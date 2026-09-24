@@ -7,17 +7,62 @@
   "id": "314",
   "slug": "wave-4-batch-1-stack-packs-and-agent-pai",
   "title": "Wave 4 batch 1: stack packs and agent pairs for ts-js-node, react, python, go",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-24T11:38:46.681Z",
-  "updatedAt": "2026-09-24T18:26:39.122Z",
+  "updatedAt": "2026-09-24T18:45:14.689Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T18:42:37.274Z",
+      "note": "stack-packs.test.ts: strict lintStackRule/lintSkill pass for the 16 rules and 18 skills; react pack.json extends ts-js-node; migrate for ts-js-node and react, empty for python and go (PR #692, e9f4e94b)"
+    },
+    "AC2": {
+      "at": "2026-09-24T18:42:37.417Z",
+      "note": "evals.json guards in stack-packs.test.ts (>=10 prompts, >=4 negatives, deterministic behavior scenarios) plus the I1-I5 integrity guard; scout records written by the CLI with candidate exclusion, no use decisions, forks justified"
+    },
+    "AC3": {
+      "at": "2026-09-24T18:42:37.558Z",
+      "note": "18 skills evaluated once with deepseek:deepseek-chat, high strictness, 5 trials, bundled scope; eval.json verbatim with digest, runner and model; checkStablePackGate fails all four packs, which stay experimental (review r2/r3 verified provenance and digests)"
+    },
+    "AC4": {
+      "at": "2026-09-24T18:42:37.702Z",
+      "note": "model-eval-runner.test.ts with an injected provider, empty-completion refusal and saved-key resolution; without --runner behavior scenarios are not-run (eval.test.ts)"
+    },
+    "AC5": {
+      "at": "2026-09-24T18:42:37.843Z",
+      "note": "generate.test.ts and agents-catalog-commands.test.ts: refusal of packs that are not gate-cleared, id must equal the directory, quoted frontmatter, two-pass containment and symlink checks; no pair ships; agent-refs empty with notes; agents verify ok (10 agents)"
+    },
+    "AC6": {
+      "at": "2026-09-24T18:42:37.986Z",
+      "note": "verify.test.ts: stack skills resolve only for agents on that stack (SKILL.md required); stack-pack-not-gate-cleared, generated-drift and generated-source-mismatch reasons tested"
+    },
+    "AC7": {
+      "at": "2026-09-24T18:42:38.128Z",
+      "note": "install-manifest has separate rule and skill modules plus a component and profile per pack; dry-runs of ts-js-node, react, python, go and full show no duplicates and reproducible output; stability pinned to pack.json by test"
+    },
+    "AC8": {
+      "at": "2026-09-24T18:42:38.273Z",
+      "note": "stocktake --scope bundled: merge set equals the six-skill baseline; all 18 pack skills keep (lane E and review r2)"
+    },
+    "AC9": {
+      "at": "2026-09-24T18:42:38.421Z",
+      "note": "audit-harness on a temp project with the full profile installed for claude: score 100/A, 0 findings; no generated agents exist to export"
+    },
+    "AC10": {
+      "at": "2026-09-24T18:42:38.566Z",
+      "note": "targeted suites green (pre-existing install.test.ts EACCES on macOS reproduces on base); typecheck and eslint clean; CI green on 29dc906b"
+    },
+    "AC11": {
+      "at": "2026-09-24T18:42:38.709Z",
+      "note": "W2 0.1.6 names code-auditor/build-fixer with no pair shipped; W1 0.2.2 records the DeepSeek outcome and the llama3.1 supplementary run; journal records coverage unchanged at 2 and corrects the earlier 2 -> 5 entry"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/692"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "tasks": [
@@ -76,7 +121,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 3,
@@ -100,7 +145,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -358,10 +404,10 @@
       "id": "T17",
       "title": "Review round-1 fixes (R1-1..R1-15): gate honesty, gate binding, generate safety, content accuracy, tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 3,
         "log": [
           {
             "at": "2026-09-24T16:34:39.536Z",
@@ -372,12 +418,18 @@
             "at": "2026-09-24T18:26:39.122Z",
             "outcome": "started",
             "detail": "fix attempt 2: R2-1 (AC rewrite, orchestrator) + R2-2..R2-5 (worker)"
+          },
+          {
+            "at": "2026-09-24T18:39:13.028Z",
+            "outcome": "started",
+            "detail": "round 3 clean (info only); no further fixes"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -658,6 +710,506 @@
       "at": "2026-09-24T18:26:39.122Z",
       "event": "task-attempt",
       "detail": "T17: started (attempt 2) — fix attempt 2: R2-1 (AC rewrite, orchestrator) + R2-2..R2-5 (worker)"
+    },
+    {
+      "at": "2026-09-24T18:39:13.028Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 3) — round 3 clean (info only); no further fixes"
+    },
+    {
+      "at": "2026-09-24T18:41:28.516Z",
+      "event": "task-done",
+      "detail": "T17: Review round-1 fixes (R1-1..R1-15): gate honesty, gate binding, generate safety, content accuracy, tests"
+    },
+    {
+      "at": "2026-09-24T18:41:28.657Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T18:41:43.914Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (program owner; flow init did not record it)"
+    },
+    {
+      "at": "2026-09-24T18:41:46.534Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:42:37.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: stack-packs.test.ts: strict lintStackRule/lintSkill pass for the 16 rules and 18 skills; react pack.json extends ts-js-node; migrate for ts-js-node and react, empty for python and go (PR #692, e9f4e94b) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.417Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: evals.json guards in stack-packs.test.ts (>=10 prompts, >=4 negatives, deterministic behavior scenarios) plus the I1-I5 integrity guard; scout records written by the CLI with candidate exclusion, no use decisions, forks justified (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.558Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: 18 skills evaluated once with deepseek:deepseek-chat, high strictness, 5 trials, bundled scope; eval.json verbatim with digest, runner and model; checkStablePackGate fails all four packs, which stay experimental (review r2/r3 verified provenance and digests) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.702Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: model-eval-runner.test.ts with an injected provider, empty-completion refusal and saved-key resolution; without --runner behavior scenarios are not-run (eval.test.ts) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.844Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: generate.test.ts and agents-catalog-commands.test.ts: refusal of packs that are not gate-cleared, id must equal the directory, quoted frontmatter, two-pass containment and symlink checks; no pair ships; agent-refs empty with notes; agents verify ok (10 agents) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.986Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verify.test.ts: stack skills resolve only for agents on that stack (SKILL.md required); stack-pack-not-gate-cleared, generated-drift and generated-source-mismatch reasons tested (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.128Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: install-manifest has separate rule and skill modules plus a component and profile per pack; dry-runs of ts-js-node, react, python, go and full show no duplicates and reproducible output; stability pinned to pack.json by test (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.273Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: stocktake --scope bundled: merge set equals the six-skill baseline; all 18 pack skills keep (lane E and review r2) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.421Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: audit-harness on a temp project with the full profile installed for claude: score 100/A, 0 findings; no generated agents exist to export (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.566Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: targeted suites green (pre-existing install.test.ts EACCES on macOS reproduces on base); typecheck and eslint clean; CI green on 29dc906b (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.709Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: W2 0.1.6 names code-auditor/build-fixer with no pair shipped; W1 0.2.2 records the DeepSeek outcome and the llama3.1 supplementary run; journal records coverage unchanged at 2 and corrects the earlier 2 -> 5 entry (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:43.634Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:42:51.394Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-24T18:42:51.395Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T18:43:37.019Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:43:37.188Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:43:44.540Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-24T18:43:44.542Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T18:44:46.675Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:44:46.827Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:44:54.648Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-09-24T18:44:54.649Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 54f59e71e670472e503ddbb4f4af83f0d7b27679, but the PR head is 29dc906bbdeac1f5c001080c89cda58ac793dbd9. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T18:45:06.768Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:45:06.927Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:45:14.687Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: passed"
+    },
+    {
+      "at": "2026-09-24T18:45:14.689Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-09-24T18:42:37.274Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.417Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.558Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.702Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.843Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.986Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.128Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.273Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.421Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.566Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.709Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:45:14.689Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc",
+      "headCommit": "29dc906bbdeac1f5c001080c89cda58ac793dbd9"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-24T18:42:51.394Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:43:44.540Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:44:54.648Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against 54f59e71e670472e503ddbb4f4af83f0d7b27679, but the PR head is 29dc906bbdeac1f5c001080c89cda58ac793dbd9. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:45:14.687Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
     }
   ]
 }

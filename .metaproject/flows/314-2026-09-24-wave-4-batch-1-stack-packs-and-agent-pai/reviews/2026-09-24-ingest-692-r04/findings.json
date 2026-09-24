@@ -22,7 +22,17 @@
       ],
       "enumeration_method": "git show of 287310ee and b020e1a5 over stacks/*/skills, plus contam.ts over all 18 skills and a phrase search for verbatim/exact sentence"
     },
-    "global_id": "2026-09-24-ingest-692-r04#R1-1"
+    "global_id": "2026-09-24-ingest-692-r04#R1-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): answer-key phrase grep over stacks/ is clean, contam.ts has 0 hits, integrity guard fires 34x on the pre-fix tree",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-2",
@@ -40,7 +50,17 @@
       ],
       "enumeration_method": "probe.ts over every pack skill"
     },
-    "global_id": "2026-09-24-ingest-692-r04#R1-2"
+    "global_id": "2026-09-24-ingest-692-r04#R1-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): probe.ts gives empty 0/36 and echo 0/36",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-3",
@@ -62,7 +82,17 @@
       ],
       "enumeration_method": "read both gate branches and both consumers"
     },
-    "global_id": "2026-09-24-ingest-692-r04#R1-3"
+    "global_id": "2026-09-24-ingest-692-r04#R1-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): gate2.ts: every binding mutation fails across 4 packs",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-4",
@@ -82,7 +112,17 @@
       ],
       "enumeration_method": "read checkStablePackGate branches and tests"
     },
-    "global_id": "2026-09-24-ingest-692-r04#R1-4"
+    "global_id": "2026-09-24-ingest-692-r04#R1-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): legacy single-report and empty skills map give named failures",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-5",
@@ -95,7 +135,17 @@
     "confidence": "high",
     "file": "src/gdskills/governance/eval.ts",
     "line": 786,
-    "global_id": "2026-09-24-ingest-692-r04#R1-5"
+    "global_id": "2026-09-24-ingest-692-r04#R1-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): 20 mutations x 4 packs, no throw, named fails",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-6",
@@ -116,7 +166,17 @@
       ],
       "enumeration_method": "read both pack readers and the write path"
     },
-    "global_id": "2026-09-24-ingest-692-r04#R1-6"
+    "global_id": "2026-09-24-ingest-692-r04#R1-6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): gen-escape2.ts: id escape and mismatch refused, nothing written",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-7",
@@ -135,7 +195,17 @@
       ],
       "enumeration_method": "inject.ts over each raw field"
     },
-    "global_id": "2026-09-24-ingest-692-r04#R1-7"
+    "global_id": "2026-09-24-ingest-692-r04#R1-7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): inject.ts: every hostile case throws InvalidStackPackFieldError",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-8",
@@ -148,7 +218,17 @@
     "confidence": "high",
     "file": "src/commands/model-eval-runner.ts",
     "line": 115,
-    "global_id": "2026-09-24-ingest-692-r04#R1-8"
+    "global_id": "2026-09-24-ingest-692-r04#R1-8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): runner throws on empty completion; 2 tests",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-9",
@@ -161,7 +241,17 @@
     "confidence": "high",
     "file": "src/commands/model-eval-runner.ts",
     "line": 91,
-    "global_id": "2026-09-24-ingest-692-r04#R1-9"
+    "global_id": "2026-09-24-ingest-692-r04#R1-9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): envWithSavedApiKeys used at build time; tests",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-10",
@@ -174,7 +264,17 @@
     "confidence": "high",
     "file": "src/agents/verify.ts",
     "line": 362,
-    "global_id": "2026-09-24-ingest-692-r04#R1-10"
+    "global_id": "2026-09-24-ingest-692-r04#R1-10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): skillres.ts: all 3 names give unknown-skill",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-11",
@@ -187,7 +287,17 @@
     "confidence": "high",
     "file": "src/commands/skills-governance.ts",
     "line": 329,
-    "global_id": "2026-09-24-ingest-692-r04#R1-11"
+    "global_id": "2026-09-24-ingest-692-r04#R1-11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): trig.ts SCOPE=bundled gives 18/18 match; gate requires bundled",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-12",
@@ -200,7 +310,17 @@
     "confidence": "high",
     "file": "src/agents/verify.ts",
     "line": 520,
-    "global_id": "2026-09-24-ingest-692-r04#R1-12"
+    "global_id": "2026-09-24-ingest-692-r04#R1-12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): generated-source-mismatch reported",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-13",
@@ -213,7 +333,17 @@
     "confidence": "high",
     "file": "src/gdskills/bundled/stacks/python/rules/patterns.mdc",
     "line": 51,
-    "global_id": "2026-09-24-ingest-692-r04#R1-13"
+    "global_id": "2026-09-24-ingest-692-r04#R1-13",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): each inaccuracy corrected (esm, CancelledError, XML, chaining, React 19, server actions)",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-14",
@@ -225,7 +355,17 @@
     "evidence": "code read",
     "confidence": "high",
     "file": "src/commands/skills-governance.test.ts",
-    "global_id": "2026-09-24-ingest-692-r04#R1-14"
+    "global_id": "2026-09-24-ingest-692-r04#R1-14",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): CLI tests added; derived pack list; stale text removed",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   },
   {
     "id": "R1-15",
@@ -237,6 +377,16 @@
     "evidence": "sum.ts",
     "confidence": "high",
     "file": "src/gdskills/bundled/stacks",
-    "global_id": "2026-09-24-ingest-692-r04#R1-15"
+    "global_id": "2026-09-24-ingest-692-r04#R1-15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 54f59e71 (fix commits d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f): EvalReport provenance fields; honest.ts 18/18",
+      "verifier": "review-round-2-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fix attempt 1 (d038c86f, 2099e8c8, 54b17ad8, 5d833dbb, d0bc9488, dad885a3, 4f05dd0f); refuted at 54f59e71 by round 2"
+    }
   }
 ]
