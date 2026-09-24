@@ -185,6 +185,46 @@ describe("keryx stack detect — basic behavior", () => {
     }
   });
 
+  test("R2-8: --cwd= (empty value via the = form) exits 1 instead of silently using the process cwd", async () => {
+    install();
+    try {
+      const base = await makeTempRepo();
+
+      await stackCommand(["detect", "--cwd="], base);
+      expect(process.exitCode).toBe(1);
+      expect(capturedErr.join("\n")).toContain("--cwd requires a directory argument");
+
+      let existsErr: unknown;
+      try {
+        await readFile(stackJsonPath(base), "utf8");
+      } catch (error) {
+        existsErr = error;
+      }
+      expect(existsErr).toBeDefined();
+    } finally {
+      restore();
+    }
+  });
+
+  test("--cwd=<dir> (the = form with a value) is honoured", async () => {
+    install();
+    try {
+      const base = await makeTempRepo();
+      const target = path.join(base, "target");
+      await mkdir(target, { recursive: true });
+      await writeFile(path.join(target, "Dockerfile"), "FROM node:20\n");
+
+      await stackCommand(["detect", "--cwd=target"], base);
+      expect(process.exitCode).toBe(0);
+
+      const onDisk = await readFile(stackJsonPath(target), "utf8");
+      const parsed = JSON.parse(onDisk) as { tags: Record<string, boolean> };
+      expect(parsed.tags.docker).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
   test("--cwd points detection at another directory", async () => {
     install();
     try {

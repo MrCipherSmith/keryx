@@ -374,30 +374,42 @@ const PYTHON_FRAMEWORK_MARKERS: Record<string, RegExp> = {
 /**
  * A structurally broken TOML file: unbalanced `[`/`]` brackets (an
  * unterminated `[table]` header, or an array/inline-table that never
- * closes), or an odd (unbalanced) count of double quotes. Bracket and quote
- * counting is done over the WHOLE file with a small state machine — normal /
- * inside a `"..."` string / inside a `'...'` literal string / inside a `#`
- * comment — so a valid multi-line array or nested array
+ * closes), or a string that is never closed. Bracket and string tracking is
+ * done over the WHOLE file with a small state machine covering TOML's four
+ * string kinds — basic `"..."` (backslash escapes apply, an escaped
+ * backslash `\\` before the closing `"` does not close it), literal
+ * `'...'` (no escapes), and their multi-line `"""..."""` / `'''...'''`
+ * forms (span newlines; `[`/`]` inside them are content, not table/array
+ * syntax) — plus `#` comments. A valid multi-line array or nested array
  * (`matrix = [\n    [1, 2],\n    [3, 4],\n]`) nets its brackets to zero
- * across the lines it spans instead of being judged one line at a time, and
- * a `"` inside a single-quoted string or a comment is never counted. A
- * lightweight heuristic, not a TOML parser — deliberately, matching the
+ * across the lines it spans instead of being judged one line at a time.
+ * Unterminated-string detection comes from the state machine's own end
+ * state (still open at EOF) rather than a quote-parity count, since parity
+ * breaks on an escaped backslash. A single-line basic (`"..."`) string
+ * that hits a bare newline before its closing quote is flagged right
+ * there — TOML basic strings can't contain a raw newline, so that is
+ * always broken. A single-line literal (`'...'`) string left open past a
+ * bare newline is not flagged the same way: it just stops being tracked
+ * as a string at line end, so an unterminated `'` doesn't swallow the
+ * rest of the file (and its real brackets/quotes) as "inside a string".
+ * A lightweight heuristic, not a TOML parser — deliberately, matching the
  * spec's "line/regex scans" discipline for every non-JSON manifest.
  */
 function pyprojectBrokenReason(text: string): string | undefined {
-  type State = "normal" | "double" | "single" | "comment";
+  type State = "normal" | "double" | "single" | "double3" | "single3" | "comment";
   let state: State = "normal";
   let depth = 0;
-  let quoteCharCount = 0;
 
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
+
     if (state === "comment") {
       if (ch === "\n") {
         state = "normal";
       }
       continue;
     }
+
     if (state === "single") {
       // TOML literal strings don't span a bare newline — stop tracking at
       // line end rather than let an unterminated `'` swallow the rest of
@@ -407,25 +419,66 @@ function pyprojectBrokenReason(text: string): string | undefined {
       }
       continue;
     }
+
     if (state === "double") {
-      if (ch === "\n") {
-        state = "normal";
+      // Basic strings escape with `\`: `\"` doesn't close the string, and
+      // `\\` is an escaped backslash (the quote right after it is NOT
+      // escaped). Skip the escaped character as a pair so a trailing
+      // `\\` before the closing `"` is read correctly either way.
+      if (ch === "\\") {
+        i += 1;
         continue;
       }
-      if (ch === '"' && text[i - 1] !== "\\") {
-        quoteCharCount += 1;
+      if (ch === "\n") {
+        // A raw newline inside a basic string is invalid TOML on its own —
+        // report it here rather than resetting silently, so an unterminated
+        // `"..."` value (not a `"""` block) is still caught.
+        return "unbalanced quotes";
+      }
+      if (ch === '"') {
         state = "normal";
       }
       continue;
     }
+
+    if (state === "double3") {
+      if (ch === "\\") {
+        i += 1;
+        continue;
+      }
+      if (ch === '"' && text[i + 1] === '"' && text[i + 2] === '"') {
+        state = "normal";
+        i += 2;
+      }
+      continue;
+    }
+
+    if (state === "single3") {
+      // Literal strings, multi-line included, have no escapes.
+      if (ch === "'" && text[i + 1] === "'" && text[i + 2] === "'") {
+        state = "normal";
+        i += 2;
+      }
+      continue;
+    }
+
     // state === "normal"
     if (ch === "#") {
       state = "comment";
     } else if (ch === '"') {
-      quoteCharCount += 1;
-      state = "double";
+      if (text[i + 1] === '"' && text[i + 2] === '"') {
+        state = "double3";
+        i += 2;
+      } else {
+        state = "double";
+      }
     } else if (ch === "'") {
-      state = "single";
+      if (text[i + 1] === "'" && text[i + 2] === "'") {
+        state = "single3";
+        i += 2;
+      } else {
+        state = "single";
+      }
     } else if (ch === "[") {
       depth += 1;
     } else if (ch === "]") {
@@ -438,8 +491,8 @@ function pyprojectBrokenReason(text: string): string | undefined {
       ? "unterminated table header or array (unbalanced '[')"
       : "unbalanced brackets (unexpected ']')";
   }
-  if (quoteCharCount % 2 !== 0) {
-    return "unbalanced quotes";
+  if (state === "double" || state === "double3" || state === "single3") {
+    return "unterminated string";
   }
   return undefined;
 }

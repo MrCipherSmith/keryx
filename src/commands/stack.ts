@@ -31,14 +31,17 @@ async function handleDetect(args: string[], cwd: string): Promise<void> {
     return;
   }
 
-  // `--cwd` present but with no value (a trailing flag, or the next token is
-  // itself another `--flag`) must be refused, not silently fall back to the
-  // process cwd: `optionValue` returns `undefined` for both "absent" and
-  // "present but valueless", so the flag's presence has to be checked
-  // separately to tell those two apart.
+  // `--cwd` present but with no value (a trailing flag, the next token is
+  // itself another `--flag`, or the `--cwd=` form with nothing after the
+  // `=`) must be refused, not silently fall back to the process cwd:
+  // `optionValue` returns `undefined` for "absent" and "present but
+  // valueless" alike, and it returns `""` for `--cwd=` — `path.resolve`
+  // treats an empty string as a no-op, so an unchecked empty value would
+  // quietly resolve to the process cwd. The flag's presence has to be
+  // checked separately, and the value has to be checked for emptiness too.
   const cwdFlagGiven = args.includes("--cwd") || args.some((arg) => arg.startsWith("--cwd="));
   const cwdOption = optionValue(args, "--cwd");
-  if (cwdFlagGiven && cwdOption === undefined) {
+  if (cwdFlagGiven && (cwdOption === undefined || cwdOption === "")) {
     console.error("--cwd requires a directory argument");
     process.exitCode = 1;
     return;

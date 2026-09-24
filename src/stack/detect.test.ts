@@ -390,6 +390,56 @@ describe("F14: pyproject broken-TOML heuristic tolerates valid multi-line/nested
   });
 });
 
+describe("R2-9: escaped backslashes and triple-quoted strings", () => {
+  test("an escaped backslash right before the closing quote does not unbalance the string", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml": '[tool.poetry]\nname = "app"\nwin = "C:\\\\"\n',
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(false);
+  });
+
+  test("a '[' inside a triple-quoted \"\"\" string is content, not a table header", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml":
+        '[tool.poetry]\nname = "app"\ndescription = """\nSee [docs](https://example.com) for more.\n"""\n',
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(false);
+  });
+
+  test("a valid triple-quoted ''' literal string spanning lines is not flagged broken", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml": "[tool.poetry]\nname = 'app'\npattern = '''\nC:\\Users\\[name]\n'''\n",
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(false);
+  });
+
+  test("a triple-quoted \"\"\" string never closed by EOF is flagged uncertain", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml": '[tool.poetry]\nname = "app"\ndescription = """\nSee [docs\n',
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toMatch(/unterminated string/);
+  });
+
+  test("a triple-quoted ''' string never closed by EOF is flagged uncertain", async () => {
+    const fs = fakeFs({
+      "/repo/pyproject.toml": "[tool.poetry]\nname = 'app'\npattern = '''\nC:\\Users\\open\n",
+    });
+    const result = await detectStack("/repo", { fs });
+    const signal = result.perSignal.find((s) => s.signal === "manifest:pyproject.toml");
+    expect(signal?.uncertain).toBe(true);
+    expect(signal?.reason).toMatch(/unterminated string/);
+  });
+});
+
 describe("determinism of output shape", () => {
   test("tags object has every known tag key, and perSignal is sorted by signal id", async () => {
     const fs = fakeFs({
