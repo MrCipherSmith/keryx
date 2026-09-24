@@ -27,8 +27,8 @@
           "grader": "judge",
           "rubric": "A correct answer starts by reading the official React upgrade guide/release notes for this specific 18-to-19 jump before touching code, rather than relying on memory of a prior migration, and mentions inventorying the removed/changed APIs and running the official codemods as part of the process rather than hand-editing everything from scratch.",
           "pass_criteria": [
-            "Recommends reading the official React 19 upgrade guide/release notes for this specific version jump before making code changes.",
-            "Mentions inventorying usage of removed/changed APIs and/or running the official codemods as part of the approach, rather than only hand-editing call sites."
+            "Names reading the official React 19 upgrade guide/release notes as the concrete first step for this specific version jump, before any code change — not just 'research first' in the abstract.",
+            "Names a concrete mechanism for the mechanical part of the migration: inventorying removed/changed APIs and/or running the official codemods, not just 'update the code carefully'."
           ],
           "fail_criteria": [
             "Recommends starting by just bumping the react/react-dom version and fixing whatever breaks, without first reading the upgrade guide for this specific version jump.",
@@ -38,7 +38,9 @@
       ],
       "calibration": {
         "known_right": "Start by reading the official React 19 upgrade guide and release notes — don't rely on how the 17-to-18 jump went, since the set of removed/changed APIs is specific to this version range. From the guide, build an inventory of what this codebase actually uses that's affected: string refs, legacy context (contextTypes/getChildContext), propTypes/defaultProps on function components, ReactDOM.render/hydrate, and the react-dom/test-utils act import, plus anything else the guide calls out as removed rather than merely deprecated (ReactDOM.findDOMNode and unmountComponentAtNode, for instance). Once you know the scope, run the official react-codemod/types-react-codemod transforms for the mechanical parts (the ref-as-prop change in particular has good codemod coverage) and review their diffs before committing, then hand-fix what the codemods can't express — mainly propTypes-to-TypeScript conversions and any custom ReactDOM.render wrapper. Update @types/react/@types/react-dom to match the target major early, since a types/runtime mismatch produces confusing unrelated errors. Only bump the actual react/react-dom dependency once the codebase is already compatible, so the version bump itself is a small, low-risk commit.",
-        "known_wrong": "Easiest way to start: just bump react and react-dom to 19 in package.json, run `npm install`, and then run the type-check/build/test suite to see what breaks. Fix the errors as they come up one by one — that's basically what we did for the 17-to-18 upgrade and it worked fine, so the process should be similar this time. No need to read through the whole upgrade guide up front; the compiler and test failures will tell you everything you actually need to fix."
+        "known_wrong": "Easiest way to start: just bump react and react-dom to 19 in package.json, run `npm install`, and then run the type-check/build/test suite to see what breaks. Fix the errors as they come up one by one — that's basically what we did for the 17-to-18 upgrade and it worked fine, so the process should be similar this time. No need to read through the whole upgrade guide up front; the compiler and test failures will tell you everything you actually need to fix.",
+        "vague": "Start by reading up on what's changed in React 19 before making any changes, then work through the codebase fixing what needs fixing.",
+        "subtle_wrong": "Skim the React 19 release notes for the headline breaking changes so you have a general sense of scope, then just bump react/react-dom in package.json and run the build/type-check/test suite to see what actually breaks in this codebase — that's usually faster than working through the full guide line by line, since most projects only hit two or three of the listed changes in practice, and the compiler will point you at the rest."
       }
     },
     {
@@ -50,19 +52,23 @@
           "grader": "judge",
           "rubric": "A correct answer says no — forcing the incompatible dependency's peer-dependency requirement with a version override/resolution hides a genuine incompatibility instead of fixing it. It recommends treating the incompatibility as a blocker to report, with real options such as waiting for the library to add support, replacing it, or patching it, rather than silently forcing the install.",
           "pass_criteria": [
-            "States that forcing/overriding the peer-dependency version is not the right fix here.",
-            "Recommends reporting the incompatibility as a blocker and considering concrete alternatives (wait for library support, replace the dependency, or patch it) instead of forcing the install."
+            "States plainly that forcing/overriding the peer-dependency version (a package.json resolution override) is not the right fix here.",
+            "Names at least one concrete alternative action (wait for the library to add React 19 support, replace the dependency, or patch it via patch-package) instead of only saying 'report it as a blocker'."
           ],
           "fail_criteria": [
-            "Recommends forcing the dependency's version via a resolution/override in package.json as the fix to make the install succeed."
+            "Recommends forcing the dependency's version via a resolution override in package.json as the fix to make the install succeed, including as a stopgap suggested alongside the real fix."
           ]
         }
       ],
       "calibration": {
         "known_right": "No, don't force it with a resolution override. That would silence a genuine peer-dependency incompatibility — the library may not actually work correctly against React 19's runtime behavior even if npm/yarn stops complaining about the version mismatch, and the failure would surface later as a confusing runtime bug instead of a clear install-time blocker you can act on now. Instead, treat this as a real blocker: check the library's repo/changelog for an open issue or in-progress React 19 support, and if there's a beta/RC release that adds it, that's the real fix. If there's no timeline, your options are to wait and keep the upgrade staged behind this one dependency, replace it with an alternative that already supports React 19, or (if it's small enough and you're willing to maintain it) patch the library yourself via patch-package rather than lying to the package manager about compatibility. Report which of these you're choosing and why, rather than quietly forcing the version.",
-        "known_wrong": "Yeah, just force the version with a resolution override in the `resolutions`/`overrides` field of package.json — most of these compatibility warnings are overly conservative peer-dependency ranges that the library maintainers just haven't bumped yet, and the actual code usually still works fine. That gets the install passing again without blocking the rest of the upgrade, and you can always revisit it later if something actually breaks at runtime."
+        "known_wrong": "Yeah, just force the version with a resolution override in the `resolutions`/`overrides` field of package.json — most of these compatibility warnings are overly conservative peer-dependency ranges that the library maintainers just haven't bumped yet, and the actual code usually still works fine. That gets the install passing again without blocking the rest of the upgrade, and you can always revisit it later if something actually breaks at runtime.",
+        "vague": "I wouldn't force it with an override — better to treat the incompatibility as a real blocker and look into your options before working around it.",
+        "subtle_wrong": "Don't leave a blanket override in place long-term, but it's reasonable to add a scoped resolution override just for this one package as a temporary unblock so the rest of the team isn't stuck on the upgrade while you sort out a real fix — track it with a follow-up ticket to remove the override once the library ships proper React 19 support, and in the meantime keep an eye on whether anything actually breaks at runtime."
       },
-      "anti_patterns": ["resolution override"]
+      "anti_patterns": [
+        "resolution override"
+      ]
     }
   ]
 }

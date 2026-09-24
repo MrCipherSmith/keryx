@@ -27,22 +27,30 @@
           "grader": "judge",
           "rubric": "A correct answer queries the submit button and error message the way a user or assistive technology would — role/label/text-based queries such as getByRole for the button and findByText/getByText for the error — rather than defaulting to data-testid, and drives the click through @testing-library/user-event rather than fireEvent.",
           "pass_criteria": [
-            "Queries the submit button with an accessible query such as getByRole('button', ...), not a data-testid, as the primary approach.",
-            "Queries the error message with an accessible query (getByText/findByText/getByRole) rather than a data-testid.",
-            "Drives the click with @testing-library/user-event (e.g. userEvent.setup() then .click), not fireEvent."
+            "Shows or names the concrete accessible query for the submit button, such as `getByRole('button', { name: ... })`, not data-testid, as the primary approach.",
+            "Shows or names the concrete accessible query for the error message (`getByText`/`findByText`/`getByRole('alert', ...)`), not data-testid.",
+            "Shows the click driven through `@testing-library/user-event` (`userEvent.setup()` then `.click`), not `fireEvent`."
           ],
           "fail_criteria": [
             "Recommends data-testid as the default/primary way to find the button or the error message when an accessible query would work.",
             "Uses fireEvent.click (or another fireEvent call) as the interaction mechanism instead of userEvent."
           ]
         },
-        { "grader": "regex", "value": "getByRole" }
+        {
+          "grader": "regex",
+          "value": "(get|find|query)(All)?ByRole"
+        }
       ],
       "calibration": {
         "known_right": "Query the submit button with `screen.getByRole('button', { name: /submit|log in/i })` — that's how a user or screen reader identifies it, by its accessible role and visible label, not by an internal test id. Drive the click with user-event rather than fireEvent: `const user = userEvent.setup(); await user.click(screen.getByRole('button', { name: /submit/i }));`. For the error message, since it appears asynchronously after the click triggers validation, use `await screen.findByText(/password is required/i)` (or `findByRole('alert', ...)` if the error is rendered with an alert role) rather than a synchronous `getByText`, since `findBy*` retries until the DOM updates. Putting it together:\n```tsx\nconst user = userEvent.setup();\nrender(<LoginForm />);\nawait user.click(screen.getByRole('button', { name: /submit/i }));\nexpect(await screen.findByText(/password is required/i)).toBeInTheDocument();\n```\nOnly fall back to `data-testid` if the button or error text genuinely has no accessible role/label/text to query by.",
-        "known_wrong": "Easiest way: give the button and the error message their own test ids in the markup — `data-testid=\"submit-btn\"` and `data-testid=\"password-error\"` — then in the test do `fireEvent.click(screen.getByTestId('submit-btn'))` and assert with `expect(screen.getByTestId('password-error')).toBeInTheDocument()`. Test ids are reliable because they don't break when you change button text or styling later, and fireEvent.click is simpler than setting up user-event since it doesn't need the extra `userEvent.setup()` call."
+        "known_wrong": "Easiest way: give the button and the error message their own test ids in the markup — `data-testid=\"submit-btn\"` and `data-testid=\"password-error\"` — then in the test do `fireEvent.click(screen.getByTestId('submit-btn'))` and assert with `expect(screen.getByTestId('password-error')).toBeInTheDocument()`. Test ids are reliable because they don't break when you change button text or styling later, and fireEvent.click is simpler than setting up user-event since it doesn't need the extra `userEvent.setup()` call.",
+        "vague": "Query for the button and the error message the way an assistive-technology user would, using accessible role- or text-based queries instead of test ids, and drive the click through the user-event library rather than firing raw DOM events.",
+        "subtle_wrong": "Find the button by its role and label, and drive the click with user-event — that part's straightforward. For the error message, since it's simplest, just add a `data-testid=\"password-error\"` to that element and query it that way after the click — the error text itself is inside a styled component that doesn't have stable visible copy yet, so a testid is the pragmatic choice there until the copy is finalized; getting the button query right is the part that really matters for this test."
       },
-      "anti_patterns": ["fireEvent", "data-testid"]
+      "anti_patterns": [
+        "fireEvent",
+        "data-testid"
+      ]
     },
     {
       "id": "mock-network-boundary",
@@ -53,20 +61,23 @@
           "grader": "judge",
           "rubric": "A correct answer mocks the network call at the request boundary (an MSW handler intercepting the actual HTTP request, or the project's existing equivalent), not by mocking the component's own data-fetching function/module directly, because a boundary mock still exercises the real fetch/parse/error-handling code path.",
           "pass_criteria": [
-            "Recommends mocking at the network/request boundary (e.g. an MSW handler for the actual HTTP request), not the component's internal fetch call.",
+            "Names the concrete boundary mechanism (an MSW request handler for the actual HTTP endpoint, e.g. `http.get('/api/...', ...)`, or the project's existing equivalent boundary mock), not just 'mock at the boundary' in the abstract.",
             "Explains or implies that mocking at the boundary keeps the real request/parse/error-handling path under test, rather than bypassing it."
           ],
           "fail_criteria": [
-            "Recommends mocking the component's own data-fetching function, fetch helper, or API client method directly instead of the network boundary.",
-            "Mentioning mocking the internal fetch helper only to warn against it is not a failure."
+            "Recommends mocking the component's own data-fetching function, fetch helper, or API client method directly (e.g. `vi.mock`/`jest.mock` on the fetch module) instead of the network boundary, even if only offered as a quicker alternative alongside the boundary approach."
           ]
         }
       ],
       "calibration": {
         "known_right": "Mock it at the network boundary, not inside the component. If the project already uses MSW, add a request handler for the actual endpoint the component calls on mount (e.g. `http.get('/api/user/:id', () => HttpResponse.json({ name: 'Ada' }))`) and let the component's real fetch call run against that intercepted request. That way the test still exercises the component's actual fetch call, response parsing, and error handling — you're only replacing what's on the other end of the network, not the code that talks to it. Then in the test, render the component and use `findBy*`/`waitFor` to wait for the state that appears once the mocked response resolves, since the fetch happens asynchronously after mount. If the project doesn't have MSW set up yet, use whatever boundary-level mock it already has (a fetch/axios interceptor) rather than reaching into the component's data-fetching function and swapping it out — that would skip real parsing/error-handling logic the test should also be covering.",
-        "known_wrong": "Simplest approach: just mock the component's fetch helper directly. If the component imports something like `fetchUser` from an api module, do `vi.mock('../api/fetchUser')` (or jest.mock) and have it resolve with your test data. That way you skip dealing with MSW handlers or intercepting real requests — you control exactly what the function returns, and the test runs faster since there's no simulated network layer involved at all."
+        "known_wrong": "Simplest approach: just mock the component's fetch helper directly. If the component imports something like `fetchUser` from an api module, do `vi.mock('../api/fetchUser')` (or jest.mock) and have it resolve with your test data. That way you skip dealing with MSW handlers or intercepting real requests — you control exactly what the function returns, and the test runs faster since there's no simulated network layer involved at all.",
+        "vague": "Mock it at the network boundary rather than inside the component, so the real fetch and parsing logic still runs.",
+        "subtle_wrong": "Set up an MSW handler for the endpoint as the primary approach — that's the right general direction. For this particular test though, since the component's fetch call is wrapped in a small `fetchUser` helper that's already unit-tested elsewhere, you can save setup time by mocking that helper directly with `vi.mock('../api/fetchUser')` instead of standing up a full MSW handler; it resolves the same test data without needing to configure the request interception for this one case."
       },
-      "anti_patterns": ["fetch helper"]
+      "anti_patterns": [
+        "fetch helper"
+      ]
     }
   ]
 }

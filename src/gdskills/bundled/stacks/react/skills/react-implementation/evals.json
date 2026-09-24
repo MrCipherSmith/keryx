@@ -28,8 +28,8 @@
           "grader": "judge",
           "rubric": "A correct answer recognizes that `displayName` is fully computable from the `user` prop and should be derived during render instead of synchronized into a second state variable via an effect. It removes the sync-effect/setState pattern and replaces it with a directly derived value (a plain expression, or useMemo if the derivation is expensive), rather than keeping the effect and just tweaking it.",
           "pass_criteria": [
-            "Recommends computing `displayName` directly from the `user` prop during render (a plain expression or useMemo), rather than storing it in separate state.",
-            "Removes the useEffect+setState pattern that mirrors the prop into state as part of the fix."
+            "Shows or names the concrete derived replacement (a plain expression such as `user.name`, or `useMemo` for an expensive case), not just 'derive it during render' in the abstract.",
+            "Explicitly removes both the useState slot for displayName and the useEffect that set it, not just the effect alone."
           ],
           "fail_criteria": [
             "Keeps the useEffect that calls setState to copy the prop into state as the recommended fix, instead of eliminating the sync effect."
@@ -38,7 +38,9 @@
       ],
       "calibration": {
         "known_right": "Drop the state variable and the effect entirely — `displayName` is just `user.name`, and any value that's fully computable from existing props/state during render shouldn't live in its own state slot, because syncing it there via an effect adds an extra render pass (the effect runs after the initial render, so there's a flash where displayName is stale/undefined) and opens up a dependency-array bug surface for no benefit. Replace it with a plain derived expression: `const displayName = user.name;` computed inline where you use it, or `const displayName = useMemo(() => computeDisplayName(user), [user])` only if the derivation is genuinely expensive (a simple property read like this isn't). Delete the `useState` for displayName and the `useEffect` that set it — there's nothing left to synchronize once the value is derived directly on every render from the prop that's already available.",
-        "known_wrong": "Keep the effect, just fix the timing — add `user.name` specifically to the dependency array instead of the whole `user` object so it only re-syncs when the name actually changes: `useEffect(() => { setDisplayName(user.name); }, [user.name]);`. That avoids extra re-renders when other parts of `user` change but the name doesn't, which should clean up the behavior you're seeing without having to restructure how displayName is stored."
+        "known_wrong": "Keep the effect, just fix the timing — add `user.name` specifically to the dependency array instead of the whole `user` object so it only re-syncs when the name actually changes: `useEffect(() => { setDisplayName(user.name); }, [user.name]);`. That avoids extra re-renders when other parts of `user` change but the name doesn't, which should clean up the behavior you're seeing without having to restructure how displayName is stored.",
+        "vague": "Instead of syncing it with an effect, just derive displayName from the user prop directly during render.",
+        "subtle_wrong": "Keep the local displayName state, but replace the useEffect with a useMemo that recomputes it: `const displayName = useMemo(() => user.name, [user]);` then still call `setDisplayName` from a small effect that only runs when the memoized value changes. This avoids the extra render-then-sync flash on unrelated user field changes while keeping the same displayName state shape the rest of the component already relies on."
       }
     },
     {
@@ -50,8 +52,8 @@
           "grader": "judge",
           "rubric": "A correct answer says using the array index as key is not safe for a filterable list, because filtering changes which items occupy which index, which corrupts React's identity tracking for local component state, focus, and animation across the filter change. It recommends replacing `index` with a stable, data-derived key such as the item's own `id`.",
           "pass_criteria": [
-            "States that index-as-key is a problem specifically because this list is filterable (filtering/reordering changes index-to-item mapping).",
-            "Recommends using a stable, data-derived key (e.g. the item's own id) instead of the array index."
+            "States that index-as-key is a problem specifically because this list is filterable (filtering changes which item sits at which index, so React's per-index identity tracking corrupts local state, focus, or animation across a filter change) — a generic 'index keys are bad practice' without tying it to filtering does not satisfy this.",
+            "Shows or names the concrete replacement key (the item's own stable id, e.g. `key={todo.id}`), not just 'use a stable key'."
           ],
           "fail_criteria": [
             "Says using the array index as key is fine/acceptable for this filterable list."
@@ -60,9 +62,13 @@
       ],
       "calibration": {
         "known_right": "No, that's not safe here — the list is filterable, which means the mapping between index and actual todo item changes whenever the filter changes: item that was at index 2 might now be at index 0 after some items get filtered out. React uses the key to match up component instances across renders, so when the index-to-item mapping shifts, React thinks the item at a given index is 'the same' component even though it's now backing a different todo, which corrupts any local state that TodoItem holds (an open edit field, an in-progress checkbox animation, input focus) — it stays attached to the index/position instead of following the actual item. Use each todo's own stable identifier instead: `key={todo.id}` (assuming your todo objects have an id field). That keeps each TodoItem's identity tied to the actual data it represents regardless of how filtering reorders or removes items around it.",
-        "known_wrong": "That's totally fine — using the array index for key is standard practice and works well as long as you're not doing drag-and-drop reordering of the list. Since this is just a filter (items are hidden/shown, not manually reordered by the user), the index key won't cause any real problems; React will just re-render the visible items in their new positions and that's it. I wouldn't worry about switching to an id-based key unless you start seeing actual visual glitches."
+        "known_wrong": "That's totally fine — using the array index for key is standard practice and works well as long as you're not doing drag-and-drop reordering of the list. Since this is just a filter (items are hidden/shown, not manually reordered by the user), the index key won't cause any real problems; React will just re-render the visible items in their new positions and that's it. I wouldn't worry about switching to an id-based key unless you start seeing actual visual glitches.",
+        "vague": "Using the index as key isn't ideal for a list that can be filtered — better to use a stable key instead.",
+        "subtle_wrong": "Index-as-key is usually fine, and since this is filtering (hiding/showing items) rather than reordering them via drag-and-drop, the relative order of visible items doesn't change, so in practice you likely won't see identity bugs here. If you do notice glitches later — stale input values or animation jumps on a filtered item — that's the signal to switch to `todo.id`, but I wouldn't treat it as a must-fix up front for a simple show/hide filter."
       },
-      "anti_patterns": ["array index"]
+      "anti_patterns": [
+        "array index"
+      ]
     }
   ]
 }
