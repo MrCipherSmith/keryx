@@ -380,6 +380,13 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
   // exit code) needs to know the import's files landed but a render did not.
   const anyRenderFailed = (rulesResult ?? []).some((result) => result.status === "failed");
 
+  // R3-F16: entries this import forcibly took ownership of FROM another
+  // bundle's ledger record, reported by displayId so a takeover is visible
+  // in both output modes rather than only showing up as an ordinary write.
+  const transferred = plan.entries
+    .filter((entry) => entry.forced && entry.previousOwnerBundleId !== undefined && applyResult.written.includes(entry.displayId))
+    .map((entry) => ({ displayId: entry.displayId, from: entry.previousOwnerBundleId as string, ...(entry.previousOwnerSourceProject !== undefined ? { fromSourceProject: entry.previousOwnerSourceProject } : {}) }));
+
   if (json) {
     console.log(
       JSON.stringify(
@@ -388,6 +395,7 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
           bundleId: plan.bundleId,
           written: applyResult.written,
           unchanged: applyResult.unchanged,
+          ...(transferred.length > 0 ? { transferred } : {}),
           ...(rulesResult !== undefined ? { rendered: rulesResult } : {}),
         },
         null,
@@ -401,6 +409,7 @@ async function handleImport(args: readonly string[], cwd: string): Promise<void>
   console.log(`Imported bundle ${style.bold(plan.bundleId)}`);
   console.log(`  written: ${applyResult.written.length}, unchanged: ${applyResult.unchanged.length}`);
   for (const written of applyResult.written) console.log(`    + ${written}`);
+  for (const t of transferred) console.log(`    transferred ${t.displayId} from ${t.from}`);
   if (rulesResult !== undefined) {
     console.log("Rendered rules:");
     for (const result of rulesResult) {
@@ -433,6 +442,13 @@ function printPlan(plan: { ok: boolean; bundleId: string; refusals: readonly Bun
             bucket: entry.bucket,
             ...(entry.conflictReason !== undefined ? { conflictReason: entry.conflictReason } : {}),
             forced: entry.forced,
+            // R3-F16: a forced takeover of another bundle's ledger record is
+            // reported explicitly — both here and in the human-readable plan
+            // below — instead of only being visible as an ordinary "forced"
+            // write with no trace of who owned it before.
+            ...(entry.forced && entry.previousOwnerBundleId !== undefined
+              ? { transferredFrom: { bundleId: entry.previousOwnerBundleId, ...(entry.previousOwnerSourceProject !== undefined ? { sourceProject: entry.previousOwnerSourceProject } : {}) } }
+              : {}),
           })),
         },
         null,
@@ -451,7 +467,8 @@ function printPlan(plan: { ok: boolean; bundleId: string; refusals: readonly Bun
   for (const kind of [...byKind.keys()].sort()) {
     console.log(`  ${kind}:`);
     for (const entry of byKind.get(kind) as PlanEntry[]) {
-      console.log(`    [${entry.bucket}${entry.forced ? " forced" : ""}] ${entry.displayId}${entry.conflictReason !== undefined ? ` (${entry.conflictReason})` : ""}`);
+      const transfer = entry.forced && entry.previousOwnerBundleId !== undefined ? ` [transferred from ${entry.previousOwnerBundleId}]` : "";
+      console.log(`    [${entry.bucket}${entry.forced ? " forced" : ""}] ${entry.displayId}${entry.conflictReason !== undefined ? ` (${entry.conflictReason})` : ""}${transfer}`);
     }
   }
   if (plan.refusals.length > 0) printRefusals(plan.refusals, false);

@@ -104,6 +104,60 @@ describe("buildBundleArchive + openBundle round trip", () => {
     if (!opened.ok) expect(opened.refusal.reason).toBe("archive-invalid");
   });
 
+  // R3-I2: a member is a DIRECTORY only by its ustar typeflag ("5"), never
+  // merely because its name ends in "/" — a SYMLINK member (typeflag "2")
+  // named with a trailing slash used to be silently treated as an empty
+  // directory instead of falling through to the unsupported-entry-type
+  // refusal every other symlink member already hits. Fails on the pre-fix
+  // code, which accepted this archive.
+  test("R3-I2: a symlink member named with a trailing slash is refused, not treated as an empty directory", async () => {
+    function ustarHeader(name: string, size: number, typeflag: number, link = ""): Buffer {
+      const header = Buffer.alloc(512);
+      header.write(name, 0, "utf8");
+      header.write("0000644\0", 100, "ascii");
+      header.write("0000000\0", 108, "ascii");
+      header.write("0000000\0", 116, "ascii");
+      header.write(`${size.toString(8).padStart(11, "0")}\0`, 124, "ascii");
+      header.write("00000000000\0", 136, "ascii");
+      header.fill(0x20, 148, 156);
+      header[156] = typeflag;
+      header.write(link, 157, "ascii");
+      header.write("ustar", 257, "ascii");
+      header.write("00", 263, "ascii");
+      let sum = 0;
+      for (let i = 0; i < 512; i += 1) sum += header[i] as number;
+      header.write(sum.toString(8).padStart(6, "0"), 148, "ascii");
+      header[154] = 0;
+      header[155] = 0x20;
+      return header;
+    }
+    const manifestBytes = Buffer.from(
+      JSON.stringify({
+        formatVersion: "1.0.0",
+        bundleId: "ptar",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        sourceKeryxVersion: "0.0.0",
+        provenance: { producedBy: "keryx bundle export", sourceScope: "project" },
+        compat: { minKeryxVersion: "0.0.0", targetHarnesses: [] },
+        contents: [],
+      }),
+    );
+    const parts = [
+      ustarHeader("bundle.json", manifestBytes.length, 0x30),
+      manifestBytes,
+      Buffer.alloc((512 - (manifestBytes.length % 512)) % 512),
+      // A symlink (typeflag '2') named with a trailing slash, pointing outside.
+      ustarHeader("rules/", 0, 0x32, "/tmp"),
+      Buffer.alloc(1024),
+    ];
+    const tar = Buffer.concat(parts);
+    const archivePath = path.join(root, "symlink-trailing-slash.tar.gz");
+    writeFileSync(archivePath, gzipSync(tar));
+    const opened = await openBundle(archivePath);
+    expect(opened.ok).toBe(false);
+    if (!opened.ok) expect(opened.refusal.reason).toBe("archive-invalid");
+  });
+
   test("default caps match what archive.ts documents (R1-F10)", () => {
     // A behavioral pin on the exported defaults, so a change to the
     // production constants is a deliberate, visible diff here rather than a
@@ -112,6 +166,7 @@ describe("buildBundleArchive + openBundle round trip", () => {
       maxEntries: 10_000,
       maxTotalBytes: 256 * 1024 * 1024,
       maxCompressedBytes: 32 * 1024 * 1024,
+      maxManifestBytes: 8 * 1024 * 1024,
     });
   });
 
@@ -128,8 +183,61 @@ describe("buildBundleArchive + openBundle round trip", () => {
     const archivePath = path.join(root, "too-many-entries.tar.gz");
     writeFileSync(archivePath, built.value);
 
-    // 3 files + bundle.json = 4 entries; cap at 2 so it refuses.
+    // 3 files (bundle.json is excluded from the count — R3-F22); cap at 2
+    // so it still refuses.
     const opened = await openBundle(archivePath, { maxEntries: 2 });
+    expect(opened.ok).toBe(false);
+    if (!opened.ok) expect(opened.refusal.reason).toBe("archive-too-large");
+  });
+
+  // R3-F22: the archive's entry cap used to count `bundle.json` as one of
+  // the entries, while `manifest.ts`'s own `contents.length` cap did not —
+  // so a VALID bundle with exactly `maxEntries` content entries (allowed by
+  // the manifest cap) could never be opened, because the archive itself
+  // carries one MORE entry (`bundle.json`) than the injected archive cap.
+  // Fails on the pre-fix code, which refused `archive-too-large` here.
+  test("R3-F22: a bundle with exactly maxEntries content files (plus bundle.json) still opens", async () => {
+    const files = new Map<string, Buffer>([
+      ["agents/a.md", Buffer.from("x")],
+      ["agents/b.md", Buffer.from("x")],
+      ["agents/c.md", Buffer.from("x")],
+    ]);
+    const built = buildBundleArchive(files, Buffer.from("{}"));
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    const archivePath = path.join(root, "exactly-at-cap.tar.gz");
+    writeFileSync(archivePath, built.value);
+
+    // 3 real files, capped at exactly 3 — bundle.json must not consume one
+    // of the 3 slots.
+    const opened = await openBundle(archivePath, { maxEntries: 3 });
+    expect(opened.ok).toBe(true);
+  });
+
+  test("R3-F22: the directory source agrees with the archive source at the same boundary", async () => {
+    const dir = path.join(root, "bundle-dir-exactly-at-cap");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "bundle.json"), '{"a":1}\n');
+    writeFileSync(path.join(dir, "a.md"), "x");
+    writeFileSync(path.join(dir, "b.md"), "x");
+    writeFileSync(path.join(dir, "c.md"), "x");
+
+    const opened = await openBundle(dir, { maxEntries: 3 });
+    expect(opened.ok).toBe(true);
+  });
+
+  test("R3-F19: a bundle.json over the injected manifest-byte cap is refused, independent of the entry/total-bytes caps", async () => {
+    const files = new Map<string, Buffer>();
+    const bigManifest = Buffer.from(`{"padding":"${"x".repeat(1000)}"}`);
+    const built = buildBundleArchive(files, bigManifest);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    const archivePath = path.join(root, "big-manifest.tar.gz");
+    writeFileSync(archivePath, built.value);
+
+    const opened = await openBundle(archivePath, { maxManifestBytes: 100 });
     expect(opened.ok).toBe(false);
     if (!opened.ok) expect(opened.refusal.reason).toBe("archive-too-large");
   });

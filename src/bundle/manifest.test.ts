@@ -118,6 +118,41 @@ describe("parseManifest", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.refusals[0]?.reason).toBe("archive-too-large");
   });
+
+  // R3-F19: the entry-count cap must run BEFORE the full JSON-schema
+  // validation, not merely before the per-entry duplicate/prefix loop the
+  // R2-F4 fix already capped — `validateAgainstSchemaObject` itself walks
+  // and validates every `contents[]` entry, which was the actually
+  // expensive step (6s / 1.68 GB at ~100k entries in review round 3). Every
+  // entry here is DELIBERATELY schema-invalid (`sha256` far too short): if
+  // the cap ran after schema validation, the result would report
+  // `schema-invalid` (from the first invalid entries encountered), not
+  // `archive-too-large` — asserting the reason is `archive-too-large` proves
+  // the cheap shape-and-length check short-circuits before that expensive
+  // pass ever starts. Fails on the pre-fix code (which validated first).
+  test("R3-F19: the entry cap short-circuits before schema validation runs", () => {
+    const manifest = validManifest();
+    const over = DEFAULT_BUNDLE_LIMITS.maxEntries + 1;
+    manifest.contents = Array.from({ length: over }, (_, i) => ({
+      path: `memory/lessons/${i}.md`,
+      kind: "memory-entry" as const,
+      scope: "project" as const,
+      sha256: "not-a-valid-sha256", // schema-invalid on purpose
+      sizeBytes: 1,
+    }));
+    const start = performance.now();
+    const result = parseManifest(Buffer.from(JSON.stringify(manifest), "utf8"));
+    const elapsedMs = performance.now() - start;
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.refusals).toHaveLength(1);
+      expect(result.refusals[0]?.reason).toBe("archive-too-large");
+    }
+    // Generous ceiling (the pre-fix cost was measured in seconds) — this is
+    // a correctness assertion (schema validation never ran), not a strict
+    // perf budget.
+    expect(elapsedMs).toBeLessThan(500);
+  });
 });
 
 describe("serializeManifest", () => {

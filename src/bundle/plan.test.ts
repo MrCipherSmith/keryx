@@ -78,8 +78,8 @@ describe("planBundleImport buckets", () => {
     // record here uses the SAME id, so this is a genuine re-import of a
     // bundle updating its own previously-written file.
     await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
-      schemaVersion: 1,
-      entries: { "hooks.json": { bundleId: "keryx-project-test", sha256: sha256Hex(oldBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z" } },
+      schemaVersion: 2,
+      entries: { "hooks.json": { bundleId: "keryx-project-test", sha256: sha256Hex(oldBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z", path: "hooks.json" } },
     });
     const entry = entryFor("hooks.json", "hook-config", "project", newBytes);
     const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["hooks.json", newBytes]]) };
@@ -101,8 +101,8 @@ describe("planBundleImport buckets", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, "hooks.json"), oldBytes);
     await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
-      schemaVersion: 1,
-      entries: { "hooks.json": { bundleId: "keryx-project-other-bundle", sha256: sha256Hex(oldBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z" } },
+      schemaVersion: 2,
+      entries: { "hooks.json": { bundleId: "keryx-project-other-bundle", sha256: sha256Hex(oldBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z", path: "hooks.json" } },
     });
     const entry = entryFor("hooks.json", "hook-config", "project", newBytes);
     const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["hooks.json", newBytes]]) };
@@ -130,6 +130,112 @@ describe("planBundleImport buckets", () => {
     expect(forcedPlan.entries[0]?.forced).toBe(true);
   });
 
+  // Choke point b (R3-F2): the ledger key is the CANONICAL (case-folded)
+  // form of the path — a bundle shipping a CASE-VARIANT of a path another
+  // bundle already owns (`rules/X.md` vs the owner's `rules/x.md`) must be
+  // recognized as the SAME on-disk file, not planned as an independent
+  // `new` entry that would silently create a second, colliding ledger
+  // record.
+  test("R3-F2: a case-variant path from a different bundle conflicts against the same owned file, not a fresh `new`", async () => {
+    const bytesA = Buffer.from("# owner\n");
+    const bytesB = Buffer.from("# other bundle, different case\n");
+    const dir = path.join(projectRoot, ".metaproject");
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(path.join(dir, "rules"), { recursive: true });
+    writeFileSync(path.join(dir, "rules", "x.md"), bytesA); // on-disk path is lower-case
+    await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
+      schemaVersion: 2,
+      entries: { "rules/x.md": { bundleId: "bundle-a", sha256: sha256Hex(bytesA), kind: "rule", appliedAt: "2026-01-01T00:00:00.000Z", path: "rules/x.md" } },
+    });
+
+    const entryB = entryFor("rules/X.md", "rule", "project", bytesB); // bundle B ships the UPPER-case path
+    const manifestB: BundleManifest = { ...manifestOf([entryB]), bundleId: "bundle-b" };
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["rules/X.md", bytesB]]) };
+    const plan = await planBundleImport({ source, manifest: manifestB, projectRoot, homeDir, env: {} });
+
+    expect(plan.ok).toBe(false);
+    expect(plan.entries[0]?.bucket).toBe("conflict");
+    expect(plan.entries[0]?.conflictReason).toBe("owned-by-other-bundle");
+    expect(plan.entries[0]?.previousOwnerBundleId).toBe("bundle-a");
+  });
+
+  // R3-F18: a bundle DECLARING the same bundleId as a previously-applied
+  // bundle is not proof it is the same producer — a hand-crafted bundle can
+  // trivially spoof any bundleId string. When the ledger record carries a
+  // `sourceProject` (recorded from `provenance.sourceProject` at apply
+  // time) that differs from this import's OWN `provenance.sourceProject`,
+  // the id is being reused across two different sources: treated as an
+  // ownership conflict needing `--force`, not a silent same-bundle update.
+  test("R3-F18: the same declared bundleId with a DIFFERENT provenance.sourceProject is a conflict, not a silent update", async () => {
+    const original = Buffer.from("# original team policy\n");
+    const spoofed = Buffer.from("# replaced by a different source claiming the same id\n");
+    const dir = path.join(projectRoot, ".metaproject");
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(path.join(dir, "rules"), { recursive: true });
+    writeFileSync(path.join(dir, "rules", "team.md"), original);
+    await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
+      schemaVersion: 2,
+      entries: {
+        "rules/team.md": {
+          bundleId: "keryx-project-0123456789ab",
+          sha256: sha256Hex(original),
+          kind: "rule",
+          appliedAt: "2026-01-01T00:00:00.000Z",
+          path: "rules/team.md",
+          sourceProject: "sha256:original-source",
+        },
+      },
+    });
+
+    const entry = entryFor("rules/team.md", "rule", "project", spoofed);
+    const manifest: BundleManifest = {
+      ...manifestOf([entry]),
+      bundleId: "keryx-project-0123456789ab", // SAME id
+      provenance: { producedBy: "keryx bundle export", sourceScope: "project", sourceProject: "sha256:different-source" },
+    };
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["rules/team.md", spoofed]]) };
+    const plan = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {} });
+
+    expect(plan.ok).toBe(false);
+    expect(plan.entries[0]?.bucket).toBe("conflict");
+    expect(plan.entries[0]?.conflictReason).toBe("owned-by-other-bundle");
+    expect(plan.entries[0]?.previousOwnerSourceProject).toBe("sha256:original-source");
+  });
+
+  test("R3-F18: the same declared bundleId with the SAME provenance.sourceProject updates normally", async () => {
+    const original = Buffer.from("# original team policy\n");
+    const updated = Buffer.from("# updated by the SAME source\n");
+    const dir = path.join(projectRoot, ".metaproject");
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(path.join(dir, "rules"), { recursive: true });
+    writeFileSync(path.join(dir, "rules", "team.md"), original);
+    await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
+      schemaVersion: 2,
+      entries: {
+        "rules/team.md": {
+          bundleId: "keryx-project-0123456789ab",
+          sha256: sha256Hex(original),
+          kind: "rule",
+          appliedAt: "2026-01-01T00:00:00.000Z",
+          path: "rules/team.md",
+          sourceProject: "sha256:same-source",
+        },
+      },
+    });
+
+    const entry = entryFor("rules/team.md", "rule", "project", updated);
+    const manifest: BundleManifest = {
+      ...manifestOf([entry]),
+      bundleId: "keryx-project-0123456789ab",
+      provenance: { producedBy: "keryx bundle export", sourceScope: "project", sourceProject: "sha256:same-source" },
+    };
+    const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["rules/team.md", updated]]) };
+    const plan = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {} });
+
+    expect(plan.ok).toBe(true);
+    expect(plan.entries[0]?.bucket).toBe("update");
+  });
+
   test("existing file differs from ledger sha -> conflict user-modified, refused without force", async () => {
     const ledgerBytes = Buffer.from(JSON.stringify({ schemaVersion: "1.0.0", hooks: {}, _keryxManaged: { tool: "keryx", version: "0.1.0" } }));
     const humanBytes = Buffer.from(JSON.stringify({ schemaVersion: "1.0.0", hooks: {}, _keryxManaged: { tool: "keryx", version: "0.2.0" } }));
@@ -138,8 +244,8 @@ describe("planBundleImport buckets", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, "hooks.json"), humanBytes);
     await writeAppliedState(appliedStatePath("project", { projectRoot, homeDir, env: {} }), {
-      schemaVersion: 1,
-      entries: { "hooks.json": { bundleId: "prior", sha256: sha256Hex(ledgerBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z" } },
+      schemaVersion: 2,
+      entries: { "hooks.json": { bundleId: "prior", sha256: sha256Hex(ledgerBytes), kind: "hook-config", appliedAt: "2026-01-01T00:00:00.000Z", path: "hooks.json" } },
     });
     const entry = entryFor("hooks.json", "hook-config", "project", incomingBytes);
     const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([["hooks.json", incomingBytes]]) };

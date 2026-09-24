@@ -52,7 +52,7 @@ function planEntry(overrides: Partial<PlanEntry> = {}): PlanEntry {
 describe("applyBundlePlan", () => {
   test("writes new entries and records the ledger", async () => {
     const entry = planEntry();
-    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot };
+    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
     const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {}, now: () => new Date("2026-09-24T00:00:00.000Z") });
     expect(result.refusals).toEqual([]);
     expect(result.written).toEqual(["project:agents/a.md"]);
@@ -67,7 +67,7 @@ describe("applyBundlePlan", () => {
   });
 
   test("a not-ok plan writes nothing", async () => {
-    const plan: BundlePlan = { ok: false, bundleId: "keryx-project-x", refusals: [{ reason: "checksum-mismatch", message: "bad" }], entries: [], projectRoot };
+    const plan: BundlePlan = { ok: false, bundleId: "keryx-project-x", refusals: [{ reason: "checksum-mismatch", message: "bad" }], entries: [], projectRoot, bundleContentDigest: "digest" };
     const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
     expect(result.written).toEqual([]);
     expect(existsSync(appliedStatePath("project", { projectRoot, homeDir, env: {} }))).toBe(false);
@@ -75,7 +75,7 @@ describe("applyBundlePlan", () => {
 
   test("a not-ok audit result writes nothing", async () => {
     const entry = planEntry();
-    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot };
+    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
     const failingAudit: AuditBundlePlanResult = { ok: false, refusals: [{ reason: "audit-failed", message: "nope" }], report: null };
     const result = await applyBundlePlan(plan, failingAudit, { homeDir, env: {} });
     expect(result.written).toEqual([]);
@@ -95,7 +95,7 @@ describe("applyBundlePlan", () => {
       bytes: Buffer.from("nested"),
       incomingSha256: sha256Hex(Buffer.from("nested")),
     });
-    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [goodEntry, badEntry], projectRoot };
+    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [goodEntry, badEntry], projectRoot, bundleContentDigest: "digest" };
     const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
     expect(result.written).toEqual([]);
     expect(existsSync(goodEntry.targetPath)).toBe(false);
@@ -117,7 +117,7 @@ describe("applyBundlePlan", () => {
       const targetPath = path.join(projectRoot, ".metaproject", "agents", "a.md");
       writeFileSync(targetPath, bytes); // the file already exists on disk — not written by any bundle.
       const entry = planEntry({ bucket: "identical", bytes, incomingSha256: sha256Hex(bytes), currentSha256: sha256Hex(bytes) });
-      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-newcomer", refusals: [], entries: [entry], projectRoot };
+      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-newcomer", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
 
       const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
       expect(result.refusals).toEqual([]);
@@ -136,11 +136,11 @@ describe("applyBundlePlan", () => {
       writeFileSync(targetPath, bytes);
       const ledgerPath = appliedStatePath("project", { projectRoot, homeDir, env: {} });
       await writeAppliedState(ledgerPath, {
-        schemaVersion: 1,
-        entries: { "agents/a.md": { bundleId: "keryx-project-original-owner", sha256: sha256Hex(bytes), kind: "agent", appliedAt: "2026-01-01T00:00:00.000Z" } },
+        schemaVersion: 2,
+        entries: { "agents/a.md": { bundleId: "keryx-project-original-owner", sha256: sha256Hex(bytes), kind: "agent", appliedAt: "2026-01-01T00:00:00.000Z", path: "agents/a.md" } },
       });
       const entry = planEntry({ bucket: "identical", bytes, incomingSha256: sha256Hex(bytes), currentSha256: sha256Hex(bytes) });
-      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-second-bundle", refusals: [], entries: [entry], projectRoot };
+      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-second-bundle", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
 
       const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
       expect(result.refusals).toEqual([]);
@@ -157,11 +157,11 @@ describe("applyBundlePlan", () => {
       writeFileSync(targetPath, bytes);
       const ledgerPath = appliedStatePath("project", { projectRoot, homeDir, env: {} });
       await writeAppliedState(ledgerPath, {
-        schemaVersion: 1,
-        entries: { "agents/a.md": { bundleId: "keryx-project-x", sha256: sha256Hex(bytes), kind: "agent", appliedAt: "2026-01-01T00:00:00.000Z" } },
+        schemaVersion: 2,
+        entries: { "agents/a.md": { bundleId: "keryx-project-x", sha256: sha256Hex(bytes), kind: "agent", appliedAt: "2026-01-01T00:00:00.000Z", path: "agents/a.md" } },
       });
       const entry = planEntry({ bucket: "identical", bytes, incomingSha256: sha256Hex(bytes), currentSha256: sha256Hex(bytes) });
-      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot };
+      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
 
       const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {}, now: () => new Date("2026-09-24T00:00:00.000Z") });
       expect(result.refusals).toEqual([]);
@@ -184,7 +184,7 @@ describe("applyBundlePlan", () => {
     mkdirSync(path.dirname(ledgerPath), { recursive: true });
     writeFileSync(ledgerPath, "{ not valid json");
     const entry = planEntry();
-    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot };
+    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
 
     const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
     expect(result.refusals).toHaveLength(1);
@@ -221,7 +221,7 @@ describe("applyBundlePlan", () => {
       bytes: Buffer.from("nested"),
       incomingSha256: sha256Hex(Buffer.from("nested")),
     });
-    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [goodMemoryEntry, badEntry], projectRoot };
+    const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [goodMemoryEntry, badEntry], projectRoot, bundleContentDigest: "digest" };
 
     const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
     expect(result.refusals).toHaveLength(1);
@@ -258,7 +258,7 @@ describe("applyBundlePlan", () => {
       bytes: Buffer.from("lesson"),
       incomingSha256: sha256Hex(Buffer.from("lesson")),
     });
-    const plan: BundlePlan = { ok: true, bundleId: "keryx-user-x", refusals: [], entries: [entry], projectRoot };
+    const plan: BundlePlan = { ok: true, bundleId: "keryx-user-x", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
 
     const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {} });
     expect(result.written).toEqual([]);

@@ -405,12 +405,17 @@ export async function exportBundle(opts: ExportOptions): Promise<ExportOutcome> 
     // disk is not restricted to portable ASCII the way a bundle path is — a
     // skill directory named with a non-ASCII character, or one that only
     // differs from a sibling by case, would otherwise export successfully
-    // and then fail on every `bundle import` of the resulting bundle. Refuse
-    // it here, at the source, with a named reason instead of shipping an
-    // unimportable artifact.
+    // and then fail on every `bundle import` of the resulting bundle.
+    //
+    // R3-F21: this used to be a hard REFUSAL that aborted the WHOLE export —
+    // one file named `rules/Code Style.md` (a space is not in the portable
+    // set) meant nobody could export ANY content at all. A single
+    // non-portable name is instead skipped, with a named reason, into the
+    // same `skipped[]` the symlink-skip path above already reports through;
+    // every OTHER, portable entry still exports normally.
     const portable = normalizeBundlePath(candidate.bundlePath);
     if (!portable.ok) {
-      refusals.push({ ...portable.refusal, message: `${candidate.bundlePath}: source name is not portable and cannot be exported: ${portable.refusal.message}` });
+      skipped.push({ path: candidate.bundlePath, reason: `non-portable-name: ${portable.refusal.message}` });
       continue;
     }
 

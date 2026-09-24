@@ -15,11 +15,11 @@ import hookConfigSchemaJson from "../../docs/requirements/keryx-agent-platform-e
 import learnedPatternSchemaJson from "../../docs/requirements/keryx-agent-platform-expansion/schemas/learned-pattern.schema.json" with {
   type: "json",
 };
-import { readAppliedState, appliedStatePath } from "./applied-state";
+import { readAppliedState, appliedStatePath, type AppliedState } from "./applied-state";
 import { sha256Hex } from "./checksum";
 import type { BundleSource } from "./archive";
 import { rewriteAgentOrigin } from "./export";
-import { readTargetFile, scopeRoot, targetFor, type PathCtx } from "./paths";
+import { canonicalBundleKey, readTargetFile, scopeRoot, targetFor, type PathCtx } from "./paths";
 import { verifyBundle } from "./verify";
 import { BUNDLE_REFUSAL, type BundleContentKind, type BundleManifest, type BundleRefusal, type BundleScope } from "./types";
 
@@ -43,8 +43,14 @@ export interface PlanEntry {
   incomingSha256: string;
   currentSha256?: string;
   ledgerSha256?: string;
+  /** The ledger record's OWN bundleId, when a record already exists for this target — set whenever `conflictReason === "owned-by-other-bundle"`, so a forced import can report the takeover (R3-F16). */
+  previousOwnerBundleId?: string;
+  /** The ledger record's `sourceProject`, when it had one — reported alongside `previousOwnerBundleId` (R3-F16, R3-F18). */
+  previousOwnerSourceProject?: string;
   bytes: Buffer;
 }
+
+type ReadAppliedStateForScope = { ok: true; state: AppliedState } | { ok: false; message: string };
 
 export interface BundlePlan {
   ok: boolean;
@@ -53,6 +59,10 @@ export interface BundlePlan {
   entries: PlanEntry[];
   /** The project root every entry's scope root was resolved against — apply re-runs path/symlink checks against the same root (R1-I1). */
   projectRoot: string;
+  /** `manifest.provenance.sourceProject`, threaded through so apply.ts can record it on every ledger entry it writes (R3-F18). */
+  bundleSourceProject?: string;
+  /** `bundleContentDigest(manifest)` — likewise threaded through for the ledger (R3-F18). */
+  bundleContentDigest: string;
 }
 
 export interface PlanBundleImportOptions {
@@ -160,9 +170,44 @@ function learnedPatternEqualModuloTtl(currentBytes: Buffer, candidateBytes: Buff
   }
 }
 
+/**
+ * A digest of the manifest's own sorted `"<path>\t<sha256>"` content list
+ * (R3-F18) — the same shape `export.ts`'s no-remote default bundleId uses,
+ * but here it is recorded in the applied-state ledger alongside
+ * `provenance.sourceProject` purely for ownership audit/troubleshooting: a
+ * later `bundle verify`/support investigation can tell whether "the same
+ * bundleId, re-applied" really was a re-export of the same content, without
+ * that comparison ever gating the plan/conflict decision itself (which
+ * relies on `sourceProject`, a much cheaper and more targeted signal against
+ * id-spoofing).
+ */
+function bundleContentDigest(manifest: BundleManifest): string {
+  const sorted = [...manifest.contents].map((e) => `${e.path}\t${e.sha256}`).sort();
+  return sha256Hex(Buffer.from(sorted.join("\n"), "utf8"));
+}
+
 export async function planBundleImport(opts: PlanBundleImportOptions): Promise<BundlePlan> {
   const ctx: PathCtx = { projectRoot: opts.projectRoot, env: opts.env, homeDir: opts.homeDir };
   const now = opts.now ?? (() => new Date());
+  const contentDigest = bundleContentDigest(opts.manifest);
+
+  // R3-F20: the ledger for a given target scope is read ONCE per plan, not
+  // once per entry — re-inspecting/re-importing a large bundle (thousands of
+  // entries, almost always all the same scope) previously re-read and
+  // re-parsed the whole ledger file per entry, which cost ~39s at 9,999
+  // entries. A corrupt ledger for a scope is cached too (so it is reported
+  // once per entry that needs it, matching the previous per-entry refusal
+  // shape, without re-reading the file each time).
+  const ledgerByScope = new Map<BundleScope, ReadAppliedStateForScope>();
+  async function ledgerFor(scope: BundleScope): Promise<ReadAppliedStateForScope> {
+    const existing = ledgerByScope.get(scope);
+    if (existing) return existing;
+    const ledgerPath = appliedStatePath(scope, ctx);
+    const read = await readAppliedState(ledgerPath);
+    const entry: ReadAppliedStateForScope = read.ok ? { ok: true, state: read.state } : { ok: false, message: read.message };
+    ledgerByScope.set(scope, entry);
+    return entry;
+  }
 
   // Step 1: checksums first. Any failure -> ok:false, no further work.
   const verified = verifyBundle(opts.source, opts.manifest);
@@ -180,7 +225,15 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     for (const p of verified.unlisted) {
       refusals.push({ reason: BUNDLE_REFUSAL.unlistedFile, path: p, message: `${p} is present in the bundle but not listed in the manifest` });
     }
-    return { ok: false, bundleId: opts.manifest.bundleId, refusals, entries: [], projectRoot: opts.projectRoot };
+    return {
+      ok: false,
+      bundleId: opts.manifest.bundleId,
+      refusals,
+      entries: [],
+      projectRoot: opts.projectRoot,
+      ...(opts.manifest.provenance.sourceProject !== undefined ? { bundleSourceProject: opts.manifest.provenance.sourceProject } : {}),
+      bundleContentDigest: contentDigest,
+    };
   }
 
   const refusals: BundleRefusal[] = [];
@@ -382,17 +435,34 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     const incomingSha256 = sha256Hex(effectiveBytes);
     const currentSha256 = currentBytes === undefined ? undefined : sha256Hex(currentBytes);
 
-    const ledgerPath = appliedStatePath(targetScope, ctx);
-    const ledgerState = await readAppliedState(ledgerPath);
+    const ledgerState = await ledgerFor(targetScope);
     if (!ledgerState.ok) {
       refusals.push({ reason: BUNDLE_REFUSAL.corruptLedger, path: contentEntry.path, message: ledgerState.message });
       continue;
     }
-    const ledgerRecord = ledgerState.state.entries[targetRelative];
+    // Choke point b (R3-F2): the ledger is keyed by the CANONICAL form of
+    // the path, not the entry's own casing — a case-variant path from a
+    // different bundle export still finds (and conflicts against) the same
+    // record a prior bundle wrote for the same on-disk file.
+    const canonicalKey = canonicalBundleKey(targetRelative);
+    const ledgerRecord = ledgerState.state.entries[canonicalKey];
     const ledgerSha256 = ledgerRecord?.sha256;
     // R1-F1: a ledger record that already exists but belongs to a DIFFERENT
     // bundleId means some other bundle wrote (and still owns) this target.
-    const ledgerOwnedByOther = ledgerRecord !== undefined && ledgerRecord.bundleId !== opts.manifest.bundleId;
+    // R3-F18: a record that DECLARES the same bundleId is not proof of the
+    // same producer — a hand-crafted bundle can trivially spoof any
+    // `bundleId` string. When the ledger record carries a `sourceProject`
+    // (recorded from `manifest.provenance.sourceProject` at apply time) and
+    // this import's manifest ALSO declares one, and they differ, the
+    // declared id is being reused across two different sources; treated the
+    // same as an ordinary ownership conflict (needs `--force`), not a
+    // silent same-bundle update. Two bundles that both have NO sourceProject
+    // (no git remote at export time) cannot be distinguished this way and
+    // fall back to the plain bundleId check, same as before.
+    const ledgerOwnedByOther =
+      ledgerRecord !== undefined &&
+      (ledgerRecord.bundleId !== opts.manifest.bundleId ||
+        (ledgerRecord.sourceProject !== undefined && opts.manifest.provenance.sourceProject !== undefined && ledgerRecord.sourceProject !== opts.manifest.provenance.sourceProject));
 
     let bucket: PlanBucket;
     let conflictReason: PlanConflictReason | undefined;
@@ -445,6 +515,11 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
       incomingSha256,
       ...(currentSha256 !== undefined ? { currentSha256 } : {}),
       ...(ledgerSha256 !== undefined ? { ledgerSha256 } : {}),
+      // R3-F16: carried through so a forced takeover can be reported (who
+      // owned it before) instead of silently disappearing into a bare
+      // "written" line.
+      ...(conflictReason === "owned-by-other-bundle" && ledgerRecord !== undefined ? { previousOwnerBundleId: ledgerRecord.bundleId } : {}),
+      ...(conflictReason === "owned-by-other-bundle" && ledgerRecord?.sourceProject !== undefined ? { previousOwnerSourceProject: ledgerRecord.sourceProject } : {}),
       bytes: effectiveBytes,
     });
   }
@@ -461,5 +536,13 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     }
   }
 
-  return { ok: refusals.length === 0, bundleId: opts.manifest.bundleId, refusals, entries, projectRoot: opts.projectRoot };
+  return {
+    ok: refusals.length === 0,
+    bundleId: opts.manifest.bundleId,
+    refusals,
+    entries,
+    projectRoot: opts.projectRoot,
+    ...(opts.manifest.provenance.sourceProject !== undefined ? { bundleSourceProject: opts.manifest.provenance.sourceProject } : {}),
+    bundleContentDigest: contentDigest,
+  };
 }

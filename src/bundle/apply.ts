@@ -10,15 +10,15 @@
 // against a file another bundle's ledger record already claims, is never
 // claimed into this bundle's ownership.
 
-import { mkdir, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { mkdir, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { removeContained, writeContained } from "../lib/contained-write";
 import { ensurePrivateDirGitignore } from "../lib/private-dir";
 import { userStorePaths } from "../lib/keryx-home";
 import { readAppliedState, writeAppliedState, type AppliedState } from "./applied-state";
 import { sha256Hex } from "./checksum";
-import { readTargetFile, refuseSymlinkChain, scopeRoot, type PathCtx } from "./paths";
+import { canonicalBundleKey, readTargetFile, refuseSymlinkChain, scopeRoot, type PathCtx } from "./paths";
 import type { PlanEntry, BundlePlan } from "./plan";
 import type { AuditBundlePlanResult } from "./audit";
 import { BUNDLE_REFUSAL, type BundleRefusal } from "./types";
@@ -46,17 +46,17 @@ function writableEntries(plan: BundlePlan): PlanEntry[] {
   return plan.entries.filter((e) => e.bucket === "new" || e.bucket === "update" || (e.bucket === "conflict" && e.forced));
 }
 
-async function atomicWrite(absolutePath: string, bytes: Buffer): Promise<void> {
-  const dir = path.dirname(absolutePath);
-  await mkdir(dir, { recursive: true });
-  const tmpPath = path.join(dir, `.${path.basename(absolutePath)}.${randomBytes(6).toString("hex")}.tmp`);
-  await writeFile(tmpPath, bytes);
-  try {
-    await rename(tmpPath, absolutePath);
-  } catch (err) {
-    await unlink(tmpPath).catch(() => undefined);
-    throw err;
-  }
+/**
+ * Flow 313 re-plan, lane C2: apply's own writes now route through the
+ * shared `writeContained` primitive (lane C1) rather than a locally
+ * duplicated tmp+rename — `root`/`rel` re-derive the same containment
+ * guarantee `targetFor`/`refuseSymlinkChain` already checked, so a symlink
+ * planted between planning and this exact write is refused here too, not
+ * only reported by the separate `refuseSymlinkChain` re-check just above
+ * each call site.
+ */
+async function atomicWrite(root: string, rel: string, bytes: Buffer): Promise<void> {
+  await writeContained(root, rel, bytes);
 }
 
 export async function applyBundlePlan(
@@ -105,9 +105,9 @@ export async function applyBundlePlan(
   }
 
   type RollbackItem =
-    | { kind: "file"; absolutePath: string; previousBytes: Buffer | null }
+    | { kind: "file"; root: string; rel: string; previousBytes: Buffer | null }
     | { kind: "dir"; absolutePath: string }
-    | { kind: "gitignore"; absolutePath: string };
+    | { kind: "gitignore"; root: string; rel: string };
 
   const rollback: RollbackItem[] = [];
   const written: string[] = [];
@@ -140,7 +140,7 @@ export async function applyBundlePlan(
           // an rmdir of a still-populated parent is a silent no-op.
           for (const dir of [...createdDirs].reverse()) rollback.push({ kind: "dir", absolutePath: dir });
           if (check.action === "create") {
-            rollback.push({ kind: "gitignore", absolutePath: path.join(memoryRoot, ".gitignore") });
+            rollback.push({ kind: "gitignore", root: memoryRoot, rel: ".gitignore" });
           }
         }
       }
@@ -170,8 +170,8 @@ export async function applyBundlePlan(
       const previousBytes: Buffer | null = previousFile.bytes ?? null;
       const createdDirs = await mkdirRecordingCreated(path.dirname(entry.targetPath));
       for (const dir of [...createdDirs].reverse()) rollback.push({ kind: "dir", absolutePath: dir });
-      rollback.push({ kind: "file", absolutePath: entry.targetPath, previousBytes });
-      await atomicWrite(entry.targetPath, entry.bytes);
+      rollback.push({ kind: "file", root, rel: entry.targetRelative, previousBytes });
+      await atomicWrite(root, entry.targetRelative, entry.bytes);
       written.push(entry.displayId);
     }
 
@@ -204,24 +204,37 @@ export async function applyBundlePlan(
 
     for (const entry of toWrite) {
       const bucket = await ledgerFor(entry.targetScope, resolveLedgerPathForEntry(entry, opts));
-      bucket.state.entries[entry.targetRelative] = {
+      // Choke point b (R3-F2): the ledger key is the CANONICAL form of the
+      // path, not its own casing, so a case-variant path from a different
+      // bundle collides with (and conflicts against) the same record.
+      bucket.state.entries[canonicalBundleKey(entry.targetRelative)] = {
         bundleId: plan.bundleId,
         sha256: entry.incomingSha256,
         kind: entry.kind,
         appliedAt: now().toISOString(),
+        path: entry.targetRelative,
+        // R3-F18: recorded so a LATER import declaring the same bundleId
+        // but a different provenance is caught as owned-by-other-bundle
+        // instead of silently updating this bundle's files.
+        ...(plan.bundleSourceProject !== undefined ? { sourceProject: plan.bundleSourceProject } : {}),
+        contentDigest: plan.bundleContentDigest,
       };
     }
     for (const entry of identical) {
       const bucket = await ledgerFor(entry.targetScope, resolveLedgerPathForEntry(entry, opts));
-      const existingRecord = bucket.state.entries[entry.targetRelative];
+      const canonicalKey = canonicalBundleKey(entry.targetRelative);
+      const existingRecord = bucket.state.entries[canonicalKey];
       if (existingRecord === undefined || existingRecord.bundleId !== plan.bundleId) {
         continue; // not ours to claim — see comment above.
       }
-      bucket.state.entries[entry.targetRelative] = {
+      bucket.state.entries[canonicalKey] = {
         bundleId: plan.bundleId,
         sha256: entry.incomingSha256,
         kind: entry.kind,
         appliedAt: now().toISOString(),
+        path: entry.targetRelative,
+        ...(plan.bundleSourceProject !== undefined ? { sourceProject: plan.bundleSourceProject } : {}),
+        contentDigest: plan.bundleContentDigest,
       };
     }
 
@@ -236,12 +249,12 @@ export async function applyBundlePlan(
       try {
         if (item.kind === "file") {
           if (item.previousBytes === null) {
-            await unlink(item.absolutePath).catch(() => undefined);
+            await removeContained(item.root, item.rel).catch(() => undefined);
           } else {
-            await writeFile(item.absolutePath, item.previousBytes);
+            await writeContained(item.root, item.rel, item.previousBytes).catch(() => undefined);
           }
         } else if (item.kind === "gitignore") {
-          await unlink(item.absolutePath).catch(() => undefined);
+          await removeContained(item.root, item.rel).catch(() => undefined);
         } else {
           await rmdir(item.absolutePath).catch(() => undefined); // best-effort; only removes if now-empty
         }

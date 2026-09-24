@@ -27,6 +27,31 @@ export function parseManifest(bytes: Buffer | string): ParseManifestResult {
     };
   }
 
+  // R3-F19: the entry-count cap runs BEFORE the full JSON-schema validation
+  // below, not only before the per-entry loop that used to follow it — a
+  // structurally-valid-shaped `contents` array with hundreds of thousands of
+  // entries made `validateAgainstSchemaObject` itself (which walks and
+  // validates every entry against the schema) the expensive step (6s / 1.68
+  // GB at ~100k entries), not the loop the R2-F4 fix already capped. This is
+  // a cheap, manual shape check — `Array.isArray`, not full validation — so
+  // it costs O(1) regardless of how large an oversized `contents` claims to
+  // be, and runs even before we know the rest of the document is otherwise
+  // schema-valid.
+  if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+    const contents = (data as Record<string, unknown>).contents;
+    if (Array.isArray(contents) && contents.length > DEFAULT_BUNDLE_LIMITS.maxEntries) {
+      return {
+        ok: false,
+        refusals: [
+          {
+            reason: BUNDLE_REFUSAL.archiveTooLarge,
+            message: `manifest lists ${contents.length} contents entries, more than the ${DEFAULT_BUNDLE_LIMITS.maxEntries}-entry cap`,
+          },
+        ],
+      };
+    }
+  }
+
   const validation = validateAgainstSchemaObject(manifestSchemaJson as Record<string, unknown>, data);
   if (!validation.valid) {
     return {
@@ -49,14 +74,9 @@ export function parseManifest(bytes: Buffer | string): ParseManifestResult {
     };
   }
 
-  // R2-F4: `contents.length` is attacker-controlled (a hand-crafted
-  // bundle.json can claim far more entries than the archive itself holds —
-  // `verifyBundle`'s missing-entry check only runs AFTER this parse), so it
-  // must be capped BEFORE any per-entry loop below, not after. `inspect` is
-  // documented safe on untrusted bundles; without this cap a ~300KB manifest
-  // with ~100k entries made the O(n^2) prefix check (removed below) hang for
-  // over a minute, and even the O(n) replacement should not iterate an
-  // unbounded array on untrusted input.
+  // R2-F4 (kept as defense-in-depth): re-checked post-schema-validation too,
+  // in case a future schema change ever lets `contents` through without
+  // being an array at the point the cheap check above runs.
   if (manifest.contents.length > DEFAULT_BUNDLE_LIMITS.maxEntries) {
     return {
       ok: false,

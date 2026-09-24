@@ -126,6 +126,16 @@ export function normalizeBundlePath(candidate: string): NormalizeResult {
         },
       };
     }
+    if (isReservedSegment(segment)) {
+      return {
+        ok: false,
+        refusal: {
+          reason: BUNDLE_REFUSAL.pathEscape,
+          path: candidate,
+          message: `path segment "${segment}" is not portable: trailing '.' and Windows device names (CON, NUL, COM1, ...) are refused (R3-I1)`,
+        },
+      };
+    }
   }
   return { ok: true, path: segments.join("/") };
 }
@@ -157,6 +167,16 @@ const GLOBALLY_FORBIDDEN_PREFIXES = [
   caseFold("bundles/"),
   caseFold("data/bundles/"),
   caseFold("state/"),
+  // R3-F15: each reserved EXACT name is also reserved as a DIRECTORY prefix —
+  // without this, a bundle entry `skills/external-imports.json/SKILL.md`
+  // dodges the exact-match check above (its own path is not literally
+  // "skills/external-imports.json") while still creating a directory AT that
+  // reserved path, so the real external-imports registry file can never be
+  // written there again (EISDIR) until the bundle is uninstalled. Reserving
+  // both the exact name and everything beneath it closes that gap without
+  // being able to forge the registry itself (the exact-match check still
+  // refuses a bundle entry AT the reserved path verbatim).
+  ...GLOBALLY_FORBIDDEN_EXACT.map((exact) => `${exact}/`),
 ];
 
 /**
@@ -165,12 +185,45 @@ const GLOBALLY_FORBIDDEN_PREFIXES = [
  * the bundle cache/ledger directories, or the external-imports registry
  * itself). Compared case-folded and NFC-normalized so a case-variant path
  * (`skills/External-Imports.json`) is caught even on a case-sensitive
- * filesystem, since APFS/exFAT treat it as the same file (R1-F2).
+ * filesystem, since APFS/exFAT treat it as the same file (R1-F2). Each exact
+ * name is reserved both for itself and as a directory prefix (R3-F15).
  */
 function isGloballyForbidden(relPath: string): boolean {
   const folded = caseFold(relPath);
   if (GLOBALLY_FORBIDDEN_EXACT.includes(folded)) return true;
   return GLOBALLY_FORBIDDEN_PREFIXES.some((prefix) => folded.startsWith(prefix));
+}
+
+/**
+ * Choke point b (flow 313 W4 re-plan, lane C2): the ONE canonical form every
+ * bundle-relative path is compared/keyed on wherever "is this the same
+ * on-disk file as that other bundle-relative path" matters — the
+ * applied-state ledger's key, ownership lookup, duplicate detection, the
+ * reserved-path guard above, the uninstall walk and export's collision
+ * detection all call this SAME function rather than each re-deriving their
+ * own fold. `relPath` must already be portable ASCII (every production
+ * caller normalizes first); lower-casing a portable-ASCII string is already
+ * a complete, alias-free fold, so there is no separate NFC/Unicode step
+ * needed here (see `caseFold`'s doc comment for why).
+ */
+export function canonicalBundleKey(relPath: string): string {
+  return caseFold(relPath);
+}
+
+const WIN32_DEVICE_BASENAMES = new Set(["con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"]);
+
+/**
+ * R3-I1: a segment ending in `.` (`SKILL.md.`) or whose basename (ignoring
+ * any extension) is a Win32 reserved device name (`CON`, `NUL`, `COM1`, ...,
+ * case-insensitive) is refused. Windows support is best-effort, but a bundle
+ * path that can never be written back out on a Windows target must not be
+ * accepted as portable in the first place.
+ */
+function isReservedSegment(segment: string): boolean {
+  if (segment.endsWith(".")) return true;
+  const dot = segment.indexOf(".");
+  const basename = dot === -1 ? segment : segment.slice(0, dot);
+  return WIN32_DEVICE_BASENAMES.has(caseFold(basename));
 }
 
 /** Does `relPath` (already normalized) match the allowed on-disk shape for `kind` at `scope`? */

@@ -34,6 +34,13 @@ export const DEFAULT_BUNDLE_LIMITS: Required<BundleLimits> = {
   maxEntries: 10_000,
   maxTotalBytes: 256 * 1024 * 1024,
   maxCompressedBytes: 32 * 1024 * 1024,
+  // R3-F19: `bundle.json` itself is capped in the reader, independent of the
+  // whole-archive size caps above — a manifest this small never needs the
+  // expensive JSON.parse + full schema validation `parseManifest` runs to
+  // discover it is oversized; refusing on the RAW BYTE LENGTH here is O(1).
+  // 8 MiB is generous headroom over a realistic 10,000-entry manifest
+  // (~1 MiB at ~100 bytes/entry).
+  maxManifestBytes: 8 * 1024 * 1024,
 };
 
 export interface BundleSource {
@@ -52,10 +59,12 @@ export interface BundleSource {
 export interface BundleLimits {
   /** Cap on a `.tar.gz` file's on-disk (compressed) size, checked before reading it. */
   maxCompressedBytes?: number;
-  /** Cap on total regular-file bytes across an archive or directory bundle. */
+  /** Cap on total regular-file bytes across an archive or directory bundle. `bundle.json` itself is excluded (R3-F22) — see `maxManifestBytes`. */
   maxTotalBytes?: number;
-  /** Cap on the number of regular-file entries in an archive or directory bundle. */
+  /** Cap on the number of regular-file entries in an archive or directory bundle. `bundle.json` itself is excluded (R3-F22) — the archive and manifest entry caps must agree, or a valid bundle at exactly the boundary (e.g. 10,000 content entries) becomes unopenable. */
   maxEntries?: number;
+  /** Cap on `bundle.json`'s own raw byte size (R3-F19), checked independently of `maxTotalBytes`/`maxEntries` and before it is ever `JSON.parse`d. */
+  maxManifestBytes?: number;
 }
 
 interface ResolvedLimits {
@@ -63,6 +72,7 @@ interface ResolvedLimits {
   maxDecompressedBytes: number;
   maxTotalBytes: number;
   maxEntries: number;
+  maxManifestBytes: number;
 }
 
 function resolveLimits(limits?: BundleLimits): ResolvedLimits {
@@ -74,6 +84,7 @@ function resolveLimits(limits?: BundleLimits): ResolvedLimits {
     maxDecompressedBytes: maxTotalBytes + 8 * 1024 * 1024,
     maxTotalBytes,
     maxEntries: limits?.maxEntries ?? DEFAULT_BUNDLE_LIMITS.maxEntries,
+    maxManifestBytes: limits?.maxManifestBytes ?? DEFAULT_BUNDLE_LIMITS.maxManifestBytes,
   };
 }
 
@@ -256,8 +267,17 @@ function parseUstar(
       return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveInvalid, path: name, message: `unsafe entry name: ${name}` } };
     }
 
-    const isDir = typeflag === "5" || name.endsWith("/");
+    // R3-I2: a directory member is identified by its ustar TYPEFLAG alone
+    // ("5"), never by the name merely ending in "/" — this repo's own writer
+    // (`buildHeader`) always sets the correct typeflag for a directory it
+    // produces, so relying on the name suffix only let a SYMLINK member
+    // named with a trailing slash (`rules/` with typeflag "2") be silently
+    // treated as an empty directory instead of falling through to the
+    // unsupported-entry-type refusal below, where every other symlink
+    // member already lands.
+    const isDir = typeflag === "5";
     const isRegular = typeflag === "0" || typeflag === "\0" || typeflag === "";
+    const isManifestEntry = !isDir && name === BUNDLE_MANIFEST_NAME;
 
     offset += BLOCK;
 
@@ -272,13 +292,25 @@ function parseUstar(
       };
     }
 
-    entryCount += 1;
-    if (entryCount > limits.maxEntries) {
-      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive has more than ${limits.maxEntries} entries` } };
-    }
-    totalBytes += size;
-    if (totalBytes > limits.maxTotalBytes) {
-      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive exceeds ${limits.maxTotalBytes} bytes total` } };
+    // R3-F22: `bundle.json` is excluded from the entry-count/total-bytes
+    // caps below — those caps and `manifest.ts`'s own `contents.length` cap
+    // must agree at the boundary, or a bundle with exactly `maxEntries`
+    // content entries (valid per the manifest cap) becomes unopenable
+    // because the archive also carries `bundle.json` as its own entry.
+    // `bundle.json` gets its OWN, independent size cap instead (R3-F19).
+    if (isManifestEntry) {
+      if (size > limits.maxManifestBytes) {
+        return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, path: name, message: `bundle.json is ${size} bytes, over the ${limits.maxManifestBytes}-byte manifest cap` } };
+      }
+    } else {
+      entryCount += 1;
+      if (entryCount > limits.maxEntries) {
+        return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive has more than ${limits.maxEntries} entries` } };
+      }
+      totalBytes += size;
+      if (totalBytes > limits.maxTotalBytes) {
+        return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive exceeds ${limits.maxTotalBytes} bytes total` } };
+      }
     }
     const dataBlocks = Math.ceil(size / BLOCK) * BLOCK;
     if (offset + size > tar.length) {
@@ -292,7 +324,7 @@ function parseUstar(
     }
     seen.add(name);
 
-    if (name === BUNDLE_MANIFEST_NAME) {
+    if (isManifestEntry) {
       manifestBytes = data;
     } else {
       files.set(name, data);
@@ -342,9 +374,19 @@ export async function openBundle(
         if (!entryStat.isFile()) {
           return { reason: BUNDLE_REFUSAL.archiveInvalid, path: rel, message: `${rel} is not a regular file` };
         }
-        // R1-F10: cap entry count and total bytes as the walk goes, BEFORE
-        // reading the file's contents — matching the archive branch's caps,
-        // so a directory source cannot be used to bypass the same limits.
+        // R1-F10/R3-F22: cap entry count and total bytes as the walk goes,
+        // BEFORE reading the file's contents — matching the archive
+        // branch's caps, so a directory source cannot be used to bypass the
+        // same limits. `bundle.json` is excluded here too, with its own
+        // independent size cap (R3-F19), so the directory and archive
+        // sources agree at the entry-count boundary.
+        if (rel === BUNDLE_MANIFEST_NAME) {
+          if (entryStat.size > resolved.maxManifestBytes) {
+            return { reason: BUNDLE_REFUSAL.archiveTooLarge, path: rel, message: `bundle.json is ${entryStat.size} bytes, over the ${resolved.maxManifestBytes}-byte manifest cap` };
+          }
+          manifestBytes = await readFile(abs);
+          continue;
+        }
         entryCount += 1;
         if (entryCount > resolved.maxEntries) {
           return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory has more than ${resolved.maxEntries} entries` };
@@ -354,11 +396,7 @@ export async function openBundle(
           return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory exceeds ${resolved.maxTotalBytes} bytes total` };
         }
         const bytes = await readFile(abs);
-        if (rel === BUNDLE_MANIFEST_NAME) {
-          manifestBytes = bytes;
-        } else {
-          files.set(rel, bytes);
-        }
+        files.set(rel, bytes);
       }
       return null;
     }

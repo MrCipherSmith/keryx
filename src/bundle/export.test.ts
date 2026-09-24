@@ -173,10 +173,13 @@ describe("exportBundle", () => {
   });
 
   // R2-F1/R2-F21 (class "path identity"): a source directory/file name that
-  // is not portable ASCII must not silently export — the resulting bundle
+  // is not portable ASCII must never be shipped in the bundle — the result
   // could never be imported (`normalizeBundlePath` refuses it on the way
-  // in). Fails on the pre-fix code, which exported it unchanged.
-  test("refuses a non-ASCII source skill directory name with a named reason", async () => {
+  // in). When it is the ONLY candidate, the export still refuses closed —
+  // with nothing else to export, `empty-bundle` is the accurate reason
+  // rather than a misleading `path-escape` for a source name that was never
+  // a bundle-relative path in the first place.
+  test("a non-ASCII source skill directory name, alone, refuses empty-bundle", async () => {
     mkdirSync(path.join(metaRoot, "skills", "skſll"), { recursive: true });
     writeFileSync(path.join(metaRoot, "skills", "skſll", "SKILL.md"), "---\nname: x\ndescription: d\n---\nbody\n");
     const outDir = path.join(root, "out-nonportable");
@@ -190,7 +193,33 @@ describe("exportBundle", () => {
     });
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
-    expect(outcome.refusals.some((r) => r.reason === "path-escape")).toBe(true);
+    expect(outcome.refusals[0]?.reason).toBe("empty-bundle");
+  });
+
+  // R3-F21: pre-fix, ONE non-portable source name aborted the WHOLE export
+  // (`rules/Code Style.md` — a space is not portable — meant nobody could
+  // export ANY content). Now it is skipped, with a named reason, and every
+  // OTHER portable entry still exports. Fails on the pre-fix code, which
+  // returned `ok: false` here with zero entries written.
+  test("R3-F21: a non-ASCII source name alongside portable entries is skipped, not fatal", async () => {
+    mkdirSync(path.join(metaRoot, "skills", "skſll"), { recursive: true });
+    writeFileSync(path.join(metaRoot, "skills", "skſll", "SKILL.md"), "---\nname: x\ndescription: d\n---\nbody\n");
+    mkdirSync(path.join(metaRoot, "skills", "good"), { recursive: true });
+    writeFileSync(path.join(metaRoot, "skills", "good", "SKILL.md"), "---\nname: good\ndescription: d\n---\nbody\n");
+    const outDir = path.join(root, "out-skip-nonportable");
+    const outcome = await exportBundle({
+      projectRoot,
+      scope: "project",
+      out: outDir,
+      keryxVersion: "0.2.999-test",
+      homeDir: path.join(root, "home"),
+      env: {},
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.result.entries.map((e) => e.path)).toEqual(["skills/good/SKILL.md"]);
+    expect(outcome.result.skipped).toContainEqual(expect.objectContaining({ path: "skills/skſll/SKILL.md" }));
+    expect(outcome.result.skipped.find((s) => s.path === "skills/skſll/SKILL.md")?.reason).toContain("non-portable-name");
   });
 
   // R2-F21 (missing regression test for R1-F23): with no git remote,

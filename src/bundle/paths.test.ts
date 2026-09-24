@@ -354,3 +354,50 @@ describe("targetFor", () => {
     if (!result.ok) expect(result.refusal.reason).toBe("symlink-refused");
   });
 });
+
+// R3-F15: a reserved EXACT path (`skills/external-imports.json`,
+// `skills/.external-imports.key`, `learning/index.json`) is also reserved as
+// a DIRECTORY PREFIX — a bundle must not be able to plant a directory AT the
+// reserved path by shipping a file underneath it.
+describe("reserved-path guard is a directory prefix too (R3-F15)", () => {
+  test.each([
+    "skills/external-imports.json/SKILL.md",
+    "skills/external-imports.json/x/SKILL.md",
+    "learning/index.json/x.json",
+  ])("%s is refused as path-not-valid-for-scope", (bundlePath) => {
+    const kind = bundlePath.startsWith("learning/") ? "learned-pattern" : "skill";
+    const result = validateKindPath(kind, "user", bundlePath);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusal.reason).toBe("path-not-valid-for-scope");
+  });
+
+  test("a case-variant of the reserved directory prefix is refused too", () => {
+    const result = validateKindPath("skill", "user", "skills/EXTERNAL-IMPORTS.JSON/SKILL.md");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusal.reason).toBe("path-not-valid-for-scope");
+  });
+
+  test("the reserved name itself (no nesting) is still refused, unchanged", () => {
+    const result = validateKindPath("hook-config", "project", "skills/external-imports.json");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusal.reason).toBe("path-not-valid-for-scope");
+  });
+});
+
+// R3-I1: a trailing-dot segment or a Win32 reserved device basename
+// (case-insensitive, with any extension) is refused as non-portable —
+// Windows support is best-effort, but a path that can never be written back
+// out on a Windows target must not be accepted as portable in the first
+// place.
+describe("normalizeBundlePath refuses trailing-dot and Win32 device names (R3-I1)", () => {
+  test.each(["agents/foo.md.", "rules/CON.md", "rules/con.md", "rules/NUL", "skills/com1.txt/SKILL.md", "rules/LPT9.md"])("%s is refused", (bundlePath) => {
+    const result = normalizeBundlePath(bundlePath);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.refusal.reason).toBe("path-escape");
+  });
+
+  test("an ordinary name that merely CONTAINS a device-like substring is accepted", () => {
+    const result = normalizeBundlePath("rules/console.md");
+    expect(result.ok).toBe(true);
+  });
+});
