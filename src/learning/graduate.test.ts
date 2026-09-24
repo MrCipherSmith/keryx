@@ -1203,6 +1203,131 @@ describe("runGraduate: a proposal orphaned by a change in cluster membership is 
   });
 });
 
+describe("runGraduate: the orphan sweep does not over-delete on a --domain run (R2-F1)", () => {
+  test("a --domain X run leaves a LIVE (non-orphaned) proposal of an unrelated domain Y intact, even though its text carries a later-configured login", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      // A `review-conventions` cluster whose trigger carries a glued token
+      // ("alice-style") that will later equal a configured login. Provenance
+      // is `reviewer-comment` (`mayCarryReviewerText` true), matching the
+      // existing R1-F4 orphan shape, so the token IS a genuine leak once the
+      // login is configured.
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // Unrelated members in a DIFFERENT domain, so a `--domain testing` run
+      // below has something of its own to cluster/report on.
+      for (const [id, trigger, action, scope] of SKILL_CLUSTER) {
+        await writePattern(root, makeAccepted(id, trigger, action, "testing", 0.5, scope), { env, capability });
+      }
+
+      // Full run (no domain filter): writes the review-conventions proposal
+      // while no login is configured yet, so "alice" survives into its
+      // suggestedName.
+      const first = await runGraduate(root, { now: NOW, env });
+      const liveProposal = first.proposals.find((p) => p.domain === "review-conventions");
+      expect(liveProposal).toBeDefined();
+      expect(liveProposal!.suggestedName.toLowerCase()).toContain("alice");
+      const liveJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${liveProposal!.proposalId}.json`);
+      const liveMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${liveProposal!.proposalId}.md`);
+      expect(existsSync(liveJsonPath)).toBe(true);
+
+      // The login is configured only now.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      // A `--domain testing` run: `listPatterns` returns only "testing"
+      // records, so the review-conventions cluster above is NOT among this
+      // run's current clusters at all. The proposal is still LIVE (its
+      // cluster is unchanged and still exists), so the sweep must leave it
+      // alone rather than treating "not in this domain-filtered run" as
+      // "orphaned".
+      const domainRun = await runGraduate(root, { now: NOW, env, domain: "testing" });
+      expect(domainRun.proposals.every((p) => p.domain === "testing")).toBe(true);
+
+      expect(existsSync(liveJsonPath)).toBe(true);
+      expect(existsSync(liveMdPath)).toBe(true);
+
+      // A subsequent FULL run still re-gates/rewrites it normally (unrelated
+      // to this finding, just confirming nothing else broke).
+      const full = await runGraduate(root, { now: NOW, env });
+      const rewritten = full.alreadyProposed.includes(liveProposal!.proposalId);
+      expect(rewritten).toBe(true);
+    });
+  });
+
+  test("scoping: an orphaned proposal whose members cannot carry reviewer text is kept even though its stored text matches a later-configured login token", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      // `repeated-correction` provenance -> `mayCarryReviewerText` is false,
+      // so `topKeywords` never filters logins for these entries at ANY time
+      // (see `topKeywords`'s per-entry scoping) — "bobby-style" is this
+      // cluster's own genuine content, not an attribution fragment, even
+      // though "bobby" later becomes a configured login.
+      const rows: readonly [string, string, string][] = [
+        ["code-style.bobby-return-aaaaaaaa", "prefer early returns bobby-style", "Prefer early returns bobby-style over nested conditionals"],
+        ["code-style.bobby-return-bbbbbbbb", "prefer early returns bobby-style always", "Prefer early returns bobby-style to reduce nesting"],
+        ["code-style.bobby-return-cccccccc", "use early returns bobby-style", "Use early returns bobby-style instead of nested if blocks"],
+      ];
+      for (const [id, trigger, action] of rows) {
+        await writePattern(root, makeAccepted(id, trigger, action, "code-style", 0.8), { env, capability });
+      }
+
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+      expect(firstProposal!.suggestedName.toLowerCase()).toContain("bobby");
+      const orphanedJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const orphanedMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      expect(existsSync(orphanedJsonPath)).toBe(true);
+
+      // A 4th similar member joins the cluster: the proposal id changes, so
+      // the old one is orphaned (never revisited by the main loop).
+      await writePattern(
+        root,
+        makeAccepted(
+          "code-style.bobby-return-dddddddd",
+          "prefer early returns bobby-style here",
+          "Prefer early returns bobby-style in handlers",
+          "code-style",
+          0.8,
+        ),
+        { env, capability },
+      );
+
+      // The login is configured only now, after the membership change.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["bobby"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      const secondProposal = second.proposals.find((p) => p.target === "agent");
+      expect(secondProposal).toBeDefined();
+      expect(secondProposal!.proposalId).not.toBe(firstProposal!.proposalId);
+
+      // The orphan's own members cannot carry reviewer text (provenance is
+      // `repeated-correction`), so "bobby-style" is genuine content for
+      // them, not a leaked login — the sweep must keep the orphan rather
+      // than deleting it on a bare token match.
+      expect(existsSync(orphanedJsonPath)).toBe(true);
+      expect(existsSync(orphanedMdPath)).toBe(true);
+    });
+  });
+});
+
 describe("applyGraduation: a login configured AFTER an already-written skill/rule proposal never appears in the printed next-step message (R10-F1)", () => {
   test("configuring the login after runGraduate: the graduate-apply-agent-only message's next step never contains it", async () => {
     await withProjectRoot(async (root, env) => {

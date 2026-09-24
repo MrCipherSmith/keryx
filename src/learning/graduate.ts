@@ -450,6 +450,33 @@ function proposalFileCarriesLogin(proposal: GraduationProposalFile, logins: read
 }
 
 /**
+ * R2-F1 (review round 2, PR #695, minor): whether `proposal` could actually
+ * be carrying review-derived text at all, the same `mayCarryReviewerText`
+ * scoping `topKeywords` already applies per member at write time. A member
+ * whose provenance never reads review text (e.g. `repeated-correction`) is
+ * never login-filtered by `topKeywords`, at proposal time OR later, so a
+ * stored keyword equal to a configured login is that member's own genuine
+ * content, not an attribution leak — deleting the proposal on a bare token
+ * match alone would destroy a legitimate artifact. Returns `true` (safe to
+ * delete, subject to the actual token check in `proposalFileCarriesLogin`)
+ * when either (a) at least one still-existing member's provenance can carry
+ * reviewer text, or (b) NONE of the members exist any more — the orphan's
+ * whole cluster is gone, the same "cluster no longer exists at all" case
+ * this sweep exists to clean up, and there is no surviving member left whose
+ * genuine content the stored text could instead be.
+ */
+async function orphanMayCarryReviewerText(root: string, proposal: GraduationProposalFile, storeOptions: StoreEnvOptions): Promise<boolean> {
+  let anyMemberFound = false;
+  for (const id of proposal.members) {
+    const record = await readMember(root, id, storeOptions);
+    if (record === undefined) continue;
+    anyMemberFound = true;
+    if (mayCarryReviewerText(record.provenance)) return true;
+  }
+  return !anyMemberFound;
+}
+
+/**
  * R1-F4: `runGraduate`'s main loop only ever revisits a proposal whose
  * cluster still exists among the CURRENT `accepted` records — when a
  * cluster's membership changes (a member joins/leaves), `proposalIdFor`
@@ -463,8 +490,28 @@ function proposalFileCarriesLogin(proposal: GraduationProposalFile, logins: read
  * (`proposalFileCarriesLogin`). A file this run cannot parse as a proposal
  * (corrupt, foreign, or racing another writer) is left alone rather than
  * guessed at.
+ *
+ * R2-F1 (review round 2, PR #695, minor): TWO bugs fixed here.
+ *  (1) `currentProposalIds` is computed from `listPatterns({ status:
+ *      "accepted", ...domain })` — when `domainFilter` (the run's
+ *      `opts.domain`) is set, that set covers only ONE domain, so every
+ *      LIVE proposal of every OTHER domain looked "orphaned" to this sweep
+ *      and was deleted outright on a `keryx learn graduate --domain X` run.
+ *      Fixed by skipping any proposal whose own stored `domain` does not
+ *      match `domainFilter` — the sweep now only ever judges proposals this
+ *      run could actually have recomputed `currentProposalIds` for.
+ *  (2) `proposalFileCarriesLogin` checked the proposal's persisted text
+ *      with no provenance scoping at all, so an orphan was deleted on a bare
+ *      token match even when that token was a member's own genuine content
+ *      (see `orphanMayCarryReviewerText`). Fixed by requiring both checks.
  */
-async function sweepOrphanedProposalsCarryingLogin(root: string, currentProposalIds: ReadonlySet<string>, logins: readonly string[]): Promise<void> {
+async function sweepOrphanedProposalsCarryingLogin(
+  root: string,
+  currentProposalIds: ReadonlySet<string>,
+  logins: readonly string[],
+  domainFilter: LearningDomain | undefined,
+  storeOptions: StoreEnvOptions,
+): Promise<void> {
   const dir = graduationDir(root);
   const { readdir, readFile } = await import("node:fs/promises");
   let entries: string[];
@@ -488,9 +535,19 @@ async function sweepOrphanedProposalsCarryingLogin(root: string, currentProposal
     } catch {
       continue;
     }
-    if (proposalFileCarriesLogin(proposal, logins)) {
-      await removeProposalFiles(root, proposalId);
-    }
+
+    // R2-F1(1): a domain-filtered run never computed `currentProposalIds`
+    // for any OTHER domain's clusters — a proposal outside this run's domain
+    // is simply out of scope, not orphaned, whether or not its own cluster
+    // still exists.
+    if (domainFilter !== undefined && proposal.domain !== domainFilter) continue;
+
+    if (!proposalFileCarriesLogin(proposal, logins)) continue;
+    // R2-F1(2): the token match alone is not enough — only delete when the
+    // matched text could actually have come from review-derived content.
+    if (!(await orphanMayCarryReviewerText(root, proposal, storeOptions))) continue;
+
+    await removeProposalFiles(root, proposalId);
   }
 }
 
@@ -666,7 +723,7 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
   // is actually configured (otherwise there is nothing to gate against, same
   // as the re-gate branch above).
   if (configuredLogins.length > 0) {
-    await sweepOrphanedProposalsCarryingLogin(root, currentProposalIds, configuredLogins);
+    await sweepOrphanedProposalsCarryingLogin(root, currentProposalIds, configuredLogins, opts.domain, storeOptions);
   }
 
   return { proposals, alreadyProposed, refused };
