@@ -1126,6 +1126,79 @@ describe("runGraduate: a login configured AFTER an already-written proposal is s
       expect(second.proposals).toEqual([]);
       expect(second.alreadyProposed).toEqual([]);
       expect(second.refused.some((r) => r.categories.includes("attribution") && r.memberIds.includes(memberId))).toBe(true);
+
+      // R1-F4: the re-gate above refuses rather than rewriting — the stale
+      // proposal `.json`/`.md` pair (written by the first, unfiltered run,
+      // and still carrying the raw "@bob" mention) must not be left sitting
+      // on disk once that member is known to gate against a configured
+      // login. Both files are deleted, not just the `.json`.
+      const proposalJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const proposalMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      expect(existsSync(proposalJsonPath)).toBe(false);
+      expect(existsSync(proposalMdPath)).toBe(false);
+    });
+  });
+});
+
+describe("runGraduate: a proposal orphaned by a change in cluster membership is swept once a login is configured (R1-F4)", () => {
+  test("cluster membership changes (proposal id changes); the old proposal, carrying a later-configured login, is deleted on rerun", async () => {
+    await withProjectRoot(async (root, env) => {
+      const capability = createAcceptCapability();
+      const rows: readonly [string, string, string][] = [
+        ["review-conventions.early-returns-aaaaaaaa", "prefer early returns alice-style", "Prefer early returns alice-style over nested conditionals"],
+        ["review-conventions.early-returns-bbbbbbbb", "prefer early returns alice-style always", "Prefer early returns alice-style to reduce nesting"],
+        ["review-conventions.early-returns-cccccccc", "use early returns alice-style", "Use early returns alice-style instead of nested if blocks"],
+      ];
+      for (const [id, hint, action] of rows) {
+        await writePattern(root, makeAcceptedReviewerComment(id, hint, action, "review-conventions", 0.8), { env, capability });
+      }
+
+      // No login configured yet: the glued "alice" keyword survives into
+      // the first proposal's suggestedName/summary (same R6-F1 shape).
+      const first = await runGraduate(root, { now: NOW, env });
+      const firstProposal = first.proposals.find((p) => p.target === "agent");
+      expect(firstProposal).toBeDefined();
+      expect(firstProposal!.suggestedName.toLowerCase()).toContain("alice");
+      const orphanedJsonPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.json`);
+      const orphanedMdPath = path.join(root, ".metaproject", "data", "learning", "graduation", `${firstProposal!.proposalId}.md`);
+      expect(existsSync(orphanedJsonPath)).toBe(true);
+
+      // A 4th similar member joins the cluster: `proposalIdFor` hashes the
+      // new (larger) sorted member-id set, so the NEW proposal gets a
+      // DIFFERENT id — the old one is now orphaned, not "already proposed".
+      await writePattern(
+        root,
+        makeAcceptedReviewerComment(
+          "review-conventions.early-returns-dddddddd",
+          "prefer early returns alice-style here",
+          "Prefer early returns alice-style in handlers",
+          "review-conventions",
+          0.8,
+        ),
+        { env, capability },
+      );
+
+      // The login is configured only now, after the membership change.
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(
+        path.join(root, ".metaproject", "review-learning.config.json"),
+        JSON.stringify({ schemaVersion: 1, skill: "module/skill", repo: "acme/widgets", authors: ["alice"] }),
+      );
+
+      const second = await runGraduate(root, { now: NOW, env });
+      const secondProposal = second.proposals.find((p) => p.target === "agent");
+      expect(secondProposal).toBeDefined();
+      expect(secondProposal!.proposalId).not.toBe(firstProposal!.proposalId);
+      // The new cluster's own proposal is clean (the main-loop gate already
+      // covered this — R6-F2) — the point under test is the ORPHAN below.
+      expect(secondProposal!.suggestedName.toLowerCase()).not.toContain("alice");
+
+      // The orphaned proposal — never visited by the main loop, since its id
+      // no longer matches any current cluster — is deleted by the sweep
+      // rather than left on disk carrying "alice" forever.
+      expect(existsSync(orphanedJsonPath)).toBe(false);
+      expect(existsSync(orphanedMdPath)).toBe(false);
     });
   });
 });

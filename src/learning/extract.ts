@@ -417,7 +417,26 @@ async function upsertDraft(
       status: "candidate",
       supersededBy: null,
       evidence: newEvidence,
-      reviewerProfile: draft.reviewerProfile ?? null,
+      // R1-F5 (review round 1, PR #695, minor): the schema only requires
+      // `reviewerProfile.reviewerId` to be a non-empty string — it does not
+      // (and cannot, generically) require the shape `reviewerIdFor` actually
+      // produces (`rv-<16 hex>`, an opaque per-project hash of a login).
+      // Every DETERMINISTIC `reviewerProfile` comes from
+      // `reviewer-comment.ts`'s own signal, which always calls
+      // `reviewerIdFor` — so it is already trustworthy. A MODEL-BACKED
+      // draft supplies its own `reviewerProfile` (if any) with no such
+      // guarantee: nothing here stops a careless or malicious model-backed
+      // extractor from putting a literal configured login straight into
+      // `reviewerId`, unguarded — the same class of leak R10-F2 already
+      // fixed for `sourceRef`. `reviewerProfile` only ever exists to let
+      // `keryx learn review`'s per-reviewer grouping (`reviewer-profile.ts`)
+      // find every record for one already-hashed reviewer id; a model-backed
+      // extractor has no legitimate way to produce that hash (it does not
+      // know the project identity `reviewerIdFor` salts with, and is never
+      // handed one), so there is no real capability lost by simply dropping
+      // it for this signal rather than trying to validate/gate an
+      // extractor-supplied value.
+      reviewerProfile: draft.extractorKind === "model-backed" ? null : (draft.reviewerProfile ?? null),
       redaction: { scanned: true, findings: [] },
       graduation: null,
       provenance: { extractor: extractorLabel, extractorKind: draft.extractorKind ?? "deterministic" },

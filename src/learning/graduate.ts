@@ -18,7 +18,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { validateAgentDefinition, type AgentDefinition } from "../agents";
-import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
+import { isNotFound, isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
 import { loadReviewLearningConfigSafe, type ReviewLearningConfig } from "../review/review-learning";
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
@@ -398,6 +398,102 @@ function projectRelativeProposalPath(proposalId: string): string {
   return path.join(".metaproject", "data", "learning", "graduation", `${proposalId}.json`);
 }
 
+/**
+ * R1-F4 (review round 1, PR #695, minor): deletes a proposal's `.json`/`.md`
+ * pair, under the same lock every writer in this file uses. Called (a) when
+ * the already-proposed re-gate below refuses an update-in-place — the stale
+ * pair must not linger with a login it was just found to carry — and (b) by
+ * `sweepOrphanedProposalsCarryingLogin` for a proposal whose cluster no
+ * longer exists at all. Both paths already validated the target paths are
+ * inside the learning root before calling this; `rm(..., { force: true })`
+ * is a no-op if a file is already gone (e.g. only the `.json` exists because
+ * a previous run was interrupted between the two writes).
+ */
+async function removeProposalFiles(root: string, proposalId: string): Promise<void> {
+  const jsonPath = proposalPathFor(root, proposalId);
+  const summaryPath = proposalSummaryPathFor(root, proposalId);
+  assertInsideLearningRoot(jsonPath, [learningDataDir(root)]);
+  assertInsideLearningRoot(summaryPath, [learningDataDir(root)]);
+  const { rm } = await import("node:fs/promises");
+  await withFileLock(projectLockPath(root), async () => {
+    await rm(jsonPath, { force: true });
+    await rm(summaryPath, { force: true });
+  });
+}
+
+/**
+ * Same word-tokenization `keywordsOf` uses (`[a-z][a-z0-9]*`, so a
+ * hyphen/underscore already splits `alice-style` into standalone `alice` +
+ * `style`), checked for exact membership in `forbidden` (a `loginKeywordSet`
+ * result) — never `containsConfiguredLogin`'s identifier-boundary regex,
+ * which is banned outside `reviewer-id.ts` (`reviewer-id.test.ts`'s import
+ * guard) and would in any case MISS this exact shape: `alice-style` is not
+ * boundary-matched for `alice` (`-` is a login-class character, not a
+ * boundary — see `containsConfiguredLogin`'s own doc), which is precisely
+ * how `alice` ends up sitting bare in a proposal's `suggestedName`/`summary`
+ * in the first place (`topKeywords` tokenizes the SAME way before the login
+ * was configured, so `alice` survived as its own keyword).
+ */
+function textCarriesForbiddenKeyword(text: string, forbidden: ReadonlySet<string>): boolean {
+  const words = text.toLowerCase().match(/[a-z][a-z0-9]*/g) ?? [];
+  return words.some((word) => forbidden.has(word));
+}
+
+/** True when any of `proposal`'s own persisted, human-readable fields carry a configured login as a standalone keyword token (R1-F4) — the exact content a stale/orphaned proposal file leaks. Checked directly against the proposal's OWN stored text (not re-derived from source member records, which may no longer exist — a record can be rejected/pruned independently of a proposal referencing it) via `loginKeywordSet`, the same token set `keywordsOf`/`topKeywords` already filter proposal text through at write time. */
+function proposalFileCarriesLogin(proposal: GraduationProposalFile, logins: readonly string[]): boolean {
+  const forbidden = loginKeywordSet(logins);
+  return (
+    textCarriesForbiddenKeyword(proposal.suggestedName, forbidden) ||
+    textCarriesForbiddenKeyword(proposal.summary, forbidden) ||
+    proposal.nextSteps.some((step) => textCarriesForbiddenKeyword(step, forbidden))
+  );
+}
+
+/**
+ * R1-F4: `runGraduate`'s main loop only ever revisits a proposal whose
+ * cluster still exists among the CURRENT `accepted` records — when a
+ * cluster's membership changes (a member joins/leaves), `proposalIdFor`
+ * hashes a different member-id set and produces a different id, orphaning
+ * the old proposal file. That orphan is never looked at again by the main
+ * loop, so a login configured after the fact never reaches it. Whenever any
+ * login is configured, this sweeps every `graduation/*.json` file that is
+ * NOT one of `currentProposalIds` (the ids the main loop just computed for
+ * the current clusters, written or not) and deletes the `.json`/`.md` pair
+ * for any orphan whose own stored text carries a configured login
+ * (`proposalFileCarriesLogin`). A file this run cannot parse as a proposal
+ * (corrupt, foreign, or racing another writer) is left alone rather than
+ * guessed at.
+ */
+async function sweepOrphanedProposalsCarryingLogin(root: string, currentProposalIds: ReadonlySet<string>, logins: readonly string[]): Promise<void> {
+  const dir = graduationDir(root);
+  const { readdir, readFile } = await import("node:fs/promises");
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch (error) {
+    if (isNotFound(error)) return;
+    throw error;
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".json")) continue;
+    const proposalId = entry.slice(0, -".json".length);
+    if (currentProposalIds.has(proposalId)) continue;
+
+    const jsonPath = path.join(dir, entry);
+    assertInsideLearningRoot(jsonPath, [learningDataDir(root)]);
+    let proposal: GraduationProposalFile;
+    try {
+      proposal = JSON.parse(await readFile(jsonPath, "utf8")) as GraduationProposalFile;
+    } catch {
+      continue;
+    }
+    if (proposalFileCarriesLogin(proposal, logins)) {
+      await removeProposalFiles(root, proposalId);
+    }
+  }
+}
+
 function renderSummaryMarkdown(proposal: GraduationProposalFile): string {
   const lines = [
     `# Graduation proposal ${proposal.proposalId}`,
@@ -452,6 +548,11 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
   const proposals: GraduationProposalFile[] = [];
   const alreadyProposed: string[] = [];
   const refused: GraduateRefusal[] = [];
+  // R1-F4: every proposal id a CURRENT cluster maps to, whether or not a
+  // file was actually (re)written for it this run — the sweep below only
+  // ever touches an id that is NOT in this set, i.e. one whose cluster no
+  // longer exists at all.
+  const currentProposalIds = new Set<string>();
 
   for (const cluster of clusters) {
     const target = classify(cluster);
@@ -459,6 +560,7 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
 
     const memberIds = cluster.map((record) => record.id);
     const proposalId = proposalIdFor(target, memberIds);
+    currentProposalIds.add(proposalId);
     const jsonPath = proposalPathFor(root, proposalId);
     assertInsideLearningRoot(jsonPath, [learningDataDir(root)]);
 
@@ -485,7 +587,12 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
             (record) => gateReviewerText({ provenance: record.provenance, trigger: record.trigger, action: record.action }, configuredLogins).refused,
           )
         ) {
+          // R1-F4: the re-gate refuses this update-in-place — the stale
+          // `.json`/`.md` pair already on disk still carries whatever login
+          // (or other now-forbidden text) the members currently gate on, so
+          // it is deleted rather than left sitting there indefinitely.
           refused.push({ memberIds, categories: ["attribution"] });
+          await removeProposalFiles(root, proposalId);
           continue;
         }
 
@@ -549,6 +656,17 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
     }
 
     proposals.push(proposal);
+  }
+
+  // R1-F4: a proposal whose cluster's membership changed since it was
+  // written hashes to a DIFFERENT proposal id (`proposalIdFor` is keyed on
+  // the sorted member-id set) and is therefore never visited by the loop
+  // above at all — orphaned, and never re-gated no matter how many times
+  // `runGraduate` reruns. Only worth the extra directory scan when a login
+  // is actually configured (otherwise there is nothing to gate against, same
+  // as the re-gate branch above).
+  if (configuredLogins.length > 0) {
+    await sweepOrphanedProposalsCarryingLogin(root, currentProposalIds, configuredLogins);
   }
 
   return { proposals, alreadyProposed, refused };

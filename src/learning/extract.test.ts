@@ -638,6 +638,51 @@ describe("runExtract — model extractor capability gate", () => {
       expect(records).toEqual([]);
     });
   });
+
+  test("R1-F5: a model-backed draft's reviewerProfile is never persisted, even when it names a configured login", async () => {
+    await withProjectRoot(async (root) => {
+      // `reviewerProfile` is schema-restricted to domain "review-conventions"
+      // (validateLearnedPattern's allOf #2) — the same domain the L3 probe
+      // used — and `trigger`/`action` here are the same clean,
+      // review-signal-free boilerplate every other model-backed fixture in
+      // this file uses, so nothing OTHER than `reviewerProfile` could cause
+      // a refusal: this isolates the one field under test.
+      writeReviewLearningConfig(root, ["alice"]);
+      const dir = path.join(root, ".metaproject");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "learning.config.json"), JSON.stringify({ schemaVersion: 1, capabilities: { modelExtractor: true } }));
+
+      const reviewerProfileExtractor: ModelExtractor = {
+        id: "fake",
+        extract: async () => [
+          {
+            domain: "review-conventions",
+            trigger: "When a model-backed pattern like this one is observed in this project",
+            action: "Treat it as a soft, uncorroborated signal worth a human's second look before acting.",
+            evidence: [
+              {
+                kind: "reinforcement",
+                sourceType: "observation",
+                sourceRef: ".metaproject/data/learning/observations/2026-09-24.jsonl#L1",
+                observedAt: NOW.toISOString(),
+              },
+            ],
+            extractor: "model-summarizer",
+            // The literal configured login, straight in `reviewerId` — never
+            // the `rv-<16 hex>` shape `reviewerIdFor` produces.
+            reviewerProfile: { reviewerId: "alice", generalizedFrom: 1 },
+          },
+        ],
+      };
+
+      const report = await runExtract(root, { now: NOW, modelExtractor: reviewerProfileExtractor });
+      expect(report.created.length).toBe(1);
+      const records = await listPatterns(root, { domain: "review-conventions" });
+      expect(records.length).toBe(1);
+      expect(records[0]?.reviewerProfile).toBeNull();
+      expect(JSON.stringify(records[0]).toLowerCase()).not.toContain("alice");
+    });
+  });
 });
 
 describe("runExtract — never produces status accepted", () => {
