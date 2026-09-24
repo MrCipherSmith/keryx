@@ -1198,7 +1198,7 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   // P2: non-secret project sandbox policy skeleton (never overwrites; no API keys).
-  const wroteSandboxPolicy = writeProjectSandboxPolicySkeletonIfMissing(projectRoot);
+  const wroteSandboxPolicy = await writeProjectSandboxPolicySkeletonIfMissing(projectRoot);
   if (wroteSandboxPolicy) {
     statusLine(".keryx/sandbox-policy.json", true, "sandbox policy skeleton (no secrets)");
   }

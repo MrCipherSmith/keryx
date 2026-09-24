@@ -33,6 +33,7 @@ const COVERED_FILES = [
   "src/commands/init.ts",
   "src/testing/service.ts",
   "src/lib/metaproject-gitignore.ts",
+  "src/lib/project-sandbox-policy.ts",
 ];
 
 /** Every write/remove/rename/mkdir-shaped `node:fs`/`node:fs/promises` export the review's 13 shapes exercise. */
