@@ -209,3 +209,4 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
     - If it finds 0 blocker, major or minor: ingest the check, run `gh pr ready`, and make one merge attempt.
     - Otherwise stop and report. No further loop.
 - 2026-09-24T14:02:24.789Z - task-attempt: T20: started (attempt 1) — 313-T20 closure fix 2 dispatch
+- 2026-09-24T14:11:15.470Z - task-done: T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs
