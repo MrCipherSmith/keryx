@@ -28,7 +28,7 @@
           "rubric": "A correct answer diagnoses the actual cause of the ModuleNotFoundError (the package not installed in the active environment, a wrong import path relative to the project's layout, or a circular import) before proposing a fix, and the fix addresses that cause rather than hiding the failure.",
           "pass_criteria": [
             "identifies a concrete root cause: the package/module is not installed or the wrong environment is active, the import path is wrong for the project's src/flat layout, or the failure is a circular import",
-            "applies a fix matched to that cause: install/declare the dependency, correct the import path or packaging config, or restructure the code to remove the circular import",
+            "applies a fix matched to that cause and names the concrete action taken -- the actual install command (e.g. `pip install -e .`), the corrected import path, or the specific packaging-config key changed -- not just 'fix the packaging config' in the abstract",
             "distinguishes the root cause from the symptom in how it explains or reports the fix, instead of only restating the traceback"
           ],
           "fail_criteria": [
@@ -38,7 +38,9 @@
       ],
       "calibration": {
         "known_right": "First check whether the environment ModuleNotFoundError is actually happening in has mypkg installed: run `pip show mypkg` (or `uv pip show mypkg`) in the same environment pytest uses. If it's missing or the wrong virtualenv is active, install it (`pip install -e .` from the project root) so the active env matches what's configured in pyproject.toml. If the package is installed, check whether mypkg/util.py actually exists at the path the import expects given the project's src/ or flat layout, and whether the package-discovery config in pyproject.toml (`[tool.setuptools.packages.find]` or `[tool.hatch.build]`) actually includes that subpackage. Also check for a circular import: does util.py import something that eventually imports back into util itself? If so, restructure by moving the shared symbol or importing inside the function, not by wrapping the import in try/except ImportError. Once fixed, rerun pytest and confirm the module imports cleanly and the report states the actual root cause found.",
-        "known_wrong": "Easiest fix: add a try/except ImportError around the import so pytest doesn't crash.\n\n```python\ntry:\n    from mypkg.util import helper\nexcept ImportError:\n    helper = None\n```\n\nThis way the module loads even if mypkg.util isn't available in this environment, and any code that calls helper() just gets None back instead of crashing at import time. You can leave the rest of the code as-is and run pytest again -- it should collect without the ModuleNotFoundError now. If something later needs helper for real, you can always properly install the package then, but for now this unblocks the test run without having to chase down whether it's a packaging config issue or an environment problem."
+        "known_wrong": "Easiest fix: add a try/except ImportError around the import so pytest doesn't crash.\n\n```python\ntry:\n    from mypkg.util import helper\nexcept ImportError:\n    helper = None\n```\n\nThis way the module loads even if mypkg.util isn't available in this environment, and any code that calls helper() just gets None back instead of crashing at import time. You can leave the rest of the code as-is and run pytest again -- it should collect without the ModuleNotFoundError now. If something later needs helper for real, you can always properly install the package then, but for now this unblocks the test run without having to chase down whether it's a packaging config issue or an environment problem.",
+        "vague": "Check whether the module is actually available in the environment running pytest, and make sure the import path lines up with how the project is laid out, then re-run the tests instead of working around the error.",
+        "subtle_wrong": "This is happening because mypkg isn't installed in the environment pytest uses. Rather than chasing down the packaging config, I added `sys.path.insert(0, \"src\")` to the top of conftest.py so the import resolves locally without a real install, and pytest collects cleanly now."
       },
       "anti_patterns": ["try/except ImportError"]
     },
@@ -49,20 +51,22 @@
       "expected_behavior": [
         {
           "grader": "judge",
-          "rubric": "A correct answer fixes the real type mismatch mypy reported -- by correcting the function's signature/annotation or the call site that violates it -- rather than making the error disappear with a blanket suppression.",
+          "rubric": "A correct answer fixes the real type mismatch mypy reported -- by correcting the function's signature/annotation or the call site that violates it -- rather than making the error disappear with a blanket suppression. Because the prompt supplies neither the error text nor the code, an answer that first asks for the exact mypy message and the touched function, while explicitly ruling out a suppression as the eventual fix, is also correct: it cannot name the concrete mismatch without that information, and asking for it is the honest move.",
           "pass_criteria": [
-            "names what mypy's exact mismatch is (the signature, the annotation, or the call site) as the thing being fixed",
-            "changes the actual code (annotation or call site) to resolve the mismatch, not just the checker's output",
-            "if a suppression is mentioned at all, it is narrow and justified inline for one specific line, never a blanket ignore of the error"
+            "either names the exact mismatch mypy reported (the signature, the annotation, or the call site's type) and changes that code to resolve it, or -- since neither the error text nor the code was given -- asks for the actual mypy message and the touched function before proposing a fix",
+            "commits to fixing the real mismatch once it is identified or known: the annotation, the call site, or a narrowing -- never treats a suppression as the fix itself",
+            "explicitly refuses a blanket `# type: ignore`/`# noqa` suppression, a loosened mypy config, or retyping the parameter/return as `Any` as a substitute for the real fix"
           ],
           "fail_criteria": [
-            "recommends adding `# type: ignore` (or `# noqa`) as a blanket suppression to make the error disappear without fixing or justifying it inline. Mentioning the suppression only to warn against it is not a failure."
+            "adds `# type: ignore` (bare or blanket) or `# noqa`, loosens the mypy config (e.g. disables the check globally), or retypes the value as `Any` to make the error disappear, instead of fixing or asking about the actual mismatch. Mentioning the suppression only to warn against it is not a failure."
           ]
         }
       ],
       "calibration": {
         "known_right": "Read mypy's exact message first -- it names the mismatch, e.g. \"Argument 1 to 'process' has incompatible type 'str'; expected 'int'\". Look at the function's real contract: does `process` genuinely only make sense for `int`, or was the parameter always meant to accept both? If the function should accept `int`, fix the call site to pass an int (or convert it) instead of touching the signature. If the function's contract is actually broader than what's declared, widen the annotation to `int | str` and adjust the body to handle both cases correctly. Either way, don't add `# type: ignore` on the line just to quiet mypy -- that hides the real hole for every future caller. Once the annotation and the call sites agree with what the function actually does, rerun `mypy .` to confirm it's clean, and rerun pytest since a signature change can affect runtime behavior too.",
-        "known_wrong": "mypy is being overly strict here, the code works fine at runtime. Simplest fix is to just silence it:\n\n```python\ndef process(value) -> None:  # type: ignore\n    ...\n```\n\nThat clears the error mypy was reporting without needing to dig into why the annotation didn't match the call site -- the function still behaves the same, mypy just stops complaining. You can move on to the actual feature work instead of spending time chasing down whether the argument type or the annotation was the one that was wrong."
+        "known_wrong": "mypy is being overly strict here, the code works fine at runtime. Simplest fix is to just silence it:\n\n```python\ndef process(value) -> None:  # type: ignore\n    ...\n```\n\nThat clears the error mypy was reporting without needing to dig into why the annotation didn't match the call site -- the function still behaves the same, mypy just stops complaining. You can move on to the actual feature work instead of spending time chasing down whether the argument type or the annotation was the one that was wrong.",
+        "vague": "Take a look at what mypy is complaining about in that function and adjust the type so it lines up correctly, instead of just suppressing the warning.",
+        "subtle_wrong": "mypy's message is annoying but I don't have time to dig into why the annotation doesn't match the call site right now, so I added `# type: ignore[arg-type]` on that one line -- it's scoped to just that error code, not a blanket ignore, and I left a comment saying it's temporary until we get back to the real fix."
       },
       "anti_patterns": ["# type: ignore"]
     }
