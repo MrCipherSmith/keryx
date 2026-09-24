@@ -149,3 +149,4 @@ Source: the review-313-r5.md report, with probes in scratchpad/review313-r5/.
    - Confirm AC1-AC15.
    - Collect the PR comments.
    - `keryx flow complete 313 --signed-by MrCipherSmith`. A health report already exists and the review rounds are recorded.
+- 2026-09-24T13:37:26.787Z - task-added: T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force

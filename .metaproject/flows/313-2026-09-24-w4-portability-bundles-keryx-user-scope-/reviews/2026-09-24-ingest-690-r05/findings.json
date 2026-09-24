@@ -19,7 +19,11 @@
       ],
       "enumeration_method": "21-variant escaping-ancestor matrix (whole .metaproject, each subdir, file links, .claude, .gitignore) x rules sync/distill/update/init/integrations install/bundle import with before/after snapshots of the outside tree; keryx ctx rg for writeFile/mkdir/writeFileAtomic in init.ts, testing/service.ts and lib helpers; same matrix on main"
     },
-    "global_id": "2026-09-24-ingest-690-r05#R5-F1"
+    "global_id": "2026-09-24-ingest-690-r05#R5-F1",
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "Pre-existing on main (keryx init contained writes); deferred to a separate follow-up flow the program orchestrator will init; owner-approved W4 closure plan 2026-09-24"
+    }
   },
   {
     "id": "R5-F2",
@@ -52,7 +56,11 @@
     "confidence": "high",
     "file": "src/lib/metaproject-gitignore.ts",
     "line": 38,
-    "global_id": "2026-09-24-ingest-690-r05#R5-F3"
+    "global_id": "2026-09-24-ingest-690-r05#R5-F3",
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "Pre-existing on main (.gitignore append through a symlinked .gitignore in update/init); deferred to the same separate follow-up flow as R5-F1; owner-approved W4 closure plan 2026-09-24"
+    }
   },
   {
     "id": "R5-F4",

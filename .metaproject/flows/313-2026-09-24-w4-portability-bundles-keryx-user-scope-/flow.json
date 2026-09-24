@@ -9,7 +9,7 @@
   "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:33.548Z",
-  "updatedAt": "2026-09-24T12:22:32.538Z",
+  "updatedAt": "2026-09-24T13:37:26.787Z",
   "source": {
     "type": "description",
     "ref": null
@@ -374,6 +374,20 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -609,6 +623,11 @@
       "at": "2026-09-24T12:22:32.538Z",
       "event": "task-attempt",
       "detail": "T18: failed (attempt 2) — round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop"
+    },
+    {
+      "at": "2026-09-24T13:37:26.787Z",
+      "event": "task-added",
+      "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
     }
   ]
 }
