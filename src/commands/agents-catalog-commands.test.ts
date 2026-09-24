@@ -177,27 +177,28 @@ describe("keryx agents export", () => {
 });
 
 describe("keryx agents verify", () => {
-  // Flow 314 W4 T13a: `go` and `python` are now `stable` with a passing
-  // `governance/eval.json` gate, so their generated pairs verify clean.
-  // `react`'s generated pair was deleted from disk entirely (its pack stays
-  // `experimental` — the react-code-review behavior eval is below the 0.8
-  // floor) and `agent-refs.json` now lists no agents for it, so `react-*`
-  // never appears in the catalog at all. `ts-js-node`'s pack is `stable`
-  // with a passing `governance/eval.json` gate too (flow 314 T13b), so its
-  // pair verifies clean like go/python — the real, un-stubbed CLI path now
-  // reports zero problems across the whole catalog.
-  test("the real bundled catalog verifies ok with zero problems (go/python/ts-js-node all gate-cleared, react has no generated pair)", async () => {
+  // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
+  // batch-1 packs (go, python, react, ts-js-node all stay `experimental`),
+  // so none of them ships a generated agent pair right now. This assertion
+  // stays true generically, independent of which packs happen to be
+  // gate-cleared on any given day: the real, un-stubbed CLI path reports
+  // zero problems across the whole catalog, and no bundled agent name uses
+  // the `<id>-code-auditor` / `<id>-build-fixer` generated-pair naming
+  // convention because none is currently generated.
+  test("the real bundled catalog verifies ok with zero problems (no batch-1 pack is gate-cleared yet)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
       ok: boolean;
       agents: Array<{ name: string; problems: Array<{ reason: string }> }>;
     };
-    expect(report.agents.length).toBeGreaterThanOrEqual(16);
+    expect(report.agents.length).toBeGreaterThanOrEqual(9);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
     expect(withProblems).toEqual([]);
     expect(report.ok).toBe(true);
-    expect(report.agents.some((agent) => agent.name.startsWith("react-"))).toBe(false);
+    expect(
+      report.agents.some((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer")),
+    ).toBe(false);
   });
 
   test("narrows to one agent by name", async () => {
@@ -256,21 +257,177 @@ describe("keryx agents generate", () => {
   // `generate` always resolves the bundled agents/stacks tree via
   // `defaultBundledRoot()` (the same real-tree resolution every other
   // subcommand's bundled reads use) — it is not `cwd`-relocatable the way
-  // `.metaproject/agents` project reads are. Tests below either use
-  // `--check` (never writes) or carefully restore any file they touch.
+  // `.metaproject/agents` project reads are, EXCEPT through the injectable
+  // `bundledRoot` seam on `AgentsCatalogDeps` (flow 314 T13a), which exists
+  // specifically so a test can point `generate` at an isolated fixture tree.
+  //
+  // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
+  // real batch-1 packs (go/python/react/ts-js-node all stay `experimental`),
+  // so `generate --stack go` now refuses with `stack-pack-not-gate-cleared`
+  // on the real tree — there is no longer a real, already-generated pack to
+  // exercise `--check`/write against. The three tests below build their own
+  // isolated, gate-cleared fixture pack (the same pack-level
+  // `{ schemaVersion, reports: [...] }` eval-document shape
+  // `checkStackPackGateCleared`/`checkStablePackGate` require — see
+  // `verify.test.ts`'s "R1-4" fixture) so this behavior is verified
+  // independent of which real pack, if any, happens to be gate-cleared.
   const REAL_BUNDLED_AGENTS_DIR = path.join(REPO_ROOT, "src", "gdskills", "bundled", "agents");
 
-  test("--check reports no drift for a real, already-generated stack pack", async () => {
+  let fixtureRoot: string;
+  let fixtureBundledRoot: string;
+  let fixtureAgentsDir: string;
+  const FIXTURE_STACK_ID = "fixture-lang";
+
+  beforeEach(() => {
+    fixtureRoot = mkdtempSync(path.join(tmpdir(), "keryx-agents-generate-fixture-"));
+    // `generate` resolves `<bundledRoot>/agents` and `<bundledRoot>/agents/../stacks`
+    // (i.e. `<bundledRoot>/stacks`) — the same two-subdirectory shape as the
+    // real `src/gdskills/bundled` tree — so the injected `bundledRoot` must
+    // itself be the parent of both, not the agents directory directly.
+    fixtureBundledRoot = path.join(fixtureRoot, "bundled");
+    fixtureAgentsDir = path.join(fixtureBundledRoot, "agents");
+    const stacksRoot = path.join(fixtureBundledRoot, "stacks");
+    const packDir = path.join(stacksRoot, FIXTURE_STACK_ID);
+    const skillDir = path.join(packDir, "skills", "fixture-skill");
+    mkdirSync(fixtureAgentsDir, { recursive: true });
+    mkdirSync(path.join(packDir, "governance"), { recursive: true });
+    mkdirSync(skillDir, { recursive: true });
+
+    writeFileSync(
+      path.join(packDir, "pack.json"),
+      JSON.stringify({
+        id: FIXTURE_STACK_ID,
+        family: "language",
+        modules: [],
+        stability: "stable",
+        skills: { review: ["fixture-skill"], "build-fix": [] },
+        agentProfile: {
+          displayName: "Fixture Lang",
+          auditFocus: ["fixture risk pattern"],
+          buildCommands: ["fixture build"],
+          fixGuardrails: ["never do the fixture-bad thing"],
+        },
+      }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: fixture-skill\ndescription: fixture skill\n---\n\nBody.\n",
+      "utf8",
+    );
+    writeFileSync(
+      path.join(skillDir, "evals.json"),
+      JSON.stringify({
+        triggers: { positive: ["p"], negative: ["n"] },
+        scenarios: [
+          {
+            id: "behavior-1",
+            prompt: "Do the thing",
+            strictness: "high",
+            expected_behavior: [{ grader: "contains", value: "thing" }],
+          },
+        ],
+      }),
+      "utf8",
+    );
+    const skillDigest = computeSkillEvalDigest(skillDir);
+    writeFileSync(
+      path.join(packDir, "governance", "eval.json"),
+      JSON.stringify({
+        schemaVersion: "1.0.0",
+        reports: [
+          {
+            schemaVersion: "1.0.0",
+            skillId: `${FIXTURE_STACK_ID}/fixture-skill`,
+            strictness: "high",
+            trials: PACK_MIN_TRIALS,
+            triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+            evidence: "authored",
+            scope: "bundled",
+            skillDigest,
+            runner: "ollama",
+            model: "llama3.1:latest",
+            recordedAt: "2026-01-01T00:00:00.000Z",
+            scenarios: [
+              {
+                id: "trigger-positive-1",
+                kind: "trigger-positive",
+                prompt: "p",
+                strictness: "high",
+                trials: 1,
+                passes: 1,
+                passRate: 1,
+                passAtK: 1,
+                grader: "trigger-rank-fork-family",
+                status: "ran",
+                deterministic: true,
+              },
+              {
+                id: "trigger-negative-1",
+                kind: "trigger-negative",
+                prompt: "n",
+                strictness: "high",
+                trials: 1,
+                passes: 1,
+                passRate: 1,
+                passAtK: 1,
+                grader: "trigger-rank-fork-family",
+                status: "ran",
+                deterministic: true,
+              },
+              {
+                id: "behavior-1",
+                kind: "behavior",
+                prompt: "Do the thing",
+                strictness: "high",
+                trials: PACK_MIN_TRIALS,
+                passes: PACK_MIN_TRIALS,
+                passRate: 1,
+                passAtK: 1,
+                grader: "contains",
+                status: "ran",
+              },
+            ],
+            verdict: "pass",
+          },
+        ],
+      }),
+      "utf8",
+    );
+  });
+
+  afterEach(() => {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  test("--check reports no drift for a gate-cleared fixture pack once its pair has been generated", async () => {
+    const written = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log: written.log,
+      error: written.error,
+    });
+    expect(process.exitCode).not.toBe(1);
+
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("generate", ["--stack", "go", "--check", "--json"], { cwd: REPO_ROOT, log, error });
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--check", "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log,
+      error,
+    });
     const doc = JSON.parse(lines.join("\n")) as {
       stack: string;
       check: boolean;
       files: Array<{ fileName: string; changed: boolean; existed: boolean }>;
     };
-    expect(doc.stack).toBe("go");
+    expect(doc.stack).toBe(FIXTURE_STACK_ID);
     expect(doc.files).toHaveLength(2);
-    expect(doc.files.map((f) => f.fileName).sort()).toEqual(["go-build-fixer.md", "go-code-auditor.md"]);
+    expect(doc.files.map((f) => f.fileName).sort()).toEqual([
+      `${FIXTURE_STACK_ID}-build-fixer.md`,
+      `${FIXTURE_STACK_ID}-code-auditor.md`,
+    ]);
     for (const file of doc.files) {
       expect(file.existed).toBe(true);
       expect(file.changed).toBe(false);
@@ -278,39 +435,61 @@ describe("keryx agents generate", () => {
     expect(process.exitCode).not.toBe(1);
   });
 
-  test("--check exits 1 and reports drift when a bundled generated file was hand-edited, without writing", async () => {
-    const filePath = path.join(REAL_BUNDLED_AGENTS_DIR, "go-code-auditor.md");
+  test("--check exits 1 and reports drift when a generated file was hand-edited, without writing", async () => {
+    const written = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log: written.log,
+      error: written.error,
+    });
+    expect(process.exitCode).not.toBe(1);
+
+    const filePath = path.join(fixtureAgentsDir, `${FIXTURE_STACK_ID}-code-auditor.md`);
     const original = readFileSync(filePath, "utf8");
-    try {
-      writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
-      const { lines, log, error } = collect();
-      await agentsCatalogCommand("generate", ["--stack", "go", "--check", "--json"], { cwd: REPO_ROOT, log, error });
-      const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
-      const auditor = doc.files.find((f) => f.fileName === "go-code-auditor.md");
-      expect(auditor?.changed).toBe(true);
-      expect(process.exitCode).toBe(1);
-      // --check never writes — the hand edit must still be on disk.
-      expect(readFileSync(filePath, "utf8")).toBe(`${original}\n<!-- hand edit -->\n`);
-    } finally {
-      writeFileSync(filePath, original, "utf8");
-      process.exitCode = 0;
-    }
+    writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
+
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--check", "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log,
+      error,
+    });
+    const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
+    const auditor = doc.files.find((f) => f.fileName === `${FIXTURE_STACK_ID}-code-auditor.md`);
+    expect(auditor?.changed).toBe(true);
+    expect(process.exitCode).toBe(1);
+    // --check never writes — the hand edit must still be on disk.
+    expect(readFileSync(filePath, "utf8")).toBe(`${original}\n<!-- hand edit -->\n`);
+    process.exitCode = 0;
   });
 
   test("writing (no --check) restores a hand-edited file back to the generated content", async () => {
-    const filePath = path.join(REAL_BUNDLED_AGENTS_DIR, "go-build-fixer.md");
+    const written = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log: written.log,
+      error: written.error,
+    });
+    expect(process.exitCode).not.toBe(1);
+
+    const filePath = path.join(fixtureAgentsDir, `${FIXTURE_STACK_ID}-build-fixer.md`);
     const original = readFileSync(filePath, "utf8");
-    try {
-      writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
-      const { lines, log, error } = collect();
-      await agentsCatalogCommand("generate", ["--stack", "go", "--json"], { cwd: REPO_ROOT, log, error });
-      const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
-      const fixer = doc.files.find((f) => f.fileName === "go-build-fixer.md");
-      expect(fixer?.changed).toBe(true);
-      expect(readFileSync(filePath, "utf8")).toBe(original);
-    } finally {
-      writeFileSync(filePath, original, "utf8");
-    }
+    writeFileSync(filePath, `${original}\n<!-- hand edit -->\n`, "utf8");
+
+    const { lines, log, error } = collect();
+    await agentsCatalogCommand("generate", ["--stack", FIXTURE_STACK_ID, "--json"], {
+      cwd: REPO_ROOT,
+      bundledRoot: fixtureBundledRoot,
+      log,
+      error,
+    });
+    const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean }> };
+    const fixer = doc.files.find((f) => f.fileName === `${FIXTURE_STACK_ID}-build-fixer.md`);
+    expect(fixer?.changed).toBe(true);
+    expect(readFileSync(filePath, "utf8")).toBe(original);
   });
 
   test("an invalid --stack id is refused", async () => {

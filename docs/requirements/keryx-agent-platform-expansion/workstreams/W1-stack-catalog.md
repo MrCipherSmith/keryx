@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.2.1
+Version: 0.2.2
 
 ## Summary
 
@@ -568,16 +568,62 @@ history is inspectable without guessing from a git blame.
   (`src/gdskills/stack-packs.test.ts`) checks that a pack's `pack.json`
   `stability` and the corresponding install-manifest component's `stability`
   agree, so the two records cannot silently diverge.
-- **Batch 1 results.** `ts-js-node`, `python`, and `go` are `stability:
-  stable`, gate-cleared against `ollama` `llama3.1:latest` at `--strictness
-  high` / `--trials 5` — every skill's report passes
-  `PACK_BEHAVIOR_PASS_FLOOR`. `react` stays `stability: experimental`: its
-  `react-code-review` pack's `flag-rules-of-hooks` behavior scenario scored a
-  `passRate` of `0.6`, below the `0.8` floor. Stack coverage (packs with any
-  authored content beyond review-only) went from 2 (NestJS/Prisma,
-  React/MobX review-only) to 5 with this batch (`ts-js-node`, `python`, `go`
-  full packs added; `react` gets a full pack but stays ungated pending a
-  fix to the failing behavior scenario).
+- **Batch 1 results (flow 314, fix attempt 1 — honest gate re-run).** Review
+  round 1 found the skills and their graders had effectively been tuned to
+  each other, so the owner decided the gate model for the real run had to be
+  independent of both: `deepseek` `deepseek-chat` at `--strictness high` /
+  `--trials 5`,
+  `--scope bundled`, `PACK_BEHAVIOR_PASS_FLOOR = 0.8`. Every report's
+  `skillDigest` binds it to the current skill directory contents, so the
+  gate re-runs whenever a skill changes. The honest run failed all four
+  batch-1 packs — every one stays `stability: experimental`, and no
+  generated `<id>-code-auditor`/`<id>-build-fixer` agent pair ships for any
+  of them (each pack's `agent-refs.json` lists `"agents": []` with a note):
+  - `ts-js-node`: `nodejs-implementation` and `nodejs-code-review` pass;
+    `nodejs-testing` fails (`mock-boundary-not-internal`, `passRate` 0),
+    `nodejs-build-fix` fails (`no-ts-ignore-suppression`, `passRate` 0), and
+    `nodejs-esm-migration` fails (`convert-before-flip-type`, `passRate`
+    `0.2`).
+  - `python`: `python-code-review` passes; `python-implementation` fails (a
+    trigger-positive false negative plus `resource-with-block`, `passRate`
+    `0.2`), `python-testing` fails (`mock-external-not-internal`, `passRate`
+    0), and `python-build-fix` fails (`mypy-error-no-blanket-suppress`,
+    `passRate` 0).
+  - `go`: `go-implementation`, `go-code-review`, and `go-build-fix` pass;
+    only `go-testing` fails (`table-driven-subtests`, `passRate` `0.4`) —
+    but a pack needs every report to pass, so the whole pack stays
+    experimental.
+  - `react`: `react-implementation`, `react-testing`, `react-code-review`,
+    and `react-upgrade-migration` pass; only `react-build-fix` fails
+    (`no-disable-hooks-lint`, `passRate` 0).
+
+  A local `ollama` `llama3.1:latest` run at the same strictness/trials is
+  kept only as a supplementary signal, not a gate outcome (its raw
+  per-skill reports live outside this repo, alongside the flow's working
+  notes): `go` clears all four of its skills under `llama3.1`; `ts-js-node`
+  clears four of five (only `nodejs-testing` fails); `python` clears two of
+  four (`python-build-fix`, `python-code-review` pass; `python-implementation`,
+  `python-testing` fail); `react` clears three of five (`react-build-fix`,
+  `react-implementation`, `react-testing` pass; `react-code-review`,
+  `react-upgrade-migration` fail). The two models disagree on which skills
+  fail, which is itself evidence for the grader-audit follow-up below rather
+  than a reason to trust either run alone.
+
+  Stack coverage (packs with any authored content beyond review-only) stays
+  at 2 (NestJS/Prisma, React/MobX review-only): none of the four batch-1
+  packs cleared the honest gate, so the coverage count does not move from
+  this batch.
+
+  **Follow-up: grader audit.** A strong model (DeepSeek `deepseek-chat`)
+  scoring `0` on three suppression-avoidance behavior scenarios —
+  `ts-js-node/nodejs-build-fix`'s `no-ts-ignore-suppression`,
+  `react/react-build-fix`'s `no-disable-hooks-lint`, and
+  `python/python-build-fix`'s `mypy-error-no-blanket-suppress` — suggests
+  these graders may be mis-specified (too strict a regex/not-contains match,
+  or a prompt that doesn't elicit the graded behavior) rather than the model
+  genuinely reaching for a suppression every time. Before re-authoring any
+  skill content, audit these three scenarios' graders and prompts, fix what
+  is actually mis-specified, and re-run the gate.
 
 ## Data contracts
 

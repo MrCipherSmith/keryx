@@ -1,5 +1,5 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.5
+Version: 0.1.6
 
 **Changelog (0.1.5, flow 314 T14):** renamed the generated per-stack pair
 from `<stack>-reviewer`/`<stack>-build-error-resolver` to
@@ -264,10 +264,24 @@ run of the generator against the same pack (a hand edit to a generated file),
 and `stack-pack-not-gate-cleared` for any pair whose source pack has since
 lost its gate-cleared status.
 
-**Batch 1 status (flow 314):** generated pairs exist for `ts-js-node`,
-`python`, and `go` (6 definitions total — all three packs are
-`stability: stable`). `react` has no generated pair because its pack remains
-`stability: experimental`.
+**Batch 1 status (flow 314, fix attempt 1 — honest gate re-run):** no
+generated pair ships for any of the four batch-1 packs (`ts-js-node`,
+`python`, `go`, `react`) — the honest DeepSeek `deepseek-chat` gate run
+failed all four, so every one stays `stability: experimental` and each
+pack's `agent-refs.json` lists `"agents": []` with a note (see
+"Implementation notes: Wave 4 batch 1 (flow 314)" in
+`W1-stack-catalog.md` for the per-pack, per-skill breakdown). The
+deliverable this batch actually landed is the generator's safety, exercised
+end-to-end against real and fixture packs: `id` must equal the pack's own
+directory name, every frontmatter scalar and list item is emitted
+double-quoted (no unquoted pack-supplied string can forge a new YAML key),
+every write is contained under `src/gdskills/bundled/agents/` with no
+traversal and no symlink target, generation refuses a pack that is not
+gate-cleared (`stack-pack-not-gate-cleared`, checked before `--check` is
+even considered), and `agents verify` reports `generated-source-mismatch`/
+`generated-drift` for a hand-edited or now-mismatched generated file. That
+safety is what the next batch (or a re-gated batch 1, after the grader
+audit below) generates through.
 
 This covers 22 of W1's 23 stack packs; `mobx` (a capability that extends
 `react` rather than a standalone language/framework) gets no generated agent

@@ -459,14 +459,18 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("every bundled shipped agent verifies ok against the real skill/bundled trees, with the per-stack packs' gate stubbed cleared", () => {
-    // Flow 314 W4 T13a/T13b: `go`, `python`, and `ts-js-node` are all real,
-    // on-disk `stable` packs with a passing `governance/eval.json`, so they
-    // verify clean with NO stub too (see the next test). `react`'s generated
-    // pair was deleted from disk entirely (T13a) because its pack stays
-    // `experimental`, so it no longer appears in the catalog at all.
-    // `stackPackGateCleared` is stubbed here anyway so this guard still
+    // Flow 314 fix attempt 1: the honest DeepSeek gate run failed all four
+    // batch-1 packs (go, python, react, ts-js-node all stay `experimental`),
+    // so none of them ship a generated agent pair right now — this asserts
+    // the SHAPE of the invariant generically, independent of which packs
+    // happen to be gate-cleared on any given day: no bundled agent name uses
+    // the `<id>-code-auditor` / `<id>-build-fixer` generated-pair convention
+    // (see `generate.ts`), because none is currently generated.
+    // `stackPackGateCleared` is stubbed cleared anyway so this guard still
     // proves everything OTHER than pack gate status (schema, tools, skills,
-    // drift) is clean, independent of gate state.
+    // drift) is clean, independent of gate state — see the R1-4 fixture
+    // tests above for the positive case of a gate-cleared pack's generated
+    // pair verifying clean.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {
       stackPackGateCleared: () => ({ cleared: true }),
     });
@@ -474,20 +478,30 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
     for (const agent of report.agents) {
       expect(agent.problems).toEqual([]);
     }
-    expect(report.agents.length).toBeGreaterThanOrEqual(16);
+    expect(report.agents.length).toBeGreaterThanOrEqual(9);
     expect(report.ok).toBe(true);
-    expect(report.agents.some((agent) => agent.name.startsWith("react-"))).toBe(false);
+    expect(report.agents.some((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))).toBe(
+      false,
+    );
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: zero problems (go/python/ts-js-node all gate-cleared)", () => {
-    // go, python, and ts-js-node are all real, on-disk "stable" packs with a
-    // passing governance/eval.json gate (flow 314 T13a/T13b), so they verify
-    // clean even with no stub. react has no generated pair on disk any more.
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (no batch-1 pack is gate-cleared yet)", () => {
+    // Flow 314 fix attempt 1: go, python, react, and ts-js-node are all real,
+    // on-disk "experimental" packs after the honest DeepSeek gate run, so
+    // none has a generated agent on disk to check gate status for — the
+    // catalog verifies clean because it currently contains only
+    // hand-authored, non-generated agents. This stays true generically
+    // whichever packs are or are not gate-cleared, since a pack that never
+    // produced a generated pair contributes nothing for `verifyAgents` to
+    // flag either way.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
     expect(withProblems).toEqual([]);
     expect(report.ok).toBe(true);
+    expect(report.agents.some((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))).toBe(
+      false,
+    );
   });
 
   // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated
