@@ -6,7 +6,7 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { buildBundleArchive, openBundle } from "./archive";
+import { DEFAULT_BUNDLE_LIMITS, buildBundleArchive, openBundle } from "./archive";
 
 let root: string;
 
@@ -104,16 +104,117 @@ describe("buildBundleArchive + openBundle round trip", () => {
     if (!opened.ok) expect(opened.refusal.reason).toBe("archive-invalid");
   });
 
-  test("refuses when the archive exceeds the entry-count ceiling", async () => {
-    const files = new Map<string, Buffer>();
-    for (let i = 0; i < 10_001; i += 1) {
-      files.set(`agents/a${i}.md`, Buffer.from("x"));
-    }
-    // Not building via buildBundleArchive (too slow at this count in a unit
-    // test); instead assert the reader's own ceiling using a synthetic tar
-    // with one legitimate small entry repeated conceptually is impractical
-    // here, so this case is exercised at the boundary check level instead.
-    expect(files.size).toBeGreaterThan(10_000);
+  test("default caps match what archive.ts documents (R1-F10)", () => {
+    // A behavioral pin on the exported defaults, so a change to the
+    // production constants is a deliberate, visible diff here rather than a
+    // silent drift from the header comment that documents them.
+    expect(DEFAULT_BUNDLE_LIMITS).toEqual({
+      maxEntries: 10_000,
+      maxTotalBytes: 256 * 1024 * 1024,
+      maxCompressedBytes: 32 * 1024 * 1024,
+    });
+  });
+
+  test("refuses an archive source past an injected entry-count cap", async () => {
+    const files = new Map<string, Buffer>([
+      ["agents/a.md", Buffer.from("x")],
+      ["agents/b.md", Buffer.from("x")],
+      ["agents/c.md", Buffer.from("x")],
+    ]);
+    const built = buildBundleArchive(files, Buffer.from("{}"));
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    const archivePath = path.join(root, "too-many-entries.tar.gz");
+    writeFileSync(archivePath, built.value);
+
+    // 3 files + bundle.json = 4 entries; cap at 2 so it refuses.
+    const opened = await openBundle(archivePath, { maxEntries: 2 });
+    expect(opened.ok).toBe(false);
+    if (!opened.ok) expect(opened.refusal.reason).toBe("archive-too-large");
+  });
+
+  test("refuses a directory source past an injected entry-count cap", async () => {
+    const dir = path.join(root, "bundle-dir-too-many-entries");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "bundle.json"), '{"a":1}\n');
+    writeFileSync(path.join(dir, "a.md"), "x");
+    writeFileSync(path.join(dir, "b.md"), "x");
+    writeFileSync(path.join(dir, "c.md"), "x");
+
+    const opened = await openBundle(dir, { maxEntries: 2 });
+    expect(opened.ok).toBe(false);
+    if (!opened.ok) expect(opened.refusal.reason).toBe("archive-too-large");
+  });
+
+  test("refuses a compressed file past an injected compressed-size cap", async () => {
+    const files = new Map<string, Buffer>([["agents/a.md", Buffer.from("hello world")]]);
+    const built = buildBundleArchive(files, Buffer.from("{}"));
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    const archivePath = path.join(root, "over-compressed-cap.tar.gz");
+    writeFileSync(archivePath, built.value);
+
+    // The archive on disk is a few hundred bytes; cap it far below that.
+    const opened = await openBundle(archivePath, { maxCompressedBytes: 16 });
+    expect(opened.ok).toBe(false);
+    if (!opened.ok) expect(opened.refusal.reason).toBe("archive-too-large");
+  });
+
+  test("refuses a gzip bomb via maxOutputLength, without inflating past a small injected cap (R1-F10)", async () => {
+    // Build a single ustar entry whose DECLARED size safely exceeds a small
+    // injected `maxTotalBytes`, filled with zero bytes. gzip level 9
+    // compresses an all-zero payload to a few KB, so the archive on disk
+    // here is tiny while its declared decompressed size is not — a genuine
+    // high-ratio decompression bomb, not just a big file.
+    //
+    // `openBundle` must refuse via gunzipSync's `maxOutputLength`, which
+    // ABORTS decompression once the cap is crossed instead of inflating the
+    // full declared size — so this test's own peak memory stays bounded
+    // near the injected cap (a few MiB), not the declared ~20 MiB, and the
+    // refusal must surface as the named `archive-invalid` reason that
+    // `maxOutputLength` errors map to (not `archive-too-large`, which is
+    // the tar-level per-entry/total check that never gets a chance to run
+    // here because decompression itself aborts first).
+    const MAX_TOTAL_BYTES = 1 * 1024 * 1024; // 1 MiB injected cap
+    const DATA_SIZE = 20 * 1024 * 1024; // declared size, well past the cap
+    const name = "agents/bomb.md";
+    const header = Buffer.alloc(512);
+    header.write(name, 0, "ascii");
+    header.write("0000644\0", 100, "ascii");
+    header.write(`${DATA_SIZE.toString(8).padStart(11, "0")}\0`, 124, "ascii");
+    header[156] = 0x30; // regular file
+    header.write("ustar", 257, "ascii");
+    header.write("00", 263, "ascii");
+    header.fill(0x20, 148, 156);
+    let sum = 0;
+    for (let i = 0; i < 512; i += 1) sum += header[i] as number;
+    header.write(sum.toString(8).padStart(6, "0"), 148, "ascii");
+    header[154] = 0;
+    header[155] = 0x20;
+
+    const dataBlocks = Math.ceil(DATA_SIZE / 512) * 512;
+    const tar = Buffer.concat([header, Buffer.alloc(dataBlocks), Buffer.alloc(1024)]);
+    const compressed = gzipSync(tar, { level: 9 });
+    // Prove this really is a high-ratio bomb: the on-disk archive is tiny
+    // relative to its declared decompressed size.
+    expect(compressed.length).toBeLessThan(64 * 1024);
+
+    const archivePath = path.join(root, "bomb.tar.gz");
+    writeFileSync(archivePath, compressed);
+
+    const rssBefore = process.memoryUsage().rss;
+    const opened = await openBundle(archivePath, { maxTotalBytes: MAX_TOTAL_BYTES });
+    const rssAfter = process.memoryUsage().rss;
+
+    expect(opened.ok).toBe(false);
+    if (!opened.ok) expect(opened.refusal.reason).toBe("archive-invalid");
+    // gunzipSync must have aborted well short of the ~20 MiB declared size.
+    // The injected cap is ~9 MiB (1 MiB total + 8 MiB ustar headroom); allow
+    // generous headroom above that for GC/allocator noise while staying
+    // meaningfully under the 20 MiB the bomb would inflate to uncapped.
+    expect(rssAfter - rssBefore).toBeLessThan(18 * 1024 * 1024);
   });
 
   test("refuses a name too long for ustar name+prefix", () => {

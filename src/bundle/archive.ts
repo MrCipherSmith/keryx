@@ -15,8 +15,8 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { BUNDLE_REFUSAL, type BundleRefusal } from "./types";
 
 const BLOCK = 512;
-const MAX_ENTRIES = 10_000;
-const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+const BUNDLE_MANIFEST_NAME = "bundle.json";
+
 // R1-F10: caps applied BEFORE decompression/reading, not only after —
 // otherwise a hostile bundle can make the process allocate hundreds of MB to
 // GB decompressing/reading before the entry/byte caps below ever get a
@@ -24,21 +24,57 @@ const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 // outright without attempting `gunzipSync`; the decompressed output itself
 // is separately capped via `maxOutputLength` so a small, highly-compressed
 // input (a "gzip bomb") cannot inflate past the same total-bytes budget the
-// tar parser enforces per-entry.
-const MAX_COMPRESSED_BYTES = 32 * 1024 * 1024;
-const MAX_DECOMPRESSED_BYTES = MAX_TOTAL_BYTES + 8 * 1024 * 1024; // headroom for ustar block padding/headers
-// A directory source has no compression to bound, so its own walk is capped
-// on entry count and total bytes as it goes (see `openBundle`'s directory
-// branch), matching the archive's caps.
-const MAX_DIRECTORY_ENTRIES = MAX_ENTRIES;
-const MAX_DIRECTORY_BYTES = MAX_TOTAL_BYTES;
-const BUNDLE_MANIFEST_NAME = "bundle.json";
+// tar parser enforces per-entry. A directory source has no compression to
+// bound, so its own walk is capped on entry count and total bytes as it
+// goes (see `openBundle`'s directory branch), matching the archive's caps.
+// These are the production defaults every real caller gets; tests may
+// inject smaller `BundleLimits` to exercise refusal without allocating
+// hundreds of MB.
+export const DEFAULT_BUNDLE_LIMITS: Required<BundleLimits> = {
+  maxEntries: 10_000,
+  maxTotalBytes: 256 * 1024 * 1024,
+  maxCompressedBytes: 32 * 1024 * 1024,
+};
 
 export interface BundleSource {
   kind: "directory" | "archive";
   manifestBytes: Buffer;
   /** Every regular file except `bundle.json`, keyed by bundle-relative POSIX path. */
   files: ReadonlyMap<string, Buffer>;
+}
+
+/**
+ * Archive/directory-read caps, injectable so tests can exercise refusal
+ * behavior without inflating hundreds of MB. Any field left unset falls
+ * back to today's production constant — production callers that pass no
+ * `limits` at all get exactly the previous, unchanged behavior.
+ */
+export interface BundleLimits {
+  /** Cap on a `.tar.gz` file's on-disk (compressed) size, checked before reading it. */
+  maxCompressedBytes?: number;
+  /** Cap on total regular-file bytes across an archive or directory bundle. */
+  maxTotalBytes?: number;
+  /** Cap on the number of regular-file entries in an archive or directory bundle. */
+  maxEntries?: number;
+}
+
+interface ResolvedLimits {
+  maxCompressedBytes: number;
+  maxDecompressedBytes: number;
+  maxTotalBytes: number;
+  maxEntries: number;
+}
+
+function resolveLimits(limits?: BundleLimits): ResolvedLimits {
+  const maxTotalBytes = limits?.maxTotalBytes ?? DEFAULT_BUNDLE_LIMITS.maxTotalBytes;
+  return {
+    maxCompressedBytes: limits?.maxCompressedBytes ?? DEFAULT_BUNDLE_LIMITS.maxCompressedBytes,
+    // Same headroom-over-total relationship as the default, so an injected
+    // small `maxTotalBytes` yields a correspondingly small decompressed cap.
+    maxDecompressedBytes: maxTotalBytes + 8 * 1024 * 1024,
+    maxTotalBytes,
+    maxEntries: limits?.maxEntries ?? DEFAULT_BUNDLE_LIMITS.maxEntries,
+  };
 }
 
 export type ArchiveResult<T> = { ok: true; value: T } | { ok: false; refusal: BundleRefusal };
@@ -175,7 +211,10 @@ function readCString(buf: Buffer, start: number, len: number): string {
 }
 
 /** Parse a ustar tar buffer fully in memory. Refuses anything not a plain file/dir it wrote itself. */
-function parseUstar(tar: Buffer): ArchiveResult<{ files: Map<string, Buffer>; manifestBytes: Buffer | null }> {
+function parseUstar(
+  tar: Buffer,
+  limits: ResolvedLimits,
+): ArchiveResult<{ files: Map<string, Buffer>; manifestBytes: Buffer | null }> {
   const files = new Map<string, Buffer>();
   let manifestBytes: Buffer | null = null;
   let offset = 0;
@@ -226,12 +265,12 @@ function parseUstar(tar: Buffer): ArchiveResult<{ files: Map<string, Buffer>; ma
     }
 
     entryCount += 1;
-    if (entryCount > MAX_ENTRIES) {
-      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive has more than ${MAX_ENTRIES} entries` } };
+    if (entryCount > limits.maxEntries) {
+      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive has more than ${limits.maxEntries} entries` } };
     }
     totalBytes += size;
-    if (totalBytes > MAX_TOTAL_BYTES) {
-      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive exceeds ${MAX_TOTAL_BYTES} bytes total` } };
+    if (totalBytes > limits.maxTotalBytes) {
+      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `archive exceeds ${limits.maxTotalBytes} bytes total` } };
     }
     const dataBlocks = Math.ceil(size / BLOCK) * BLOCK;
     if (offset + size > tar.length) {
@@ -260,7 +299,11 @@ function parseUstar(tar: Buffer): ArchiveResult<{ files: Map<string, Buffer>; ma
  * Read-only, in-memory for archives; a directory source is walked with
  * `lstat` and refuses any symlink.
  */
-export async function openBundle(bundlePath: string): Promise<ArchiveResult<BundleSource>> {
+export async function openBundle(
+  bundlePath: string,
+  limits?: BundleLimits,
+): Promise<ArchiveResult<BundleSource>> {
+  const resolved = resolveLimits(limits);
   let stat;
   try {
     stat = await lstat(bundlePath);
@@ -295,12 +338,12 @@ export async function openBundle(bundlePath: string): Promise<ArchiveResult<Bund
         // reading the file's contents — matching the archive branch's caps,
         // so a directory source cannot be used to bypass the same limits.
         entryCount += 1;
-        if (entryCount > MAX_DIRECTORY_ENTRIES) {
-          return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory has more than ${MAX_DIRECTORY_ENTRIES} entries` };
+        if (entryCount > resolved.maxEntries) {
+          return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory has more than ${resolved.maxEntries} entries` };
         }
         totalBytes += entryStat.size;
-        if (totalBytes > MAX_DIRECTORY_BYTES) {
-          return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory exceeds ${MAX_DIRECTORY_BYTES} bytes total` };
+        if (totalBytes > resolved.maxTotalBytes) {
+          return { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `bundle directory exceeds ${resolved.maxTotalBytes} bytes total` };
         }
         const bytes = await readFile(abs);
         if (rel === BUNDLE_MANIFEST_NAME) {
@@ -323,17 +366,17 @@ export async function openBundle(bundlePath: string): Promise<ArchiveResult<Bund
   if (stat.isFile()) {
     // R1-F10: refuse an oversized compressed input BEFORE reading it fully
     // into memory or attempting to decompress it.
-    if (stat.size > MAX_COMPRESSED_BYTES) {
-      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `${bundlePath} is ${stat.size} bytes, over the ${MAX_COMPRESSED_BYTES}-byte compressed-size cap` } };
+    if (stat.size > resolved.maxCompressedBytes) {
+      return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveTooLarge, message: `${bundlePath} is ${stat.size} bytes, over the ${resolved.maxCompressedBytes}-byte compressed-size cap` } };
     }
     const raw = await readFile(bundlePath);
     let tar: Buffer;
     try {
-      tar = gunzipSync(raw, { maxOutputLength: MAX_DECOMPRESSED_BYTES });
+      tar = gunzipSync(raw, { maxOutputLength: resolved.maxDecompressedBytes });
     } catch {
       return { ok: false, refusal: { reason: BUNDLE_REFUSAL.archiveInvalid, message: "not a valid gzip stream, or it decompresses past the size cap" } };
     }
-    const parsed = parseUstar(tar);
+    const parsed = parseUstar(tar, resolved);
     if (!parsed.ok) return parsed;
     if (parsed.value.manifestBytes === null) {
       return { ok: false, refusal: { reason: BUNDLE_REFUSAL.notABundle, message: `${bundlePath} has no bundle.json at its root` } };
