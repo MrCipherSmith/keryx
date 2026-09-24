@@ -181,16 +181,11 @@ describe("keryx agents verify", () => {
   // `react`'s generated pair was deleted from disk entirely (its pack stays
   // `experimental` — the react-code-review behavior eval is below the 0.8
   // floor) and `agent-refs.json` now lists no agents for it, so `react-*`
-  // never appears in the catalog at all. Only `ts-js-node`'s pair remains —
-  // its pack is still `experimental`, owned by a different concurrent
-  // worker on this same flow — legitimately reporting
-  // `stack-pack-not-gate-cleared` on the real, un-stubbed CLI path. The CLI
-  // has no seam to inject `stackPackGateCleared` the way `verify.ts`'s own
-  // tests do, so this test asserts the real-tree output is clean of every
-  // OTHER problem instead of asserting `ok: true` outright.
-  const EXPECTED_UNGATED_AGENTS = ["ts-js-node-build-fixer", "ts-js-node-code-auditor"].sort();
-
-  test("the real bundled catalog verifies ok except the still-ungated ts-js-node pair, which fails only on stack-pack-not-gate-cleared", async () => {
+  // never appears in the catalog at all. `ts-js-node`'s pack is `stable`
+  // with a passing `governance/eval.json` gate too (flow 314 T13b), so its
+  // pair verifies clean like go/python — the real, un-stubbed CLI path now
+  // reports zero problems across the whole catalog.
+  test("the real bundled catalog verifies ok with zero problems (go/python/ts-js-node all gate-cleared, react has no generated pair)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -199,10 +194,8 @@ describe("keryx agents verify", () => {
     };
     expect(report.agents.length).toBeGreaterThanOrEqual(16);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
-    for (const agent of withProblems) {
-      expect(agent.problems.map((p) => p.reason)).toEqual(["stack-pack-not-gate-cleared"]);
-    }
-    expect(withProblems.map((agent) => agent.name).sort()).toEqual(EXPECTED_UNGATED_AGENTS);
+    expect(withProblems).toEqual([]);
+    expect(report.ok).toBe(true);
     expect(report.agents.some((agent) => agent.name.startsWith("react-"))).toBe(false);
   });
 

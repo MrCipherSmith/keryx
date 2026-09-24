@@ -353,15 +353,14 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("every bundled shipped agent verifies ok against the real skill/bundled trees, with the per-stack packs' gate stubbed cleared", () => {
-    // Flow 314 W4 T13a: `go` and `python` are real, on-disk `stable` packs
-    // with a passing `governance/eval.json`, so they verify clean with NO
-    // stub too (see the next test). `react`'s generated pair was deleted
-    // from disk entirely (T13a) because its pack stays `experimental`, so it
-    // no longer appears in the catalog at all. `ts-js-node` is still
-    // `experimental`, owned by a different concurrent worker on this same
-    // flow — `stackPackGateCleared` is stubbed here so this guard still
-    // proves everything OTHER than that one pack's gate status (schema,
-    // tools, skills, drift) is clean.
+    // Flow 314 W4 T13a/T13b: `go`, `python`, and `ts-js-node` are all real,
+    // on-disk `stable` packs with a passing `governance/eval.json`, so they
+    // verify clean with NO stub too (see the next test). `react`'s generated
+    // pair was deleted from disk entirely (T13a) because its pack stays
+    // `experimental`, so it no longer appears in the catalog at all.
+    // `stackPackGateCleared` is stubbed here anyway so this guard still
+    // proves everything OTHER than pack gate status (schema, tools, skills,
+    // drift) is clean, independent of gate state.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {
       stackPackGateCleared: () => ({ cleared: true }),
     });
@@ -374,17 +373,15 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
     expect(report.agents.some((agent) => agent.name.startsWith("react-"))).toBe(false);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: only stack-pack-not-gate-cleared appears, for exactly the still-ungated ts-js-node pair", () => {
-    // go and python are real, on-disk "stable" packs with a passing
-    // governance/eval.json gate (flow 314 T13a), so they verify clean even
-    // with no stub. react has no generated pair on disk any more.
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (go/python/ts-js-node all gate-cleared)", () => {
+    // go, python, and ts-js-node are all real, on-disk "stable" packs with a
+    // passing governance/eval.json gate (flow 314 T13a/T13b), so they verify
+    // clean even with no stub. react has no generated pair on disk any more.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
-    for (const agent of withProblems) {
-      expect(agent.problems.map((p) => p.reason)).toEqual(["stack-pack-not-gate-cleared"]);
-    }
-    expect(withProblems.map((agent) => agent.name).sort()).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"].sort());
+    expect(withProblems).toEqual([]);
+    expect(report.ok).toBe(true);
   });
 
   // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated

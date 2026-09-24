@@ -1,6 +1,6 @@
 ---
 name: code-style-review
-description: "Use when the legacy code style and architecture review profile (code-style-patterns.mdc) is asked for by name — naming, organization, patterns, and TypeScript usage on the current branch. NOT for: a general style review (review-style) or an architecture review (review-architecture)."
+description: "Use when a caller wants the style/architecture checklist in code-style-patterns.mdc applied by its own name — checks naming, module and file layout, and TypeScript usage patterns against that specific ruleset, over this branch's diff. Narrower than a general style pass, and separate from the correctness-and-security AI review baseline. NOT for: a general style review (review-style) or an architecture review (review-architecture)."
 triggers:
   - "code-style-review"
   - "architecture style"

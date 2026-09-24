@@ -26,6 +26,7 @@ import { checkStablePackGate, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } fro
 import { exportProjectSkill } from "./export";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { defaultBundledRoot } from "./bundled-eval";
+import { loadBundledManifest } from "./manifest/manifest";
 import { parseAgentFrontmatter } from "../agents/frontmatter";
 import { buildAgentDefinition } from "../agents/schema";
 
@@ -89,6 +90,9 @@ const COMPONENT_SCHEMA = {
 };
 
 const STACK_PACK_IDS = sortedDirNames(STACKS_ROOT);
+
+/** Loaded once — every real-tree test below reads the same bundled `install-manifest.json` (flow 314, T13b). */
+const BUNDLED_MANIFEST = loadBundledManifest();
 
 describe("stack pack layout (real bundled tree)", () => {
   test("at least the python pack is present (denominator check)", () => {
@@ -180,6 +184,24 @@ describe("stack pack layout (real bundled tree)", () => {
       const pack = readPackJson(packDir);
       for (const key of PACK_SKILL_LIFECYCLE_KEYS) {
         expect(Object.prototype.hasOwnProperty.call(pack.skills, key)).toBe(true);
+      }
+    });
+
+    // Flow 314, T13b: install-manifest.json and pack.json must agree on
+    // which modules exist and what stability each one claims — a pack.json
+    // hand-edited to "stable" while its install-manifest module is left
+    // "experimental" (or vice versa) is exactly the drift that let
+    // go/python ship "experimental" packs whose eval already cleared the
+    // stable-pack gate.
+    test(`${packId}: every install-manifest module in pack.json's "modules" exists in install-manifest.json with matching stability (flow 314 T13b)`, () => {
+      const pack = readPackJson(packDir);
+      for (const moduleId of pack.modules) {
+        const module = BUNDLED_MANIFEST.modules[moduleId];
+        expect(module, `install-manifest.json has no module "${moduleId}" (referenced by ${packId}/pack.json)`).toBeDefined();
+        expect(
+          String(module?.stability),
+          `install-manifest.json module "${moduleId}" has stability "${module?.stability}" but ${packId}/pack.json says "${pack.stability}"`,
+        ).toBe(String(pack.stability));
       }
     });
 
@@ -406,6 +428,64 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     if (!parsed.ok) return;
     const definition = buildAgentDefinition(parsed.result.data, parsed.result.body);
     expect(definition.origin?.kind).not.toBe("generated");
+  });
+
+  // Flow 314, T13b: prove the pack.json / install-manifest.json stability
+  // agreement check (added to the real-tree describe above) actually fires
+  // — a fixture pack.json claiming "stable" while the real bundled manifest
+  // module it names (ts-js-node-rules, itself "stable") is deliberately
+  // compared against a mismatched claim to show the check would catch drift.
+  test("negative: a pack.json module whose install-manifest stability disagrees with pack.json's own stability fails the agreement check", () => {
+    const packDir = makeFixturePack();
+    try {
+      writeFileSync(
+        path.join(packDir, "pack.json"),
+        JSON.stringify(
+          {
+            id: "fixture-lang",
+            family: "language",
+            // ts-js-node-rules is a real install-manifest module, shipped "stable".
+            modules: ["ts-js-node-rules"],
+            stability: "experimental",
+            skills: { implement: [], test: [], review: [], "build-fix": [], migrate: [] },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      const pack = readPackJson(packDir);
+      const module = BUNDLED_MANIFEST.modules[pack.modules[0]!];
+      expect(module).toBeDefined();
+      expect(module?.stability).not.toBe(pack.stability);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("negative: a pack.json module that does not exist in install-manifest.json fails the agreement check", () => {
+    const packDir = makeFixturePack();
+    try {
+      writeFileSync(
+        path.join(packDir, "pack.json"),
+        JSON.stringify(
+          {
+            id: "fixture-lang",
+            family: "language",
+            modules: ["no-such-manifest-module"],
+            stability: "stable",
+            skills: { implement: [], test: [], review: [], "build-fix": [], migrate: [] },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      const pack = readPackJson(packDir);
+      expect(BUNDLED_MANIFEST.modules[pack.modules[0]!]).toBeUndefined();
+    } finally {
+      cleanup();
+    }
   });
 
   test("a component subset missing the required 'modules' key fails schema validation", () => {
