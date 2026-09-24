@@ -123,6 +123,55 @@ describe("writePattern refusals", () => {
     });
   });
 
+  test("refuses a candidate -> accepted transition without the capability even when another id is already accepted", async () => {
+    await withProjectRoot(async (root) => {
+      const alreadyAccepted = makeRecord({
+        id: "testing.already-accepted-11111111",
+        status: "accepted",
+        confidence: 0.61,
+        confidenceLevel: "medium",
+      });
+      delete (alreadyAccepted as { ttl?: unknown }).ttl;
+      await writePattern(root, alreadyAccepted, { capability: createAcceptCapability() });
+
+      const stillCandidate = makeRecord({ id: "testing.still-candidate-22222222", status: "accepted", confidence: 0.61, confidenceLevel: "medium" });
+      delete (stillCandidate as { ttl?: unknown }).ttl;
+      await expect(writePattern(root, stillCandidate)).rejects.toMatchObject({
+        reason: "learning-accept-capability-required",
+      });
+    });
+  });
+
+  test("allows a write with status:accepted without the capability when the stored record for the same scope+id is already accepted (non-transition, e.g. extract's reinforcement/decay pass)", async () => {
+    await withProjectRoot(async (root) => {
+      const accepted = makeRecord({ id: "testing.reinforced-33333333", status: "accepted", confidence: 0.61, confidenceLevel: "medium" });
+      delete (accepted as { ttl?: unknown }).ttl;
+      await writePattern(root, accepted, { capability: createAcceptCapability() });
+
+      const reinforced = {
+        ...accepted,
+        confidence: 0.7465,
+        confidenceLevel: "medium" as const,
+        evidence: [
+          ...accepted.evidence,
+          {
+            kind: "reinforcement" as const,
+            sourceType: "observation" as const,
+            sourceRef: ".metaproject/data/learning/observations/2026-09-25.jsonl#L1",
+            observedAt: "2026-09-25T00:00:00.000Z",
+            weight: 1,
+          },
+        ],
+        updatedAt: "2026-09-25T00:00:00.000Z",
+      };
+      // No capability passed — this must succeed because it is not a status transition.
+      await writePattern(root, reinforced);
+      const read = await readPattern(root, accepted.id, "project");
+      expect(read?.status).toBe("accepted");
+      expect(read?.evidence.length).toBe(2);
+    });
+  });
+
   test("path-traversal id is refused before any write", async () => {
     await withProjectRoot(async (root) => {
       const record = makeRecord({ id: "../../etc/passwd" });

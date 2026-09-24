@@ -126,6 +126,21 @@ export async function listPatterns(
   return records;
 }
 
+/** True when the record currently on disk for `id`+`scope` has `status: "accepted"`. A missing or corrupt stored record reads as `false` — never treated as "already accepted" by default. */
+async function isStoredAsAccepted(
+  root: string,
+  id: string,
+  scope: LearningScope,
+  options: StoreEnvOptions,
+): Promise<boolean> {
+  try {
+    const stored = await readPattern(root, id, scope, options);
+    return stored?.status === "accepted";
+  } catch {
+    return false;
+  }
+}
+
 export interface WritePatternOptions extends StoreEnvOptions {
   /** Required when `record.status === "accepted"` — see `accept-capability.ts`. */
   capability?: AcceptCapability;
@@ -138,7 +153,15 @@ export interface WritePatternOptions extends StoreEnvOptions {
  *  - a target outside its scope's learning root (`learning-path-outside-root`,
  *    from `assertInsideLearningRoot`);
  *  - `status: "accepted"` without the accept capability
- *    (`learning-accept-capability-required`).
+ *    (`learning-accept-capability-required`) — UNLESS the record already
+ *    stored under the same scope+id also has `status: "accepted"`. That case
+ *    is not a `candidate -> accepted` transition (only `keryx learn accept`,
+ *    holding the capability, may ever produce that transition — AC4/AC11); it
+ *    is an already-accepted record picking up new evidence (`extract.ts`'s
+ *    reinforcement/decay passes, which run on candidate AND accepted records
+ *    alike and must not need the capability to touch the latter). Read
+ *    failure/absence is treated as "not already accepted", so a forged first
+ *    write still requires the capability.
  */
 export async function writePattern(
   root: string,
@@ -154,10 +177,13 @@ export async function writePattern(
     );
   }
   if (record.status === "accepted" && !isAcceptCapability(options.capability)) {
-    throw new LearningStoreError(
-      "learning-accept-capability-required",
-      `refusing to write status:"accepted" for ${record.id} without the accept capability`,
-    );
+    const alreadyAccepted = await isStoredAsAccepted(root, record.id, record.scope, options);
+    if (!alreadyAccepted) {
+      throw new LearningStoreError(
+        "learning-accept-capability-required",
+        `refusing to write status:"accepted" for ${record.id} without the accept capability`,
+      );
+    }
   }
   const target = patternPathFor(root, record.id, record.scope, options);
   assertInsideLearningRoot(target, [allowedRootFor(root, record.scope, options)]);

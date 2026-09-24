@@ -94,3 +94,21 @@ export {
   type DecisionAction,
   type DecisionLogOptions,
 } from "./decisions";
+
+// --- T7: Extract ------------------------------------------------------------
+
+export {
+  deterministicPatternId,
+  loadObservationWindow,
+  LearningExtractError,
+  runExtract,
+  type ExtractReport,
+  type ModelExtractor,
+  type RunExtractOptions,
+} from "./extract";
+
+export { learningConfigPath, loadLearningConfig, type LearningConfig } from "./config";
+
+export { generalizeLesson, reviewerIdFor } from "./reviewer-id";
+
+export type { ObservationLine, SignalDraft, SignalRunner, SignalRunOptions } from "./signals/types";

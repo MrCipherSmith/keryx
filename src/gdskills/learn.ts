@@ -253,7 +253,10 @@ type HealthFinding = {
   scope?: { skill?: string | null };
 };
 
-function parseHealthFindings(source: string): HealthFinding[] {
+// Exported (W3, flow 312 T7) so `src/learning/signals/health-regression.ts`
+// can reuse the exact same "what counts as a health finding" shape without a
+// second parser — behaviour unchanged, only the export keyword is new.
+export function parseHealthFindings(source: string): HealthFinding[] {
   try {
     const parsed = JSON.parse(source) as { findings?: HealthFinding[] };
     return Array.isArray(parsed.findings) ? parsed.findings : [];
@@ -265,7 +268,9 @@ function parseHealthFindings(source: string): HealthFinding[] {
 // Pick the project-skill with the most Code Health findings, restricted to
 // skills that exist in the registry. Lets `learn --from-health` resolve the
 // target skill without an explicit `--skill`.
-function dominantHealthSkill(
+// Exported (W3, flow 312 T7) for the same reason as `parseHealthFindings`
+// above — behaviour unchanged.
+export function dominantHealthSkill(
   source: string,
   registry: ProjectSkillRegistryEntry[],
 ): string | undefined {

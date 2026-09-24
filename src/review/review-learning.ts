@@ -46,6 +46,14 @@ export type ReviewLearningConfig = {
   repo: string;
   /** GitHub logins whose comments count. Empty is refused; see the loader. */
   authors: string[];
+  /**
+   * (W3) GitHub logins, among `authors`, that also get their own per-reviewer
+   * profile rule (`.metaproject/rules/reviewers/<reviewer-id>.mdc`). Must be a
+   * subset of `authors` — an author who does not count for the skill cannot
+   * count for a profile either (W3 spec, "Reviewer profiles"). Omitted means
+   * no author gets a profile.
+   */
+  reviewerProfiles?: string[];
 };
 
 export function reviewLearningConfigPath(cwd: string): string {
@@ -93,11 +101,29 @@ export async function loadReviewLearningConfig(cwd: string): Promise<ReviewLearn
     );
   }
 
+  const trimmedAuthors = authors.map((author) => author.trim());
+
+  let reviewerProfiles: string[] | undefined;
+  if (raw.reviewerProfiles !== undefined) {
+    if (!Array.isArray(raw.reviewerProfiles) || raw.reviewerProfiles.some((entry) => typeof entry !== "string")) {
+      throw new Error(`${where}: "reviewerProfiles" must be an array of strings, got ${JSON.stringify(raw.reviewerProfiles)}.`);
+    }
+    const configuredAuthors = new Set(trimmedAuthors.map((author) => author.toLowerCase()));
+    const unknown = raw.reviewerProfiles.filter((login) => !configuredAuthors.has(login.trim().toLowerCase()));
+    if (unknown.length > 0) {
+      throw new Error(
+        `${where}: "reviewerProfiles" must be a subset of "authors" (case-insensitive); not configured as an author: ${unknown.join(", ")}.`,
+      );
+    }
+    reviewerProfiles = raw.reviewerProfiles.map((login) => login.trim());
+  }
+
   return {
     schemaVersion: REVIEW_LEARNING_CONFIG_SCHEMA_VERSION,
     skill,
     repo,
-    authors: authors.map((author) => author.trim()),
+    authors: trimmedAuthors,
+    ...(reviewerProfiles !== undefined ? { reviewerProfiles } : {}),
   };
 }
 
