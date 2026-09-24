@@ -224,7 +224,25 @@ export async function applyBundlePlan(
       const bucket = await ledgerFor(entry.targetScope, resolveLedgerPathForEntry(entry, opts));
       const canonicalKey = canonicalBundleKey(entry.targetRelative);
       const existingRecord = bucket.state.entries[canonicalKey];
-      if (existingRecord === undefined || existingRecord.bundleId !== plan.bundleId) {
+      // R6-F(R3-F18 residual) (review round 6): this used to check ONLY
+      // `bundleId`, so a same-id bundle whose `sourceProject` OMITTED or
+      // MISMATCHED the recorded value — but whose bytes happened to be
+      // byte-identical to what's already on disk — still passed this guard
+      // and had its record rewritten below, which silently erased (spread is
+      // skipped when `plan.bundleSourceProject` is `undefined`) or relabelled
+      // the recorded `sourceProject`. A later import with different bytes and
+      // that same omitted/forged `sourceProject` then updated in place with
+      // no conflict and no `--force`, laundering a takeover through this
+      // "safe, unchanged bytes" branch — exactly the ownership check
+      // `plan.ts:456-458` exists to enforce for `conflict`/`update`. Ownership
+      // for a same-bundleId record is `bundleId` AND `sourceProject` together
+      // (mirroring `ledgerOwnedByOther`), so a mismatch here leaves the
+      // existing record completely untouched rather than reclaiming it.
+      if (
+        existingRecord === undefined ||
+        existingRecord.bundleId !== plan.bundleId ||
+        existingRecord.sourceProject !== plan.bundleSourceProject
+      ) {
         continue; // not ours to claim — see comment above.
       }
       bucket.state.entries[canonicalKey] = {

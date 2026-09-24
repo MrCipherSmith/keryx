@@ -166,17 +166,27 @@ function lossyDecodeBytes(buffer: Buffer): string {
  * the plain lossy UTF-8 decode below (bare UTF-16 with no BOM is
  * indistinguishable from arbitrary bytes without a declared encoding, and is
  * scanned as whatever that lossy decode produces, same as any other file).
+ *
+ * R6-F(R5-F2 residual) (review round 6): this used to decode with
+ * `{fatal: true}` and return `undefined` on any decode error, so a file that
+ * IS genuinely UTF-16 with a BOM — real content, not an ASCII file wearing a
+ * BOM prefix — but carries one lone surrogate (an unpaired `00 D8`/`D8 00`
+ * code unit) or one odd trailing byte lost its BOM-decoded variant entirely.
+ * `contentVariants` then fell back to ONLY the lossy UTF-8 view, which for
+ * genuine UTF-16 bytes is NUL-interleaved noise that no text check matches —
+ * the exact zero-finding gap this dual-decode rule exists to close. A BOM is
+ * a strong, deliberate declaration of encoding; once one is present, the
+ * UTF-16 view is decoded LOSSILY (`fatal: false`, same as `lossyDecodeBytes`
+ * above) instead of being dropped on any single malformed code unit, so it
+ * always joins `contentVariants` whenever a BOM is present. The dual scan and
+ * finding union below are unchanged.
  */
 function decodeUtf16WithBom(buffer: Buffer): string | undefined {
   if (buffer.length < 2) return undefined;
   const isLittleEndianBom = buffer[0] === 0xff && buffer[1] === 0xfe;
   const isBigEndianBom = buffer[0] === 0xfe && buffer[1] === 0xff;
   if (!isLittleEndianBom && !isBigEndianBom) return undefined;
-  try {
-    return new TextDecoder(isLittleEndianBom ? "utf-16le" : "utf-16be", { fatal: true }).decode(buffer.subarray(2));
-  } catch {
-    return undefined;
-  }
+  return new TextDecoder(isLittleEndianBom ? "utf-16le" : "utf-16be", { fatal: false }).decode(buffer.subarray(2));
 }
 
 type JsonRecord = Record<string, unknown>;

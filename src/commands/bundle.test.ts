@@ -360,6 +360,67 @@ describe("keryx bundle export -> verify -> inspect -> import -> uninstall", () =
       restore();
     }
   });
+
+  // R6 (flow 313 W4 review round 6, R3-F18 residual): the two-step takeover
+  // through the CLI's own "identical" bucket, reproduced end to end.
+  //   1. bundle A is recorded with a sourceProject.
+  //   2. a same-id bundle with NO sourceProject and byte-IDENTICAL content is
+  //      imported — this used to silently erase the recorded sourceProject
+  //      (apply.ts's identical-entry claim checked only bundleId), with no
+  //      conflict and no --force needed.
+  //   3. a same-id bundle with NO sourceProject and DIFFERENT content is then
+  //      imported — this must still be refused without --force, because the
+  //      recorded sourceProject must have survived step 2.
+  test("R6 (R3-F18 residual): an identical-bytes same-id import cannot launder away the recorded sourceProject", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    // Step 1: bundle A, recorded with sourceProject sha256:aaa.
+    const originalDir = await makeManifestBundle("keryx-launder-id", "sha256:aaa", "rules/team.md", "# team policy\n");
+    install();
+    try {
+      await bundleCommand(["import", originalDir, "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+    } finally {
+      restore();
+    }
+    const ledgerPath = path.join(targetRoot, ".metaproject", "data", "bundles", "applied-state.json");
+    const ledgerAfterStep1 = JSON.parse(await readFile(ledgerPath, "utf8")) as { entries: Record<string, { sourceProject?: string }> };
+    expect(ledgerAfterStep1.entries["rules/team.md"]?.sourceProject).toBe("sha256:aaa");
+
+    // Step 2: same id, NO sourceProject, byte-IDENTICAL content.
+    const identicalDir = await makeManifestBundle("keryx-launder-id", undefined, "rules/team.md", "# team policy\n");
+    install();
+    try {
+      await bundleCommand(["import", identicalDir, "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+      const result = lastJson() as { ok: boolean; written: string[]; unchanged?: string[] };
+      expect(result.ok).toBe(true);
+      expect(result.written).toEqual([]);
+    } finally {
+      restore();
+    }
+    // The recorded sourceProject must survive step 2 untouched.
+    const ledgerAfterStep2 = JSON.parse(await readFile(ledgerPath, "utf8")) as { entries: Record<string, { sourceProject?: string }> };
+    expect(ledgerAfterStep2.entries["rules/team.md"]?.sourceProject).toBe("sha256:aaa");
+    expect(await readFile(path.join(targetRoot, ".metaproject", "rules", "team.md"), "utf8")).toBe("# team policy\n");
+
+    // Step 3: same id, NO sourceProject, DIFFERENT content — must still be
+    // refused without --force, because the ledger's sourceProject persists.
+    const launderedDir = await makeManifestBundle("keryx-launder-id", undefined, "rules/team.md", "# laundered takeover\n");
+    install();
+    try {
+      await bundleCommand(["import", launderedDir, "--json"], targetRoot);
+      expect(process.exitCode).toBe(1);
+      const refused = lastJson() as { ok: boolean; refusals: Array<{ reason: string }> };
+      expect(refused.ok).toBe(false);
+      expect(refused.refusals.some((r) => r.reason === "unresolved-conflict")).toBe(true);
+      expect(await readFile(path.join(targetRoot, ".metaproject", "rules", "team.md"), "utf8")).toBe("# team policy\n");
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe("keryx bundle — refusal and usage exit codes", () => {

@@ -432,9 +432,16 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     // R3-F18 (round-5 follow-up): a record that DECLARES the same bundleId
     // is not proof of the same producer — a hand-crafted bundle can
     // trivially spoof any `bundleId` string. Ownership is therefore also
-    // compared on `sourceProject`, the one field this import cannot forge
-    // to match a prior record it never produced: a recorded
-    // `manifest.provenance.sourceProject` and this import's own
+    // compared on `sourceProject`. IMPORTANT (review round 6): this is
+    // trust-on-first-use, not a forgery barrier — `sourceProject` is a plain
+    // sha256 of the source project's normalized git remote identity,
+    // computed at export time and carried in cleartext in every
+    // `bundle.json`, so anyone who has seen a previously-exported bundle (or
+    // simply knows the source repository's remote) can reproduce it and
+    // populate a hand-crafted bundle to match. What this comparison actually
+    // guards against is ACCIDENTAL collision — two unrelated projects that
+    // happen to reuse the same `bundleId` — not a deliberate attacker: a
+    // recorded `manifest.provenance.sourceProject` and this import's own
     // `provenance.sourceProject` must be `===` (both present and equal, or
     // BOTH absent) or the target is a conflict, exactly like a differing
     // bundleId. Round 5's R5-F2-adjacent review (own.out O5) found the
@@ -452,7 +459,11 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     // into the same `owned-by-other-bundle` conflict a bundleId mismatch
     // already produces, needing `--force` to take over. A forced takeover
     // is reported via `previousOwnerSourceProject` below, in both human and
-    // `--json` output (see `format.ts`/`apply.ts`).
+    // `--json` output (see `format.ts`/`apply.ts`). `apply.ts`'s
+    // "identical" bucket applies this same bundleId-AND-sourceProject
+    // ownership check before ever reclaiming a ledger record (review round
+    // 6, R3-F18 residual) — byte-identical content is never sufficient on
+    // its own to relabel or erase a recorded `sourceProject`.
     const ledgerOwnedByOther =
       ledgerRecord !== undefined &&
       (ledgerRecord.bundleId !== opts.manifest.bundleId || ledgerRecord.sourceProject !== opts.manifest.provenance.sourceProject);

@@ -174,6 +174,122 @@ describe("applyBundlePlan", () => {
     });
   });
 
+  // R6 (flow 313 W4 review round 6, R3-F18 residual): claiming an "identical"
+  // entry used to check ONLY `bundleId`, not `sourceProject` — a same-id
+  // bundle whose bytes happen to already match what's on disk, but whose
+  // `sourceProject` is omitted or differs from the recorded value, still
+  // passed that guard and had its ledger record rewritten below (where the
+  // `sourceProject` spread is skipped when `plan.bundleSourceProject` is
+  // `undefined`). That silently erased or relabelled the recorded
+  // `sourceProject` WITHOUT `--force` and without any conflict — laundering a
+  // takeover through the "safe, unchanged bytes" branch: a later import with
+  // different bytes and that same omitted/forged `sourceProject` then read as
+  // a plain same-bundle update. Ownership for a same-bundleId identical entry
+  // is now `bundleId` AND `sourceProject` together (mirroring
+  // `plan.ts:456-458`'s `ledgerOwnedByOther`), and a mismatch leaves the
+  // existing record completely untouched.
+  describe("R6 (R3-F18 residual): identical-entry claim also requires a matching sourceProject", () => {
+    test("an identical entry with the SAME bundleId but an OMITTED sourceProject does not erase the recorded one", async () => {
+      const bytes = Buffer.from("# team policy\n");
+      const targetPath = path.join(projectRoot, ".metaproject", "agents", "a.md");
+      writeFileSync(targetPath, bytes);
+      const ledgerPath = appliedStatePath("project", { projectRoot, homeDir, env: {} });
+      await writeAppliedState(ledgerPath, {
+        schemaVersion: 2,
+        entries: {
+          "agents/a.md": {
+            bundleId: "keryx-project-x",
+            sha256: sha256Hex(bytes),
+            kind: "agent",
+            appliedAt: "2026-01-01T00:00:00.000Z",
+            path: "agents/a.md",
+            sourceProject: "sha256:aaa",
+          },
+        },
+      });
+      const entry = planEntry({ bucket: "identical", bytes, incomingSha256: sha256Hex(bytes), currentSha256: sha256Hex(bytes) });
+      // Same bundleId, but this import declares NO sourceProject at all.
+      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
+
+      const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {}, now: () => new Date("2026-09-24T00:00:00.000Z") });
+      expect(result.refusals).toEqual([]);
+      expect(result.unchanged).toEqual(["project:agents/a.md"]);
+
+      const ledger = await readAppliedState(ledgerPath);
+      expect(ledger.ok).toBe(true);
+      if (ledger.ok) {
+        // The record — including its sourceProject — must be untouched.
+        expect(ledger.state.entries["agents/a.md"]?.bundleId).toBe("keryx-project-x");
+        expect(ledger.state.entries["agents/a.md"]?.sourceProject).toBe("sha256:aaa");
+        expect(ledger.state.entries["agents/a.md"]?.appliedAt).toBe("2026-01-01T00:00:00.000Z");
+      }
+    });
+
+    test("an identical entry with the SAME bundleId but a DIFFERENT sourceProject does not relabel the recorded one", async () => {
+      const bytes = Buffer.from("# team policy\n");
+      const targetPath = path.join(projectRoot, ".metaproject", "agents", "a.md");
+      writeFileSync(targetPath, bytes);
+      const ledgerPath = appliedStatePath("project", { projectRoot, homeDir, env: {} });
+      await writeAppliedState(ledgerPath, {
+        schemaVersion: 2,
+        entries: {
+          "agents/a.md": {
+            bundleId: "keryx-project-x",
+            sha256: sha256Hex(bytes),
+            kind: "agent",
+            appliedAt: "2026-01-01T00:00:00.000Z",
+            path: "agents/a.md",
+            sourceProject: "sha256:aaa",
+          },
+        },
+      });
+      const entry = planEntry({ bucket: "identical", bytes, incomingSha256: sha256Hex(bytes), currentSha256: sha256Hex(bytes) });
+      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", bundleSourceProject: "sha256:evil", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
+
+      const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {}, now: () => new Date("2026-09-24T00:00:00.000Z") });
+      expect(result.refusals).toEqual([]);
+      expect(result.unchanged).toEqual(["project:agents/a.md"]);
+
+      const ledger = await readAppliedState(ledgerPath);
+      expect(ledger.ok).toBe(true);
+      if (ledger.ok) {
+        expect(ledger.state.entries["agents/a.md"]?.sourceProject).toBe("sha256:aaa");
+        expect(ledger.state.entries["agents/a.md"]?.appliedAt).toBe("2026-01-01T00:00:00.000Z");
+      }
+    });
+
+    test("an identical entry with the SAME bundleId AND the SAME sourceProject is still refreshed normally (no regression)", async () => {
+      const bytes = Buffer.from("# team policy\n");
+      const targetPath = path.join(projectRoot, ".metaproject", "agents", "a.md");
+      writeFileSync(targetPath, bytes);
+      const ledgerPath = appliedStatePath("project", { projectRoot, homeDir, env: {} });
+      await writeAppliedState(ledgerPath, {
+        schemaVersion: 2,
+        entries: {
+          "agents/a.md": {
+            bundleId: "keryx-project-x",
+            sha256: sha256Hex(bytes),
+            kind: "agent",
+            appliedAt: "2026-01-01T00:00:00.000Z",
+            path: "agents/a.md",
+            sourceProject: "sha256:aaa",
+          },
+        },
+      });
+      const entry = planEntry({ bucket: "identical", bytes, incomingSha256: sha256Hex(bytes), currentSha256: sha256Hex(bytes) });
+      const plan: BundlePlan = { ok: true, bundleId: "keryx-project-x", bundleSourceProject: "sha256:aaa", refusals: [], entries: [entry], projectRoot, bundleContentDigest: "digest" };
+
+      const result = await applyBundlePlan(plan, OK_AUDIT, { homeDir, env: {}, now: () => new Date("2026-09-24T00:00:00.000Z") });
+      expect(result.refusals).toEqual([]);
+      const ledger = await readAppliedState(ledgerPath);
+      expect(ledger.ok).toBe(true);
+      if (ledger.ok) {
+        expect(ledger.state.entries["agents/a.md"]?.sourceProject).toBe("sha256:aaa");
+        expect(ledger.state.entries["agents/a.md"]?.appliedAt).toBe("2026-09-24T00:00:00.000Z");
+      }
+    });
+  });
+
   // R1-F29: an unreadable/corrupt ledger must refuse (named `corrupt-ledger`)
   // rather than being silently treated as empty — pre-fix, `ledgerFor`
   // substituted `{ schemaVersion: 1, entries: {} }` for a read failure, so
