@@ -68,6 +68,22 @@ export { confidenceLevelConsistent, validateLearnedPattern, validateObservationE
 
 export { detectInjectionShape, redactPreview, scanLearnedText, type ScanResult } from "./scan";
 
+// --- T6: Observe -------------------------------------------------------------
+
+export {
+  appendObservation,
+  buildObservationLine,
+  createLearningObservationSink,
+  mapHookEventToObservation,
+  observeHostHookPayload,
+  type AppendObservationDeps,
+  type BuildObservationLineDeps,
+  type BuildObservationLineInput,
+  type CreateLearningObservationSinkDeps,
+  type LearningObservationLike,
+  type LearningObservationSink,
+} from "./observe";
+
 // `accept-capability.ts` is deliberately NOT re-exported here: the source
 // audit (`accept-capability.test.ts`) asserts only `store.ts` and `accept.ts`
 // (T8) import it, and re-exporting it from this facade would make every
@@ -112,3 +128,31 @@ export { learningConfigPath, loadLearningConfig, type LearningConfig } from "./c
 export { generalizeLesson, reviewerIdFor } from "./reviewer-id";
 
 export type { ObservationLine, SignalDraft, SignalRunner, SignalRunOptions } from "./signals/types";
+
+// --- T8: Accept / reject / prune --------------------------------------------
+
+export {
+  acceptPattern,
+  LearningAcceptError,
+  rejectPattern,
+  type AcceptOptions,
+  type AcceptResult,
+  type RejectOptions,
+  type RejectResult,
+} from "./accept";
+
+export { pruneLearning, type ExpiredRecord, type PruneOptions, type PruneReport } from "./prune";
+
+// --- T9/T10 stubs (final signatures; bodies land with those tasks) ---------
+
+export { applyLearnedPattern, LearningApplyError, type ApplyLearnedPatternOptions } from "./apply";
+
+export { promotePattern, LearningPromoteError, type PromotePatternOptions } from "./promote";
+
+export {
+  applyGraduation,
+  runGraduate,
+  LearningGraduateError,
+  type ApplyGraduationOptions,
+  type RunGraduateOptions,
+} from "./graduate";

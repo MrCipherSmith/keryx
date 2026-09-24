@@ -64,6 +64,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   },
   { verb: "sync", reason: "writes into external runtime directories outside the project" },
   { verb: "skills", reason: "skill lifecycle incl. install/export/sync writing outside the project; needs its own review before exposure" },
+  {
+    verb: "learn",
+    reason:
+      "self-learning loop consent gate (flow 312, W3): accept/promote/graduate apply are deliberately interactive-only (no bypass flag) and must never be agent-invocable — a descriptor here would advertise them as a callable operation to exactly the caller they refuse; needs its own review before any subset of it is exposed",
+  },
   { verb: "skill-verify-skill", reason: "standalone alias of skills verify; not part of the agent surface" },
   { verb: "rules", reason: "rewrites agent entrypoint rule files; lifecycle, not an operation" },
   { verb: "standard", reason: "conformance tooling for the Metaproject Standard, aimed at maintainers" },

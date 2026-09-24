@@ -98,6 +98,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration. |
+| `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
 
 | Shell command | Summary |
 |---|---|

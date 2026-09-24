@@ -304,6 +304,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     summary: "Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration.",
   },
   {
+    kind: "cli",
+    name: "learn",
+    group: "Automation",
+    summary: "Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune.",
+  },
+  {
     kind: "slash",
     name: "/triggers",
     group: "Automation",
