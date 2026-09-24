@@ -131,7 +131,7 @@ describe("verifyAgents", () => {
     );
   });
 
-  test("AC6: a generated definition passes when the injected resolver confirms the stack pack", () => {
+  test("AC6: a generated definition passes when the injected resolvers confirm the stack pack exists AND is gate-cleared", () => {
     writeAgent(
       bundledRoot,
       "generated-agent",
@@ -141,9 +141,95 @@ describe("verifyAgents", () => {
       bundledRoot,
       skillExists: ALWAYS_SKILL_EXISTS,
       stackPackExists: (ref) => ref === "some-stack",
+      stackPackGateCleared: (ref) => ({ cleared: ref === "some-stack" }),
     });
     expect(report.ok).toBe(true);
     const agent = report.agents.find((a) => a.name === "generated-agent");
+    expect(agent?.problems).toEqual([]);
+  });
+
+  // Flow 314, W4 Wave 4 (W2-AC6): existence alone ("resolves to an existing
+  // ... stack pack") is not the whole contract — "resolves to an existing,
+  // GATE-CLEARED W1 stack pack". `stackPackExists` confirming the pack is
+  // there must not be enough on its own when the injected
+  // `stackPackGateCleared` resolver says it is not cleared: a distinct
+  // reason (`stack-pack-not-gate-cleared`), never conflated with
+  // `stack-pack-missing`.
+  test("W4: a generated definition whose pack EXISTS but is not gate-cleared fails closed with stack-pack-not-gate-cleared, distinct from stack-pack-missing", () => {
+    writeAgent(
+      bundledRoot,
+      "generated-agent",
+      agentMarkdown("generated-agent", {}, "\norigin:\n  kind: generated\n  sourceRef: some-stack"),
+    );
+    const report = verifyAgents(projectRoot, {
+      bundledRoot,
+      skillExists: ALWAYS_SKILL_EXISTS,
+      stackPackExists: (ref) => ref === "some-stack",
+      stackPackGateCleared: () => ({ cleared: false, reason: "pack stability is \"experimental\", not \"stable\"" }),
+    });
+    expect(report.ok).toBe(false);
+    const agent = report.agents.find((a) => a.name === "generated-agent");
+    expect(
+      agent?.problems.some(
+        (p) => p.reason === "stack-pack-not-gate-cleared" && p.detail.includes("some-stack") && p.detail.includes("experimental"),
+      ),
+    ).toBe(true);
+    expect(agent?.problems.some((p) => p.reason === "stack-pack-missing")).toBe(false);
+  });
+
+  test("W4: the default stackPackGateCleared resolver fails closed for a real 'experimental' pack (the shipped python pack today)", () => {
+    writeAgent(
+      bundledRoot,
+      "generated-python-agent",
+      agentMarkdown("generated-python-agent", {}, "\norigin:\n  kind: generated\n  sourceRef: python"),
+    );
+    const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+    mkdirSync(path.join(stacksRoot, "python", "governance"), { recursive: true });
+    writeFileSync(
+      path.join(stacksRoot, "python", "pack.json"),
+      JSON.stringify({ id: "python", family: "language", modules: [], stability: "experimental", skills: {} }),
+      "utf8",
+    );
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    expect(report.ok).toBe(false);
+    const agent = report.agents.find((a) => a.name === "generated-python-agent");
+    expect(agent?.problems.some((p) => p.reason === "stack-pack-not-gate-cleared")).toBe(true);
+  });
+
+  test("W4: the default stackPackGateCleared resolver passes for a real 'stable' pack with a passing eval.json", () => {
+    writeAgent(
+      bundledRoot,
+      "generated-stable-agent",
+      agentMarkdown("generated-stable-agent", {}, "\norigin:\n  kind: generated\n  sourceRef: fixture-stable"),
+    );
+    const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
+    const packDir = path.join(stacksRoot, "fixture-stable");
+    mkdirSync(path.join(packDir, "governance"), { recursive: true });
+    writeFileSync(
+      path.join(packDir, "pack.json"),
+      JSON.stringify({ id: "fixture-stable", family: "language", modules: [], stability: "stable", skills: {} }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(packDir, "governance", "eval.json"),
+      JSON.stringify({
+        schemaVersion: "1.0.0",
+        skillId: "fixture-stable/fixture-skill",
+        strictness: "low",
+        trials: 3,
+        triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+        evidence: "authored",
+        scenarios: [
+          { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+          { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+        ],
+        verdict: "pass",
+      }),
+      "utf8",
+    );
+    const report = verifyAgents(projectRoot, { bundledRoot, skillExists: ALWAYS_SKILL_EXISTS });
+    expect(report.ok).toBe(true);
+    const agent = report.agents.find((a) => a.name === "generated-stable-agent");
     expect(agent?.problems).toEqual([]);
   });
 

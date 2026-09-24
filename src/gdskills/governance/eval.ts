@@ -705,6 +705,100 @@ export interface StablePackGateResult {
 }
 
 /**
+ * Flow 314, W4 Wave 4: the pack-level behavior-eval floor
+ * (docs/requirements/keryx-agent-platform-expansion/metrics-and-validation.md
+ * "Behavior-eval pass@k": "pass@3 ≥ 80% before graduating from `candidate`").
+ * Applied per RAN behavior scenario in a pack-level eval document — see
+ * `checkStablePackGate`'s pack-level branch below.
+ */
+export const PACK_BEHAVIOR_PASS_FLOOR = 0.8;
+
+/** The pack-level document form of `<pack>/governance/eval.json` — one `EvalReport` per skill the pack ships, keyed by `report.skillId` (flow 314, W4 Wave 4). Distinguished from the single-report form by its `reports` array field. */
+export interface PackEvalDocument {
+  readonly schemaVersion: "1.0.0";
+  readonly reports: readonly EvalReport[];
+}
+
+function isPackEvalDocument(value: unknown): value is PackEvalDocument {
+  return typeof value === "object" && value !== null && Array.isArray((value as { reports?: unknown }).reports);
+}
+
+/**
+ * Evaluates ONE skill's report from a pack-level document against the
+ * stable-pack gate's requirements (flow 314, W4 Wave 4 dispatch): the report
+ * must validate against its own contract (`validateEvalReport`), carry
+ * verdict `"pass"`, evidence `"authored"`, at least one RAN behavior
+ * scenario, and every RAN behavior scenario must clear
+ * `PACK_BEHAVIOR_PASS_FLOOR`. Returns a reason string naming the skill on any
+ * gap, or `undefined` when the skill's report clears every requirement.
+ */
+function checkSkillReportForPackGate(skillId: string, report: EvalReport | undefined): string | undefined {
+  if (report === undefined) {
+    return `no eval report for skill "${skillId}"`;
+  }
+  if (report.skillId !== skillId) {
+    return `report for "${skillId}" carries a mismatched skillId "${report.skillId}"`;
+  }
+  let errors: string[];
+  try {
+    errors = validateEvalReport(report);
+  } catch (error) {
+    return `skill "${skillId}": eval report could not be validated: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  if (errors.length > 0) {
+    return `skill "${skillId}": eval report fails its own contract: ${errors.join("; ")}`;
+  }
+  if (report.verdict !== "pass") {
+    return `skill "${skillId}": eval report verdict is "${report.verdict}", not "pass"`;
+  }
+  if (report.evidence !== "authored") {
+    return `skill "${skillId}": eval report evidence is "${report.evidence}", not "authored"`;
+  }
+  const ranBehaviorScenarios = report.scenarios.filter(
+    (scenario) => scenario.kind === "behavior" && scenario.status === "ran",
+  );
+  if (ranBehaviorScenarios.length === 0) {
+    return `skill "${skillId}": eval report has zero ran behavior scenarios`;
+  }
+  const belowFloor = ranBehaviorScenarios.find((scenario) => scenario.passRate < PACK_BEHAVIOR_PASS_FLOOR);
+  if (belowFloor !== undefined) {
+    return `skill "${skillId}": behavior scenario "${belowFloor.id}" passRate ${belowFloor.passRate} is below the pack floor ${PACK_BEHAVIOR_PASS_FLOOR}`;
+  }
+  return undefined;
+}
+
+/**
+ * The pack-level branch of `checkStablePackGate` (flow 314, W4 Wave 4): reads
+ * `<packDir>/pack.json`'s `skills` map and requires, for EVERY skill name it
+ * lists (across all five lifecycle buckets — `implement`/`test`/`review`/
+ * `build-fix`/`migrate`), a report in `doc.reports` whose `skillId` is
+ * `"<pack.id>/<name>"` and clears `checkSkillReportForPackGate`. Any gap
+ * fails the whole gate, naming the offending skill.
+ */
+function checkPackEvalDocument(packDir: string, doc: PackEvalDocument): StablePackGateResult {
+  const packJsonPath = path.join(packDir, "pack.json");
+  let pack: { readonly id: string; readonly skills: Readonly<Record<string, readonly string[]>> };
+  try {
+    pack = JSON.parse(readFileSync(packJsonPath, "utf8")) as typeof pack;
+  } catch (error) {
+    return { status: "fail", reason: `pack.json could not be read/parsed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const reportsBySkillId = new Map(doc.reports.map((report) => [report.skillId, report] as const));
+  const skillNames = new Set<string>();
+  for (const names of Object.values(pack.skills ?? {})) {
+    for (const name of names) skillNames.add(name);
+  }
+  for (const name of [...skillNames].sort()) {
+    const skillId = `${pack.id}/${name}`;
+    const reason = checkSkillReportForPackGate(skillId, reportsBySkillId.get(skillId));
+    if (reason !== undefined) {
+      return { status: "fail", reason };
+    }
+  }
+  return { status: "pass" };
+}
+
+/**
  * F19 (flow 309 review round 1): the "a stable stack pack ships a passing
  * governance/eval.json" gate used to live only as inline assertions inside
  * `stack-packs.test.ts`, against the REAL bundled `python` pack — which
@@ -724,12 +818,23 @@ export function checkStablePackGate(packDir: string, stability: string): StableP
   if (!existsSync(evalPath)) {
     return { status: "fail", reason: "governance/eval.json is missing" };
   }
-  let report: EvalReport;
+  let parsed: unknown;
   try {
-    report = JSON.parse(readFileSync(evalPath, "utf8")) as EvalReport;
+    parsed = JSON.parse(readFileSync(evalPath, "utf8"));
   } catch (error) {
     return { status: "fail", reason: `governance/eval.json could not be parsed: ${error instanceof Error ? error.message : String(error)}` };
   }
+  // Flow 314, W4 Wave 4: a PACK-LEVEL eval.json (`{ schemaVersion, reports:
+  // EvalReport[] }`) is distinguished from the original single-report form by
+  // its `reports` array field — every skill pack.json lists must carry a
+  // passing, authored report with >=1 ran behavior scenario, each clearing
+  // `PACK_BEHAVIOR_PASS_FLOOR`. The single-report form (most of this
+  // function, below) keeps working unchanged for a pack that ships just one
+  // report at the top level.
+  if (isPackEvalDocument(parsed)) {
+    return checkPackEvalDocument(packDir, parsed);
+  }
+  const report = parsed as EvalReport;
   // R2-6 (flow 309 review round 2): `validateEvalReport` itself is now
   // defensive against a missing `triggerAccuracy`/`scenarios` (it returns
   // errors instead of throwing), but this call is wrapped regardless — a

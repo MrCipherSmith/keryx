@@ -21,11 +21,13 @@ import installManifestSchemaJson from "../../docs/requirements/keryx-agent-platf
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { lintSkill, lintStackRule, STACK_EXTENSIONS } from "./governance/authoring-lint";
 import { readScoutRecord } from "./governance/scout";
-import type { EvalReport } from "./governance/eval";
-import { checkStablePackGate, validateEvalReport } from "./governance/eval";
+import type { EvalReport, EvalSpecFile, PackEvalDocument } from "./governance/eval";
+import { checkStablePackGate, PACK_BEHAVIOR_PASS_FLOOR, validateEvalReport } from "./governance/eval";
 import { exportProjectSkill } from "./export";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { defaultBundledRoot } from "./bundled-eval";
+import { parseAgentFrontmatter } from "../agents/frontmatter";
+import { buildAgentDefinition } from "../agents/schema";
 
 const STACKS_ROOT = path.join(defaultBundledRoot(), "stacks");
 
@@ -37,6 +39,15 @@ interface PackJson {
   readonly provenance?: { readonly origin: string; readonly sourceRef?: string; readonly addedAt?: string };
   readonly stability: string;
   readonly skills: Readonly<Record<string, readonly string[]>>;
+  readonly extends?: string;
+}
+
+/** The five lifecycle buckets every pack.json's `skills` map must carry a key for (flow 314, W4 Wave 4) — an empty array is fine, a missing key is not. */
+const PACK_SKILL_LIFECYCLE_KEYS = ["implement", "test", "review", "build-fix", "migrate"] as const;
+
+interface AgentRefsJson {
+  readonly agents: readonly string[];
+  readonly note?: string;
 }
 
 function sortedDirNames(dir: string): string[] {
@@ -131,6 +142,71 @@ describe("stack pack layout (real bundled tree)", () => {
       }
     });
 
+    // Flow 314, W4 Wave 4: every skill under stacks/*/skills/* ships an
+    // `evals.json` beside SKILL.md that (a) parses, (b) carries >=10 trigger
+    // prompts total with >=4 negatives, (c) carries >=1 behavior scenario,
+    // and (d) never names a "model" grader in any behavior scenario's
+    // `expected_behavior` — every grader is deterministic
+    // (contains|regex|not-contains) so a scenario is machine-checkable
+    // without a human-in-the-loop judge.
+    test(`${packId}: every skills/*/evals.json exists, parses, and meets the trigger-bank/behavior/grader floors (flow 314 W4)`, () => {
+      for (const name of skillDirNames(packDir)) {
+        const evalsPath = path.join(packDir, "skills", name, "evals.json");
+        expect(existsSync(evalsPath)).toBe(true);
+        let spec: EvalSpecFile;
+        expect(() => {
+          spec = JSON.parse(readFileSync(evalsPath, "utf8")) as EvalSpecFile;
+        }).not.toThrow();
+        spec = JSON.parse(readFileSync(evalsPath, "utf8")) as EvalSpecFile;
+
+        const positives = spec.triggers?.positive ?? [];
+        const negatives = spec.triggers?.negative ?? [];
+        expect(positives.length + negatives.length).toBeGreaterThanOrEqual(10);
+        expect(negatives.length).toBeGreaterThanOrEqual(4);
+
+        const scenarios = spec.scenarios ?? [];
+        expect(scenarios.length).toBeGreaterThanOrEqual(1);
+
+        for (const scenario of scenarios) {
+          for (const expected of scenario.expected_behavior) {
+            expect(expected.grader).not.toBe("model");
+            expect(["contains", "regex", "not-contains"]).toContain(expected.grader);
+          }
+        }
+      }
+    });
+
+    test(`${packId}: pack.json's skills map carries all five lifecycle keys (flow 314 W4)`, () => {
+      const pack = readPackJson(packDir);
+      for (const key of PACK_SKILL_LIFECYCLE_KEYS) {
+        expect(Object.prototype.hasOwnProperty.call(pack.skills, key)).toBe(true);
+      }
+    });
+
+    test(`${packId}: pack.json's "extends", when present, names an existing pack dir (flow 314 W4)`, () => {
+      const pack = readPackJson(packDir);
+      if (pack.extends === undefined) return;
+      const extendedDir = path.join(STACKS_ROOT, pack.extends);
+      expect(existsSync(extendedDir)).toBe(true);
+    });
+
+    test(`${packId}: agent-refs.json's listed agents each resolve to a generated agent file with a matching origin.sourceRef (flow 314 W4)`, () => {
+      const refsPath = path.join(packDir, "agent-refs.json");
+      if (!existsSync(refsPath)) return;
+      const pack = readPackJson(packDir);
+      const refs = JSON.parse(readFileSync(refsPath, "utf8")) as AgentRefsJson;
+      for (const agentName of refs.agents) {
+        const agentPath = path.join(defaultBundledRoot(), "agents", `${agentName}.md`);
+        expect(existsSync(agentPath)).toBe(true);
+        const parsed = parseAgentFrontmatter(readFileSync(agentPath, "utf8"));
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) continue;
+        const definition = buildAgentDefinition(parsed.result.data, parsed.result.body);
+        expect(definition.origin?.kind).toBe("generated");
+        expect(definition.origin?.sourceRef).toBe(pack.id);
+      }
+    });
+
     test(`${packId}: the stable-pack eval gate is not-applicable or passing (never a silent fail)`, () => {
       const pack = readPackJson(packDir);
       const result = checkStablePackGate(packDir, pack.stability);
@@ -210,6 +286,126 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
     } finally {
       cleanup();
     }
+  });
+
+  // Flow 314, W4 Wave 4: negative fixtures proving the four new real-tree
+  // checks above actually fire (missing evals.json, too few trigger prompts,
+  // a "model" grader in a behavior scenario, a pack.json missing a lifecycle
+  // key, a dangling "extends", and an agent-refs.json entry that does not
+  // resolve/does not carry the right origin).
+
+  function validEvalSpec(overrides: Partial<EvalSpecFile> = {}): EvalSpecFile {
+    return {
+      triggers: {
+        positive: ["p1", "p2", "p3", "p4", "p5", "p6"],
+        negative: ["n1", "n2", "n3", "n4"],
+      },
+      scenarios: [
+        { id: "s1", prompt: "do the thing", strictness: "low", expected_behavior: [{ grader: "contains", value: "ok" }] },
+      ],
+      ...overrides,
+    };
+  }
+
+  test("negative: a skill directory with no evals.json fails the evals.json-exists check", () => {
+    const packDir = makeFixturePack();
+    try {
+      // fixture-skill has no SKILL.md/evals.json beyond the empty dir makeFixturePack created.
+      expect(existsSync(path.join(packDir, "skills", "fixture-skill", "evals.json"))).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("negative: fewer than 10 total trigger prompts fails the trigger-bank-size check", () => {
+    const spec = validEvalSpec({ triggers: { positive: ["p1", "p2"], negative: ["n1", "n2"] } });
+    expect((spec.triggers?.positive.length ?? 0) + (spec.triggers?.negative.length ?? 0)).toBeLessThan(10);
+  });
+
+  test("negative: fewer than 4 negative trigger prompts fails the negatives-floor check", () => {
+    const spec = validEvalSpec({
+      triggers: { positive: ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"], negative: ["n1", "n2"] },
+    });
+    expect(spec.triggers?.negative.length ?? 0).toBeLessThan(4);
+  });
+
+  test("negative: zero behavior scenarios fails the >=1-behavior-scenario check", () => {
+    const spec = validEvalSpec({ scenarios: [] });
+    expect(spec.scenarios?.length ?? 0).toBe(0);
+  });
+
+  test("negative: a 'model' grader in expected_behavior fails the deterministic-grader check", () => {
+    const spec = validEvalSpec({
+      scenarios: [
+        { id: "s1", prompt: "do the thing", strictness: "low", expected_behavior: [{ grader: "model", value: "looks right" }] },
+      ],
+    });
+    const graders = (spec.scenarios ?? []).flatMap((scenario) => scenario.expected_behavior.map((e) => e.grader));
+    expect(graders).toContain("model");
+  });
+
+  test("negative: pack.json missing a lifecycle key fails the five-keys check", () => {
+    const packDir = makeFixturePack();
+    try {
+      writeFileSync(
+        path.join(packDir, "pack.json"),
+        JSON.stringify({ id: "fixture-lang", family: "language", modules: [], stability: "experimental", skills: { implement: [], test: [] } }, null, 2),
+        "utf8",
+      );
+      const pack = readPackJson(packDir);
+      const missing = PACK_SKILL_LIFECYCLE_KEYS.filter((key) => !Object.prototype.hasOwnProperty.call(pack.skills, key));
+      expect(missing.length).toBeGreaterThan(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("negative: pack.json's 'extends' naming a nonexistent pack fails the extends-exists check", () => {
+    const packDir = makeFixturePack();
+    try {
+      writeFileSync(
+        path.join(packDir, "pack.json"),
+        JSON.stringify(
+          { id: "fixture-lang", family: "language", modules: [], stability: "experimental", skills: { implement: [], test: [], review: [], "build-fix": [], migrate: [] }, extends: "no-such-pack" },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      const pack = readPackJson(packDir);
+      expect(pack.extends).toBeDefined();
+      expect(existsSync(path.join(STACKS_ROOT, pack.extends!))).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("negative: an agent-refs.json entry naming a nonexistent agent file fails the agent-refs check", () => {
+    const packDir = makeFixturePack();
+    try {
+      writeFileSync(
+        path.join(packDir, "agent-refs.json"),
+        JSON.stringify({ agents: ["no-such-agent"] }, null, 2),
+        "utf8",
+      );
+      const refs = JSON.parse(readFileSync(path.join(packDir, "agent-refs.json"), "utf8")) as AgentRefsJson;
+      expect(existsSync(path.join(defaultBundledRoot(), "agents", `${refs.agents[0]}.md`))).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("negative: an agent-refs.json entry resolving to an 'authored' (not 'generated') agent fails the origin check", () => {
+    // A real shipped agent (e.g. codebase-navigator) is origin "authored", not
+    // "generated" — using it as a stand-in agent-ref proves the origin check
+    // fires against a real file, not just a fixture that was never written.
+    const agentPath = path.join(defaultBundledRoot(), "agents", "codebase-navigator.md");
+    expect(existsSync(agentPath)).toBe(true);
+    const parsed = parseAgentFrontmatter(readFileSync(agentPath, "utf8"));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const definition = buildAgentDefinition(parsed.result.data, parsed.result.body);
+    expect(definition.origin?.kind).not.toBe("generated");
   });
 
   test("a component subset missing the required 'modules' key fails schema validation", () => {
@@ -296,6 +492,111 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
         verdict: "fail",
       };
       writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(report, null, 2), "utf8");
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("fail");
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Flow 314, W4 Wave 4: the pack-level eval.json form (`{ schemaVersion,
+  // reports: EvalReport[] }`) — `checkStablePackGate` must require every
+  // skill pack.json lists to carry a passing, authored report with every ran
+  // behavior scenario clearing `PACK_BEHAVIOR_PASS_FLOOR` (>= 0.8, citing
+  // metrics-and-validation.md's "pass@3 >= 80%").
+
+  function writePackJson(packDir: string, skills: Readonly<Record<string, readonly string[]>>): void {
+    writeFileSync(
+      path.join(packDir, "pack.json"),
+      JSON.stringify(
+        { id: "fixture-lang", family: "language", modules: [], stability: "stable", skills },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+  }
+
+  function passingSkillReport(skillId: string, behaviorPassRate: number): EvalReport {
+    return {
+      schemaVersion: "1.0.0",
+      skillId,
+      strictness: "low",
+      trials: 3,
+      triggerAccuracy: { truePositive: 1, falsePositive: 0, positives: 1, negatives: 1 },
+      evidence: "authored",
+      scenarios: [
+        { id: "trigger-positive-1", kind: "trigger-positive", prompt: "p", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+        { id: "trigger-negative-1", kind: "trigger-negative", prompt: "n", strictness: "low", trials: 1, passes: 1, passRate: 1, passAtK: 1, grader: "trigger-rank-fork-family", status: "ran", deterministic: true },
+        { id: "behavior-1", kind: "behavior", prompt: "do the thing", strictness: "low", trials: 3, passes: Math.round(behaviorPassRate * 3), passRate: behaviorPassRate, passAtK: behaviorPassRate > 0 ? 1 : 0, grader: "contains", status: "ran" },
+      ],
+      verdict: behaviorPassRate >= 0.5 ? "pass" : "fail",
+    };
+  }
+
+  test("checkStablePackGate (pack-level doc): every listed skill passing, every behavior scenario >= floor -> pass", () => {
+    const packDir = makeFixturePack();
+    try {
+      writePackJson(packDir, { implement: ["fixture-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const doc: PackEvalDocument = {
+        schemaVersion: "1.0.0",
+        reports: [passingSkillReport("fixture-lang/fixture-skill", 1)],
+      };
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("pass");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("checkStablePackGate (pack-level doc): a skill listed in pack.json with no matching report fails, naming the skill", () => {
+    const packDir = makeFixturePack();
+    try {
+      writePackJson(packDir, { implement: ["fixture-skill", "second-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const doc: PackEvalDocument = {
+        schemaVersion: "1.0.0",
+        reports: [passingSkillReport("fixture-lang/fixture-skill", 1)],
+      };
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("second-skill");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test(`checkStablePackGate (pack-level doc): a behavior scenario below PACK_BEHAVIOR_PASS_FLOOR (${PACK_BEHAVIOR_PASS_FLOOR}) fails`, () => {
+    const packDir = makeFixturePack();
+    try {
+      writePackJson(packDir, { implement: ["fixture-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const doc: PackEvalDocument = {
+        schemaVersion: "1.0.0",
+        reports: [passingSkillReport("fixture-lang/fixture-skill", 0.6)],
+      };
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
+      const result = checkStablePackGate(packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toMatch(/below the pack floor/);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("checkStablePackGate (pack-level doc): a report with synthesized evidence fails even if its verdict were 'pass'", () => {
+    const packDir = makeFixturePack();
+    try {
+      writePackJson(packDir, { implement: ["fixture-skill"], test: [], review: [], "build-fix": [], migrate: [] });
+      const report = passingSkillReport("fixture-lang/fixture-skill", 1);
+      // A synthesized-evidence report is REFUSED verdict "pass" by
+      // `validateEvalReport` itself (F5) — so a hand-edited doc claiming both
+      // is caught either by that contract check or by the evidence check;
+      // this fixture proves the pack gate rejects it either way (never a
+      // silent pass through the pack-level branch).
+      const synthesized: EvalReport = { ...report, evidence: "synthesized" };
+      const doc: PackEvalDocument = { schemaVersion: "1.0.0", reports: [synthesized] };
+      writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify(doc, null, 2), "utf8");
       const result = checkStablePackGate(packDir, "stable");
       expect(result.status).toBe("fail");
     } finally {

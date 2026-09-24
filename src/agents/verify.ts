@@ -15,10 +15,11 @@
 // cannot be checked at all (e.g. `--name` naming nothing in the catalog)
 // becomes a `not-found` problem row rather than an exception.
 
-import { existsSync, lstatSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { defaultBundledRoot } from "../gdskills/bundled-eval";
 import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
+import { checkStablePackGate } from "../gdskills/governance/eval";
 import { agentExportSupport, defaultAgentSupportLookup, type AgentSupportLookup } from "./export";
 import { PROMPT_DEFENSE_BASELINE } from "./baseline";
 import { loadAgentCatalog, type AgentCatalogError } from "./catalog";
@@ -62,6 +63,7 @@ export type AgentVerifyProblemReason =
   | "origin-missing-source-ref"
   | "invalid-source-ref"
   | "stack-pack-missing"
+  | "stack-pack-not-gate-cleared"
   | "baseline-in-body"
   | "no-export-support"
   | "catalog-error"
@@ -98,6 +100,22 @@ export interface VerifyAgentsOptions {
    * `false`) for anything it cannot positively confirm.
    */
   readonly stackPackExists?: (sourceRef: string) => boolean;
+  /**
+   * Flow 314, W4 Wave 4 (W2-AC6: "resolves to an existing, gate-cleared W1
+   * stack pack; fails closed if ... retired"). Confirms a `generated`
+   * origin's `sourceRef` names not merely an EXISTING pack directory
+   * (`stackPackExists` above only answers existence) but one that is
+   * actually gate-cleared: `stability === "stable"` (an `experimental` or
+   * `deprecated` pack is never cleared) AND
+   * `checkStablePackGate(packDir, "stable").status === "pass"`. Default: a
+   * real (non-symlink) directory at `<bundledRoot-or-default>/../stacks/<sourceRef>`
+   * whose `pack.json` parses and clears both checks — fails closed (returns
+   * `{ cleared: false }`) for anything it cannot positively confirm. Kept
+   * independent of the injectable `stackPackExists` above (which still only
+   * answers existence, unchanged) so a caller can inject one without the
+   * other.
+   */
+  readonly stackPackGateCleared?: (sourceRef: string) => { readonly cleared: boolean; readonly reason?: string };
   /**
    * Confirms a `skills[]` entry resolves in the skill catalogue. Default:
    * `BUNDLED_GDSKILLS` names plus every directory under
@@ -150,16 +168,93 @@ function defaultStackPackExists(bundledAgentsRoot: string): (sourceRef: string) 
   };
 }
 
+interface StackPackJsonShape {
+  readonly stability?: unknown;
+}
+
+/**
+ * Default gate-cleared resolver (flow 314, W4 Wave 4, W2-AC6): a real
+ * (non-symlink) directory at `<stacksRoot>/<sourceRef>` whose `pack.json`
+ * parses, declares `stability: "stable"`, and clears
+ * `checkStablePackGate(packDir, "stable")`. Mirrors
+ * `defaultStackPackExists`'s own path-safety checks (id pattern already
+ * enforced by `verifyOne` before this is ever called, `lstat` never follows a
+ * symlink, resolved path confirmed contained under `stacksRoot`) rather than
+ * assuming `stackPackExists` already ran — this resolver is independently
+ * injectable and must fail closed on its own.
+ */
+function defaultStackPackGateCleared(
+  bundledAgentsRoot: string,
+): (sourceRef: string) => { readonly cleared: boolean; readonly reason?: string } {
+  const stacksRoot = path.join(path.dirname(bundledAgentsRoot), "stacks");
+  return (sourceRef: string): { readonly cleared: boolean; readonly reason?: string } => {
+    if (!STACK_SOURCE_REF_RE.test(sourceRef)) {
+      return { cleared: false, reason: `"${sourceRef}" is not a valid stack-pack id` };
+    }
+    const packDir = path.join(stacksRoot, sourceRef);
+    const relative = path.relative(stacksRoot, packDir);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      return { cleared: false, reason: `"${sourceRef}" resolves outside the stacks root` };
+    }
+    let stats: ReturnType<typeof lstatSync>;
+    try {
+      stats = lstatSync(packDir);
+    } catch {
+      return { cleared: false, reason: `pack directory "${sourceRef}" does not exist` };
+    }
+    if (!stats.isDirectory() || stats.isSymbolicLink()) {
+      return { cleared: false, reason: `pack directory "${sourceRef}" is not a real directory` };
+    }
+    const packJsonPath = path.join(packDir, "pack.json");
+    let pack: StackPackJsonShape;
+    try {
+      pack = JSON.parse(readFileSync(packJsonPath, "utf8")) as StackPackJsonShape;
+    } catch (error) {
+      return { cleared: false, reason: `pack.json could not be read/parsed: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    if (pack.stability !== "stable") {
+      return { cleared: false, reason: `pack stability is "${String(pack.stability)}", not "stable"` };
+    }
+    const gate = checkStablePackGate(packDir, "stable");
+    if (gate.status !== "pass") {
+      return { cleared: false, reason: gate.reason ?? `stable-pack eval gate status is "${gate.status}"` };
+    }
+    return { cleared: true };
+  };
+}
+
 /**
  * Default skill resolver: `BUNDLED_GDSKILLS` names, plus every skill
  * directory under the project's installed `.metaproject/skills/gdskills`
- * tree and its local `.metaproject/project-skills` tree. Walks a
- * `<tree>/<category-or-module>/<name>` layout — the same shape
+ * tree and its local `.metaproject/project-skills` tree, plus (flow 314, W4
+ * Wave 4) every stack-pack skill directory under
+ * `<bundledAgentsRoot>/../stacks/<pack>/skills/<name>` — the W1 stack packs' own
+ * skills, which a `generated` agent's `skills[]` may legitimately name.
+ * Walks a `<tree>/<category-or-module>/<name>` layout — the same shape
  * `agent-catalogue-xref.test.ts`'s `knownAgentNames` and
  * `project-skills.ts`'s `packageRoot` both use.
  */
-function defaultSkillExists(projectRoot: string): (skillId: string) => boolean {
+function defaultSkillExists(projectRoot: string, bundledAgentsRoot: string): (skillId: string) => boolean {
   const names = new Set(BUNDLED_GDSKILLS.map((skill) => skill.name));
+  const stacksRoot = path.join(path.dirname(bundledAgentsRoot), "stacks");
+  if (existsSync(stacksRoot)) {
+    try {
+      for (const packEntry of readdirSync(stacksRoot, { withFileTypes: true })) {
+        if (!packEntry.isDirectory()) continue;
+        const skillsDir = path.join(stacksRoot, packEntry.name, "skills");
+        if (!existsSync(skillsDir)) continue;
+        try {
+          for (const skillEntry of readdirSync(skillsDir, { withFileTypes: true })) {
+            if (skillEntry.isDirectory()) names.add(skillEntry.name);
+          }
+        } catch {
+          // Unreadable pack's skills directory: skip it rather than fail the whole resolver.
+        }
+      }
+    } catch {
+      // Unreadable stacks root: fall through with just the bundled/project trees.
+    }
+  }
   const trees = [
     path.join(projectRoot, ".metaproject", "skills", "gdskills"),
     path.join(projectRoot, ".metaproject", "project-skills"),
@@ -194,6 +289,7 @@ function verifyOne(
   loaded: LoadedAgent,
   options: {
     readonly stackPackExists: (sourceRef: string) => boolean;
+    readonly stackPackGateCleared: (sourceRef: string) => { readonly cleared: boolean; readonly reason?: string };
     readonly skillExists: (skillId: string) => boolean;
     readonly supportLookup?: AgentSupportLookup;
   },
@@ -272,6 +368,21 @@ function verifyOne(
           reason: "stack-pack-missing",
           detail: `origin.sourceRef "${origin.sourceRef}" does not resolve to an existing W1 stack pack`,
         });
+      } else {
+        // Flow 314, W4 Wave 4 (W2-AC6): existence alone is not enough — a
+        // `generated` definition's pack must also be GATE-CLEARED (stable
+        // stability + a passing `checkStablePackGate`). Checked only once
+        // `stackPackExists` has already confirmed the pack is really there,
+        // so a merely-existing but retired/experimental/failing-gate pack
+        // gets its own distinct, more specific reason rather than being
+        // reported as simply "missing".
+        const gate = options.stackPackGateCleared(origin.sourceRef);
+        if (!gate.cleared) {
+          problems.push({
+            reason: "stack-pack-not-gate-cleared",
+            detail: `origin.sourceRef "${origin.sourceRef}" is not a gate-cleared stack pack${gate.reason !== undefined ? `: ${gate.reason}` : ""}`,
+          });
+        }
       }
     }
   }
@@ -303,7 +414,8 @@ export function verifyAgents(projectRoot: string, options: VerifyAgentsOptions =
   const catalog = loadAgentCatalog(projectRoot, options.bundledRoot === undefined ? {} : { bundledRoot: options.bundledRoot });
   const bundledAgentsRoot = options.bundledRoot ?? path.join(defaultBundledRoot(), "agents");
   const stackPackExists = options.stackPackExists ?? defaultStackPackExists(bundledAgentsRoot);
-  const skillExists = options.skillExists ?? defaultSkillExists(projectRoot);
+  const stackPackGateCleared = options.stackPackGateCleared ?? defaultStackPackGateCleared(bundledAgentsRoot);
+  const skillExists = options.skillExists ?? defaultSkillExists(projectRoot, bundledAgentsRoot);
   const supportLookup = options.supportLookup ?? defaultAgentSupportLookup;
 
   let candidates = catalog.agents;
@@ -312,7 +424,7 @@ export function verifyAgents(projectRoot: string, options: VerifyAgentsOptions =
   }
 
   const agents: AgentVerifyResult[] = candidates.map((loaded) =>
-    verifyOne(loaded, { stackPackExists, skillExists, supportLookup }),
+    verifyOne(loaded, { stackPackExists, stackPackGateCleared, skillExists, supportLookup }),
   );
 
   if (options.name !== undefined && candidates.length === 0) {
