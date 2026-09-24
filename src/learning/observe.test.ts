@@ -323,6 +323,212 @@ describe("O-1: no absolute path, home directory, username, or raw edit content i
     });
   });
 
+  test("O2-1: a real Claude Write tool_response (top-level `content` file body) never leaks into outputPreview", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      const absolutePath = path.join(root, "src", "plan.md");
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Write",
+          toolInput: { file_path: absolutePath, content: "WRITEBODY client Acme plan" },
+          toolOutput: { type: "create", filePath: absolutePath, content: "WRITEBODY client Acme plan", structuredPatch: [] },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain("WRITEBODY");
+      expect(line.outputPreview).not.toContain("client Acme plan");
+      expect(line.outputPreview).not.toContain(root);
+      // A fixed short summary, not the raw response object.
+      expect(line.outputPreview).toBe('{"filePath":"src/plan.md","type":"create"}');
+    });
+  });
+
+  test("O2-1: an Edit tool_response (filePath/originalFile/structuredPatch shape) never leaks raw content into outputPreview", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      const absolutePath = path.join(root, "src", "module.ts");
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Edit",
+          toolInput: { file_path: absolutePath, old_string: "a", new_string: "b" },
+          toolOutput: {
+            filePath: absolutePath,
+            oldString: "a",
+            newString: "b",
+            originalFile: "SECRET_LOOKING_ORIGINAL",
+            structuredPatch: [{ lines: ["-a", "+b"] }],
+            userModified: false,
+            replaceAll: false,
+          },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain("SECRET_LOOKING_ORIGINAL");
+      expect(line.outputPreview).not.toContain("structuredPatch");
+      expect(line.outputPreview).not.toContain(root);
+    });
+  });
+
+  test("O2-2: NotebookEdit's new_source (input) and original_file (response) are never previewed", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      const absolutePath = path.join(root, "notebook.ipynb");
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "NotebookEdit",
+          toolInput: { notebook_path: absolutePath, cell_id: "c1", new_source: "print('SECRET_CELL_BODY')" },
+          toolOutput: { original_file: "OLD_SECRET_CELL_BODY", new_source: "print('SECRET_CELL_BODY')" },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string; outputPreview: string | null };
+      expect(line.inputPreview).not.toContain("SECRET_CELL_BODY");
+      expect(line.outputPreview).not.toContain("OLD_SECRET_CELL_BODY");
+      expect(line.outputPreview).not.toContain("SECRET_CELL_BODY");
+    });
+  });
+
+  test("O2-3: Task/Agent prompt-like input keys (prompt, messages, system, instructions) are dropped from inputPreview", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-start",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Task",
+          toolInput: {
+            description: "short task label",
+            prompt: "SECRET_TASK_PROMPT with client Acme details",
+            subagent_type: "general-purpose",
+            messages: [{ role: "user", content: "SECRET_MESSAGE_BODY" }],
+            system: "SECRET_SYSTEM_PROMPT",
+            instructions: "SECRET_INSTRUCTIONS",
+          },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string };
+      expect(line.inputPreview).not.toContain("SECRET_TASK_PROMPT");
+      expect(line.inputPreview).not.toContain("SECRET_MESSAGE_BODY");
+      expect(line.inputPreview).not.toContain("SECRET_SYSTEM_PROMPT");
+      expect(line.inputPreview).not.toContain("SECRET_INSTRUCTIONS");
+      expect(line.inputPreview).toContain("short task label");
+    });
+  });
+
+  test("O2-5: another user's home directory and a Windows path are reduced to a basename, never a full path", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-start",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: {
+            command:
+              "cat /Users/some-other-user/.ssh/id_rsa && cat /home/another-user/secrets.env && type C:\\Users\\someone\\creds.txt",
+          },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string };
+      expect(line.inputPreview).not.toContain("/Users/some-other-user");
+      expect(line.inputPreview).not.toContain("/home/another-user");
+      expect(line.inputPreview).not.toContain("C:\\Users\\someone");
+      expect(line.inputPreview).toContain("id_rsa");
+      expect(line.inputPreview).toContain("secrets.env");
+      expect(line.inputPreview).toContain("creds.txt");
+    });
+  });
+
+  test("O2-5: root is only rewritten at a path-segment boundary — a sibling directory sharing the root as a text prefix is untouched", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      const siblingPath = `${root}-secret`;
+      await sink.record({
+        kind: "tool-start",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: { command: `cat ${siblingPath}/file.txt` },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string };
+      // The bug: root `/a/proj` boundary-unsafe replacement turned
+      // `/a/proj-secret` into `.-secret`. Fixed: the root is not matched at
+      // all inside `<root>-secret` (no boundary there), and the fallback
+      // absolute-path reducer takes over instead.
+      expect(line.inputPreview).not.toContain(".-secret");
+      expect(line.inputPreview).not.toContain(root);
+      expect(line.inputPreview).not.toContain(siblingPath);
+    });
+  });
+
+  test("O2-5: a Grep-shaped filenames array is relativized entry-by-entry, not scrubbed as prose", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      const absoluteA = path.join(root, "src", "a.ts");
+      const absoluteB = path.join(root, "src", "b.ts");
+      await sink.record({
+        kind: "tool-start",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Grep",
+          toolInput: { pattern: "TODO", filenames: [absoluteA, absoluteB] },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { inputPreview: string };
+      expect(line.inputPreview).toContain("src/a.ts");
+      expect(line.inputPreview).toContain("src/b.ts");
+      expect(line.inputPreview).not.toContain(root);
+    });
+  });
+
   test("a path outside the project is reduced to its basename only, never the full path", async () => {
     await withTempRoot(async (root) => {
       const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });

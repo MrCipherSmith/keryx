@@ -22,7 +22,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
-import { readStdinBounded } from "../lib/bounded-stdin";
+import { readStdinBounded, LEARN_OBSERVE_MAX_STDIN_BYTES } from "../lib/bounded-stdin";
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
 import {
@@ -205,7 +205,7 @@ async function runObserveHook(deps: LearnCommandDeps): Promise<void> {
   // `observeHostHookPayload` itself — is swallowed here, never thrown.
   process.exitCode = 0;
   try {
-    const readStdin = deps.readStdin ?? ((): Promise<string | null> => readStdinBounded(STDIN_DEADLINE_MS));
+    const readStdin = deps.readStdin ?? ((): Promise<string | null> => readStdinBounded(STDIN_DEADLINE_MS, LEARN_OBSERVE_MAX_STDIN_BYTES));
     const raw = await readStdin();
     if (raw === null || raw.trim().length === 0) return;
     if (Buffer.byteLength(raw, "utf8") > MAX_HOOK_STDIN_BYTES) return; // O-6: drop, don't parse/store, still exit 0.

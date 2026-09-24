@@ -18,6 +18,7 @@
 // byte-for-byte in sync with `builtins.ts`'s `LearningObservation`/
 // `LearningObservationSink`.
 import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -126,7 +127,18 @@ export interface BuildObservationLineDeps {
 /** Path-shaped keys across Claude's own tool-input/tool-response shapes (snake_case input, camelCase response) and Keryx's own (`file_path`). */
 const PATH_LIKE_KEYS = new Set(["file_path", "path", "filePath", "notebook_path"]);
 
-/** Raw-content-bearing keys on an edit-like tool's input or Claude's `tool_response` for one — never previewed; the D3 `edit` hash-only field covers them instead. */
+/** Array fields that are lists of paths (Grep's `filenames`, generic `files`/`paths`) rather than free text — each entry is relativized like a `PATH_LIKE_KEYS` value, never scrubbed as prose. */
+const PATH_LIST_KEYS = new Set(["filenames", "files", "paths"]);
+
+/**
+ * Raw-content-bearing keys on an edit-like tool's input or Claude's
+ * `tool_response` for one — never previewed; the D3 `edit` hash-only field
+ * covers them instead (O2-1/O2-2: includes NotebookEdit's `new_source`
+ * input key and `original_file` response key). Also covers prompt-like
+ * keys (O2-3: a Task/Agent tool's `prompt`/`messages`/`system`/
+ * `instructions` input) — dropped from every tool's preview the same way;
+ * `inputDigest` still covers the full input regardless.
+ */
 const CONTENT_DROP_KEYS = new Set([
   "old_string",
   "new_string",
@@ -136,16 +148,102 @@ const CONTENT_DROP_KEYS = new Set([
   "edits",
   "originalFile",
   "structuredPatch",
+  "new_source",
+  "original_file",
+  "prompt",
+  "messages",
+  "system",
+  "instructions",
 ]);
 
-/** Replaces every occurrence of the project root with `.` and the caller's home directory with `~` in free text (a Bash command, stdout/stderr, …). Root is checked first (longer, more specific) so a project rooted under `$HOME` is not double-replaced. */
+/** Edit-like tool names (Claude's own + Keryx's `apply_patch`/`shell_exec` aliases) whose `tool_response` can carry a raw file body — O2-1: their output preview is a fixed summary, never a `content`/`originalFile`/... extraction. */
+const EDIT_LIKE_TOOLS = new Set(["Edit", "MultiEdit", "Write", "NotebookEdit", "apply_patch"]);
+
+/** `root`'s resolved form plus its realpath (O2-5: macOS `/private/var` vs `/var`), longest-first so a more specific path is tried before a shorter prefix of it. Memoized per root — cheap, and `root` does not change within a process. */
+const rootVariantsCache = new Map<string, readonly string[]>();
+function rootVariants(root: string): readonly string[] {
+  let variants = rootVariantsCache.get(root);
+  if (variants === undefined) {
+    const resolved = path.resolve(root);
+    const set = new Set<string>();
+    if (resolved.length > 0) set.add(resolved);
+    try {
+      const real = realpathSync(resolved);
+      if (real.length > 0) set.add(real);
+    } catch {
+      // root may not exist yet (fixtures, dry runs) — resolved form only.
+    }
+    variants = [...set].sort((a, b) => b.length - a.length);
+    rootVariantsCache.set(root, variants);
+  }
+  return variants;
+}
+
+/** The caller's home directory plus its realpath, same rationale as `rootVariants`. Memoized once per process — `os.homedir()` does not change mid-run. */
+let homeVariantsCache: readonly string[] | undefined;
+function homeVariants(): readonly string[] {
+  if (homeVariantsCache === undefined) {
+    const home = os.homedir();
+    const set = new Set<string>();
+    if (home.length > 0) {
+      set.add(home);
+      try {
+        const real = realpathSync(home);
+        if (real.length > 0) set.add(real);
+      } catch {
+        // home may not exist under a sandboxed HOME — resolved form only.
+      }
+    }
+    homeVariantsCache = [...set].sort((a, b) => b.length - a.length);
+  }
+  return homeVariantsCache;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Replaces `target` in `text` only where it ends at a path-segment boundary (end of string, or the next char is not part of the same path component) — O2-5: a root of `/a/proj` must not rewrite `/a/proj-secret` into `.-secret`. */
+function replaceAtPathBoundary(text: string, target: string, replacement: string): string {
+  if (target.length === 0) return text;
+  const pattern = new RegExp(`${escapeRegExp(target)}(?![A-Za-z0-9_.-])`, "g");
+  return text.replace(pattern, replacement);
+}
+
+/** Best-effort basename (or `[abs-path]` when none) for a matched absolute-path token — never the full path. */
+function basenameOfToken(token: string): string {
+  const trimmed = token.replace(/[\\/]+$/, "");
+  const base = trimmed.split(/[/\\]/).pop();
+  return base !== undefined && base.length > 0 ? base : "[abs-path]";
+}
+
+// O2-5: after root/home are scrubbed, anything still shaped like an absolute
+// path (someone else's `/home/<user>/…` or `/Users/<user>/…`, a Windows
+// `C:\Users\…`/`C:/Users/…`, a sibling `~otheruser/…`) is reduced to its
+// basename rather than surviving verbatim in free text. A leading boundary
+// (`(?<![\w:./~-])`) keeps these from matching mid-token (e.g. inside a URL).
+const POSIX_ABS_PATH = /(?<![\w:./~-])\/[^\s"'<>|]+\/[^\s"'<>|]*/g;
+const WINDOWS_ABS_PATH = /(?<![\w:./~-])[A-Za-z]:[\\/][^\s"'<>|]*/g;
+const TILDE_USER_PATH = /(?<![\w:./~-])~[A-Za-z0-9_.-]+(?:\/[^\s"'<>|]*)?/g;
+
+function replaceRemainingAbsolutePaths(text: string): string {
+  return text
+    .replace(POSIX_ABS_PATH, basenameOfToken)
+    .replace(WINDOWS_ABS_PATH, basenameOfToken)
+    .replace(TILDE_USER_PATH, basenameOfToken);
+}
+
+/** Replaces every occurrence of the project root with `.` and the caller's home directory with `~` in free text (a Bash command, stdout/stderr, …), then reduces any other absolute-path-shaped token to its basename. Root variants are tried first (longer, more specific) so a project rooted under `$HOME` is not double-replaced; each replacement only fires at a path-segment boundary (O2-5). */
 function scrubPathsInText(root: string, text: string): string {
   let out = text;
-  const resolvedRoot = path.resolve(root);
-  const home = os.homedir();
-  if (resolvedRoot.length > 0) out = out.split(resolvedRoot).join(".");
-  if (home.length > 0 && home !== resolvedRoot) out = out.split(home).join("~");
-  return out;
+  const roots = rootVariants(root);
+  for (const variant of roots) out = replaceAtPathBoundary(out, variant, ".");
+  const rootSet = new Set(roots);
+  for (const variant of homeVariants()) {
+    if (rootSet.has(variant)) continue;
+    out = replaceAtPathBoundary(out, variant, "~");
+  }
+  return replaceRemainingAbsolutePaths(out);
 }
 
 /** One path-like field's preview value: project-relative when inside root, basename-only (never a full path) when outside it or unresolvable. */
@@ -172,6 +270,13 @@ function sanitizeForPreview(root: string, value: unknown): unknown {
         out[key] = relativizePathForPreview(root, v);
         continue;
       }
+      // O2-5: a Grep-shaped `filenames` (or generic `files`/`paths`) array is
+      // a list of paths, not prose — relativize each entry the same way a
+      // single `PATH_LIKE_KEYS` value is, instead of scrubbing it as text.
+      if (PATH_LIST_KEYS.has(key) && Array.isArray(v)) {
+        out[key] = v.map((entry) => (typeof entry === "string" ? relativizePathForPreview(root, entry) : sanitizeForPreview(root, entry)));
+        continue;
+      }
       out[key] = sanitizeForPreview(root, v);
     }
     return out;
@@ -186,9 +291,35 @@ function rawInputPreviewText(root: string, input: BuildObservationLineInput): st
   return "";
 }
 
-function rawOutputPreviewText(root: string, toolOutput: unknown): string {
+/** True for a `tool_response` shape carrying `filePath` + a `create`/`update` `type` — Claude's own Write/Edit response envelope, even when `tool` itself wasn't recognized (e.g. an unaliased/renamed tool). */
+function isEditLikeResponseShape(toolOutput: Record<string, unknown>): boolean {
+  return (
+    typeof toolOutput.filePath === "string" &&
+    typeof toolOutput.type === "string" &&
+    (toolOutput.type === "create" || toolOutput.type === "update")
+  );
+}
+
+/** O2-1 fixed short summary for an edit-like tool's output: `{"type":"...","filePath":"<relative>"}` (only the keys actually present), never the raw `content`/`originalFile`/`structuredPatch`/... body. */
+function editLikeOutputSummary(root: string, toolOutput: Record<string, unknown>): string {
+  const summary: Record<string, string> = {};
+  if (typeof toolOutput.type === "string") summary.type = toolOutput.type;
+  const filePath = typeof toolOutput.filePath === "string" ? toolOutput.filePath : typeof toolOutput.file_path === "string" ? toolOutput.file_path : undefined;
+  if (filePath !== undefined) summary.filePath = relativizePathForPreview(root, filePath);
+  return Object.keys(summary).length > 0 ? canonicalJson(summary) : "";
+}
+
+function rawOutputPreviewText(root: string, tool: string | null, toolOutput: unknown): string {
   if (typeof toolOutput === "string") return scrubPathsInText(root, toolOutput);
   if (isPlainObject(toolOutput)) {
+    // O2-1: an edit-like tool's `tool_response` can carry the raw file body
+    // (Write's top-level `content`, Edit's `originalFile`/`structuredPatch`,
+    // ...) under a KEY this function would otherwise extract directly
+    // (`content`) or recurse into via `sanitizeForPreview` — never previewed
+    // for these; a fixed short summary replaces the whole extraction.
+    if ((tool !== null && EDIT_LIKE_TOOLS.has(tool)) || isEditLikeResponseShape(toolOutput)) {
+      return editLikeOutputSummary(root, toolOutput);
+    }
     const parts: string[] = [];
     for (const key of ["stdout", "stderr", "output", "content"]) {
       const value = toolOutput[key];
@@ -331,7 +462,7 @@ export async function buildObservationLine(
 
   const isOutputEvent = input.event === "tool-complete" || input.event === "tool-failed";
   const outputPreview = isOutputEvent
-    ? await redactPreview(root, rawOutputPreviewText(root, input.toolOutput), MAX_PREVIEW_LEN)
+    ? await redactPreview(root, rawOutputPreviewText(root, input.tool, input.toolOutput), MAX_PREVIEW_LEN)
     : null;
 
   const cwdHash = sha256Hex(path.resolve(input.cwd));
