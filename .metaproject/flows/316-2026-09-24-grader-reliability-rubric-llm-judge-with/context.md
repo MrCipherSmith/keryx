@@ -55,4 +55,24 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+- Base: feat/agent-platform-expansion at 8c7e50da (contains W1-W8 and batch 1, #692 / flow 314). Worktree /Users/Goodea/goodea/keryx-ape-316-graders, branch flow/316-graders.
+- Inputs: the flow 314 journal (follow-up entries 23:10Z-00:30Z), the review reports scratchpad/f314/review-r1.md, review-r2.md (R2-6) and review-r3.md, and scratchpad/f314/fix1-contract.md (integrity rules I1-I5).
+- Code:
+  - src/gdskills/governance/eval.ts: evalSkill, validateEvalSpec, gradeExpectations, checkStablePackGate, computeSkillEvalDigest.
+  - src/commands/model-eval-runner.ts: buildEvalRunner, runModelTurn, fail-closed.
+  - src/commands/skills-governance.ts: `skills eval` flags.
+  - src/gdskills/governance/catalog-index.ts: loadSkillCatalog; the bundled scope is root-independent.
+  - src/gdskills/stack-pack-eval-integrity.test.ts: I1-I5.
+- Gate callers: src/agents/verify.ts and src/commands/agents-catalog.ts. The gate fixtures are in src/agents/generate.test.ts, src/agents/verify.test.ts, src/gdskills/stack-packs.test.ts and src/commands/agents-catalog-commands.test.ts.
+- Import zones: src/gdskills is core and must never import src/harness (client). The provider adapter for the judge therefore lives in src/commands (adapter), next to model-eval-runner.ts.
+- The previous honest DeepSeek run (flow 314, 4f05dd0f) scored 0 on these scenarios:
+  - nodejs-build-fix no-ts-ignore-suppression;
+  - react-build-fix no-disable-hooks-lint;
+  - python-build-fix mypy-error-no-blanket-suppress;
+  - nodejs-testing mock-boundary-not-internal;
+  - python-testing mock-external-not-internal.
+- The old nodejs-build-fix grader was `not-contains "@ts-ignore"` and `not-contains "as any"`. A correct answer that warns against @ts-ignore fails it by construction. That is a hypothesis for AC9, to be proven with recorded outputs.
+- Old reports store only pass counts, not outputs, so the AC9 evidence must come from the new run's recorded raw outputs, re-graded under the pre-migration expectations taken from `git show 8c7e50da:<evals.json>`.
+- Owner constraints: judge and gate model DeepSeek deepseek-chat (the key is in ~/.local/share/keryx/auth.json and is never printed); floor 0.8; strictness high; trials >= 5; scope bundled; no SKILL.md tuning. Standing merge rule: 0 blocker and 0 major means merge.
+- Flow 315 runs in parallel. Avoid src/security/audit-harness, src/learning, src/commands/init.ts, src/assets, src/gdskills/install.ts and src/lib/*.
+- Use `bun ./src/cli.ts` for every flow, review and skills command. The global keryx 0.2.154 is stale.

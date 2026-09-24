@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,14 +8,14 @@
   "id": "316",
   "slug": "grader-reliability-rubric-llm-judge-with",
   "title": "Grader reliability: rubric LLM judge with anti-gaming tests for skill evals, validated on batch 1",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T18:51:50.333Z",
-  "updatedAt": "2026-09-24T18:51:50.333Z",
+  "updatedAt": "2026-09-24T18:57:58.747Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:bb371335e7835c3dc3cb36b8e10fe891c3bcdca8350f97bb506d93d9f607fe70",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -32,34 +32,396 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific implement tasks T5-T10 and T15"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5/T6 tests and the T11 integrity and anti-gaming guard"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Judge core, eval engine trial records and regrade, gate hardening (judge.ts, eval.ts, gate-policy.ts + gate fixtures)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "CLI judge adapter: model-eval-judge.ts, skills eval --judge, skills judge-check --record",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Migrate ts-js-node evals.json (5 skills) to rubric judge scenarios with calibration",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Migrate react evals.json (5 skills) to rubric judge scenarios with calibration",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Migrate python evals.json (4 skills) to rubric judge scenarios with calibration",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Migrate go evals.json (4 skills) to rubric judge scenarios with calibration",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Integrity guard I6-I9 and anti-gaming harness over recorded verdicts, plus opt-in live test",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Live calibration: judge-check --record for all 18 skills, every canned verdict correct",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Honest gate run: 18 skills via real CLI with runner+judge DeepSeek, eval.json from raw outputs only",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "AC9 evidence: re-grade recorded DeepSeek outputs of the three zero-scoring suppression scenarios under the old graders",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Apply gate outcome: stability, agent pairs via agents generate, manifests, agent-refs notes, shipped-state tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Docs: W1/W2, CLI reference, rubric-authoring and anti-gaming guide",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T14",
+        "T15"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "Adversarial review (opus) incl. judge-gaming attempts; fix loop",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "PR CI green and merge into feat/agent-platform-expansion",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T18:51:50.333Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T18:57:49.609Z",
+      "event": "task-added",
+      "detail": "T5: Judge core, eval engine trial records and regrade, gate hardening (judge.ts, eval.ts, gate-policy.ts + gate fixtures)"
+    },
+    {
+      "at": "2026-09-24T18:57:49.746Z",
+      "event": "task-added",
+      "detail": "T6: CLI judge adapter: model-eval-judge.ts, skills eval --judge, skills judge-check --record"
+    },
+    {
+      "at": "2026-09-24T18:57:49.888Z",
+      "event": "task-added",
+      "detail": "T7: Migrate ts-js-node evals.json (5 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T18:57:50.032Z",
+      "event": "task-added",
+      "detail": "T8: Migrate react evals.json (5 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T18:57:50.170Z",
+      "event": "task-added",
+      "detail": "T9: Migrate python evals.json (4 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T18:57:50.311Z",
+      "event": "task-added",
+      "detail": "T10: Migrate go evals.json (4 skills) to rubric judge scenarios with calibration"
+    },
+    {
+      "at": "2026-09-24T18:57:50.449Z",
+      "event": "task-added",
+      "detail": "T11: Integrity guard I6-I9 and anti-gaming harness over recorded verdicts, plus opt-in live test"
+    },
+    {
+      "at": "2026-09-24T18:57:50.580Z",
+      "event": "task-added",
+      "detail": "T12: Live calibration: judge-check --record for all 18 skills, every canned verdict correct"
+    },
+    {
+      "at": "2026-09-24T18:57:50.717Z",
+      "event": "task-added",
+      "detail": "T13: Honest gate run: 18 skills via real CLI with runner+judge DeepSeek, eval.json from raw outputs only"
+    },
+    {
+      "at": "2026-09-24T18:57:50.848Z",
+      "event": "task-added",
+      "detail": "T14: AC9 evidence: re-grade recorded DeepSeek outputs of the three zero-scoring suppression scenarios under the old graders"
+    },
+    {
+      "at": "2026-09-24T18:57:50.984Z",
+      "event": "task-added",
+      "detail": "T15: Apply gate outcome: stability, agent pairs via agents generate, manifests, agent-refs notes, shipped-state tests"
+    },
+    {
+      "at": "2026-09-24T18:57:51.114Z",
+      "event": "task-added",
+      "detail": "T16: Docs: W1/W2, CLI reference, rubric-authoring and anti-gaming guide"
+    },
+    {
+      "at": "2026-09-24T18:57:51.253Z",
+      "event": "task-added",
+      "detail": "T17: Adversarial review (opus) incl. judge-gaming attempts; fix loop"
+    },
+    {
+      "at": "2026-09-24T18:57:51.389Z",
+      "event": "task-added",
+      "detail": "T18: PR CI green and merge into feat/agent-platform-expansion"
+    },
+    {
+      "at": "2026-09-24T18:57:58.201Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T18:57:58.337Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T18:57:58.476Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T18:57:58.611Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T18:57:58.747Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }

@@ -1,3 +1,23 @@
 # Flow Journal
 
 - 2026-09-24T18:51:50.333Z - flow created
+- 2026-09-24T18:57:49.609Z - task-added: T5: Judge core, eval engine trial records and regrade, gate hardening (judge.ts, eval.ts, gate-policy.ts + gate fixtures)
+- 2026-09-24T18:57:49.746Z - task-added: T6: CLI judge adapter: model-eval-judge.ts, skills eval --judge, skills judge-check --record
+- 2026-09-24T18:57:49.888Z - task-added: T7: Migrate ts-js-node evals.json (5 skills) to rubric judge scenarios with calibration
+- 2026-09-24T18:57:50.032Z - task-added: T8: Migrate react evals.json (5 skills) to rubric judge scenarios with calibration
+- 2026-09-24T18:57:50.170Z - task-added: T9: Migrate python evals.json (4 skills) to rubric judge scenarios with calibration
+- 2026-09-24T18:57:50.311Z - task-added: T10: Migrate go evals.json (4 skills) to rubric judge scenarios with calibration
+- 2026-09-24T18:57:50.449Z - task-added: T11: Integrity guard I6-I9 and anti-gaming harness over recorded verdicts, plus opt-in live test
+- 2026-09-24T18:57:50.580Z - task-added: T12: Live calibration: judge-check --record for all 18 skills, every canned verdict correct
+- 2026-09-24T18:57:50.717Z - task-added: T13: Honest gate run: 18 skills via real CLI with runner+judge DeepSeek, eval.json from raw outputs only
+- 2026-09-24T18:57:50.848Z - task-added: T14: AC9 evidence: re-grade recorded DeepSeek outputs of the three zero-scoring suppression scenarios under the old graders
+- 2026-09-24T18:57:50.984Z - task-added: T15: Apply gate outcome: stability, agent pairs via agents generate, manifests, agent-refs notes, shipped-state tests
+- 2026-09-24T18:57:51.114Z - task-added: T16: Docs: W1/W2, CLI reference, rubric-authoring and anti-gaming guide
+- 2026-09-24T18:57:51.253Z - task-added: T17: Adversarial review (opus) incl. judge-gaming attempts; fix loop
+- 2026-09-24T18:57:51.389Z - task-added: T18: PR CI green and merge into feat/agent-platform-expansion
+- 2026-09-24T18:57:58.201Z - frozen: 12 criteria; checksum recorded
+- 2026-09-24T18:57:58.337Z - started
+- 2026-09-24T18:57:58.476Z - task-done: T1: Collect remaining context
+- 2026-09-24T18:57:58.611Z - task-done: T2: Implement per plan
+- 2026-09-24T18:57:58.747Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-24T18:58Z - Formalized by the flow runner. The owner's decisions (from chat, relayed by the coordinator) are the design basis: a DeepSeek rubric judge, deterministic checks only for facts, mandatory anti-gaming tests, the gate unchanged (0.8 / high / >=5 / bundled / DeepSeek), no SKILL.md tuning, and the standing merge rule. The completion outcome is create-pr-and-merge (operator_confirmed, runner brief). The design contract is in plan.md. Decision: on catalog drift the gate re-scores triggers live instead of invalidating on any bundled edit, because a hard catalog digest would fail CI on unrelated PRs.
