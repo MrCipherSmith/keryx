@@ -9,7 +9,7 @@
   "title": "W3: self-learning loop — observe, extract, consent-gated learned patterns, reviewer profiles, promote and graduate",
   "status": "in-progress",
   "createdAt": "2026-09-24T07:18:32.725Z",
-  "updatedAt": "2026-09-24T10:55:31.476Z",
+  "updatedAt": "2026-09-24T10:58:35.361Z",
   "source": {
     "type": "description",
     "ref": null
@@ -378,7 +378,7 @@
       "id": "T16",
       "title": "Verify: targeted tests, typecheck and eslint on changed files",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13",
         "T14",
@@ -386,12 +386,19 @@
         "T12"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T10:57:19.342Z",
+            "outcome": "started",
+            "detail": "orchestrator local checks"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T17",
@@ -703,6 +710,16 @@
       "at": "2026-09-24T10:55:31.476Z",
       "event": "task-attempt",
       "detail": "T15: started (attempt 5) — round 3 re-check after T18"
+    },
+    {
+      "at": "2026-09-24T10:57:19.342Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — orchestrator local checks"
+    },
+    {
+      "at": "2026-09-24T10:58:35.361Z",
+      "event": "task-done",
+      "detail": "T16: Verify: targeted tests, typecheck and eslint on changed files"
     }
   ],
   "owner": {

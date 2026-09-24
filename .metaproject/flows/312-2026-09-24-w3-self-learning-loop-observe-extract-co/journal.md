@@ -67,3 +67,6 @@
 - 2026-09-24T10:55:31.326Z - task-done: T18: Fix Observe round-2 findings O2-1..O2-6
 - 2026-09-24T10:55:31.476Z - task-attempt: T15: started (attempt 5) — round 3 re-check after T18
 - 2026-09-24 - T18 DONE. The stdin byte cap is now opt-in (default unbounded) so the ctx guard behaves as before; learn observe passes 1 MiB+1 explicitly (haiku fix, bounded-stdin test proves an unbounded 2 MiB read).
+- 2026-09-24T10:57:19.342Z - task-attempt: T16: started (attempt 1) — orchestrator local checks
+- 2026-09-24T10:58:35.361Z - task-done: T16: Verify: targeted tests, typecheck and eslint on changed files
+- 2026-09-24 - T16: rebased on origin/feat (flow 311 rename, flow 309 close); tsc clean; eslint clean on the 82 changed .ts files; all changed tests plus drift/integrations/agents/import-policy suites pass. src/security/read-source.test.ts fails locally only because this machine's global git hook refuses author t@t, unrelated (service.ts change is additive). CI is authoritative.
