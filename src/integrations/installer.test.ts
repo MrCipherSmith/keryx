@@ -199,12 +199,26 @@ describe("doctorIntegration: lenientSelectors (F1)", () => {
     await expect(doctorIntegration("/nonexistent", "claude", { surfaces: ["bogus-selector"] })).rejects.toThrow(/bogus-selector/);
   });
 
-  test("a runtime lacking the selected surface reports noMatchingSurface instead of throwing", async () => {
+  // review round 5, F1: a runtime lacking the selected surface must NOT be
+  // skipped — `--surface` is additive for doctor, so a runtime that doesn't
+  // declare `agents` is still doctored in full over its own default
+  // surfaces. Only the informational `noMatchingSurface` marker is set.
+  test("a runtime lacking the selected surface is still doctored in full, with noMatchingSurface only as a marker", async () => {
     await withMetaproject(async (root) => {
       // gemini-cli carries no `agents` surface (see registry.ts) — the
       // multi-runtime case (`--runtime all`/comma list) this fix targets.
+      const gemini = getHarnessAdapter("gemini-cli")!;
+      const nonOptIn = gemini.surfaces.filter((s) => !s.optIn).length;
+      const withoutSelector = await doctorIntegration(root, "gemini-cli", {});
       const result = await doctorIntegration(root, "gemini-cli", { surfaces: ["agents"], lenientSelectors: true });
-      expect(result).toEqual({ runtimeId: "gemini-cli", surfaces: [], problems: [], ok: true, noMatchingSurface: true });
+      expect(result.noMatchingSurface).toBe(true);
+      // Same full doctor pass as if `--surface agents` had never been
+      // passed: no surfaces silently dropped, no health checks skipped.
+      expect(result.surfaces.length).toBe(nonOptIn);
+      expect(result.surfaces.map((s) => s.surfaceId).sort()).toEqual(withoutSelector.surfaces.map((s) => s.surfaceId).sort());
+      expect(result.problems).toEqual(withoutSelector.problems);
+      expect(result.ok).toBe(withoutSelector.ok);
+      expect(result.surfaces.some((s) => s.surfaceId === "agents")).toBe(false);
     });
   });
 
@@ -216,13 +230,22 @@ describe("doctorIntegration: lenientSelectors (F1)", () => {
     });
   });
 
-  test("selecting something no runtime declares at all still errors, even under lenientSelectors", async () => {
+  // review round 5: renamed from "...still errors, even under
+  // lenientSelectors" — `doctorIntegration` itself never errors here, it
+  // only reports `noMatchingSurface: true`; the CLI aggregate
+  // (`commands/integrations.ts`, `handleDoctor`) is what turns "every
+  // selected runtime had no matching surface" into an exit-1 error. Kept
+  // here to cover the flag doctorIntegration reports, with the name no
+  // longer implying doctorIntegration itself throws or errors.
+  test("selecting something no runtime declares at all reports noMatchingSurface (the CLI aggregate is what errors)", async () => {
     await withMetaproject(async (root) => {
       const result = await doctorIntegration(root, "gemini-cli", {
         surfaces: ["totally-bogus-selector-nothing-declares"],
         lenientSelectors: true,
       });
       expect(result.noMatchingSurface).toBe(true);
+      // Still fully doctored, not skipped, even though nothing matched.
+      expect(result.surfaces.length).toBeGreaterThan(0);
     });
   });
 });

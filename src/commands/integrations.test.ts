@@ -290,8 +290,8 @@ describe("F3: --runtime all + --surface skips runtimes that declare no matching 
 // requested opt-in surface (`agents`) under `--runtime all`/a comma list,
 // because it always ran the strict selector check. Same F3 lenient-matching
 // shape as install/uninstall above, now threaded through `doctorIntegration`.
-describe("F1: doctor --runtime all/comma-list + --surface skips runtimes that declare no matching surface", () => {
-  test("doctor --runtime all --surface agents exits 0 with no false errors; runtimes without `agents` are skipped, not errored", async () => {
+describe("F1: doctor --runtime all/comma-list + --surface never skips a runtime's own doctor pass", () => {
+  test("doctor --runtime all --surface agents exits 0 with no false errors; runtimes without `agents` are still fully doctored, not skipped", async () => {
     await withMetaproject(async (root) => {
       // Install `agents` first on every runtime that carries it, so the
       // matched runtimes' doctor is genuinely `ok`, not just non-throwing.
@@ -307,15 +307,19 @@ describe("F1: doctor --runtime all/comma-list + --surface skips runtimes that de
         results: { runtimeId: string; ok: boolean; surfaces: unknown[]; noMatchingSurface?: boolean }[];
       };
       const matched = parsed.results.filter((r) => !r.noMatchingSurface);
-      const skipped = parsed.results.filter((r) => r.noMatchingSurface);
+      const notDeclared = parsed.results.filter((r) => r.noMatchingSurface);
       // Sanity: this fixture actually exercises both branches — some
       // registered runtime carries `agents` (claude/codex/kiro/opencode) and
       // some does not (e.g. gemini-cli), or the test proves nothing about F1.
       expect(matched.length).toBeGreaterThan(0);
-      expect(skipped.length).toBeGreaterThan(0);
+      expect(notDeclared.length).toBeGreaterThan(0);
       for (const r of matched) expect(r.ok).toBe(true);
-      for (const r of skipped) {
-        expect(r.surfaces).toEqual([]);
+      // review round 5, F1: a runtime that doesn't declare `agents` is still
+      // doctored in full over its own default surfaces — `noMatchingSurface`
+      // is an informational marker only, never a "skip this runtime" signal.
+      for (const r of notDeclared) {
+        expect(r.surfaces.length).toBeGreaterThan(0);
+        expect(r.ok).toBe(true);
       }
     });
   });
@@ -328,10 +332,12 @@ describe("F1: doctor --runtime all/comma-list + --surface skips runtimes that de
       await integrationsCommand(["doctor", "--runtime", "claude,gemini-cli", "--surface", "agents", "--json"], root);
       expect(process.exitCode).toBe(0);
       const parsed = JSON.parse(captured.join("\n")) as {
-        results: { runtimeId: string; noMatchingSurface?: boolean }[];
+        results: { runtimeId: string; noMatchingSurface?: boolean; surfaces: unknown[] }[];
       };
       expect(parsed.results.find((r) => r.runtimeId === "claude")?.noMatchingSurface).toBeUndefined();
-      expect(parsed.results.find((r) => r.runtimeId === "gemini-cli")?.noMatchingSurface).toBe(true);
+      const geminiResult = parsed.results.find((r) => r.runtimeId === "gemini-cli")!;
+      expect(geminiResult.noMatchingSurface).toBe(true);
+      expect(geminiResult.surfaces.length).toBeGreaterThan(0);
     });
   });
 
@@ -347,6 +353,33 @@ describe("F1: doctor --runtime all/comma-list + --surface skips runtimes that de
       await integrationsCommand(["doctor", "--runtime", "all", "--surface", "totally-bogus-selector"], root);
       expect(process.exitCode).toBe(1);
       expect(capturedErr.join("\n")).toContain("No selected runtime declares surface(s): totally-bogus-selector");
+    });
+  });
+
+  // review round 5, F1: the actual regression — a broken runtime that
+  // doesn't declare the requested opt-in surface must not report healthy
+  // just because it was "skipped". Corrupt cursor's hooks.json (cursor
+  // carries no `agents` surface), then confirm `--surface agents` still
+  // surfaces that drift and exits 1, matching a plain `doctor --runtime
+  // claude,cursor` with no `--surface` at all.
+  test("a broken runtime lacking the requested surface still reports its own drift and exits 1 (R5-F1 regression)", async () => {
+    await withMetaproject(async (root) => {
+      await integrationsCommand(["install", "--runtime", "claude,cursor"], root);
+      const cursorHooksPath = path.join(root, ".cursor", "hooks.json");
+      await writeFile(cursorHooksPath, "{ broken", "utf8");
+
+      captured = [];
+      process.exitCode = 0;
+      await integrationsCommand(["doctor", "--runtime", "claude,cursor", "--surface", "agents", "--json"], root);
+      expect(process.exitCode).toBe(1);
+      const parsed = JSON.parse(captured.join("\n")) as {
+        results: { runtimeId: string; ok: boolean; noMatchingSurface?: boolean; problems: string[]; surfaces: { problems: string[] }[] }[];
+      };
+      const cursorResult = parsed.results.find((r) => r.runtimeId === "cursor")!;
+      expect(cursorResult.noMatchingSurface).toBe(true);
+      expect(cursorResult.ok).toBe(false);
+      const allProblems = [...cursorResult.problems, ...cursorResult.surfaces.flatMap((s) => s.problems)].join(" ");
+      expect(allProblems).toContain("not valid JSON");
     });
   });
 });

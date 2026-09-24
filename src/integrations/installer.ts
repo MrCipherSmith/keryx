@@ -154,7 +154,20 @@ export interface DoctorIntegrationResult {
   /** F7: top-level problems not tied to any one surface — e.g. an unreadable install-state file. */
   readonly problems: readonly string[];
   readonly ok: boolean;
-  /** review round 4, F1: set (with empty `surfaces`/`problems`, `ok: true`) when `lenientSelectors` found no surface on this runtime matching any requested selector — mirrors `InstallIntegrationResult`/`UninstallIntegrationResult`'s `noMatchingSurface`. */
+  /**
+   * review round 4, F1 / review round 5, F1: set when `lenientSelectors`
+   * found no surface on this runtime matching any requested `--surface`
+   * selector. Unlike `InstallIntegrationResult`/`UninstallIntegrationResult`'s
+   * `noMatchingSurface` — which means "nothing to do on this runtime, skip
+   * it" for install/uninstall, where `--surface` restricts the work — doctor
+   * treats `--surface` as ADDITIVE: an opt-in surface is added on top of the
+   * runtime's normal doctor set, never in place of it. So this flag never
+   * skips anything here: `surfaces`/`problems`/`ok` above are always the
+   * full, normal doctor result for this runtime. It only tells the caller
+   * this runtime declares none of the requested selectors (informational —
+   * and, aggregated across every selected runtime, whether to error with "no
+   * selected runtime declares surface(s)").
+   */
   readonly noMatchingSurface?: boolean;
 }
 
@@ -709,9 +722,16 @@ export interface DoctorOptions {
    * same meaning as `InstallOptions.lenientSelectors`. A selector that
    * matches nothing on THIS runtime is dropped instead of throwing, since a
    * runtime legitimately does not carry every surface every other selected
-   * runtime does; when NONE of `surfaces` match anything on this runtime,
-   * `doctorIntegration` returns `{ noMatchingSurface: true }` instead of
-   * throwing, mirroring `installIntegration`/`uninstallIntegration`.
+   * runtime does.
+   *
+   * review round 5, F1: unlike `installIntegration`/`uninstallIntegration`,
+   * doctor never skips a runtime over this — `--surface` is additive for
+   * doctor (it adds an opt-in surface to the normal doctor set), not
+   * restrictive, so a runtime declaring none of `surfaces` is still doctored
+   * in full over its default (non-opt-in) surfaces. When NONE of `surfaces`
+   * match anything on this runtime, `doctorIntegration` still runs that full
+   * doctor and returns it with `noMatchingSurface: true` attached, purely as
+   * an informational/aggregation marker — never in place of `surfaces`.
    */
   readonly lenientSelectors?: boolean;
 }
@@ -739,17 +759,28 @@ export async function doctorIntegration(root: string, runtimeId: string, opts: D
   // multi-runtime case, same condition `installIntegration`/
   // `uninstallIntegration` already use) switches to
   // `resolveSurfaceSelectionLenient` instead: a selector matching nothing on
-  // THIS runtime is silently dropped, and only when NONE of `surfaces` match
-  // anything here does doctor skip this runtime via `noMatchingSurface`,
-  // rather than throw. A single explicit runtime still goes through the
-  // strict `resolveSurfaceSelection` below and throws on an unknown
-  // selector, unchanged.
+  // THIS runtime is silently dropped rather than thrown on. A single
+  // explicit runtime still goes through the strict `resolveSurfaceSelection`
+  // below and throws on an unknown selector, unchanged.
+  //
+  // review round 5, F1: for install/uninstall a `--surface` selection
+  // RESTRICTS the work to the selected surfaces, so a runtime matching none
+  // of them legitimately has nothing to do and can be skipped outright. For
+  // doctor, `--surface` only ADDS an opt-in surface on top of the runtime's
+  // normal doctor set (see `explicitlySelected` below) — the surface loop
+  // always doctors every one of `adapter.surfaces`. Early-returning here on
+  // "no match" therefore used to skip a runtime's entire doctor pass (every
+  // default surface, not just the opt-in one), silently hiding real drift —
+  // e.g. `doctor --runtime claude,cursor --surface agents` reported a
+  // corrupted `.cursor/hooks.json` as healthy because cursor doesn't declare
+  // `agents`. So: never skip. Just remember whether this runtime declared
+  // any of the requested selectors, for the informational marker below and
+  // the caller's aggregate "no selected runtime declares surface(s)" check.
+  let noMatchingSurface = false;
   if (opts.surfaces && opts.surfaces.length > 0) {
     if (opts.lenientSelectors) {
       const matched = resolveSurfaceSelectionLenient(adapter, opts.surfaces);
-      if (matched.length === 0) {
-        return { runtimeId, surfaces: [], problems: [], ok: true, noMatchingSurface: true };
-      }
+      noMatchingSurface = matched.length === 0;
     } else {
       resolveSurfaceSelection(adapter, opts.surfaces);
     }
@@ -797,5 +828,5 @@ export async function doctorIntegration(root: string, runtimeId: string, opts: D
   }
 
   const ok = problems.length === 0 && !surfaces.some((s) => s.recorded && s.live !== "valid");
-  return { runtimeId, surfaces, problems, ok };
+  return { runtimeId, surfaces, problems, ok, ...(noMatchingSurface ? { noMatchingSurface: true } : {}) };
 }

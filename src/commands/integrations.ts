@@ -365,8 +365,13 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
   // review round 4, F1: multi-runtime (`all`/comma list) + `--surface` uses
   // `doctorIntegration`'s lenient selector resolution — same condition
   // install/uninstall already gate `lenientSelectors` on — so a selector
-  // that only some selected runtimes declare (e.g. `agents`) skips the
-  // runtimes that lack it instead of erroring every one of them.
+  // that only some selected runtimes declare (e.g. `agents`) is dropped for
+  // the runtimes that lack it instead of erroring every one of them.
+  //
+  // review round 5, F1: unlike install/uninstall, this never skips a
+  // runtime's doctor pass — see `doctorIntegration`'s `DoctorOptions`/
+  // `DoctorIntegrationResult` docs. `noMatchingSurface` below is purely
+  // informational/aggregation, not a "was this runtime checked" flag.
   const lenientSelectors = surfaces.length > 0 && isMultiRuntimeRequest(runtimeArg);
 
   const results: DoctorIntegrationResult[] = [];
@@ -378,8 +383,8 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
     // selector reports as an error for that runtime instead of crashing the
     // whole command, and a multi-runtime `--runtime all` still doctors every
     // other runtime. With `lenientSelectors`, a runtime matching none of
-    // `surfaces` instead comes back as `noMatchingSurface: true` and never
-    // throws.
+    // `surfaces` is still doctored in full (never throws) and comes back
+    // with `noMatchingSurface: true` attached, alongside its normal result.
     try {
       const result = await doctorIntegration(cwd, adapter.id, { surfaces, lenientSelectors });
       results.push(result);
@@ -406,13 +411,15 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
 
   heading("keryx integrations doctor");
   for (const result of results) {
-    // N6 (mirrors install/uninstall's no-match line): a runtime with no
-    // matching surface gets ONLY the "· <id> — no matching surface" line.
-    if (result.noMatchingSurface) {
-      printNoMatchingSurface(result.runtimeId);
-      continue;
-    }
     console.log(`  ${style.bold(result.runtimeId)} ${result.ok ? style.green("ok") : style.red("problems found")}`);
+    // review round 5, F1: `--surface` is additive for doctor, not
+    // restrictive (unlike install/uninstall's "no matching surface" skip
+    // line) — this runtime's normal doctor output above/below is always the
+    // full result. This note only flags that none of the requested
+    // selectors apply here, so it never replaces that output.
+    if (result.noMatchingSurface) {
+      note(`    ${result.runtimeId} declares none of the requested surface(s): ${surfaces.join(", ")}`);
+    }
     for (const problem of result.problems) {
       console.log(`  ${style.red(symbols.cross)} ${problem}`);
     }
