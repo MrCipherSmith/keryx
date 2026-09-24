@@ -14,6 +14,14 @@
 // `keryx ctx rg`) rather than a second invented wording, without duplicating
 // the whole bootstrap block verbatim into a file this workstream cannot
 // confirm any harness reads end-to-end.
+//
+// Review round 2 (N4): every splice below operates on the file's RAW bytes
+// directly — never a normalised-then-reapplied copy — so a mixed-EOL file
+// (some `\r\n` lines, some bare `\n`) is untouched everywhere outside the
+// block itself; only NEW content this module writes (the block, and a
+// freshly-prepended front matter) is rendered in the file's DOMINANT line
+// ending. See `dominantEol`/`applyEol` and `computeFencedRanges` (which walks
+// raw content directly rather than a normalised copy).
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -41,19 +49,62 @@ interface Block {
 
 type LineEnding = "\r\n" | "\n";
 
-function detectLineEnding(content: string): LineEnding {
-  return content.includes("\r\n") ? "\r\n" : "\n";
+/**
+ * The file's majority line ending, counted directly over raw (possibly
+ * mixed-EOL) content — NEW content this module writes (the block, a
+ * freshly-prepended front matter) follows this, never a hardcoded style, so
+ * install does not turn a CRLF file's own inserted content into a stray LF
+ * island (or vice versa). A tie, or a file with no newlines at all, defaults
+ * to `"\n"`.
+ */
+function dominantEol(content: string): LineEnding {
+  const crlf = (content.match(/\r\n/g) ?? []).length;
+  const totalLf = (content.match(/\n/g) ?? []).length;
+  const bareLf = totalLf - crlf;
+  return crlf > bareLf ? "\r\n" : "\n";
 }
 
-/** CRLF -> LF, used only for detection/comparison — never written back as-is. */
-function normalizeNewlines(content: string): string {
-  return content.replace(/\r\n/g, "\n");
+/** Rewrites a LITERAL's own `\n`s to `eol` — used only on text this module itself renders (the block, front matter), never on bytes read back from disk. */
+function applyEol(text: string, eol: LineEnding): string {
+  return eol === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
 }
 
-/** The inverse of `normalizeNewlines`, applied once at write time. */
-function applyLineEnding(content: string, ending: LineEnding): string {
-  return ending === "\r\n" ? content.replace(/\n/g, "\r\n") : content;
+function endsWithEol(text: string): boolean {
+  return text.endsWith("\n"); // covers both "\n" and "\r\n" (which also ends in "\n")
 }
+
+/** True when `text` ends with two consecutive line endings (a blank line), either style. */
+function endsWithBlankLine(text: string): boolean {
+  return /(\r\n|\n)(\r\n|\n)$/.test(text);
+}
+
+/** Collapses a trailing blank line (either EOL style) to a single line ending, preserving which style was there. */
+function collapseTrailingBlankLine(text: string): string {
+  const match = text.match(/(\r\n|\n)(\r\n|\n)$/);
+  if (!match) return text;
+  return text.slice(0, text.length - match[0].length) + match[2];
+}
+
+/** Advances `cursor` past one line ending (`\r\n` or `\n`) at that position, if any. */
+function eatEol(text: string, cursor: number): number {
+  if (text.startsWith("\r\n", cursor)) return cursor + 2;
+  if (text[cursor] === "\n") return cursor + 1;
+  return cursor;
+}
+
+/**
+ * Review round 2 (N4): a distinguishing marker written ONLY on the "file did
+ * not exist yet" install path — the one case where `writeFile` creates the
+ * file outright rather than editing existing bytes. Its presence (immediately
+ * before the block, after `frontMatter` if any) is how `uninstallMarkdownBlock`
+ * tells "install created this file" apart from "the file already existed
+ * (even if empty/whitespace-only) and install only added the block" — two
+ * cases that, before this marker existed, could write byte-identical content
+ * and were therefore impossible to tell apart afterwards. Only the FORMER may
+ * ever have its file deleted on uninstall; the latter always survives, even
+ * when nothing but whitespace is left once the block is removed.
+ */
+const CREATED_FILE_MARKER = "<!-- keryx:created-file -->\n";
 
 /** The managed block body, byte-identical across every markdown-block surface. */
 export function renderInstructionsBlock(): string {
@@ -75,25 +126,37 @@ function allIndices(haystack: string, needle: string): number[] {
   return out;
 }
 
-/** Char ranges (start inclusive, end exclusive) covered by fenced code blocks (``` or ~~~, >=3). */
-function computeFencedRanges(normalized: string): Array<[number, number]> {
+/**
+ * Char ranges (start inclusive, end exclusive) covered by fenced code blocks
+ * (``` or ~~~, >=3). Walks `content` DIRECTLY — raw, possibly mixed-EOL bytes
+ * — splitting on either `\r\n` or `\n` while tracking exact offsets, rather
+ * than a normalised copy, so a marker's position here lines up exactly with
+ * `allIndices`' positions in the same raw string.
+ */
+function computeFencedRanges(content: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
-  let offset = 0;
+  const eolRe = /\r\n|\n/g;
+  let lineStart = 0;
   let fenceStart: number | null = null;
-  for (const line of normalized.split("\n")) {
-    if (/^(`{3,}|~{3,})/.test(line.trimStart())) {
-      if (fenceStart === null) {
-        fenceStart = offset;
-      } else {
-        ranges.push([fenceStart, offset + line.length]);
+  let match: RegExpExecArray | null;
+  const consumeLine = (text: string, end: number): void => {
+    if (/^(`{3,}|~{3,})/.test(text.trimStart())) {
+      if (fenceStart === null) fenceStart = lineStart;
+      else {
+        ranges.push([fenceStart, end]);
         fenceStart = null;
       }
     }
-    offset += line.length + 1;
+  };
+  while ((match = eolRe.exec(content)) !== null) {
+    const lineEnd = match.index + match[0].length;
+    consumeLine(content.slice(lineStart, match.index), lineEnd);
+    lineStart = lineEnd;
   }
+  consumeLine(content.slice(lineStart), content.length);
   // An unterminated fence: cheap-and-safe is to treat the rest of the file as
   // fenced rather than assume it closes, so a marker after it is not trusted.
-  if (fenceStart !== null) ranges.push([fenceStart, normalized.length]);
+  if (fenceStart !== null) ranges.push([fenceStart, content.length]);
   return ranges;
 }
 
@@ -102,20 +165,21 @@ function isWithinRanges(offset: number, ranges: Array<[number, number]>): boolea
 }
 
 /**
- * Every COMPLETE `start...end` block in `normalized`, in document order.
- * Throws `UnterminatedInstructionsBlockError` — never silently drops or
- * guesses — the moment it finds a marker it cannot pair up safely.
+ * Every COMPLETE `start...end` block in `content` (raw, possibly mixed-EOL
+ * bytes), in document order. Throws `UnterminatedInstructionsBlockError` —
+ * never silently drops or guesses — the moment it finds a marker it cannot
+ * pair up safely.
  */
-function parseBlocks(normalized: string, relativePath: string): Block[] {
+function parseBlocks(content: string, relativePath: string): Block[] {
   const fail = (): never => {
     throw new UnterminatedInstructionsBlockError(
       `${relativePath}: unterminated ${INSTRUCTIONS_START_MARKER} block — fix it by hand`,
     );
   };
 
-  const fenced = computeFencedRanges(normalized);
-  const starts = allIndices(normalized, INSTRUCTIONS_START_MARKER);
-  const ends = allIndices(normalized, INSTRUCTIONS_END_MARKER);
+  const fenced = computeFencedRanges(content);
+  const starts = allIndices(content, INSTRUCTIONS_START_MARKER);
+  const ends = allIndices(content, INSTRUCTIONS_END_MARKER);
 
   // A marker literally quoted inside a fenced code block (e.g. a doc example)
   // is not trustworthy either way — refuse rather than treat it as real or
@@ -144,45 +208,45 @@ function parseBlocks(normalized: string, relativePath: string): Block[] {
 /**
  * Replace the FIRST block with `replacement`; drop every later block
  * entirely (F9: duplicate complete blocks collapse into one on install).
- * Eats exactly the one newline each block's own rendered text contributed,
- * so neither the kept nor a dropped block leaves a blank line behind.
+ * Eats exactly the one line ending each block's own rendered text
+ * contributed, so neither the kept nor a dropped block leaves a blank line
+ * behind. Everything outside a block's own span is copied byte-for-byte from
+ * `content`.
  */
-function collapseBlocks(normalized: string, blocks: Block[], replacement: string): string {
+function collapseBlocks(content: string, blocks: Block[], replacement: string): string {
   let result = "";
   let cursor = 0;
   blocks.forEach((block, i) => {
-    result += normalized.slice(cursor, block.start);
+    result += content.slice(cursor, block.start);
     if (i === 0) result += replacement;
-    cursor = block.end;
-    if (normalized[cursor] === "\n") cursor += 1;
+    cursor = eatEol(content, block.end);
   });
-  result += normalized.slice(cursor);
+  result += content.slice(cursor);
   return result;
 }
 
-/** Remove every block entirely (F9: uninstall removes ALL duplicate blocks). */
-function removeAllBlocks(normalized: string, blocks: Block[]): string {
+/** Remove every block entirely (F9: uninstall removes ALL duplicate blocks). Everything outside a block's own span is copied byte-for-byte. */
+function removeAllBlocks(content: string, blocks: Block[]): string {
   let result = "";
   let cursor = 0;
   for (const block of blocks) {
-    result += normalized.slice(cursor, block.start);
-    cursor = block.end;
-    if (normalized[cursor] === "\n") cursor += 1;
+    result += content.slice(cursor, block.start);
+    cursor = eatEol(content, block.end);
   }
-  result += normalized.slice(cursor);
+  result += content.slice(cursor);
   return result;
 }
 
-function appendBlock(content: string, block: string): string {
+function appendBlock(content: string, block: string, eol: LineEnding): string {
   if (content.length === 0) return block;
-  const withTrailingNewline = content.endsWith("\n") ? content : `${content}\n`;
-  const separator = withTrailingNewline.endsWith("\n\n") ? "" : "\n";
+  const withTrailingNewline = endsWithEol(content) ? content : `${content}${eol}`;
+  const separator = endsWithBlankLine(withTrailingNewline) ? "" : eol;
   return `${withTrailingNewline}${separator}${block}`;
 }
 
-/** True when `normalized` starts with a YAML front-matter block (any content, not just Keryx's own). */
-function hasAnyFrontMatter(normalized: string): boolean {
-  const lines = normalized.split("\n");
+/** True when `content` starts with a YAML front-matter block (any content, not just Keryx's own). Splits on either EOL style. */
+function hasAnyFrontMatter(content: string): boolean {
+  const lines = content.split(/\r\n|\n/);
   if (lines[0] !== "---") return false;
   for (let i = 1; i < lines.length; i += 1) {
     if (lines[i] === "---") return true;
@@ -203,24 +267,25 @@ function fileFor(root: string, relativePath: string): string {
  * byte-identical to Keryx's own).
  *
  * Idempotent: re-running replaces only the block, preserving everything else
- * in the file untouched. CRLF files are read/compared as LF (F9) and written
- * back in their original line-ending style. A file with more than one
- * complete block collapses to one (replacing the first, dropping the rest).
- * Refuses — leaving the file completely untouched — when a block cannot be
- * parsed safely; see `UnterminatedInstructionsBlockError`.
+ * in the file untouched. The block (and a freshly-prepended front matter) are
+ * rendered in the file's DOMINANT line ending (N4); everything outside the
+ * spliced region is copied from the file's raw bytes untouched, so a
+ * mixed-EOL file is never homogenised by an install. A file with more than
+ * one complete block collapses to one (replacing the first, dropping the
+ * rest). Refuses — leaving the file completely untouched — when a block
+ * cannot be parsed safely; see `UnterminatedInstructionsBlockError`.
  */
 export async function installMarkdownBlock(root: string, relativePath: string, frontMatter?: string): Promise<string[]> {
   const file = fileFor(root, relativePath);
-  const block = renderInstructionsBlock();
   if (!(await pathExists(file))) {
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, `${frontMatter ?? ""}${block}`, "utf8");
+    await writeFile(file, `${frontMatter ?? ""}${CREATED_FILE_MARKER}${renderInstructionsBlock()}`, "utf8");
     return [];
   }
   const raw = await readFile(file, "utf8");
-  const lineEnding = detectLineEnding(raw);
-  const normalized = normalizeNewlines(raw);
-  const withFrontMatter = frontMatter && !hasAnyFrontMatter(normalized) ? `${frontMatter}${normalized}` : normalized;
+  const eol = dominantEol(raw);
+  const frontMatterForEol = frontMatter !== undefined ? applyEol(frontMatter, eol) : undefined;
+  const withFrontMatter = frontMatterForEol && !hasAnyFrontMatter(raw) ? `${frontMatterForEol}${raw}` : raw;
 
   let blocks: Block[];
   try {
@@ -230,85 +295,112 @@ export async function installMarkdownBlock(root: string, relativePath: string, f
     throw error;
   }
 
-  const next = blocks.length === 0 ? appendBlock(withFrontMatter, block) : collapseBlocks(withFrontMatter, blocks, block);
-  const nextRaw = applyLineEnding(next, lineEnding);
-  if (nextRaw !== raw) await writeFile(file, nextRaw, "utf8");
+  const block = applyEol(renderInstructionsBlock(), eol);
+  const next = blocks.length === 0 ? appendBlock(withFrontMatter, block, eol) : collapseBlocks(withFrontMatter, blocks, block);
+  if (next !== raw) await writeFile(file, next, "utf8");
   return [];
 }
 
 /**
- * Remove every managed block from `relativePath`. Deletes the file when
- * nothing but whitespace (or only the front matter Keryx itself wrote) would
- * remain; otherwise preserves every other line untouched. Returns `false`
- * when there was nothing to remove.
+ * Remove every managed block from `relativePath`. Deletes the file ONLY when
+ * install itself CREATED it (review round 2, N4) — detected via
+ * `CREATED_FILE_MARKER`, not by whether what remains is empty/whitespace: a
+ * file that already existed (even empty, or whitespace-only) before install
+ * ran always survives uninstall untouched, byte-identical to what it was
+ * before install, even when nothing visible is left once the block (and any
+ * front matter install added) is stripped back out. Returns `false` when
+ * there was nothing to remove.
  *
- * CRLF files are read/compared as LF and written back in their original
- * line-ending style (F9). An install→uninstall round trip on a file that had
- * content without the block, and ended with a single trailing newline, is
- * byte-identical — uninstall removes exactly the blank-line separator
- * install added, nothing more.
+ * Everything outside a block's own span (and, when install added it, the
+ * exact `frontMatter` text it prepended) is preserved byte-for-byte,
+ * including original mixed line endings (N4).
  *
  * Throws `UnterminatedInstructionsBlockError` — and leaves the file
  * completely untouched — rather than guess at, and potentially delete
  * content around, a block it cannot parse safely (F1). `customUninstall`'s
  * contract has no error channel (unlike `customInstall`'s `string[]`), so
  * throwing here — the same "refuse hard" idiom `readSettingsFile` already
- * uses for invalid JSON — is how this surface refuses.
+ * uses for invalid JSON — is how this surface refuses; `installer.ts` (N1)
+ * catches it into a `failed` `SurfaceResult` rather than letting it escape.
  */
 export async function uninstallMarkdownBlock(root: string, relativePath: string, frontMatter?: string): Promise<boolean> {
   const file = fileFor(root, relativePath);
   if (!(await pathExists(file))) return false;
   const raw = await readFile(file, "utf8");
-  const lineEnding = detectLineEnding(raw);
-  const normalized = normalizeNewlines(raw);
-  const blocks = parseBlocks(normalized, relativePath);
+  const blocks = parseBlocks(raw, relativePath);
   if (blocks.length === 0) return false;
 
   const lastBlock = blocks[blocks.length - 1]!;
-  const afterLast = normalized.slice(lastBlock.end);
-  const wasTrailingBlock = afterLast === "" || afterLast === "\n";
-  // The "file didn't exist yet" install path (`${frontMatter ?? ""}${block}`)
-  // never runs `appendBlock`'s separator logic at all — it is a direct
-  // concatenation. Collapsing a trailing blank line there would eat part of
-  // the front matter's OWN formatting, not a separator this helper added.
-  const beforeFirstBlock = normalized.slice(0, blocks[0]!.start);
-  const skipSeparatorCollapse = frontMatter !== undefined && beforeFirstBlock === frontMatter;
+  const afterLast = raw.slice(lastBlock.end);
+  const wasTrailingBlock = afterLast === "" || afterLast === "\n" || afterLast === "\r\n";
 
-  let removed = removeAllBlocks(normalized, blocks);
-  if (wasTrailingBlock && !skipSeparatorCollapse) removed = removed.replace(/\n\n$/, "\n");
+  const beforeFirstBlock = raw.slice(0, blocks[0]!.start);
+  const createdPrefix = `${frontMatter ?? ""}${CREATED_FILE_MARKER}`;
+  const createdByInstall = beforeFirstBlock === createdPrefix;
+  // The "file didn't exist yet" install path (direct concatenation) and the
+  // "existing file whose own content was empty, so front matter alone ends up
+  // right before the block" path both never ran `appendBlock`'s separator
+  // logic — collapsing a trailing blank line there would eat part of the
+  // front matter's OWN formatting, not a separator this module added.
+  const directConcatenation = createdByInstall || (frontMatter !== undefined && beforeFirstBlock === frontMatter);
+
+  let removed = removeAllBlocks(raw, blocks);
+  if (wasTrailingBlock && !directConcatenation) removed = collapseTrailingBlankLine(removed);
+
+  if (createdByInstall && removed === createdPrefix) {
+    await rm(file, { force: true });
+    return true;
+  }
 
   const withoutFrontMatter = frontMatter && removed.startsWith(frontMatter) ? removed.slice(frontMatter.length) : removed;
-  if (withoutFrontMatter.trim().length === 0) {
-    await rm(file, { force: true });
-  } else {
-    const nextRaw = applyLineEnding(removed, lineEnding);
-    if (nextRaw !== raw) await writeFile(file, nextRaw, "utf8");
-  }
+  if (withoutFrontMatter !== raw) await writeFile(file, withoutFrontMatter, "utf8");
   return true;
 }
 
-/** Health check for a markdown-block surface: missing file / missing block / stale block content. */
-export async function probeMarkdownBlock(root: string, relativePath: string): Promise<string[]> {
+export interface MarkdownBlockInspection {
+  readonly state: "absent-file" | "no-block" | "present" | "stale" | "malformed";
+  readonly message?: string;
+}
+
+/**
+ * Structured probe (review round 2, F4/N1): the single source of truth
+ * `probeMarkdownBlock` (health-check messages) AND `installer.ts`'s dry-run
+ * presence checks both build on, so dry-run and the real install/uninstall
+ * can never disagree about what state a markdown-block surface's file is in.
+ */
+export async function inspectMarkdownBlock(root: string, relativePath: string): Promise<MarkdownBlockInspection> {
   const file = fileFor(root, relativePath);
-  if (!(await pathExists(file))) {
-    return [`${relativePath}: file is missing`];
-  }
+  if (!(await pathExists(file))) return { state: "absent-file" };
   const raw = await readFile(file, "utf8");
-  const normalized = normalizeNewlines(raw);
   let blocks: Block[];
   try {
-    blocks = parseBlocks(normalized, relativePath);
+    blocks = parseBlocks(raw, relativePath);
   } catch (error) {
-    if (error instanceof UnterminatedInstructionsBlockError) return [error.message];
+    if (error instanceof UnterminatedInstructionsBlockError) return { state: "malformed", message: error.message };
     throw error;
   }
-  if (blocks.length === 0) {
-    return [`${relativePath}: missing the keryx:instructions block`];
-  }
+  if (blocks.length === 0) return { state: "no-block", message: `${relativePath}: missing the keryx:instructions block` };
   const first = blocks[0]!;
-  const block = normalized.slice(first.start, first.end);
+  // Normalised to LF for comparison only — never written back — so a CRLF
+  // file's block still compares equal to the LF-rendered canonical text.
+  const block = raw.slice(first.start, first.end).replace(/\r\n/g, "\n");
   if (`${block}\n`.trim() !== renderInstructionsBlock().trim()) {
-    return [`${relativePath}: keryx:instructions block is stale — re-run the install`];
+    return { state: "stale", message: `${relativePath}: keryx:instructions block is stale — re-run the install` };
   }
-  return [];
+  return { state: "present" };
+}
+
+/** Health check for a markdown-block surface: missing file / missing block / stale block content / unterminated block. */
+export async function probeMarkdownBlock(root: string, relativePath: string): Promise<string[]> {
+  const inspection = await inspectMarkdownBlock(root, relativePath);
+  switch (inspection.state) {
+    case "absent-file":
+      return [`${relativePath}: file is missing`];
+    case "no-block":
+    case "stale":
+    case "malformed":
+      return [inspection.message!];
+    case "present":
+      return [];
+  }
 }

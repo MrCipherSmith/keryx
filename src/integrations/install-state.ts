@@ -60,19 +60,68 @@ export async function sha256OfFile(root: string, relativePath: string): Promise<
 }
 
 /**
- * F7: a parsed value only counts as install-state when it carries THIS
- * module's `schemaVersion` and an array `installedModules` — the two facts
- * every reader below actually depends on. Anything else (a bare `{}`, an
- * array, a record shaped for a future/older schema version) is treated the
- * same as unparsable JSON: `readInstallState` reports it as absent rather
- * than handing a caller a value it will crash trying to read, and
- * `installStateIsUnreadable` reports it as a problem `doctor` can surface
- * instead of throwing.
+ * F7: a single record's shape check — `moduleId` must be a string,
+ * `writtenPaths` an array of strings, and `sha256` (when present at all) a
+ * plain, non-array object; it defaults to `{}` when absent, since older/odd
+ * writers may omit it. Anything else — `null`, a string, an array element
+ * with a non-string `moduleId`, ... — is not a usable record.
  */
-function isValidInstallState(value: unknown): value is InstallState {
-  if (typeof value !== "object" || value === null) return false;
+function normalizeInstalledModuleRecord(value: unknown): InstalledModuleRecord | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
-  return record.schemaVersion === INSTALL_STATE_SCHEMA_VERSION && Array.isArray(record.installedModules);
+  if (typeof record.moduleId !== "string") return undefined;
+  if (!Array.isArray(record.writtenPaths) || !record.writtenPaths.every((p) => typeof p === "string")) return undefined;
+  const sha256Raw = record.sha256;
+  if (sha256Raw !== undefined && (typeof sha256Raw !== "object" || sha256Raw === null || Array.isArray(sha256Raw))) return undefined;
+  return {
+    moduleId: record.moduleId,
+    ...(typeof record.surface === "string" ? { surface: record.surface as SurfaceFlag } : {}),
+    writtenPaths: [...(record.writtenPaths as string[])],
+    sha256: { ...((sha256Raw as Record<string, string> | undefined) ?? {}) },
+    managedSentinel: record.managedSentinel === true,
+    ...(typeof record.keryxVersion === "string" ? { keryxVersion: record.keryxVersion } : {}),
+    ...(typeof record.installedAt === "string" ? { installedAt: record.installedAt } : {}),
+  };
+}
+
+/**
+ * F7 (review round 2 — carried over from round 1): a parsed value only
+ * counts as usable install-state when it carries THIS module's
+ * `schemaVersion`, an array `installedModules`, AND every element of that
+ * array is itself a valid record (see `normalizeInstalledModuleRecord`).
+ *
+ * Decision (documented here, since the task this fixes left it open): ONE
+ * malformed record makes the WHOLE state file "unreadable" — this module
+ * does not attempt to keep the other, well-formed records and drop only the
+ * bad one. A state file is a single artifact keryx alone writes; there is no
+ * expected way for exactly one record in it to be corrupt while the rest are
+ * fine, so treating the whole file as unreadable (same as bad JSON, or a
+ * record shaped for a future/older schema version) keeps the failure mode
+ * simple and matches "install should overwrite/repair it safely" — the next
+ * `recordSurfaceInstalled` call reads `undefined` back (nothing recorded)
+ * and writes a fresh, valid file from scratch, which discards the corrupt
+ * records rather than trying to merge around them. `doctor` surfaces the
+ * unreadable file as a top-level problem (`installStateIsUnreadable`)
+ * instead of crashing or silently reporting "nothing installed".
+ */
+function normalizeInstallState(value: unknown): InstallState | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.schemaVersion !== INSTALL_STATE_SCHEMA_VERSION) return undefined;
+  if (!Array.isArray(record.installedModules)) return undefined;
+  const installedModules: InstalledModuleRecord[] = [];
+  for (const entry of record.installedModules) {
+    const normalized = normalizeInstalledModuleRecord(entry);
+    if (!normalized) return undefined;
+    installedModules.push(normalized);
+  }
+  return {
+    schemaVersion: INSTALL_STATE_SCHEMA_VERSION,
+    target: typeof record.target === "string" ? record.target : "",
+    ...(typeof record.profile === "string" ? { profile: record.profile } : {}),
+    installedModules,
+    recordedAt: typeof record.recordedAt === "string" ? record.recordedAt : "",
+  };
 }
 
 async function parseInstallStateFile(
@@ -83,7 +132,8 @@ async function parseInstallStateFile(
   if (!(await pathExists(file))) return { state: undefined, unreadable: false };
   try {
     const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
-    if (isValidInstallState(parsed)) return { state: parsed, unreadable: false };
+    const normalized = normalizeInstallState(parsed);
+    if (normalized) return { state: normalized, unreadable: false };
     return { state: undefined, unreadable: true };
   } catch {
     return { state: undefined, unreadable: true };

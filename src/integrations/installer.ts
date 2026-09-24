@@ -21,7 +21,7 @@
 import path from "node:path";
 import { getHarnessAdapter, harnessAdapterIds, settingsFileOwnerFor } from "./registry";
 import { installSurfaces, uninstallSurfaces } from "./settings-file";
-import { MANAGED_KEY, readSettingsFile } from "./settings-json";
+import { readSettingsFile } from "./settings-json";
 import {
   recordSurfaceInstalled,
   recordSurfaceUninstalled,
@@ -197,40 +197,92 @@ function resolveAdapterOrError(runtimeId: string): { adapter: HarnessAdapter } |
   return { adapter };
 }
 
+/** Structural deep-equality over JSON-shaped `Settings` values — no library dependency, and key ORDER never matters (only key membership + value equality). */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, i) => deepEqual(item, b[i]));
+  }
+  if (typeof a === "object" && typeof b === "object") {
+    const aRecord = a as Record<string, unknown>;
+    const bRecord = b as Record<string, unknown>;
+    const aKeys = Object.keys(aRecord);
+    const bKeys = Object.keys(bRecord);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every((key) => Object.prototype.hasOwnProperty.call(bRecord, key) && deepEqual(aRecord[key], bRecord[key]));
+  }
+  return false;
+}
+
 /**
- * Whether `surface` was already installed in `settings`, going only by the
- * shared `_keryxManaged` sentinel bookkeeping (`addSentinelTo`/
- * `removeSentinelFrom` in `settings-json.ts`) every JSON surface's merge/strip
- * maintains at the settings file's top level — NOT `surface.validate`, which
- * checks shape correctness and can reject a group written by an older/odd
- * build (a different matcher, a flat entry, no matcher at all, ...) that is
- * nonetheless present and sentinel-tagged, and therefore still something an
- * uninstall must report as "removed" once it strips it.
+ * Whether `surface` was already installed in `settings` (review round 2, N2):
+ * judged PER SURFACE, by actually applying THIS surface's own `strip` to a
+ * deep clone and checking whether that changed anything — not by checking
+ * for a shared `_keryxManaged` sentinel string at the settings file's top
+ * level (`addSentinelTo`/`removeSentinelFrom` in `settings-json.ts`), which
+ * more than one surface on the same file can carry (e.g.
+ * `security-check-input`/`security-check-output` both use
+ * `AGENT_HOOKS_SENTINEL`). The old sentinel-only check therefore reported a
+ * surface as "installed" the moment its SIBLING was, even when this surface
+ * itself was never touched — `claude install --surface security-check-output`
+ * then `claude uninstall --surface security-check-input` must report nothing
+ * to remove for security-check-input, not "removed".
+ *
+ * NOT `surface.validate`, which checks shape correctness and can reject a
+ * group written by an older/odd build (a different matcher, a flat entry, no
+ * matcher at all, ...) that is nonetheless present and therefore still
+ * something an uninstall must report as "removed" once it strips it.
  */
 function wasSurfaceInstalled(settings: Settings, surface: SurfaceAdapter): boolean {
-  const managed = settings[MANAGED_KEY];
-  return Array.isArray(managed) && managed.includes(surface.sentinel);
+  if (!surface.strip) return false;
+  const before = structuredClone(settings);
+  const after = surface.strip(structuredClone(settings));
+  return !deepEqual(before, after);
 }
 
 /**
  * Dry-run presence check for a custom (non-JSON) surface's UNINSTALL (F4):
  * mirrors what the real `customUninstall` would find, so dry-run and the
- * real run never disagree. Plain file existence is right for a surface that
- * owns its whole file outright (the OpenCode plugin: any content present
- * means there is something to remove) but wrong for a managed-markdown-block
- * surface (gemini-cli/kiro/github-copilot-agent's `instructions` surfaces),
- * whose file can exist with the managed block already removed by hand —
- * `probeMarkdownBlock`'s literal "missing the keryx:instructions block"
- * message (`markdown-block.ts`) is the one signal that distinguishes that
- * one case, where the real uninstall finds nothing to strip, from every
- * other custom surface's "file present" meaning "there is something to
- * remove".
+ * real run never disagree. A surface with a structured `inspect` (review
+ * round 2 — markdown-block `instructions` surfaces wire this to
+ * `inspectMarkdownBlock`) is judged off that typed state rather than
+ * string-matching a `probe` message, and a `"malformed"` file (an
+ * unterminated block) reports `failed` — the same outcome the real uninstall
+ * would hit, instead of silently disagreeing with it. A surface without
+ * `inspect` (the OpenCode plugin, which owns its whole file outright) falls
+ * back to plain file existence: any content present means there is something
+ * to remove.
  */
-async function customSurfaceWouldRemove(root: string, surface: SurfaceAdapter, file: string): Promise<boolean> {
-  if (!(await pathExists(file))) return false;
-  if (!surface.probe) return true;
-  const problems = await surface.probe(root);
-  return !problems.some((p) => p.includes("missing the keryx:instructions block"));
+async function customUninstallDryRun(
+  root: string,
+  surface: SurfaceAdapter,
+  file: string | undefined,
+): Promise<{ status: UninstallSurfaceStatus; errors: string[] }> {
+  if (surface.inspect) {
+    const inspection = await surface.inspect(root);
+    if (inspection.state === "malformed") return { status: "failed", errors: [inspection.message ?? "malformed"] };
+    if (inspection.state === "absent-file" || inspection.state === "no-block") return { status: "nothing-to-remove", errors: [] };
+    return { status: "would-remove", errors: [] };
+  }
+  const wouldRemove = file ? await pathExists(file) : false;
+  return { status: wouldRemove ? "would-remove" : "nothing-to-remove", errors: [] };
+}
+
+/**
+ * Dry-run presence check for a custom (non-JSON) surface's INSTALL (F4):
+ * a surface with `inspect` reports `failed` when the file is currently
+ * malformed (the real install would find the same thing and refuse), since
+ * an install always attempts to write the block regardless of the surface's
+ * current state, everything else reports `would-install`.
+ */
+async function customInstallDryRun(root: string, surface: SurfaceAdapter): Promise<{ status: InstallSurfaceStatus; errors: string[] }> {
+  if (surface.inspect) {
+    const inspection = await surface.inspect(root);
+    if (inspection.state === "malformed") return { status: "failed", errors: [inspection.message ?? "malformed"] };
+  }
+  return { status: "would-install", errors: [] };
 }
 
 /** Partition a resolved surface list into JSON-owned (grouped by file), custom-install, and satisfied-by-runtime. */
@@ -364,10 +416,26 @@ export async function installIntegration(
 
   for (const surface of custom) {
     if (opts.dryRun) {
-      results.push({ ...baseResult(surface, surface.relativePath), status: "would-install", errors: [], warnings: warningsFor(surface) });
+      // F4: judge off the surface's own structured `inspect` (falling back to
+      // "would-install") instead of always reporting "would-install"
+      // regardless of whether the real install would actually fail.
+      const dryRun = await customInstallDryRun(root, surface);
+      if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
+      results.push({ ...baseResult(surface, surface.relativePath), status: dryRun.status, errors: dryRun.errors, warnings: warningsFor(surface) });
       continue;
     }
-    const customErrors = surface.customInstall ? await surface.customInstall(root) : [];
+    // N1: a thrown error from `customInstall` (an `UnterminatedInstructionsBlockError`
+    // escaping a bug, or any other unexpected throw) becomes a `failed`
+    // SurfaceResult instead of escaping `installIntegration` — this happens
+    // AFTER the jsonByPath loop above has already written/stripped every JSON
+    // surface, and it must not stop a LATER custom surface, or the
+    // satisfied-by-runtime loop below, from being processed.
+    let customErrors: string[];
+    try {
+      customErrors = surface.customInstall ? await surface.customInstall(root) : [];
+    } catch (error) {
+      customErrors = [(error as Error).message];
+    }
     if (customErrors.length > 0) {
       errors.push(...customErrors);
       results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: customErrors, warnings: warningsFor(surface) });
@@ -493,19 +561,35 @@ export async function uninstallIntegration(
   for (const surface of custom) {
     const file = surface.relativePath ? fileFor(root, surface.relativePath) : undefined;
     if (opts.dryRun) {
-      // F4: dry-run parity — use the surface's own presence check (probe-
-      // backed for a markdown-block surface) instead of a bare file-exists
-      // check, so dry-run and the real uninstall never disagree.
-      const wouldRemove = file ? await customSurfaceWouldRemove(root, surface, file) : false;
-      results.push({
-        ...baseResult(surface, surface.relativePath),
-        status: wouldRemove ? "would-remove" : "nothing-to-remove",
-        errors: [],
-        warnings: warningsFor(surface),
-      });
+      // F4: dry-run parity — use the surface's own structured `inspect` (or
+      // plain file existence, when it has none) instead of string-matching a
+      // `probe` message, so dry-run and the real uninstall never disagree —
+      // including on a malformed (unterminated) block, which must report
+      // `failed` here exactly as the real run would.
+      const dryRun = await customUninstallDryRun(root, surface, file);
+      if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
+      results.push({ ...baseResult(surface, surface.relativePath), status: dryRun.status, errors: dryRun.errors, warnings: warningsFor(surface) });
       continue;
     }
-    const removed = surface.customUninstall ? await surface.customUninstall(root) : false;
+    // N1: a thrown error from `customUninstall` (markdown-block surfaces
+    // throw `UnterminatedInstructionsBlockError` rather than return a false —
+    // see `markdown-block.ts`) becomes a `failed` SurfaceResult instead of
+    // escaping `uninstallIntegration`. This runs AFTER the jsonByPath loop
+    // above has already stripped every JSON surface, and a throw here must
+    // not stop a LATER custom surface, or the satisfied-by-runtime loop
+    // below, from being processed.
+    let removed = false;
+    let customError: string | undefined;
+    try {
+      removed = surface.customUninstall ? await surface.customUninstall(root) : false;
+    } catch (error) {
+      customError = (error as Error).message;
+    }
+    if (customError !== undefined) {
+      errors.push(customError);
+      results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: [customError], warnings: warningsFor(surface) });
+      continue;
+    }
     results.push({
       ...baseResult(surface, surface.relativePath),
       status: removed ? "removed" : "nothing-to-remove",

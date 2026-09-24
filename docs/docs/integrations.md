@@ -86,8 +86,10 @@ against the live settings file. When something has gone missing, it reports
 drift naming the version and date Keryx installed it — for example:
 
 ```
-gemini-cli (block) was installed by Keryx 0.2.140 on 2026-08-03 and is now missing: .gemini/settings.json: file is missing
+ctx-guard (block) was installed by Keryx 0.2.140 on 2026-08-03 and is now missing: .gemini/settings.json: file is missing
 ```
+
+(`ctx-guard (block)` is the *surface* id and flag — not the runtime id `gemini-cli` — since one runtime can carry several surfaces, each drifting independently.)
 
 — rather than the less useful "surface is missing," because knowing *when*
 and *by which build* narrows down what changed the file in between.

@@ -28,6 +28,7 @@ import {
 import { parseCopilotToolArgsCommand, parseKiroCommand, parseRunShellCommandInput } from "./codecs";
 import { CTX_HOOK_SENTINEL, ctxHookCommand, nestedCtxSurface } from "./surfaces";
 import {
+  inspectMarkdownBlock,
   installMarkdownBlock,
   probeMarkdownBlock,
   uninstallMarkdownBlock,
@@ -74,6 +75,7 @@ export const INSTRUCTIONS_GEMINI_CLI: SurfaceAdapter = {
   customInstall: (root) => installMarkdownBlock(root, "GEMINI.md"),
   customUninstall: (root) => uninstallMarkdownBlock(root, "GEMINI.md"),
   probe: (root) => probeMarkdownBlock(root, "GEMINI.md"),
+  inspect: (root) => inspectMarkdownBlock(root, "GEMINI.md"),
 };
 
 // ---------------------------------------------------------------------------
@@ -191,6 +193,7 @@ export const INSTRUCTIONS_KIRO: SurfaceAdapter = {
   customInstall: (root) => installMarkdownBlock(root, ".kiro/steering/keryx.md", KIRO_STEERING_FRONT_MATTER),
   customUninstall: (root) => uninstallMarkdownBlock(root, ".kiro/steering/keryx.md", KIRO_STEERING_FRONT_MATTER),
   probe: (root) => probeMarkdownBlock(root, ".kiro/steering/keryx.md"),
+  inspect: (root) => inspectMarkdownBlock(root, ".kiro/steering/keryx.md"),
 };
 
 // ---------------------------------------------------------------------------
@@ -294,6 +297,7 @@ export const INSTRUCTIONS_GITHUB_COPILOT_AGENT: SurfaceAdapter = {
   customInstall: (root) => installMarkdownBlock(root, ".github/copilot-instructions.md"),
   customUninstall: (root) => uninstallMarkdownBlock(root, ".github/copilot-instructions.md"),
   probe: (root) => probeMarkdownBlock(root, ".github/copilot-instructions.md"),
+  inspect: (root) => inspectMarkdownBlock(root, ".github/copilot-instructions.md"),
 };
 
 // ---------------------------------------------------------------------------

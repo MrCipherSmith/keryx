@@ -165,6 +165,22 @@ export interface SurfaceAdapter {
    * for any surface lacking `validate`.
    */
   probe?(projectRoot: string): Promise<string[]>;
+  /**
+   * Structured dry-run probe for a custom (non-JSON) surface (review round 2,
+   * F4/N1): reports exactly what `customInstall`/`customUninstall` would find
+   * as a typed state, instead of a caller having to string-match a `probe`
+   * message. Markdown-block `instructions` surfaces (gemini-cli/kiro/
+   * github-copilot-agent) wire this to `inspectMarkdownBlock`
+   * (`markdown-block.ts`); a custom surface without one (the OpenCode plugin)
+   * falls back to a plain file-existence dry-run check in `installer.ts`.
+   * `"malformed"` (an unterminated/unpairable block) is the one state that
+   * must make a dry run report `failed` — the same outcome the real
+   * install/uninstall would hit.
+   */
+  inspect?(projectRoot: string): Promise<{
+    readonly state: "absent-file" | "no-block" | "present" | "stale" | "malformed";
+    readonly message?: string;
+  }>;
 
   // --- ctx-guard-only presentation/decode facts -----------------------------
   // Carried on the surface (rather than hand-duplicated per view module) so

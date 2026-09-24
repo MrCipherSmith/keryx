@@ -60,7 +60,7 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   {
     verb: "integrations",
     reason:
-      "writes Keryx's hooks and instructions into another coding agent's own config/instruction files outside this project's managed surface — the same reason `integrate` is excluded",
+      "install/uninstall can remove the agent's own guard hooks (its ctx-guard/security block), so the verb must not be agent-invocable — the exclusion is at the VERB level, not per-subcommand, so read-only subcommands (doctor, matrix) are excluded alongside install/uninstall rather than carved out",
   },
   { verb: "sync", reason: "writes into external runtime directories outside the project" },
   { verb: "skills", reason: "skill lifecycle incl. install/export/sync writing outside the project; needs its own review before exposure" },

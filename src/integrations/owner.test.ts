@@ -18,7 +18,7 @@ import { installRuntimeHooks, uninstallRuntimeHooks } from "../security/agent-ho
 import { CLAUDE_RUNTIME as SECURITY_CLAUDE_RUNTIME } from "../security/agent-hooks/runtimes";
 import { getHarnessAdapter, surfacesOf } from "./registry";
 import { createSettingsFileOwner, installSurfaces } from "./settings-file";
-import { settingsFileOwnerFor } from "./service";
+import { settingsFileOwnerFor } from "./index";
 import type { Settings, SurfaceAdapter } from "./types";
 
 async function withTempDir<T>(run: (root: string) => Promise<T>): Promise<T> {

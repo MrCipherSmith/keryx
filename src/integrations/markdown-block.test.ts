@@ -283,6 +283,119 @@ describe("F9: CRLF handling, duplicate blocks, byte-identical round trip", () =>
 // Idempotent re-install (general, beyond the CRLF/front-matter cases above).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// N4 (review round 2): uninstall deletes the file ONLY when install itself
+// created it — a pre-existing empty/whitespace-only file always survives,
+// byte-identical, even though nothing but the block would otherwise remain.
+// Mixed-EOL files are untouched outside the block, and kiro's prepended
+// front matter round-trips byte-identical on a file that already had content.
+// ---------------------------------------------------------------------------
+
+describe("N4: uninstall deletes the file only when install created it", () => {
+  test("file did not exist before install: uninstall deletes it (unchanged from before)", async () => {
+    await withTempDir(async (root) => {
+      const file = path.join(root, RELATIVE_PATH);
+      await installMarkdownBlock(root, RELATIVE_PATH);
+      expect(existsSync(file)).toBe(true);
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
+      expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(false);
+    });
+  });
+
+  test("pre-existing EMPTY file (0 bytes): survives uninstall, byte-identical to \"\"", async () => {
+    await withTempDir(async (root) => {
+      const file = await writeRaw(root, RELATIVE_PATH, "");
+      await installMarkdownBlock(root, RELATIVE_PATH);
+      expect(await readFile(file, "utf8")).not.toBe("");
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
+      expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(true);
+      expect(await readFile(file, "utf8")).toBe("");
+    });
+  });
+
+  test("pre-existing WHITESPACE-only file (\"  \\n\"): survives uninstall, byte-identical", async () => {
+    await withTempDir(async (root) => {
+      const original = "  \n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+      await installMarkdownBlock(root, RELATIVE_PATH);
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
+      expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(true);
+      expect(await readFile(file, "utf8")).toBe(original);
+    });
+  });
+
+  test("kiro (front matter): pre-existing EMPTY steering file survives uninstall, byte-identical to \"\"", async () => {
+    const FRONT_MATTER = "---\ninclusion: always\n---\n\n";
+    await withTempDir(async (root) => {
+      const file = await writeRaw(root, RELATIVE_PATH, "");
+      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      expect(await readFile(file, "utf8")).not.toBe("");
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(true);
+      expect(await readFile(file, "utf8")).toBe("");
+    });
+  });
+
+  test("kiro (front matter): a file that pre-existed with real content ('mine\\n') round-trips byte-identical — front matter added by install is removed again, file is never deleted", async () => {
+    const FRONT_MATTER = "---\ninclusion: always\n---\n\n";
+    await withTempDir(async (root) => {
+      const original = "mine\n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+      await installMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      const afterInstall = await readFile(file, "utf8");
+      expect(afterInstall).toContain(FRONT_MATTER);
+      expect(afterInstall).toContain("mine\n");
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH, FRONT_MATTER);
+      expect(removed).toBe(true);
+      expect(existsSync(file)).toBe(true);
+      expect(await readFile(file, "utf8")).toBe(original);
+    });
+  });
+});
+
+describe("N4: mixed-EOL files are untouched outside the block", () => {
+  test("a file with both CRLF and bare LF lines: install inserts an LF-or-CRLF block (per majority) without rewriting the other lines' own endings", async () => {
+    await withTempDir(async (root) => {
+      // Majority LF (2 bare \n vs 1 \r\n).
+      const original = "line one\r\nline two\nline three\n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+
+      await installMarkdownBlock(root, RELATIVE_PATH);
+      const afterInstall = await readFile(file, "utf8");
+      // Every byte of the original content, in its ORIGINAL mixed-EOL form, survives untouched.
+      expect(afterInstall.startsWith(original)).toBe(true);
+      expect(afterInstall).toContain(INSTRUCTIONS_START_MARKER);
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
+      expect(removed).toBe(true);
+      expect(await readFile(file, "utf8")).toBe(original);
+    });
+  });
+
+  test("a CRLF-majority file: install renders the block in CRLF", async () => {
+    await withTempDir(async (root) => {
+      const original = "line one\r\nline two\r\nline three\n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+
+      await installMarkdownBlock(root, RELATIVE_PATH);
+      const afterInstall = await readFile(file, "utf8");
+      expect(afterInstall.startsWith(original)).toBe(true);
+      // The block itself uses CRLF (the file's dominant style).
+      const blockRegion = afterInstall.slice(original.length);
+      expect(blockRegion).toContain("\r\n");
+      expect(blockRegion).toContain(INSTRUCTIONS_START_MARKER);
+    });
+  });
+});
+
 describe("idempotent re-install", () => {
   test("re-running install on an already-installed file changes nothing", async () => {
     await withTempDir(async (root) => {

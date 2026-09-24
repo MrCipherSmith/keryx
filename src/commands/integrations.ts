@@ -259,11 +259,14 @@ async function runAndReportRuntimeOps<R extends RuntimeOpResult>(
 
   heading(headingText);
   for (const result of results) {
-    console.log(`  ${style.bold(result.runtimeId)}`);
+    // N6: a runtime with no matching surface gets ONLY the "· <id> — no
+    // matching surface" line — the bold runtime-id header above it would
+    // repeat the id with nothing under it to justify a heading of its own.
     if (result.noMatchingSurface) {
       printNoMatchingSurface(result.runtimeId);
       continue;
     }
+    console.log(`  ${style.bold(result.runtimeId)}`);
     for (const surfaceResult of result.results) printSurfaceResult(cwd, surfaceResult);
     if (result.results.length === 0 && result.errors.length > 0) {
       for (const error of result.errors) console.error(`  ${style.red(symbols.cross)} ${error}`);
@@ -373,8 +376,14 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
     for (const surface of result.surfaces) {
       const marker = surface.drift ? style.yellow(symbols.bullet) : surface.live === "valid" ? style.green(symbols.ok) : style.gray(symbols.off);
       console.log(`  ${marker} ${surface.surfaceId} (${surface.flag}) — ${surface.live}${surface.recorded ? "" : " (not recorded)"}`);
-      if (surface.drift) note(`    ${surface.drift}`);
-      for (const problem of surface.problems) console.log(`    ${style.dim(problem)}`);
+      if (surface.drift) {
+        // N6: `driftMessage` already embeds every one of `surface.problems`
+        // (joined by "; ") in its own text — printing `surface.problems`
+        // again underneath would repeat the same problem text twice.
+        note(`    ${surface.drift}`);
+      } else {
+        for (const problem of surface.problems) console.log(`    ${style.dim(problem)}`);
+      }
     }
   }
   for (const report of unsupported) printUnsupported(report);

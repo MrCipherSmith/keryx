@@ -536,3 +536,143 @@ describe("F10: a shared-file group failure is reported once, not duplicated/re-p
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Review round 2 fixes
+// ---------------------------------------------------------------------------
+
+describe("F4/N1 (round 2): a malformed (unterminated) markdown block — dry-run and the real run agree, and a throw never escapes", () => {
+  async function writeUnterminated(root: string, relativePath: string): Promise<void> {
+    const file = path.join(root, ...relativePath.split("/"));
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "# Notes\n\n<!-- keryx:instructions -->\nno end marker here\n", "utf8");
+  }
+
+  test("uninstall dry-run reports failed for an unterminated block, matching the real uninstall", async () => {
+    await withMetaproject(async (root) => {
+      await writeUnterminated(root, "GEMINI.md");
+
+      const dryRun = await uninstallIntegration(root, "gemini-cli", { surfaces: ["instructions"], dryRun: true });
+      expect(dryRun.results[0]!.status).toBe("failed");
+      expect(dryRun.results[0]!.errors[0]).toContain("unterminated");
+
+      // The real run must reach the SAME outcome (failed), not throw and
+      // abort uninstallIntegration entirely (N1).
+      const real = await uninstallIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+      expect(real.results[0]!.status).toBe("failed");
+      expect(real.results[0]!.errors[0]).toContain("unterminated");
+      // Untouched — refusing must never delete/rewrite the file.
+      expect(await readFile(path.join(root, "GEMINI.md"), "utf8")).toContain("no end marker here");
+    });
+  });
+
+  test("install dry-run reports failed for an unterminated block, matching the real install", async () => {
+    await withMetaproject(async (root) => {
+      await writeUnterminated(root, "GEMINI.md");
+
+      const dryRun = await installIntegration(root, "gemini-cli", { surfaces: ["instructions"], dryRun: true });
+      expect(dryRun.results[0]!.status).toBe("failed");
+
+      const real = await installIntegration(root, "gemini-cli", { surfaces: ["instructions"] });
+      expect(real.results[0]!.status).toBe("failed");
+    });
+  });
+
+  test("a JSON surface in the SAME install call still gets written even when a custom surface in the call throws", async () => {
+    await withMetaproject(async (root) => {
+      await writeUnterminated(root, "GEMINI.md");
+      // gemini-cli only has ctx-guard (JSON) + instructions (custom) —
+      // install both in one call; instructions fails but ctx-guard must
+      // still be written (N1: JSON surfaces are processed BEFORE custom
+      // ones, and a custom-surface throw must not roll that back or stop it).
+      const result = await installIntegration(root, "gemini-cli");
+      const ctxGuard = result.results.find((r) => r.surfaceId === "ctx-guard");
+      const instructions = result.results.find((r) => r.surfaceId === "instructions");
+      expect(ctxGuard?.status).toBe("installed");
+      expect(instructions?.status).toBe("failed");
+      expect(existsSync(path.join(root, ".gemini", "settings.json"))).toBe(true);
+    });
+  });
+});
+
+describe("N2 (round 2): uninstall presence is judged PER SURFACE, not by a sentinel shared with a sibling surface", () => {
+  test("claude: installing only security-check-output, then uninstalling security-check-input, reports nothing-to-remove", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["security-check-output"] });
+
+      const uninstall = await uninstallIntegration(root, "claude", { surfaces: ["security-check-input"] });
+      expect(uninstall.results[0]!.status).toBe("nothing-to-remove");
+
+      // security-check-output must be untouched by that uninstall.
+      const doctor = await doctorIntegration(root, "claude");
+      const output = doctor.surfaces.find((s) => s.surfaceId === "security-check-output")!;
+      expect(output.live).toBe("valid");
+    });
+  });
+
+  test("claude: installing only security-check-output, dry-run uninstalling security-check-input also reports nothing-to-remove", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["security-check-output"] });
+      const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["security-check-input"], dryRun: true });
+      expect(dryRun.results[0]!.status).toBe("nothing-to-remove");
+    });
+  });
+
+  test("claude: uninstalling the surface that WAS installed still reports removed", async () => {
+    await withMetaproject(async (root) => {
+      await installIntegration(root, "claude", { surfaces: ["security-check-output"] });
+      const uninstall = await uninstallIntegration(root, "claude", { surfaces: ["security-check-output"] });
+      expect(uninstall.results[0]!.status).toBe("removed");
+    });
+  });
+});
+
+describe("F7 (round 2): a malformed RECORD inside installedModules invalidates the whole state, never crashes", () => {
+  async function writeState(root: string, runtimeId: string, installedModules: unknown): Promise<void> {
+    const file = installStatePath(root, runtimeId);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(
+      file,
+      JSON.stringify({ schemaVersion: "1.0.0", target: runtimeId, installedModules, recordedAt: new Date().toISOString() }),
+      "utf8",
+    );
+  }
+
+  test("installedModules: [null] — readInstallState returns undefined, doctor reports a problem instead of crashing", async () => {
+    await withMetaproject(async (root) => {
+      await writeState(root, "claude", [null]);
+      expect(await readInstallState(root, "claude")).toBeUndefined();
+
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.problems.some((p) => p.includes("install-state unreadable"))).toBe(true);
+      expect(doctor.ok).toBe(false);
+    });
+  });
+
+  test("installedModules with a record missing moduleId — same treatment, install repairs the file", async () => {
+    await withMetaproject(async (root) => {
+      await writeState(root, "claude", [{ writtenPaths: [], sha256: {}, managedSentinel: true }]);
+      expect(await readInstallState(root, "claude")).toBeUndefined();
+
+      const install = await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
+      expect(install.errors).toEqual([]);
+
+      // Repaired: the state file is now valid and carries only the fresh record.
+      const state = await readInstallState(root, "claude");
+      expect(state).toBeDefined();
+      expect(state!.installedModules.map((r) => r.moduleId)).toEqual(["ctx-guard"]);
+    });
+  });
+
+  test("a record missing sha256 defaults to {} rather than crashing shaDriftedSinceInstall (via doctor)", async () => {
+    await withMetaproject(async (root) => {
+      await writeState(root, "claude", [
+        { moduleId: "ctx-guard", writtenPaths: [".claude/settings.json"], managedSentinel: true },
+      ]);
+      expect(await readInstallState(root, "claude")).toBeDefined();
+      // Must not throw.
+      const doctor = await doctorIntegration(root, "claude");
+      expect(doctor.problems).toEqual([]);
+    });
+  });
+});

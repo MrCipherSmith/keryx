@@ -126,10 +126,12 @@ export {
 export {
   INSTRUCTIONS_END_MARKER,
   INSTRUCTIONS_START_MARKER,
+  inspectMarkdownBlock,
   installMarkdownBlock,
   probeMarkdownBlock,
   renderInstructionsBlock,
   uninstallMarkdownBlock,
+  type MarkdownBlockInspection,
 } from "./markdown-block";
 
 // ---------------------------------------------------------------------------
