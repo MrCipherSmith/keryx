@@ -167,3 +167,68 @@ describe("scrubPathsInText (free text — commands, stdout/stderr)", () => {
     expect(out).toBe("curl https://example.com/Users/bob/api");
   });
 });
+
+// R2-F1 regression: a path embedded INSIDE a token (not at its start) used
+// to survive unscrubbed — stack frames, JSON, shell redirects, file://
+// URLs, backtick-quoted literals, and an unbalanced quote's tail. These all
+// fail on the pre-fix classifier (only a token-START path shape was
+// classified).
+describe("scrubPathsInText (R2-F1: embedded paths inside a token)", () => {
+  test("a stack-trace frame's path is reduced to its basename, line:col kept", () => {
+    const out = scrubPathsInText("/nonexistent-root", "    at run (/Users/bob/other-client/src/x.ts:10:5)");
+    expect(out).not.toContain("bob");
+    expect(out).not.toContain("other-client");
+    expect(out).toContain("(x.ts:10:5)");
+  });
+
+  test("a path embedded in a JSON string value is reduced to its basename", () => {
+    const out = scrubPathsInText("/nonexistent-root", '{"path":"/Users/bob/secret-client/notes.md"}');
+    expect(out).not.toContain("bob");
+    expect(out).not.toContain("secret-client");
+    expect(out).toBe('{"path":"notes.md"}');
+  });
+
+  test("shell redirect targets (< and 2>) are reduced to their basenames", () => {
+    const out = scrubPathsInText("/nonexistent-root", "wc </Users/bob/secret/a.txt 2>/home/bob/err.log");
+    expect(out).not.toContain("bob");
+    expect(out).not.toContain("secret");
+    expect(out).toContain("<a.txt");
+    expect(out).toContain("2>err.log");
+  });
+
+  test("a file:// URL's path is reduced to its basename, scheme kept", () => {
+    const out = scrubPathsInText("/nonexistent-root", "open file:///Users/bob/secret/a.pdf");
+    expect(out).not.toContain("bob");
+    expect(out).not.toContain("secret");
+    expect(out).toContain("file://a.pdf");
+  });
+
+  test("a backtick-quoted path is reduced to its basename", () => {
+    const out = scrubPathsInText("/nonexistent-root", "see `/Users/bob/y` for details");
+    expect(out).not.toContain("bob");
+    expect(out).toContain("`y`");
+  });
+
+  test("a JSON array of paths has each embedded path reduced", () => {
+    const out = scrubPathsInText("/nonexistent-root", '["/Users/bob/a.txt","/Users/carol/b.txt"]');
+    expect(out).not.toContain("bob");
+    expect(out).not.toContain("carol");
+    expect(out).toBe('["a.txt","b.txt"]');
+  });
+
+  test("an unbalanced quote's remainder is treated as one run, never leaking a space-containing directory name", () => {
+    const out = scrubPathsInText("/nonexistent-root", '"unbalanced /Users/bob/Acme Merger/plan.txt');
+    expect(out).not.toContain("Acme");
+    expect(out).not.toContain("Merger");
+    expect(out).not.toContain("bob");
+    expect(out).toContain("plan.txt");
+  });
+
+  test("an in-root path still becomes a relative ./ path (regression guard)", async () => {
+    await withTempRoot(async (root) => {
+      const out = scrubPathsInText(root, `cd ${root}/src && ls`);
+      expect(out).toContain("cd ./src");
+      expect(out).not.toContain(root);
+    });
+  });
+});

@@ -151,6 +151,23 @@ function splitTrailingPunct(value: string): { core: string; suffix: string } {
   return m ? { core: m[1] ?? value, suffix: m[2] ?? "" } : { core: value, suffix: "" };
 }
 
+/**
+ * Like `splitTrailingPunct`, but first peels a trailing stack-trace-style
+ * `:<line>` or `:<line>:<col>` suffix (R2-F1) off the end so it is kept
+ * verbatim rather than fed into `classifyPath` as part of the path
+ * (`x.ts:10:5` -> core `x.ts`, suffix `:10:5`, not a path literally ending
+ * in digits). Falls back to `splitTrailingPunct` alone when there is no
+ * such suffix.
+ */
+function splitTrailingPathSuffix(value: string): { core: string; suffix: string } {
+  const { core: afterPunct, suffix: punctSuffix } = splitTrailingPunct(value);
+  const lineCol = /^(.*?)(:\d+(?::\d+)?)$/.exec(afterPunct);
+  if (lineCol?.[1] !== undefined && lineCol[2] !== undefined) {
+    return { core: lineCol[1], suffix: `${lineCol[2]}${punctSuffix}` };
+  }
+  return { core: afterPunct, suffix: punctSuffix };
+}
+
 interface PrefixMatch {
   prefix: string;
   rest: string;
@@ -167,22 +184,63 @@ function matchPrefixedPath(inner: string): PrefixMatch | null {
   return null;
 }
 
-/** Classifies the path shape (if any) found within one already-unquoted token: a drive-letter absolute path (checked first so `C:` is never misread as a `host:` prefix), a flag/`=`/`host:`-prefixed path, or a bare `/`, `~`, `./`, `../` start. Returns `null` (token left unchanged) when none of these shapes match — this is what keeps `bun test ./src/a.test.ts`'s `bun`/`test` words and `(fail) … 1 fail` intact. */
+/**
+ * A literal `file://` URL: the scheme is stripped and the absolute path that
+ * follows is classified normally (R2-F1). Any other URL scheme
+ * (`http(s)://`, ...) never matches here and is left alone.
+ */
+const FILE_URL_RE = /file:\/\/(\/[^\s"'`)\]},]*)/;
+
+/**
+ * An embedded path start (R2-F1): a `/`, `~`, or drive-letter path
+ * immediately after one of `( < > " ' \` = : [ { ,` — inside a stack-trace
+ * frame `(/Users/…)`, a JSON string value `:"/Users/…"`, a shell redirect
+ * `2>/home/…`, or a backtick-quoted literal `` `/Users/…` ``. The
+ * `/(?!\/)` guard on the plain-slash alternative keeps a `scheme://host/…`
+ * URL (`:` immediately followed by `//`) from being misread as a
+ * `:`-prefixed embedded path — `file://` itself is handled separately by
+ * `FILE_URL_RE`. The match stops at whitespace, a quote, `` ` ``, `)`,
+ * `]`, `}`, or `,`.
+ */
+const EMBEDDED_PATH_RE = /(?<=[(<>"'`=:[{,])(\/(?!\/)[^\s"'`)\]},]*|~[^\s"'`)\]},]*|[A-Za-z]:[\\/][^\s"'`)\]},]*)/;
+
+const EMBEDDED_SCAN_RE = new RegExp(`${FILE_URL_RE.source}|${EMBEDDED_PATH_RE.source}`, "g");
+
+/**
+ * R2-F1 fallback: once whole-token classification (below) finds no path
+ * shape at the START of `inner`, scans the rest of it for a path embedded
+ * after a delimiter — see `EMBEDDED_PATH_RE`/`FILE_URL_RE` — and rewrites
+ * just the path-shaped run(s), leaving surrounding text (punctuation,
+ * other words) untouched. Returns `inner` unchanged when nothing embedded
+ * looks like a path.
+ */
+function scrubEmbeddedPaths(root: string, inner: string): string {
+  return inner.replace(EMBEDDED_SCAN_RE, (_whole: string, fileUrlPath: string | undefined, embedded: string | undefined) => {
+    const isFileUrl = fileUrlPath !== undefined;
+    const raw = isFileUrl ? fileUrlPath : (embedded ?? "");
+    const { core, suffix } = splitTrailingPathSuffix(raw);
+    const rendered = renderClassifiedPathForText(classifyPath(root, core));
+    return `${isFileUrl ? "file://" : ""}${rendered}${suffix}`;
+  });
+}
+
+/** Classifies the path shape (if any) found within one already-unquoted token: a drive-letter absolute path (checked first so `C:` is never misread as a `host:` prefix), a flag/`=`/`host:`-prefixed path, a bare `/`, `~`, `./`, `../` start, or — failing all of those — an embedded path start found anywhere later in the token (`scrubEmbeddedPaths`, R2-F1). Returns `null` (token left unchanged) when none of these shapes match — this is what keeps `bun test ./src/a.test.ts`'s `bun`/`test` words and `(fail) … 1 fail` intact. */
 function classifyPathInToken(root: string, inner: string): string | null {
   if (/^[A-Za-z]:[\\/]/.test(inner)) {
-    const { core, suffix } = splitTrailingPunct(inner);
+    const { core, suffix } = splitTrailingPathSuffix(inner);
     return renderClassifiedPathForText(classifyPath(root, core)) + suffix;
   }
   const prefixed = matchPrefixedPath(inner);
   if (prefixed !== null) {
-    const { core, suffix } = splitTrailingPunct(prefixed.rest);
+    const { core, suffix } = splitTrailingPathSuffix(prefixed.rest);
     return `${prefixed.prefix}${renderClassifiedPathForText(classifyPath(root, core))}${suffix}`;
   }
   if (/^\/|^~|^\.\.?\//.test(inner)) {
-    const { core, suffix } = splitTrailingPunct(inner);
+    const { core, suffix } = splitTrailingPathSuffix(inner);
     return renderClassifiedPathForText(classifyPath(root, core)) + suffix;
   }
-  return null;
+  const embedded = scrubEmbeddedPaths(root, inner);
+  return embedded === inner ? null : embedded;
 }
 
 /** Rewrites one whitespace/quote-delimited token: a quoted segment (`"…"`/`'…'`) is unwrapped, classified, and rewrapped so a quoted path with spaces (`"/Users/bob/Acme Merger Docs/plan.txt"`) is treated as one token, not scrubbed word-by-word. */
@@ -195,13 +253,70 @@ function scrubToken(root: string, token: string): string {
 }
 
 /**
+ * True when `text` has an opening `"`/`'` with no matching close after it —
+ * a shell/JSON quoting error (R2-F1). When that happens, the text from that
+ * quote to the end of the string must be treated as ONE run rather than
+ * re-tokenized on whitespace, or a directory name containing a space
+ * (`Acme Merger/plan.txt`) leaks through as an un-scrubbed word once the
+ * space splits it from the path token before it. Returns the index of the
+ * unmatched quote and which character it is, or `null` when every quote in
+ * `text` is balanced.
+ */
+function findUnbalancedQuoteRun(text: string): { start: number; quoteChar: string } | null {
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      const closeIdx = text.indexOf(ch, i + 1);
+      if (closeIdx === -1) return { start: i, quoteChar: ch };
+      i = closeIdx;
+    }
+  }
+  return null;
+}
+
+/**
+ * Handles the tail after an unbalanced quote (`findUnbalancedQuoteRun`):
+ * finds the first embedded path start in `run` — at the very start or after
+ * a delimiter, mirroring `EMBEDDED_PATH_RE` — and classifies everything
+ * from there to the end of the string as one path literal, spaces and all
+ * (this is what reduces `Acme Merger/plan.txt` to a bare basename instead
+ * of leaking `Merger/plan.txt` as a second, un-scrubbed word). The text
+ * before the path start is scrubbed token-by-token as usual. Falls back to
+ * ordinary token scrubbing when nothing in `run` looks like a path start.
+ */
+function scrubUnclosedRun(root: string, run: string): string {
+  const match = /(^|[\s(<>"'`=:[{,])(\/(?!\/)|~|[A-Za-z]:[\\/])/.exec(run);
+  if (match === null) return run.replace(TOKEN_RE, (token) => scrubToken(root, token));
+  const boundaryLen = match[1]?.length ?? 0;
+  const pathStartIdx = (match.index ?? 0) + boundaryLen;
+  const before = run.slice(0, pathStartIdx);
+  const pathPart = run.slice(pathStartIdx);
+  const rewrittenBefore = before.replace(TOKEN_RE, (token) => scrubToken(root, token));
+  const { core, suffix } = splitTrailingPathSuffix(pathPart);
+  const rendered = renderClassifiedPathForText(classifyPath(root, core));
+  return `${rewrittenBefore}${rendered}${suffix}`;
+}
+
+/**
  * Rewrites every path-shaped token in `text` (a Bash command, stdout/stderr,
  * ...) through `classifyPath`: project-relative paths become `./<relative>`,
  * the root itself becomes `.`, a home-shaped path becomes `[home]` or a
  * basename, and any other absolute/drive-letter/outside-root path is reduced
  * to its basename. A token with no path shape (a plain word, a bare relative
- * path with no `./`/`../` prefix, a URL) is left unchanged.
+ * path with no `./`/`../` prefix, a URL) is left unchanged. A path embedded
+ * inside a token (a stack frame, JSON, a redirect, `file://`, a
+ * backtick-quoted literal) is scrubbed too (`scrubEmbeddedPaths`, R2-F1), and
+ * an unbalanced quote's remainder is treated as one run so a space inside a
+ * leaked directory name never survives as its own un-scrubbed word
+ * (`scrubUnclosedRun`).
  */
 export function scrubPathsInText(root: string, text: string): string {
+  const unbalanced = findUnbalancedQuoteRun(text);
+  if (unbalanced !== null) {
+    const prefix = text.slice(0, unbalanced.start);
+    const run = text.slice(unbalanced.start + 1);
+    const rewrittenPrefix = prefix.replace(TOKEN_RE, (token) => scrubToken(root, token));
+    return `${rewrittenPrefix}${unbalanced.quoteChar}${scrubUnclosedRun(root, run)}`;
+  }
   return text.replace(TOKEN_RE, (token) => scrubToken(root, token));
 }

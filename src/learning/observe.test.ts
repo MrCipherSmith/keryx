@@ -503,6 +503,134 @@ describe("O-1: no absolute path, home directory, username, or raw edit content i
     });
   });
 
+  test("R2-F1: a path embedded inside stdout (stack frame, JSON, redirect) is reduced to a basename, not just a token-start path", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: { command: "true" },
+          toolOutput: { stdout: "    at run (/Users/bob/other-client/src/x.ts:10:5)" },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain("bob");
+      expect(line.outputPreview).not.toContain("other-client");
+      expect(line.outputPreview).toContain("x.ts:10:5");
+    });
+  });
+
+  test("R2-F1: a path embedded in a JSON stdout value is reduced to a basename", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: { command: "true" },
+          toolOutput: { stdout: '{"path":"/Users/bob/secret-client/notes.md"}' },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain("bob");
+      expect(line.outputPreview).not.toContain("secret-client");
+      expect(line.outputPreview).toContain("notes.md");
+    });
+  });
+
+  test("R2-F1: shell redirect targets embedded in stdout are reduced to basenames", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: { command: "true" },
+          toolOutput: { stdout: "wc </Users/bob/secret/a.txt 2>/home/bob/err.log" },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain("bob");
+      expect(line.outputPreview).not.toContain("secret");
+      expect(line.outputPreview).toContain("a.txt");
+      expect(line.outputPreview).toContain("err.log");
+    });
+  });
+
+  test("R2-F1: a file:// URL and a backtick-quoted path in stdout are reduced to basenames", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: { command: "true" },
+          toolOutput: { stdout: "open file:///Users/bob/secret/a.pdf and see `/Users/bob/y`" },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain("bob");
+      expect(line.outputPreview).not.toContain("secret");
+      expect(line.outputPreview).toContain("a.pdf");
+      expect(line.outputPreview).toContain("`y`");
+    });
+  });
+
+  test("R2-F1: an unbalanced quote in stdout never leaks a space-containing directory name", async () => {
+    await withTempRoot(async (root) => {
+      const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
+      await sink.record({
+        kind: "tool-complete",
+        sessionId: "s1",
+        runId: "r1",
+        timestamp: "2026-09-24T12:00:00.000Z",
+        payload: {
+          sessionId: "s1",
+          runId: "r1",
+          toolCallId: "t1",
+          toolName: "Bash",
+          toolInput: { command: "true" },
+          toolOutput: { stdout: '"unbalanced /Users/bob/Acme Merger/plan.txt' },
+        },
+      });
+      const lines = await readDayFileLines(root, "2026-09-24");
+      const line = lines[0] as { outputPreview: string | null };
+      expect(line.outputPreview).not.toContain("Acme");
+      expect(line.outputPreview).not.toContain("Merger");
+      expect(line.outputPreview).not.toContain("bob");
+      expect(line.outputPreview).toContain("plan.txt");
+    });
+  });
+
   test("O2-5: a Grep-shaped filenames array is relativized entry-by-entry, not scrubbed as prose", async () => {
     await withTempRoot(async (root) => {
       const sink = createLearningObservationSink(root, { now: () => "2026-09-24T12:00:00.000Z" });
