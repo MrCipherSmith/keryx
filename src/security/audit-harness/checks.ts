@@ -9,7 +9,7 @@ import { detectSecrets } from "../detect/secrets";
 import { scanMcpManifest } from "../detect/mcp";
 import { touchesAgentCredentials } from "../../lib/command-risk";
 import { redactSensitiveText } from "../redact";
-import { AGENT_SENTINEL_PREFIX } from "../../agents/compile";
+import { agentSentinelFormatOf, structuralSentinelModelTier, type AgentSentinelFormat } from "../../agents/sentinel";
 import type { AuditSeverity, FindingLocation, InternalProposal, RawFinding, SurfaceId } from "./types";
 
 function lineOfOffset(content: string, offset: number): number {
@@ -549,17 +549,34 @@ function parseFrontmatter(content: string): Record<string, string> | undefined {
   return fields;
 }
 
-type AgentFileFormat = "md" | "toml" | "json";
-
-function agentFileFormat(relativePath: string): AgentFileFormat {
-  if (relativePath.endsWith(".toml")) return "toml";
-  if (relativePath.endsWith(".json")) return "json";
-  return "md";
+/** R2-F6: the frontmatter BLOCK's own raw YAML text (delimiters excluded) — for parsing with `Bun.YAML`, never the whole file (the body may itself contain `---`-shaped text). `undefined` when there is no well-formed block at all. */
+function frontmatterBlockText(content: string): string | undefined {
+  return /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1];
 }
 
-/** Whether a TOML top-level `key = ...` assignment appears anywhere in `content` — a dependency-free check (this module never pulls in a TOML parser), sufficient for the single-line keys (`sandbox_mode`, `model`) codex's renderer ever emits. */
+/** Whether a TOML top-level `key = ...` assignment appears anywhere in `content` — a dependency-free FALLBACK for when `Bun.TOML.parse` cannot make sense of `content` at all, sufficient for the single-line keys (`sandbox_mode`, `model`) codex's renderer ever emits. Prefer `tomlHasTopLevelKey` (real TOML parse), which this backs up. */
 function tomlHasKey(content: string, key: string): boolean {
   return new RegExp(`^\\s*${key}\\s*=`, "m").test(content);
+}
+
+/**
+ * R2-F6 (residual): the plain `tomlHasKey` regex scans the WHOLE file, so a
+ * `model = ...`-shaped line embedded inside `developer_instructions`'s
+ * multi-line body (prose, not real TOML structure) can be mistaken for a
+ * genuine top-level key. Parse with `Bun.TOML.parse` (already used
+ * elsewhere in this codebase for the same reason — `compile.format-
+ * safety.test.ts`) and check the real, structured document; fall back to the
+ * regex heuristic only when the content does not parse as TOML at all (a
+ * hand-edited/malformed file this audit still wants to say SOMETHING about).
+ */
+function tomlHasTopLevelKey(content: string, key: string): boolean {
+  try {
+    const doc = Bun.TOML.parse(content) as Record<string, unknown>;
+    if (doc && typeof doc === "object" && key in doc) return true;
+    return false;
+  } catch {
+    return tomlHasKey(content, key);
+  }
 }
 
 function parseJsonObject(content: string): Record<string, unknown> | undefined {
@@ -572,45 +589,72 @@ function parseJsonObject(content: string): Record<string, unknown> | undefined {
 }
 
 /**
- * `model_tier=<tier>` inside the keryx-managed sentinel line
- * (`compile.ts#agentManagedSentinelText`) — the one tier signal available on
- * a host format with no first-party `model`/`model_tier` field of its own
- * (codex/kiro omit `model` entirely; opencode's documented frontmatter has
- * no tier field). Only ever a FALLBACK: a format's own explicit field is
- * checked first, so this never masks a hand-authored file that carries
- * neither the field nor the sentinel.
+ * `model_tier=<tier>` inside the keryx-managed sentinel — the one tier
+ * signal available on a host format with no first-party `model`/
+ * `model_tier` field of its own (codex/kiro omit `model` entirely;
+ * opencode's documented frontmatter has no tier field). Only ever a
+ * FALLBACK: a format's own explicit field is checked first, so this never
+ * masks a hand-authored file that carries neither the field nor the
+ * sentinel.
+ *
+ * R2-F6: anchored to `../../agents/sentinel`'s STRUCTURAL candidate position
+ * (the line right after frontmatter close, TOML's first line, or — for kiro
+ * — only the FIRST LINE of the parsed `prompt` field), never a whole-file or
+ * whole-line-of-the-one-physical-JSON-line scan. Before this, a kiro file's
+ * `prompt` value is ONE physical text line containing the entire header too
+ * (JSON encodes real newlines as `\n`), so prose anywhere in that header
+ * could suppress the finding; now only the sentinel's own structural line is
+ * ever tested.
  */
-const MODEL_TIER_SENTINEL_RE = /\bmodel_tier=(?:light|standard|deep)\b/;
-
-/**
- * R1-F12: the previous version of this fallback tested `MODEL_TIER_SENTINEL_RE`
- * against the WHOLE file, so a hand-written host file that merely mentions
- * `model_tier=deep` anywhere — including in body prose, a comment, or
- * `developer_instructions` — suppressed `agent-missing-model-tier` even
- * though it carries no actual keryx-managed sentinel. This helper isolates
- * just the line(s) that start with `AGENT_SENTINEL_PREFIX`
- * (`compile.ts`'s `"keryx-managed: keryx agents export ("`, the fixed,
- * name/hash-independent prefix every managed sentinel this codebase writes
- * begins with) and only THOSE lines are tested for the `model_tier=` value.
- */
-function sentinelLines(content: string): string[] {
-  return content.split(/\r?\n/).filter((line) => line.includes(AGENT_SENTINEL_PREFIX));
+function hasSentinelModelTier(content: string, format: AgentSentinelFormat): boolean {
+  return structuralSentinelModelTier(content, format) !== undefined;
 }
 
-function hasSentinelModelTier(content: string): boolean {
-  return sentinelLines(content).some((line) => MODEL_TIER_SENTINEL_RE.test(line));
+/**
+ * R2-F3: whether claude frontmatter's `tools` value is a genuine, non-empty
+ * allowlist. Tries `Bun.YAML.parse` on the frontmatter BLOCK first (real
+ * type information — YAML null spellings all parse to `null`, distinct from
+ * an empty string or an empty sequence), and only falls back to a scalar
+ * text check on `fields.tools` (from the hand-rolled `parseFrontmatter`
+ * above) when that block does not parse as YAML at all. `undefined`
+ * `fields`/absent `tools` key both mean "no allowlist declared" — `false`.
+ */
+function claudeToolsIsAllowlist(content: string, fields: Record<string, string> | undefined): boolean {
+  const block = frontmatterBlockText(content);
+  if (block !== undefined) {
+    try {
+      const parsed = Bun.YAML.parse(block) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && "tools" in (parsed as Record<string, unknown>)) {
+        const toolsValue = (parsed as Record<string, unknown>).tools;
+        if (toolsValue === null || toolsValue === undefined) return false;
+        if (typeof toolsValue === "string" && toolsValue.trim().length === 0) return false;
+        if (Array.isArray(toolsValue) && toolsValue.length === 0) return false;
+        return true;
+      }
+      // Block parsed but carries no `tools` key at all — no allowlist.
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return false;
+    } catch {
+      // Fall through to the scalar-text fallback below.
+    }
+  }
+  const toolsValue = fields?.tools;
+  if (toolsValue === undefined) return false;
+  const trimmed = toolsValue.trim();
+  const NULL_LIKE = new Set(["null", "Null", "NULL", "~", "[]"]);
+  const isNullLike = trimmed.length === 0 || trimmed === '""' || trimmed === "''" || NULL_LIKE.has(trimmed);
+  return !isNullLike;
 }
 
 export function checkAgentUnrestrictedTools(relativePath: string, content: string): RawFinding[] {
-  const format = agentFileFormat(relativePath);
+  const format = agentSentinelFormatOf(relativePath);
   let hasAllowlist: boolean;
   if (format === "toml") {
     // codex governs access entirely via `sandbox_mode` (read-only |
     // workspace-write) — it has no per-tool allowlist at all, so the
     // presence of that key IS the closest analog to a restriction here
     // (`compile.ts#renderCodexExport`'s own documented rationale).
-    hasAllowlist = tomlHasKey(content, "sandbox_mode");
-  } else if (format === "json") {
+    hasAllowlist = tomlHasTopLevelKey(content, "sandbox_mode");
+  } else if (format === "kiro-json") {
     // kiro's `tools` is a JSON array of coarse tags/builtin names
     // (`compile.ts#renderKiroExport`).
     const doc = parseJsonObject(content);
@@ -620,19 +664,24 @@ export function checkAgentUnrestrictedTools(relativePath: string, content: strin
     // (frontmatter `permission:` parses as a present-but-empty-value key
     // above, which is enough to detect the block exists).
     //
-    // R1-F12: a PRESENT `tools` key is not by itself a restriction. Claude
-    // Code treats `tools:` with no value, or `tools: ""`, as "no allowlist
-    // declared" and grants the subagent every tool — the least-restricted
-    // outcome, not a restricted one — so those two shapes must still count
-    // as agent-unrestricted-tools rather than passing because the key
-    // exists. `permission:` has no such empty-means-unrestricted footgun
-    // documented for it, so its mere presence still counts as an allowlist.
+    // R1-F12/R2-F3: a PRESENT `tools` key is not by itself a restriction.
+    // Claude Code treats an empty/null `tools` (omitted value, `""`, `''`,
+    // or any YAML null spelling — `null`/`Null`/`NULL`/`~` — as well as an
+    // explicit `[]`) as "no allowlist declared" and grants the subagent
+    // every tool — the least-restricted outcome, not a restricted one — so
+    // every one of those shapes must still count as
+    // agent-unrestricted-tools rather than passing because the key exists.
+    // `permission:` has no such empty-means-unrestricted footgun documented
+    // for it, so its mere presence still counts as an allowlist.
+    //
+    // Parsed with `Bun.YAML` first (real type information: null vs "" vs []
+    // vs a non-empty scalar/sequence, none of which a hand-rolled string
+    // check can tell apart reliably) and falls back to a precise scalar
+    // check only when the frontmatter block does not parse as YAML at all.
     const fields = parseFrontmatter(content);
-    const toolsValue = fields?.tools;
-    const toolsIsEmpty = toolsValue !== undefined && (toolsValue.length === 0 || toolsValue === '""' || toolsValue === "''");
-    const toolsIsAllowlist = toolsValue !== undefined && !toolsIsEmpty;
     const hasPermissionBlock = !!fields && "permission" in fields;
-    hasAllowlist = toolsIsAllowlist || hasPermissionBlock;
+    const toolsAllowlistResult = claudeToolsIsAllowlist(content, fields);
+    hasAllowlist = toolsAllowlistResult || hasPermissionBlock;
   }
   if (hasAllowlist) return [];
   return [
@@ -649,16 +698,16 @@ export function checkAgentUnrestrictedTools(relativePath: string, content: strin
 }
 
 export function checkAgentMissingModelTier(relativePath: string, content: string): RawFinding[] {
-  const format = agentFileFormat(relativePath);
+  const format = agentSentinelFormatOf(relativePath);
   let hasTier: boolean;
   if (format === "toml") {
-    hasTier = tomlHasKey(content, "model") || hasSentinelModelTier(content);
-  } else if (format === "json") {
+    hasTier = tomlHasTopLevelKey(content, "model") || hasSentinelModelTier(content, format);
+  } else if (format === "kiro-json") {
     const doc = parseJsonObject(content);
-    hasTier = typeof doc?.model === "string" || hasSentinelModelTier(content);
+    hasTier = typeof doc?.model === "string" || hasSentinelModelTier(content, format);
   } else {
     const fields = parseFrontmatter(content);
-    hasTier = !!(fields && ("model_tier" in fields || "model" in fields)) || hasSentinelModelTier(content);
+    hasTier = !!(fields && ("model_tier" in fields || "model" in fields)) || hasSentinelModelTier(content, format);
   }
   if (hasTier) return [];
   return [

@@ -89,8 +89,11 @@ that baseline is host-specific:
 - **OpenCode** — `edit`, `bash`, and `web*` tools explicitly denied via the
   `permission` block; read tools remain available.
 - **Kiro** — the `read` tag only.
-- **Codex** — governed by `sandbox_mode` rather than a per-tool allowlist;
-  an empty `tools[]` maps to `sandbox_mode = "read-only"`.
+- **Codex** — has no per-tool allowlist at all, so `tools[]` (empty or not)
+  never affects its export: `sandbox_mode` follows `policy_profile` alone —
+  `read-only` → `sandbox_mode = "read-only"`, `workspace-write` →
+  `sandbox_mode = "workspace-write"` — every declared tool is reported
+  governed-by-sandbox rather than dropped.
 
 ## Policy profiles
 

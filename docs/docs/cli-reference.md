@@ -2955,13 +2955,17 @@ and exits `1`.
 
 ## agents
 
-Three unrelated surfaces share this noun: `bootstrap` manages global instruction
+Four unrelated surfaces share this noun: `bootstrap` manages global instruction
 files for coding agents, `external` inspects the vendor CLIs keryx can host as
-child agents, and `monitor` reads a recorded subagent-fleet event log.
+child agents, `monitor` reads a recorded subagent-fleet event log, and
+`list`/`show`/`export`/`verify` (flow 310) work the agent-definition catalog
+described below under "agents catalog".
 
-(It said "two" until 2026-09-05, while the router dispatched three. `monitor`
-was undocumented here from the day it shipped — the sentence counting the
-surfaces was itself the thing that had drifted.)
+(It said "two" until 2026-09-05, while the router dispatched three, then
+"three" while it dispatched four — each time the sentence counting the
+surfaces was itself the thing that had drifted, which is why the coverage
+test at `src/cli-reference-coverage.test.ts` now derives this from the router
+instead of trusting the prose.)
 
 `bootstrap` is not project initialization: it only writes a small managed block
 into the selected global `AGENTS.md` / `CLAUDE.md` file. The block tells agents to
@@ -3045,6 +3049,35 @@ for the runtime this registry feeds.
 
 Exit code is `0` for a successful report — including one where the capability is
 disabled or a binary is missing, both of which are answers rather than failures.
+
+### agents catalog
+
+Flow 310 (W2): `list`/`show`/`export`/`verify` are a fourth surface under this
+noun — the agent-definition catalog (`.metaproject/agents/*.md`, plus keryx's
+own bundled definitions), compiled into either `spawn_subagent` dispatch
+inputs (`keryx-shell`) or a host's own native/adapter subagent file
+(`claude`/`codex`/`kiro`/`opencode`). See the
+[agent catalog guide](guides/agent-catalog.md) for the definition schema,
+export-support levels, the content-hash sentinel `export` writes, and what
+`verify`'s named problem reasons mean.
+
+```
+keryx agents list [--stack <id>] [--json]
+keryx agents show <name>
+keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--dry-run] [--json]
+keryx agents verify [<name>] [--json]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `list` | `--stack <id>`, `--json` | List every catalog definition (bundled and project-local), optionally filtered to one stack pack. Read-only. |
+| `show` | `<name>` | Print one definition's fields and its resolved export-support level for every runtime. Read-only. |
+| `export` | `--runtime <id>`, `<name>`, `--dry-run`, `--json` | Compile one definition for one runtime and write its managed file (or, for `keryx-shell`, print the compiled dispatch input — nothing is written for that runtime). Refuses to overwrite a file with no keryx-managed sentinel, or a sentinel-bearing file that was hand-edited since export, unless `--force`. |
+| `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. |
+
+To export the whole catalog for one harness at once, use
+`keryx integrations install --runtime <id> --surface agents` (opt-in — the
+default install does not write agent files).
 
 ---
 

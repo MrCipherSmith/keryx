@@ -4,7 +4,7 @@
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { scanMcpManifest } from "../detect/mcp";
 import { computeObjectChecksum } from "../config";
 import { addBaselineEntry, applyAuditProposal, auditGate, defaultBaselinePath, runHarnessAudit } from "./index";
@@ -1068,4 +1068,54 @@ test("checkAgentUnrestrictedTools: claude md with `tools: \"\"` is flagged as un
 test("checkAgentUnrestrictedTools: claude md with a non-empty `tools:` value is still treated as an allowlist", () => {
   const nonEmptyTools = "---\nname: x\ndescription: d\ntools: Read, Grep\n---\nbody\n";
   expect(checkAgentUnrestrictedTools(".claude/agents/x.md", nonEmptyTools)).toEqual([]);
+});
+
+// --- R2-F3 (review 310 round 2): YAML null-form `tools` values are flagged too --
+
+describe("R2-F3: checkAgentUnrestrictedTools flags every YAML null-form spelling of `tools`, not just \"\"/''", () => {
+  for (const spelling of ["null", "Null", "NULL", "~"]) {
+    test(`tools: ${spelling}`, () => {
+      const content = `---\nname: x\ndescription: d\ntools: ${spelling}\n---\nbody\n`;
+      const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", content);
+      expect(findings.length).toBe(1);
+      expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+    });
+  }
+
+  test("tools: [] (explicit empty flow sequence)", () => {
+    const content = "---\nname: x\ndescription: d\ntools: []\n---\nbody\n";
+    const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", content);
+    expect(findings.length).toBe(1);
+    expect(findings[0]!.check).toBe("agent-unrestricted-tools");
+  });
+
+  test("a genuinely unparsable frontmatter block still falls back to the scalar check for the null spellings", () => {
+    // `Bun.YAML.parse` throws on this (an unindented nested mapping under an
+    // empty `tools:` key) — the fallback scalar path must still catch it.
+    const content = "---\nname: x\ndescription: d\ntools: ~\nbad:\nnested: [unterminated\n---\nbody\n";
+    const findings = checkAgentUnrestrictedTools(".claude/agents/x.md", content);
+    expect(findings.length).toBe(1);
+  });
+});
+
+// --- R2-F6 (review 310 round 2): kiro's tier fallback is anchored to the
+// FIRST LINE of the parsed `prompt` only — prose anywhere else in that one
+// physical JSON line (which also carries the whole header) must not
+// suppress the finding. --------------------------------------------------
+
+test("R2-F6: checkAgentMissingModelTier — model_tier= in kiro prompt HEADER prose (after the real sentinel line) does not, by itself, save a file with no real sentinel", () => {
+  const noSentinelButHeaderMentionsTier = JSON.stringify({
+    name: "x",
+    prompt: "Not a real sentinel line at all.\n\nThe agent should use model_tier=deep for reasoning.",
+  });
+  const findings = checkAgentMissingModelTier(".kiro/agents/x.json", noSentinelButHeaderMentionsTier);
+  expect(findings.length).toBe(1);
+});
+
+test("R2-F6: checkAgentMissingModelTier — a real kiro sentinel on the prompt's first line still suppresses the finding even when the header body also mentions model_tier=", () => {
+  const realSentinelPlusHeaderMention = JSON.stringify({
+    name: "x",
+    prompt: "keryx-managed: keryx agents export (x, sha256:abc, model_tier=deep)\n\nDo not use model_tier=light for this task.",
+  });
+  expect(checkAgentMissingModelTier(".kiro/agents/x.json", realSentinelPlusHeaderMention)).toEqual([]);
 });

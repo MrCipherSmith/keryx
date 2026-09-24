@@ -341,11 +341,18 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
   const runtimeArg = requireRuntimeArg(args);
   if (runtimeArg === undefined) {
     console.error("--runtime is required");
-    console.error("Usage: keryx integrations doctor --runtime <id>[,<id>...|all] [--json]");
+    console.error("Usage: keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]");
     process.exitCode = 1;
     return;
   }
   const json = isFlag(args, "--json");
+  // R2-F5: `--surface` was accepted by nothing but tests calling
+  // `doctorIntegration` directly — the CLI parsed `--runtime`/`--json` only
+  // and silently dropped `--surface`. Threaded through exactly like
+  // install/uninstall already do (`parseRuntimeOpts`), so a never-installed
+  // opt-in surface (e.g. `agents`) can be asked about explicitly before
+  // anyone has run `install --surface agents`.
+  const surfaces = collectRepeatable(args, "--surface");
 
   const { supported, unsupported, unknown } = resolveRuntimeIds(runtimeArg);
   if (unknown.length > 0) {
@@ -357,7 +364,7 @@ async function handleDoctor(args: string[], cwd: string): Promise<void> {
 
   const results: DoctorIntegrationResult[] = [];
   for (const adapter of supported) {
-    const result = await doctorIntegration(cwd, adapter.id);
+    const result = await doctorIntegration(cwd, adapter.id, { surfaces });
     results.push(result);
     if (!result.ok) process.exitCode = 1;
   }

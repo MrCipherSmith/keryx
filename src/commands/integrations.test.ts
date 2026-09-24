@@ -139,6 +139,40 @@ describe("doctor exit code", () => {
   });
 });
 
+describe("R2-F5: doctor --surface reaches doctorIntegration, it is not silently ignored", () => {
+  test("agents: invisible in default doctor output before opt-in, but named explicitly with --surface agents", async () => {
+    await withMetaproject(async (root) => {
+      // No `--surface agents` on install, so the opt-in `agents` surface has
+      // no install-state record at all — `doctorIntegration`'s R1-F8 default
+      // skip means the plain `doctor --runtime claude` output below must NOT
+      // mention it.
+      await integrationsCommand(["install", "--runtime", "claude"], root);
+
+      captured = [];
+      await integrationsCommand(["doctor", "--runtime", "claude", "--json"], root);
+      expect(process.exitCode).toBe(0);
+      const withoutSurface = JSON.parse(captured.join("\n")) as {
+        results: { surfaces: { surfaceId: string }[] }[];
+      };
+      expect(withoutSurface.results[0]!.surfaces.some((s) => s.surfaceId === "agents")).toBe(false);
+
+      // Before R2-F5's fix, `handleDoctor` parsed `--runtime`/`--json` only
+      // and never read `--surface` at all, so this call produced the exact
+      // same output as the one above — the flag was accepted and silently
+      // had no effect. With it wired through to `doctorIntegration`'s
+      // `DoctorOptions.surfaces`, naming the opt-in surface explicitly makes
+      // it appear even with no install-state record.
+      captured = [];
+      await integrationsCommand(["doctor", "--runtime", "claude", "--surface", "agents", "--json"], root);
+      expect(process.exitCode).toBe(0);
+      const withSurface = JSON.parse(captured.join("\n")) as {
+        results: { surfaces: { surfaceId: string }[] }[];
+      };
+      expect(withSurface.results[0]!.surfaces.some((s) => s.surfaceId === "agents")).toBe(true);
+    });
+  });
+});
+
 describe("M3 (round 3): doctor --runtime all survives one runtime's corrupt settings file", () => {
   test("a corrupt kiro settings file does not abort doctor for every OTHER runtime, and exits 1", async () => {
     await withMetaproject(async (root) => {

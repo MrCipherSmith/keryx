@@ -14,9 +14,12 @@
 //      never has (or needs) a matrix `agents` record of its own — the
 //      matrix's `keryx-shell` row belongs to W6.
 //   2. `planAgentExport` — decides create/update/unchanged/refuse-unmanaged
-//      against what is ALREADY on disk, using the sentinel every renderer in
-//      `compile.ts` embeds (`compile.ts`'s `AGENT_SENTINEL_PREFIX`). Never
-//      overwrites a file lacking that sentinel.
+//      against what is ALREADY on disk, using the STRUCTURAL sentinel
+//      predicate every renderer in `compile.ts` embeds (`./sentinel`'s
+//      `isStructurallyManaged` — R2-F1: the sentinel must sit on its
+//      renderer-defined line/field and name this agent, never a substring
+//      match anywhere in the file). Never overwrites a file that does not
+//      structurally carry it.
 //   3. `writeAgentExport`/`removeManagedAgentExports` — the only code in
 //      this zone that actually touches the filesystem for an export.
 
@@ -31,10 +34,10 @@ import {
   agentManagedSentinelText,
   finalizeAgentContentHash,
   verifyAgentContentHash,
-  AGENT_SENTINEL_PREFIX,
   type HostAgentExport,
   type KeryxShellCompileResult,
 } from "./compile";
+import { agentSentinelFormatOf, isStructurallyManaged, type AgentSentinelFormat } from "./sentinel";
 import type { HostToolTarget } from "./tools";
 import type { AgentDefinition, AgentExportRuntime, ExportSupportLevel } from "./types";
 
@@ -189,26 +192,29 @@ interface DecidedAction {
 /**
  * create/update/unchanged/refuse-unmanaged/refuse-modified, judged purely
  * off what is already on disk at `relativePath` versus the freshly generated
- * `content`: absent -> create; present but missing ANY keryx-managed
- * sentinel -> refuse-unmanaged (this exporter never overwrites a file it
- * does not own); present, sentinel-bearing, and byte-identical -> unchanged;
- * present, sentinel-bearing, different, AND its own `content-sha256:` no
- * longer matches its own content (R1-F9 — it was hand-edited since it was
- * exported) -> refuse-modified (only `--force` overwrites this, never a
- * plain re-export); present, sentinel-bearing, different, and verified
- * unedited -> update (a newer source version, or a different target's
- * render of the same source).
+ * `content`: absent -> create; present but missing a STRUCTURAL
+ * keryx-managed sentinel for `expectedName` (R2-F1 — the sentinel must sit on
+ * its renderer-defined line/field and name THIS agent, never a substring
+ * match anywhere in the file) -> refuse-unmanaged (this exporter never
+ * overwrites a file it does not own); present, sentinel-bearing, and
+ * byte-identical -> unchanged; present, sentinel-bearing, different, AND its
+ * own `content-sha256:` no longer matches its own content (R1-F9 — it was
+ * hand-edited since it was exported) -> refuse-modified (only `--force`
+ * overwrites this, never a plain re-export); present, sentinel-bearing,
+ * different, and verified unedited -> update (a newer source version, or a
+ * different target's render of the same source).
  */
-function decideAction(existing: string | undefined, generated: string): DecidedAction {
+function decideAction(existing: string | undefined, generated: string, format: AgentSentinelFormat, expectedName: string): DecidedAction {
   if (existing === undefined) return { action: "create" };
-  if (!existing.includes(AGENT_SENTINEL_PREFIX)) {
+  if (!isStructurallyManaged(existing, format, expectedName)) {
     return {
       action: "refuse-unmanaged",
-      reason: "existing file carries no keryx-managed sentinel — refusing to overwrite a file this exporter does not own",
+      reason:
+        "existing file carries no structural keryx-managed sentinel for this agent — refusing to overwrite a file this exporter does not own",
     };
   }
   if (existing === generated) return { action: "unchanged" };
-  if (!verifyAgentContentHash(existing)) {
+  if (!verifyAgentContentHash(format, existing)) {
     return {
       action: "refuse-modified",
       reason:
@@ -290,9 +296,9 @@ export async function planAgentExport(
     const provenance =
       `<!-- ${agentManagedSentinelText(definition)}; instruction-only prose — ` +
       `no "agents" surface record for runtime "${runtime}" in the W5 capability matrix -->`;
-    const content = finalizeAgentContentHash(`${provenance}\n\n${headerResult.header}\n`);
+    const content = finalizeAgentContentHash("md", `${provenance}\n\n${headerResult.header}\n`);
     const existing = await readExistingFileContent(projectRoot, relativePath);
-    const decided = decideAction(existing, content);
+    const decided = decideAction(existing, content, "md", definition.name);
     return {
       runtime,
       name: definition.name,
@@ -331,7 +337,7 @@ export async function planAgentExport(
     };
   }
   const existing = await readExistingFileContent(projectRoot, hostResult.relativePath);
-  const decided = decideAction(existing, hostResult.content);
+  const decided = decideAction(existing, hostResult.content, agentSentinelFormatOf(hostResult.relativePath), definition.name);
   return {
     runtime,
     name: definition.name,
@@ -458,7 +464,8 @@ async function scanManagedAgentExports(
     } catch {
       continue;
     }
-    if (content.includes(AGENT_SENTINEL_PREFIX)) managed.push(relativePath);
+    const stem = entry.name.slice(0, entry.name.length - path.extname(entry.name).length);
+    if (isStructurallyManaged(content, agentSentinelFormatOf(relativePath), stem)) managed.push(relativePath);
   }
   return managed.sort();
 }
