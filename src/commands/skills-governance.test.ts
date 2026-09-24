@@ -9,7 +9,10 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { Judge, JudgeRequest } from "../gdskills/governance/judge";
+import { readJudgeRecording, recordedJudge } from "../gdskills/governance/judge-recordings";
 import { acquireCwd, releaseCwd } from "../lib/test-cwd";
+import type { buildEvalJudge } from "./model-eval-judge";
 import { skillsGovernanceCommand } from "./skills-governance";
 
 // R3-4 (flow 309 review round 3): chmod 000 has no effect for the root user
@@ -440,5 +443,228 @@ describe("R1-14: keryx skills scout --record --skill-name excludes the candidate
     }
     const output = JSON.parse(logs.join("\n")) as { matches: ReadonlyArray<{ skillId: string }> };
     expect(output.matches.some((match) => match.skillId === "widget-pack/widget-dashboard-helper")).toBe(true);
+  });
+});
+
+// Flow 316, T6 — `eval --judge` / `judge-check`. `go/go-build-fix` is one of
+// the batch-1 migrated skills (its evals.json carries two judge-graded
+// scenarios, each with a calibration pair) and is used as the fixture skill
+// throughout. `SkillsGovernanceDeps.buildJudge` is the injection seam
+// (`skills-governance.ts`'s own doc comment on it): every test below stays
+// fully offline via a fake, deterministic `Judge` builder — never the real
+// `buildEvalJudge`, never a network call.
+describe("flow 316: keryx skills eval --judge / judge-check", () => {
+  const GO_BUILD_FIX_SKILL = "go/go-build-fix";
+
+  /** Wraps a plain `Judge` as the `buildJudge` seam — ignores the provider spec/options entirely (these tests do not exercise `buildEvalJudge`'s own fail-closed construction, which is covered by `model-eval-judge.test.ts`). */
+  function fakeJudgeBuilder(judge: Judge): typeof buildEvalJudge {
+    return (() => judge) as typeof buildEvalJudge;
+  }
+
+  describe("eval --judge stamps the fields", () => {
+    test("report.judge / report.judgeModel are stamped from --judge, with no runner so the judge is never actually called", async () => {
+      const logs: string[] = [];
+      const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+        logs.push(args.map(String).join(" "));
+      });
+      let judgeCalls = 0;
+      const judge: Judge = async () => {
+        judgeCalls += 1;
+        return { verdict: "pass", reason: "should never be called" };
+      };
+      try {
+        await skillsGovernanceCommand(
+          ["eval", GO_BUILD_FIX_SKILL, "--judge", "deepseek:deepseek-chat", "--json"],
+          { buildJudge: fakeJudgeBuilder(judge) },
+        );
+        const report = JSON.parse(logs.join("\n")) as { judge?: string; judgeModel?: string };
+        expect(report.judge).toBe("deepseek");
+        expect(report.judgeModel).toBe("deepseek-chat");
+        // No `--runner` was given: `evalSkill` reports every behavior
+        // scenario `not-run` before it ever reaches the judge-graded branch
+        // (see `eval.ts`'s own trial loop) — the fake judge above proves
+        // that by never being invoked.
+        expect(judgeCalls).toBe(0);
+      } finally {
+        logSpy.mockRestore();
+      }
+    });
+
+    test("--judge defaults judgeModel via defaultModelFor when no explicit model is given", async () => {
+      const logs: string[] = [];
+      const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+        logs.push(args.map(String).join(" "));
+      });
+      const judge: Judge = async () => ({ verdict: "pass", reason: "unused" });
+      try {
+        await skillsGovernanceCommand(["eval", GO_BUILD_FIX_SKILL, "--judge", "deepseek", "--json"], {
+          buildJudge: fakeJudgeBuilder(judge),
+        });
+        const report = JSON.parse(logs.join("\n")) as { judge?: string; judgeModel?: string };
+        expect(report.judge).toBe("deepseek");
+        expect(report.judgeModel).toBe("deepseek-chat");
+      } finally {
+        logSpy.mockRestore();
+      }
+    });
+
+    test("--judge with no value is refused", async () => {
+      await skillsGovernanceCommand(["eval", GO_BUILD_FIX_SKILL, "--judge"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("--judge requires a value"))).toBe(true);
+    });
+  });
+
+  // A missing credential must fail closed — mirrors the existing `--runner
+  // anthropic` R2-5 test (same rationale: never let a real, spend-incurring,
+  // network-calling eval run inside a unit test regardless of the host env).
+  // This test deliberately uses the REAL `buildEvalJudge` (no `deps`
+  // override) to prove the CLI's own fail-closed wiring, not just the
+  // injection seam.
+  describe("a missing DeepSeek credential fails closed", () => {
+    test("eval --judge deepseek with no DEEPSEEK_API_KEY in env fails closed: exit 1, named reason", async () => {
+      const savedKey = process.env.DEEPSEEK_API_KEY;
+      delete process.env.DEEPSEEK_API_KEY;
+      try {
+        await skillsGovernanceCommand(["eval", GO_BUILD_FIX_SKILL, "--judge", "deepseek"]);
+        expect(process.exitCode).toBe(1);
+        expect(errors.some((line) => line.includes("no credential"))).toBe(true);
+      } finally {
+        if (savedKey === undefined) {
+          delete process.env.DEEPSEEK_API_KEY;
+        } else {
+          process.env.DEEPSEEK_API_KEY = savedKey;
+        }
+      }
+    });
+
+    test("judge-check --judge deepseek with no DEEPSEEK_API_KEY in env fails closed: exit 1, named reason", async () => {
+      const savedKey = process.env.DEEPSEEK_API_KEY;
+      delete process.env.DEEPSEEK_API_KEY;
+      try {
+        await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek"]);
+        expect(process.exitCode).toBe(1);
+        expect(errors.some((line) => line.includes("no credential"))).toBe(true);
+      } finally {
+        if (savedKey === undefined) {
+          delete process.env.DEEPSEEK_API_KEY;
+        } else {
+          process.env.DEEPSEEK_API_KEY = savedKey;
+        }
+      }
+    });
+  });
+
+  describe("judge-check", () => {
+    test("--judge is required", async () => {
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("--judge is required"))).toBe(true);
+    });
+
+    test("exits 1 on a misjudged canned answer (a judge that always says pass fails the anti-gaming proof)", async () => {
+      const alwaysPass: Judge = async () => ({ verdict: "pass", reason: "everything looks fine" });
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek"], {
+        buildJudge: fakeJudgeBuilder(alwaysPass),
+      });
+      // known-wrong/echo/injection/stuffed all expect "fail" — a judge that
+      // always says "pass" mismatches every one of them.
+      expect(process.exitCode).toBe(1);
+    });
+
+    test("exits 0 when the judge correctly grades every canned answer", async () => {
+      // Mirrors `antiGamingAnswers`' own `expect` table exactly: an answer
+      // passes iff it is EXACTLY the scenario's own `known_right` text.
+      // `echo`/`known-wrong`/`injection`/`stuffed` are all, by construction,
+      // different strings from `known_right` (`injection`/`stuffed` append
+      // extra text to `known_wrong`; `echo` echoes the task prompt) — so an
+      // exact-match rule grades every canned answer exactly the way
+      // `antiGamingAnswers` expects, for any scenario's calibration text,
+      // without needing to guess at scenario-specific substrings.
+      const { loadSkillCatalog } = await import("../gdskills/governance/catalog-index");
+      const { readSkillEvalSpec } = await import("../gdskills/governance/eval");
+      const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
+      const skill = catalog.find((entry) => entry.id === GO_BUILD_FIX_SKILL)!;
+      const spec = readSkillEvalSpec(skill.path);
+      const knownRightAnswers = new Set((spec?.scenarios ?? []).map((scenario) => scenario.calibration?.known_right).filter((value): value is string => value !== undefined));
+
+      const correctJudge: Judge = async (request: JudgeRequest) => ({
+        verdict: knownRightAnswers.has(request.answer) ? "pass" : "fail",
+        reason: "stub",
+      });
+      await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek"], {
+        buildJudge: fakeJudgeBuilder(correctJudge),
+      });
+      expect(process.exitCode).toBe(0);
+    });
+  });
+
+  describe("judge-check --record", () => {
+    function fixtureRecordingsDir(): string {
+      return mkdtempSync(path.join(tmpdir(), "skills-governance-judge-recordings-"));
+    }
+
+    test("--record writes a file that recordedJudge replays identically to the live (fake) judge", async () => {
+      const dir = fixtureRecordingsDir();
+      const savedEnv = process.env.KERYX_JUDGE_RECORDINGS_DIR;
+      process.env.KERYX_JUDGE_RECORDINGS_DIR = dir;
+
+      // A deterministic fake "live" judge: pass iff the answer mentions the
+      // fix this skill's rubric asks for. Correctness against the rubric
+      // does not matter for THIS test — only that a replay through
+      // `recordedJudge` reproduces exactly what this function returned.
+      const liveJudge: Judge = async (request) => {
+        const pass = request.answer.toLowerCase().includes("go mod tidy") && !request.answer.toLowerCase().includes("bump the go directive");
+        return { verdict: pass ? "pass" : "fail", reason: pass ? "mentions go mod tidy" : "does not mention go mod tidy correctly" };
+      };
+
+      try {
+        await skillsGovernanceCommand(["judge-check", GO_BUILD_FIX_SKILL, "--judge", "deepseek", "--record", "--json"], {
+          buildJudge: fakeJudgeBuilder(liveJudge),
+        });
+
+        const recording = readJudgeRecording(GO_BUILD_FIX_SKILL, dir);
+        expect(recording).not.toBeUndefined();
+        expect(recording?.judge).toBe("deepseek");
+        expect(recording?.judgeModel).toBe("deepseek-chat");
+        expect((recording?.entries.length ?? 0) > 0).toBe(true);
+        // The empty-answer canned case never reaches the judge and is never
+        // recorded (this module's own documented decision).
+        expect(recording?.entries.some((entry) => entry.kind === "empty")).toBe(false);
+
+        const replay = recordedJudge(recording!);
+
+        // Re-derive the exact same scenarios/answers `judgeCheckCommand`
+        // itself graded, and confirm the replay reproduces every verdict.
+        const { loadSkillCatalog } = await import("../gdskills/governance/catalog-index");
+        const { readSkillEvalSpec } = await import("../gdskills/governance/eval");
+        const { antiGamingAnswers, gradeScenarioAnswer } = await import("../gdskills/governance/judge");
+        const catalog = loadSkillCatalog(process.cwd(), { scope: "bundled" });
+        const skill = catalog.find((entry) => entry.id === GO_BUILD_FIX_SKILL);
+        expect(skill).not.toBeUndefined();
+        const spec = readSkillEvalSpec(skill!.path);
+        const judgeScenarios = (spec?.scenarios ?? []).filter((scenario) =>
+          scenario.expected_behavior.some((expected) => expected.grader === "judge"),
+        );
+        expect(judgeScenarios.length).toBeGreaterThan(0);
+
+        for (const scenario of judgeScenarios) {
+          for (const answer of antiGamingAnswers(scenario)) {
+            if (answer.kind === "empty") continue; // never recorded, see above
+            const live = await gradeScenarioAnswer(answer.answer, scenario, liveJudge);
+            const replayed = await gradeScenarioAnswer(answer.answer, scenario, replay);
+            expect(replayed.judge).toEqual(live.judge);
+            expect(replayed.passed).toBe(live.passed);
+          }
+        }
+      } finally {
+        if (savedEnv === undefined) {
+          delete process.env.KERYX_JUDGE_RECORDINGS_DIR;
+        } else {
+          process.env.KERYX_JUDGE_RECORDINGS_DIR = savedEnv;
+        }
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

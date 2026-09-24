@@ -391,6 +391,18 @@ function readEvalSpec(skillMdPath: string): EvalSpecFile | undefined {
   return parsed;
 }
 
+/**
+ * Flow 316: a thin exported wrapper over `readEvalSpec` for callers outside
+ * this module that need a skill's parsed, validated `evals.json` without
+ * duplicating this module's path derivation (`evals.json` next to
+ * `SKILL.md`) or `validateEvalSpec`'s shape checks — `keryx skills
+ * judge-check` (`src/commands/skills-governance.ts`) reads a stack skill's
+ * evals.json this way rather than re-implementing spec parsing.
+ */
+export function readSkillEvalSpec(skillMdPath: string): EvalSpecFile | undefined {
+  return readEvalSpec(skillMdPath);
+}
+
 const USE_WHEN_CLAUSE = /use when[^.]*\.?/i;
 
 function extractUseWhenClause(description: string): string | undefined {
