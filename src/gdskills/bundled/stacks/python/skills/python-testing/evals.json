@@ -1,0 +1,40 @@
+{
+  "triggers": {
+    "positive": [
+      "Write pytest tests for the new widgets module",
+      "Add test coverage for this Python function I just wrote",
+      "Fix this failing pytest test in test_client.py",
+      "Add a pytest fixture for the database connection used across these tests",
+      "Parametrize this pytest test to cover empty, None, and negative inputs",
+      "Fix this failing pytest test that forgot pytest.mark.asyncio for the coroutine"
+    ],
+    "negative": [
+      "Implement the feature this test suite will eventually cover",
+      "Review this Python pull request for mutable default arguments and broad except clauses",
+      "Fix this ModuleNotFoundError breaking pytest collection",
+      "Write Jest tests for this TypeScript React component",
+      "Run a generic quality/test-gen pass across the whole repository",
+      "Review this Python diff for security and resource-leak issues"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "fixture-scope-guidance",
+      "prompt": "I need a pytest fixture used by only one test file. Where should it live and what scope should it have?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "conftest" },
+        { "grader": "regex", "value": "function" }
+      ]
+    },
+    {
+      "id": "mock-external-not-internal",
+      "prompt": "Write a pytest test for a function that calls an internal helper in the same package and also calls an external HTTP API. What should be mocked?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "[Ee]xternal" },
+        { "grader": "not-contains", "value": "mock the internal helper" }
+      ]
+    }
+  ]
+}

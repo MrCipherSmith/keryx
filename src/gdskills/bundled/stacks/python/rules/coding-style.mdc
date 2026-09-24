@@ -21,6 +21,12 @@ Python-specific still comes from the common rules this file `extends`.
 - Prefer `from __future__ import annotations` in modules that predate PEP 604
   (`int | None`) rather than importing `Optional`/`Union` piecemeal.
 - Use `pathlib.Path`, not `os.path` string joins, for new filesystem code.
+- Use f-strings for interpolation in normal code (`f"{name} joined"`), not
+  `%`-formatting or `.format()` — except in logging calls, where lazy `%s`
+  interpolation is correct (see `rules/patterns.mdc`).
+- Run `ruff check .` (or the project's configured equivalent) instead of
+  hand-checking unused imports, shadowed builtins, or import order; fix what
+  it flags rather than adding a blanket `# noqa`.
 
 ## Naming and structure
 

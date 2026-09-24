@@ -1,6 +1,6 @@
 ---
 name: python-testing
-description: "Use when a Python project's pytest test suite needs writing, extending, or fixing -- covers fixture design, parametrization, mocking, and coverage gaps in existing pytest test files."
+description: "Use when you write, extend, or fix a Python project's pytest suite -- add pytest.mark.parametrize cases, design conftest.py fixtures at the right scope, use pytest.mark.asyncio for coroutines, and patch external calls with mocker.patch/monkeypatch to close coverage gaps in a failing or incomplete test file. Not for auditing test conventions without changing files (see review-testing-practices)."
 triggers:
   - "write pytest tests"
   - "add python test coverage"
