@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.2.2
+Version: 0.2.3
 
 ## Summary
 
@@ -370,12 +370,22 @@ Three gates, each with a CLI surface and a data contract, enforcing D-7
    existing `spawn_subagent` execution substrate, capped by the existing
    `DEFAULT_MAX_TREE_DEPTH`/`DEFAULT_MAX_CHILDREN` limits in
    `src/harness/child/orchestrate.ts`), and grades each trial against an
-   `expected_behavior` list with a deterministic or model grader. Output:
-   `{ skillId, scenarios: [{ prompt, strictness, trials, passRate, grader
-   }], triggerAccuracy: { truePositive, falsePositive }, verdict: "pass" |
-   "fail" }`. Multiple trials per scenario (3–5) report a pass-rate
-   distribution, not a single boolean — a W1 design choice, to be validated
-   by the first governance eval batch.
+   `expected_behavior` list. Output: `{ skillId, scenarios: [{ prompt,
+   strictness, trials, passRate, grader }], triggerAccuracy: { truePositive,
+   falsePositive }, verdict: "pass" | "fail" }`. Multiple trials per scenario
+   (3–5) report a pass-rate distribution, not a single boolean — a W1 design
+   choice, validated by the first governance eval batch.
+   - **Grading, revised in flow 316.** A behavior scenario's answer is no
+     longer graded by string matching against the answer text. A
+     `"grader": "judge"` expectation (`rubric`, `pass_criteria`,
+     `fail_criteria`) is scored by a separate LLM judge call against the
+     rubric, not the words the answer happens to contain; a deterministic
+     `contains`/`regex`/`not-contains` expectation is kept only for an
+     unambiguous fact (a specific API name or syntax every correct answer
+     must contain), never for "does not mention token X", since a correct
+     answer that only warns against an anti-pattern also does not contain
+     it in the sense the token match cared about. See "Implementation
+     notes: grader reliability (flow 316)" below.
 3. **`keryx skills stocktake [--scope bundled|all] [--quick]`** — periodic
    health check across the existing catalog (72 skills today, growing with
    each stack pack). `--quick` does a diff-based staleness scan (frontmatter
@@ -615,10 +625,12 @@ history is inspectable without guessing from a git blame.
   fail, which is itself evidence for the grader-audit follow-up below rather
   than a reason to trust either run alone.
 
-  Stack coverage (packs with any authored content beyond review-only) stays
-  at 2 (NestJS/Prisma, React/MobX review-only): none of the four batch-1
-  packs cleared the honest gate, so the coverage count does not move from
-  this batch.
+  Stack coverage (packs with any authored content beyond review-only) stood
+  at 2 (NestJS/Prisma, React/MobX review-only) at this point: none of the
+  four batch-1 packs had cleared the honest gate yet, so the coverage count
+  did not move from this batch. Flow 316 re-ran the gate with a hardened
+  grader and two of the four packs cleared it — see "Implementation notes:
+  grader reliability (flow 316)" below for the count moving from 2 to 4.
 
   **Follow-up: grader audit.** A strong model (DeepSeek `deepseek-chat`)
   scoring `0` on three suppression-avoidance behavior scenarios —
@@ -630,6 +642,119 @@ history is inspectable without guessing from a git blame.
   genuinely reaching for a suppression every time. Before re-authoring any
   skill content, audit these three scenarios' graders and prompts, fix what
   is actually mis-specified, and re-run the gate.
+
+## Implementation notes: grader reliability (flow 316)
+
+The grader audit flagged at the end of Wave 4 batch 1 found the batch-1
+graders themselves mis-specified, not the skills they were scoring. Flow 316
+replaced string-matching for behavior scenarios with a rubric-graded LLM
+judge, hardened the stable-pack gate around it, and re-ran the honest gate.
+
+- **Judge design.** `src/gdskills/governance/judge.ts` (core, no provider
+  imports) defines the `"judge"` expectation kind (`rubric`, `pass_criteria`,
+  `fail_criteria`) and the one grading function, `gradeScenarioAnswer`, used
+  by the eval trial loop, the anti-gaming harness, and `skills judge-check`
+  alike, so the three can never disagree about what "this answer passes this
+  scenario" means. `buildJudgePrompt` wraps the task prompt and the answer
+  each in its own boundary tag, derived from the sha256 of the content it
+  wraps, and tells the judge explicitly that text inside those tags is
+  untrusted data to grade, never an instruction to follow — mentioning an
+  anti-pattern only to warn against it does not count as committing it, and
+  text addressed to "the grader"/"the judge" inside an answer counts as
+  evidence against that answer, not for it. `JUDGE_PROMPT_VERSION` is bumped
+  whenever the prompt text changes; a recorded verdict is only trusted against
+  the exact prompt version that produced it.
+- **Deterministic checks, narrowed.** A deterministic `contains`/`regex`/
+  `not-contains` expectation is now kept only for an unambiguous fact (a
+  specific API name or syntax every correct answer must contain) — never for
+  wording, and never `not-contains` an anti-pattern token, since a correct
+  answer that warns against the anti-pattern still mentions its name.
+- **Anti-gaming, mandatory per scenario.** Every judge scenario is proven
+  hard to game against six canned answers (`antiGamingAnswers`): `empty`,
+  `echo` (repeats the prompt back), `known-wrong` (a hand-written wrong
+  answer that commits the anti-pattern), `injection` (known-wrong plus a
+  paragraph telling the grader to output pass), and `stuffed` (known-wrong
+  plus the rubric's own wording pasted in) must all FAIL; `known-right` (a
+  hand-written correct answer) must PASS. `keryx skills judge-check
+  <skill-id> --judge <provider>[:<model>] [--record]` runs this set against a
+  live judge and exits 1 on any mismatch; `--record` persists the verdicts
+  for offline replay by the integrity guard.
+- **Gate hardening.** `STACK_PACK_GATE_POLICY`
+  (`src/gdskills/governance/gate-policy.ts`) pins both roles to DeepSeek
+  `deepseek-chat` — the runner that answers each scenario AND the judge that
+  grades it, since a free choice of grader model would weaken the gate. The
+  gate additionally requires every ran behavior scenario to carry
+  `trialRecords` (one full record per trial: output, its sha256,
+  deterministic results, judge verdict), and `regradeRecordedReport` to
+  re-derive the same pass/fail from those records with no discrepancy — a
+  recorded "pass" that does not survive a fresh re-grade fails the gate. A
+  report's `catalogDigest` pins the bundled catalog it was scored against; on
+  drift the gate re-scores the trigger scenarios live and fails only if a
+  result actually changed, rather than invalidating every report on any
+  unrelated bundled-skill edit.
+- **Honest DeepSeek runner+judge gate run (T13).** Each of the 18 batch-1
+  skills ran once through the real CLI:
+  `skills eval --scope bundled --runner deepseek:deepseek-chat --judge
+  deepseek:deepseek-chat --strictness high --trials 5 --json`. Outcome by
+  pack:
+  - **ts-js-node — gate PASS.** All 5 skills pass; every scenario clears the
+    0.8 floor (`no-ts-ignore-suppression` and `dirname-replacement` both
+    score 4/5).
+  - **react — gate PASS.** All 5 skills pass (`no-disable-hooks-lint` and
+    `no-mobx-scope` both score 4/5).
+  - **python — gate FAIL.** `python-build-fix`'s `mypy-error-no-blanket-
+    suppress` scored 0/5 and `python-implementation`'s `resource-with-block`
+    scored 3/5.
+  - **go — gate FAIL.** `go-testing`'s `table-driven-subtests` scored 2/5.
+- **Diagnosis of the python/go failures (T13), recorded rather than tuned —
+  no re-run followed.** Taken from the judge's own reasons in the recorded
+  eval.json:
+  - `python mypy-error-no-blanket-suppress`: the scenario prompt ("mypy
+    reports a type error on a function I touched. Fix it.") supplies no code
+    and no error text. All 5 answers correctly ask for the missing error and
+    refuse a blanket suppression, but the rubric demands naming the exact
+    type mismatch and editing code, which is not possible without the code —
+    the scenario looks under-specified. Working hypothesis, unproven until
+    the follow-up re-run: a scenario defect rather than a skill defect.
+  - `python resource-with-block`: 2 of the 5 failures use
+    `Path.read_text()` + `json.loads`, which is resource-safe. The pass
+    criterion demanding a literal `with open(...)` block looks too narrow.
+    Working hypothesis: a rubric defect.
+  - `go table-driven-subtests`: in 3 of the 5 failures the model emitted a
+    shell/tool call instead of an answer; the skill tells it to inspect the
+    function first, and the single-turn runner has no tools to do that with.
+    Working hypothesis: a runner/skill interaction limitation, to be tested
+    with an answer-in-text runner note in the follow-up.
+  - None of these hypotheses is proven. The follow-up fixes (a concrete
+    snippet or a revised rubric for mypy, a widened resource-safety
+    criterion, an answer-in-text runner note) are each validated only by a
+    fresh honest re-run.
+  - Both packs stay `stability: experimental` and the reason is recorded
+    here — fixing these scenarios is follow-up work for the next grader pass,
+    not something this flow does after seeing the run (that would be tuning
+    the grader to the result).
+- **AC9 evidence: the old graders were mis-specified (T14).** The real
+  DeepSeek outputs from the honest run were re-graded under the
+  pre-migration `not-contains`-based expectations (`git show 8c7e50da`).
+  - `nodejs-build-fix no-ts-ignore-suppression`: old grader 1/5, judge 4/5.
+    In 4 of the old failures the only failing checks were `not-contains
+    "@ts-ignore"` / `"as any"`; every mention of those tokens was inside a
+    warning (for example, "These all make the error disappear without fixing
+    anything: ... `// @ts-ignore`").
+  - `react-build-fix no-disable-hooks-lint`: old grader 0/5, judge 4/5. All 5
+    fail `not-contains "eslint-disable"`, and 4 of them mention it only under
+    "What not to do".
+  - `python-build-fix mypy-error-no-blanket-suppress`: old grader 0/5, judge
+    0/5 — the judge fails these for a different and real reason (the
+    scenario is under-specified, above), not the old grader's reason.
+  - Conclusion: penalizing any mention of a suppression token failed correct
+    answers that warn against using it. The old graders were mis-specified,
+    not the skills.
+- **Stack coverage: 2 → 4.** ts-js-node and react cleared the honest gate and
+  now ship with generated pairs (`agents generate --stack <id>`). Counting
+  the pre-existing NestJS/Prisma and React/MobX review-only coverage plus
+  these two newly-cleared packs, stack coverage moves from 2 to 4. python and
+  go stay experimental, for the specific, recorded reasons above.
 
 ## Data contracts
 

@@ -1,5 +1,14 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.6
+Version: 0.1.7
+
+**Changelog (0.1.7, flow 316 T16):** flow 316 replaced the batch-1 stack-pack
+graders (string matching) with a rubric LLM judge and re-ran the honest
+DeepSeek gate (see `W1-stack-catalog.md`, "Implementation notes: grader
+reliability (flow 316)"). `ts-js-node` and `react` cleared the gate and now
+ship generated `<stack>-code-auditor`/`<stack>-build-fixer` pairs; `python`
+and `go` stayed `stability: experimental` and still have no generated pair.
+This corrects the 0.1.6 changelog line below, which recorded the pre-316
+(inaccurate) state of that same gate run.
 
 **Changelog (0.1.5, flow 314 T14):** renamed the generated per-stack pair
 from `<stack>-reviewer`/`<stack>-build-error-resolver` to
@@ -265,23 +274,38 @@ and `stack-pack-not-gate-cleared` for any pair whose source pack has since
 lost its gate-cleared status.
 
 **Batch 1 status (flow 314, fix attempt 1 — honest gate re-run):** no
-generated pair ships for any of the four batch-1 packs (`ts-js-node`,
-`python`, `go`, `react`) — the honest DeepSeek `deepseek-chat` gate run
-failed all four, so every one stays `stability: experimental` and each
-pack's `agent-refs.json` lists `"agents": []` with a note (see
-"Implementation notes: Wave 4 batch 1 (flow 314)" in
-`W1-stack-catalog.md` for the per-pack, per-skill breakdown). The
-deliverable this batch actually landed is the generator's safety, exercised
-end-to-end against real and fixture packs: `id` must equal the pack's own
-directory name, every frontmatter scalar and list item is emitted
-double-quoted (no unquoted pack-supplied string can forge a new YAML key),
-every write is contained under `src/gdskills/bundled/agents/` with no
-traversal and no symlink target, generation refuses a pack that is not
-gate-cleared (`stack-pack-not-gate-cleared`, checked before `--check` is
-even considered), and `agents verify` reports `generated-source-mismatch`/
+generated pair shipped for any of the four batch-1 packs (`ts-js-node`,
+`python`, `go`, `react`) at this point — the honest DeepSeek `deepseek-chat`
+gate run failed all four, so every one stayed `stability: experimental` and
+each pack's `agent-refs.json` listed `"agents": []` with a note (see
+"Implementation notes: Wave 4 batch 1 (flow 314)" in `W1-stack-catalog.md`
+for the per-pack, per-skill breakdown). The deliverable this batch actually
+landed was the generator's safety, exercised end-to-end against real and
+fixture packs: `id` must equal the pack's own directory name, every
+frontmatter scalar and list item is emitted double-quoted (no unquoted
+pack-supplied string can forge a new YAML key), every write is contained
+under `src/gdskills/bundled/agents/` with no traversal and no symlink
+target, generation refuses a pack that is not gate-cleared
+(`stack-pack-not-gate-cleared`, checked before `--check` is even
+considered), and `agents verify` reports `generated-source-mismatch`/
 `generated-drift` for a hand-edited or now-mismatched generated file. That
-safety is what the next batch (or a re-gated batch 1, after the grader
-audit below) generates through.
+safety is what the grader-audit follow-up below generates through.
+
+**Batch 1 status, revised (flow 316):** the grader audit found the batch-1
+graders themselves mis-specified — string matching had penalized correct
+answers for merely mentioning an anti-pattern while warning against it (see
+`W1-stack-catalog.md`, "Implementation notes: grader reliability
+(flow 316)"). Flow 316 replaced string graders with a rubric LLM judge,
+hardened the gate, and re-ran it honestly (DeepSeek `deepseek-chat` for both
+the runner and the judge, `--strictness high --trials 5 --scope bundled`).
+`ts-js-node` and `react` cleared the gate this time and each now has a
+generated `<stack>-code-auditor`/`<stack>-build-fixer` pair under
+`src/gdskills/bundled/agents/`, produced by `keryx agents generate --stack
+ts-js-node` and `keryx agents generate --stack react`. `python` and `go`
+failed the re-run for scenario/runner-interaction reasons recorded in
+`W1-stack-catalog.md` (not a grader defect this time) and stay
+`stability: experimental` with no generated pair — each pack's
+`agent-refs.json` still lists `"agents": []` with a note naming why.
 
 This covers 22 of W1's 23 stack packs; `mobx` (a capability that extends
 `react` rather than a standalone language/framework) gets no generated agent

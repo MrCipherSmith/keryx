@@ -62,10 +62,16 @@ Per-stack generated pairs (a `<stack>-code-auditor` and a `<stack>-build-fixer`
 per stack pack) are not part of this hand-authored initial catalogue — each
 pair is generated only from a stack pack that has already cleared its own
 governance gates, via `keryx agents generate --stack <id> [--check] [--json]`.
-As of flow 314 Wave 4 batch 1 (fix attempt 1, honest gate re-run), no pair
-exists yet: `ts-js-node`, `python`, `go`, and `react` all failed the gate
-(DeepSeek `deepseek-chat`, `--strictness high` / `--trials 5`) and stay
-`stability: experimental`, so none has a generated pair to list.
+As of flow 316's re-run of the honest gate (DeepSeek `deepseek-chat` for both
+the runner and the judge, `--strictness high` / `--trials 5`), `ts-js-node`
+and `react` have cleared it and each ships a generated pair:
+`ts-js-node-code-auditor` / `ts-js-node-build-fixer` and
+`react-code-auditor` / `react-build-fixer`. `python` and `go` still fail the
+gate — for scenario/runner-interaction reasons, not a grader defect this
+time (see `docs/requirements/keryx-agent-platform-expansion/workstreams/
+W1-stack-catalog.md`, "Implementation notes: grader reliability
+(flow 316)") — and stay `stability: experimental`, so neither has a
+generated pair.
 
 A project can drop its own files under `.metaproject/agents/<name>.md`. A
 project definition with the same `name` as a bundled one **overrides** it;
