@@ -171,6 +171,16 @@ export const CTX_GUARD_KIRO: SurfaceAdapter = {
   label: ".kiro/hooks/keryx-ctx-guard.json",
   // review round 3, M2: kiro's entries sit directly in the top-level `hooks`
   // array (no nested container) — `groupContainer` is deliberately omitted.
+  // Round 4, R4-1/R4-2 (info): `src/ctx/runtimes.ts::describeExistingGuard`
+  // reads `container: runtime.groupContainer ?? "hooks"`, so an omitted
+  // `groupContainer` here is NOT "top-level" to it — it becomes the literal
+  // container name `"hooks"`, and it then looks at `settings.hooks.hooks`
+  // instead of the real top-level `settings.hooks` array. There is no way to
+  // express "top-level container" through this surface's fields (`?? "hooks"`
+  // always wins over `undefined`), so `describeExistingGuard` always reports
+  // no existing guard for kiro (returns `null`) — by design/limitation, not
+  // by this surface's install-state tracking, which is unaffected (it does
+  // not go through `describeExistingGuard`).
   groupKey: "hooks",
   payloadCodec: parseKiroCommand,
   // F6: this file is written by no one but this surface — safe to delete

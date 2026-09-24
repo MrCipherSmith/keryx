@@ -13,6 +13,7 @@ import {
   INSTRUCTIONS_END_MARKER,
   INSTRUCTIONS_START_MARKER,
   UnterminatedInstructionsBlockError,
+  inspectMarkdownBlock,
   installMarkdownBlock,
   probeMarkdownBlock,
   renderInstructionsBlock,
@@ -489,6 +490,72 @@ describe("N4: mixed-EOL files are untouched outside the block", () => {
       const blockRegion = afterInstall.slice(original.length);
       expect(blockRegion).toContain("\r\n");
       expect(blockRegion).toContain(INSTRUCTIONS_START_MARKER);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R4-1: appending the block after a file that ends inside an UNCLOSED fence
+// (e.g. GEMINI.md left as "# x\n```\ncode\n") used to succeed, but placed the
+// new block INSIDE the fence as `computeFencedRanges` sees it — so the very
+// next probe/uninstall found the block's markers "inside a fenced code
+// block" and refused as unterminated. install/inspect now catch this UP
+// FRONT and refuse with a precise, actionable error instead, leaving the
+// file untouched; inspect/probe agree with install (so a dry-run predicts
+// the same refusal) even for a file with no block yet.
+// ---------------------------------------------------------------------------
+
+describe("R4-1: a file ending inside an unclosed code fence is refused, not silently mis-fenced", () => {
+  const UNCLOSED_FENCE_FILE = "# x\n```\ncode\n";
+
+  test("install refuses with a precise error and leaves the file byte-identical", async () => {
+    await withTempDir(async (root) => {
+      const file = await writeRaw(root, RELATIVE_PATH, UNCLOSED_FENCE_FILE);
+
+      const errors = await installMarkdownBlock(root, RELATIVE_PATH);
+      expect(errors).toEqual([
+        `${RELATIVE_PATH}: ends inside an unclosed code fence — close it (or add the Keryx block by hand) before installing`,
+      ]);
+      expect(await readFile(file, "utf8")).toBe(UNCLOSED_FENCE_FILE);
+    });
+  });
+
+  test("inspect reports the same condition (no block yet) so a dry-run install agrees install would fail", async () => {
+    await withTempDir(async (root) => {
+      await writeRaw(root, RELATIVE_PATH, UNCLOSED_FENCE_FILE);
+
+      const expectedMessage = `${RELATIVE_PATH}: ends inside an unclosed code fence — close it (or add the Keryx block by hand) before installing`;
+      const inspection = await inspectMarkdownBlock(root, RELATIVE_PATH);
+      // Reported as "malformed" — the same state a real parse failure uses —
+      // so `installer.ts`'s existing "malformed" -> dry-run-`failed` handling
+      // already covers this case with no further changes there.
+      expect(inspection.state).toBe("malformed");
+      expect(inspection.message).toBe(expectedMessage);
+
+      // What install itself reports must match: a dry-run built on `inspect`
+      // must not promise `would-install` for a file the real install refuses.
+      const errors = await installMarkdownBlock(root, RELATIVE_PATH);
+      expect(errors).toEqual([expectedMessage]);
+    });
+  });
+
+  test("a file with a CLOSED fence (not the last thing in the file) still installs fine", async () => {
+    await withTempDir(async (root) => {
+      const original = "# x\n\n```\ncode\n```\n\nmore text after the fence closes.\n";
+      const file = await writeRaw(root, RELATIVE_PATH, original);
+
+      const errors = await installMarkdownBlock(root, RELATIVE_PATH);
+      expect(errors).toEqual([]);
+      const content = await readFile(file, "utf8");
+      expect(content.startsWith(original)).toBe(true);
+      expect(content).toContain(INSTRUCTIONS_START_MARKER);
+
+      const inspection = await inspectMarkdownBlock(root, RELATIVE_PATH);
+      expect(inspection.state).toBe("present");
+
+      const removed = await uninstallMarkdownBlock(root, RELATIVE_PATH);
+      expect(removed).toBe(true);
+      expect(await readFile(file, "utf8")).toBe(original);
     });
   });
 });

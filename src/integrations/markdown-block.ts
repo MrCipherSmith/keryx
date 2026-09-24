@@ -152,7 +152,7 @@ function allIndices(haystack: string, needle: string): number[] {
  * than a normalised copy, so a marker's position here lines up exactly with
  * `allIndices`' positions in the same raw string.
  */
-function computeFencedRanges(content: string): Array<[number, number]> {
+function computeFencedRanges(content: string): { ranges: Array<[number, number]>; endsInOpenFence: boolean } {
   const ranges: Array<[number, number]> = [];
   const eolRe = /\r\n|\n/g;
   let lineStart = 0;
@@ -176,11 +176,29 @@ function computeFencedRanges(content: string): Array<[number, number]> {
   // An unterminated fence: cheap-and-safe is to treat the rest of the file as
   // fenced rather than assume it closes, so a marker after it is not trusted.
   if (fenceStart !== null) ranges.push([fenceStart, content.length]);
-  return ranges;
+  return { ranges, endsInOpenFence: fenceStart !== null };
 }
 
 function isWithinRanges(offset: number, ranges: Array<[number, number]>): boolean {
   return ranges.some(([s, e]) => offset >= s && offset < e);
+}
+
+/**
+ * True when `content` ends with a still-open fenced code block (its closing
+ * ``` / ~~~ line was never reached) — the exact condition
+ * `computeFencedRanges` treats as "fenced through EOF" (round 4, R4-1).
+ * Appending the block after such a fence would land it inside that
+ * (mis-detected) fenced range, so a later parse would refuse it as
+ * unterminated; install/inspect check this UP FRONT instead and refuse with a
+ * precise, actionable error, leaving the file untouched.
+ */
+function endsInsideOpenFence(content: string): boolean {
+  return computeFencedRanges(content).endsInOpenFence;
+}
+
+/** The exact error `installMarkdownBlock`/`inspectMarkdownBlock` share for a file ending inside an unclosed code fence (R4-1). */
+function unclosedFenceMessage(relativePath: string): string {
+  return `${relativePath}: ends inside an unclosed code fence — close it (or add the Keryx block by hand) before installing`;
 }
 
 /**
@@ -196,7 +214,7 @@ function parseBlocks(content: string, relativePath: string): Block[] {
     );
   };
 
-  const fenced = computeFencedRanges(content);
+  const { ranges: fenced } = computeFencedRanges(content);
   const starts = allIndices(content, INSTRUCTIONS_START_MARKER);
   const ends = allIndices(content, INSTRUCTIONS_END_MARKER);
 
@@ -322,6 +340,13 @@ export async function installMarkdownBlock(root: string, relativePath: string, f
     throw error;
   }
 
+  // R4-1: a file ending inside an unclosed fence must be refused BEFORE
+  // either the append or the in-place-replacement path touches it — appending
+  // after an unclosed fence would place the new block inside that
+  // (mis-detected) fenced range, so a later parse would wrongly refuse it as
+  // unterminated. Caught here, up front, with a precise error instead.
+  if (endsInsideOpenFence(raw)) return [unclosedFenceMessage(relativePath)];
+
   const block = applyEol(renderInstructionsBlock(), eol);
   const next = blocks.length === 0 ? appendBlock(raw, block, eol) : collapseBlocks(raw, blocks, block);
   if (next !== raw) await writeFile(file, next, "utf8");
@@ -395,7 +420,18 @@ export async function inspectMarkdownBlock(root: string, relativePath: string): 
     if (error instanceof UnterminatedInstructionsBlockError) return { state: "malformed", message: error.message };
     throw error;
   }
-  if (blocks.length === 0) return { state: "no-block", message: `${relativePath}: missing the keryx:instructions block` };
+  if (blocks.length === 0) {
+    // R4-1: a file with no block that ALSO ends inside an unclosed fence
+    // would otherwise be reported as merely "no-block" here while
+    // `installMarkdownBlock` refuses it outright — reported as "malformed"
+    // (the same state a parse failure uses) so `installer.ts`'s existing
+    // "malformed" -> `failed` dry-run handling, and the `MarkdownBlockInspection`
+    // type both already in place, cover this case with no further changes:
+    // a dry-run install (built on this same inspection) predicts the real
+    // install's refusal instead of promising success it cannot deliver.
+    if (endsInsideOpenFence(raw)) return { state: "malformed", message: unclosedFenceMessage(relativePath) };
+    return { state: "no-block", message: `${relativePath}: missing the keryx:instructions block` };
+  }
   const first = blocks[0]!;
   // Normalised to LF for comparison only — never written back — so a CRLF
   // file's block still compares equal to the LF-rendered canonical text.
