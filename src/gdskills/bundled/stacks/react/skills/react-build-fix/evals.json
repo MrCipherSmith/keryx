@@ -23,18 +23,48 @@
       "prompt": "react-hooks/exhaustive-deps is failing on my useEffect because it's missing a dependency. What should I do to fix the build?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "not-contains", "value": "eslint-disable" },
-        { "grader": "regex", "value": "dependency array" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the exhaustive-deps failure by adding the missing reactive dependency to the effect's dependency array, or, if the value is genuinely stable (a ref, a dispatch function, a value confirmed never to change in a way the effect needs), uses the lint rule's own documented escape hatch after explaining why the value is stable. It treats the failure as a real staleness bug to fix, not noise to silence.",
+          "pass_criteria": [
+            "Recommends adding the missing dependency to the effect's dependency array as the primary fix, or explicitly justifies why a specific value is stable enough to omit using the lint rule's own escape hatch.",
+            "Treats the fix as resolving the underlying staleness/dependency issue, not merely making the build stop complaining."
+          ],
+          "fail_criteria": [
+            "Recommends disabling or suppressing the exhaustive-deps rule (for example an eslint-disable-next-line comment) as the fix, instead of adding the missing dependency or justifying a stability-based exception.",
+            "Mentioning eslint-disable only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Add the dependency the effect actually reads to its dependency array — that's what exhaustive-deps is flagging, and it's usually a real staleness bug, not a false positive. Look at what's inside the useEffect callback: if it reads a prop or piece of state that isn't listed, add it. If adding it would cause the effect to re-run on every render because it's a function or object recreated each render, wrap that value in useCallback/useMemo in its own definition rather than dropping it from the array. Only omit a value from the array when you've confirmed it's genuinely stable across renders — a ref, a setState/dispatch function, or a value you've verified never changes in a way this effect cares about — and in that case use the rule's documented per-line justification rather than a blanket eslint-disable-next-line comment. Don't just silence the rule; it exists to catch stale closures that cause real bugs in production, and an eslint-disable comment here would hide that instead of fixing it.",
+        "known_wrong": "Easiest fix: add `// eslint-disable-next-line react-hooks/exhaustive-deps` right above the useEffect line. That silences the warning so your build/lint step goes green immediately, and you don't need to touch the dependency array or worry about extra re-renders. Just drop that comment in and move on — the effect will keep working the same way it does now, the lint rule just won't complain anymore."
+      },
+      "anti_patterns": ["eslint-disable"]
     },
     {
       "id": "no-any-cast",
       "prompt": "I have a TSX prop type error on an event handler and the build is failing. Should I just cast it to any to unblock the build?",
       "strictness": "high",
       "expected_behavior": [
-        { "grader": "not-contains", "value": "cast it to any" },
-        { "grader": "regex", "value": "React\\.(Change|Mouse|Form)?Event<" }
-      ]
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says no, casting to any is not the fix, and instead resolves the actual type mismatch by typing the event handler parameter with the specific React event type that matches the element and event in use (for example React.ChangeEvent<HTMLInputElement> or React.MouseEvent<HTMLButtonElement>), so the type check reflects reality instead of being bypassed.",
+          "pass_criteria": [
+            "States that casting to any is not the right fix for this prop type error.",
+            "Identifies fixing the event handler's type with the correct, specific React event type for the element/event involved as the actual fix."
+          ],
+          "fail_criteria": [
+            "Recommends casting the prop/event to any (or `as any`) as the way to unblock the build.",
+            "Mentioning an any cast only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No — casting to any would remove type checking at that call site entirely, including for whatever the next person changes there, and it doesn't actually fix anything, it just hides the mismatch. Look at what element and event you're actually handling: for an <input> onChange it's React.ChangeEvent<HTMLInputElement>, for a button click it's React.MouseEvent<HTMLButtonElement>, for a form submit it's React.FormEvent<HTMLFormElement>. Update the handler's parameter type to match the specific element/event combination instead of whatever loose or generic type it currently has. If you're not sure which one applies, check how the handler is wired up in JSX (onChange, onClick, onSubmit) — that tells you the event type. Once the parameter type matches what's actually being passed, the type error goes away because the code is now honestly described, not suppressed. Re-run the build after the change to confirm it's green.",
+        "known_wrong": "Yeah, just cast it `as any` for now — `(e as any).target.value` or type the handler param `(e: any) => { ... }` — and the type error will go away so your build unblocks. You can always circle back and add the proper React.ChangeEvent type later if it becomes an issue; for now the `as any` cast gets you moving without having to dig into exactly which event type the handler needs."
+      },
+      "anti_patterns": ["as any"]
     }
   ]
 }
