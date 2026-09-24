@@ -27,6 +27,7 @@ keryx init
 - **[architecture.md](./architecture.md)** — System overview, the four-layer pattern, the two invariants, cross-module data flows, and external integrations.
 - **[harness.md](./harness.md)** — The agent runtime, feature by feature: the four doors, providers, sessions and forking, the policy engine, OS containment, evidence and the completion gate, child agents, record and replay — and what it does not do yet.
 - **[modules.md](./modules.md)** — One section per module: purpose, CLI surface, key files, mechanics, the `.metaproject/` paths it reads/writes, and integrations.
+- **[learning.md](./learning.md)** — The self-learning loop (`keryx learn`): observe, extract, review/accept, apply, promote, graduate, prune; what is observed and never stored, the confidence model, and consent guarantees.
 - **[cli-reference.md](./cli-reference.md)** — Complete reference for every command, subcommand, flag, and exit code.
 - **[workspace-and-lifecycle.md](./workspace-and-lifecycle.md)** — The `.metaproject/` directory contract, source-of-truth vs generated `data/`, the manifest, agent entrypoints, and the `init`/`update` lifecycle.
 - **[guides/shared-agent-context.md](./guides/shared-agent-context.md)** — Shared Agent Context: `keryx workspace`, FWK reads, propose/review, MCP `sac.*`, harness `workspace_*`.

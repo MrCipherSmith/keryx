@@ -1,6 +1,7 @@
 ---
 description: "When and how agents verify and re-learn project-skills during implementation and review. Verify/learn live in the agent loop, not in git hooks."
 alwaysApply: false
+version: 0.2.0
 ---
 
 # Skill Lifecycle — verify & learn in the loop
@@ -52,8 +53,35 @@ a different `review tier` invocation (e.g. `--scope narrow`, which resolves
 heavier than `light`).** The flagship's only job here is to review the
 proposal before apply.
 
+### Passive observation is not mutation (W3, decision D-3)
+
+A hook registered under the shell hook runtime (W6) may append an
+**observation event** to `.metaproject/data/learning/observations/` — the
+shipped `keryx.learning-observer` hook does exactly this, on
+`tool-start`/`tool-complete`/`tool-failed`/`user-prompt`/`session-start`/
+`turn-stop`/`session-end`. This is explicitly permitted from a hook, unlike
+every other write this rule governs, because it changes no skill, rule,
+agent, or memory entry — it only accumulates evidence (redacted, digest-only)
+that a human will later decide about.
+
+`keryx learn extract`, which turns accumulated observations into a
+`status: candidate` `learned-pattern` record under
+`.metaproject/data/learning/candidates/`, is a separate, **command- or
+schedule-triggered** step — never run inside a hook. It still produces no
+`accepted` state and mutates no skill/rule/agent/memory file by itself.
+
+Everything from `keryx learn accept` onward — Accept, project-skill Apply,
+reviewer-profile Apply, Promote, Graduate apply — remains agent-loop,
+human-triggered work under the rule above, with the same "dispatch as a
+light-tier subagent, review before apply" discipline already specified for
+`skills learn apply`. Each of accept/promote/graduate-apply additionally
+refuses outright outside a real interactive terminal (no bypass flag).
+
 ## Never
 
-- Do not put `learn` (or any mutation) in a hook.
+- Do not put `learn` (or any mutation) in a hook — **passive observation is
+  the single exception** (see above): a hook may append an observation event,
+  nothing more. `keryx learn extract` also never runs inside a hook, even
+  though it produces no `accepted` state.
 - Do not `apply` a proposal without reading it.
 - Do not trust a `stale` / `needs-review` skill as ground truth.
