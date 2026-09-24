@@ -43,3 +43,4 @@
 - 2026-09-24T08:24:07.886Z - task-done: T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)
 - 2026-09-24T08:24:07.988Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-24T08:24:07Z - T12/T13: real-CLI e2e transcript (scratchpad/w4-e2e/e2e.out) proves export→verify→inspect→import→inspect(identical)→user-modified refused→--force→uninstall keeps modified; tar.gz tamper fails closed. AC evidence list recorded for AC1-AC15 (targeted suite 2189 pass, 0 fail; tsc clean; matrix --check ok). Found bug: --render-for not validated before writes → fixed in T16.
+- 2026-09-24T08:31:02Z - Pre-PR guard fixes: import-policy facade ratchet (4 new bypasses routed via service.ts facades); src/bundle + src/rules added to test:core (core-package gate). src/lib/git-hooks + security-pre-push local failures are environment-only (a global git hook refuses the test author email), CI is the judge.
