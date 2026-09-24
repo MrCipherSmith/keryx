@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generalizeLesson, reviewerIdFor } from "./reviewer-id";
+import { containsConfiguredLogin, generalizeLesson, reviewerIdFor } from "./reviewer-id";
 
 const PROJECT_IDENTITY = "a".repeat(64);
 
@@ -75,12 +75,58 @@ describe("generalizeLesson", () => {
     expect(result?.toLowerCase()).not.toContain("alice-dev");
   });
 
-  test("still does NOT strip a login glued to more of the same word class (alicedev_ is not a match for alicedev)", () => {
-    // Conservative on purpose: `alicedev_` is glued to a trailing word
-    // character, so it is not treated as an exact, bounded occurrence of the
-    // login `alicedev` — the same reason `alice` must not match inside
-    // `alicedeveloper`.
+  // The bounded-regex pass alone still does not strip `alicedev` out of
+  // `alicedeveloper` (glued to a trailing alphanumeric, no boundary) — but
+  // R2-F6's final substring safety net (`containsConfiguredLogin`) still
+  // finds "alicedev" sitting inside "alicedeveloper" either way and drops
+  // the whole lesson rather than shipping a record that merely LOOKS
+  // attribution-free. Conservative on purpose: a name-shaped false positive
+  // costs one dropped lesson; a missed one costs a stored login.
+  test("R2-F6: drops a lesson where the login is a substring of a longer word (alicedev inside alicedeveloper)", () => {
+    const result = generalizeLesson("alicedeveloper prefers early returns over nested conditionals for readability", ["alicedev"]);
+    expect(result).toBeNull();
+  });
+
+  // R2-F6 (review round 2, PR #691, PROBE p4.ts): `_` is punctuation to a
+  // login, not a login character — the old boundary class `[\w-]` (which
+  // `\w` folds `_` into) treated a login immediately followed by `_` as
+  // "glued to more of the same word class" and refused to strip it, leaving
+  // the literal login in the "generalized" text. The boundary is now
+  // `[A-Za-z0-9-]`, which does not include `_`, so `_` counts as a boundary
+  // the same way a space does.
+  test("R2-F6: strips a login glued to a trailing underscore (alicedev_ IS a bounded match for alicedev)", () => {
     const result = generalizeLesson("alicedev_ prefers early returns over nested conditionals for readability", ["alicedev"]);
-    expect(result?.toLowerCase()).toContain("alicedev_");
+    expect(result).not.toBeNull();
+    expect(result?.toLowerCase()).not.toContain("alicedev");
+  });
+
+  // R2-F6: the final safety net — even when the boundary regex fails to
+  // strip a login (e.g. `alicedev` glued to `xreview`, no boundary
+  // character on either side at all), the lesson is dropped entirely rather
+  // than shipped with the login still in it.
+  test("R2-F6: drops (returns null for) a lesson whose login survives stripping with no boundary on either side", () => {
+    const result = generalizeLesson("never merge without alicedevxreview signing off on the migration plan", ["alicedev"]);
+    expect(result).toBeNull();
+  });
+
+  test("R2-F6: passing every configured author (not just the comment's own) strips a login the comment merely names", () => {
+    // `reviewer-comment.ts`'s signal now passes the FULL configured login
+    // list to every `generalizeLesson` call, not just the current comment's
+    // own author — a comment from alice naming a co-reviewer must not leak
+    // bob's login either.
+    const result = generalizeLesson("as bob-reviewer said, keep functions small and focused", ["alice", "bob-reviewer"]);
+    expect(result).not.toBeNull();
+    expect(result?.toLowerCase()).not.toContain("bob-reviewer");
+  });
+});
+
+describe("containsConfiguredLogin", () => {
+  test("case-insensitive substring match", () => {
+    expect(containsConfiguredLogin("Per ALICE's review, keep it small", ["alice"])).toBe(true);
+    expect(containsConfiguredLogin("keep it small", ["alice"])).toBe(false);
+  });
+
+  test("empty/whitespace-only logins are ignored, not treated as always-matching", () => {
+    expect(containsConfiguredLogin("anything at all", ["", "   "])).toBe(false);
   });
 });

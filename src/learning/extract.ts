@@ -13,6 +13,7 @@ import { loadLearningConfig } from "./config";
 import { resolveProjectIdentity } from "./identity";
 import { observationsDir } from "./paths";
 import { pruneObservationFilesPass } from "./prune";
+import { containsConfiguredLogin } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { validateObservationEvent } from "./schema";
 import { FAILING_TO_PASSING_TEST_SIGNAL } from "./signals/failing-to-passing-test";
@@ -23,6 +24,7 @@ import { REVIEWER_COMMENT_SIGNAL } from "./signals/reviewer-comment";
 import type { ObservationLine, SignalDraft, SignalRunner } from "./signals/types";
 import { createPattern, listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { EvidenceItem, LearnedPattern, LearningDomain, ObservationEvent } from "./types";
+import { loadReviewLearningConfig } from "../review/review-learning";
 
 export class LearningExtractError extends Error {
   constructor(
@@ -213,6 +215,13 @@ async function decayExistingRecords(
   }
 }
 
+/** `config.authors` + `config.reviewerProfiles`, deduped — or `[]` when the project has no review-learning config. */
+async function configuredReviewLogins(root: string): Promise<string[]> {
+  const config = await loadReviewLearningConfig(root);
+  if (config === null) return [];
+  return [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
+}
+
 async function upsertDraft(
   root: string,
   draft: SignalDraft,
@@ -220,6 +229,7 @@ async function upsertDraft(
   now: Date,
   storeOptions: StoreEnvOptions,
   report: ExtractReport,
+  configuredLogins: readonly string[],
 ): Promise<void> {
   const id = deterministicPatternId(draft.domain, draft.trigger);
   let existing: LearnedPattern | undefined;
@@ -245,6 +255,17 @@ async function upsertDraft(
   const scan = await scanLearnedText(root, [draft.trigger, draft.action]);
   if (scan.findings.length > 0) {
     report.refused.push({ signal: draft.extractor, categories: scan.findings });
+    return;
+  }
+
+  // R2-F6: a draft's trigger/action never reaches the store carrying any
+  // configured reviewer login as a case-insensitive substring — this is the
+  // same check `generalizeLesson` already applies to its own output, run
+  // again here as extract's own choke point, since a draft can originate
+  // from a signal other than `reviewer-comment` (or, in principle, an
+  // out-of-tree model-backed extractor) that never called it at all.
+  if (containsConfiguredLogin(draft.trigger, configuredLogins) || containsConfiguredLogin(draft.action, configuredLogins)) {
+    report.refused.push({ signal: draft.extractor, categories: ["attribution"] });
     return;
   }
 
@@ -394,8 +415,9 @@ export async function runExtract(root: string, opts: RunExtractOptions = {}): Pr
   }
 
   const projectIdentity = resolveProjectIdentity(root);
+  const configuredLogins = await configuredReviewLogins(root);
   for (const draft of drafts) {
-    await upsertDraft(root, draft, projectIdentity, now, storeOptions, report);
+    await upsertDraft(root, draft, projectIdentity, now, storeOptions, report, configuredLogins);
   }
 
   return report;

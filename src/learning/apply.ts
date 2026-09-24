@@ -13,6 +13,8 @@ import { isPathInside, withFileLock, writeFileAtomic } from "../lib/fs";
 import { renderProposalMarkdown, resolveRegisteredSkillTarget, suggestedSectionsFor } from "../gdskills/learn";
 import type { ApplyLearningProposalResult, LearningProposal, LearningSourceType } from "../gdskills/learn";
 import { applyLearningProposal } from "../gdskills/learn";
+import { loadReviewLearningConfig } from "../review/review-learning";
+import { containsConfiguredLogin } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { readPattern, type StoreEnvOptions } from "./store";
 import type { EvidenceSourceType, LearnedPattern, LearningDomain } from "./types";
@@ -178,6 +180,19 @@ export async function applyLearnedPattern(
   const scan = await scanLearnedText(root, [record.trigger, record.action]);
   if (scan.findings.length > 0) {
     throw new LearningApplyError("learning-text-refused", `record "${id}" refused by the security scan: ${scan.findings.join(", ")}`);
+  }
+
+  // R2-F6: same defense-in-depth as `graduate.ts`'s agent-candidate render
+  // and extract's upsert — `domain: "review-conventions"` records (where a
+  // login is most likely) are already refused above, but a login named in
+  // free text on another domain's `trigger`/`action` (e.g. someone quoted in
+  // a `code-style` lesson) must not reach the rendered skill proposal either.
+  const configuredLogins = await (async (): Promise<string[]> => {
+    const config = await loadReviewLearningConfig(root);
+    return config === null ? [] : [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
+  })();
+  if (configuredLogins.length > 0 && (containsConfiguredLogin(record.trigger, configuredLogins) || containsConfiguredLogin(record.action, configuredLogins))) {
+    throw new LearningApplyError("learning-text-refused", `record "${id}" refused: contains a configured reviewer login`);
   }
 
   let skillEntry: { module: string; name: string; path: string; target: string };

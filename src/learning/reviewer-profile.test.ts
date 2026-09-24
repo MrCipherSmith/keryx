@@ -135,22 +135,32 @@ describe("applyReviewerProfile", () => {
     });
   });
 
-  test("refuses when the rendered profile would still contain a configured author's login (reviewer-profile-attribution-refused)", async () => {
+  // R2-F6: `generalizeLesson` now drops (returns `null` for) any lesson that
+  // still contains a configured login as a case-insensitive substring after
+  // its own boundary-based stripping — the same "glued to more of the same
+  // word class on one side" shape this test constructs, which used to defeat
+  // the boundary regex and slip the literal login through unstripped. That
+  // record's action is filtered out of `generalizedActionsFor` before
+  // rendering, so the ONLY accepted record for this reviewer id contributes
+  // no convention at all: the profile still applies (there is nothing left
+  // to refuse it), but the rendered text never carries the login, and the
+  // dropped lesson never appears in it either.
+  test("drops a lesson that would still leak a configured author's login instead of rendering it (R2-F6)", async () => {
     await withProject(async (root) => {
       await seedConfig(root, BASE_CONFIG);
-      // Written directly through the store so the leaked login bypasses
-      // `generalizeLesson`'s own stripping (concatenated with no word
-      // boundary on one side) and reaches the final attribution guard.
       const leaking = makeReviewConventionsRecord({
         action: `never merge without ${LOGIN}xreview signing off on the migration plan`,
       });
       await writePattern(root, leaking, { capability: createAcceptCapability() });
 
-      await expect(applyReviewerProfile(root, REVIEWER_ID)).rejects.toMatchObject({
-        reason: "reviewer-profile-attribution-refused",
-      });
+      const result = await applyReviewerProfile(root, REVIEWER_ID);
+      const rendered = await readFile(path.join(root, result.path), "utf8");
+      expect(rendered.toLowerCase()).not.toContain(LOGIN.toLowerCase());
+      expect(rendered).not.toContain("signing off on the migration plan");
+      expect(rendered).toContain("No generalized conventions recorded yet.");
     });
   });
+
 
   test("refuses injection-shaped text before rendering (learning-text-refused)", async () => {
     await withProject(async (root) => {

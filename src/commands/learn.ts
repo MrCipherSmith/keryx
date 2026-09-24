@@ -24,7 +24,6 @@ import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { readStdinBounded, LEARN_OBSERVE_MAX_STDIN_BYTES } from "../lib/bounded-stdin";
 import { resolveProjectRoot } from "../lib/contained-path";
-import { parseLearnArgs } from "../learning/cli-args";
 import {
   acceptPattern,
   applyGraduation,
@@ -37,6 +36,7 @@ import {
   listPatterns,
   observationFilePath,
   observeHostHookPayload,
+  parseLearnArgs,
   promotePattern,
   pruneLearning,
   readPattern,
@@ -47,6 +47,7 @@ import {
   type LearningDomain,
   type LearningScope,
   type LearningStatus,
+  type ParsedLearnArgs,
 } from "../learning/service";
 
 const STDIN_DEADLINE_MS = 2_000;
@@ -185,6 +186,45 @@ function storeOptionsOf(deps: LearnCommandDeps): { env?: NodeJS.ProcessEnv; home
 }
 
 // ---------------------------------------------------------------------------
+// R2-F2: per-verb -h/--help and positional-arity enforcement
+// ---------------------------------------------------------------------------
+
+/** One line, matching the `Usage:` block in `printLearnHelp` below. */
+const VERB_USAGE: Readonly<Record<string, string>> = {
+  observe: "keryx learn observe [--hook claude]",
+  extract: "keryx learn extract [--domain <d>] [--since <YYYY-MM-DD>] [--json]",
+  list: "keryx learn list [--status <s>] [--domain <d>] [--scope <s>] [--json]",
+  review: "keryx learn review [<id>] [--scope <s>]",
+  accept: "keryx learn accept <id> [--scope user] [--refresh]",
+  reject: "keryx learn reject <id> [--scope user]",
+  apply: "keryx learn apply <id> --skill <module/name> [--dry-run]",
+  promote: "keryx learn promote <id>",
+  graduate: "keryx learn graduate [--domain <d>] [--json]",
+  "graduate apply": "keryx learn graduate apply <proposal-id>",
+  prune: "keryx learn prune [--dry-run] [--json]",
+};
+
+/** `-h`/`--help` anywhere in the verb's own (already-split-off) args — checked against the RAW args, before `parseLearnArgs`, so it is never reported as an unknown/single-dash flag and never reaches any mutating code. */
+function wantsHelp(args: readonly string[]): boolean {
+  return args.includes("-h") || args.includes("--help");
+}
+
+/** Prints just this verb's usage line and returns — exit code stays 0, nothing is read or written. */
+function printVerbHelp(verb: keyof typeof VERB_USAGE): void {
+  console.log(`Usage:\n  ${VERB_USAGE[verb]}`);
+}
+
+/** `undefined` when `parsed.positionals.length` is within `[min, max]`; otherwise the "unexpected/missing argument" message the caller should `fail()` with. */
+function positionalArityError(parsed: ParsedLearnArgs, min: number, max: number, usage: string): string | undefined {
+  if (parsed.positionals.length < min) return `usage: ${usage}`;
+  if (parsed.positionals.length > max) {
+    const extra = parsed.positionals.slice(max);
+    return `unexpected argument(s): ${extra.join(", ")} — usage: ${usage}`;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // observe
 // ---------------------------------------------------------------------------
 
@@ -235,8 +275,11 @@ async function runObserveManual(deps: LearnCommandDeps): Promise<void> {
 }
 
 async function runObserve(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("observe");
   const parsed = parseLearnArgs(args, { value: ["--hook"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.observe as string);
+  if (arityError !== undefined) return fail(arityError);
   const hook = parsed.values.get("--hook");
   if (hook !== undefined && hook !== "claude") return fail(`--hook must be "claude", not "${hook}"`);
   if (hook === "claude") {
@@ -251,8 +294,11 @@ async function runObserve(args: readonly string[], deps: LearnCommandDeps): Prom
 // ---------------------------------------------------------------------------
 
 async function runExtractCommand(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("extract");
   const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--domain", "--since"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.extract as string);
+  if (arityError !== undefined) return fail(arityError);
   try {
     const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
     const since = parsed.values.get("--since");
@@ -291,8 +337,11 @@ function formatRecordRow(record: LearnedPattern): string {
 }
 
 async function runList(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("list");
   const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--status", "--domain", "--scope"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.list as string);
+  if (arityError !== undefined) return fail(arityError);
   try {
     const status = parseEnumFlag(parsed.values.get("--status"), "--status", STATUSES);
     const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
@@ -357,8 +406,11 @@ async function findById(
 }
 
 async function runReview(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("review");
   const parsed = parseLearnArgs(args, { value: ["--scope"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 1, VERB_USAGE.review as string);
+  if (arityError !== undefined) return fail(arityError);
   try {
     const scope = parseEnumFlag(parsed.values.get("--scope"), "--scope", SCOPES);
     const root = resolveRoot(deps);
@@ -391,8 +443,11 @@ async function runReview(args: readonly string[], deps: LearnCommandDeps): Promi
 // ---------------------------------------------------------------------------
 
 async function runAccept(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("accept");
   const parsed = parseLearnArgs(args, { boolean: ["--refresh"], value: ["--scope"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.accept as string);
+  if (arityError !== undefined) return fail(arityError);
   const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn accept <id> [--scope user] [--refresh]");
   try {
@@ -414,8 +469,11 @@ async function runAccept(args: readonly string[], deps: LearnCommandDeps): Promi
 }
 
 async function runReject(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("reject");
   const parsed = parseLearnArgs(args, { value: ["--scope"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.reject as string);
+  if (arityError !== undefined) return fail(arityError);
   const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn reject <id> [--scope user]");
   try {
@@ -437,8 +495,11 @@ async function runReject(args: readonly string[], deps: LearnCommandDeps): Promi
 // ---------------------------------------------------------------------------
 
 async function runApply(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("apply");
   const parsed = parseLearnArgs(args, { boolean: ["--dry-run"], value: ["--skill"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.apply as string);
+  if (arityError !== undefined) return fail(arityError);
   const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn apply <id> --skill <module/name> [--dry-run]");
   const skill = parsed.values.get("--skill");
@@ -465,10 +526,13 @@ async function runApply(args: readonly string[], deps: LearnCommandDeps): Promis
 // ---------------------------------------------------------------------------
 
 async function runPromote(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("promote");
   // No flags at all — in particular, no --yes/--force/--non-interactive (W3
   // spec "Promotion rule" #2). Any flag here is refused, not just an unknown one.
   const parsed = parseLearnArgs(args, {});
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")} — promote takes no flags (no bypass exists)`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE.promote as string);
+  if (arityError !== undefined) return fail(arityError);
   const id = parsed.positionals[0];
   if (id === undefined) return fail("usage: keryx learn promote <id>");
   const terminal = resolveTerminal(deps);
@@ -498,8 +562,11 @@ async function runPromote(args: readonly string[], deps: LearnCommandDeps): Prom
 // ---------------------------------------------------------------------------
 
 async function runGraduateRun(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("graduate");
   const parsed = parseLearnArgs(args, { boolean: ["--json"], value: ["--domain"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.graduate as string);
+  if (arityError !== undefined) return fail(arityError);
   try {
     const domain = parseEnumFlag(parsed.values.get("--domain"), "--domain", DOMAINS);
     const root = resolveRoot(deps);
@@ -526,9 +593,12 @@ async function runGraduateRun(args: readonly string[], deps: LearnCommandDeps): 
 }
 
 async function runGraduateApply(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("graduate apply");
   // Same "no flags at all" rule as promote — no bypass exists for graduate apply either.
   const parsed = parseLearnArgs(args, {});
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")} — graduate apply takes no flags (no bypass exists)`);
+  const arityError = positionalArityError(parsed, 1, 1, VERB_USAGE["graduate apply"] as string);
+  if (arityError !== undefined) return fail(arityError);
   const proposalId = parsed.positionals[0];
   if (proposalId === undefined) return fail("usage: keryx learn graduate apply <proposal-id>");
   const terminal = resolveTerminal(deps);
@@ -566,19 +636,29 @@ async function runGraduateCommand(args: readonly string[], deps: LearnCommandDep
 // ---------------------------------------------------------------------------
 
 async function runPrune(args: readonly string[], deps: LearnCommandDeps): Promise<void> {
+  if (wantsHelp(args)) return printVerbHelp("prune");
   const parsed = parseLearnArgs(args, { boolean: ["--dry-run", "--json"] });
   if (parsed.bad.length > 0) return fail(`unknown flag(s): ${parsed.bad.join(", ")}`);
+  const arityError = positionalArityError(parsed, 0, 0, VERB_USAGE.prune as string);
+  if (arityError !== undefined) return fail(arityError);
   try {
     const root = resolveRoot(deps);
-    const report = await pruneLearning(root, { now: resolveNow(deps), dryRun: parsed.flags.has("--dry-run"), ...storeOptionsOf(deps) });
+    const dryRun = parsed.flags.has("--dry-run");
+    const report = await pruneLearning(root, { now: resolveNow(deps), dryRun, ...storeOptionsOf(deps) });
     if (parsed.flags.has("--json")) {
       console.log(JSON.stringify(report, null, 2));
       return;
     }
+    // R2-F8: a dry run deletes/expires nothing — say "would", and say so
+    // explicitly, rather than printing the same "deleted"/"expired" wording
+    // a real run uses (an operator piping/skimming output could not tell
+    // the two apart).
+    const verb = dryRun ? "would delete" : "deleted";
+    const expireVerb = dryRun ? "would expire" : "expired";
     console.log(
-      `keryx learn prune: deleted ${report.deletedObservationFiles.length} observation file(s), expired ${report.expired.length} candidate(s)${
+      `keryx learn prune: ${verb} ${report.deletedObservationFiles.length} observation file(s), ${expireVerb} ${report.expired.length} candidate(s)${
         report.errors.length > 0 ? `, ${report.errors.length} error(s)` : ""
-      }.`,
+      }.${dryRun ? " (dry run — nothing written)" : ""}`,
     );
     for (const file of report.deletedObservationFiles) console.log(`  - observations/${file}`);
     for (const entry of report.expired) console.log(`  - ${entry.id} (${entry.scope})`);

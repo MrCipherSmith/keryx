@@ -172,7 +172,7 @@ export async function promotePattern(root: string, id: string, opts: PromotePatt
   // overwriting a candidate/accepted record a concurrent promote/accept
   // wrote in between; it still asserts the target lies inside the
   // user-scope learning root, same as the old direct write did.
-  await createPattern(root, promoted, storeOptions);
+  await createPattern(root, promoted, { ...storeOptions, replaceableStatuses: ["rejected", "expired", "superseded"] });
 
   const actor = resolveActor(root, env);
   await appendDecision(root, { action: "promote", id, actor, tty: true, at: nowIso }, { ...storeOptions, scope: "project" });

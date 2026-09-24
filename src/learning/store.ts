@@ -49,6 +49,42 @@ function envOf(options: StoreEnvOptions): NodeJS.ProcessEnv {
   return options.env ?? process.env;
 }
 
+/**
+ * R2-F5: whitelist of `LearnedPattern` fields `updatePattern` allows to
+ * change on a record whose STORED (pre-update) status is already
+ * `"accepted"`, without holding the accept capability. Everything else —
+ * `domain`, `status`, `supersededBy`, `reviewerProfile`, `redaction`,
+ * `provenance`, `schemaVersion` — must round-trip unchanged (checked below);
+ * `id`/`scope`/`project`/`createdAt`/`trigger`/`action` have their own,
+ * more specific refusal reasons already and are excluded from this list so
+ * they are not checked twice. `ttl` is intentionally absent from both this
+ * list and the checked-fields list below — an accepted record never carries
+ * one, enforced by its own explicit check.
+ */
+const ACCEPTED_IMMUTABLE_CHECK_FIELDS = [
+  "domain",
+  "status",
+  "supersededBy",
+  "reviewerProfile",
+  "redaction",
+  "provenance",
+  "schemaVersion",
+] as const satisfies readonly (keyof LearnedPattern)[];
+
+/** Plain structural equality over JSON-shaped values (strings/numbers/booleans/null/arrays/plain objects) — every field this compares (`ACCEPTED_IMMUTABLE_CHECK_FIELDS`) is exactly that shape. */
+function deepEqualJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null || typeof a !== "object") return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, index) => deepEqualJson(item, b[index]));
+  }
+  const aKeys = Object.keys(a as Record<string, unknown>);
+  const bKeys = Object.keys(b as Record<string, unknown>);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => deepEqualJson((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]));
+}
+
 function patternPathFor(root: string, id: string, scope: LearningScope, options: StoreEnvOptions): string {
   return scope === "project" ? projectPatternPath(root, id) : userPatternPath(id, envOf(options), options.homeDir);
 }
@@ -196,6 +232,22 @@ export interface WritePatternOptions extends StoreEnvOptions {
  *    alike and must not need the capability to touch the latter). Read
  *    failure/absence is treated as "not already accepted", so a forged first
  *    write still requires the capability.
+ *  - `learning-accepted-text-immutable` (R2-F4) — the record currently
+ *    stored on disk at `record.id`+`record.scope` is ALREADY `status:
+ *    "accepted"` and `record` carries a different `trigger`/`action` than
+ *    that stored copy. `updatePattern` already refuses this (comparing its
+ *    own before/after), but that check is enforced only for callers that go
+ *    through the choke point; this is the same refusal pushed down into the
+ *    one function every write (`writePattern` included) funnels through, so
+ *    a caller that reaches `writePattern` directly (bypassing
+ *    `updatePattern`) cannot silently rewrite an accepted record's text
+ *    either. Deliberately NOT extended to the other immutable fields
+ *    (`project.identity`/`identityKind`/`createdAt`) `updatePattern` also
+ *    checks: those are legitimate to differ here — `createPattern` replacing
+ *    a terminal (`rejected`/`superseded`/`expired`) record (e.g. `promote.ts`
+ *    re-promoting after an earlier promotion was rejected) intentionally
+ *    writes a fresh `createdAt`, and a terminal record is never `"accepted"`
+ *    so this check never fires for that path.
  */
 async function writeRecordUnlocked(root: string, record: LearnedPattern, options: WritePatternOptions): Promise<void> {
   assertValidLearningId(record.id);
@@ -214,6 +266,22 @@ async function writeRecordUnlocked(root: string, record: LearnedPattern, options
         `refusing to write status:"accepted" for ${record.id} without the accept capability`,
       );
     }
+  }
+  let storedExisting: LearnedPattern | undefined;
+  try {
+    storedExisting = await readPattern(root, record.id, record.scope, options);
+  } catch {
+    storedExisting = undefined;
+  }
+  if (
+    storedExisting !== undefined &&
+    storedExisting.status === "accepted" &&
+    (record.trigger !== storedExisting.trigger || record.action !== storedExisting.action)
+  ) {
+    throw new LearningStoreError(
+      "learning-accepted-text-immutable",
+      `refusing to change the trigger/action text of already-accepted record "${record.id}" (${record.scope})`,
+    );
   }
   const target = patternPathFor(root, record.id, record.scope, options);
   assertInsideLearningRoot(target, [allowedRootFor(root, record.scope, options)]);
@@ -305,29 +373,80 @@ export async function updatePattern(
         `refusing to change the trigger/action text of already-accepted record "${id}" (${scope})`,
       );
     }
+    if (existing.status === "accepted") {
+      // R2-F5: an accepted record routes `domain`/`reviewerProfile` into
+      // `apply.ts`'s proposal target and `reviewer-profile.ts`'s rendered
+      // output — either one silently changing without a fresh human accept
+      // would re-route an already-consented record. Whitelist what MAY
+      // change on an accepted record instead of only blacklisting
+      // trigger/action: everything not in `ACCEPTED_MUTABLE_FIELDS` (and not
+      // already covered by the id/scope/project-identity/createdAt/
+      // trigger/action checks above) must come back unchanged, and `ttl`
+      // must stay absent (an accepted record never carries one).
+      if (next.ttl !== undefined) {
+        throw new LearningStoreError(
+          "learning-accepted-field-immutable",
+          `refusing to add a ttl to already-accepted record "${id}" (${scope})`,
+        );
+      }
+      for (const key of ACCEPTED_IMMUTABLE_CHECK_FIELDS) {
+        if (!deepEqualJson(next[key], existing[key])) {
+          throw new LearningStoreError(
+            "learning-accepted-field-immutable",
+            `refusing to change "${key}" of already-accepted record "${id}" (${scope}) via an update`,
+          );
+        }
+      }
+    }
     await writeRecordUnlocked(root, next, options);
     return next;
   });
 }
 
+export interface CreatePatternOptions extends WritePatternOptions {
+  /**
+   * R2-F3: the ONLY statuses an existing stored record at `record.id`+
+   * `record.scope` may have for this call to replace it. Defaults to none —
+   * an existing record of ANY status (active or terminal) refuses the
+   * create — so every caller must say explicitly what it intends to
+   * overwrite rather than relying on "terminal is always replaceable":
+   *  - `extract.ts` passes nothing (the default): a rejected/superseded/
+   *    expired record is never resurfaced by extraction, matching "extract
+   *    never re-drafts a decided pattern" — `upsertDraft` already skips
+   *    terminal records it read before the lock, and this default closes the
+   *    race the old unconditional-terminal-replace left open (a record
+   *    rejected concurrently, after that read, could still be overwritten).
+   *  - `promote.ts` passes `["rejected", "expired", "superseded"]`: promotion
+   *    may replace an earlier, no-longer-active promotion attempt at the
+   *    same id in the user-scope store.
+   * `"accepted"` must never appear in this list for any caller — a
+   * `createPattern` replacing an accepted record would bypass the
+   * accept-capability transition entirely; nothing in this codebase does.
+   */
+  replaceableStatuses?: readonly LearningStatus[];
+}
+
 /**
  * Write choke point for a BRAND NEW record (R1-F1 + R1-F7's sibling case):
- * refuses, under the scope's lock, when an active (`candidate`/`accepted`)
- * record already exists at `record.id`+`record.scope` — `learning-record-
- * already-exists` — rather than silently overwriting it. A record left
- * behind in a terminal state (`rejected`/`superseded`/`expired`), or no
- * record at all, may be replaced (extract re-drafting after an expiry;
- * `promote` re-promoting after an earlier promotion was rejected).
+ * refuses, under the scope's lock, when a record already exists at
+ * `record.id`+`record.scope` whose status is not explicitly listed in
+ * `options.replaceableStatuses` (R2-F3; see that option's own doc) —
+ * `learning-record-already-exists` — rather than silently overwriting it.
+ * The rejected/replaceable check happens on the read taken UNDER the lock,
+ * not any snapshot the caller read beforehand, so a concurrent write
+ * landing between the caller's own pre-check and this call cannot resurface
+ * a decided record.
  */
-export async function createPattern(root: string, record: LearnedPattern, options: WritePatternOptions = {}): Promise<void> {
+export async function createPattern(root: string, record: LearnedPattern, options: CreatePatternOptions = {}): Promise<void> {
   assertValidLearningId(record.id);
+  const replaceable = new Set(options.replaceableStatuses ?? []);
   const lockPath = lockPathFor(root, record.scope, options);
   await withFileLock(lockPath, async () => {
     const existing = await readPattern(root, record.id, record.scope, options);
-    if (existing !== undefined && (existing.status === "candidate" || existing.status === "accepted")) {
+    if (existing !== undefined && !replaceable.has(existing.status)) {
       throw new LearningStoreError(
         "learning-record-already-exists",
-        `refusing to create "${record.id}" (${record.scope}): an active (${existing.status}) record already exists there`,
+        `refusing to create "${record.id}" (${record.scope}): a (${existing.status}) record already exists there and is not in the caller's replaceable-status list`,
       );
     }
     await writeRecordUnlocked(root, record, options);

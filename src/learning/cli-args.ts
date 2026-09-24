@@ -67,6 +67,15 @@ export function parseLearnArgs(args: readonly string[], spec: LearnArgSpec): Par
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] as string;
     if (!arg.startsWith("--")) {
+      // R2-F2: a single-dash arg other than the lone `-` (a real, if unusual,
+      // positional some CLIs use for "stdin") is refused like an unknown
+      // flag, not silently accepted as a positional — `prune -n` or
+      // `extract -x` used to fall straight through to the positional list
+      // (ignored by every verb that takes none) instead of being reported.
+      if (arg.startsWith("-") && arg !== "-") {
+        bad.push(arg);
+        continue;
+      }
       positionals.push(arg);
       continue;
     }

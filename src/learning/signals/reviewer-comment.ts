@@ -47,6 +47,13 @@ export async function reviewerCommentSignal(root: string, _window: ObservationLi
 
   const projectIdentity = resolveProjectIdentity(root).identity;
   const profiledAuthors = new Set((config.reviewerProfiles ?? []).map((login) => login.toLowerCase()));
+  // R2-F6: strip/refuse EVERY configured login, not just the comment's own
+  // author — a comment from alice quoting or naming a co-reviewer ("as
+  // bob-reviewer said...") must not leak bob's login into the stored lesson
+  // either. `reviewerProfiles` is a subset of `authors` (the config loader
+  // enforces this) but unioned explicitly anyway, in case that invariant is
+  // ever relaxed.
+  const allConfiguredLogins = [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
   const drafts: SignalDraft[] = [];
 
   for (const file of files) {
@@ -63,7 +70,7 @@ export async function reviewerCommentSignal(root: string, _window: ObservationLi
       const selection = selectLearnableComments(state, [author]);
       for (const comment of selection.kept) {
         for (const sentence of splitSentences(comment.body ?? "")) {
-          const lesson = generalizeLesson(sentence, [author]);
+          const lesson = generalizeLesson(sentence, allConfiguredLogins);
           if (lesson === null) continue;
           const isProfiled = profiledAuthors.has(author.toLowerCase());
           drafts.push({

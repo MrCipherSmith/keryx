@@ -3,8 +3,7 @@ import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { learnProjectSkill } from "../gdskills/learn";
-import { applyReviewerProfile } from "../learning/service";
-import { parseLearnArgs } from "../learning/cli-args";
+import { applyReviewerProfile, parseLearnArgs } from "../learning/service";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
   learningRecordPath,
@@ -1326,8 +1325,28 @@ function requiredInteger(args: string[], name: string): number {
  */
 async function runLearn(args: string[]): Promise<void> {
   rejectUnknownFlags(args, LEARN_FLAGS, "learn --pr <n> | --reviewer <id>");
-  const reviewerId = optionValue(args, "--reviewer");
+  // R2-F7: parse the verb's own args ONCE with `parseLearnArgs` — the same
+  // parser `--reviewer` mode already used below it — instead of re-deriving
+  // `--dry-run`/`--json` with `args.includes` and `--reviewer` with
+  // `optionValue` on the `--pr` path. Those disagreed with the parser in two
+  // ways: `--dry-run=1` passed `rejectUnknownFlags` (it only checks flag
+  // NAMES) and then `args.includes("--dry-run")` read it as absent, so a
+  // preview request on the `--pr` path silently produced the real write;
+  // and a repeated or valueless `--reviewer` was never refused at all
+  // (`optionValue` just returns the last/`undefined` one).
+  const parsed = parseLearnArgs(args, { boolean: ["--dry-run", "--json"], value: ["--pr", "--reviewer"] });
+  if (parsed.bad.length > 0) {
+    throw new Error(`Unknown option(s) for \`keryx review learn\`: ${parsed.bad.join(", ")}.`);
+  }
+  const reviewerOccurrences = args.filter((arg) => arg === "--reviewer" || arg.startsWith("--reviewer=")).length;
+  if (reviewerOccurrences > 1) {
+    throw new Error("`--reviewer` was given more than once for `keryx review learn`.");
+  }
+  const reviewerId = parsed.values.get("--reviewer");
   if (reviewerId !== undefined) {
+    if (reviewerId.trim().length === 0) {
+      throw new Error("`--reviewer <id>` needs a value.");
+    }
     await runLearnReviewer(args, reviewerId);
     return;
   }
@@ -1340,7 +1359,10 @@ async function runLearn(args: string[]): Promise<void> {
     return;
   }
 
-  const number = requiredInteger(args, "--pr");
+  const number = parseNonNegativeInteger(parsed.values.get("--pr"), "--pr");
+  if (number === undefined) {
+    throw new Error("`--pr <n>` is required.");
+  }
   const statePath = prCommentsStatePath(cwd, config.repo, number);
   if (!(await pathExists(statePath))) {
     throw new Error(
@@ -1374,7 +1396,7 @@ async function runLearn(args: string[]): Promise<void> {
       `excluded as unconfigured: ${selection.unconfigured.length}`,
       `configured but with no recorded body: ${selection.bodyless.length}`,
     ].join(", ");
-    if (args.includes("--json")) {
+    if (parsed.flags.has("--json")) {
       console.log(
         JSON.stringify(
           { repo: config.repo, number, skill: config.skill, source: relativeSourcePath, proposal: null, selection: counts(state, selection) },
@@ -1394,10 +1416,10 @@ async function runLearn(args: string[]): Promise<void> {
     sourceType: "review",
     sourcePath: relativeSourcePath,
     skill: config.skill,
-    dryRun: args.includes("--dry-run"),
+    dryRun: parsed.flags.has("--dry-run"),
   });
 
-  if (args.includes("--json")) {
+  if (parsed.flags.has("--json")) {
     console.log(
       JSON.stringify(
         { repo: config.repo, number, skill: config.skill, source: relativeSourcePath, proposal, selection: counts(state, selection) },

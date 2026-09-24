@@ -433,15 +433,51 @@ describe("createPattern (R1-F1/R1-F7 choke point)", () => {
     });
   });
 
-  test("allows replacing a TERMINAL (rejected/expired/superseded) record", async () => {
+  // R2-F3: a terminal record is no longer replaceable by DEFAULT — the
+  // caller must explicitly list which statuses it intends to replace.
+  test("refuses to replace a TERMINAL (rejected) record when the caller passes no replaceableStatuses (the new default)", async () => {
     await withProjectRoot(async (root) => {
       const rejected = makeRecord({ id: "testing.rejected-11221122", status: "rejected" });
       delete (rejected as { ttl?: unknown }).ttl;
       await writePattern(root, rejected);
       const fresh = makeRecord({ id: rejected.id });
-      await createPattern(root, fresh);
+      await expect(createPattern(root, fresh)).rejects.toMatchObject({ reason: "learning-record-already-exists" });
+      const read = await readPattern(root, rejected.id, "project");
+      expect(read?.status).toBe("rejected"); // untouched
+    });
+  });
+
+  test("replaces a TERMINAL (rejected/expired/superseded) record when the caller explicitly lists it as replaceable (e.g. promote.ts's own option)", async () => {
+    await withProjectRoot(async (root) => {
+      const rejected = makeRecord({ id: "testing.rejected-33443344", status: "rejected" });
+      delete (rejected as { ttl?: unknown }).ttl;
+      await writePattern(root, rejected);
+      const fresh = makeRecord({ id: rejected.id });
+      await createPattern(root, fresh, { replaceableStatuses: ["rejected", "expired", "superseded"] });
       const read = await readPattern(root, rejected.id, "project");
       expect(read?.status).toBe("candidate");
+    });
+  });
+
+  // R2-F3: the discriminating case from the round-2 probe (s1.ts S1) — a
+  // rejected record must never be resurfaced by a `createPattern` call that
+  // uses extract's own options (no `replaceableStatuses` at all), even when
+  // simulating the race extract's upsert closes (a pre-lock read that missed
+  // the rejection, calling `createPattern` with the same options extract
+  // does). This FAILS on the pre-R2-F3 code (which always replaced any
+  // terminal status unconditionally).
+  test("R2-F3 (R2-F2 probe s1.ts S1): createPattern with extract's own options never replaces a rejected record", async () => {
+    await withProjectRoot(async (root) => {
+      const rejected = makeRecord({ id: "testing.rejected-55665566", status: "rejected" });
+      delete (rejected as { ttl?: unknown }).ttl;
+      await writePattern(root, rejected);
+      // extract.ts's `upsertDraft` calls `createPattern(root, record, storeOptions)`
+      // with no `replaceableStatuses` — the same shape reproduced here.
+      await expect(createPattern(root, makeRecord({ id: rejected.id }), {})).rejects.toMatchObject({
+        reason: "learning-record-already-exists",
+      });
+      const read = await readPattern(root, rejected.id, "project");
+      expect(read?.status).toBe("rejected");
     });
   });
 });

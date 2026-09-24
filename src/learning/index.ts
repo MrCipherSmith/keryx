@@ -89,13 +89,21 @@ export {
 // (T8) import it, and re-exporting it from this facade would make every
 // caller of this facade an importer too.
 
+// R2-F4: `writePattern`/`writeIndex` — the low-level, non-reentrant
+// primitives `store.ts` itself documents as callable only from inside a
+// callback already holding the scope's lock (`updatePattern`/`createPattern`,
+// or `store.ts`'s own tests) — are deliberately NOT re-exported here. Every
+// outside caller of this facade goes through `updatePattern`/`createPattern`
+// for a write; re-exporting the raw primitives would let a facade caller
+// bypass the identity/immutability checks those choke points layer on top
+// (see `store-choke-point.test.ts`, widened to scan all of `src/**` for
+// exactly this).
 export {
   LearningStoreError,
   listPatterns,
   readIndex,
   readPattern,
-  writeIndex,
-  writePattern,
+  type CreatePatternOptions,
   type ListPatternsFilter,
   type StoreEnvOptions,
   type WritePatternOptions,
@@ -125,7 +133,15 @@ export {
 
 export { learningConfigPath, loadLearningConfig, type LearningConfig } from "./config";
 
-export { generalizeLesson, reviewerIdFor } from "./reviewer-id";
+export { containsConfiguredLogin, generalizeLesson, reviewerIdFor } from "./reviewer-id";
+
+// CI/import-policy: `src/commands/learn.ts` and `src/commands/review.ts`
+// (both "commands" zone, `client-imports-core-internal`-tracked) used to
+// import `parseLearnArgs` straight from `./cli-args`, bypassing this facade
+// even though one exists — two avoidable bypasses the ratchet test
+// (`src/lib/import-policy.live.test.ts`) caught growing. Re-exporting it here
+// lets both commands import it through `../learning/service` instead.
+export { parseLearnArgs, type LearnArgSpec, type ParsedLearnArgs } from "./cli-args";
 
 export type { ObservationLine, SignalDraft, SignalRunner, SignalRunOptions } from "./signals/types";
 

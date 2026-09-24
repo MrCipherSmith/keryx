@@ -19,11 +19,20 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { validateAgentDefinition, type AgentDefinition } from "../agents";
 import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
+import { loadReviewLearningConfig } from "../review/review-learning";
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
+import { containsConfiguredLogin } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { listPatterns, readPattern, updatePattern, type StoreEnvOptions } from "./store";
 import type { GraduationTarget, LearnedPattern, LearningDomain, LearningScope } from "./types";
+
+/** `config.authors` + `config.reviewerProfiles`, deduped — or `[]` when the project has no review-learning config. Duplicated from `extract.ts` rather than shared: a two-line pure lookup, not worth a cross-file dependency between these two feature modules. */
+async function configuredReviewLogins(root: string): Promise<string[]> {
+  const config = await loadReviewLearningConfig(root);
+  if (config === null) return [];
+  return [...new Set([...config.authors, ...(config.reviewerProfiles ?? [])])];
+}
 
 export class LearningGraduateError extends Error {
   constructor(
@@ -528,6 +537,24 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   const scan = await scanLearnedText(root, [candidate.description, candidate.role, candidate.body]);
   if (scan.findings.length > 0) {
     throw new LearningGraduateError("learning-text-refused", `agent candidate refused by the security scan: ${scan.findings.join(", ")}`);
+  }
+
+  // R2-F6: the same case-insensitive configured-login substring refusal
+  // `generalizeLesson`/extract's upsert apply, run here too — a graduated
+  // agent body concatenates every member record's stored `trigger`/`action`
+  // text (`buildAgentCandidate` above), so an attribution fragment that
+  // somehow survived into a stored record (or arrived via a differently
+  // configured login list at graduation time) is still refused before it
+  // reaches `.metaproject/agents/<name>.md`.
+  const configuredLogins = await configuredReviewLogins(root);
+  if (
+    configuredLogins.length > 0 &&
+    [candidate.description, candidate.role, candidate.body].some((text) => containsConfiguredLogin(text, configuredLogins))
+  ) {
+    throw new LearningGraduateError(
+      "learning-text-refused",
+      `agent candidate for proposal "${proposalId}" refused: contains a configured reviewer login`,
+    );
   }
 
   const validation = validateAgentDefinition(candidate);
