@@ -47,19 +47,19 @@ afterEach(() => {
 
 describe("loadAgentCatalog", () => {
   test("loads a bundled definition", () => {
-    writeAgent(bundledRoot, "code-explorer", agentMarkdown("code-explorer"));
+    writeAgent(bundledRoot, "codebase-navigator", agentMarkdown("codebase-navigator"));
     const catalog = loadAgentCatalog(projectRoot, { bundledRoot });
     expect(catalog.errors).toEqual([]);
-    expect(catalog.agents.map((a) => a.definition.name)).toEqual(["code-explorer"]);
+    expect(catalog.agents.map((a) => a.definition.name)).toEqual(["codebase-navigator"]);
     expect(catalog.agents[0]?.source.kind).toBe("bundled");
   });
 
   test("a project definition of the same name overrides the bundled one", () => {
-    writeAgent(bundledRoot, "code-explorer", agentMarkdown("code-explorer", { role: "Bundled role." }));
+    writeAgent(bundledRoot, "codebase-navigator", agentMarkdown("codebase-navigator", { role: "Bundled role." }));
     writeAgent(
       path.join(projectRoot, ".metaproject", "agents"),
-      "code-explorer",
-      agentMarkdown("code-explorer", { role: "Project role." }),
+      "codebase-navigator",
+      agentMarkdown("codebase-navigator", { role: "Project role." }),
     );
     const catalog = loadAgentCatalog(projectRoot, { bundledRoot });
     expect(catalog.errors).toEqual([]);
@@ -69,22 +69,22 @@ describe("loadAgentCatalog", () => {
   });
 
   test("a second file whose declared name collides with another's is caught as a stem mismatch (the stem invariant makes true same-source duplicates unreachable on disk)", () => {
-    // Two different files in the same source directory both declaring `name: code-explorer`:
-    // the second one's OWN stem ("code-explorer-2") no longer matches its declared name, so
+    // Two different files in the same source directory both declaring `name: codebase-navigator`:
+    // the second one's OWN stem ("codebase-navigator-2") no longer matches its declared name, so
     // `name-stem-mismatch` fires for it before the duplicate-name check would ever see it —
     // which is exactly why a same-source duplicate can only happen if that invariant is later
     // relaxed (e.g. a second accepted file extension), the scenario `duplicate-name` guards.
-    writeAgent(bundledRoot, "code-explorer", agentMarkdown("code-explorer"));
-    writeAgent(bundledRoot, "code-explorer-2", agentMarkdown("code-explorer"));
+    writeAgent(bundledRoot, "codebase-navigator", agentMarkdown("codebase-navigator"));
+    writeAgent(bundledRoot, "codebase-navigator-2", agentMarkdown("codebase-navigator"));
     const catalog = loadAgentCatalog(projectRoot, { bundledRoot });
-    expect(catalog.agents.map((a) => a.definition.name)).toEqual(["code-explorer"]);
-    expect(catalog.errors.some((e) => e.reason === "name-stem-mismatch" && e.path.endsWith("code-explorer-2.md"))).toBe(
+    expect(catalog.agents.map((a) => a.definition.name)).toEqual(["codebase-navigator"]);
+    expect(catalog.errors.some((e) => e.reason === "name-stem-mismatch" && e.path.endsWith("codebase-navigator-2.md"))).toBe(
       true,
     );
   });
 
   test("a file stem that does not match the declared name is a named error", () => {
-    writeAgent(bundledRoot, "wrong-stem", agentMarkdown("code-explorer"));
+    writeAgent(bundledRoot, "wrong-stem", agentMarkdown("codebase-navigator"));
     const catalog = loadAgentCatalog(projectRoot, { bundledRoot });
     expect(catalog.agents).toEqual([]);
     expect(catalog.errors).toHaveLength(1);

@@ -47,16 +47,16 @@ Ten generic, stack-agnostic definitions ship with Keryx:
 
 | Name | Role |
 |---|---|
-| `architect` | system-design and structural-tradeoff reasoning |
-| `planner` | breaks a request into an ordered task/dependency plan |
-| `code-explorer` | read-only location and cross-reference search |
-| `tdd-guide` | drives a failing-test-first implementation loop |
-| `refactor-cleaner` | scoped simplification/dedup pass, no behavior change |
-| `silent-failure-hunter` | finds swallowed errors, empty catches, dropped rejections |
-| `doc-updater` | keeps docs/comments in sync with a code change |
-| `security-reviewer` | stack-agnostic security-pattern review |
-| `performance-reviewer` | stack-agnostic performance-pattern review |
-| `e2e-runner` | drives and reports on an end-to-end test pass |
+| `design-advisor` | system-design and structural-tradeoff reasoning |
+| `work-planner` | breaks a request into an ordered task/dependency plan |
+| `codebase-navigator` | read-only location and cross-reference search |
+| `test-first-driver` | drives a failing-test-first implementation loop |
+| `refactoring-steward` | scoped simplification/dedup pass, no behavior change |
+| `error-path-auditor` | finds swallowed errors, empty catches, dropped rejections |
+| `docs-maintainer` | keeps docs/comments in sync with a code change |
+| `security-auditor` | stack-agnostic security-pattern review |
+| `performance-auditor` | stack-agnostic performance-pattern review |
+| `end-to-end-tester` | drives and reports on an end-to-end test pass |
 
 Per-stack generated pairs (a reviewer and a build-error-resolver per stack
 pack) are not part of this initial catalogue — they arrive later, generated

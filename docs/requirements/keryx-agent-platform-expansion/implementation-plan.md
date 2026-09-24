@@ -115,9 +115,9 @@ content), W2 (format, compiler, exporters — not yet the full agent catalog).
   `spawn_subagent`-shaped dispatch contracts from it, and exporters to Claude
   Code / Codex / Kiro / OpenCode / keryx shell child agents (support per
   harness recorded honestly via W5's matrix). The initial generic catalog
-  (architect, planner, code-explorer, tdd-guide, refactor-cleaner,
-  silent-failure-hunter, doc-updater, security-reviewer, performance-
-  reviewer, e2e-runner) ships in this wave; per-stack pairs wait for Wave 4.
+  (design-advisor, work-planner, codebase-navigator, test-first-driver, refactoring-steward,
+  error-path-auditor, docs-maintainer, security-auditor, performance-
+  auditor, end-to-end-tester) ships in this wave; per-stack pairs wait for Wave 4.
 
 **Entry criteria:** Wave 1 exit criteria met (W6 hook runtime and W5-b matrix
 available for W2's exporters to record support against; W8 audit available to

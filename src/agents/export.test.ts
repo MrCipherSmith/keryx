@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 const DEFINITION: AgentDefinition = {
-  name: "code-explorer",
+  name: "codebase-navigator",
   description: "Locates code and cross-references.",
   role: "You locate code; you never write.",
   tools: ["read_file", "search_code", "shell_exec", "web_search"],
@@ -95,7 +95,7 @@ describe("planAgentExport — instruction-only fallback (AC4)", () => {
     const plan = await planAgentExport(root, DEFINITION, "opencode", { lookup: noRecordLookup });
     expect(plan.supportLevel).toBe("instruction-only");
     expect(plan.action).toBe("create");
-    expect(plan.relativePath).toBe(".metaproject/agents-export/opencode/code-explorer.md");
+    expect(plan.relativePath).toBe(".metaproject/agents-export/opencode/codebase-navigator.md");
     expect(plan.content).toContain("instruction-only prose");
     expect(plan.content).toContain(PROMPT_DEFENSE_BASELINE);
     // No enforced host fields: no YAML frontmatter block, no `permission:` map.
@@ -113,10 +113,10 @@ describe("planAgentExport / writeAgentExport lifecycle", () => {
   test("create: no existing file", async () => {
     const plan = await planAgentExport(root, DEFINITION, "claude");
     expect(plan.action).toBe("create");
-    expect(plan.relativePath).toBe(".claude/agents/code-explorer.md");
+    expect(plan.relativePath).toBe(".claude/agents/codebase-navigator.md");
     const { written } = await writeAgentExport(root, plan);
     expect(written).toBe(true);
-    expect(readFileSync(path.join(root, ".claude/agents/code-explorer.md"), "utf8")).toBe(plan.content as string);
+    expect(readFileSync(path.join(root, ".claude/agents/codebase-navigator.md"), "utf8")).toBe(plan.content as string);
   });
 
   test("unchanged: re-planning after a write reports unchanged and writes nothing", async () => {
@@ -136,18 +136,18 @@ describe("planAgentExport / writeAgentExport lifecycle", () => {
     expect(second.action).toBe("update");
     const { written } = await writeAgentExport(root, second);
     expect(written).toBe(true);
-    expect(readFileSync(path.join(root, ".claude/agents/code-explorer.md"), "utf8")).toContain("A different description now.");
+    expect(readFileSync(path.join(root, ".claude/agents/codebase-navigator.md"), "utf8")).toContain("A different description now.");
   });
 
   test("refuse-unmanaged: an existing file with no keryx-managed sentinel is never overwritten", async () => {
     mkdirSync(path.join(root, ".claude", "agents"), { recursive: true });
-    writeFileSync(path.join(root, ".claude", "agents", "code-explorer.md"), "# hand-authored, not keryx's\n", "utf8");
+    writeFileSync(path.join(root, ".claude", "agents", "codebase-navigator.md"), "# hand-authored, not keryx's\n", "utf8");
     const plan = await planAgentExport(root, DEFINITION, "claude");
     expect(plan.action).toBe("refuse-unmanaged");
     expect(plan.reason).toBeDefined();
     const { written } = await writeAgentExport(root, plan);
     expect(written).toBe(false);
-    expect(readFileSync(path.join(root, ".claude", "agents", "code-explorer.md"), "utf8")).toBe("# hand-authored, not keryx's\n");
+    expect(readFileSync(path.join(root, ".claude", "agents", "codebase-navigator.md"), "utf8")).toBe("# hand-authored, not keryx's\n");
   });
 
   test("dry-run never writes, even for a create/update plan", async () => {
@@ -155,7 +155,7 @@ describe("planAgentExport / writeAgentExport lifecycle", () => {
     const { written } = await writeAgentExport(root, plan, { dryRun: true });
     expect(written).toBe(false);
     expect(readFileSync).toBeDefined(); // sanity: file truly absent
-    expect(() => readFileSync(path.join(root, ".claude/agents/code-explorer.md"), "utf8")).toThrow();
+    expect(() => readFileSync(path.join(root, ".claude/agents/codebase-navigator.md"), "utf8")).toThrow();
   });
 
   test("keryx-shell plans compiled-only with no file and a KeryxShellCompileResult", async () => {
@@ -164,7 +164,7 @@ describe("planAgentExport / writeAgentExport lifecycle", () => {
     expect(plan.relativePath).toBeUndefined();
     expect(plan.content).toBeUndefined();
     expect(plan.keryxShell?.target).toBe("keryx-shell");
-    expect(plan.keryxShell?.input.label).toBe("code-explorer");
+    expect(plan.keryxShell?.input.label).toBe("codebase-navigator");
     expect(plan.droppedTools).toEqual([]);
     const { written } = await writeAgentExport(root, plan);
     expect(written).toBe(false);
@@ -183,8 +183,8 @@ describe("removeManagedAgentExports", () => {
     writeFileSync(path.join(root, ".claude", "agents", "hand-authored.md"), "# not keryx's\n", "utf8");
 
     const removed = await removeManagedAgentExports(root, "claude");
-    expect(removed).toEqual([".claude/agents/code-explorer.md"]);
-    expect(() => readFileSync(path.join(root, ".claude/agents/code-explorer.md"), "utf8")).toThrow();
+    expect(removed).toEqual([".claude/agents/codebase-navigator.md"]);
+    expect(() => readFileSync(path.join(root, ".claude/agents/codebase-navigator.md"), "utf8")).toThrow();
     expect(readFileSync(path.join(root, ".claude/agents/hand-authored.md"), "utf8")).toBe("# not keryx's\n");
   });
 
@@ -228,7 +228,7 @@ describe("T17: removeManagedAgentExportsDetailed keeps hand-edited managed files
   test("removeManagedAgentExports (the plain list-returning wrapper) only ever reports what was actually removed, never a kept hand-edited file", async () => {
     const plan = await planAgentExport(root, DEFINITION, "claude");
     await writeAgentExport(root, plan);
-    const filePath = path.join(root, ".claude", "agents", "code-explorer.md");
+    const filePath = path.join(root, ".claude", "agents", "codebase-navigator.md");
     writeFileSync(filePath, `${readFileSync(filePath, "utf8")}\nhand-added line\n`, "utf8");
 
     expect(await removeManagedAgentExports(root, "claude")).toEqual([]);
@@ -248,7 +248,7 @@ describe("R1-F3: symlink safety", () => {
     const outsideDir = mkdtempSync(path.join(tmpdir(), "keryx-agents-outside-"));
     const outsideTarget = path.join(outsideDir, "outside-target.txt");
     mkdirSync(path.join(root, ".claude", "agents"), { recursive: true });
-    symlinkSync(outsideTarget, path.join(root, ".claude", "agents", "code-explorer.md"));
+    symlinkSync(outsideTarget, path.join(root, ".claude", "agents", "codebase-navigator.md"));
 
     const plan = await planAgentExport(root, DEFINITION, "claude");
     expect(plan.action).toBe("refuse-unmanaged");
@@ -270,7 +270,7 @@ describe("R1-F3: symlink safety", () => {
     const { written } = await writeAgentExport(root, plan);
     expect(written).toBe(false);
     expect(readFileSync !== undefined).toBe(true);
-    expect(() => readFileSync(path.join(outsideDir, "code-explorer.md"), "utf8")).toThrow();
+    expect(() => readFileSync(path.join(outsideDir, "codebase-navigator.md"), "utf8")).toThrow();
 
     rmSync(outsideDir, { recursive: true, force: true });
   });
@@ -298,7 +298,7 @@ describe("R1-F9: refuse-modified / --force", () => {
   test("re-exporting after a hand edit to a managed file reports refuse-modified, not update", async () => {
     const first = await planAgentExport(root, DEFINITION, "claude");
     await writeAgentExport(root, first);
-    const filePath = path.join(root, ".claude", "agents", "code-explorer.md");
+    const filePath = path.join(root, ".claude", "agents", "codebase-navigator.md");
     const original = readFileSync(filePath, "utf8");
     writeFileSync(filePath, `${original}\nhand-added line, sentinel left untouched\n`, "utf8");
 
@@ -323,7 +323,7 @@ describe("R1-F9: refuse-modified / --force", () => {
   test("--force overwrites a hand-edited managed file; a plain re-export without --force still refuses", async () => {
     const first = await planAgentExport(root, DEFINITION, "claude");
     await writeAgentExport(root, first);
-    const filePath = path.join(root, ".claude", "agents", "code-explorer.md");
+    const filePath = path.join(root, ".claude", "agents", "codebase-navigator.md");
     writeFileSync(filePath, `${readFileSync(filePath, "utf8")}\nhand edit\n`, "utf8");
 
     const changed: AgentDefinition = { ...DEFINITION, description: "A different description now." };
@@ -340,12 +340,12 @@ describe("R1-F9: refuse-modified / --force", () => {
 
   test("--force never overwrites a plain refuse-unmanaged (no sentinel at all)", async () => {
     mkdirSync(path.join(root, ".claude", "agents"), { recursive: true });
-    writeFileSync(path.join(root, ".claude", "agents", "code-explorer.md"), "# hand-authored, not keryx's\n", "utf8");
+    writeFileSync(path.join(root, ".claude", "agents", "codebase-navigator.md"), "# hand-authored, not keryx's\n", "utf8");
     const plan = await planAgentExport(root, DEFINITION, "claude");
     expect(plan.action).toBe("refuse-unmanaged");
     const { written } = await writeAgentExport(root, plan, { force: true });
     expect(written).toBe(false);
-    expect(readFileSync(path.join(root, ".claude", "agents", "code-explorer.md"), "utf8")).toBe("# hand-authored, not keryx's\n");
+    expect(readFileSync(path.join(root, ".claude", "agents", "codebase-navigator.md"), "utf8")).toBe("# hand-authored, not keryx's\n");
   });
 });
 

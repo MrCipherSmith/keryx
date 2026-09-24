@@ -90,7 +90,7 @@ const NON_SKILL_AGENT_LABELS: ReadonlyMap<string, string> = new Map([
 /**
  * Flow 310 (W2 agent-definitions catalog): a dispatch position may also name
  * one of the `src/agents/` catalog's own generic agents (`agent:
- * "code-explorer"`, `Agent("architect")`, ...), which are real dispatchable
+ * "codebase-navigator"`, `Agent("design-advisor")`, ...), which are real dispatchable
  * units this tree ships but are not gdskills — a separate catalog with its
  * own loader (`loadAgentCatalog`). A catalog-load failure here (unreadable
  * file, invalid frontmatter/schema, duplicate name) does not fail this
@@ -289,13 +289,13 @@ describe("a shipped skill never dispatches an agent this tree does not have", ()
   test("the agent-definitions catalog is non-empty and a dispatch-position reference to it resolves", () => {
     const agentCatalogNames = knownAgentCatalogNames();
     expect(agentCatalogNames.size).toBeGreaterThan(0);
-    expect(agentCatalogNames.has("architect")).toBe(true);
+    expect(agentCatalogNames.has("design-advisor")).toBe(true);
 
     const known = knownAgentNames();
     const legitimate = [
-      'Agent("architect")',
-      'subagent_type: "code-explorer"',
-      '{ id: "plan", type: "plan", agent: "planner", depends: [] }',
+      'Agent("design-advisor")',
+      'subagent_type: "codebase-navigator"',
+      '{ id: "plan", type: "plan", agent: "work-planner", depends: [] }',
     ];
     for (const line of legitimate) {
       for (const pattern of DISPATCH_PATTERNS) {

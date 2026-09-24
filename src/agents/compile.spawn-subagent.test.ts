@@ -51,7 +51,7 @@ function makeRealSpawnSubagentTool() {
 }
 
 const DEFINITION: AgentDefinition = {
-  name: "code-explorer",
+  name: "codebase-navigator",
   description: "Read-only location and cross-reference search.",
   role: "You locate code and cross-references; you never write.",
   tools: ["read_file", "search_code"],

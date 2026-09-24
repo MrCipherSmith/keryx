@@ -1,5 +1,5 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.3
+Version: 0.1.5
 
 ## Summary
 
@@ -219,16 +219,16 @@ Generic personas (hand-authored, stack-agnostic):
 
 | Name | Role |
 |---|---|
-| `architect` | system-design and structural-tradeoff reasoning |
-| `planner` | breaks a request into an ordered task/dependency plan |
-| `code-explorer` | read-only location and cross-reference search |
-| `tdd-guide` | drives a failing-test-first implementation loop |
-| `refactor-cleaner` | scoped simplification/dedup pass, no behavior change |
-| `silent-failure-hunter` | finds swallowed errors, empty catches, dropped rejections |
-| `doc-updater` | keeps docs/comments in sync with a code change |
-| `security-reviewer` | stack-agnostic security-pattern review |
-| `performance-reviewer` | stack-agnostic performance-pattern review |
-| `e2e-runner` | drives and reports on an end-to-end test pass |
+| `design-advisor` | system-design and structural-tradeoff reasoning |
+| `work-planner` | breaks a request into an ordered task/dependency plan |
+| `codebase-navigator` | read-only location and cross-reference search |
+| `test-first-driver` | drives a failing-test-first implementation loop |
+| `refactoring-steward` | scoped simplification/dedup pass, no behavior change |
+| `error-path-auditor` | finds swallowed errors, empty catches, dropped rejections |
+| `docs-maintainer` | keeps docs/comments in sync with a code change |
+| `security-auditor` | stack-agnostic security-pattern review |
+| `performance-auditor` | stack-agnostic performance-pattern review |
+| `end-to-end-tester` | drives and reports on an end-to-end test pass |
 
 Per-stack pairs, generated from each W1 stack pack once it has passed W1's
 governance gates (dedupe + eval + stocktake) — not hand-authored, and not
