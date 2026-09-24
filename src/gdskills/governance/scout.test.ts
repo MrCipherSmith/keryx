@@ -70,6 +70,57 @@ describe("scoutSkill", () => {
     expect(result.decision).toBe("create");
     expect(result.matches).toEqual([]);
   });
+
+  // Flow 314 T15: scouting a NAMED candidate (`--skill-name` with
+  // `--record`, or `--candidate` naming an on-disk entry) must not be
+  // allowed to match the candidate's own already-written `SKILL.md` — that
+  // trivially scores 1.0 against itself and reports "use" against itself,
+  // which is meaningless for a pre-creation dedupe check. `excludeIds`
+  // removes the candidate from the scored catalog entirely, so the decision
+  // reflects only OTHER skills.
+  describe("excludeIds (flow 314 T15)", () => {
+    test("without excludeIds, a candidate's own description matches itself at full coverage", () => {
+      const self = catalog.find((entry) => entry.description.length > 0);
+      expect(self).toBeDefined();
+      if (self === undefined) return;
+      const result = scoutSkill(self.description, catalog);
+      expect(result.matches[0]?.skillId).toBe(self.id);
+      expect(result.matches[0]?.overlapScore).toBe(1);
+      expect(result.decision).toBe("use");
+    });
+
+    test("with excludeIds naming the candidate, its own catalog entry is scored out and a weaker neighbour surfaces instead", () => {
+      const self = catalog.find((entry) => entry.id === "review/review-frontend");
+      expect(self).toBeDefined();
+      if (self === undefined) return;
+      const result = scoutSkill(self.description, catalog, { excludeIds: [self.id] });
+      expect(result.matches.every((match) => match.skillId !== self.id)).toBe(true);
+      // A weaker neighbour (review/review-backend, review/code-mobx-store-review,
+      // ... share "review"/"react"/"component" vocabulary) should now surface
+      // as the top match instead, at a lower score than the self-match was.
+      expect(result.matches[0]?.skillId).not.toBe(self.id);
+      if (result.matches.length > 0) {
+        expect(result.matches[0]?.overlapScore).toBeLessThan(1);
+      }
+    });
+
+    test("excludeIds only removes the named id(s); unrelated entries are unaffected", () => {
+      const result = scoutSkill("underwater basket weaving championship schedule for goldfish", catalog, {
+        excludeIds: ["review/review-frontend"],
+      });
+      expect(result.decision).toBe("create");
+    });
+
+    test("plain scout with no excludeIds keeps today's self-matching behavior", () => {
+      const self = catalog.find((entry) => entry.id === "review/review-frontend");
+      expect(self).toBeDefined();
+      if (self === undefined) return;
+      const withoutExclude = scoutSkill(self.description, catalog);
+      const withEmptyExclude = scoutSkill(self.description, catalog, { excludeIds: [] });
+      expect(withoutExclude.matches[0]?.skillId).toBe(self.id);
+      expect(withEmptyExclude.matches[0]?.skillId).toBe(self.id);
+    });
+  });
 });
 
 describe("checkSkillSelected", () => {
