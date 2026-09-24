@@ -183,6 +183,17 @@ async function handleApply(cwd: string, args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  // N6: `applyAuditProposal` locks via a `.metaproject/data/...` path built
+  // from `root` — `mkdir(..., { recursive: true })` on that lock's parent
+  // directory silently created every missing ancestor, `root` itself
+  // included, when `root` did not exist (or was a file). Mirrors `handleRun`'s
+  // same check above: refuse up front, nothing created.
+  const rootStat = await stat(root).catch(() => undefined);
+  if (!rootStat || !rootStat.isDirectory()) {
+    console.error(`No such directory: ${root}`);
+    process.exitCode = 1;
+    return;
+  }
   try {
     const result = await applyAuditProposal(root, proposalId);
     heading("keryx security audit-harness apply");
@@ -215,7 +226,7 @@ function isValidCalendarDateString(value: string): boolean {
 async function handleBaseline(cwd: string, args: string[]): Promise<void> {
   if (args[0] !== "add") {
     console.error(
-      "Usage: keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>] [--reseal]",
+      "Usage: keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>] [--reseal] [--json]",
     );
     process.exitCode = 1;
     return;
@@ -228,9 +239,10 @@ async function handleBaseline(cwd: string, args: string[]): Promise<void> {
   const author = optionValue(rest, "--author");
   const baselineArg = optionValue(rest, "--baseline");
   const reseal = rest.includes("--reseal");
+  const asJson = rest.includes("--json");
   if (!findingIdArg || !justification) {
     console.error(
-      "Usage: keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>] [--reseal]",
+      "Usage: keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>] [--reseal] [--json]",
     );
     process.exitCode = 1;
     return;
@@ -240,7 +252,7 @@ async function handleBaseline(cwd: string, args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  let result: { resealed: boolean };
+  let result: { resealed: boolean; carriedOver: string[]; discarded: string[]; backupPath?: string };
   try {
     result = await addBaselineEntry(
       root,
@@ -257,12 +269,40 @@ async function handleBaseline(cwd: string, args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        {
+          findingId: findingIdArg,
+          baselinePath: defaultBaselinePath(root),
+          resealed: result.resealed,
+          carriedOver: result.carriedOver,
+          discarded: result.discarded,
+          ...(result.backupPath ? { backupPath: result.backupPath } : {}),
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
   heading("keryx security audit-harness baseline add");
   if (result.resealed) {
     // F8: an add onto a mismatch/unreadable baseline only reaches here with
     // `--reseal` explicitly passed — this is the one place that reseal is
     // acknowledged rather than happening silently.
     console.log(`  ${style.yellow(symbols.bullet)} resealed a previously tampered/unreadable baseline (--reseal)`);
+    // N7: which findingIds actually survived the reseal vs were lost, and
+    // where the pre-reseal file was backed up before being overwritten.
+    console.log(
+      `  ${style.dim("carried over:")} ${result.carriedOver.length > 0 ? result.carriedOver.join(", ") : "(none)"}`,
+    );
+    console.log(
+      `  ${style.dim("discarded:")} ${result.discarded.length > 0 ? result.discarded.join(", ") : "(none)"}`,
+    );
+    if (result.backupPath) {
+      console.log(`  ${style.dim("backup:")} ${result.backupPath}`);
+    }
   }
   console.log(`  ${style.green(symbols.ok)} recorded suppression for ${findingIdArg} → ${defaultBaselinePath(root)}`);
 }
@@ -272,7 +312,7 @@ export function printAuditHarnessHelp(): void {
   helpUsage([
     "keryx security audit-harness [path] [--fix-proposals] [--json] [--ci] [--baseline <file>] [--severity-floor <level>]",
     "keryx security audit-harness apply --proposal <id> [path]",
-    "keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>] [--reseal]",
+    "keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>] [--reseal] [--json]",
   ]);
   helpOptions([
     { flag: "--json", desc: "Emit the machine-readable report." },

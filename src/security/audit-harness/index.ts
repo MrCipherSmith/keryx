@@ -372,7 +372,7 @@ export async function computeAuditInternal(
 
   // --- skills ------------------------------------------------------------------
   {
-    const { found: files, unreadable: discoveryUnreadable } = await discoverSkillScripts(root);
+    const { found: files, unreadable: discoveryUnreadable, reasons: skillReasons } = await discoverSkillScripts(root);
     const unreadable: string[] = [...discoveryUnreadable];
     for (const relativePath of files) {
       const content = await safeReadText(path.join(root, relativePath));
@@ -384,6 +384,11 @@ export async function computeAuditInternal(
       raw.push(...checkInjectionInText("skills", "skill-script-injection", relativePath, content, "high"));
     }
     surfaces.push(surfaceResult("skills", files, unreadable));
+    // N3: a depth-cap truncation is not tied to one path (everything below
+    // the cut is unscanned), so it is not an `unreadable` entry — it reports
+    // as a top-level coverage reason instead, the same channel the
+    // `mcp-rug-pull: not-established` gap already uses.
+    coverageReasons.push(...skillReasons);
   }
 
   // --- imported-bundles ----------------------------------------------------------

@@ -397,9 +397,48 @@ export function checkHookExfiltrationShape(relativePath: string, hookCommand: st
   ];
 }
 
+const TRAILING_EXIT0_RE = /\s*(?:;|&&)\s*exit\s+0\s*$/;
+
+/**
+ * N4: strip EVERY `|| true` and `2>/dev/null` occurrence (not just the
+ * first), plus a trailing `; exit 0` / `&& exit 0` (repeated, if the command
+ * chains more than one), then trim. Pure string transform — used to build the
+ * `json-set` edit's replacement VALUE directly (no text search against the
+ * raw file bytes), so a command containing JSON-escaped quotes is unaffected:
+ * the value is assigned into the already-parsed object graph and re-serialized,
+ * never spliced into the file's text.
+ */
+function stripHookSuppression(command: string): string {
+  let next = command.replace(/\s*\|\|\s*true\b/g, "").replace(/\s*2>\/dev\/null/g, "");
+  let previous: string;
+  do {
+    previous = next;
+    next = next.replace(TRAILING_EXIT0_RE, "");
+  } while (next !== previous);
+  return next.trim();
+}
+
 export function checkHookSilentSuppression(relativePath: string, hookCommand: string, pointer: string): RawFinding[] {
-  const suppressed = /\|\|\s*true\b/.test(hookCommand) || /2>\/dev\/null/.test(hookCommand) || /;\s*exit\s+0\b/.test(hookCommand);
+  const suppressed =
+    /\|\|\s*true\b/.test(hookCommand) ||
+    /2>\/dev\/null/.test(hookCommand) ||
+    /;\s*exit\s+0\b/.test(hookCommand) ||
+    /&&\s*exit\s+0\b/.test(hookCommand);
   if (!suppressed) return [];
+  const rewritten = stripHookSuppression(hookCommand);
+  // N4: `checkHookSilentSuppression` is only ever called (from `index.ts`)
+  // against a `command` string already extracted from a PARSED JSON settings
+  // file — the previous `text-replace` edit re-searched the raw file TEXT for
+  // `hookCommand` verbatim, which breaks the moment the command contains a
+  // character JSON escapes on disk (a `"` becomes `\"`, for instance) and,
+  // being a single `String#replace`, only ever removed the FIRST `|| true`.
+  // A `json-set` edit at the command's own JSON pointer sidesteps both: it
+  // mutates the parsed object graph directly (no text matching at all) and
+  // writes the fully-stripped command in one shot. Kept conditional on the
+  // path actually being JSON so a hypothetical non-JSON caller still gets a
+  // text edit — `applyTextEdit` already refuses an edit whose `from` is not
+  // exactly one match in the file (see F2), so that path stays safe too.
+  const isJsonFile = relativePath.toLowerCase().endsWith(".json");
   return [
     {
       surface: "hooks",
@@ -416,20 +455,14 @@ export function checkHookSilentSuppression(relativePath: string, hookCommand: st
           rationale: "Remove the suppression so a failing hook actually reports failure.",
           // F4: the raw hook command can embed a secret (a token baked into a
           // curl/wget flag, for instance) — this `patch` is advisory display
-          // text (never what `applyTextEdit` actually writes; that uses
-          // `edit.from`/`edit.to` below, unredacted, since it has to match the
-          // file byte-for-byte), so it goes through the same redaction floor
-          // used to sanitize tool output before it reaches a report/log.
-          patch: redactSensitiveText(
-            `- ${hookCommand}\n+ ${hookCommand.replace(/\s*\|\|\s*true\b/, "").replace(/\s*2>\/dev\/null/, "")}`,
-          ),
+          // text (never what the edit below actually writes), so it goes
+          // through the same redaction floor used to sanitize tool output
+          // before it reaches a report/log.
+          patch: redactSensitiveText(`- ${hookCommand}\n+ ${rewritten}`),
         },
-        edit: {
-          kind: "text-replace",
-          path: relativePath,
-          from: hookCommand,
-          to: hookCommand.replace(/\s*\|\|\s*true\b/, "").replace(/\s*2>\/dev\/null/, ""),
-        },
+        edit: isJsonFile
+          ? { kind: "json-set", path: relativePath, pointer, value: rewritten }
+          : { kind: "text-replace", path: relativePath, from: hookCommand, to: rewritten },
       },
     },
   ];

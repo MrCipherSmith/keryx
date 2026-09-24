@@ -119,6 +119,73 @@ describe("F27: apply accepts an explicit [path] root, consistent with the audit 
   });
 });
 
+// --- N6: `apply` must not create a nonexistent root -----------------------
+
+describe("N6: apply --proposal <id> <path> refuses a nonexistent path instead of creating it", () => {
+  test("a nonexistent path is refused with exit 1 and nothing is created", async () => {
+    root = await makeRoot("keryx-n6-apply-missing-root-");
+    const missing = path.join(root, "does", "not", "exist");
+
+    const { exit, err } = await run(root, ["apply", "--proposal", "p-0000000000000000", missing]);
+    expect(exit).toBe(1);
+    expect(err).toMatch(/no such directory/i);
+
+    const stillMissing = await import("node:fs/promises").then((fs) =>
+      fs
+        .stat(missing)
+        .then(() => true)
+        .catch(() => false),
+    );
+    expect(stillMissing).toBe(false);
+  });
+
+  test("a path that resolves to a FILE, not a directory, is refused with exit 1", async () => {
+    root = await makeRoot("keryx-n6-apply-file-root-");
+    const filePath = path.join(root, "not-a-dir.txt");
+    await writeFile(filePath, "hi\n", "utf8");
+
+    const { exit, err } = await run(root, ["apply", "--proposal", "p-0000000000000000", filePath]);
+    expect(exit).toBe(1);
+    expect(err).toMatch(/no such directory/i);
+  });
+});
+
+// --- N7: baseline add --reseal --json -----------------------------------------
+
+describe("N7: baseline add --reseal reports carried-over/discarded ids and a backup path", () => {
+  test("--json lists carriedOver/discarded/backupPath on a reseal", async () => {
+    root = await makeRoot("keryx-n7-baseline-reseal-json-");
+    const baselinePath = path.join(root, ".metaproject", "security-audit-baseline.json");
+    await writeFile(
+      baselinePath,
+      `${JSON.stringify({ schemaVersion: 1, entries: [{ findingId: "evil", justification: "planted" }], checksum: "wrong" }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const { exit, out } = await run(root, [
+      "baseline",
+      "add",
+      "--finding",
+      "legit",
+      "--justification",
+      "ok",
+      "--reseal",
+      "--json",
+    ]);
+    expect(exit).toBe(0);
+    const result = JSON.parse(out) as {
+      resealed: boolean;
+      carriedOver: string[];
+      discarded: string[];
+      backupPath?: string;
+    };
+    expect(result.resealed).toBe(true);
+    expect(result.carriedOver).toEqual(["evil"]);
+    expect(result.discarded).toEqual([]);
+    expect(result.backupPath).toBeTruthy();
+  });
+});
+
 // --- F24: CLI-level --ci exit codes -------------------------------------------
 
 describe("F24: CLI-level --ci exit codes", () => {

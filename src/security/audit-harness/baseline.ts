@@ -4,6 +4,7 @@
 // `security.config.json` (`computeObjectChecksum`, reused as-is).
 
 import path from "node:path";
+import { copyFile, readFile } from "node:fs/promises";
 import { pathExists, writeFileAtomic } from "../../lib/fs";
 import { readJsonObjectFile } from "../../lib/json";
 import { computeObjectChecksum } from "../config";
@@ -109,6 +110,15 @@ export function isValidCalendarDateString(value: string): boolean {
  * treated as never active: it does not suppress anything. It is still
  * visible in `state.entries` (and so in the report's `baseline.entries`), so
  * the malformed value is reported, not silently dropped.
+ *
+ * N9: `expiresAt` is a DATE, not a timestamp — "expires 2026-09-24" reads,
+ * to whoever wrote the baseline entry, as "suppresses through the end of
+ * that day", not "suppresses only up to the exact instant midnight UTC
+ * ticks over". Comparing against that date's `T00:00:00.000Z` (as this used
+ * to) made an entry expire at the FIRST moment of its own expiry day, so a
+ * suppression written as "expires today" was already inactive for the rest
+ * of today. The cutoff is now that date's last instant, `T23:59:59.999Z`
+ * UTC — inclusive THROUGH the end of the expiry day.
  */
 export function entryIsActive(entry: BaselineEntry, now: Date): boolean {
   if (!entry.expiresAt) {
@@ -117,8 +127,8 @@ export function entryIsActive(entry: BaselineEntry, now: Date): boolean {
   if (!isValidCalendarDateString(entry.expiresAt)) {
     return false;
   }
-  const expires = new Date(`${entry.expiresAt}T00:00:00.000Z`);
-  return expires.getTime() >= now.getTime();
+  const expiresEndOfDay = new Date(`${entry.expiresAt}T23:59:59.999Z`);
+  return expiresEndOfDay.getTime() >= now.getTime();
 }
 
 /**
@@ -157,7 +167,39 @@ export function indefiniteSuppressionFindings(applicableEntries: readonly Baseli
     }));
 }
 
-export type AddBaselineEntryResult = { resealed: boolean };
+export type AddBaselineEntryResult = {
+  resealed: boolean;
+  /** N7: findingIds from the previous file that survived into the rewritten one. */
+  carriedOver: string[];
+  /** N7: findingIds seen in the previous file's raw JSON that did NOT survive (lost to the reseal). */
+  discarded: string[];
+  /** N7: set only on a reseal — where the pre-reseal file was copied before being overwritten. */
+  backupPath?: string;
+};
+
+/**
+ * Best-effort, schema-independent recovery of the findingIds a baseline file
+ * NAMES, straight from its raw JSON — used only to report `discarded` (N7):
+ * a file that fails whole-document schema validation (`readBaseline`'s
+ * "unreadable" state) comes back with `entries: []`, telling the caller
+ * NOTHING was recoverable, but the raw JSON may still name ids worth
+ * reporting as lost. Never used for suppression — only for this message.
+ */
+async function readRawBaselineFindingIds(filePath: string): Promise<string[]> {
+  try {
+    const text = await readFile(filePath, "utf8");
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { entries?: unknown }).entries)) {
+      return [];
+    }
+    const ids = (parsed as { entries: unknown[] }).entries
+      .map((e) => (e && typeof e === "object" ? (e as { findingId?: unknown }).findingId : undefined))
+      .filter((id): id is string => typeof id === "string");
+    return [...new Set(ids)];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Write (or reseal) the baseline file with an added entry. Only writing path
@@ -174,15 +216,25 @@ export type AddBaselineEntryResult = { resealed: boolean };
  * case the reseal is real (a fresh, valid checksum is written) but is not
  * silent — the caller is told it happened (`result.resealed`) so it can be
  * logged/printed.
+ *
+ * N7: a reseal is also not silent about WHAT it kept vs lost. Before
+ * overwriting a tampered/unreadable file, it is copied to
+ * `<file>.bak-<timestamp>` (so the pre-reseal bytes are never gone), and the
+ * result reports which findingIds survived into the new file
+ * (`carriedOver`) vs were named in the old file's raw JSON but did not
+ * (`discarded`) — for an "unreadable" file (failed schema validation, or not
+ * even parseable JSON), that is typically every id it named.
  */
 export async function addBaselineEntry(
   root: string,
   entry: BaselineEntry,
-  options: { baselinePath?: string; reseal?: boolean } = {},
+  options: { baselinePath?: string; reseal?: boolean; now?: () => Date } = {},
 ): Promise<AddBaselineEntryResult> {
   const filePath = options.baselinePath ?? defaultBaselinePath(root);
   let entries: BaselineEntry[] = [];
   let resealed = false;
+  let discarded: string[] = [];
+  let backupPath: string | undefined;
   if (await pathExists(filePath)) {
     const loaded = await readBaseline(filePath);
     if (loaded && loaded.state.tamperState !== "ok") {
@@ -192,18 +244,27 @@ export async function addBaselineEntry(
             `(tampered or unreadable). Pass --reseal to explicitly reseal it and add anyway.`,
         );
       }
+      // Back up the pre-reseal file BEFORE it is overwritten — the one and
+      // only chance to keep its bytes once the rewrite below lands.
+      const now = options.now ? options.now() : new Date();
+      backupPath = `${filePath}.bak-${now.toISOString().replace(/[:.]/g, "-")}`;
+      await copyFile(filePath, backupPath);
       // `state.entries` is the raw, schema-valid entry list even when the
       // checksum mismatches (only an "unreadable" file — failed schema
       // validation entirely — has none to recover).
       entries = loaded.state.entries;
+      const rawIds = await readRawBaselineFindingIds(filePath);
+      const keptIds = new Set(entries.map((e) => e.findingId));
+      discarded = rawIds.filter((id) => !keptIds.has(id));
       resealed = true;
     } else if (loaded) {
       entries = loaded.applicableEntries;
     }
   }
+  const carriedOver = entries.filter((existing) => existing.findingId !== entry.findingId).map((e) => e.findingId);
   const next = [...entries.filter((existing) => existing.findingId !== entry.findingId), entry];
   const checksum = computeObjectChecksum(next);
   const payload = { schemaVersion: 1, entries: next, checksum };
   await writeFileAtomic(filePath, `${JSON.stringify(payload, null, 2)}\n`);
-  return { resealed };
+  return { resealed, carriedOver, discarded, ...(backupPath ? { backupPath } : {}) };
 }

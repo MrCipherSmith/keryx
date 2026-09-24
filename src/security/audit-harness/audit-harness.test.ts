@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { scanMcpManifest } from "../detect/mcp";
 import { computeObjectChecksum } from "../config";
 import { addBaselineEntry, applyAuditProposal, auditGate, defaultBaselinePath, runHarnessAudit } from "./index";
+import { entryIsActive } from "./baseline";
 import { isPinnedPackageSpec } from "./checks";
 import { scoreFindings } from "./score";
 import type { AuditFinding } from "./types";
@@ -382,7 +383,12 @@ test("F2: a $-pattern in the replacement text does not corrupt the written file 
   expect(after.securityHooks[0]?.command).toBe("echo $& should-not-duplicate");
 });
 
-test("F2: a text-replace refuses when its target text is not unique in the file — no write, no partial apply", async () => {
+// N4: `hook-silent-suppression` against a JSON settings file now edits by
+// JSON POINTER (`json-set`), not a raw-text search — so two array entries
+// with the byte-for-byte IDENTICAL command (previously ambiguous for a
+// `text-replace`, and refused) are no longer ambiguous at all: each finding's
+// pointer already names its own array index, so both apply independently.
+test("N4: two hook entries with the identical command each apply independently via their own JSON pointer (json-set, not an ambiguous text-replace)", async () => {
   await mkdir(path.join(root, ".claude"), { recursive: true });
   const hookCommand = "echo hi || true";
   const settings = {
@@ -397,10 +403,37 @@ test("F2: a text-replace refuses when its target text is not unique in the file 
   const suppressionFindings = report.findings.filter((f) => f.check === "hook-silent-suppression" && f.fixProposal);
   expect(suppressionFindings.length).toBe(2);
 
-  const before = await readFile(path.join(root, ".claude", "settings.json"), "utf8");
-  await expect(applyAuditProposal(root, suppressionFindings[0]!.fixProposal!.id)).rejects.toThrow(/appears 2 times/i);
-  const after = await readFile(path.join(root, ".claude", "settings.json"), "utf8");
-  expect(after).toBe(before);
+  await applyAuditProposal(root, suppressionFindings[0]!.fixProposal!.id);
+  await applyAuditProposal(root, suppressionFindings[1]!.fixProposal!.id);
+  const after = JSON.parse(await readFile(path.join(root, ".claude", "settings.json"), "utf8")) as {
+    securityHooks: Array<{ command: string }>;
+  };
+  expect(after.securityHooks[0]?.command).toBe("echo hi");
+  expect(after.securityHooks[1]?.command).toBe("echo hi");
+});
+
+// N4: checks.ts ~l.430 — the previous proposal text-spliced the raw file
+// bytes, which broke on a JSON-escaped command (an embedded `"`), never
+// stripped a trailing `; exit 0`, and only removed the FIRST `|| true`. The
+// `json-set` edit sidesteps all three: it mutates the parsed object graph
+// (no text search) and strips every suppression pattern in one pass.
+test("N4: a command with escaped quotes and multiple suppression patterns is fully stripped; the settings file still parses", async () => {
+  await mkdir(path.join(root, ".claude"), { recursive: true });
+  const hookCommand = 'echo "start" && keryx security check-output --file "out.txt" || true 2>/dev/null; exit 0';
+  const settings = { securityHooks: [{ on: "input", command: hookCommand }] };
+  await writeFile(path.join(root, ".claude", "settings.json"), `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+
+  const report = await runHarnessAudit(root, { fixProposals: true });
+  const finding_ = report.findings.find((f) => f.check === "hook-silent-suppression");
+  expect(finding_?.fixProposal).toBeTruthy();
+
+  await applyAuditProposal(root, finding_!.fixProposal!.id);
+  const raw = await readFile(path.join(root, ".claude", "settings.json"), "utf8");
+  const after = JSON.parse(raw) as { securityHooks: Array<{ command: string }> };
+  expect(after.securityHooks[0]?.command).toBe('echo "start" && keryx security check-output --file "out.txt"');
+  expect(after.securityHooks[0]?.command).not.toContain("|| true");
+  expect(after.securityHooks[0]?.command).not.toContain("2>/dev/null");
+  expect(after.securityHooks[0]?.command).not.toMatch(/;\s*exit\s+0/);
 });
 
 // F3: proposal ids are opaque hashes; a malformed id is refused up front.
@@ -578,6 +611,69 @@ test("F9: an out-of-range calendar date (Feb 30) is also invalid, not silently r
   expect(found?.suppressed.value).toBe(false);
 });
 
+// N9: expiresAt is inclusive through the END of the expiry day (UTC).
+test("N9: an entry expiring TODAY still suppresses later in that same UTC day", () => {
+  const entry = { findingId: "x", justification: "j", expiresAt: "2026-09-24" };
+  // Before the fix: compared against `T00:00:00.000Z`, so anything after
+  // midnight UTC on the expiry day already read as expired.
+  expect(entryIsActive(entry, new Date("2026-09-24T00:00:00.000Z"))).toBe(true);
+  expect(entryIsActive(entry, new Date("2026-09-24T10:00:00.000Z"))).toBe(true);
+  expect(entryIsActive(entry, new Date("2026-09-24T23:59:59.999Z"))).toBe(true);
+  // The instant the next day begins, it is no longer active.
+  expect(entryIsActive(entry, new Date("2026-09-25T00:00:00.000Z"))).toBe(false);
+});
+
+// N7: `baseline add --reseal` reports which findingIds survived vs were
+// lost, and backs up the pre-reseal file before overwriting it.
+test("N7: reseal over a checksum-mismatched (but schema-valid) baseline carries every entry over and backs up the original file", async () => {
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  const tamperedEntries = [{ findingId: "evil", justification: "planted" }];
+  const baselinePath = defaultBaselinePath(root);
+  await writeFile(
+    baselinePath,
+    `${JSON.stringify({ schemaVersion: 1, entries: tamperedEntries, checksum: "wrong" }, null, 2)}\n`,
+    "utf8",
+  );
+
+  const result = await addBaselineEntry(root, { findingId: "legit", justification: "ok" }, { reseal: true });
+  expect(result.resealed).toBe(true);
+  expect(result.carriedOver).toEqual(["evil"]);
+  expect(result.discarded).toEqual([]);
+  expect(result.backupPath).toBeTruthy();
+
+  const backup = JSON.parse(await readFile(result.backupPath!, "utf8")) as { checksum: string };
+  expect(backup.checksum).toBe("wrong"); // the pre-reseal bytes, untouched
+});
+
+test("N7: reseal over an unparseable baseline discards everything it named, but still backs it up first", async () => {
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  const baselinePath = defaultBaselinePath(root);
+  // Valid JSON, valid `entries` shape (so ids are recoverable for reporting),
+  // but fails whole-document schema validation as a baseline file — an extra
+  // unknown top-level key trips `additionalProperties: false`.
+  await writeFile(
+    baselinePath,
+    `${JSON.stringify(
+      { schemaVersion: 1, entries: [{ findingId: "lost-one", justification: "x" }], unknownField: true },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  const result = await addBaselineEntry(root, { findingId: "legit", justification: "ok" }, { reseal: true });
+  expect(result.resealed).toBe(true);
+  expect(result.carriedOver).toEqual([]);
+  expect(result.discarded).toEqual(["lost-one"]);
+  expect(result.backupPath).toBeTruthy();
+
+  const backup = await readFile(result.backupPath!, "utf8");
+  expect(backup).toContain("lost-one");
+
+  const after = JSON.parse(await readFile(baselinePath, "utf8")) as { entries: Array<{ findingId: string }> };
+  expect(after.entries.map((e) => e.findingId)).toEqual(["legit"]);
+});
+
 // F10: policyId is always part of the finding id, not just an `??` fallback.
 test("F10: two distinct poisoning policies matching the same tool produce two distinct finding ids", async () => {
   const manifest = {
@@ -611,15 +707,25 @@ test("F16: .codex/config.toml is listed only under mcp-configs, never under sett
 
 // F20: a no-op proposal is refused, and neither the target file nor an
 // applied-marker/changelog entry is written for it.
-test("F20: a hook-silent-suppression proposal that would not actually change the file is refused, and nothing is marked applied", async () => {
+//
+// N4 fixed the ORIGINAL no-op repro here (the fix now strips a trailing
+// `; exit 0`/`&& exit 0` too, and every `|| true`/`2>/dev/null`, not just the
+// first — see checks.ts `stripHookSuppression`). The stripper is
+// deliberately scoped to a TRAILING `; exit 0`/`&& exit 0` only — an
+// `exit 0` in the MIDDLE of a chained command (more commands follow it) is
+// left alone, since stripping it would change the command's control flow,
+// not just remove a suppression. Detection is broader (any `&& exit 0`,
+// trailing or not), so that mid-command shape still produces a finding whose
+// proposed edit is a genuine no-op — the case this test now exercises.
+test("F20: a hook-silent-suppression proposal is refused as a no-op when the exit-0 shape is not trailing (more command follows it)", async () => {
   await mkdir(path.join(root, ".claude"), { recursive: true });
-  // The CHECK detects this suppression shape (`; exit 0`), but the FIX's
-  // regexes only target ` || true` and `2>/dev/null` — so the proposed `to`
-  // is byte-for-byte identical to `from`.
-  const hookCommand = "run-the-thing; exit 0";
-  const settings = { securityHooks: [{ on: "input", command: hookCommand }] };
+  const hookCommand = "echo hi && exit 0 && continue-cmd";
   const settingsPath = path.join(root, ".claude", "settings.json");
-  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  await writeFile(
+    settingsPath,
+    `${JSON.stringify({ securityHooks: [{ on: "input", command: hookCommand }] }, null, 2)}\n`,
+    "utf8",
+  );
   const before = await readFile(settingsPath, "utf8");
 
   const report = await runHarnessAudit(root, { fixProposals: true });
@@ -669,6 +775,64 @@ test("F21: a skill script that is a symlink resolving INSIDE root is followed an
   const surface = report.surfaces.find((s) => s.surface === "skills");
   expect(surface?.pathsScanned).toContain(".metaproject/skills/x/scripts/linked.sh");
   expect(surface?.pathsUnreadable ?? []).not.toContain(".metaproject/skills/x/scripts/linked.sh");
+});
+
+// N3: a symlinked SKILL DIRECTORY (not just a symlinked script file, F21
+// above) resolving outside root is reported, never silently dropped — before
+// this fix it matched neither the directory-recursion branch nor the
+// symlinked-script branch (a `Dirent` for a symlink reports `isDirectory() ===
+// false` even when its target is a directory) and simply vanished.
+test("N3: a symlinked skill DIRECTORY resolving outside root is reported unreadable, and coverage is incomplete", async () => {
+  const skillsDir = path.join(root, ".claude", "skills");
+  await mkdir(skillsDir, { recursive: true });
+  const outsideDir = await mkdtemp(path.join(tmpdir(), "keryx-audit-harness-outside-dir-"));
+  await writeFile(path.join(outsideDir, "evil.sh"), "echo hi\n", "utf8");
+  try {
+    await symlink(outsideDir, path.join(skillsDir, "escape"), "dir");
+
+    const report = await runHarnessAudit(root);
+    const surface = report.surfaces.find((s) => s.surface === "skills");
+    expect(surface?.status).toBe("error");
+    expect(surface?.pathsUnreadable).toContain(".claude/skills/escape");
+    expect(surface?.pathsScanned ?? []).not.toContain(".claude/skills/escape/evil.sh");
+    expect(report.coverage.status).toBe("incomplete");
+  } finally {
+    await rm(outsideDir, { recursive: true, force: true });
+  }
+});
+
+test("N3: a symlinked skill DIRECTORY resolving inside root is followed (with a cycle guard)", async () => {
+  await mkdir(path.join(root, "real-skills"), { recursive: true });
+  await writeFile(path.join(root, "real-skills", "run.sh"), "echo hi\n", "utf8");
+  const skillsDir = path.join(root, ".claude", "skills");
+  await mkdir(skillsDir, { recursive: true });
+  await symlink(path.join(root, "real-skills"), path.join(skillsDir, "linked"), "dir");
+  // A cycle: the symlink target links right back to the skills directory
+  // that contains it. Without the `visited` realpath guard this recurses
+  // forever; with it, the second visit is simply skipped.
+  await symlink(skillsDir, path.join(root, "real-skills", "loop"), "dir");
+
+  const report = await runHarnessAudit(root);
+  const surface = report.surfaces.find((s) => s.surface === "skills");
+  expect(surface?.status).toBe("scanned");
+  expect(surface?.pathsScanned).toContain(".claude/skills/linked/run.sh");
+});
+
+// N3: a walk truncated by the depth cap is reported as a coverage reason
+// rather than returning as if the subtree beneath it did not exist.
+test("N3: a skills walk truncated at the depth cap is reported as a coverage reason, not silently dropped", async () => {
+  let rel = path.join(".claude", "skills");
+  for (let i = 1; i <= 9; i += 1) {
+    rel = path.join(rel, `d${i}`);
+  }
+  await mkdir(path.join(root, rel), { recursive: true });
+  await writeFile(path.join(root, rel, "script.sh"), "echo hi\n", "utf8");
+
+  const report = await runHarnessAudit(root);
+  expect(report.coverage.status).toBe("incomplete");
+  expect(report.coverage.reasons?.some((r) => r.startsWith("skills: walk truncated at depth"))).toBe(true);
+  const surface = report.surfaces.find((s) => s.surface === "skills");
+  expect(surface?.pathsScanned ?? []).toEqual([]);
 });
 
 // F27: apply accepts an explicit root, consistent with the audit run itself

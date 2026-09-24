@@ -7,7 +7,7 @@
 // `pathsUnreadable` fields read directly off these.
 
 import path from "node:path";
-import { readdir, realpath } from "node:fs/promises";
+import { readdir, realpath, stat } from "node:fs/promises";
 import { isPathInside, pathExists, toPosix } from "../../lib/fs";
 import { SETTINGS_FILE_OWNERS, HARNESS_ADAPTERS } from "../../integrations/index";
 import type { SurfaceId } from "./types";
@@ -184,57 +184,102 @@ export async function discoverAgentDefinitions(root: string): Promise<DiscoveryR
 
 const SCRIPT_EXTENSIONS = new Set([".sh", ".py", ".js", ".ts"]);
 
-async function walkScripts(root: string, dirRelative: string, depth = 0): Promise<DiscoveryResult> {
-  if (depth > 8) return { found: [], unreadable: [] };
+/**
+ * N3: `discoverSkillScripts`'s coverage-vs-silence contract, matching the
+ * `unreadable` handling everywhere else in this file — plus `reasons`, for a
+ * gap that is not tied to one specific path (a depth-cap truncation covers
+ * everything below it, not one file).
+ */
+export type SkillsDiscoveryResult = DiscoveryResult & { reasons: string[] };
+
+const SKILL_WALK_MAX_DEPTH = 8;
+
+type WalkAccumulator = { found: string[]; unreadable: string[]; reasons: Set<string> };
+
+/**
+ * N3: previously a symlinked directory vanished in total silence — a
+ * `Dirent` for a symlink reports `isDirectory() === false` even when its
+ * target is a directory (that check never follows the link), so it matched
+ * neither the `isDirectory()` recursion branch nor the `isSymbolicLink()`
+ * branch below (which only handled a symlinked FILE with a script
+ * extension). Depth-cap truncation was silent too — `depth > 8` just
+ * returned an empty result with no trace in `unreadable`/coverage at all.
+ * Both are now reported: a symlinked directory resolving OUTSIDE root, or a
+ * dangling one, lands in `unreadable` (surfaces as `pathsUnreadable` +
+ * `status: "error"`, same as every other unreadable path here); one
+ * resolving INSIDE root is followed, guarded against a symlink cycle by
+ * `visited` (realpaths already walked); and a walk truncated by the depth
+ * cap adds a `reasons` entry rather than returning as if nothing were there.
+ */
+async function walkScripts(
+  root: string,
+  dirRelative: string,
+  depth: number,
+  visited: Set<string>,
+  acc: WalkAccumulator,
+): Promise<void> {
+  if (depth > SKILL_WALK_MAX_DEPTH) {
+    acc.reasons.add(`skills: walk truncated at depth ${depth} (${toPosix(dirRelative)})`);
+    return;
+  }
   const dirAbsolute = path.join(root, dirRelative);
   if (!(await pathExists(dirAbsolute))) {
-    return { found: [], unreadable: [] };
+    return;
+  }
+  const dirReal = await realpath(dirAbsolute).catch(() => undefined);
+  if (dirReal !== undefined) {
+    if (visited.has(dirReal)) return; // symlink cycle: already walked this real directory
+    visited.add(dirReal);
   }
   let entries: import("node:fs").Dirent[];
   try {
     entries = await readdir(dirAbsolute, { withFileTypes: true });
   } catch {
     // Exists but unreadable (F7): a coverage gap, not a silent empty result.
-    return { found: [], unreadable: [toPosix(dirRelative)] };
+    acc.unreadable.push(toPosix(dirRelative));
+    return;
   }
-  const found: string[] = [];
-  const unreadable: string[] = [];
   for (const entry of entries) {
     const childRelative = path.join(dirRelative, entry.name);
     if (entry.isDirectory()) {
-      const nested = await walkScripts(root, childRelative, depth + 1);
-      found.push(...nested.found);
-      unreadable.push(...nested.unreadable);
+      await walkScripts(root, childRelative, depth + 1, visited, acc);
       continue;
     }
     if (entry.isFile() && SCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
-      found.push(toPosix(childRelative));
+      acc.found.push(toPosix(childRelative));
       continue;
     }
-    if (entry.isSymbolicLink() && SCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
-      // F21: a symlinked script previously vanished silently — `entry.isFile()`
-      // is false for a symlink dirent, so it never reached the extension
-      // check at all. Follow it; report it unreadable rather than dropping it
-      // when it resolves outside root (or not at all).
+    if (entry.isSymbolicLink()) {
       const absolute = path.join(root, childRelative);
-      if (await resolvesInsideRoot(root, absolute)) {
-        found.push(toPosix(childRelative));
-      } else {
-        unreadable.push(toPosix(childRelative));
+      if (!(await resolvesInsideRoot(root, absolute))) {
+        // F21/N3: resolves outside root (or dangling) — never silently
+        // skipped, whether it turns out to be a file or a directory.
+        acc.unreadable.push(toPosix(childRelative));
+        continue;
+      }
+      const stats = await stat(absolute).catch(() => undefined);
+      if (stats?.isDirectory()) {
+        await walkScripts(root, childRelative, depth + 1, visited, acc);
+      } else if (stats?.isFile() && SCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
+        acc.found.push(toPosix(childRelative));
+      } else if (stats === undefined) {
+        acc.unreadable.push(toPosix(childRelative));
       }
     }
   }
-  return { found, unreadable };
 }
 
-export async function discoverSkillScripts(root: string): Promise<DiscoveryResult> {
-  const [metaSkills, claudeSkills] = await Promise.all([
-    walkScripts(root, ".metaproject/skills"),
-    walkScripts(root, ".claude/skills"),
+export async function discoverSkillScripts(root: string): Promise<SkillsDiscoveryResult> {
+  const metaAcc: WalkAccumulator = { found: [], unreadable: [], reasons: new Set() };
+  const claudeAcc: WalkAccumulator = { found: [], unreadable: [], reasons: new Set() };
+  await Promise.all([
+    walkScripts(root, ".metaproject/skills", 0, new Set(), metaAcc),
+    walkScripts(root, ".claude/skills", 0, new Set(), claudeAcc),
   ]);
   return {
-    found: [...new Set([...metaSkills.found, ...claudeSkills.found])].sort(),
-    unreadable: [...new Set([...metaSkills.unreadable, ...claudeSkills.unreadable])].sort(),
+    found: [...new Set([...metaAcc.found, ...claudeAcc.found])].sort(),
+    unreadable: [...new Set([...metaAcc.unreadable, ...claudeAcc.unreadable])].sort(),
+    reasons: [...new Set([...metaAcc.reasons, ...claudeAcc.reasons])].sort(),
   };
 }
 
