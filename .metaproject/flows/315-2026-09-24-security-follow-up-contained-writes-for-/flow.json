@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "315",
   "slug": "security-follow-up-contained-writes-for-",
   "title": "Security follow-up: contained writes for init, testing service and .gitignore, plus deferred W3/W4 minors",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-24T18:05:52.943Z",
-  "updatedAt": "2026-09-24T18:05:52.943Z",
+  "updatedAt": "2026-09-24T18:09:13.329Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:93674c681bf37d0aa5df04a80e06bbf694f4996360fa995f4f253d78214e3c8f",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,224 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by lane tasks T5-T10"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by lane tasks T5-T10"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by lane tasks T5-T10"
+    },
+    {
+      "id": "T5",
+      "title": "Lane A: contained writes for init.ts, testing/service.ts, metaproject-gitignore.ts + ratchet + symlink regression tests (R5-F1, R5-F3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Lane B: audit-harness R8-F1 UTF-16 BOM auto-run agent test; R8-F2 UTF-32 BOM, R8-F3 direct-path false positive (fix or document)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Lane C: learning R10-F1 re-gate stale graduation proposals + nextSteps at apply; R10-F2 gate model-backed extractor label/sourceRef",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Verify: targeted tests, pre-fix failure proof per regression test, typecheck + eslint on changed files",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "PR + adversarial opus review/fix loop (<=3 attempts), CI green",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Merge into feat/agent-platform-expansion and close the flow",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-24T18:05:52.943Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-24T18:09:12.413Z",
+      "event": "task-added",
+      "detail": "T5: Lane A: contained writes for init.ts, testing/service.ts, metaproject-gitignore.ts + ratchet + symlink regression tests (R5-F1, R5-F3)"
+    },
+    {
+      "at": "2026-09-24T18:09:12.502Z",
+      "event": "task-added",
+      "detail": "T6: Lane B: audit-harness R8-F1 UTF-16 BOM auto-run agent test; R8-F2 UTF-32 BOM, R8-F3 direct-path false positive (fix or document)"
+    },
+    {
+      "at": "2026-09-24T18:09:12.585Z",
+      "event": "task-added",
+      "detail": "T7: Lane C: learning R10-F1 re-gate stale graduation proposals + nextSteps at apply; R10-F2 gate model-backed extractor label/sourceRef"
+    },
+    {
+      "at": "2026-09-24T18:09:12.666Z",
+      "event": "task-added",
+      "detail": "T8: Verify: targeted tests, pre-fix failure proof per regression test, typecheck + eslint on changed files"
+    },
+    {
+      "at": "2026-09-24T18:09:12.751Z",
+      "event": "task-added",
+      "detail": "T9: PR + adversarial opus review/fix loop (<=3 attempts), CI green"
+    },
+    {
+      "at": "2026-09-24T18:09:12.833Z",
+      "event": "task-added",
+      "detail": "T10: Merge into feat/agent-platform-expansion and close the flow"
+    },
+    {
+      "at": "2026-09-24T18:09:12.915Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T18:09:12.997Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T18:09:13.083Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T18:09:13.163Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T18:09:13.244Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T18:09:13.329Z",
+      "event": "started"
     }
   ]
 }
