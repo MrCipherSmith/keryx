@@ -393,34 +393,56 @@ async function scanImportedBundle(
     // format-valid polyglot skipped the text scan entirely). Every skill
     // file is scanned; only a genuine filesystem read failure (permissions,
     // a symlink race) lands in `unreadable`.
+    //
+    // R5-F2 (review round 5): a leading UTF-16 BOM used to SELECT exactly one
+    // decode (`decodeUtf16WithBom(buffer) ?? lossyDecodeBytes(buffer)`) — a
+    // file that starts with `FF FE`/`FE FF` and is otherwise plain ASCII (a
+    // BOM prefix glued onto an ASCII script/markdown file, not a real UTF-16
+    // document) decodes under UTF-16 to CJK noise with no surrogate errors,
+    // so the fatal decode never falls through to the lossy branch and every
+    // check below only ever saw the noise, never the real ASCII content. A
+    // file with a valid BOM decode is now scanned under BOTH the BOM-decoded
+    // text AND the plain lossy decode of the same bytes — a genuine UTF-16
+    // file is still caught via its real decode, and an ASCII file wearing a
+    // BOM prefix is caught via the lossy decode of its actual bytes. Findings
+    // from the two passes are unioned, deduplicated by `findingId` (so a
+    // genuine UTF-16 file whose lossy NUL-interleaved decode happens to also
+    // trip the same check at the same pointer isn't reported twice).
     if (entry.kind === "skill") {
       const buffer = await safeReadBuffer(absolute);
       if (buffer === undefined) {
         unreadable.push(entry.path);
         continue;
       }
-      const content = decodeUtf16WithBom(buffer) ?? lossyDecodeBytes(buffer);
+      const bomDecoded = decodeUtf16WithBom(buffer);
+      const lossyDecoded = lossyDecodeBytes(buffer);
+      const contentVariants = bomDecoded !== undefined ? [bomDecoded, lossyDecoded] : [lossyDecoded];
       scanned.push(entry.path);
-      raw.push(
-        ...asBundleFindings(
-          checkSecretsInText("skills", "skill-script-secret", entry.path, content, "high"),
-          "bundle-skill-script-secret",
-        ),
-      );
-      raw.push(
-        ...asBundleFindings(
-          checkInjectionInText("skills", "skill-script-injection", entry.path, content, "high"),
-          "bundle-skill-script-injection",
-        ),
-      );
-      raw.push(...asBundleFindings(checkAutoRunDirective("skills", entry.path, content), "bundle-auto-run-directive"));
-      raw.push(
-        ...asBundleFindings(
-          checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
-          "bundle-prompt-injection-in-instructions",
-        ),
-      );
-      raw.push(...asBundleFindings(checkRemoteExecInText("skills", entry.path, content), "bundle-hook-remote-exec"));
+      const seenFindingIds = new Set<string>();
+      for (const content of contentVariants) {
+        const variantFindings: RawFinding[] = [
+          ...asBundleFindings(
+            checkSecretsInText("skills", "skill-script-secret", entry.path, content, "high"),
+            "bundle-skill-script-secret",
+          ),
+          ...asBundleFindings(
+            checkInjectionInText("skills", "skill-script-injection", entry.path, content, "high"),
+            "bundle-skill-script-injection",
+          ),
+          ...asBundleFindings(checkAutoRunDirective("skills", entry.path, content), "bundle-auto-run-directive"),
+          ...asBundleFindings(
+            checkInjectionInText("instructions", "prompt-injection-in-instructions", entry.path, content, "high"),
+            "bundle-prompt-injection-in-instructions",
+          ),
+          ...asBundleFindings(checkRemoteExecInText("skills", entry.path, content), "bundle-hook-remote-exec"),
+        ];
+        for (const finding of variantFindings) {
+          const id = findingId(finding);
+          if (seenFindingIds.has(id)) continue;
+          seenFindingIds.add(id);
+          raw.push(finding);
+        }
+      }
       continue;
     }
 

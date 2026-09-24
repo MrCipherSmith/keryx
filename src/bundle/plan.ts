@@ -429,20 +429,33 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
     const ledgerSha256 = ledgerRecord?.sha256;
     // R1-F1: a ledger record that already exists but belongs to a DIFFERENT
     // bundleId means some other bundle wrote (and still owns) this target.
-    // R3-F18: a record that DECLARES the same bundleId is not proof of the
-    // same producer — a hand-crafted bundle can trivially spoof any
-    // `bundleId` string. When the ledger record carries a `sourceProject`
-    // (recorded from `manifest.provenance.sourceProject` at apply time) and
-    // this import's manifest ALSO declares one, and they differ, the
-    // declared id is being reused across two different sources; treated the
-    // same as an ordinary ownership conflict (needs `--force`), not a
-    // silent same-bundle update. Two bundles that both have NO sourceProject
-    // (no git remote at export time) cannot be distinguished this way and
-    // fall back to the plain bundleId check, same as before.
+    // R3-F18 (round-5 follow-up): a record that DECLARES the same bundleId
+    // is not proof of the same producer — a hand-crafted bundle can
+    // trivially spoof any `bundleId` string. Ownership is therefore also
+    // compared on `sourceProject`, the one field this import cannot forge
+    // to match a prior record it never produced: a recorded
+    // `manifest.provenance.sourceProject` and this import's own
+    // `provenance.sourceProject` must be `===` (both present and equal, or
+    // BOTH absent) or the target is a conflict, exactly like a differing
+    // bundleId. Round 5's R5-F2-adjacent review (own.out O5) found the
+    // previous version of this check only compared when BOTH sides declared
+    // a `sourceProject` — an incoming bundle that simply omitted the field
+    // (or a recorded entry that had none) silently bypassed the comparison
+    // and updated in place. Plain `!==` handles every case in one
+    // expression: both `undefined` compares equal (no regression — a
+    // recorded entry and an importer that BOTH lack a source project, e.g.
+    // no git remote at export time, still can't be distinguished this way,
+    // so today's trust-on-first-use behaviour for that pair is unchanged
+    // and documented at `PlanEntry.previousOwnerSourceProject` and in
+    // `docs/docs/cli-reference.md`'s `## bundle` section); exactly one side
+    // present, or both present but different, both compare unequal and fall
+    // into the same `owned-by-other-bundle` conflict a bundleId mismatch
+    // already produces, needing `--force` to take over. A forced takeover
+    // is reported via `previousOwnerSourceProject` below, in both human and
+    // `--json` output (see `format.ts`/`apply.ts`).
     const ledgerOwnedByOther =
       ledgerRecord !== undefined &&
-      (ledgerRecord.bundleId !== opts.manifest.bundleId ||
-        (ledgerRecord.sourceProject !== undefined && opts.manifest.provenance.sourceProject !== undefined && ledgerRecord.sourceProject !== opts.manifest.provenance.sourceProject));
+      (ledgerRecord.bundleId !== opts.manifest.bundleId || ledgerRecord.sourceProject !== opts.manifest.provenance.sourceProject);
 
     // Case-variant of an already-owned path: the ledger record exists but
     // was recorded under a DIFFERENT case than this entry's incoming path.

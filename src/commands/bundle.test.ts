@@ -7,6 +7,7 @@
 
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -92,6 +93,48 @@ async function makeSourceProjectWithRule(): Promise<string> {
 
 function lastJson(): unknown {
   return JSON.parse(captured.join("\n"));
+}
+
+// R3-F18 (round-5 follow-up): builds a bundle DIRECTORY (bundle.json plus its
+// content file) by hand, with an explicit `bundleId`/`sourceProject`, rather
+// than going through `bundleCommand export` — export always derives
+// `sourceProject` from the source project's own git remote (or omits it),
+// which cannot express "two different sources declare the same bundleId" in
+// one process. Mirrors the manifest shape `src/bundle/plan.ts`'s tests build.
+async function makeManifestBundle(
+  bundleId: string,
+  sourceProject: string | undefined,
+  relPath: string,
+  content: string,
+): Promise<string> {
+  const dir = await makeTempDir("keryx-bundle-manifest-");
+  const bytes = Buffer.from(content, "utf8");
+  const abs = path.join(dir, relPath);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await writeFile(abs, bytes, "utf8");
+  const manifest = {
+    formatVersion: "1.0.0",
+    bundleId,
+    createdAt: "2026-09-24T00:00:00.000Z",
+    sourceKeryxVersion: "0.2.999",
+    provenance: {
+      producedBy: "keryx bundle export",
+      sourceScope: "project",
+      ...(sourceProject !== undefined ? { sourceProject } : {}),
+    },
+    compat: { minKeryxVersion: "0.2.999", targetHarnesses: [] },
+    contents: [
+      {
+        path: relPath,
+        kind: "rule",
+        scope: "project",
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        sizeBytes: bytes.length,
+      },
+    ],
+  };
+  await writeFile(path.join(dir, "bundle.json"), JSON.stringify(manifest, null, 2) + "\n", "utf8");
+  return dir;
 }
 
 describe("keryx bundle export -> verify -> inspect -> import -> uninstall", () => {
@@ -231,6 +274,88 @@ describe("keryx bundle export -> verify -> inspect -> import -> uninstall", () =
       expect(forced.ok).toBe(true);
       expect(forced.written).toEqual(["project:skills/acme-widget/SKILL.md"]);
       expect(await readFile(writtenPath, "utf8")).toContain("acme-widget");
+    } finally {
+      restore();
+    }
+  });
+
+  // R3-F18 (round-5 follow-up): a second bundle DECLARING the same bundleId
+  // as one already recorded in the ledger, but with a DIFFERENT
+  // `provenance.sourceProject`, is now a conflict rather than a silent
+  // takeover — `plan.test.ts` covers the plan-level bucket/conflictReason;
+  // this covers that a FORCED takeover is actually surfaced to the CLI user,
+  // in both `--json` (`transferred[]` with `from`/`fromSourceProject`) and
+  // the human-readable path (a `transferred ... from ...` line), not just
+  // absorbed into an ordinary `written`/`+` line.
+  test("R3-F18: a forced takeover across a sourceProject conflict is reported in --json and human output", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    const originalDir = await makeManifestBundle("keryx-shared-id", "sha256:project-a", "rules/team.md", "# original team policy\n");
+    install();
+    try {
+      await bundleCommand(["import", originalDir, "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+    } finally {
+      restore();
+    }
+
+    const spoofedDir = await makeManifestBundle("keryx-shared-id", "sha256:project-b", "rules/team.md", "# replaced by a different source\n");
+
+    // Unforced: refused as a conflict, nothing written.
+    install();
+    try {
+      await bundleCommand(["import", spoofedDir, "--json"], targetRoot);
+      expect(process.exitCode).toBe(1);
+      const refused = lastJson() as { ok: boolean; refusals: Array<{ reason: string }> };
+      expect(refused.ok).toBe(false);
+      expect(refused.refusals.some((r) => r.reason === "unresolved-conflict")).toBe(true);
+      expect(await readFile(path.join(targetRoot, ".metaproject", "rules", "team.md"), "utf8")).toBe("# original team policy\n");
+    } finally {
+      restore();
+    }
+
+    // Forced: the takeover is reported in --json.
+    install();
+    try {
+      await bundleCommand(["import", spoofedDir, "--force", "rules/team.md", "--json"], targetRoot);
+      expect(process.exitCode).toBe(0);
+      const forced = lastJson() as {
+        ok: boolean;
+        written: string[];
+        transferred?: Array<{ displayId: string; from: string; fromSourceProject?: string }>;
+      };
+      expect(forced.ok).toBe(true);
+      expect(forced.written).toEqual(["project:rules/team.md"]);
+      expect(forced.transferred).toEqual([
+        { displayId: "project:rules/team.md", from: "keryx-shared-id", fromSourceProject: "sha256:project-a" },
+      ]);
+      expect(await readFile(path.join(targetRoot, ".metaproject", "rules", "team.md"), "utf8")).toBe("# replaced by a different source\n");
+    } finally {
+      restore();
+    }
+  });
+
+  test("R3-F18: the same forced takeover is reported in human-readable output too", async () => {
+    const home = await makeTempDir("keryx-bundle-home-");
+    process.env.KERYX_HOME = home;
+    const targetRoot = await makeTempDir("keryx-bundle-target-");
+
+    const originalDir = await makeManifestBundle("keryx-shared-id-2", "sha256:project-a", "rules/team.md", "# original\n");
+    install();
+    try {
+      await bundleCommand(["import", originalDir], targetRoot);
+    } finally {
+      restore();
+    }
+
+    const spoofedDir = await makeManifestBundle("keryx-shared-id-2", "sha256:project-b", "rules/team.md", "# replaced\n");
+    install();
+    try {
+      await bundleCommand(["import", spoofedDir, "--force", "rules/team.md"], targetRoot);
+      expect(process.exitCode).toBe(0);
+      expect(captured.some((line) => line.includes("transferred") && line.includes("project:rules/team.md") && line.includes("keryx-shared-id-2"))).toBe(true);
     } finally {
       restore();
     }
