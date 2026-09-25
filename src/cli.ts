@@ -321,6 +321,8 @@ export const USAGE_BODY = `Usage:
   keryx routing set <category> <provider> [--user|--project]
   keryx routing unset <category> [--user|--project]
   keryx routing trust
+  keryx routing profile list [--json]
+  keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>
   keryx auth list [--json]
   keryx auth login <provider>
   keryx auth logout <provider>
@@ -471,7 +473,7 @@ Commands:
   rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
   sync      Reconcile graph/wiki/memory with the current code, and wire the git hooks
   providers Providers this operator has configured, and cross-family review eligibility
-  routing   Category -> model routing table: list, set, unset (per-user default; --project for the project layer)
+  routing   Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set)
   auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
   orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
   agents    Manage optional global agent bootstrap instructions, and the agent catalog (list/show/export/verify/generate)

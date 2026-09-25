@@ -6,6 +6,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadRoutingConfig, loadRoutingConfigRaw } from "../harness/routing/config";
+import { refreshModelProfiles } from "../harness/routing/model-profile";
 import { routingCommand, type RoutingCommandDeps } from "./routing";
 
 const roots: string[] = [];
@@ -245,4 +246,106 @@ test("flow 305 AC11: `keryx routing trust` with no project categories says there
   const d = await deps();
   const { stdout } = await capture(() => routingCommand(["trust"], d));
   expect(stdout.join("\n")).toContain("nothing to approve");
+});
+
+// ---------------------------------------------------------------------------
+// Flow 327 (Routing A2), item 5 — `keryx routing profile list/set` and the
+// `derived`/`unavailable` rendering of `keryx routing list`.
+// ---------------------------------------------------------------------------
+
+test("keryx routing profile list: prints the curated seed from the FIRST read, no write required", async () => {
+  const d = await deps();
+  const { stdout } = await capture(() => routingCommand(["profile", "list"], d));
+  expect(stdout.join("\n")).toContain("anthropic/claude-sonnet-5");
+});
+
+test("keryx routing profile list --json: a JSON array of every stored + curated-seed profile", async () => {
+  const d = await deps();
+  const { stdout } = await capture(() => routingCommand(["profile", "list", "--json"], d));
+  const parsed = JSON.parse(stdout.join("")) as { profiles: Array<{ providerId: string; modelId: string }> };
+  expect(parsed.profiles.some((p) => p.providerId === "anthropic" && p.modelId === "claude-sonnet-5")).toBe(true);
+});
+
+test("keryx routing profile set: an operator correction persists with source 'operator' and shows up on the next list", async () => {
+  const d = await deps();
+  const { stdout: setOut } = await capture(() => routingCommand(["profile", "set", "anthropic/claude-sonnet-5", "--tier", "deep"], d));
+  expect(setOut.join("\n")).toContain("tier=deep (operator)");
+  const { stdout } = await capture(() => routingCommand(["profile", "list", "--json"], d));
+  const parsed = JSON.parse(stdout.join("")) as {
+    profiles: Array<{ providerId: string; modelId: string; strengthTier: { value: string; source: string } }>;
+  };
+  const sonnet = parsed.profiles.find((p) => p.providerId === "anthropic" && p.modelId === "claude-sonnet-5");
+  expect(sonnet?.strengthTier).toEqual({ value: "deep", source: "operator" });
+});
+
+test("keryx routing profile set --priority: a numeric flag persists as an operator correction", async () => {
+  const d = await deps();
+  const { stdout } = await capture(() => routingCommand(["profile", "set", "anthropic/claude-sonnet-5", "--priority", "42"], d));
+  expect(stdout.join("\n")).toContain("priority=42 (operator)");
+});
+
+test("keryx routing profile set: rejects a target with no slash", async () => {
+  const d = await deps();
+  const { stderr } = await capture(() => routingCommand(["profile", "set", "not-a-target", "--tier", "deep"], d));
+  expect(stderr.join("\n")).toContain("Usage: keryx routing profile set");
+});
+
+test("keryx routing profile set: rejects a missing field flag", async () => {
+  const d = await deps();
+  const { stderr } = await capture(() => routingCommand(["profile", "set", "anthropic/claude-sonnet-5"], d));
+  expect(stderr.join("\n")).toContain("Usage: keryx routing profile set");
+});
+
+test("flow 327: `keryx routing list` reports a category with no explicit config as 'auto (derived from <provider>'s models)', source [derived]", async () => {
+  const d = await deps({
+    providers: async () => [{ name: "anthropic", models: ["claude-opus-5.5", "claude-sonnet-5"] }],
+    session: () => ({ providerId: "anthropic", modelId: "claude-opus-5.5" }),
+  });
+  await refreshModelProfiles("anthropic", ["claude-opus-5.5", "claude-sonnet-5"], {}, { dir: d.userConfigDir });
+  const { stdout } = await capture(() => routingCommand(["list"], d));
+  const text = stdout.join("\n");
+  expect(text).toMatch(/subagents\s+auto \(derived from anthropic's models\) -> anthropic\/claude-sonnet-5\s+\[derived\]/);
+  expect(text).toMatch(/review\s+auto \(derived from anthropic's models\) -> anthropic\/claude-opus-5\.5\s+\[derived\]/);
+});
+
+test("flow 327: `keryx routing list --json` reports source 'derived' for a category the operator never configured", async () => {
+  const d = await deps({
+    providers: async () => [{ name: "anthropic", models: ["claude-opus-5.5", "claude-sonnet-5"] }],
+    session: () => ({ providerId: "anthropic", modelId: "claude-opus-5.5" }),
+  });
+  await refreshModelProfiles("anthropic", ["claude-opus-5.5", "claude-sonnet-5"], {}, { dir: d.userConfigDir });
+  const { stdout } = await capture(() => routingCommand(["list", "--json"], d));
+  const parsed = JSON.parse(stdout.join("")) as { categories: Record<string, { assignment: unknown; source: string }> };
+  expect(parsed.categories.subagents).toEqual({
+    assignment: { kind: "model", providerId: "anthropic", modelId: "claude-sonnet-5" },
+    source: "derived",
+  });
+});
+
+test("flow 327 AC11: an explicit entry naming a model whose profile went unavailable falls back, with the em-dash 'unavailable' notice", async () => {
+  const d = await deps({ providers: async () => [{ name: "anthropic", models: ["claude-x"] }] });
+  await refreshModelProfiles("anthropic", ["claude-x"], {}, { dir: d.userConfigDir }); // first seen
+  await refreshModelProfiles("anthropic", [], {}, { dir: d.userConfigDir }); // vanished -> available: false, kept
+  await capture(() => routingCommand(["set", "review", "anthropic/claude-x"], d));
+  const { stdout } = await capture(() => routingCommand(["list"], d));
+  const text = stdout.join("\n");
+  expect(text).toContain("anthropic/claude-x — unavailable, falling back to session default");
+  expect(text).not.toContain("anthropic/claude-x - not connected"); // the DIFFERENT flow 305 notice, not this one
+});
+
+test("flow 327 AC11: `keryx routing list --json` carries the unavailable rejection with its reason", async () => {
+  const d = await deps({ providers: async () => [{ name: "anthropic", models: ["claude-x"] }] });
+  await refreshModelProfiles("anthropic", ["claude-x"], {}, { dir: d.userConfigDir });
+  await refreshModelProfiles("anthropic", [], {}, { dir: d.userConfigDir });
+  await capture(() => routingCommand(["set", "review", "anthropic/claude-x"], d));
+  const { stdout } = await capture(() => routingCommand(["list", "--json"], d));
+  const parsed = JSON.parse(stdout.join("")) as {
+    categories: Record<string, { source: string; rejected?: { assignment: unknown; source: string; reason?: string } }>;
+  };
+  expect(parsed.categories.review?.source).toBe("default");
+  expect(parsed.categories.review?.rejected).toEqual({
+    assignment: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
+    source: "user",
+    reason: "unavailable",
+  });
 });

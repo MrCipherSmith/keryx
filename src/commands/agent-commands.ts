@@ -139,6 +139,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/flows", description: "Browse project flows and inspect one", modes: BOTH },
   {
+    name: "/ac",
+    description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check",
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/workspace",
     description: "Show this session's SAC workspace and its slates",
     // TUI-only: the sidebar entry, mouse click, and 3-tab modal all need the

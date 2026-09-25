@@ -124,6 +124,12 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # edit inside that block is regenerated away by the next `keryx update`.
 .metaproject/data/review-conform/
 
+# `keryx flow check-ac` (flow 328): per-flow cached check-ac results, keyed by
+# (criteria checksum, diff hash) — project-local runtime state, not something
+# to commit. Written 0o600. Added by hand, outside the `keryx:begin`/
+# `keryx:end` managed block above, for the same reason as the conform cache
+# above: a hand edit inside that block is regenerated away by `keryx update`.
+.metaproject/data/ac-check/
 # Flow 331's review-conform adapter runs `keryx review conform` with its cwd
 # set to bench/jev-review/fixtures/conform-project/ (its own scratch
 # .metaproject/tasks.config.json), so that command writes the same

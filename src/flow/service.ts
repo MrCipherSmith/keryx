@@ -28,6 +28,40 @@ import {
 // Re-exported so a client (the CLI) reads the caveat through this facade,
 // not from the zone's internals (import policy, rule 2).
 export { CONFIRMATION_CAVEAT } from "./confirm-token";
+// Flow 328: re-exported so `keryx flow check-ac`'s adapter
+// (`src/commands/flow-check-ac.ts`), the AC5/AC6 callers
+// (`src/commands/flow.ts`/`src/commands/review.ts`) and the AC7 TUI reader
+// (`src/tui/inspector-sources.ts`) reach `acPath`/`assertAcIntact`/`readFlow`/
+// `resolveFlowDir` and every `check-ac.ts` export through THIS facade, not
+// the zone's internals (import policy, rule 2 — `client-imports-core-internal`
+// only excuses a `service.ts` target).
+export { acPath, assertAcIntact, readFlow, resolveFlowDir } from "./store";
+export {
+  AC_CHECK_TOKEN_BUDGET,
+  acCheckCacheKey,
+  acCheckCachePath,
+  batchAcCheckItems,
+  classifyNotCheckable,
+  computeAcFacts,
+  evaluatedVerdict,
+  factsOnlyVerdict,
+  hashDiff,
+  isFrozen,
+  notCheckableVerdict,
+  parseAcceptanceCriteria,
+  readAcCheckCache,
+  readAcCheckEnabled,
+  renderAcCheckAdvisoryNotice,
+  renderAcCheckReport,
+  selectMatchedHunks,
+  statusLabel,
+  summarizeVerdicts,
+  writeAcCheckCache,
+  type AcCheckCacheRecord,
+  type AcCheckItem,
+  type AcCheckStatus,
+  type AcCheckVerdict,
+} from "./check-ac";
 import {
   acChecksum,
   acPath,
