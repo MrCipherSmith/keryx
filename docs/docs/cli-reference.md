@@ -1216,6 +1216,48 @@ keryx auth status <provider> [--json]
 
 `/provider` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
 
+### OpenAI API and ChatGPT subscriptions
+
+`/provider` offers two independent entries:
+
+| Entry | Provider ID | Credential and usage |
+|---|---|---|
+| OpenAI API | `openai` | Platform API key (`OPENAI_API_KEY`), billed through the API account. |
+| ChatGPT / Codex | `openai-codex` | ChatGPT subscription login, using the account's Codex access and limits. |
+
+For a ChatGPT subscription, enable device-code login in your ChatGPT security
+settings, then choose **ChatGPT / Codex** in `/provider`. Keryx displays a
+verification URL and a one-time code and opens the browser when available.
+Sign in to your account in that browser and enter the code. On a headless
+machine, open the displayed URL on another device. Escape cancels the Shell
+login. The command is `/provider`, not `/provide`.
+
+The same login can be started before opening Shell:
+
+```bash
+keryx auth login openai-codex
+keryx auth status openai-codex
+keryx shell
+```
+
+Then choose `/provider` → **ChatGPT / Codex** and a model returned by the
+subscription service. `/connect` lists connected providers and offers Test and
+Disconnect; CLI equivalents are `keryx providers test openai-codex` and
+`keryx providers remove openai-codex`. A successful model-list probe verifies
+authentication and discovery; send a short prompt to verify inference too.
+
+OAuth tokens stay in Keryx's owner-only credential store and are refreshed
+before use. They are never exported as `OPENAI_API_KEY`. Existing OAuth grants
+saved under the old `openai` name remain readable by `openai-codex`. Disconnecting
+the subscription removes its canonical and legacy OAuth grants, not the API
+key. Disconnecting OpenAI API leaves subscription credentials intact.
+
+If authentication is refused or a refresh token is no longer valid, repeat
+`keryx auth login openai-codex`. Device-code availability and model access depend
+on your account and workspace settings. See [OpenAI authentication](https://learn.chatgpt.com/docs/auth).
+Offline integration tests cover the protocol; a live login and prompt with
+your own subscription remain the final account-specific check.
+
 ---
 
 ## providers

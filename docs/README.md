@@ -14,6 +14,8 @@ intent, implementation plans, and release evidence do not get mixed together.
   Gherkin scenarios for complete setup, validation, repair, and handoff.
 - [Documentation index](docs/index.md) — compact navigation for the generated
   current-behavior reference.
+- [OpenAI API and ChatGPT subscriptions](docs/cli-reference.md#openai-api-and-chatgpt-subscriptions)
+  — separate providers, browser-completed device login, and connection checks.
 
 ## Product intent
 

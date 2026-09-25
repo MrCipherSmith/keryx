@@ -49,6 +49,8 @@ export interface OpenAiCapabilityGrant {
 export interface OpenAiProviderDeps {
   readonly fetch: typeof fetch;
   readonly grant?: OpenAiCapabilityGrant;
+  /** Explicit subscription transport; never inferred from an API credential. */
+  readonly codex?: { readonly accountId: string };
   readonly clock?: () => number;
   /**
    * Deadline (ms) for the first stream byte to arrive after the response
@@ -149,14 +151,14 @@ function clampOpenAiReasoningEffort(effort: string): string {
  * did not itself produce (`kind !== "reasoning_item"`), is not this
  * adapter's to interpret and is silently skipped rather than guessed at.
  */
-function ownedReasoningItems(reasoning: MessageReasoning | undefined): Record<string, unknown>[] {
+function ownedReasoningItems(reasoning: MessageReasoning | undefined, providerId: string): Record<string, unknown>[] {
   const replay = reasoning?.replay;
   if (replay === undefined) {
     return [];
   }
   const items: Record<string, unknown>[] = [];
   for (const item of replay) {
-    if (item.providerId !== PROVIDER_ID || item.kind !== "reasoning_item") {
+    if (item.providerId !== providerId || item.kind !== "reasoning_item") {
       continue;
     }
     if (isPlainObject(item.data)) {
@@ -192,7 +194,7 @@ function ownedReasoningItems(reasoning: MessageReasoning | undefined): Record<st
  * item belongs to a different provider) injects nothing here and builds
  * exactly as before.
  */
-function toResponsesInput(messages: readonly NormalizedMessage[]): Record<string, unknown>[] {
+function toResponsesInput(messages: readonly NormalizedMessage[], providerId: string): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
   for (const linked of linkToolCalls(messages)) {
     const message = linked.message;
@@ -215,7 +217,7 @@ function toResponsesInput(messages: readonly NormalizedMessage[]): Record<string
       continue;
     }
     if (message.role === "assistant") {
-      for (const item of ownedReasoningItems(message.reasoning)) {
+      for (const item of ownedReasoningItems(message.reasoning, providerId)) {
         out.push(item);
       }
     }
@@ -351,6 +353,7 @@ const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
 
 /** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
 const READ_TIMED_OUT = Symbol("openai-read-timed-out");
+const READ_CANCELLED = Symbol("openai-read-cancelled");
 
 /** The resolved type of `reader.read()`, derived rather than named (lib.dom's exact type differs across TS/bun-types versions). */
 type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
@@ -364,14 +367,22 @@ type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array
 async function raceReadAgainstDeadline(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   ms: number,
-): Promise<ReadChunkResult | typeof READ_TIMED_OUT> {
+  signal?: AbortSignal,
+): Promise<ReadChunkResult | typeof READ_TIMED_OUT | typeof READ_CANCELLED> {
+  if (signal?.aborted === true) return READ_CANCELLED;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<typeof READ_TIMED_OUT>((resolve) => {
     timer = setTimeout(() => resolve(READ_TIMED_OUT), ms);
   });
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<typeof READ_CANCELLED>((resolve) => {
+    onAbort = () => resolve(READ_CANCELLED);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
   try {
-    return await Promise.race([reader.read(), deadline]);
+    return await Promise.race([reader.read(), deadline, aborted]);
   } finally {
+    if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
     if (timer !== undefined) {
       clearTimeout(timer);
     }
@@ -413,6 +424,10 @@ async function* drainAndCheckAbort(
 export class OpenAiProvider implements ProviderPort {
   private readonly deps: OpenAiProviderDeps;
 
+  private get providerId(): string {
+    return this.deps.codex === undefined ? PROVIDER_ID : "openai-codex";
+  }
+
   constructor(deps: OpenAiProviderDeps) {
     this.deps = deps;
   }
@@ -445,16 +460,16 @@ export class OpenAiProvider implements ProviderPort {
     };
     return {
       capabilities,
-      descriptor: { providerId: PROVIDER_ID, providerRevision: PROVIDER_REVISION },
+      descriptor: { providerId: this.providerId, providerRevision: PROVIDER_REVISION },
     };
   }
 
   descriptorDocument(): OpenAiProviderDescriptorDocument {
     return {
       schemaVersion: 1,
-      providerId: PROVIDER_ID,
+      providerId: this.providerId,
       providerRevision: PROVIDER_REVISION,
-      models: [{ modelId: DEFAULT_MODEL.modelId, revision: DEFAULT_MODEL.revision }],
+      models: [{ modelId: this.deps.codex === undefined ? DEFAULT_MODEL.modelId : "gpt-5.4", revision: DEFAULT_MODEL.revision }],
       capabilities: {
         streaming: true,
         tools: true,
@@ -488,7 +503,8 @@ export class OpenAiProvider implements ProviderPort {
       return;
     }
 
-    const baseUrl = grant.baseUrl ?? DEFAULT_BASE_URL;
+    const codex = this.deps.codex;
+    const baseUrl = codex === undefined ? grant.baseUrl ?? DEFAULT_BASE_URL : "https://chatgpt.com/backend-api/codex";
 
     // Guarded egress: private/loopback/link-local/metadata hosts fail closed,
     // BEFORE any fetch, reusing the W15 SSRF predicate (AC4).
@@ -507,10 +523,16 @@ export class OpenAiProvider implements ProviderPort {
       return;
     }
 
-    const url = `${baseUrl.replace(/\/+$/, "")}/v1/responses`;
+    const url = `${baseUrl.replace(/\/+$/, "")}${codex === undefined ? "/v1/responses" : "/responses"}`;
     const headers: Record<string, string> = {
       authorization: `Bearer ${grant.apiKey}`,
       "content-type": "application/json",
+      ...(codex === undefined ? {} : {
+        "ChatGPT-Account-ID": codex.accountId,
+        originator: "keryx",
+        "User-Agent": "keryx",
+        accept: "text/event-stream",
+      }),
     };
     // Reasoning (flow 268 T14, AC9): `request.options.reasoning` is the
     // effort level a caller opted into ("minimal"|"low"|"medium"|"high");
@@ -530,7 +552,7 @@ export class OpenAiProvider implements ProviderPort {
     const payload: Record<string, unknown> = {
       model: request.modelId,
       instructions: request.systemInstruction,
-      input: toResponsesInput(request.messages),
+      input: toResponsesInput(request.messages, this.providerId),
       stream: true,
       // Output token limit (flow 268 T6): the Responses API field is
       // `max_output_tokens`, distinct from Chat Completions' `max_tokens`.
@@ -540,7 +562,7 @@ export class OpenAiProvider implements ProviderPort {
       // but this engine used to silently drop it rather than serialize it —
       // always send it, unconditionally, so a configured override actually
       // reaches the wire.
-      max_output_tokens: request.budget.maxOutputTokens,
+      ...(codex === undefined ? { max_output_tokens: request.budget.maxOutputTokens } : { store: false, tool_choice: "auto", parallel_tool_calls: true, tools: [] }),
       // `temperature` stays conditional: genuinely absent (not merely
       // defaulted) on every request until an operator configures one (AC3).
       // NEVER sent alongside `reasoning` below — the Responses API 400s a
@@ -550,7 +572,7 @@ export class OpenAiProvider implements ProviderPort {
       // operator-configured temperature is silently omitted whenever
       // `reasoningRequested`, rather than sent on a request guaranteed to
       // fail with a 400.
-      ...(request.options?.temperature !== undefined && !reasoningRequested
+      ...(codex === undefined && request.options?.temperature !== undefined && !reasoningRequested
         ? { temperature: request.options.temperature }
         : {}),
       ...(reasoningRequested
@@ -684,9 +706,9 @@ export class OpenAiProvider implements ProviderPort {
 
     readLoop: while (true) {
       const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
-      let readResult: ReadChunkResult | typeof READ_TIMED_OUT;
+      let readResult: ReadChunkResult | typeof READ_TIMED_OUT | typeof READ_CANCELLED;
       try {
-        readResult = await raceReadAgainstDeadline(reader, timeoutMs);
+        readResult = await raceReadAgainstDeadline(reader, timeoutMs, opts.signal);
       } catch (cause) {
         cancelReader();
         const aborted =
@@ -704,6 +726,11 @@ export class OpenAiProvider implements ProviderPort {
         return;
       }
 
+      if (readResult === READ_CANCELLED) {
+        cancelReader();
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
+      }
       if (readResult === READ_TIMED_OUT) {
         cancelReader();
         yield errorEvent({
@@ -879,7 +906,7 @@ export class OpenAiProvider implements ProviderPort {
               }
               bodies.push({
                 kind: "reasoning_replay",
-                replay: { providerId: PROVIDER_ID, kind: "reasoning_item", data: item },
+                replay: { providerId: this.providerId, kind: "reasoning_item", data: item },
               });
             }
             break;

@@ -1,0 +1,25 @@
+# Flow Journal
+
+- 2026-09-25T21:40:13.138Z - flow created
+- 2026-09-25T21:41:17.106Z - frozen: 7 criteria; checksum recorded
+- 2026-09-25T21:41:17.428Z - started
+- 2026-09-25T21:41:59.019Z - task-added: T5: Verify OAuth login to streamed subscription answer and tools offline
+- 2026-09-25T21:42:07.698Z - task-added: T6: Run typecheck lint build health and independent review
+- 2026-09-25T21:42:08.057Z - task-added: T7: Update provider usage and implementation documentation
+- 2026-09-25T21:43:00.540Z - task-attempt: T1: started (attempt 1) — Verify primary OpenAI protocol and isolate subscription provider design
+- 2026-09-25T21:43:00.878Z - task-attempt: T3: started (attempt 1) — tests-creator: RED provider separation lifecycle and disconnect scenarios
+- 2026-09-25T21:44:41.489Z - task-done: T1: Collect remaining context
+- 2026-09-25T21:44:41.856Z - task-attempt: T2: started (attempt 1) — OAuth lifecycle, Responses adapter and provider UI integration workers
+- 2026-09-25T21:59:00.145Z - task-done: T2: Implement per plan
+- 2026-09-25T21:59:00.785Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-25T21:59:01.470Z - task-done: T5: Verify OAuth login to streamed subscription answer and tools offline
+- 2026-09-25T21:59:02.177Z - task-done: T7: Update provider usage and implementation documentation
+- 2026-09-25T22:00:20.187Z - ac-confirmed: AC1: Distinct always-visible picker identities; API/OAuth isolation and connection classification regressions pass. (signed: agent:codex [stated])
+- 2026-09-25T22:00:20.610Z - ac-confirmed: AC2: TUI and readline browser-completed device login covered offline; cancellation timer regression repaired; peer verification recorded. (signed: agent:codex [stated])
+- 2026-09-25T22:00:21.308Z - ac-confirmed: AC3: Offline login to saved grant to native factory to streamed tool/result/text integration passes at fixed Codex endpoint. (signed: agent:codex [stated])
+- 2026-09-25T22:00:21.904Z - ac-confirmed: AC4: Refresh rotation, legacy fallback, invalid grant errors, logout protection and two-process single-rotation regression pass. (signed: agent:codex [stated])
+- 2026-09-25T22:00:22.354Z - ac-confirmed: AC5: Discovery, connection testing/listing and independent disconnect covered by provider/UI tests; saved grant reloaded each turn. (signed: agent:codex [stated])
+- 2026-09-25T22:00:22.760Z - ac-confirmed: AC7: Connection guide and pinned protocol references updated; live personal-account validation explicitly pending and no release published. (signed: agent:codex [stated])
+- 2026-09-25T22:02:02.420Z - task-done: T6: Run typecheck lint build health and independent review
+- 2026-09-25T22:02:03.014Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-25T22:02:03.462Z - ac-confirmed: AC6: Offline integration and final checks passed: changed strict1410pass0fail, later shell selection68pass, typecheck/script types/lint/build. Advisory output scanner warnings retained in verification.md (signed: agent:codex [stated])

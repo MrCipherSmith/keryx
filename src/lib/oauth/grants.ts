@@ -1,6 +1,7 @@
 // OAuth grants in the existing user-global auth.json (mode 0600).
 // Secrets live only in this file. Status/list surfaces never copy them.
 
+import { codexTokenMetadata } from "./openai-token";
 import { loadShellConfig, noteSavedCredentialEnv, saveShellConfig } from "../shell-config";
 
 export type OAuthGrantMethod = "device-code" | "oauth-pkce-loopback";
@@ -8,6 +9,7 @@ export type OAuthGrantMethod = "device-code" | "oauth-pkce-loopback";
 export interface OAuthGrant {
   method: OAuthGrantMethod;
   access: string;
+  accountId?: string;
   refresh?: string;
   /** Epoch milliseconds. Absent when the issuer did not return expires_in. */
   expires?: number;
@@ -22,12 +24,18 @@ export function loadOAuthGrant(provider: string, dir?: string): OAuthGrant | und
   if (grants === undefined) {
     return undefined;
   }
-  const grant = grants[provider];
+  const grant = grants[provider] ?? (provider === "openai-codex" ? grants.openai : undefined);
   if (grant === undefined || typeof grant.access !== "string" || grant.access.length === 0) {
     return undefined;
   }
   if (grant.method !== "device-code" && grant.method !== "oauth-pkce-loopback") {
     return undefined;
+  }
+  if (provider === "openai-codex" || provider === "openai") {
+    const metadata = codexTokenMetadata(grant.access);
+    return { ...grant,
+      ...(grant.accountId === undefined && metadata.accountId !== undefined ? {accountId: metadata.accountId} : {}),
+      ...(grant.expires === undefined && metadata.expiresAt !== undefined ? {expires: metadata.expiresAt} : {}) };
   }
   return grant;
 }
@@ -39,16 +47,18 @@ export function saveOAuthGrant(provider: string, grant: OAuthGrant, dir?: string
 
 export function deleteOAuthGrant(provider: string, dir?: string): void {
   const existing = { ...(loadShellConfig(dir).oauthGrants ?? {}) };
-  if (existing[provider] === undefined) {
+  if (existing[provider] === undefined && !(provider === "openai-codex" && existing.openai !== undefined)) {
     return;
   }
   delete existing[provider];
+  if (provider === "openai-codex") delete existing.openai;
   saveShellConfig({ oauthGrants: existing }, dir);
 }
 
 export function listOAuthGrantProviders(dir?: string): string[] {
   const grants = loadShellConfig(dir).oauthGrants ?? {};
-  return Object.keys(grants).filter((name) => loadOAuthGrant(name, dir) !== undefined).sort();
+  return [...new Set(Object.keys(grants).map((name) => name === "openai" ? "openai-codex" : name))]
+    .filter((name) => loadOAuthGrant(name, dir) !== undefined).sort();
 }
 
 /** Public metadata for `keryx auth status`. Never includes token values. */
@@ -138,7 +148,7 @@ export function applyOAuthAccessToEnv(dir?: string): string[] {
 
 export function grantFromTokens(
   method: OAuthGrantMethod,
-  tokens: { accessToken: string; refreshToken?: string; expiresInSeconds?: number },
+  tokens: { accessToken: string; refreshToken?: string; expiresInSeconds?: number; accountId?: string; expiresAt?: number },
   now: () => number = Date.now,
 ): OAuthGrant {
   const obtainedAt = new Date(now()).toISOString();
@@ -147,6 +157,8 @@ export function grantFromTokens(
     access: tokens.accessToken,
     ...(tokens.refreshToken !== undefined ? { refresh: tokens.refreshToken } : {}),
     ...(tokens.expiresInSeconds !== undefined ? { expires: now() + tokens.expiresInSeconds * 1000 } : {}),
+    ...(tokens.accountId !== undefined ? { accountId: tokens.accountId } : {}),
+    ...(tokens.expiresInSeconds === undefined && tokens.expiresAt !== undefined ? { expires: tokens.expiresAt } : {}),
     obtainedAt,
   };
 }

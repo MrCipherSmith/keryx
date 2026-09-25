@@ -28,7 +28,9 @@ import {
   refreshModelProfiles,
   type ProfileRefreshSummary,
 } from "../harness/routing/model-profile";
-import { envWithOAuthAccess, oauthEnvKeyFor } from "../lib/oauth/grants";
+import { fetchOpenAiCodexModels, OPENAI_CODEX_PICKER } from "./subscription-models";
+import { OPENAI_MODELS } from "./curated-model-lists";
+import { envWithOAuthAccess, loadOAuthGrant, oauthEnvKeyFor } from "../lib/oauth/grants";
 import { logoutProvider } from "../lib/oauth/login";
 import { resolveCallerSession } from "../lib/caller-session";
 import {
@@ -319,6 +321,7 @@ export function resolveProviderModelParamsByName(
  * picker fetches each provider's LIVE `/models` list (filterable by name).
  */
 export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
+  { name: "openai", label: "OpenAI API", baseUrl: "https://api.openai.com", envKey: "OPENAI_API_KEY", models: [...OPENAI_MODELS], note: "Platform API key · separate API billing" },
   {
     name: "openrouter",
     label: "OpenRouter",
@@ -465,6 +468,11 @@ export function providerByName(name: string, dir?: string): OpenAiCompatProvider
   return allOpenAiCompatProviders(dir).find((p) => p.name === name);
 }
 
+/** Metadata for connection management; subscription transport is never registered as Chat Completions. */
+export function connectionProviderByName(name: string, dir?: string): OpenAiCompatProvider | undefined {
+  return name === "openai-codex" ? OPENAI_CODEX_PICKER : providerByName(name, dir);
+}
+
 /**
  * Operator-defined custom providers from `llm-providers.json` (the in-TUI
  * "add custom provider" wizard), mapped onto the registry shape. Custom
@@ -475,7 +483,7 @@ export function providerByName(name: string, dir?: string): OpenAiCompatProvider
  * whose `name` collides with a built-in is excluded (built-ins win).
  */
 export function customCompatProviders(dir?: string): OpenAiCompatProvider[] {
-  const builtinNames = new Set(OPENAI_COMPAT_PROVIDERS.map((p) => p.name));
+  const builtinNames = new Set([...OPENAI_COMPAT_PROVIDERS.map((p) => p.name), "openai-codex"]);
   return loadCustomCompatProviders(dir)
     .filter((p) => !builtinNames.has(p.name))
     .map((p): OpenAiCompatProvider => ({
@@ -813,14 +821,15 @@ export async function resolveModelsForPicker(
   fetchFn: typeof fetch,
   provider: { name: string; models: string[]; baseUrl?: string; envKey?: string },
   env: Record<string, string | undefined> = process.env,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; configDir?: string },
 ): Promise<ModelsResolveResult> {
-  const compat = providerByName(provider.name);
+  if (provider.name === "openai-codex") return fetchOpenAiCodexModels(fetchFn, opts);
+  const compat = providerByName(provider.name, opts?.configDir);
   if (compat === undefined) {
     return { models: [...provider.models], source: "fallback" };
   }
   const envKey = provider.envKey ?? compat.envKey;
-  const raw = envKey === undefined ? undefined : env[envKey];
+  const raw = envKey === undefined ? undefined : envWithSavedApiKeys(env, opts?.configDir)[envKey];
   const apiKey = typeof raw === "string" && raw.length > 0 ? raw : compat.apiKey;
   return fetchOpenAiCompatModelsDetailed(
     fetchFn,
@@ -1057,7 +1066,8 @@ export async function testProviderConnection(
   env: Record<string, string | undefined> = process.env,
   profiles?: ProfileRefreshOpts,
 ): Promise<ModelsResolveResult> {
-  const apiKey = providerApiKey(provider, env) ?? provider.apiKey;
+  if (provider.name === "openai-codex") return fetchOpenAiCodexModels(fetchFn, { ...(profiles?.dir !== undefined ? { configDir: profiles.dir } : {}) });
+  const apiKey = providerApiKey(provider, envWithSavedApiKeys(env, profiles?.dir)) ?? provider.apiKey;
   return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, {
     timeoutMs: MODELS_FETCH_TIMEOUT_MS,
     ...(profiles !== undefined ? { refreshProfiles: profiles } : {}),
@@ -1140,7 +1150,7 @@ export function classifyProviderConnection(
   if (customCompatProviders(dir).some((p) => p.name === name)) {
     return { kind: "custom", sharedWith: [] };
   }
-  if (loadShellConfig(dir).oauthGrants?.[name] !== undefined) {
+  if (name !== "openai" && loadOAuthGrant(name, dir) !== undefined) {
     const envKey = oauthEnvKeyFor(name);
     const sharedWith = envKey === undefined ? [] : providersSharingEnvKey(envKey, name, allOpenAiCompatProviders(dir));
     return { kind: "oauth-grant", ...(envKey !== undefined ? { envKey } : {}), sharedWith };
@@ -1260,7 +1270,8 @@ export function configuredProviders(
       return providerApiKey(provider, env) !== undefined || provider.apiKey !== undefined;
     })
     .filter((provider) => isProviderPlatformSupported(provider))
-    .map((provider) => ({ name: provider.name, models: provider.models }));
+    .map((provider) => ({ name: provider.name, models: provider.models }))
+    .concat(loadOAuthGrant("openai-codex", dir) === undefined ? [] : [{ name: "openai-codex", models: [...OPENAI_CODEX_PICKER.models] }]);
 }
 
 /** Seams for `keryx providers test`/`keryx providers remove` tests: production passes none. */
@@ -1322,7 +1333,7 @@ async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Pro
     return;
   }
   const dir = deps.dir;
-  const provider = providerByName(name, dir);
+  const provider = connectionProviderByName(name, dir);
   if (provider === undefined) {
     console.error(`Unknown provider: ${name}`);
     process.exitCode = 1;
@@ -1412,7 +1423,7 @@ async function runProvidersRemove(args: string[], deps: ProvidersCommandDeps): P
   const json = args.includes("--json");
   // flow 304 review finding #3: an unknown name used to report success and
   // exit 0. Validate the SAME way `test` does, before even asking to confirm.
-  if (providerByName(name, dir) === undefined) {
+  if (connectionProviderByName(name, dir) === undefined) {
     if (json) {
       console.log(JSON.stringify({ provider: name, ok: false, reason: "unknown provider" }, null, 2));
     } else {

@@ -7,10 +7,9 @@
 // models (fail-SOFT — a throw / non-2xx simply omits ollama), adds `anthropic`
 // ONLY when `deps.env.ANTHROPIC_API_KEY` is a non-empty string (a STATIC
 // `claude-*` list, ZERO network calls, the key never leaves `env`), and
-// (flow 183 T9) `openai`/`gemini` the same way — `deps.env.OPENAI_API_KEY` /
-// `deps.env.GEMINI_API_KEY` (falling back to `GOOGLE_API_KEY`), each a
-// static curated list, zero network calls, key never leaves `env` — and
-// ALWAYS offers `fake`. It is deterministic: no `Date.now`/`Math.random`.
+// Gemini is likewise key-gated. OpenAI API and ChatGPT / Codex are always
+// offered as distinct choices; authentication happens after selection.
+// Detection makes no remote authentication/model requests for these entries.
 //
 // `pickProviderModel(io, detected)` renders a numbered provider menu then a
 // numbered model menu over the injected `ShellIO`, re-prompting on
@@ -21,6 +20,10 @@
 // network, no real TTY/stdin. See `.metaproject/flows/
 // 022-2026-07-13-keryx-r2-4-tui/acceptance-criteria.md` (AC1-AC2).
 
+import { OPENAI_CODEX_PICKER } from "./subscription-models";
+import { loadOAuthGrant } from "../lib/oauth/grants";
+import { loginDeviceCode } from "../lib/oauth/login";
+import { openVerificationUrl } from "../lib/oauth/open-url";
 import { isLoopbackHost, isPrivateEgressHost } from "../harness/mutation/guard";
 import {
   allOpenAiCompatProviders,
@@ -35,7 +38,7 @@ import {
 // §6.1) can read the SAME ids without an import cycle back through this
 // file's own `../commands/providers` dependency. Re-imported here under the
 // same names so every other reference in this file is unchanged.
-import { ANTHROPIC_MODELS, GEMINI_MODELS, OPENAI_MODELS } from "./curated-model-lists";
+import { ANTHROPIC_MODELS, GEMINI_MODELS } from "./curated-model-lists";
 
 type ShellIO = {
   lines: AsyncIterable<string>;
@@ -72,6 +75,7 @@ export interface DetectProvidersDeps {
   baseUrl?: string;
   /** Runtime platform filter for registry providers (defaults to `process.platform`). */
   platform?: string;
+  configDir?: string;
 }
 
 /** Mirrors `OllamaProvider`'s `DEFAULT_BASE_URL` (loopback Ollama default). */
@@ -183,13 +187,7 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
     detected.push({ name: "anthropic", models: [...ANTHROPIC_MODELS] });
   }
 
-  // flow 183 T9: openai/gemini as first-class picker entries, same shape as
-  // anthropic above — key presence gates visibility, the key itself never
-  // reaches the returned shape or gets logged.
-  const openaiKey = deps.env.OPENAI_API_KEY;
-  if (typeof openaiKey === "string" && openaiKey.length > 0) {
-    detected.push({ name: "openai", models: [...OPENAI_MODELS] });
-  }
+  detected.push({ name: OPENAI_CODEX_PICKER.name, label: OPENAI_CODEX_PICKER.label, models: [...OPENAI_CODEX_PICKER.models], note: "ChatGPT subscription · browser device login" });
 
   const geminiKey = deps.env.GEMINI_API_KEY ?? deps.env.GOOGLE_API_KEY;
   if (typeof geminiKey === "string" && geminiKey.length > 0) {
@@ -201,7 +199,7 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
   // construction time, or the interactive shell prompts + persists it, so the user
   // need not pre-set env vars just to see them. Curated `models` are a fallback; the
   // picker fetches each provider's live `/models` list. Keys never surface here.
-  for (const p of allOpenAiCompatProviders()) {
+  for (const p of allOpenAiCompatProviders(deps.configDir)) {
     if (!isProviderPlatformSupported(p, platform)) {
       continue;
     }
@@ -279,6 +277,34 @@ function toSelection(provider: DetectedProvider, model: string): { provider: str
 export interface PickProviderModelDeps {
   fetch?: typeof fetch;
   env?: Record<string, string | undefined>;
+  configDir?: string;
+  signal?: AbortSignal;
+  openVerificationUrl?: (url: string) => void;
+}
+
+class SubscriptionSelectionError extends Error {}
+
+async function loginSubscriptionInReadline(io: ShellIO, deps: PickProviderModelDeps, fetchFn: typeof fetch): Promise<void> {
+  const controller = new AbortController();
+  const cancel = (): void => controller.abort();
+  const signal = deps.signal === undefined ? controller.signal : AbortSignal.any([controller.signal, deps.signal]);
+  process.on("SIGINT", cancel);
+  try {
+    io.write("Connect your ChatGPT subscription (Ctrl+C to cancel).\n");
+    const result = await loginDeviceCode({
+      provider: "openai-codex",
+      fetch: (url, init) => fetchFn(url, init),
+      signal,
+      ...(deps.configDir === undefined ? {} : { dir: deps.configDir }),
+      onChallenge: (challenge) => {
+        io.write(`${challenge.instructions}\n`);
+        (deps.openVerificationUrl ?? openVerificationUrl)(challenge.verificationUriComplete ?? challenge.verificationUri);
+      },
+    });
+    if (!result.ok) throw new SubscriptionSelectionError(signal.aborted ? "ChatGPT subscription login cancelled" : result.error);
+  } finally {
+    process.removeListener("SIGINT", cancel);
+  }
 }
 
 /**
@@ -287,7 +313,7 @@ export interface PickProviderModelDeps {
  * that provider is OpenAI-compat (and the network answers); curated lists are
  * only the offline/error fallback. Re-prompts on invalid input; on EOF before
  * a valid choice, falls back deterministically to `detected[0]` (+ its first
- * model). Never throws/hangs.
+ * model). Subscription login failures reject rather than selecting an unusable model.
  */
 export async function pickProviderModel(
   io: ShellIO,
@@ -341,9 +367,20 @@ export async function pickProviderModel(
     break;
   }
 
+  if (chosenProvider.name === "openai-codex" && loadOAuthGrant("openai-codex", deps.configDir) === undefined) {
+    await loginSubscriptionInReadline(io, deps, fetchFn);
+  }
   // Stage 2 — live model list when the network is up; curated offline fallback.
   io.write(`Fetching models for ${chosenProvider.name}…\n`);
-  const resolved = await resolveModelsForPicker(fetchFn, chosenProvider, env);
+  const modelOptions = deps.configDir === undefined ? {} : { configDir: deps.configDir };
+  let resolved = await resolveModelsForPicker(fetchFn, chosenProvider, env, modelOptions);
+  if (chosenProvider.name === "openai-codex" && resolved.failure?.kind === "rejected") {
+    await loginSubscriptionInReadline(io, deps, fetchFn);
+    resolved = await resolveModelsForPicker(fetchFn, chosenProvider, env, modelOptions);
+  }
+  if (chosenProvider.name === "openai-codex" && (resolved.source !== "live" || resolved.models.length === 0)) {
+    throw new SubscriptionSelectionError("ChatGPT subscription models are unavailable. Try again or run `keryx auth login openai-codex`.");
+  }
   const models = resolved.models.length > 0 ? resolved.models : chosenProvider.models;
   if (resolved.source === "live") {
     io.write(`  (${models.length} model(s) from API)\n`);

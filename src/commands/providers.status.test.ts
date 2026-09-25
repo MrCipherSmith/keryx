@@ -59,15 +59,15 @@ test("keryx providers status (human): names the provider, status, model count an
   expect(text).toContain("fetched");
 });
 
-test("keryx providers status: with no credential configured, nothing shows — the synthetic fake provider is excluded and never a guessed real one", async () => {
+test("keryx providers status: absent cloud credentials only a supported keyless local provider can appear", async () => {
   const dir = tempDir();
   const { logs } = await withCapturedLogs(async () => {
-    await providersCommand(["status"], { fetch: fetchOk, env: {}, dir });
+    await providersCommand(["status", "--json"], { fetch: fetchOk, env: {}, dir });
   });
-  const text = logs.join("\n");
-  expect(text).toContain("none — no provider is connected");
-  expect(text).not.toContain("fake");
-  expect(text).not.toContain("deepseek");
+  const parsed = JSON.parse(logs.join("\n")) as { providers: Array<{ name: string }> };
+  // The live mock also answers Rapid-MLX's probe. macOS legitimately offers
+  // that keyless local service; no cloud or synthetic provider may sneak in.
+  expect(parsed.providers.map((provider) => provider.name)).toEqual(process.platform === "darwin" ? ["rapid-mlx"] : []);
 });
 
 test("keryx providers status --refresh: bypasses a fresh cache and re-probes", async () => {

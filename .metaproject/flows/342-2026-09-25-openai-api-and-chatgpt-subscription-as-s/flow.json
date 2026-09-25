@@ -1,0 +1,382 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "342",
+  "slug": "openai-api-and-chatgpt-subscription-as-s",
+  "title": "OpenAI API and ChatGPT subscription as separate working Shell providers",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T21:40:13.138Z",
+  "updatedAt": "2026-09-25T22:02:03.462Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T22:00:20.187Z",
+      "note": "Distinct always-visible picker identities; API/OAuth isolation and connection classification regressions pass."
+    },
+    "AC2": {
+      "at": "2026-09-25T22:00:20.610Z",
+      "note": "TUI and readline browser-completed device login covered offline; cancellation timer regression repaired; peer verification recorded."
+    },
+    "AC3": {
+      "at": "2026-09-25T22:00:21.308Z",
+      "note": "Offline login to saved grant to native factory to streamed tool/result/text integration passes at fixed Codex endpoint."
+    },
+    "AC4": {
+      "at": "2026-09-25T22:00:21.904Z",
+      "note": "Refresh rotation, legacy fallback, invalid grant errors, logout protection and two-process single-rotation regression pass."
+    },
+    "AC5": {
+      "at": "2026-09-25T22:00:22.354Z",
+      "note": "Discovery, connection testing/listing and independent disconnect covered by provider/UI tests; saved grant reloaded each turn."
+    },
+    "AC7": {
+      "at": "2026-09-25T22:00:22.760Z",
+      "note": "Connection guide and pinned protocol references updated; live personal-account validation explicitly pending and no release published."
+    },
+    "AC6": {
+      "at": "2026-09-25T22:02:03.462Z",
+      "note": "Offline integration and final checks passed: changed strict1410pass0fail, later shell selection68pass, typecheck/script types/lint/build. Advisory output scanner warnings retained in verification.md"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T21:43:00.540Z",
+            "outcome": "started",
+            "detail": "Verify primary OpenAI protocol and isolate subscription provider design"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T21:44:41.856Z",
+            "outcome": "started",
+            "detail": "OAuth lifecycle, Responses adapter and provider UI integration workers"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Separate identities, device OAuth lifecycle, native Responses transport and Shell integration implemented; final peer correction and verification tracked by T6"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T21:43:00.878Z",
+            "outcome": "started",
+            "detail": "tests-creator: RED provider separation lifecycle and disconnect scenarios"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "RED separation and lifecycle tests implemented and made GREEN; final impacted verification tracked by T6"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent OAuth, native transport and Shell reviews complete with findings repaired. Local verified handoff ready; PR/release publication deferred to next user step"
+    },
+    {
+      "id": "T5",
+      "title": "Verify OAuth login to streamed subscription answer and tools offline",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Offline end-to-end device login, saved grant, factory, streamed tool call/result and text passed; no live account used"
+    },
+    {
+      "id": "T6",
+      "title": "Run typecheck lint build health and independent review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Final TypeScript/build/scoped ESLint pass; changed strict1410pass0fail exit0; final shell selection regressions pass; peer findings closed. Advisory test-log scanner warnings recorded in verification.md"
+    },
+    {
+      "id": "T7",
+      "title": "Update provider usage and implementation documentation",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two-provider connection guide, requirements status, pinned primary protocol sources and change report written;1632 documentation links checked"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T21:40:13.138Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T21:41:17.106Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T21:41:17.428Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T21:41:59.019Z",
+      "event": "task-added",
+      "detail": "T5: Verify OAuth login to streamed subscription answer and tools offline"
+    },
+    {
+      "at": "2026-09-25T21:42:07.698Z",
+      "event": "task-added",
+      "detail": "T6: Run typecheck lint build health and independent review"
+    },
+    {
+      "at": "2026-09-25T21:42:08.057Z",
+      "event": "task-added",
+      "detail": "T7: Update provider usage and implementation documentation"
+    },
+    {
+      "at": "2026-09-25T21:43:00.540Z",
+      "event": "task-attempt",
+      "detail": "T1: started (attempt 1) — Verify primary OpenAI protocol and isolate subscription provider design"
+    },
+    {
+      "at": "2026-09-25T21:43:00.878Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — tests-creator: RED provider separation lifecycle and disconnect scenarios"
+    },
+    {
+      "at": "2026-09-25T21:44:41.489Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T21:44:41.856Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — OAuth lifecycle, Responses adapter and provider UI integration workers"
+    },
+    {
+      "at": "2026-09-25T21:59:00.145Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T21:59:00.785Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T21:59:01.470Z",
+      "event": "task-done",
+      "detail": "T5: Verify OAuth login to streamed subscription answer and tools offline"
+    },
+    {
+      "at": "2026-09-25T21:59:02.177Z",
+      "event": "task-done",
+      "detail": "T7: Update provider usage and implementation documentation"
+    },
+    {
+      "at": "2026-09-25T22:00:20.187Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Distinct always-visible picker identities; API/OAuth isolation and connection classification regressions pass. (signed: agent:codex [stated])"
+    },
+    {
+      "at": "2026-09-25T22:00:20.610Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: TUI and readline browser-completed device login covered offline; cancellation timer regression repaired; peer verification recorded. (signed: agent:codex [stated])"
+    },
+    {
+      "at": "2026-09-25T22:00:21.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Offline login to saved grant to native factory to streamed tool/result/text integration passes at fixed Codex endpoint. (signed: agent:codex [stated])"
+    },
+    {
+      "at": "2026-09-25T22:00:21.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Refresh rotation, legacy fallback, invalid grant errors, logout protection and two-process single-rotation regression pass. (signed: agent:codex [stated])"
+    },
+    {
+      "at": "2026-09-25T22:00:22.354Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Discovery, connection testing/listing and independent disconnect covered by provider/UI tests; saved grant reloaded each turn. (signed: agent:codex [stated])"
+    },
+    {
+      "at": "2026-09-25T22:00:22.760Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Connection guide and pinned protocol references updated; live personal-account validation explicitly pending and no release published. (signed: agent:codex [stated])"
+    },
+    {
+      "at": "2026-09-25T22:02:02.420Z",
+      "event": "task-done",
+      "detail": "T6: Run typecheck lint build health and independent review"
+    },
+    {
+      "at": "2026-09-25T22:02:03.014Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T22:02:03.462Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Offline integration and final checks passed: changed strict1410pass0fail, later shell selection68pass, typecheck/script types/lint/build. Advisory output scanner warnings retained in verification.md (signed: agent:codex [stated])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T22:00:20.187Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent:codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e"
+    },
+    {
+      "at": "2026-09-25T22:00:20.610Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent:codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e"
+    },
+    {
+      "at": "2026-09-25T22:00:21.308Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent:codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e"
+    },
+    {
+      "at": "2026-09-25T22:00:21.904Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent:codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e"
+    },
+    {
+      "at": "2026-09-25T22:00:22.354Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent:codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e"
+    },
+    {
+      "at": "2026-09-25T22:00:22.760Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent:codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e"
+    },
+    {
+      "at": "2026-09-25T22:02:03.462Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent:codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e"
+    }
+  ]
+}
