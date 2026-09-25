@@ -1,0 +1,138 @@
+[
+  {
+    "id": "B1",
+    "reviewer": "review-orchestrator",
+    "severity": "blocker",
+    "problem": "honest-gate re-run was gamed: description/triggers text restated failing eval prompts near-verbatim",
+    "impact": "second run's PASS verdicts were not honest held-out results",
+    "suggested_fix": "revert every restated line to run-1 wording; make run 1 the official gate result",
+    "evidence": "i11.ts near-copy measurement, Jaccard >=0.5 against failing prompts",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/ci-github-gitlab/skills/ci-pipeline-build-fix/SKILL.md",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/ci-github-gitlab/skills/ci-pipeline-implementation/SKILL.md",
+        "src/gdskills/bundled/stacks/ci-github-gitlab/skills/ci-pipeline-code-review/SKILL.md",
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/skills/docker-k8s-terraform-build-fix/SKILL.md"
+      ],
+      "enumeration_method": "i11.ts run against every SKILL.md description/triggers line in both new packs vs each skill's own evals.json positives, both review rounds"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#B1"
+  },
+  {
+    "id": "B2",
+    "reviewer": "review-orchestrator",
+    "severity": "blocker",
+    "problem": "I11 not enforced for the two new packs; 5 near-copy positive/trigger pairs",
+    "impact": "near-copy trigger prompts could pass eval integrity undetected",
+    "suggested_fix": "add both packs to I11_ENFORCED_PACKS; reword the near-copies",
+    "evidence": "i11.ts measurement",
+    "confidence": "high",
+    "file": "src/gdskills/stack-pack-eval-integrity.test.ts",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/skills/docker-k8s-terraform-review/evals.json"
+      ],
+      "enumeration_method": "i11.ts full-catalog run; only docker-k8s-terraform-review carried pre-existing (Phase A) near-copies beyond the ones fixed under B1"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#B2"
+  },
+  {
+    "id": "M1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Kubernetes NetworkPolicy ingress: [] vs ingress: [{}] semantics inverted",
+    "impact": "guidance would tell a user the deny-all shape is allow-all and vice versa",
+    "suggested_fix": "correct per Kubernetes NetworkPolicy fail-closed semantics",
+    "evidence": "ctx7 Kubernetes docs",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/docker-k8s-terraform/rules/security.mdc",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/skills/docker-k8s-terraform-review/SKILL.md"
+      ],
+      "enumeration_method": "grep for ingress:/NetworkPolicy wording across the pack"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#M1"
+  },
+  {
+    "id": "M2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "false claim that GitLab CI needs the same env:/variables: injection fix GitHub Actions does",
+    "impact": "guidance would recommend a fix that changes nothing about the actual risk",
+    "suggested_fix": "rewrite around real risks (unquoted expansion, eval/sh -c, $[[ inputs.* ]])",
+    "evidence": "ctx7 GitLab docs",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/ci-github-gitlab/rules/security.mdc",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/ci-github-gitlab/pack.json",
+        "src/gdskills/bundled/stacks/ci-github-gitlab/skills/ci-pipeline-implementation/SKILL.md",
+        "src/gdskills/bundled/stacks/ci-github-gitlab/skills/ci-pipeline-code-review/SKILL.md"
+      ],
+      "enumeration_method": "grep for the false variables:-indirection claim across the pack"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#M2"
+  },
+  {
+    "id": "M3",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "notes.implement/notes.test rationales were false (deploy doesn't author configs; terraform test/helm test are real)",
+    "impact": "misleads a reader of the pack about why implement/test skills were omitted",
+    "suggested_fix": "rewrite as honest deferrals",
+    "evidence": "deploy/SKILL.md read directly; ctx7 Terraform/Helm docs",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/docker-k8s-terraform/pack.json",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/skills/docker-k8s-terraform-review/SKILL.md",
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/rules/testing.mdc",
+        "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md"
+      ],
+      "enumeration_method": "traced the false 'deploy authors configs' and 'no test concept' claims to every place they were repeated or relied upon"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#M3"
+  },
+  {
+    "id": "M4",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "two causality claims about which gate run caused which failure were wrong",
+    "impact": "misleading record of the honest-gate history",
+    "suggested_fix": "correct against archived run-1 raw data",
+    "evidence": "gate-evidence/run1/*.json raw output",
+    "confidence": "high",
+    "file": ".metaproject/flows/338-2026-09-25-wave-4-batch-6-stack-packs-for-docker-k8/journal.md",
+    "class_scope": {
+      "sites": [
+        "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md"
+      ],
+      "enumeration_method": "cross-checked every per-scenario causality claim in the journal and W1 doc against the two skills' archived run-1 raw JSON"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#M4"
+  },
+  {
+    "id": "MIN-1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "multiple minor content/wording/test-quality issues bundled (see report body)",
+    "impact": "various small correctness/clarity gaps",
+    "suggested_fix": "see report body for the full itemized list",
+    "evidence": "manual review of pack content and test files",
+    "confidence": "medium",
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#MIN-1"
+  },
+  {
+    "id": "INFO-1",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "anti_patterns tokens also present in calibration.known_right for scenarios naming the exact pattern reviewed",
+    "impact": "none — assessed against I6/I7's actual requirement and the live-judge AG check",
+    "suggested_fix": "no action needed",
+    "evidence": "stack-pack-eval-integrity.test.ts I6/I7 definitions; AG judge-check results",
+    "confidence": "high",
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-733#INFO-1"
+  }
+]
