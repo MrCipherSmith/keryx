@@ -5794,18 +5794,23 @@ export async function launchTuiAgentShell(opts: {
           renderer: r,
           ...(initialTab !== undefined ? { initialTab } : {}),
           // Flow 328, AC7: `c` runs `keryx flow check-ac` for the selected
-          // flow (advisory, never blocking) and reopens the modal on the AC
-          // tab with the freshly cached markers.
-          onRunCheck: (item) => {
-            void (async () => {
-              io.onSystem?.(`Checking flow ${item.id} against its frozen acceptance criteria…\n`);
-              try {
-                await runCheckAc(cwd, item.id, {});
-              } catch (error) {
-                io.onSystem?.(`acceptance-criteria check failed: ${error instanceof Error ? error.message : String(error)}\n`);
-              }
-              showFlows("ac");
-            })();
+          // flow (advisory, never blocking). Item 4 review finding: on
+          // success this reopens the modal on the AC tab with the freshly
+          // cached markers, same as before; on FAILURE it returns `{error}`
+          // instead, so the modal itself shows the error (in place, no
+          // reopen) rather than only a terminal line the operator may
+          // already have scrolled past.
+          onRunCheck: async (item) => {
+            io.onSystem?.(`Checking flow ${item.id} against its frozen acceptance criteria…\n`);
+            try {
+              await runCheckAc(cwd, item.id, {});
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              io.onSystem?.(`acceptance-criteria check failed: ${message}\n`);
+              return { error: message };
+            }
+            showFlows("ac");
+            return undefined;
           },
           ...inspectorKeys,
         });

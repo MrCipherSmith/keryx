@@ -203,7 +203,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       "  --harness    Bind this server process's cross-harness memory identity once at launch (or set KERYX_HARNESS; --harness wins). Used by memory.search filtering, memory.handoff, and the Source-Harness stamped on memory.propose writes. Unknown id refuses to start.\n",
     ],
     flow: [
-      "  keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)\n",
+      "  keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)\n",
     ],
   };
 

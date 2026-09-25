@@ -68,6 +68,43 @@ describe("classifyNotCheckable", () => {
   test("an ordinary checkable criterion is undefined", () => {
     expect(classifyNotCheckable("`keryx flow check-ac <id>` reports per criterion likely-met/not-evident.")).toBeUndefined();
   });
+
+  // Review finding: a criterion mixing a checkable clause with a
+  // not-checkable one used to become WHOLLY not-checkable the moment ANY
+  // clause matched a marker — this flow's own AC10 is the real-world case
+  // that hit it (doc paths and "import zones" ARE evidenced by a diff;
+  // "CI green"/"`keryx health run` passes" are not).
+  test("a mixed criterion (this flow's own AC10) stays checkable — one checkable clause is enough", () => {
+    const ac10 =
+      "Docs (cli-reference, flow docs, HELP_GROUPS, commands-by-task), CI green, `keryx health run` passes, hermetic macOS-safe tests, import zones respected.";
+    expect(classifyNotCheckable(ac10)).toBeUndefined();
+  });
+
+  test("a criterion whose EVERY comma-separated clause names a marker is wholly not-checkable", () => {
+    const classification = classifyNotCheckable("CI green, `keryx health run` passes.");
+    expect(classification).toBeDefined();
+    expect(classification?.label).toContain("CI green");
+    expect(classification?.label).toContain("health passing");
+  });
+
+  test('a single checkable clause added to an otherwise not-checkable one keeps the whole criterion checkable', () => {
+    expect(classifyNotCheckable("`src/flow/check-ac.ts` implements the checker, CI green.")).toBeUndefined();
+  });
+
+  // The narrowed "CI green" marker (review finding): the old
+  // `\bCI\b.*\bgreen\b` matched "CI" and "green" anywhere in the same
+  // criterion, in either order — this criterion has both words but never the
+  // phrase, and must NOT be flagged.
+  test("a pure 'CI green' criterion is not-checkable; 'CI'..'green' unrelated in the same sentence is not", () => {
+    expect(classifyNotCheckable("CI green.")?.label).toBe("CI green");
+    expect(classifyNotCheckable("CI is green.")?.label).toBe("CI green");
+    expect(classifyNotCheckable("CI passes.")?.label).toBe("CI green");
+    expect(classifyNotCheckable("CI runs fast, and the status light eventually turns green.")).toBeUndefined();
+    // Same check with NO comma at all, so this is exercising the regex
+    // itself rather than the clause split: "CI" and "green" both appear,
+    // never as the phrase "CI green"/"CI is green".
+    expect(classifyNotCheckable("CI eventually turns the dashboard green.")).toBeUndefined();
+  });
 });
 
 describe("extractCriterionTokens", () => {
@@ -229,12 +266,32 @@ describe("rendering", () => {
       evaluatedVerdict({ criterion: { id: "AC1", text: "a" }, facts: computeAcFacts({ id: "AC1", text: "a" }, "", []), matchedHunks: [], changedFiles: [] }, 0.9),
       notCheckableVerdict({ id: "AC2", text: "Live check." }, "not-checkable: live check."),
     ];
-    const report = renderAcCheckReport({ flowId: "328", verdicts, jevAsked: true, usage: { jevCalls: 1 } });
+    const report = renderAcCheckReport({
+      flowId: "328",
+      verdicts,
+      jevAsked: true,
+      usage: { jevCalls: 1 },
+      at: "2026-09-25T00:00:00.000Z",
+      criteriaChecksum: "sha256:aaa",
+      diffHash: hashDiff("diff one"),
+    });
     expect(report).toContain("flow 328");
     expect(report).toContain("likely met: 1");
     expect(report).toContain("not checkable: 1");
     expect(report).toContain("AC1");
     expect(report).toContain("AC2");
+    // Review finding: the checked-at time, criteria checksum and diff hash
+    // must be visible in the report, not just held in the cache record.
+    expect(report).toContain("checked: 2026-09-25T00:00:00.000Z");
+    expect(report).toContain("criteria checksum: sha256:aaa");
+    expect(report).toContain(`diff hash: ${hashDiff("diff one")}`);
+  });
+
+  test("renderAcCheckReport without at/criteriaChecksum/diffHash reads 'unknown' rather than omitting the line", () => {
+    const report = renderAcCheckReport({ flowId: "328", verdicts: [], jevAsked: false });
+    expect(report).toContain("checked: unknown");
+    expect(report).toContain("criteria checksum: unknown");
+    expect(report).toContain("diff hash: unknown");
   });
 
   test("renderAcCheckAdvisoryNotice is a single line naming criteria in doubt", () => {

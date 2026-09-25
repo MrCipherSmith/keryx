@@ -45,6 +45,7 @@ export {
   computeAcFacts,
   evaluatedVerdict,
   factsOnlyVerdict,
+  hashDiff,
   isFrozen,
   notCheckableVerdict,
   parseAcceptanceCriteria,

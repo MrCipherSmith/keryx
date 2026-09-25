@@ -83,7 +83,11 @@ export interface NotCheckableMarker {
  */
 export const NOT_CHECKABLE_MARKERS: readonly NotCheckableMarker[] = [
   { label: "live check", re: /\blive[- ]?check\b|\brun(?:s|ning)? with\b.*\benv\b|\blive[- ]?run\b/i },
-  { label: "CI green", re: /\bCI\b.*\bgreen\b|\bCI (?:is )?passes?\b|\bCI green\b/i },
+  // Narrow on purpose (review finding): the previous `\bCI\b.*\bgreen\b`
+  // matched "CI" and "green" ANYWHERE in the same criterion, in either
+  // order and however far apart — "CI runs fast; the light turns green"
+  // would have matched it. This only accepts the phrase actually meant.
+  { label: "CI green", re: /\bCI (?:is )?green\b|\bCI passes\b/i },
   { label: "health passing", re: /\bhealth run\b|\bhealth (?:passes|passing)\b|\bkeryx health run\b/i },
   { label: "docs published", re: /\bdocs?(?:umentation)? (?:published|live|deployed|site)\b/i },
   { label: "manual verification", re: /\bmanually verified\b|\bmanual(?:ly)? tested?\b|\ba human (?:verifies|confirms|checks)\b/i },
@@ -95,10 +99,10 @@ export interface NotCheckableClassification {
   readonly reason: string;
 }
 
-/** `undefined` when the criterion is checkable — the default reading of anything not on the marker list. */
-export function classifyNotCheckable(criterionText: string): NotCheckableClassification | undefined {
+/** One marker's classification of a single clause, or `undefined` when nothing on the list matches it. */
+function classifyClause(clauseText: string): NotCheckableClassification | undefined {
   for (const marker of NOT_CHECKABLE_MARKERS) {
-    if (marker.re.test(criterionText)) {
+    if (marker.re.test(clauseText)) {
       return {
         label: marker.label,
         reason: `not-checkable: this criterion names a "${marker.label}" condition, which no diff records — assigned without asking Jev.`,
@@ -106,6 +110,43 @@ export function classifyNotCheckable(criterionText: string): NotCheckableClassif
     }
   }
   return undefined;
+}
+
+/**
+ * Review finding: a criterion combining a checkable clause with a
+ * not-checkable one (this flow's own AC10 — "Docs (…), CI green, `keryx
+ * health run` passes, hermetic macOS-safe tests, import zones respected" —
+ * has doc paths and "import zones" a diff CAN evidence, alongside "CI
+ * green"/"health run" it cannot) used to become WHOLLY not-checkable the
+ * moment any one clause matched a marker, silently dropping the checkable
+ * part from every Jev call and every fact line. Split on `,`/`;` and
+ * classify each clause; the criterion is not-checkable only when EVERY
+ * clause is — one checkable clause keeps the whole criterion checkable, so
+ * the evidence for it still reaches Jev with the full original text.
+ */
+function criterionClauses(criterionText: string): string[] {
+  return criterionText
+    .split(/[,;]/)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length > 0);
+}
+
+/** `undefined` when the criterion is checkable — the default reading of anything not on the marker list. */
+export function classifyNotCheckable(criterionText: string): NotCheckableClassification | undefined {
+  const clauses = criterionClauses(criterionText);
+  if (clauses.length <= 1) {
+    // No comma/semicolon at all — the single-clause path, unchanged.
+    return classifyClause(criterionText);
+  }
+  const classifications = clauses.map(classifyClause);
+  if (classifications.some((classification) => classification === undefined)) {
+    return undefined;
+  }
+  const labels = [...new Set(classifications.map((classification) => classification?.label))];
+  return {
+    label: labels.join(", "),
+    reason: `not-checkable: every clause of this criterion names a condition no diff records (${labels.join(", ")}) — assigned without asking Jev.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -446,12 +487,27 @@ export function summarizeVerdicts(verdicts: readonly AcCheckVerdict[]): AcCheckS
   };
 }
 
-/** The full, multi-line report `keryx flow check-ac` prints (text mode). Always ADVISORY — never a pass/fail gate. */
+/**
+ * The full, multi-line report `keryx flow check-ac` prints (text mode).
+ * Always ADVISORY — never a pass/fail gate.
+ *
+ * `at`/`criteriaChecksum`/`diffHash` are the full cache key
+ * (`acCheckCacheKey`'s `(criteriaChecksum, diffHash)` pair) plus when it was
+ * computed — review finding: a report with no visible key gives a reader no
+ * way to tell a fresh check from a stale one just by reading the file, which
+ * is exactly the fact AC6's/AC7's freshness checks exist to surface. Optional
+ * only so a caller with no cache record yet (nothing has ever run) can still
+ * render a report; every caller that HAS a cache record — a live run, a cache
+ * hit, or `review ingest`'s attachment — always supplies them.
+ */
 export function renderAcCheckReport(input: {
   readonly flowId: string;
   readonly verdicts: readonly AcCheckVerdict[];
   readonly jevAsked: boolean;
   readonly usage?: { readonly jevCalls: number; readonly costUsd?: number };
+  readonly at?: string;
+  readonly criteriaChecksum?: string;
+  readonly diffHash?: string;
 }): string {
   const counts = summarizeVerdicts(input.verdicts);
   const lines: string[] = [
@@ -459,6 +515,7 @@ export function renderAcCheckReport(input: {
     "",
     "This is Jev's/deterministic opinion, never a gate: it never changes flow state and never confirms an AC.",
     "",
+    `checked: ${input.at ?? "unknown"}   criteria checksum: ${input.criteriaChecksum ?? "unknown"}   diff hash: ${input.diffHash ?? "unknown"}`,
     `likely met: ${counts.likelyMet}   not evident: ${counts.notEvident}   not checkable: ${counts.notCheckable}`,
     input.jevAsked ? `Jev was asked${input.usage ? ` (${input.usage.jevCalls} call(s)${input.usage.costUsd !== undefined ? `, ≈$${input.usage.costUsd.toFixed(4)}` : ""})` : ""}.` : "Jev was NOT asked (not configured, or nothing checkable) — deterministic evidence only below.",
     "",

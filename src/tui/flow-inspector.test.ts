@@ -119,7 +119,7 @@ test("formatAcMarkersSummary and formatAcCheckLines: not run vs. a cached result
   expect(formatAcCheckLines(stale).join("\n")).toContain("STALE");
 });
 
-test("presentFlows: /ac requests the AC tab as initialTab, and `c` calls onRunCheck with the selected flow", () => {
+test("presentFlows: /ac requests the AC tab as initialTab, and `c` calls onRunCheck with the selected flow", async () => {
   let active = "list";
   let ran: FlowInspectorItem | undefined;
   const calls: { initialTab?: string }[] = [];
@@ -139,8 +139,9 @@ test("presentFlows: /ac requests the AC tab as initialTab, and `c` calls onRunCh
     {
       items: [ITEM],
       initialTab: "ac",
-      onRunCheck: (item) => {
+      onRunCheck: async (item) => {
         ran = item;
+        return undefined;
       },
       onKeypress: (handler) => {
         handler({ name: "c", sequence: "c" });
@@ -149,7 +150,73 @@ test("presentFlows: /ac requests the AC tab as initialTab, and `c` calls onRunCh
     },
   );
   expect(calls[0]?.initialTab).toBe("ac");
+  await Promise.resolve(); // let onRunCheck's own promise settle
   expect(ran?.id).toBe("154");
+});
+
+// Item 4 review finding: an in-modal busy state for `c`, `c` ignored while a
+// check is in flight, and errors shown IN the modal rather than only on a
+// terminal line the operator may already have scrolled past.
+test("presentFlows: `c` shows 'Checking…', ignores a second `c` in flight, and shows the error in the AC tab on failure", async () => {
+  let active = "ac";
+  let acNode: { content: string } | undefined;
+  let runCount = 0;
+  let resolveCheck: ((outcome: { error?: string } | undefined) => void) | undefined;
+  const checked: FlowInspectorItem = {
+    ...ITEM,
+    acMarkers: [{ id: "AC1", status: "likely-met", label: "likely met" }],
+    acCheckedAt: "2026-09-25T00:00:00.000Z",
+  };
+
+  presentFlows(
+    (_otui, _chrome, input) => {
+      input.renderTab("ac", {
+        add: (child: { content?: string }) => {
+          acNode = child as { content: string };
+        },
+      });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    {
+      TextRenderable: class {
+        content: string;
+        constructor(_r: unknown, opts: { content: string }) {
+          this.content = opts.content;
+        }
+      },
+    },
+    {},
+    {
+      items: [checked],
+      initialTab: "ac",
+      onRunCheck: () => {
+        runCount += 1;
+        return new Promise((resolve) => {
+          resolveCheck = resolve;
+        });
+      },
+      onKeypress: (handler) => {
+        handler({ name: "c", sequence: "c" }); // starts the check
+        handler({ name: "c", sequence: "c" }); // ignored — one is already in flight
+        return () => {};
+      },
+    },
+  );
+
+  expect(runCount).toBe(1); // the second `c` never called onRunCheck again
+  expect(acNode?.content).toContain("Checking…");
+
+  resolveCheck?.({ error: "boom" });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  expect(acNode?.content).toContain("Error: boom");
 });
 
 test("windowLines and clampScroll keep a viewport over long bodies", () => {

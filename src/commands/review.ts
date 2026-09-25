@@ -44,8 +44,12 @@ import { githubAdapter } from "../flow/tracker/github";
 // `src/commands/flow.ts`) and never fails `review ingest` over it. Through
 // the flow facade (`../flow/service`), not `../flow/store`/`../flow/check-ac`
 // directly — import policy rule 2 only excuses a `service.ts` target.
-import { readAcCheckEnabled, renderAcCheckReport, resolveFlowDir } from "../flow/service";
-import { acCheckCachePath, readAcCheckCache } from "./flow-check-ac";
+import { acCheckCacheKey, readAcCheckEnabled, readFlow, renderAcCheckReport, resolveFlowDir } from "../flow/service";
+// AC6's freshness check reuses the SAME merge-base + diff shape `runCheckAc`
+// computes with, generalized to the ingested round's own `(--ref, --head)`
+// pair — see `resolveIngestDiff`'s own comment for why the live worktree
+// (what `resolveDiffAgainstBase` diffs against) is the wrong target here.
+import { acCheckCachePath, defaultGitSpawn, readAcCheckCache, resolveIngestDiff } from "./flow-check-ac";
 import {
   buildPathScope,
   buildReviewScope,
@@ -773,20 +777,60 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   // Flow 328, AC6: reviewers see which criteria are in doubt. Silent no-op
   // when the opt-in is off, no flow is attached, or nothing has been cached
   // yet (`keryx flow check-ac` populates the cache; this never populates it).
+  //
+  // Review finding: the ORIGINAL version attached whatever was cached
+  // unconditionally — a check run against yesterday's diff read as current
+  // for today's round. Fixed by recomputing this round's own diff (merge-base
+  // of `target.ref`/`target.head`, the same shape `runCheckAc` uses) and
+  // comparing the FULL cache key (criteria checksum + diff hash) before
+  // attaching anything.
+  //
+  // DECISION (documented, per the review finding's own ask): a cache that
+  // exists but does not verify as fresh — key mismatch, or the diff could
+  // not be computed at all (no recorded head, git error) — still gets a
+  // SHORT STALE NOTE, not silence. Reviewers reading a package with no
+  // `ac-check.md` at all cannot tell "no check has ever run for this flow"
+  // from "one ran, just not against this diff"; the note answers that
+  // question instead of leaving it to a reviewer to notice the file is
+  // simply absent. Never fails `review ingest` either way.
   if (mode === "ingest" && result.manifest.flow?.id !== undefined && (await readAcCheckEnabled(cwd))) {
     try {
       const flowId = result.manifest.flow.id;
       const flowDir = await resolveFlowDir(cwd, flowId);
       const cached = await readAcCheckCache(acCheckCachePath(cwd, flowDir));
       if (cached !== undefined) {
-        const markdown = renderAcCheckReport({
-          flowId,
-          verdicts: cached.verdicts,
-          jevAsked: cached.jevAsked,
-          ...(cached.usage !== undefined ? { usage: cached.usage } : {}),
-        });
-        await writeFileAtomic(path.join(result.path, "ac-check.md"), `${markdown}\n`);
-        console.log(`ac-check: attached (${result.path}/ac-check.md)`);
+        const target = result.manifest.target;
+        let fresh = false;
+        let flow: Awaited<ReturnType<typeof readFlow>> | undefined;
+        if (target.head !== undefined) {
+          try {
+            flow = await readFlow(cwd, flowDir);
+            const diffText = await resolveIngestDiff(defaultGitSpawn, target.ref, target.head, { cwd });
+            fresh = cached.key === acCheckCacheKey(flow.acChecksum ?? "", diffText);
+          } catch {
+            fresh = false; // diff could not be computed — never claim fresh on silence
+          }
+        }
+        const acCheckPath = path.join(result.path, "ac-check.md");
+        if (fresh) {
+          const markdown = renderAcCheckReport({
+            flowId,
+            verdicts: cached.verdicts,
+            jevAsked: cached.jevAsked,
+            ...(cached.usage !== undefined ? { usage: cached.usage } : {}),
+            at: cached.at,
+            criteriaChecksum: flow?.acChecksum ?? "",
+            diffHash: cached.key.slice(cached.key.lastIndexOf(":") + 1),
+          });
+          await writeFileAtomic(acCheckPath, `${markdown}\n`);
+          console.log(`ac-check: attached (${result.path}/ac-check.md)`);
+        } else {
+          await writeFileAtomic(
+            acCheckPath,
+            `# Acceptance-criteria check — STALE\n\nflow ${flowId}: the cached criteria check (checked ${cached.at}) was run against a different diff than this round's — run \`keryx flow check-ac ${flowId} --refresh\` and re-ingest for a current report.\n`,
+          );
+          console.log(`ac-check: stale (${result.path}/ac-check.md) — cached check (${cached.at}) does not match this round's diff`);
+        }
       }
     } catch {
       // Best-effort attachment; never fails `review ingest` over it.

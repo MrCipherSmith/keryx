@@ -37,7 +37,12 @@ export function formatAcMarkersSummary(item: FlowInspectorItem): string {
     },
     { met: 0, notEvident: 0, notCheckable: 0 },
   );
-  const staleNote = item.acCheckStale === true ? " (stale — criteria changed since this check)" : "";
+  const staleNote =
+    item.acCheckStale === true
+      ? " (stale — the criteria or the diff changed since this check)"
+      : item.acCheckStale === "unknown"
+        ? " (freshness unknown — could not compute the current diff quickly)"
+        : "";
   return `AC: ${counts.met} met, ${counts.notEvident} not evident, ${counts.notCheckable} not checkable${staleNote}`;
 }
 
@@ -46,10 +51,13 @@ export function formatAcCheckLines(item: FlowInspectorItem): string[] {
   if (item.acMarkers === undefined || item.acMarkers.length === 0) {
     return ["No acceptance-criteria check has been run for this flow yet.", "Press `c` to run `keryx flow check-ac` now."];
   }
-  const lines: string[] = [
-    `Last checked: ${item.acCheckedAt ?? "unknown"}${item.acCheckStale === true ? "  (STALE — criteria changed since this check; press `c` to re-check)" : ""}`,
-    "",
-  ];
+  const freshnessNote =
+    item.acCheckStale === true
+      ? "  (STALE — the criteria or the diff changed since this check; press `c` to re-check)"
+      : item.acCheckStale === "unknown"
+        ? "  (FRESHNESS UNKNOWN — could not compute the current diff quickly; press `c` to re-check)"
+        : "";
+  const lines: string[] = [`Last checked: ${item.acCheckedAt ?? "unknown"}${freshnessNote}`, ""];
   for (const marker of item.acMarkers) {
     lines.push(`${marker.id}  ${MARKER_GLYPH[marker.status]}`);
   }
@@ -190,8 +198,17 @@ export type PresentFlowsOptions = {
    * write) is entirely the caller's concern — this modal only asks and
    * displays whatever fresh `items` it is next opened with; it never runs a
    * check itself.
+   *
+   * Review finding (item 4): returns a `Promise` now, not `void`, so this
+   * modal can show an in-progress "Checking…" state on the AC tab and ignore
+   * a second `c` while one is in flight — a fire-and-forget callback gave it
+   * no way to know when the check was done. On success the caller is
+   * expected to replace this modal with a fresh one (fresh `items`, fresh
+   * cached markers) the same way it always has; on failure it returns
+   * `{error}` instead of reopening, so THIS modal can show the error in
+   * place rather than silently closing over it.
    */
-  onRunCheck?: (item: FlowInspectorItem) => void;
+  onRunCheck?: (item: FlowInspectorItem) => Promise<{ readonly error?: string } | void>;
 };
 
 // Review finding: session-info.ts's tabs wrap to ctx.width (added in this
@@ -259,6 +276,14 @@ export function presentFlows(
       ? modalBodyRows(resolveModalPanelSize(rendererHint.width, rendererHint.height).height)
       : 13);
   let tabWidth: number | undefined;
+  // Item 4 review finding: an in-modal busy state for `c` — without it,
+  // pressing `c` gave no feedback until the whole modal was replaced (or,
+  // on failure, no feedback at all beyond a terminal line that had already
+  // scrolled past by the time anyone looked). `checkError` is cleared on
+  // every new `c` press, not just on success, so a stale error never lingers
+  // once the operator asks for a fresh check.
+  let checking = false;
+  let checkError: string | undefined;
 
   // List rows are one line per flow (fixed `id status done/total title`
   // format) and its scroll/selection math is item-indexed (`scrollToReveal`
@@ -276,8 +301,12 @@ export function presentFlows(
   };
   const acLines = (): string[] => {
     const item = items[selected];
+    if (checking) {
+      return ["Checking…", "", "Running `keryx flow check-ac` against the frozen criteria — this can take a few seconds."];
+    }
     const raw = item !== undefined ? formatAcCheckLines(item) : ["No flow selected."];
-    return wrapLines(raw.join("\n"), tabWidth).split("\n");
+    const withError = checkError !== undefined ? [...raw, "", `Error: ${checkError}`] : raw;
+    return wrapLines(withError.join("\n"), tabWidth).split("\n");
   };
 
   const paintSelection = (): void => {
@@ -359,8 +388,34 @@ export function presentFlows(
       }
       if (token === "c") {
         const item = items[selected];
-        if (item !== undefined) {
-          options.onRunCheck?.(item);
+        // Item 4: ignore `c` while a check is already in flight — a second
+        // press must never start a second overlapping check for the same
+        // (or a different) flow while the first one's result is still
+        // pending.
+        if (item !== undefined && options.onRunCheck !== undefined && !checking) {
+          checking = true;
+          checkError = undefined;
+          paintSelection();
+          void options
+            .onRunCheck(item)
+            .then((outcome) => {
+              checking = false;
+              if (outcome !== undefined && outcome.error !== undefined) {
+                // Failure: shown in THIS modal, in place — the caller does
+                // not reopen a fresh one, since a failed check produced no
+                // new markers to show.
+                checkError = outcome.error;
+                paintSelection();
+              }
+              // Success: the caller is expected to replace this modal with
+              // a fresh one carrying the newly cached markers. Nothing more
+              // to paint here either way.
+            })
+            .catch((error: unknown) => {
+              checking = false;
+              checkError = error instanceof Error ? error.message : String(error);
+              paintSelection();
+            });
         }
         return;
       }
