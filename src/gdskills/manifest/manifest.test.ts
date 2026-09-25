@@ -12,7 +12,9 @@ test("the bundled install-manifest.json validates against install-manifest.schem
   expect(Object.keys(manifest.profiles).sort()).toEqual([
     "angular",
     "c-cpp",
+    "ci-github-gitlab",
     "core",
+    "docker-k8s-terraform",
     "full",
     "go",
     "minimal",

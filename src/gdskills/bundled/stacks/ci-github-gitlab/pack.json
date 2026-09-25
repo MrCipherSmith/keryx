@@ -1,0 +1,41 @@
+{
+  "id": "ci-github-gitlab",
+  "family": "tool",
+  "modules": ["ci-github-gitlab-rules", "ci-github-gitlab-skills"],
+  "detectionMarkers": ["github-actions", "gitlab-ci"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 338, Wave 4 batch 6"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["ci-pipeline-implementation"],
+    "test": [],
+    "review": ["ci-pipeline-code-review"],
+    "build-fix": ["ci-pipeline-build-fix"],
+    "migrate": []
+  },
+  "notes": "No separate `test` skill: a CI workflow file has no independent test suite of its own beyond the platform linter (actionlint / GitLab CI Lint), which `ci-pipeline-implementation`'s own Verify step and `ci-pipeline-build-fix` already cover -- a dedicated `test` skill would duplicate one of those two rather than earn a distinct place. No `migrate` skill: migrating GitHub Actions runtime/syntax versions or GitLab CI schema changes did not reach the bar for a distinct skill in this pass (unlike `ts-js-node`/`react`'s ESM/version-upgrade migrations, there is no single recurring migration shape specific enough to write a focused skill and eval suite around yet) -- left for a future batch if a concrete need shows up.",
+  "agentProfile": {
+    "displayName": "CI (GitHub Actions & GitLab CI)",
+    "auditFocus": [
+      "a pull_request_target job that checks out github.event.pull_request.head.sha/.ref and then runs a build/test/lint step against it (the pwn-request pattern)",
+      "a third-party uses: action pinned to a mutable tag (@v4, @main) instead of a full commit SHA",
+      "a workflow-level permissions: write-all, or no permissions: block at all, on a workflow whose jobs do not all need write access",
+      "${{ github.event.* }} interpolated directly into a run: shell string instead of passed through env: first, or a GitLab CI script: line that unquotes an untrusted variable, feeds it to eval/sh -c, or reaches it through an unvalidated $[[ inputs.* ]] interpolation",
+      "a GitLab CI deploy job consuming a Protected+Masked variable with no rules: restricting it to the protected branch/tag that variable is exposed to",
+      "a cache key that never changes, or a job with no timeout-minutes/timeout on a step that can hang"
+    ],
+    "buildCommands": [
+      "actionlint (GitHub Actions workflow files, when configured)",
+      "the project's own GitLab CI Lint / gitlab-ci-lint run (.gitlab-ci.yml, when configured)",
+      "re-trigger the specific failing run to confirm the named error is resolved"
+    ],
+    "fixGuardrails": [
+      "never grant a broader permissions: scope than the specific failing step needs, and never at the workflow level to fix one job's failure",
+      "never unprotect a GitLab CI/CD variable, or remove a rules:/branch gate protecting it, just to make a job on the wrong branch pass",
+      "never disable or loosen a rules:/if: condition to make a job \"just run\" without understanding why it was scoped that way",
+      "never pin an action to a tag to work around a SHA-pinning lint failure instead of resolving to the correct commit SHA"
+    ]
+  }
+}

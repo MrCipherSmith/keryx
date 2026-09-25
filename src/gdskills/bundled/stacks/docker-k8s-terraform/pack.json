@@ -1,0 +1,46 @@
+{
+  "id": "docker-k8s-terraform",
+  "family": "tool",
+  "modules": ["docker-k8s-terraform-rules", "docker-k8s-terraform-skills"],
+  "detectionMarkers": ["docker", "docker-compose", "terraform"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 338, Wave 4 batch 6"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": [],
+    "test": [],
+    "review": ["docker-k8s-terraform-review"],
+    "build-fix": ["docker-k8s-terraform-build-fix"],
+    "migrate": []
+  },
+  "notes": {
+    "implement": "No implement skill authored in this batch. W1-stack-catalog.md's target-stack table gives the reason as \"config authoring lives in the deploy quality skill\" -- that does not hold up: `src/gdskills/bundled/skills/quality/deploy/SKILL.md` is scoped to running a deployment pipeline/release (\"Use when deploying a release to any environment\"), not authoring Dockerfiles/K8s manifests/Terraform configs. No existing catalog skill actually covers authoring these files. This is a genuine, honestly-deferred gap, not a covered case -- left for a future batch, and W1-stack-catalog.md's table entry needs its own correction (tracked in that doc's flow 338 review-round notes).",
+    "test": "No separate test skill in this batch. This is a scope deferral, not an absence of a real concept: Terraform has `terraform test` (`.tftest.hcl` run blocks) and Helm has `helm test` (chart-defined test hooks) plus the community `helm-unittest` plugin (template unit tests with no cluster required) -- both are genuine, analogous to what go-testing/python-testing cover for their stacks. `docker-k8s-terraform-build-fix`'s reproduce-and-classify step covers running an EXISTING validator (hadolint, kubeconform/kubeval, `terraform validate`/`plan`) to diagnose a failure, which is a different job from writing/extending `.tftest.hcl` or helm-unittest test suites. Left for a future batch.",
+    "migrate": "No migrate skill in this batch. This is a scope deferral, not an absence of real migration concepts: Kubernetes API version deprecations (e.g. a manifest still on `apps/v1beta1` needing `apps/v1`), a Terraform provider major-version upgrade with its own breaking-change/state-migration steps, and a Helm chart's own major-version upgrade path are all genuine, recurring migration shapes for this family -- none was concrete/scoped enough to write a focused skill and eval suite around in this batch. Left for a future batch, not claimed as nonexistent."
+  },
+  "agentProfile": {
+    "displayName": "Docker / Kubernetes / Terraform",
+    "auditFocus": [
+      "a container image actually running as root -- no USER instruction AND no evidence the base image already defaults to a non-root user (see rules/patterns.mdc), or an explicit USER root reintroduced after a non-root user was already set -- or a Kubernetes securityContext missing runAsNonRoot/allowPrivilegeEscalation: false",
+      "a base image pinned only by a mutable tag (`FROM node:20`) instead of an immutable digest (`FROM node:20@sha256:...`)",
+      "a secret (API key, password, token) baked into an image layer via ARG/ENV/COPY instead of a build-time secret mount or runtime injection",
+      "a Kubernetes Pod/Deployment with no resource requests/limits, no readOnlyRootFilesystem, or capabilities not dropped to the minimum the container needs",
+      "a namespace or workload with no default-deny NetworkPolicy, or one scoped too broadly to serve as a real boundary",
+      "a Terraform resource or module with a hardcoded credential/connection string in `.tf`/`.tfvars`, a `sensitive = true` value treated as if that alone encrypted it, or state configured with a local/unencrypted backend"
+    ],
+    "buildCommands": [
+      "hadolint <Dockerfile> (when hadolint is available)",
+      "docker build . (or docker compose build for a compose project)",
+      "kubeconform -strict -summary <manifest-or-dir> (or kubeval, whichever the project already uses)",
+      "terraform validate && terraform plan (only plan, never apply, from this skill)"
+    ],
+    "fixGuardrails": [
+      "Never remove a USER/securityContext non-root setting, drop a NetworkPolicy, or relax a capability drop just to make a build/deploy pass.",
+      "Never bake a secret into an image layer (ARG/ENV/COPY of a credential) to route around a missing runtime secret — use a build-time secret mount or say the runtime wiring is still needed.",
+      "Never commit or read a `.tfstate` file as the source of truth for a fix, and never suggest disabling remote state locking to unblock a run.",
+      "Never widen a Terraform `sensitive = true` removal or a K8s NetworkPolicy loosening to silence a validator finding without saying so in the report."
+    ]
+  }
+}

@@ -116,6 +116,28 @@
       ],
       "stackDetectionAware": true
     },
+    "docker-k8s-terraform": {
+      "description": "Common rules plus the Docker/Kubernetes/Terraform tool pack component, installed when `keryx stack detect` finds a matching tag (docker, docker-compose, or terraform). Experimental: has not cleared the honest behavioral eval gate yet.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "tool:docker-k8s-terraform"
+      ],
+      "stackDetectionAware": true
+    },
+    "ci-github-gitlab": {
+      "description": "Common rules plus the CI (GitHub Actions & GitLab CI) tool pack component, installed when `keryx stack detect` finds a matching tag (github-actions or gitlab-ci). Experimental: has not cleared the honest behavioral eval gate yet.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "tool:ci-github-gitlab"
+      ],
+      "stackDetectionAware": true
+    },
     "full": {
       "description": "Every registered module and component, unconditionally.",
       "modules": [
@@ -147,6 +169,10 @@
         "angular-skills",
         "nextjs-nuxt-rules",
         "nextjs-nuxt-skills",
+        "docker-k8s-terraform-rules",
+        "docker-k8s-terraform-skills",
+        "ci-github-gitlab-rules",
+        "ci-github-gitlab-skills",
         "php-laravel-rules",
         "php-laravel-skills",
         "ruby-rails-rules",
@@ -166,6 +192,8 @@
         "framework:vue",
         "framework:angular",
         "framework:nextjs-nuxt",
+        "tool:docker-k8s-terraform",
+        "tool:ci-github-gitlab",
         "framework:php-laravel",
         "framework:ruby-rails",
         "lang:c-cpp",
@@ -721,6 +749,66 @@
       "cost": "medium",
       "stability": "experimental"
     },
+    "docker-k8s-terraform-rules": {
+      "kind": "rule",
+      "description": "Docker/Kubernetes/Terraform stack pack rules (coding-style, patterns, security, testing; scoped to Dockerfiles, compose YAML, k8s/Helm YAML, *.tf/*.tfvars) from src/gdskills/bundled/stacks/docker-k8s-terraform/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "docker-k8s-terraform-skills": {
+      "kind": "skill",
+      "description": "Docker/Kubernetes/Terraform stack pack skills (no implement skill per W1-stack-catalog.md -- config authoring lives in the deploy quality skill; review, build-fix) from src/gdskills/bundled/stacks/docker-k8s-terraform/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "ci-github-gitlab-rules": {
+      "kind": "rule",
+      "description": "CI (GitHub Actions & GitLab CI) stack pack rules (patterns, security; scoped to .github/workflows/*.yml and .gitlab-ci.yml only) from src/gdskills/bundled/stacks/ci-github-gitlab/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ci-github-gitlab/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "ci-github-gitlab-skills": {
+      "kind": "skill",
+      "description": "CI (GitHub Actions & GitLab CI) stack pack skills (implementation, code review, build-fix) from src/gdskills/bundled/stacks/ci-github-gitlab/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ci-github-gitlab/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
     "php-laravel-rules": {
       "kind": "rule",
       "description": "PHP/Laravel stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/php-laravel/rules/.",
@@ -964,6 +1052,35 @@
       "detectionMarkers": [
         "nextjs",
         "nuxt"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "tool:docker-k8s-terraform": {
+      "family": "tool",
+      "modules": [
+        "docker-k8s-terraform-rules",
+        "docker-k8s-terraform-skills"
+      ],
+      "detectionMarkers": [
+        "docker",
+        "docker-compose",
+        "terraform"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "tool:ci-github-gitlab": {
+      "family": "tool",
+      "modules": [
+        "ci-github-gitlab-rules",
+        "ci-github-gitlab-skills"
+      ],
+      "detectionMarkers": [
+        "github-actions",
+        "gitlab-ci"
       ],
       "provenance": {
         "origin": "authored"

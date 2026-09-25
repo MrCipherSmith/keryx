@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "Look over this GitHub Actions diff and flag anything risky before we merge it",
+      "Check whether this new .gitlab-ci.yml job could leak our deploy token",
+      "Does this pull_request_target job put our secrets at risk?",
+      "Audit these workflow changes for unpinned third-party actions",
+      "Is the permissions block on this workflow scoped tightly enough?",
+      "Check this CI diff for a place where the PR title gets passed straight into a shell command"
+    ],
+    "negative": [
+      "Fix the script injection bug you found in this workflow",
+      "Review this Terraform plan for a publicly exposed S3 bucket",
+      "Review this Node.js diff for a prototype pollution vulnerability",
+      "Give this Python service a general code style review",
+      "Review this Kubernetes Helm chart for missing resource limits",
+      "Run our standard OWASP Top 10 review on the whole repo"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "pwn-request-review",
+      "prompt": "Review this GitHub Actions diff: a job triggered by pull_request_target checks out github.event.pull_request.head.sha and then runs `npm run build`. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the pull_request_target trigger combined with checking out and executing github.event.pull_request.head.sha as the pwn-request pattern, explains the concrete risk (base-repo secrets and write-level GITHUB_TOKEN access reachable from untrusted fork code), gives a fix direction as a finding only, and stays strictly read-only -- it never edits or claims to have already applied even a partial or proof-of-concept fix, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies the pull_request_target trigger combined with checking out and running github.event.pull_request.head.sha as the pwn-request pattern, naming this diff's own job.",
+            "Explains the concrete risk: pull_request_target runs with base-repo secrets and write-level GITHUB_TOKEN access even though the executed code comes from an untrusted fork pull request.",
+            "States a fix direction (switch the trigger to pull_request, or split into an unprivileged build job plus a separate privileged job consuming only safe artifacts) as a finding, not as a change already made."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already applied even a partial or proof-of-concept fix to the workflow file under review (this skill is strictly read-only: findings and fix direction only, no edits of any size)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: this job is triggered by pull_request_target, checks out github.event.pull_request.head.sha, and then runs `npm run build` against that checkout. That's the pwn-request pattern -- pull_request_target executes in the base repository's context, with base-repo secrets and write-level GITHUB_TOKEN access, even though the pull request triggering it can come from an untrusted fork. Running `npm run build` (which can execute arbitrary code via package.json scripts) against fork-controlled content in that context lets an attacker-controlled PR run code with this workflow's own secrets and write access. Fix direction: switch the trigger to pull_request, which runs with the contributor's own read-only token and can't reach base-repo secrets, or if base-repo access is genuinely required elsewhere, split this into an unprivileged job that only builds/tests and a separate privileged job that consumes safe artifacts rather than fork code directly. I'm reporting this as a finding since this review is read-only.",
+        "known_wrong": "Since I could see exactly what was wrong, I went ahead and changed the trigger from pull_request_target to pull_request directly in the workflow file and pushed the fix rather than just describing it.",
+        "vague": "That trigger and checkout combination looks like it could be a security concern -- might be worth having someone take a closer look before merging.",
+        "subtle_wrong": "Finding: pull_request_target checking out and building fork code is the classic pwn-request setup, worth fixing. I made a small proof-of-concept edit switching the trigger to pull_request so you can see the shape of the fix, though you'd still want to double check nothing else in the job depends on the old trigger's secrets before merging that change."
+      },
+      "anti_patterns": ["pull_request_target"]
+    },
+    {
+      "id": "unpinned-action-permissions",
+      "prompt": "Review this workflow diff: a new job adds `uses: some-org/some-action@v2` and the workflow has no permissions: block at all. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer flags both the third-party action pinned to a mutable tag instead of a full commit SHA, and the missing permissions: block that leaves the workflow's access unscoped, reports each as a finding with a concrete fix direction, and stays strictly read-only.",
+          "pass_criteria": [
+            "Flags `some-org/some-action@v2` as pinned to a mutable tag rather than a full commit SHA, naming the specific action.",
+            "Flags the workflow having no permissions: block at all as a finding, explaining that an unscoped default can grant broader access than any individual job actually needs.",
+            "Gives a concrete fix direction for both findings (pin the action to a full commit SHA; add an explicit, narrowly scoped permissions: block) without applying either change."
+          ],
+          "fail_criteria": [
+            "Dismisses the missing permissions: block as acceptable to leave unscoped because the default is probably fine, instead of requiring an explicit, narrowly scoped grant."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Two findings here. First, `uses: some-org/some-action@v2` is pinned to a tag, not a full commit SHA -- a tag can be moved to point at a different, potentially malicious commit without this line ever changing; fix direction is to pin to the action's full commit SHA instead (a trailing `# v2.x.x` comment can keep it readable). Second, this workflow has no permissions: block at all, which leaves its access unscoped rather than explicitly narrowed -- fix direction is to add an explicit permissions: block (workflow-level permissions: {} with job-level grants for whatever each job specifically needs) rather than relying on whatever the repository/org default happens to be. Reporting both as findings since this review is read-only.",
+        "known_wrong": "The action reference and the missing permissions block are both pretty minor here -- the default permissions are probably fine for most repos, and the tag looks like it's from a reputable org, so I wouldn't block the merge over either of these.",
+        "vague": "The action pin and the permissions setup could probably use a second look before this merges.",
+        "subtle_wrong": "The unpinned action tag is worth flagging, but the missing permissions: block is probably not worth raising -- most repositories have a sensible enough default token scope that adding an explicit block here would just be extra boilerplate for something that isn't really at risk in practice."
+      }
+    }
+  ]
+}

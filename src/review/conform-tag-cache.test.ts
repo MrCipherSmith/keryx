@@ -6,6 +6,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { cachedTagsFor, CONFORM_TAG_CACHE_PATH, hashConformDocContent, readClauseTagCache, writeClauseTagCache } from "./conform-tag-cache";
+import { hashOriginContent } from "../gdskills/project-skills";
 
 let dir = "";
 
@@ -88,5 +89,25 @@ describe("AC2: clause tag cache", () => {
     // Two files on disk, not one shared file.
     expect((await stat(path.join(dir, CONFORM_TAG_CACHE_PATH))).isFile()).toBe(true);
     expect((await stat(path.join(dir, jevRulesPath))).isFile()).toBe(true);
+  });
+
+  // Precision fix, flow 337 (AC5): a bumped tag-schema version folds into the
+  // hash so a cache entry written before the pre-classifier/sharper `choice`
+  // wording shipped is never read as a hit afterward — same document bytes,
+  // different tagging behaviour, so the cache must miss and re-tag.
+  test("the schema version is folded into the hash — a raw hashOriginContent value is a different (stale-schema) key", () => {
+    const content = "doc content v1";
+    expect(hashConformDocContent(content)).not.toBe(hashOriginContent(content));
+  });
+
+  test("a v1-schema hash (simulated: raw hashOriginContent, no version prefix) misses against the current schema's cache entry", async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "keryx-conform-cache-"));
+    const content = "doc content v1";
+    const currentHash = hashConformDocContent(content);
+    const staleV1Hash = hashOriginContent(content); // what a pre-bump cache would have stored
+    await writeClauseTagCache(dir, "docs/ref.md", currentHash, { "h-1": { state_kind: "pr", checkable: true } });
+    const cache = await readClauseTagCache(dir);
+    expect(cachedTagsFor(cache, "docs/ref.md", staleV1Hash)).toBeUndefined();
+    expect(cachedTagsFor(cache, "docs/ref.md", currentHash)).toEqual({ "h-1": { state_kind: "pr", checkable: true } });
   });
 });

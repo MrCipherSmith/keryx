@@ -14,6 +14,7 @@ import {
   type DivergenceResolution,
 } from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
+import { describeModelChoiceStatus } from "../lib/model-choice";
 import {
   distillAgentEntrypoints,
   hasDistilledEntrypoints,
@@ -149,6 +150,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   for (const rule of syncedRules) {
     console.log(`- ${rule.source} -> .metaproject/rules/${rule.ruleFile} (${rule.priority})`);
   }
+  console.log(await describeModelChoiceStatus(projectRoot));
 }
 
 function parseRulesOptions(args: string[]): RulesOptions {

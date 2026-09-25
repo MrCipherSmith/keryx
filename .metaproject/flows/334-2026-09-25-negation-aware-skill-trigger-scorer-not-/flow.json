@@ -8,17 +8,46 @@
   "id": "334",
   "slug": "negation-aware-skill-trigger-scorer-not-",
   "title": "Negation-aware skill trigger scorer: Not-for clauses stop counting as evidence",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-25T14:52:23.218Z",
-  "updatedAt": "2026-09-25T17:22:04.451Z",
+  "updatedAt": "2026-09-25T17:42:43.598Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T17:40:07.862Z",
+      "note": "stripExclusionClauses (scout.ts) removes Not-for/Never/Do-not-use-for/Does-not/Use-X-instead/(not X)/(see X) clauses from entry text before scoring; excluded tokens dropped only, not negative-weighted (conservative choice, journal T5 entry). PR #725 merged as b722dc52."
+    },
+    "AC2": {
+      "at": "2026-09-25T17:40:08.274Z",
+      "note": "scoutSkill/nearestSkills reuse entryLexicalTokens (round 1) and strip their own description-shaped query too (round 1 fix); AC2 test in scout.test.ts demonstrates quality/pr no longer scores a perfect 1.0 for pr-issue-documenter's topic. PR #725."
+    },
+    "AC3": {
+      "at": "2026-09-25T17:40:08.633Z",
+      "note": "No model call added; the merged PR #725 diff confirms src/harness/routing/star-star and src/harness/decision/star-star untouched (verified both review rounds)."
+    },
+    "AC4": {
+      "at": "2026-09-25T17:40:09.121Z",
+      "note": "nodejs-testing/nodejs-implementation real bundled example test; full-catalog regression via checkSkillSelectedLeaveOneOut (non-circular grader), ratchet test <=155/642 after #719 merge re-measurement. scout.test.ts."
+    },
+    "AC5": {
+      "at": "2026-09-25T17:40:10.012Z",
+      "note": "Honest before/after measured twice (pre- and post-#719-merge): TP/FP totals and per-skill diffs recorded in journal with root-cause investigation for every regression; 4 restored via honest description edits, 4 left as documented honest losses. No evals.json/SKILL.md edited to chase a number."
+    },
+    "AC6": {
+      "at": "2026-09-25T17:40:10.464Z",
+      "note": "checkStablePackGate re-run for go and python (the only stable packs) against the merged 110-skill catalog: both pass. Journal has the direct call output."
+    },
+    "AC7": {
+      "at": "2026-09-25T17:40:11.315Z",
+      "note": "docs/docs/guides/write-a-rubric-scenario.md updated with the recognized exclusion-clause forms, consumer list, and query-side conditionality; corrected twice per review rounds 1 and 2."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/725"
   },
   "baseBranch": "main",
   "owner": {
@@ -349,6 +378,275 @@
       "at": "2026-09-25T17:22:04.451Z",
       "event": "task-done",
       "detail": "T10: PR, review/fix loop, CI, merge sequencing"
+    },
+    {
+      "at": "2026-09-25T17:39:48.115Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/725 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T17:40:07.862Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: stripExclusionClauses (scout.ts) removes Not-for/Never/Do-not-use-for/Does-not/Use-X-instead/(not X)/(see X) clauses from entry text before scoring; excluded tokens dropped only, not negative-weighted (conservative choice, journal T5 entry). PR #725 merged as b722dc52. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T17:40:08.274Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: scoutSkill/nearestSkills reuse entryLexicalTokens (round 1) and strip their own description-shaped query too (round 1 fix); AC2 test in scout.test.ts demonstrates quality/pr no longer scores a perfect 1.0 for pr-issue-documenter's topic. PR #725. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T17:40:08.633Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: No model call added; the merged PR #725 diff confirms src/harness/routing/star-star and src/harness/decision/star-star untouched (verified both review rounds). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T17:40:09.121Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: nodejs-testing/nodejs-implementation real bundled example test; full-catalog regression via checkSkillSelectedLeaveOneOut (non-circular grader), ratchet test <=155/642 after #719 merge re-measurement. scout.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T17:40:10.012Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Honest before/after measured twice (pre- and post-#719-merge): TP/FP totals and per-skill diffs recorded in journal with root-cause investigation for every regression; 4 restored via honest description edits, 4 left as documented honest losses. No evals.json/SKILL.md edited to chase a number. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T17:40:10.464Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: checkStablePackGate re-run for go and python (the only stable packs) against the merged 110-skill catalog: both pass. Journal has the direct call output. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T17:40:11.315Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: docs/docs/guides/write-a-rubric-scenario.md updated with the recognized exclusion-clause forms, consumer list, and query-side conditionality; corrected twice per review rounds 1 and 2. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T17:40:16.128Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T17:40:26.335Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T17:40:26.337Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/334-2026-09-25-negation-aware-skill-trigger-scorer-not-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#725 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__725.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 725 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-25T17:42:35.385Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/725 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T17:42:35.670Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T17:42:43.596Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-25T17:42:43.598Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T17:40:07.862Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:40:08.274Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:40:08.633Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:40:09.121Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:40:10.012Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:40:10.464Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:40:11.315Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:42:43.598Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b",
+      "headCommit": "544697fa0abf5b0fd438bfae52b5432d91f1b946"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T17:40:26.335Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "7 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "10 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/334-2026-09-25-negation-aware-skill-trigger-scorer-not-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#725 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__725.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 725 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
+    },
+    {
+      "at": "2026-09-25T17:42:43.596Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "7 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "10 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b"
     }
   ]
 }

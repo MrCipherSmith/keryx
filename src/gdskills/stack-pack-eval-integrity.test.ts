@@ -434,6 +434,8 @@ const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set([
   "vue",
   "angular",
   "mobx",
+  "docker-k8s-terraform",
+  "ci-github-gitlab",
   // Wave 4 batch 5 (flow 337) — authored against I11 from the start.
   "php-laravel",
   "ruby-rails",

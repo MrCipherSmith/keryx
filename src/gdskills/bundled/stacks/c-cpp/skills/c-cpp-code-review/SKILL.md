@@ -4,7 +4,7 @@ description: "Use when reviewing a C or C++ change for memory-safety and undefin
 triggers:
   - "review this C++ diff for memory safety"
   - "check this C change for a use-after-free"
-  - "review this pull request for buffer overflows"
+  - "review this C++ PR for buffer overflows"
   - "any dangling references in this C++ change"
   - "check this diff for iterator invalidation"
   - "review this C code for unchecked malloc"

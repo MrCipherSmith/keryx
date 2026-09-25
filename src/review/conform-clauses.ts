@@ -65,6 +65,13 @@ export interface RawReferenceClause {
   readonly text: string;
   readonly heading_path: readonly string[];
   readonly explicit?: ClauseExplicitTag;
+  /**
+   * True when `explicit` was produced by {@link preClassifyProcessClause}
+   * (flow 337's deterministic pre-classifier) rather than the document's own
+   * `[state:...]`/`[not-checkable:...]` marker — read by {@link applyClauseTags}
+   * to stamp `tag_source: "pre-classified"` instead of `"explicit"`.
+   */
+  readonly preClassified?: boolean;
 }
 
 export type ClauseExplicitTag =
@@ -79,8 +86,16 @@ export interface ReferenceClause {
   readonly state_kind: ReferenceClauseStateKind;
   readonly checkable: boolean;
   readonly reason?: string;
-  /** How this clause got its tag — never trusted silently by a caller that wants to know. */
-  readonly tag_source: "explicit" | "jev" | "cache";
+  /**
+   * How this clause got its tag — never trusted silently by a caller that
+   * wants to know. `"pre-classified"` (flow 337, clause-tag precision) is
+   * distinct from `"explicit"`: both never reach Jev, but `"explicit"` is a
+   * DOCUMENT AUTHOR's own `[state:...]`/`[not-checkable:...]` marker, while
+   * `"pre-classified"` is this module's own deterministic guess
+   * ({@link preClassifyProcessClause}) — a caller that wants to trust only
+   * what the document itself asserted must not conflate the two.
+   */
+  readonly tag_source: "explicit" | "pre-classified" | "jev" | "cache";
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +113,14 @@ const LIST_ITEM_RE = /^ {0,3}(?:[-*+]|\d+[.)])\s+(.+?)\s*$/;
 const CONTINUATION_RE = /^ {2,}(\S.*)$/;
 
 const EXPLICIT_MARKER_RE = /\s*\[(state:(pr|report|hunk)|not-checkable:\s*([^\]]+))\]\s*$/i;
+// A fenced-code-block delimiter (` ``` `/` ~~~ `, any language tag) — tracked
+// so the pre-classifier below can tell a numbered step written INSIDE a
+// fence (this repo's own `api-contracts.mdc` writes its workflow this way)
+// from an ordinary ordered list. The line itself is never a clause.
+const FENCE_DELIMITER_RE = /^\s{0,3}(`{3,}|~{3,})/;
+// A list item introduced by a digit marker (`1.`/`2)`), as opposed to a
+// bullet (`-`/`*`/`+`) — the "ordered" half of {@link ClauseWorkflowContext}.
+const ORDERED_LIST_ITEM_RE = /^ {0,3}\d+[.)]\s+/;
 
 function slugify(text: string): string {
   const slug = text
@@ -123,6 +146,198 @@ function extractExplicitMarker(text: string): { text: string; explicit?: ClauseE
   return { text: clean, explicit: { not_checkable_reason: (reason ?? "").trim() } };
 }
 
+// ---------------------------------------------------------------------------
+// Deterministic process/not-checkable pre-classifier (clause-tag precision
+// fix, flow 337 — follow-up to `review-jev-rules`'s own precision fixes in
+// `./jev-rules.ts`). PR #712 against this repo's own `.metaproject/rules`
+// left exactly two findings, both false positives from ONE clause of
+// `api-contracts.mdc`: "Review the contract for breaking changes" — a
+// PROCESS step (step 2 of a 5-step fenced numbered workflow: design, review,
+// generate types, implement, write tests) that Jev's `choice` tagging called
+// `hunk`-checkable anyway. This pre-classifier catches that shape
+// DETERMINISTICALLY, with no model call, applied inside `extractReferenceClauses`
+// below — BEFORE `buildClauseTagQuestions` ever builds a question for the
+// clause — the same "explicit, never asked" channel a document's own
+// `[state:...]`/`[not-checkable:...]` marker already uses (a document-authored
+// marker still wins outright; this only fires when the document supplies
+// none). A clause stating a property of code (`must`/`never`/`always` + a
+// code noun) is checked FIRST and always stays a Jev candidate, even if it
+// also happens to open with a process-verb-shaped word.
+// ---------------------------------------------------------------------------
+
+/**
+ * Imperative verbs/phrases read as addressed to a PERSON or AGENT, never to
+ * code — matched only at the very START of a clause's already-marker-stripped
+ * text, so "The function must document its return type" is untouched:
+ * "document" there is not the clause's opening word.
+ */
+export const PROCESS_VERB_LEAD_TERMS = ["review", "discuss", "ask", "document", "communicate", "get approval", "plan", "decide"] as const;
+
+const PROCESS_VERB_LEAD_RE = new RegExp(`^(${PROCESS_VERB_LEAD_TERMS.join("|")})\\b`, "i");
+
+/** "design ... in" — a two-part phrase a single leading-verb match would miss ("Design the endpoint in OpenAPI/schema first"). */
+const PROCESS_DESIGN_IN_RE = /^design\b.*\bin\b/i;
+
+/**
+ * A property-of-code clause: `must`/`never`/`always` PLUS one of these code
+ * nouns anywhere in the same clause — always stays a Jev candidate, checked
+ * BEFORE the process heuristics below so it wins any collision. Widened
+ * (flow 337, item 3) with the property-ish nouns the reviewer's sweep found
+ * uncovered — `field`, `method`, `constructor`, `property`, `file`, `files`,
+ * `path`, `directory`, `module`, `component`, `store`, `schema`, `endpoint`
+ * — so a clause like "Plan files MUST be Markdown (`.md`)." is rescued here
+ * instead of ever reaching the verb-lead check below.
+ */
+export const CODE_PROPERTY_NOUNS = [
+  "function",
+  "class",
+  "import",
+  "export",
+  "type",
+  "handler",
+  "query",
+  "test",
+  "field",
+  "method",
+  "constructor",
+  "property",
+  "file",
+  "files",
+  "path",
+  "directory",
+  "module",
+  "component",
+  "store",
+  "schema",
+  "endpoint",
+] as const;
+
+// Verb and noun matched independently, in EITHER order ("a handler must
+// never ..." and "must never leak from a handler" both count) — a single
+// ordered pattern would miss the noun-before-verb phrasing.
+const CODE_PROPERTY_VERB_RE = /\b(must|never|always)\b/i;
+const CODE_PROPERTY_NOUN_RE = new RegExp(`\\b(${CODE_PROPERTY_NOUNS.join("|")})\\b`, "i");
+
+function isCodePropertyClause(text: string): boolean {
+  return CODE_PROPERTY_VERB_RE.test(text) && CODE_PROPERTY_NOUN_RE.test(text);
+}
+
+/**
+ * Flow 337, item 4: the noun/verb ambiguity a lead term like "plan" or
+ * "document" carries — cheap, not grammar. When the next word is one of
+ * these, it reads as the OBJECT of a genuine imperative ("Review THE
+ * contract", "Ask WHETHER to apply changes", "Get approval FROM a domain
+ * owner") — the lead word stays a verb. Absent that, the lead word is very
+ * likely a bare NOUN SUBJECT instead ("Plan files MUST be Markdown", "Document
+ * index" — a document's index, not an instruction to document one), so the
+ * clause is left un-pre-classified rather than guessed.
+ */
+const IMPERATIVE_OBJECT_LEAD_WORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "any",
+  "each",
+  "every",
+  "this",
+  "that",
+  "these",
+  "those",
+  "your",
+  "its",
+  "their",
+  "our",
+  "his",
+  "her",
+  "whether",
+  "for",
+  "with",
+  "about",
+  "to",
+  "from",
+  "on",
+  "in",
+  "of",
+  "before",
+  "after",
+]);
+
+/** A lead word directly followed by one of these reads as the SUBJECT of a property statement ("Plan must...", "Document is...") rather than a command — never an imperative, checked before {@link IMPERATIVE_OBJECT_LEAD_WORDS}. */
+const PROPERTY_ASSERTION_NEXT_WORDS = new Set(["must", "should", "is", "are"]);
+
+/**
+ * True when the word immediately after `leadTerm` (already matched at the
+ * start of `trimmed` by {@link PROCESS_VERB_LEAD_RE}) does NOT read as an
+ * imperative's object — i.e. the lead word is ambiguous enough that it
+ * should NOT be pre-classified as a process step.
+ */
+function leadVerbReadsAsNoun(trimmed: string, leadTerm: string): boolean {
+  const rest = trimmed.slice(leadTerm.length).trimStart();
+  const nextWordMatch = /^([A-Za-z][A-Za-z'-]*)/.exec(rest);
+  if (nextWordMatch === null) return false;
+  const nextWord = nextWordMatch[1]!.toLowerCase();
+  if (PROPERTY_ASSERTION_NEXT_WORDS.has(nextWord)) return true;
+  return !IMPERATIVE_OBJECT_LEAD_WORDS.has(nextWord);
+}
+
+/** Where a clause sits, for {@link isWorkflowListStep}/{@link preClassifyProcessClause} — captured by `extractReferenceClauses` at the moment its enclosing list item started. */
+export interface ClauseWorkflowContext {
+  /** The list marker was a digit (`1.`/`2)`), not a bullet (`-`/`*`/`+`). */
+  readonly ordered: boolean;
+  /** The list item sits inside a fenced (` ``` `) code block. */
+  readonly fenced: boolean;
+  readonly headingPath: readonly string[];
+}
+
+const WORKFLOW_HEADING_RE = /workflow/i;
+
+/**
+ * True for an ordered list item whose NEAREST heading (the last entry of
+ * `headingPath` — never the whole ancestor chain) itself names "workflow".
+ * Flow 337, item 1: checking the full chain swept every ordered list in a
+ * file merely because some ANCESTOR heading (often the file's own H1) said
+ * "Workflow" — e.g. `rule-management-workflow.mdc`'s H1 "Rule Management
+ * Workflow" wrongly caught "2. Keep all rule files in English." nested three
+ * headings below it under "## Mandatory Behavior", which says nothing about
+ * a workflow at all. Only the clause's own immediate heading counts now.
+ *
+ * Flow 337, item 2: being fenced no longer qualifies a step on its own
+ * either (dropped the old unconditional `if (fenced) return true`) — this
+ * repo's own `mobx-store-template.mdc` fences its "1. private fields … 5.
+ * private methods" member-ordering list under "## Member Ordering" (no
+ * "workflow" anywhere), and that list is a checkable convention, not a
+ * process. A fenced OR ordered step is process only via its own text
+ * (the verb-lead/design-in checks above, run before this one) or via this
+ * heading check — never merely for being fenced.
+ */
+export function isWorkflowListStep(context: ClauseWorkflowContext): boolean {
+  if (!context.ordered) return false;
+  const nearestHeading = context.headingPath[context.headingPath.length - 1];
+  return nearestHeading !== undefined && WORKFLOW_HEADING_RE.test(nearestHeading);
+}
+
+/**
+ * The pre-classifier itself: returns a `not-checkable` reason string when
+ * `text` reads as a PROCESS step rather than a checkable code property, else
+ * `undefined` (stays a Jev candidate, behaviour unchanged). Pure,
+ * deterministic, no I/O.
+ */
+export function preClassifyProcessClause(text: string, context: ClauseWorkflowContext): string | undefined {
+  const trimmed = text.trim();
+  if (isCodePropertyClause(trimmed)) return undefined;
+  const verbMatch = PROCESS_VERB_LEAD_RE.exec(trimmed);
+  if (verbMatch !== null && !leadVerbReadsAsNoun(trimmed, verbMatch[1]!)) {
+    return `Pre-classified process: clause opens with the imperative verb "${verbMatch[1]!.toLowerCase()}", addressed to a person or agent — not a property checkable in a code hunk.`;
+  }
+  if (PROCESS_DESIGN_IN_RE.test(trimmed)) {
+    return `Pre-classified process: clause opens with "design ... in" — an instruction to a person or agent, not a property checkable in a code hunk.`;
+  }
+  if (isWorkflowListStep(context)) {
+    return `Pre-classified process: a numbered step under a heading naming "workflow" — a sequential process instruction, not a single hunk-checkable property.`;
+  }
+  return undefined;
+}
+
 /**
  * AC1: split a reference document into clauses. Pure, synchronous, no I/O and
  * no model call. `docText` is the whole file's content (markdown-shaped —
@@ -140,24 +355,46 @@ export function extractReferenceClauses(docText: string): RawReferenceClause[] {
   const headingPath: string[] = [];
   let headingSlug = "root";
   let indexInHeading = 0;
-  let current: { textLines: string[]; explicit?: ClauseExplicitTag } | undefined;
+  let inFence = false;
+  let current: { textLines: string[]; explicit?: ClauseExplicitTag; ordered: boolean; fenced: boolean } | undefined;
 
   const flush = (): void => {
     if (current === undefined) return;
     const joined = current.textLines.join(" ").replace(/\s+/g, " ").trim();
     if (joined.length > 0) {
       indexInHeading += 1;
+      // Pre-classifier (flow 337): only when the document itself supplied no
+      // explicit marker — an author's own `[state:...]`/`[not-checkable:...]`
+      // always wins outright, exactly as before. A pre-classifier hit is
+      // marked distinctly (`preClassified: true`) so `applyClauseTags` can
+      // stamp `tag_source: "pre-classified"`, never conflated with a real
+      // document-authored `"explicit"` marker.
+      let explicit = current.explicit;
+      let preClassified = false;
+      if (explicit === undefined) {
+        const reason = preClassifyProcessClause(joined, { ordered: current.ordered, fenced: current.fenced, headingPath });
+        if (reason !== undefined) {
+          explicit = { not_checkable_reason: reason };
+          preClassified = true;
+        }
+      }
       clauses.push({
         clause_id: `${headingSlug}-${indexInHeading}`,
         text: joined,
         heading_path: [...headingPath],
-        ...(current.explicit !== undefined ? { explicit: current.explicit } : {}),
+        ...(explicit !== undefined ? { explicit } : {}),
+        ...(preClassified ? { preClassified: true } : {}),
       });
     }
     current = undefined;
   };
 
   for (const rawLine of lines) {
+    if (FENCE_DELIMITER_RE.test(rawLine)) {
+      flush();
+      inFence = !inFence;
+      continue;
+    }
     const headingMatch = HEADING_RE.exec(rawLine);
     if (headingMatch !== null) {
       flush();
@@ -178,7 +415,7 @@ export function extractReferenceClauses(docText: string): RawReferenceClause[] {
     if (listMatch !== null) {
       flush();
       const { text, explicit } = extractExplicitMarker(listMatch[1]!);
-      current = { textLines: [text], ...(explicit !== undefined ? { explicit } : {}) };
+      current = { textLines: [text], ordered: ORDERED_LIST_ITEM_RE.test(rawLine), fenced: inFence, ...(explicit !== undefined ? { explicit } : {}) };
       continue;
     }
     const continuationMatch = current !== undefined ? CONTINUATION_RE.exec(rawLine) : null;
@@ -205,11 +442,22 @@ export function extractReferenceClauses(docText: string): RawReferenceClause[] {
 // ---------------------------------------------------------------------------
 
 /**
- * One `choice` question per clause that has no explicit marker (AC2's Jev
- * fallback). The clause's own text is embedded — that is the feature, opt-in
- * via `review.jev.conform` — but only after `redactSensitiveText` strips any
- * secret the reference document itself happens to contain, same floor every
- * other piece of state sent to Jev already gets.
+ * One `choice` question per clause that has no explicit marker AND was not
+ * caught by {@link preClassifyProcessClause} at extraction time (AC2's Jev
+ * fallback, narrowed by flow 337's precision fix). The clause's own text is
+ * embedded — that is the feature, opt-in via `review.jev.conform` — but only
+ * after `redactSensitiveText` strips any secret the reference document
+ * itself happens to contain, same floor every other piece of state sent to
+ * Jev already gets.
+ *
+ * Instructions (flow 337): the ORIGINAL wording asked "which kind of state"
+ * without ever contrasting a code-observable fact against a human action —
+ * `api-contracts.mdc`'s "Review the contract for breaking changes" (an
+ * instruction to a person, not a fact about the diff) still got tagged
+ * `hunk`. The rewrite below states the "hunk" criterion as "a property you
+ * can see in a code hunk" and its rejection as "an action someone
+ * performs", so the two readings a clause can have are named explicitly
+ * rather than left for the model to infer from "code or test change".
  */
 export function buildClauseTagQuestions(
   clauses: readonly RawReferenceClause[],
@@ -220,10 +468,14 @@ export function buildClauseTagQuestions(
     questions[clause.clause_id] = {
       type: "choice",
       instructions:
-        `Classify this rule-document clause. Which kind of state would you check it against — "pr" (the pull ` +
-        `request's own title/body/size), "report" (an existing review report/findings), or "hunk" (a code or test ` +
-        `change)? If it names no gatherable artefact at all — a live/manual step such as "verified on a running ` +
-        `instance" or an obligation on the reviewer's own process — answer "not-checkable" instead.\n\nClause: ${redactSensitiveText(clause.text)}`,
+        `Classify this rule-document clause by what you would check it against. Answer "hunk" only when the clause ` +
+        `states a property you can see in a code hunk — something true of the code or test diff itself (a required ` +
+        `pattern, a forbidden call, a naming or structural rule) that a reviewer could point at inside the changed ` +
+        `lines. Answer "pr" for the pull request's own title/body/size, "report" for an existing review ` +
+        `report/findings. If the clause instead describes an action someone performs — a step a person or agent ` +
+        `carries out (reviewing, discussing, asking, documenting, communicating, planning, deciding, getting ` +
+        `approval) rather than a fact the diff itself states, or any other live/manual step with no gatherable ` +
+        `artefact — answer "not-checkable" instead.\n\nClause: ${redactSensitiveText(clause.text)}`,
       criteria: CLAUSE_TAG_CRITERIA_RECORD,
     };
   }
@@ -254,6 +506,11 @@ export function applyClauseTags(
 ): ReferenceClause[] {
   return clauses.map((clause) => {
     if (clause.explicit !== undefined) {
+      // Flow 337, item 5: a document-authored marker is `"explicit"`; a hit
+      // produced by the pre-classifier at extraction time (never itself a
+      // document marker) is `"pre-classified"` instead — kept distinguishable
+      // by a caller that trusts only the document's own word.
+      const tagSource: ReferenceClause["tag_source"] = clause.preClassified === true ? "pre-classified" : "explicit";
       if ("state_kind" in clause.explicit) {
         return {
           clause_id: clause.clause_id,
@@ -261,7 +518,7 @@ export function applyClauseTags(
           heading_path: clause.heading_path,
           state_kind: clause.explicit.state_kind,
           checkable: true,
-          tag_source: "explicit",
+          tag_source: tagSource,
         };
       }
       return {
@@ -271,7 +528,7 @@ export function applyClauseTags(
         state_kind: "pr",
         checkable: false,
         reason: clause.explicit.not_checkable_reason,
-        tag_source: "explicit",
+        tag_source: tagSource,
       };
     }
     const hit = resolved.get(clause.clause_id);

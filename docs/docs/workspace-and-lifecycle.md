@@ -207,7 +207,13 @@ directly into the root file. Everything after the sentinel is regenerated;
 everything before it (the human's own prose) is preserved. The block adds per-skill
 routing policies (consult `.metaproject/index.md` and the module skills before
 doing raw file/code work) for gdgraph, gdwiki, gdctx, gdskills, testing, memory,
-and flow.
+and flow, plus a **Model choice** policy (`src/lib/model-choice.ts`) telling
+Claude Code and Codex CLI which model tier to run on — the flagship tier for
+planning/review, one tier down for subagents/docs/unattended work, the
+smallest tier only for trivial work — in tier words, adding a concrete
+provider/model id only when this project's `routing.config.json` resolves and
+the operator has approved one. Disable it with `.metaproject/tasks.config.json`
+`{"modelGuidance":{"enabled":false}}`. See [cli-reference#rules](cli-reference.md#rules).
 
 The block is **self-healing**: `ensureMetaprojectReference` migrates old policy
 wording to the current phrasing, de-duplicates repeated policies, and

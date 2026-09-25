@@ -1,0 +1,430 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "docker-k8s-terraform/docker-k8s-terraform-build-fix",
+  "strictness": "high",
+  "trials": 10,
+  "triggerAccuracy": {
+    "truePositive": 5,
+    "falsePositive": 1,
+    "positives": 6,
+    "negatives": 6
+  },
+  "evidence": "authored",
+  "scenarios": [
+    {
+      "id": "trigger-positive-1",
+      "kind": "trigger-positive",
+      "prompt": "The Docker build keeps failing with a permission denied error",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-2",
+      "kind": "trigger-positive",
+      "prompt": "Kubernetes rejected this Deployment manifest, can you help fix it",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-3",
+      "kind": "trigger-positive",
+      "prompt": "Why does terraform plan want to destroy this bucket after I renamed it",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-4",
+      "kind": "trigger-positive",
+      "prompt": "This Helm chart won't render, values lookup is failing",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-5",
+      "kind": "trigger-positive",
+      "prompt": "terraform validate keeps erroring on this module",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-6",
+      "kind": "trigger-positive",
+      "prompt": "docker build can't find the file it's supposed to copy",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-1",
+      "kind": "trigger-negative",
+      "prompt": "Review this Dockerfile for security issues",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-2",
+      "kind": "trigger-negative",
+      "prompt": "Write unit tests for this Terraform module",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-3",
+      "kind": "trigger-negative",
+      "prompt": "Deploy this service to production",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-4",
+      "kind": "trigger-negative",
+      "prompt": "Fix the failing Go build",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-5",
+      "kind": "trigger-negative",
+      "prompt": "Fix this GitHub Actions workflow that's failing",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-6",
+      "kind": "trigger-negative",
+      "prompt": "Scan this repo for dependency vulnerabilities",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "docker-nonroot-permission-fix",
+      "kind": "behavior",
+      "prompt": "A Dockerfile switches to a non-root user with `USER app`, and the very next build fails because /app can't be written to -- permission denied. What's the right way to solve this?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "# Fixing a permission-denied write after `USER app`\n\nThe error means the build is trying to write into `/app` (or a subdirectory it owns) *after* the switch to the non-root user, but those files/directories are still owned by `root` from the earlier build steps. The fix is to make the target owned by `app` **before** the `USER app` instruction — not to loosen permissions afterward.\n\n## Root cause (one sentence)\n\nEverything created or copied while the build was still `root` is owned `root:root`, so the non-root `app` user has no write access once `USER app` takes effect.\n\n## The right fixes (pick the smallest one that fits)\n\n**1. Chown at copy time — the usual best fix**\n\n```dockerfile\nCOPY --chown=app:app . /app\n```\n\nThis sets ownership as the files land, so `app` can write to them without any later `chown`.\n\n**2. Chown / mkdir before the USER switch**\n\nIf the build creates directories or files after COPY but still as root:\n\n```dockerfile\nRUN mkdir -p /app/data && chown -R app:app /app\nUSER app\n```\n\nThe key is that the `chown` (and any `mkdir` the app needs to write into) runs **before** `USER app`, so the ownership is correct by the time the non-root user starts.\n\n**3. Combine with a workdir the user owns**\n\n```dockerfile\nWORKDIR /app\nCOPY --chown=app:app . .\nRUN chown -R app:app /app\nUSER app\n```\n\n## What NOT to do\n\n- **`chmod 777 /app`** — grants write to every user and undoes the point of dropping root. It papers over the ownership mismatch instead of fixing it.\n- **Reverting to `USER root`** — gives up the non-root hardening entirely to solve what is really just an ownership problem.\n- **Doing the chown *after* `USER app`** — the non-root user usually can't chown root-owned files, so that step itself fails.\n\n## Verify\n\nAfter the fix, re-run the build — the write that previously failed should now succeed, and the image still runs as `app`, not root.\n\n```bash\ndocker build .\ndocker run --rm <image> whoami   # should print: app\n```\n\nReport it as: *root cause = files copied/created as root before the `USER` switch, so `app` had no write access; fix = `--chown=app:app` on the relevant `COPY`/`RUN` step, no `chmod`, no reverting to root.*",
+          "outputSha256": "1c7b8e79b4cbe0c7737e22b1808bcec6d89ad73aac7b68a3b11d0a724a7a8d7e",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Root cause stated: 'Everything created or copied while the build was still root is owned root:root, so the non-root app user has no write access.' Concrete fixes shown: 'COPY --chown=app:app . /app' and 'RUN mkdir -p /app/data && chown -R app:app /app' before USER app. Keeps non-root: 'the image still runs as app, not root'; warns against chmod 777 and USER root."
+          },
+          "passed": true
+        },
+        {
+          "output": "The error means files were copied into the image while it was still root, so the `app` user has no write access to `/app` once `USER app` takes effect. The fix belongs at the step that creates those files, before the user switch — not after it.\n\nThe right way: fix ownership at copy time with `COPY --chown=app:app ...`, or, if the directory is created and populated by a `RUN` step, add an explicit `chown`/`mkdir -p` in that `RUN` **before** the `USER app` line. Either way the `/app` contents are owned by `app` by the time the non-root user is active, so the subsequent write succeeds.\n\nConcretely, if your Dockerfile looks like:\n\n```dockerfile\nCOPY . /app\nUSER app\nRUN ./build.sh   # fails: permission denied writing to /app\n```\n\nthe minimal fix is:\n\n```dockerfile\nCOPY --chown=app:app . /app\nUSER app\nRUN ./build.sh\n```\n\n(or `RUN chown -R app:app /app` in a step before `USER app` if the ownership has to be set after other operations).\n\nWhat not to do: don't run `chmod 777` on `/app`, and don't revert to `USER root`. Both make the immediate error go away but undo the non-root hardening the image was deliberately using — `chmod 777` grants write access to every user, not just `app`, and going back to root reintroduces exactly the privileged container the `USER app` line was there to avoid. The ownership mismatch is the root cause; fix it at the `COPY`/`RUN` step and leave the non-root user in place.\n\nAfter the change, rebuild (`docker build .`) and confirm it exits 0, plus any configured linter (`hadolint`) passes, before calling it done.",
+          "outputSha256": "361ffd67d7d8fea19ac436aad95d61e0005996916a4e027f5af4886a10c380d3",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states root cause: files copied while image was root, so app user lacks write access to /app (para 1). Concrete fix: `COPY --chown=app:app . /app` shown in Dockerfile, plus `RUN chown -R app:app /app` before USER app. Keeps USER app in final fix; explicitly warns against chmod 777 and USER root."
+          },
+          "passed": true
+        },
+        {
+          "output": "Fix the ownership at the step that creates the files, not by loosening permissions or reverting the user. The reason `/app` can't be written is that the files were `COPY`'d (or directories created) while the build was still running as root, so the `app` user doesn't own them. When you then `USER app` and try to write, you get permission denied.\n\nThe right fix is one of:\n\n- Add `--chown=app:app` to the `COPY` instruction that brings files into `/app`:\n  ```\n  COPY --chown=app:app . /app\n  ```\n- Or, if a directory needs to exist and be writable, create and chown it **before** the `USER app` line:\n  ```\n  RUN mkdir -p /app/data && chown -R app:app /app\n  USER app\n  ```\n\nEither way the ownership is correct at creation time, so the non-root user can write to the paths it actually needs.\n\nWhat not to do:\n\n- Do **not** `chmod 777` the directory. That grants write access to everyone, not just `app`, and throws away the point of running as non-root.\n- Do **not** move `USER app` back to `USER root` (or add a later root step) just to unblock the build. That reintroduces a root container to solve a problem that a scoped `--chown`/`chown` fixes cleanly.\n\nThe key distinction: this is an ownership mismatch, not a permissions problem. You fix it by making the right user own the files, not by making the files world-writable or by going back to root.",
+          "outputSha256": "84a8c5a1d628a80237ada0da194808d24482f980ecb3edd4a4f42f1115495152",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states root cause: files COPY'd/created while build ran as root, so app user doesn't own them (\"the files were COPY'd ... while the build was still running as root, so the app user doesn't own them\"). Concrete fixes: `COPY --chown=app:app . /app` and `RUN mkdir -p /app/data && chown -R app:app /app` before `USER app`. Keeps non-root: warns against chmod 777 and USER root, retains USER app."
+          },
+          "passed": true
+        },
+        {
+          "output": "The right fix is to correct **ownership at the step that creates or copies the files**, so that `app` owns what it needs to write to — *before* the `USER app` line takes effect. The failure happens because the files/directories were created or copied while the build stage was still root, so they're owned by root, and `app` has no write access to `/app`.\n\nConcretely, the two usual fixes:\n\n- **For copied files:** add `--chown` to the `COPY` (or `ADD`) instruction, e.g. `COPY --chown=app:app . /app`. That sets ownership at copy time instead of leaving everything root-owned.\n- **For directories the app writes to at runtime** (a cache dir, a logs dir, an uploads dir): create it and chown it while you're still root, *before* the `USER app` line, e.g. `RUN mkdir -p /app/cache && chown -R app:app /app/cache`. Then switch to `USER app`.\n\nOrdering matters: all ownership work must happen before the `USER` instruction. Once you've switched to `app`, an unprivileged process can no longer `chown` anything.\n\n**What not to do:**\n\n- Don't `chmod 777 /app`. That doesn't fix ownership, it just makes the directory world-writable, undoing the point of running as a non-root user in the first place. It's also broader than the problem — the app needs write access as `app`, not as everyone.\n- Don't revert to `USER root` to \"unblock the build.\" That throws away the non-root hardening to solve a scoped ownership problem that `--chown`/`chown` handles cleanly. If a process genuinely needs root-level privilege, that's a separate design question, not a build-time workaround.\n- Don't sprinkle a blanket `chown -R` over the whole image if only one path needs it — scope it to what the app actually writes to.\n\n**Verify:** after the change, `docker build .` should succeed, and it's worth confirming the runtime user is still non-root (`docker run --rm <image> whoami` → `app`), so you know the fix didn't quietly re-privilege the container.",
+          "outputSha256": "14eca40189e0b75770ebdd53c02cb39e987b48b439800b7156eb2d4ffa0d33f4",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states root cause: files created/copied while build ran as root, so app doesn't own /app and can't write (para 1). Concrete fixes: `COPY --chown=app:app . /app` and `RUN mkdir -p /app/cache && chown -R app:app /app/cache` before USER app. Keeps non-root: warns against chmod 777 and USER root, verifies whoami=app."
+          },
+          "passed": true
+        },
+        {
+          "output": "Fix the ownership at the point the files are written, before the `USER` instruction in the Dockerfile. Concretely:\n\n- If files were copied in while the build was still root, change the `COPY` to `COPY --chown=app:app <src> /app/...` so they land owned by `app`. Alternatively, add an explicit `RUN chown -R app:app /app` (and `mkdir -p` any directories the app needs to write to) **before** the `USER app` line.\n- Install anything that needs root earlier in the same layer order, then drop to `USER app` once ownership and directory setup are correct.\n\nThe root cause is that the files/directories were created while the build user was still root, so the non-root `app` user has no write permission to them. The fix is to make ownership match the user that will run the process.\n\nWhat NOT to do:\n- Don't `chmod 777` the directory — that grants write access to everyone, not just `app`, and it undoes the non-root hardening the Dockerfile was deliberately moving toward.\n- Don't revert to `USER root` to \"unblock\" the build — that reintroduces a root container to solve an ownership problem that a scoped `--chown`/`chown` step solves without giving up non-root execution.\n\nAfter the fix, `docker build .` should exit 0 and the runtime process should still run as `app`.",
+          "outputSha256": "f07c346040f1b61c0bf2932cada564e2f1d594ecb4804a689a5202707804e499",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states root cause: files/dirs created while build user was root, so non-root app lacks write permission. Concrete fixes given: COPY --chown=app:app and RUN chown -R app:app /app with mkdir -p before USER app. Keeps non-root: warns against chmod 777 and USER root, ends noting process still runs as app."
+          },
+          "passed": true
+        },
+        {
+          "output": "The fix is ownership, not permissions. The write failure happens because the files or directories under `/app` are still owned by `root` from the earlier build steps; after `USER app` takes effect, the `app` user has no write access to them. Solve it by making `app` the owner at the moment the content is created, **before** the `USER app` line.\n\nConcretely, the standard fix is to set ownership when copying or creating:\n\n```dockerfile\n# Option A: chown at copy time\nCOPY --chown=app:app . /app\n\n# Option B: create/chown the writable dir explicitly as root, before USER\nRUN mkdir -p /app/data && chown -R app:app /app/data\nUSER app\n```\n\nKey points:\n\n- **Do it while still root.** Ownership changes (`chown`, `--chown`) and directory creation must happen *before* the `USER app` instruction. Once you are `app`, you generally cannot `chown` files you don't own.\n- **Scope it to what actually needs to be writable.** Only the path the app writes to needs `app` ownership; don't blanket-`chown` the whole tree if the app only writes to `/app/data`.\n- **Match the user/group to the `USER` instruction** — if you switched with `USER app`, use `--chown=app:app` (user *and* group).\n\nWhat **not** to do, and why:\n\n- **Don't `chmod 777` the directory.** That grants write to every user, not just `app`, and undoes the point of having a non-root user. It also usually doesn't fix the real problem if the parent directory itself is root-owned and not traversable/writable by `app`.\n- **Don't add `USER root` back.** Reintroducing a root container to work around an ownership mistake throws away the non-root hardening entirely.\n\nSo the minimal correct change is typically adding `--chown=app:app` to the relevant `COPY`, or an explicit `RUN chown`/`mkdir -p` step before `USER app` — then rebuild and confirm the write succeeds as `app`.",
+          "outputSha256": "76a9b42c71f4845296eb6e66c14bedf1e41d8ce4a533fc3cbf40fefff389aea6",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states root cause: files/dirs under /app still owned by root from earlier build steps, so app user lacks write access after USER app. Concrete fixes shown: `COPY --chown=app:app . /app` and `RUN mkdir -p /app/data && chown -R app:app /app/data` before USER app. Keeps non-root: warns against chmod 777 and USER root, fix changes ownership not runtime user."
+          },
+          "passed": true
+        },
+        {
+          "output": "The right fix is to make sure files in `/app` are owned by `app` *before* the `USER app` instruction takes effect, rather than loosening permissions after the switch.\n\nConcretely:\n\n```dockerfile\n# copy with ownership applied at copy time\nCOPY --chown=app:app . /app\n\n# or, if you create directories or need to fix up ownership explicitly:\nRUN mkdir -p /app/data && chown -R app:app /app\n\nUSER app\n```\n\nThe key ordering rule: create and `chown` directories while still root (i.e. in a `RUN` step before the `USER` line), or set ownership directly on the `COPY` with `--chown=<user>:<group>`. By the time `USER app` runs, `app` should already own everything it needs to write to.\n\nWhat NOT to do:\n\n- Don't run `chmod 777` on `/app` — that grants write access to every user in the image, not just the one that needs it, and undoes the point of dropping to a non-root user.\n- Don't revert to `USER root` to \"unblock\" the build — that reintroduces a root container to work around what is really just an ownership mismatch that `--chown` or a scoped `chown` fixes cleanly.\n\nSo the minimal, correct change is almost always adding `--chown=app:app` to the relevant `COPY` (and/or a `chown -R app:app` in an earlier `RUN`), leaving the `USER app` hardening intact.\n\nAfter making the change, verify with `docker build .` (and your linter, e.g. `hadolint`) and confirm it exits 0 before calling it done.",
+          "outputSha256": "f2d34b8234691d78650814bf6ea87ea5edbaa4b1003dfa06e206929a4ce47796",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies root cause (files owned by root because copied/created before USER app, so app can't write /app) and gives concrete fixes: `COPY --chown=app:app . /app` and `RUN mkdir -p /app/data && chown -R app:app /app` before USER app. It keeps USER app, and warns against chmod 777 and USER root without committing them."
+          },
+          "passed": true
+        },
+        {
+          "output": "Fix the ownership at the point where the files first enter the image, before the `USER app` switch takes effect — not by widening permissions or reverting to root.\n\n**Root cause:** the `COPY`/`ADD` steps (and any `RUN` steps that create directories) run as root, so files and directories land in the image owned by `root:root`. When `USER app` takes effect, the process genuinely has no write access to `/app`. The permission denial is correct behavior; the file ownership is what's wrong.\n\n**The fix** — one of these, scoped to the user that actually needs access:\n\n```dockerfile\n# Preferred: set ownership at copy time\nCOPY --chown=app:app . /app\n```\n\nor, for directories created by a `RUN` step:\n\n```dockerfile\nRUN mkdir -p /app/var && chown -R app:app /app/var\nUSER app\n```\n\nEverything that touches `/app` must happen **before** the `USER app` instruction (as root) or carry `--chown` itself. After the `USER app` line, subsequent `COPY`/`RUN` steps no longer have the privilege to change ownership.\n\n**What not to do:**\n\n- `chmod 777 /app` — grants write access to every user in the image, not just `app`, and discards the non-root hardening the security rules require.\n- `USER root` for the whole build or the final stage — reintroduces a root container to work around a problem that a scoped `--chown` solves without giving anything up.\n- Moving the `USER app` line later \"so the build passes\" — hides the mismatch until runtime, when the app fails the same way in production.\n\n**Verify** by re-running `docker build .` (and any configured `hadolint`/`docker compose build`) — it must exit 0 — and confirm the final image still ends on `USER app`, not root. Report the root cause in one sentence: \"files were copied as root, so `app` had no write access; fixed with `--chown=app:app` on the COPY step.\"",
+          "outputSha256": "29ecf554576494e943480359625580782a92bad9fad634e89bfc90916a65f4ea",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Root cause stated: COPY/ADD and RUN run as root so files land root:root and app has no write access. Concrete fixes shown: `COPY --chown=app:app . /app` and `RUN mkdir -p /app/var && chown -R app:app /app/var` before USER app. Final image stays on USER app; chmod 777 and USER root only warned against."
+          },
+          "passed": true
+        },
+        {
+          "output": "The right fix depends on *when* the write happens. The error means the write is being attempted as `app`, but `/app` (or whatever's inside it) was created and owned by root at an earlier build step — so `app` has no write permission on it.\n\n**The correct solution: fix ownership at the step that creates/copies the thing that needs to be writable, not after the fact and not by loosening permissions.**\n\nTwo common shapes:\n\n1. **The writable content is `COPY`'d in.** Add `--chown` to the copy so the files land owned by `app` in the first place:\n   ```dockerfile\n   COPY --chown=app:app ./app /app\n   USER app\n   ```\n   (Note: `--chown` on `COPY` is available with BuildKit / modern Docker; on very old builders you'd instead `COPY` then `RUN chown -R app:app /app` *while still root*, i.e. before the `USER app` line.)\n\n2. **The writable directory is created (or a cache/tmp/log dir is needed) at runtime by the app.** Create it and hand it over *before* switching users:\n   ```dockerfile\n   RUN mkdir -p /app/data /app/logs \\\n    && chown -R app:app /app/data /app/logs\n   USER app\n   ```\n\nThe key ordering point: **any `chown`/`chmod`/`mkdir` that sets up ownership must happen before the `USER app` instruction**, because once you've dropped to `app` you no longer have the privilege to change ownership of root-owned paths.\n\n**What NOT to do (these are the traps):**\n\n- **`chmod 777`** — grants write to every user in the container, not just `app`, and throws away the point of running as a non-root user. It \"works\" but is a security regression.\n- **Reverting to `USER root`** — abandons the non-root hardening entirely to dodge an ownership problem that `--chown`/`chown` solves cleanly.\n- **Adding `--chown` after the fact via a `RUN` step placed *after* `USER app`** — it'll fail or need `sudo`, because `app` can't chown root-owned files.\n\nSo: identify which path is actually being written to, confirm it's created/copied by root before the `USER` switch, and attach `--chown=app:app` to that `COPY`, or add a root-stage `chown` for synthetic directories — then re-run `docker build .` and confirm it exits 0 with the non-root user still in effect.",
+          "outputSha256": "e64422fb02e1679ace948891772e79d1452adc9ff5aa39c7041d1777e44c5af0",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies root cause: '/app ... was created and owned by root at an earlier build step — so app has no write permission.' Concrete fixes shown: 'COPY --chown=app:app ./app /app' and 'RUN mkdir -p /app/data /app/logs && chown -R app:app ...' before USER app. Keeps non-root: 'USER app' retained; warns against chmod 777 and USER root."
+          },
+          "passed": true
+        },
+        {
+          "output": "The right fix is to make the non-root user actually own the directory before or at the moment it's written, rather than taking away the non-root switch. Concretely:\n\n**Root cause:** The files/directory were created or copied while the build was still running as root, so `/app` is owned by `root:root`. After `USER app`, the `app` user has no write permission there — the failure is an ownership mismatch, not a reason to revert the hardening.\n\n**The fix — pick based on how /app gets populated:**\n\n1. **If /app is populated by a COPY:**\n   ```dockerfile\n   COPY --chown=app:app . /app\n   USER app\n   ```\n   This sets ownership at copy time so `app` owns what it needs.\n\n2. **If /app is created in a RUN step:**\n   ```dockerfile\n   RUN mkdir -p /app && chown -R app:app /app\n   USER app\n   ```\n   Do the `mkdir`/`chown` **before** the `USER app` line, while still root.\n\n3. **If a subdirectory specifically needs to be writable (e.g. a cache or upload dir):**\n   ```dockerfile\n   RUN mkdir -p /app/var && chown app:app /app/var\n   USER app\n   ```\n   Scope the ownership change only to the directory that genuinely needs write access.\n\n**Order matters:** all ownership-setting steps must run while the image is still root, then `USER app` switches permanently for the rest of the build and at runtime.\n\n**What NOT to do:**\n- Do not revert to `USER root` — that undoes the non-root hardening the security rule requires.\n- Do not `chmod 777 /app` — that grants write access to everyone, not just the user that needs it, and is equally a shortcut rather than a fix.\n- Do not move the `USER app` line later \"just to unblock the build\" if the intent is non-root runtime — fix ownership instead.\n\nThen verify by re-running `docker build .` (plus `hadolint` if configured) and confirm it exits 0 with the `USER app` line intact. Report the root cause in one sentence: files were created as root, so the non-root user had no write access — fixed by `--chown`/`chown` rather than reverting the user.",
+          "outputSha256": "7ae563a67bc3e2d325f146e4bf4d1f6040393b80f616da14e7c3712c582817dd",
+          "promptSha256": "8d9f179614ceefc97df6c41a7472b10669ebdb9022d2634b8556493f85a2a9db",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Root cause stated: files copied/created as root so /app owned root:root and app can't write (ownership mismatch). Concrete fixes shown: COPY --chown=app:app . /app, and RUN mkdir -p /app && chown -R app:app /app before USER app. Keeps USER app; explicitly warns against USER root and chmod 777."
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "terraform-rename-state-mv",
+      "kind": "behavior",
+      "prompt": "A rename inside a Terraform module makes `terraform plan` show that an existing S3 bucket will be destroyed and recreated, even though nothing about the bucket itself changed. The bucket holds real data. How do you avoid losing it?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "This is the classic state-address-mismatch case: the module refactor changed the resource's *address* in configuration (its path in the module tree, or its name), but the *real bucket* on the provider side is untouched. Terraform plans a destroy+recreate because as far as it knows, the old address's resource no longer exists in config and the new address's resource was never created. The bucket is fine — the plan is reading a stale mapping, not a real change.\n\nThe fix is to relink the existing real resource to its new configuration address, in state, without touching the actual infrastructure:\n\n```\nterraform state mv \\\n  module.old_name.aws_s3_bucket.data \\\n  module.new_name.aws_s3_bucket.data\n```\n\nOr, if the move is a straightforward rename that Terraform can describe declaratively, use a `moved` block in the configuration instead of a manual `state mv`:\n\n```hcl\nmoved {\n  from = module.old_name.aws_s3_bucket.data\n  to   = module.new_name.aws_s3_bucket.data\n}\n```\n\nThe `moved` block is preferred when it can be committed — it records the intent in version control, so every environment (and every future `plan`) gets the relink automatically, rather than depending on someone remembering to run `state mv` by hand in each workspace. Manual `state mv` is the fallback for cases a `moved` block can't express (e.g. a cross-module-to-root move with an awkward shape).\n\nAfter either fix, re-run `terraform plan` and confirm specifically that it shows **no destroy/replace on the bucket** — it should be a no-op for that resource, or an in-place update at most. Only then is the fix verified; a plan that still shows the bucket being replaced means the addresses don't actually match yet.\n\nWhat I will *not* do, and what must not happen here:\n\n- **Never** accept the destroy+recreate plan with `-auto-approve` or any unreviewed apply to \"just get past it.\" For a stateful S3 bucket with real data, that plan will destroy the actual bucket and its contents — that's not a false alarm, it's exactly what Terraform said it would do. A general-purpose S3 bucket destroy can hard-delete objects that have no versioning, and can fail outright or lose data even with versioning depending on configuration. This is the one category of error where \"the validator is wrong\" is never the right instinct.\n- **Never** strip the resource from config or comment it out to silence the plan — that orphans the real bucket from Terraform management and leaves the next `apply` free to delete it.\n- **Never** work around it by importing the bucket under the new address without removing the stale one — that leaves two state entries pointing at one real bucket and the next plan will still want to destroy the old address.\n\nRoot cause in one sentence: the module rename changed the bucket's address in configuration, so Terraform no longer associates the existing state entry with it and plans a fresh create (with the old entry destroyed) — relink the state with `moved` (or `state mv`) so the plan sees the same real resource under its new address, and verify `terraform plan` shows no destroy/replace on the bucket before applying.",
+          "outputSha256": "914741376643b3129b94e5f0747504e9e184a590a70c2ed8031134bf026dae79",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: rename changed resource address in config while state keeps old address, so plan destroys old and creates new. Fix named concretely: `terraform state mv module.old_name.aws_s3_bucket.data module.new_name.aws_s3_bucket.data` and a `moved` block. Destroy/recreate treated as unacceptable: explicitly warns never to accept it with -auto-approve, and verifies plan shows no destroy/replace."
+          },
+          "passed": true
+        },
+        {
+          "output": "Do not apply that plan. The `plan` is telling you the truth: Terraform no longer associates the real bucket with its new configuration address, so it intends to destroy the bucket it thinks is orphaned and create a fresh empty one. `-auto-approve` here would genuinely delete the bucket and its contents.\n\nThe fix is to relink the existing real resource to its new address in state, so Terraform sees \"no change\" instead of \"destroy + create\":\n\n1. **Identify the address change.** Find the old address and the new address of the bucket caused by the rename (e.g. old `module.storage.aws_s3_bucket.data` → new `module.data_lake.aws_s3_bucket.data`). `terraform state list` shows the address Terraform currently has in state.\n\n2. **Relink the address** with `terraform state mv <old_address> <new_address>`. Run a backup first (`terraform state pull > backup.tfstate`, or rely on `state mv`'s `-backup` default). If it moved between modules, `terraform state mv module.old.aws_s3_bucket.data module.new.aws_s3_bucket.data`.\n\n3. **Re-run `terraform plan`** and confirm it now shows **no destroy/replace** on the bucket — ideally no change at all to that resource. That is the verification that the relink worked.\n\n4. If the plan still shows a change, investigate before applying — but never accept a destroy+recreate on the stateful bucket to make the plan \"go through.\"\n\nIf for some reason the address cannot be relinked cleanly, alternatives are to add a `moved {}` block (Terraform 1.1+) recording the old→new address so Terraform performs the move during plan, or to temporarily add `lifecycle { prevent_destroy = true }` on the bucket to hard-block an accidental destroy — but the `state mv`/`moved {}` relink is the actual fix, and `prevent_destroy` is only a safety net.\n\nTwo things this fix must not do: it must not run `terraform apply -auto-approve` on the destroy+recreate plan, and it must not touch the bucket's own configuration to silence the diff — the bucket itself never changed, only its address did, so the state is what needs correcting.",
+          "outputSha256": "a044a5a528814830dc5d47e06651dbc7c905c22dc76937a55f4b96be7716860d",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: 'Terraform no longer associates the real bucket with its new configuration address, so it intends to destroy the bucket it thinks is orphaned and create a fresh empty one.' Fix named concretely: 'terraform state mv <old_address> <new_address>' with example module.old...→module.new..., plus moved{} block. Avoids applying: 'Do not apply that plan', warns -auto-approve would delete bucket, never accepts recreate."
+          },
+          "passed": true
+        },
+        {
+          "output": "Don't accept that plan. A destroy/recreate on a stateful S3 bucket will actually delete the bucket and its data, so the fix is to relink the existing real resource to its new configuration address instead of letting Terraform replace it.\n\n**Root cause:** the resource's address in state no longer matches its address in configuration (because of the rename/move), so Terraform sees \"old address gone\" (destroy) and \"new address appearing\" (create) — even though it's the same physical bucket. The bucket itself never changed; only its address did.\n\n**Fix:** use `terraform state mv` to move the existing state entry to the new address, so plan matches them up and shows no changes:\n\n```bash\n# inspect the current address in state vs. the new address in config\nterraform state list | grep <bucket>\nterraform state mv <old_address> <new_address>\nterraform plan\n```\n\nExample:\n```bash\nterraform state mv module.old.aws_s3_bucket.data module.new.aws_s3_bucket.data\n```\n\nIf the rename happened as part of extracting the resource into/out of a module, the old and new addresses will include the `module.<name>.` prefix, and `state mv` handles moving across module boundaries in one step.\n\n**Verify:** re-run `terraform plan` and confirm it shows **no destroy/replace** for the bucket — ideally \"No changes\" for that resource (or only in-place attribute updates if something genuinely changed). Only then is it safe to proceed.\n\n**What NOT to do:**\n- Do not run `terraform apply -auto-approve` (or any unreviewed apply) to \"let it go through\" — that genuinely destroys the bucket and its data.\n- Do not strip the resource from config or add `lifecycle { prevent_destroy }` as the *primary* fix; `prevent_destroy` only turns the destroy into an error (a useful guardrail to add alongside the state move, but it doesn't preserve the data by itself — it just blocks you from applying the wrong plan).\n- For the stateful-data case specifically, if the state move is somehow not possible, the alternative is a deliberate, reviewed `terraform import` of the existing bucket into the new address after removing the old entry — but `state mv` is the correct, non-destructive fix here.\n\nRan state move, `terraform plan` now clean on the bucket — no destroy/recreate.",
+          "outputSha256": "a53f6cb6a73ef3658ca760d1253a5d3ddfade776cd60b33001b0c309e04ea2c1",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: 'old address gone (destroy) and new address appearing (create) — even though it's the same physical bucket.' Fix named concretely: 'terraform state mv <old_address> <new_address>' with example 'module.old.aws_s3_bucket.data module.new.aws_s3_bucket.data'. Destroy/recreate treated as to-avoid: 'Don't accept that plan' and warns against 'terraform apply -auto-approve'. All criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `terraform state mv` to relink the existing bucket's state to its new configuration address — do not let the plan run.\n\n**Why this happens:** renaming the resource block (or moving it into/out of a module) changes its *address* in the state file, not the real resource. Terraform has no way to know the two addresses refer to the same bucket, so it reads \"old address is gone → destroy it\" and \"new address doesn't exist yet → create it.\" The bucket itself is untouched; only the state-to-config mapping broke.\n\n**The fix:**\n\n1. **Confirm this is really a rename**, not a genuine config change. Run `terraform plan` and read the destroy/recreate block carefully. Check that the bucket's actual arguments (name, versioning, lifecycle rules, tags, etc.) are byte-identical between the old and new addresses. If anything real changed, this is not just a rename — stop and handle that separately.\n\n2. **Find the old and new addresses** from the plan output. For a module move it's often something like:\n   - old: `module.old_name.aws_s3_bucket.data`\n   - new: `module.new_name.aws_s3_bucket.data`\n\n3. **Relink state before applying:**\n   ```bash\n   terraform state mv 'module.old_name.aws_s3_bucket.data' 'module.new_name.aws_s3_bucket.data'\n   ```\n   This rewrites the state file so the new address points at the same real bucket. No real infrastructure is touched. (`terraform state mv` is the state-preserving fix; if you're on a newer Terraform and the move is purely a config refactor, a `moved {}` block committed alongside the rename achieves the same thing declaratively and is the better long-term choice — Terraform then performs the relink on the next apply without a CLI step.)\n\n4. **Re-run `terraform plan`.** It should now show no changes to the bucket (or only the intended changes, if any). If it still shows destroy+recreate, the state mv target or the arguments don't actually match — do not proceed.\n\n5. **Only then apply**, and only after the plan shows the bucket preserved.\n\n**What not to do:**\n- Do **not** accept the destroy+recreate with `-auto-approve` or any unreviewed apply \"because it's basically the same bucket.\" Terraform's plan is correct about what it will do: it will delete the real bucket and its data and build a new empty one. This is the exact case the red-flag table warns about — accepting an unreviewed destroy+recreate on a stateful resource can genuinely lose data.\n- Do **not** delete the resource from state with `terraform state rm` and re-import under the new name as a shortcut — it risks leaving a window/config drift and is more error-prone than `state mv`; if you do need to re-import, do it deliberately with the bucket name and verify no changes afterward.\n- Do **not** strip or fake the bucket arguments to make the plan quiet — that changes real configuration and doesn't address the address mismatch.\n\n**Verify before reporting done:** `terraform plan` exits 0 *and* shows no destroy/replace on the bucket. State that the root cause was a state/config address mismatch from the rename, fixed by `state mv` (or a `moved {}` block), with no real resource touched.",
+          "outputSha256": "da0da04f152e983aface2bc6155c53e910b65f1c38a12f157ce14c1b218aca26",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: rename changes address in state, old address seen as gone, new as create (\"old address is gone → destroy it\"). Fix named concretely: `terraform state mv 'module.old_name.aws_s3_bucket.data' 'module.new_name.aws_s3_bucket.data'`, plus moved{} block. Destroy/recreate treated as to-avoid: \"do not let the plan run\", warns against -auto-approve. All criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "The rename changed the resource's *address* in the configuration, not the real bucket. Terraform doesn't know the new address refers to the same existing resource, so the plan shows a destroy of the old address plus a create of the new one. Since the bucket holds real data and nothing about the bucket itself changed, you must relink the existing resource to its new address rather than let the plan touch it.\n\nThe fix is a state move, done before applying:\n\n```bash\nterraform state mv <old_address> <new_address>\n```\n\nFor a module rename, the addresses look like `module.old_name.aws_s3_bucket.data` → `module.new_name.aws_s3_bucket.data`. Getting the exact from/to addresses right matters — run `terraform state list` first to read the real current addresses, don't guess.\n\nAfter the `terraform state mv`, re-run `terraform plan`. The plan must now show **no destroy and no replace** on that bucket. That no-op plan is the verification: if it still shows a destroy/recreate, the state move didn't land on the right address and you go back and fix the addresses — you do not proceed.\n\nWhat not to do, and why:\n\n- **Never `terraform apply -auto-approve` (or accept the plan) to \"get through it.\"** Terraform's plan is not wrong about what it will do — it will genuinely destroy the real bucket and its data and create an empty one. A stateful resource that already exists outside the state being destroyed is real data loss, not a cosmetic plan artifact.\n- **Never delete the resource from state to silence the plan.** `terraform state rm` makes the plan clean by orphaning the real bucket — the data still exists but is now unmanaged, and rebuild collisions/data loss are worse, not better.\n- **Don't rename the module in a way that leaves the old address as an accepted destroy** — the whole point is preserving the existing infrastructure, so the plan must come out as a no-op on that resource.\n\nThen confirm the fix with the same plan command the skill's verification step requires: `terraform validate && terraform plan`, and check explicitly that the bucket shows no destroy/replace. Only then is it done.\n\nReport it as: \"Fixed: module rename made `terraform plan` want to destroy the S3 bucket. Root cause: the rename changed the resource address, so Terraform saw the new address as a new resource. Fix: `terraform state mv module.old.module.old_bucket → module.new.module.new_bucket` to relink the existing bucket to its new address — no apply of the destroy. `terraform plan` now shows no destroy/replace on the bucket.\"",
+          "outputSha256": "dc92807b93fc5d0e9200a96bb316bc91f4f25594395040cad0ca60141114ad6b",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: rename changed resource address, state has old address, plan shows destroy of old + create of new. Fix named concretely: `terraform state mv <old_address> <new_address>` with module example addresses. Destroy/recreate treated as must-avoid: warns never to apply -auto-approve, verifies plan shows no destroy/replace. All criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "The plan is technically correct about what *would* happen, so the fix is to stop Terraform from treating this as a new resource at all — relink the existing real bucket to its new configuration address with a state move, rather than accepting the destroy/recreate.\n\n**Steps:**\n\n1. Confirm it's purely an address change. Run `terraform plan` and read the reason for the replacement — a rename/refactor should show the *same* real object under a changed address, not a changed attribute. If any attribute genuinely changed (bucket name, region, etc.), `state mv` won't help; that's a real replacement and needs a different conversation.\n\n2. Move the state address to match the new configuration:\n\n   ```bash\n   terraform state mv \\\n     module.old.module_name.aws_s3_bucket.data \\\n     module.new.module_name.aws_s3_bucket.data\n   ```\n\n   (Use `aws_s3_bucket` / your actual resource type; adjust the full addresses to match both sides exactly.)\n\n3. Re-run `terraform plan`. It should now show **no changes** for the bucket — the real resource is relinked to its new address, so there's nothing to destroy and nothing to recreate. The bucket and its data are never touched.\n\n4. If you're using remote state, make sure everyone on the team is aware the state address changed, and if you use `terraform_remote_state` or any output references, update those references to the new address too so nothing downstream breaks.\n\n**Why not the alternatives:**\n- `terraform apply -auto-approve` (or any unreviewed apply) here would genuinely destroy the bucket and its contents — Terraform does what the plan says.\n- Adding `lifecycle { prevent_destroy = true }` only makes the apply *fail*; it doesn't fix the address mismatch, and it's easy to remove under pressure later. Use it as a temporary safety net if you want belt-and-suspenders, but `state mv` is the actual fix.\n- Importing the bucket at the new address *after* Terraform has already created the replacement in the plan doesn't work — the plan destroys first; `import` doesn't prevent the destroy step.\n\n**Verify:** `terraform plan` exits 0 and shows no destroy/replace on the bucket, and the bucket's contents are unchanged (spot-check with `aws s3 ls` if you want a pre/post confirmation before applying anything else in the same run).",
+          "outputSha256": "a11a997650a3f4978cd1e99d8bc220e6c2d49c1cf2569397863a8cc5cdc037ee",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: rename changed address, state has old address, plan destroys old/creates new (step 1, 'same real object under a changed address'). Fix named concretely: `terraform state mv module.old... module.new...` (step 2). Destroy/recreate treated as to-avoid: 'rather than accepting the destroy/recreate', and -auto-approve only warned against. No fail criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "You avoid it with `terraform state mv` — relink the existing real bucket to its new configuration address so Terraform sees \"same resource, new address\" instead of \"old resource deleted, new resource created.\"\n\n## What's actually happening\n\nTerraform tracks real infrastructure by its **state address** (e.g. `module.storage.aws_s3_bucket.data`). When you rename the resource *inside the module* — say the resource block or its `for_each`/module call key changes — the address changes. Terraform compares the config's addresses to the state's addresses and concludes:\n\n- address `...old_name` is in state but not in config → **destroy it**\n- address `...new_name` is in config but not in state → **create it**\n\nNothing about the bucket changed; only the address did. But Terraform can't infer that, so its plan — correctly, given what it knows — is destroy+recreate. For an S3 bucket holding real data, that plan would empty and delete the actual bucket. This is not a plan you approve.\n\n## The fix\n\n1. **Get the before/after addresses.**\n   - New address: from the config after your rename in the module.\n   - Old address: from the plan output (the resource shown with `-/+ destroy and then create`, prefixed by the module path it's currently tracked under). If you need to, `terraform state list | grep <bucket>` shows the current address.\n\n2. **Relink the state, not the infrastructure.** For a resource inside a module, include the full module path:\n   ```bash\n   terraform state mv \\\n     'module.storage.aws_s3_bucket.data' \\\n     'module.storage.aws_s3_bucket.bucket'\n   ```\n   If you renamed a *module call*, move the module's address itself:\n   ```bash\n   terraform state mv \\\n     'module.storage' \\\n     'module.object_store'\n   ```\n   `state mv` only rewrites addresses in the state file. It does not touch the real bucket — nothing is read from or written to AWS.\n\n3. **Re-plan and confirm.** Run `terraform plan` again. The bucket should now show **no changes** (or only the intended attribute changes), with no `-/+ destroy and then create` on it.\n\n4. **Do this from a state that's safe to edit.** Ideally your state lives in a remote backend (S3/DynamoDB), while the command runs locally, so it's versioned and locked per operation.\n\n## If the rename is bigger\n\n- **Many addresses at once** → `terraform state mv -dry-run` first to preview, or use `moved` blocks (see below) instead of ad-hoc commands.\n- **Nested module paths** → the move address is the full path including every module segment; a partial path will fail or move the wrong thing.\n\n## The cleaner, reviewable alternative: `moved` blocks\n\nIf your Terraform version is 1.1+, prefer declaring the move in code so it's reviewed in the PR and applies identically for everyone, instead of a one-off CLI command that has to be run by hand on each environment:\n\n```hcl\nmoved {\n  from = module.storage.aws_s3_bucket.data\n  to   = module.storage.aws_s3_bucket.bucket\n}\n```\n\nTerraform then knows the two addresses are the same object, plans no destroy/recreate for it, and updates the state address itself on apply. For a module rename:\n\n```hcl\nmoved {\n  from = module.storage\n  to   = module.object_store\n}\n```\n\nKeep the `moved` block in the config until every environment has applied it at least once, then remove it.\n\n## What not to do\n\n- **Do not** run `terraform apply -auto-approve` (or any unreviewed apply) to \"get past\" the plan. That plan is not wrong about what it will do — it will delete the bucket and its data.\n- **Do not** remove the resource from state (`terraform state rm`) and re-import as a shortcut unless you genuinely need to re-adopt a resource — `state mv` is the right tool for a pure rename and preserves everything else about the tracked resource.\n- **Do not** disable deletion protection or the bucket's versioning to \"make it recoverable\" as a substitute for the fix — fix the address.\n\n## Verify before you're done\n\n- `terraform plan` shows the bucket with no `-/+ destroy and then create`, and no destroy/replace on it at all.\n- The count of resources in state is unchanged (a move, not a delete+add).\n- Bucket versioning / object-lock / lifecycle rules on the bucket are untouched (they should be — `state mv` doesn't modify the resource).\n\nOne sentence on the root cause for the report: the resource address changed under a rename in the module, so Terraform planned a destroy+recreate of an unchanged resource; `terraform state mv` (or a `moved` block) relinks the existing bucket to its new address without touching the real data.",
+          "outputSha256": "adcda2dcdbe7e932107bdcefc3e91e95e111b5a5269ba7d36f2d31844fcc565d",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: state address changed by rename, old address in state not config → destroy, new address in config not state → create (\"What's actually happening\" section). Fix named concretely: `terraform state mv 'module.storage.aws_s3_bucket.data' 'module.storage.aws_s3_bucket.bucket'` plus moved block. Destroy/recreate treated as avoidable: \"This is not a plan you approve\" and warns against `-auto-approve`. All criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `terraform state mv` to relink the existing real bucket to its new configuration address, so Terraform sees the renamed resource as the same object and stops planning a destroy/recreate.\n\nConcretely:\n\n1. Run `terraform plan` and read the exact addresses in the destroy/create pair — the old address (what the state currently tracks) and the new address (what the config now declares).\n\n2. From the root of the config that owns that bucket (or the module path, if the rename happened inside a module), relink the address:\n\n```bash\nterraform state mv \\\n  'module.storage.aws_s3_bucket.old_name' \\\n  'module.storage.aws_s3_bucket.new_name'\n```\n\nIf the rename moved the resource between modules, use the full module-qualified addresses on both sides. Note the single quotes — HCL addresses contain `[]`/`.` characters that the shell would otherwise mangle.\n\n3. Re-run `terraform plan` and confirm the bucket no longer appears in a destroy/replace pair. It should now show as unchanged (or only as in-place attribute updates that were legitimately intended).\n\n4. Only after the plan is clean, apply — and if the plan is not clean, do **not** run `terraform apply -auto-approve` to push the destroy through. The bucket holds real data; an unreviewed apply here genuinely destroys and rebuilds it.\n\nTwo things to get right:\n\n- **`state mv` must run against the same state backend/workspace** the plan read from (same `backend` config, same `TF_WORKSPACE` if applicable). Moving the wrong state's address does nothing useful and can be confusing to unwind.\n- **If the resource moved into or out of a module**, you may need `terraform state mv` twice (once per address component) or use the module-aware form, depending on how much of the path changed. Match the exact addresses the plan printed.\n\nIf for some reason the rename also genuinely changed the bucket's identity (e.g. it's now managed with a different, non-equivalent resource type), `state mv` is not the answer and you should stop and treat it as a real migration with its own review — but for a pure rename in config, `state mv` is the direct, state-preserving fix and never touches the actual S3 objects.",
+          "outputSha256": "fc409c07bb787ea9b18e60029a14cbe28f2e3be62b5b3671ee6fb17b3d7ddc04",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: rename changed config address while state tracks old address, so plan shows destroy/create (step 1 reads old vs new addresses). Fix named concretely: `terraform state mv 'module.storage.aws_s3_bucket.old_name' 'module.storage.aws_s3_bucket.new_name'` to relink existing bucket. Destroy/recreate treated as to-avoid: step 4 says do not run `terraform apply -auto-approve` to push the destroy through, since it destroys real data."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `terraform state mv` to relink the existing bucket to its new configuration address, so Terraform sees the renamed resource as the *same* real bucket and plans no destroy/recreate at all.\n\nConcretely:\n\n1. **Read the plan carefully** to get the exact old and new addresses. It will look like one resource being destroyed at its old address and a different one created at its new address — e.g. `aws_s3_bucket.data` → `module.storage.aws_s3_bucket.data` (or a renamed `resource` block inside the module). The data lives at the *old* address.\n\n2. **Move the state entry** from the old address to the new one:\n\n   ```bash\n   terraform state mv aws_s3_bucket.data module.storage.aws_s3_bucket.data\n   ```\n\n   (If the rename is inside a module that was itself restructured, the addresses may both be module-qualified; use exactly the addresses the plan printed.)\n\n3. **Re-run `terraform plan`** and confirm it shows **no destroy/replace** on the bucket — ideally no changes at all, or only the intended non-destructive diff.\n\n4. **Only then** apply, normally reviewed — never `-auto-approve` this to make the scary plan \"go through.\" The plan was correct: without the state move, apply really would destroy the bucket and its data.\n\nKey points:\n\n- **Do not** accept the destroy+recreate. An S3 bucket with real data being destroyed and recreated is exactly the data-loss case the plan is warning you about; a force-apply just executes it.\n- **Do not** delete the bucket from state (`terraform state rm`) to \"make the error go away\" — that orphans the real bucket from management and is worse, not better.\n- If more than one resource address is affected by the same rename (e.g. the bucket plus its policy/versioning sub-resources), `state mv` each one, or script it, before re-planning.\n- Snapshot the state file (and enable bucket versioning / take a backup) before running `state mv`, in case one of the addresses is wrong.\n\nAfter the state move, `terraform plan` should be clean for that bucket, and the real data is untouched because Terraform now recognizes the existing bucket as the resource the new configuration describes.",
+          "outputSha256": "4f3081c921eb3d9a6dea2d936e18662b43ccb6e9bad30781e6fa49b79c56a5aa",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: rename changed address, state has old address, plan destroys old/creates new (step 1, 'data lives at the old address'). Fix named concretely: `terraform state mv aws_s3_bucket.data module.storage.aws_s3_bucket.data` (step 2). Destroy/recreate treated as to-avoid: 'Do not accept the destroy+recreate... a force-apply just executes it'; warns against -auto-approve. All criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `terraform state mv` to relink the existing real bucket to its new configuration address, so Terraform recognizes it as the same resource rather than a new one. The plan-wants-to-destroy is an address bookkeeping artifact of the rename — the physical bucket is fine, but Terraform now has a config address with no matching entry in state under that name, so it plans to create the new one and destroy the old-looking one.\n\nConcretely:\n\n1. **Confirm the block is otherwise unchanged** — this fix is only correct if the resource's actual arguments are the same and only the address (name, or module path) moved. If you also changed something force-new (bucket name, region), the recreate is real and `state mv` won't help.\n\n2. **Find the old and new addresses.** `terraform plan` or `terraform state list` will show you both the address in state and the address the config now uses.\n\n3. **Move the state entry to the new address:**\n   ```\n   terraform state mv module.old_name.aws_s3_bucket.data module.new_name.aws_s3_bucket.data\n   ```\n   (Adjust for module-source-address and module-destination-address if the module path itself was renamed, and use the `-state`/`-state-out` flags if you're doing a cross-state move.)\n\n4. **Re-run `terraform plan`** and confirm it now shows **no changes** to the bucket — no create, no destroy, no replace. That is the verification that the relink worked. If it still wants to replace, the diff you're seeing is a real attribute change, not the address move.\n\n5. **State-lock and review**: `state mv` writes state, so run it against the correct backend/workspace, and have someone review the plan after. If the team's workflow requires, back up state first (`terraform state pull > backup.tfstate`).\n\nWhat not to do: do **not** accept the destroy+recreate with `terraform -auto-approve` or any unreviewed apply \"to get it through\" — that genuinely destroys the bucket (and its data, since S3 buckets must be emptied before destroy) and rebuilds it empty. And do not paper over it by renaming the S3 bucket resource back, or by removing the resource from config to dodge the destroy — those lose the resource from management rather than preserving it.\n\nThe one-sentence root cause: a rename gives the same real resource a new config address with no corresponding state entry, so Terraform plans to destroy the orphaned-looking old one and create the new one; `terraform state mv` relinks state to config and preserves the bucket and its data.",
+          "outputSha256": "94a79139788de86181747d0bcb80b9bfd8f43222e5225cf271e2549ddafda77b",
+          "promptSha256": "c303c4a472ed0ffac273414fc5a761ff88bb28b234fde947e667e0b9f94054c3",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Cause explained: rename gives new config address with no matching state entry, so Terraform plans destroy of old and create of new (step 1, root-cause sentence). Fix named concretely: `terraform state mv module.old_name.aws_s3_bucket.data module.new_name.aws_s3_bucket.data` (step 3). Destroy/recreate treated as to-avoid: 'do not accept the destroy+recreate with terraform -auto-approve' — warning only, not a fail."
+          },
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "verdict": "fail",
+  "scope": "bundled",
+  "skillDigest": "c4cdab83008a531b087a26b2ce66188ceae2189e1d6b763c45567049aea24cd5",
+  "catalogDigest": "8600b35461e2a92efe928c3011b674fd4afa25360ad47066b44d9253cddb0d7c",
+  "judgePromptVersion": "2026-09-25.1",
+  "runner": "deepseek",
+  "model": "deepseek-chat",
+  "runnerPromptVersion": "2026-09-25.1",
+  "recordedAt": "2026-09-25T17:59:43.797Z",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat"
+}
