@@ -1,0 +1,84 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.html"]
+metadata:
+  origin: authored
+---
+
+# Angular patterns
+
+Idiomatic component/service/change-detection design for current Angular,
+and the anti-patterns to avoid when narrowing the common architecture rules
+to this stack.
+
+## Change detection
+
+- Default new components to `ChangeDetectionStrategy.OnPush`. With
+  signal-based state this is nearly free: reading a signal in a template
+  registers it as a dependency and Angular schedules the check for you, so
+  `OnPush` plus signals rarely needs a manual `markForCheck()` at all.
+- If a component still receives data via `@Input()` mutation of a plain
+  object (not a signal) under `OnPush`, replace the mutation with a new
+  object reference (or migrate the input to a signal) — `OnPush` only
+  re-checks on a new reference/signal change, not a mutated property on the
+  same object.
+- Reach for `ChangeDetectorRef.markForCheck()` only when a value changes
+  outside Angular's own change-detection triggers (a third-party callback,
+  a native DOM event Angular didn't bind) and cannot reasonably be modeled
+  as a signal — not as a routine fix for "the view didn't update".
+
+## Dependency injection and service boundaries
+
+- Scope a service with `providedIn: 'root'` for app-wide singletons; scope
+  it in a route's providers (or a standalone component's `providers`) for
+  state that should reset per-feature/per-route instead of leaking across
+  the whole app's lifetime.
+- Keep a component's class focused on view state and event wiring; move
+  business logic, HTTP calls, and cross-component state into an injectable
+  service. A component `inject()`-ing `HttpClient` directly to build
+  request logic inline is a sign that logic belongs in a service instead.
+- Use Angular's `HttpClient` (with `provideHttpClient()` and interceptors
+  for cross-cutting concerns like auth headers) rather than a bare `fetch`
+  scattered through components — interceptors are the idiomatic place for
+  auth/error handling, not per-call boilerplate.
+
+## RxJS and signal interop
+
+- Prefer `toSignal()`/`toObservable()` (`@angular/core/rxjs-interop`) at
+  the boundary between RxJS streams (HTTP, router events, form
+  `valueChanges`) and signal-based component state, rather than manually
+  subscribing into a plain field.
+- When an `Observable` genuinely needs a manual `.subscribe()` inside a
+  component (rare once `async` pipe / `toSignal()` cover the common case),
+  pipe through `takeUntilDestroyed()` (call it in an injection context, or
+  pass an explicit `DestroyRef`) instead of hand-rolling a `Subject`+
+  `ngOnDestroy` teardown.
+- Do not fan a single source Observable out into multiple independent
+  `.subscribe()` calls that each re-trigger the source's side effects
+  (e.g. a re-fetching HTTP call); share it (`shareReplay`, or convert once
+  with `toSignal()`) so the side effect runs once per meaningful change.
+
+## Forms
+
+- Prefer Angular's typed Reactive Forms (`FormGroup<{...}>`,
+  `FormControl<T>`) over template-driven forms for anything beyond a
+  trivial single-field form — typed forms catch a renamed/removed control
+  at compile time instead of a silent runtime `undefined`.
+- Validate with Angular's built-in or custom `ValidatorFn`s registered on
+  the control, not ad-hoc validation logic scattered through submit-button
+  click handlers.
+
+## Anti-patterns
+
+- Do not reach into a child component's internals via `ViewChild` to call
+  a method or set a field when an `@Input()`/`input()`/signal binding, or
+  an `@Output()`/`output()` event, would express the same interaction
+  declaratively.
+- Do not perform DOM manipulation directly through `ElementRef.nativeElement`
+  in ordinary component code — use Angular's `Renderer2`, template
+  bindings, or a directive when direct DOM access is genuinely required
+  (a third-party widget, focus management); bypassing Angular's rendering
+  layer breaks server-side rendering and change-detection assumptions.
+- Do not put HTTP calls or other side effects inside a `computed()` — a
+  computed's callback can re-run any number of times and must stay pure;
+  side effects belong in `effect()` or an explicit event handler.

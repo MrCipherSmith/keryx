@@ -1,0 +1,82 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.html"]
+metadata:
+  origin: authored
+---
+
+# Angular coding style
+
+Narrows the stack-agnostic style rules to current Angular idiom (standalone
+components, signals, `inject()`). Applies to `*.ts` and component
+`*.html` templates; everything not Angular-specific still comes from the
+common rules this file `extends`.
+
+## Components and files
+
+- Components, directives, and pipes are standalone by default in current
+  Angular — do not set `standalone: false` or write a new `NgModule` to
+  register one unless the project itself is still NgModule-based
+  end-to-end.
+- One component (and its template/styles) per file, named after the
+  component class (`OrderSummary` in `order-summary.ts`, not a generic
+  `component.ts`). Match whatever file-suffix convention (`.component.ts`
+  vs. plain `.ts`) the project's own `angular.json`/existing files already
+  use rather than introducing a second one.
+- Keep a component's template under roughly 60-80 lines before extracting a
+  child component; a template doing significant `@if`/`@for` branching for
+  more than one concern is a sign the branches belong in separate
+  components.
+
+## Dependency injection
+
+- Prefer the `inject()` function over constructor-parameter injection for
+  new code (`private readonly router = inject(Router);`), since it composes
+  cleanly with field initializers and works outside constructors (guards,
+  resolvers, `provide*` factories). Do not mix `inject()` and
+  constructor-parameter injection for different dependencies in the same
+  class — pick one per class, and prefer `inject()` for new classes.
+- `inject()` only works inside an injection context (a constructor, a field
+  initializer, or a call wrapped in `runInInjectionContext`) — do not call
+  it inside a `setTimeout`, a plain async callback, or after the
+  constructor has returned.
+
+## Signals and state
+
+- Use `signal()` for local component/service state that changes over time,
+  `computed()` for values derived from other signals, and `input()`/
+  `model()` for component inputs — do not read/write a signal's backing
+  value directly; always go through `.set()`/`.update()`.
+- Keep a `computed()`'s computation pure (no side effects, no writes to
+  other signals inside it) — if a change needs to trigger a side effect,
+  use `effect()`, not a computed callback abused for its side effect.
+- Do not mirror a signal's value into a plain class field "for convenience"
+  in the template — read the signal directly (`value()`) so Angular's
+  fine-grained reactivity tracks the actual dependency.
+
+## Templates and control flow
+
+- Use the built-in control flow (`@if`, `@for` with a `track` expression,
+  `@switch`) in new templates, not `*ngIf`/`*ngFor`/`*ngSwitch` — unless the
+  surrounding component's own template still uses the structural-directive
+  form throughout, in which case match the existing file rather than
+  mixing both styles in one template.
+- Always give `@for` an explicit `track` expression (the item's own stable
+  id, not `$index`, unless the list has no natural identity) — an untracked
+  or index-tracked loop over data that reorders forces Angular to
+  re-render every row instead of just the ones that changed.
+
+## Naming and typing
+
+- `PascalCase` for component/directive/pipe/service classes, `camelCase`
+  for signals, fields, and methods — a signal's own name should read as the
+  value it holds (`user`, not `userSignal`), since calling it (`user()`)
+  already signals reactivity.
+- Type every `input()`/`output()`/`model()` explicitly
+  (`input<Order | null>(null)`) rather than relying on inference from a
+  loosely-typed default; an untyped input silently becomes `unknown`/`any`
+  at every call site.
+- Avoid `any` in component/service code; when the Angular CLI's generated
+  boilerplate produces a loosely-typed value (e.g. a form's raw value),
+  narrow it explicitly at the boundary instead of propagating `any`
+  through the class.

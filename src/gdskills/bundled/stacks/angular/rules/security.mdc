@@ -1,0 +1,70 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.html"]
+metadata:
+  origin: authored
+---
+
+# Angular security
+
+Stack-specific risks on top of the common security rules, focused on where
+Angular's own sanitization can be bypassed and where DI/routing choices
+create an opening.
+
+## Template injection and sanitization bypass
+
+- Angular auto-sanitizes values bound into `innerHTML`, `href`,
+  style/URL/resource-URL contexts, and script/style properties — do not
+  reach for `DomSanitizer.bypassSecurityTrustHtml`/`bypassSecurityTrustUrl`/
+  `bypassSecurityTrustResourceUrl`/`bypassSecurityTrustScript` on
+  user-supplied or user-influenced content. Those calls tell Angular "trust
+  this value completely, skip sanitization" — reserve them for genuinely
+  static, developer-authored content (a hardcoded SVG, a known-safe
+  asset URL), never for a value that traces back to user input or an
+  external API response.
+- Prefer binding through the normal property/interpolation syntax
+  (`{{ value }}`, `[textContent]`) over `[innerHTML]` for user-controlled
+  text; if `[innerHTML]` is genuinely required for rich content, sanitize
+  server-side or via a vetted sanitizer library rather than trusting
+  Angular's default sanitizer alone for anything beyond simple formatting.
+- Never write directly to `ElementRef.nativeElement.innerHTML` — that
+  bypasses Angular's sanitizer entirely, unlike the `[innerHTML]` template
+  binding which still runs through it.
+
+## HTTP and CSRF
+
+- Send credentials/tokens via `HttpClient` interceptors (`HttpInterceptorFn`
+  or a class-based `HttpInterceptor`), not by hand-appending an
+  `Authorization` header at each call site — a missed call site is a
+  silent auth gap, not a build error.
+- When the backend uses cookie-based sessions, rely on Angular's built-in
+  `XSRF-TOKEN`/`X-XSRF-TOKEN` CSRF handling (`withXsrfConfiguration` /
+  the default cookie name) rather than disabling `withCredentials` or
+  rolling a custom CSRF header scheme, unless the backend's own CSRF
+  contract genuinely requires different header/cookie names — configure
+  those, don't drop the protection.
+
+## Routing and route guards
+
+- Gate any route that requires authentication/authorization with a route
+  guard (`CanActivateFn`/`CanMatchFn`) that actually checks server-verified
+  state (a token's validity, a role from the authenticated session) — never
+  a guard that only checks a client-side flag with no corresponding
+  server-side check on the API the route's data comes from.
+- Do not put secrets, API keys, or backend-only credentials into
+  environment files (`environment.ts`) that ship in the client bundle —
+  anything in `environment.*.ts` is public once built; only put
+  publicly-safe configuration (API base URLs, feature flags) there.
+
+## Dependency injection surface
+
+- Do not widen a service's provider scope to `providedIn: 'root'` just to
+  work around an injection error, when the service holds per-user or
+  per-session state — a root-scoped singleton is shared across the whole
+  app's lifetime (and across users in SSR), so session-scoped data leaking
+  into it is a cross-request data leak, not just a design smell.
+- Validate and narrow data crossing a trust boundary (route params, query
+  params, a form's raw value, a third-party postMessage payload) before
+  using it in a template binding or passing it to a service call — treat
+  router/query-string values as untrusted input, not as pre-validated
+  application state.

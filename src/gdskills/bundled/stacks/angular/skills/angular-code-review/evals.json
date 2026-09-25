@@ -1,0 +1,71 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Angular component diff for RxJS subscription leaks before merging",
+      "Check this Angular PR for OnPush change detection mistakes",
+      "Review this Angular service for unsafe DomSanitizer bypassSecurityTrustHtml usage",
+      "Audit this Angular component's inject() calls for injection context misuse",
+      "Review this standalone Angular component for signal anti-patterns in computed()",
+      "Check this Angular diff for mixing NgModule and standalone components before merge"
+    ],
+    "negative": [
+      "Review this NestJS controller diff for DTO validation and guard usage",
+      "Review this MobX store diff for observable/action correctness",
+      "Review this React component diff for missing hook dependencies",
+      "Add retry and error handling to this Angular service's outgoing HTTP call chain",
+      "Write a TestBed spec asserting this Angular route guard blocks an unauthenticated user",
+      "Review this Node.js Express route diff for injection vulnerabilities"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "flag-subscription-without-teardown",
+      "prompt": "Reviewing this Angular component diff:\n\n```ts\nexport class OrderPanel implements OnInit {\n  private readonly orders = inject(OrdersService);\n  order?: Order;\n\n  ngOnInit() {\n    this.orders.watchOrder(this.orderId).subscribe(order => {\n      this.order = order;\n    });\n  }\n}\n```\n\nWhat, if anything, should be flagged?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags the .subscribe() call in ngOnInit as having no teardown path -- no takeUntilDestroyed, no async pipe, and no ngOnDestroy unsubscribe -- and names the concrete fix (piping through takeUntilDestroyed(), or switching to the async pipe / toSignal()) rather than leaving the subscription open for the component's full lifetime.",
+          "pass_criteria": [
+            "Identifies that the .subscribe() call has no teardown/unsubscribe mechanism and flags it as a leak risk",
+            "Names a concrete fix: takeUntilDestroyed() piped into the subscription, converting to the async pipe, or using toSignal() -- not just 'add cleanup' in the abstract"
+          ],
+          "fail_criteria": [
+            "Says the code has no issues worth flagging",
+            "Proposes fixing the subscription by editing the code directly instead of reporting it as a finding"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag this: `this.orders.watchOrder(this.orderId).subscribe(...)` in ngOnInit has no teardown -- no takeUntilDestroyed(), no async pipe, no ngOnDestroy unsubscribe. As written, the subscription stays open for the component's entire lifetime and beyond if the observable is long-lived (a websocket-backed stream, a polling interval), which is a leak. Fix: pipe it through takeUntilDestroyed() (inject() is already called in a valid field-initializer context here, so takeUntilDestroyed() can be called the same way), e.g. `this.orders.watchOrder(this.orderId).pipe(takeUntilDestroyed()).subscribe(order => this.order = order);` -- or, since this is just mirroring an observable into a field for template use, convert it to `order = toSignal(this.orders.watchOrder(this.orderId))` and drop the manual subscription entirely.",
+        "known_wrong": "This looks fine -- the component subscribes once in ngOnInit and just updates a local field, nothing unusual there. No changes needed.",
+        "vague": "There might be a subscription cleanup concern here worth double-checking before merging.",
+        "subtle_wrong": "Worth a note: I'd suggest adding a comment above the subscribe() call documenting that it's expected to live for the component's full lifetime, so future readers know it's intentional rather than an oversight. That way the review concern is addressed without needing to change the subscription handling itself."
+      }
+    },
+    {
+      "id": "flag-onpush-inplace-mutation",
+      "prompt": "Reviewing this Angular component diff:\n\n```ts\n@Component({\n  selector: 'app-cart',\n  changeDetection: ChangeDetectionStrategy.OnPush,\n  template: `@for (item of items; track item.id) { <div>{{ item.name }}</div> }`\n})\nexport class Cart {\n  items: CartItem[] = [];\n\n  addItem(item: CartItem) {\n    this.items.push(item);\n  }\n}\n```\n\nWhat should be flagged about addItem, given this component is OnPush?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that addItem mutates the items array in place (push) inside an OnPush component, so Angular won't detect the change and re-render the template, and names the fix: replace the array with a new reference (e.g. this.items = [...this.items, item]) or model items as a signal updated via .update()/.set().",
+          "pass_criteria": [
+            "States that `this.items.push(item)` mutates the array in place and that OnPush will not pick up a mutation on the same reference",
+            "Names a concrete fix: reassigning items to a new array (e.g. `this.items = [...this.items, item]`) or converting items to a signal updated with .update()"
+          ],
+          "fail_criteria": [
+            "Says the code is correct as-is with no OnPush-related concern"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag `addItem`: `this.items.push(item)` mutates the existing array in place. Since Cart is OnPush, Angular only re-checks the component on a new input/signal reference or an event inside the component -- a template-bound array pushed to on the same reference produces no reference change for OnPush to notice, so the new item may not render until some unrelated change-detection trigger happens to run. Fix by replacing the reference: `this.items = [...this.items, item];`, or better, model `items` as a signal (`items = signal<CartItem[]>([]);`) and update it with `this.items.update(current => [...current, item]);` so the template's `@for` tracks the signal directly.",
+        "known_wrong": "This is fine -- `items` is declared as a regular array field and push() is the normal way to add to it. OnPush doesn't need anything special here since the template just iterates over items.",
+        "vague": "Something about how items get updated here might not play well with OnPush -- worth a second look.",
+        "subtle_wrong": "I'd flag this but suggest a lighter fix: keep `this.items.push(item)` as-is, and just call `this.cdr.markForCheck()` right after it inside addItem to force the check. That avoids restructuring how items is stored while still making sure OnPush picks up the change on every call site that mutates it."
+      }
+    }
+  ]
+}

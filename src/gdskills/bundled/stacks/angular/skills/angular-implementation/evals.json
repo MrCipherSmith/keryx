@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Create a new standalone Angular component that shows a user's order history",
+      "Add an Angular service using inject() that wraps our orders HTTP API",
+      "Implement this Angular feature with signal()/computed() state instead of plain fields",
+      "Build a typed Angular reactive form for a shipping address with validators",
+      "Add an Angular route guard that redirects unauthenticated users to /login",
+      "Wire up a new Angular component with OnPush change detection reading a signal input",
+      "Convert this NgModule-declared component into a standalone Angular component"
+    ],
+    "negative": [
+      "Create a new Vue component using the Composition API with <script setup>",
+      "Create a new React component that fetches and displays a user's order history",
+      "Write a TestBed spec that calls fixture.detectChanges and asserts the rendered template",
+      "Fix this ng build AOT compile error about a missing NgModule declaration",
+      "Review this Angular component's diff for RxJS subscription leaks",
+      "Fix this tsc type error in our Node.js backend service",
+      "Migrate this MobX store's observable state to use runInAction correctly"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "signal-input-not-input-decorator",
+      "prompt": "I'm adding a new standalone Angular component that receives an `order: Order` value as an input. The rest of this codebase uses signals throughout (signal(), computed(), input()). How should I declare and read this input?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer declares the input with the signal-based `input()` function (e.g. `order = input.required<Order>()` or `order = input<Order | null>(null)`), explicitly typed to Order, and reads it in the class/template by calling it as a function (`order()`), rather than declaring a plain class field decorated with `@Input()`.",
+          "pass_criteria": [
+            "Shows the actual declaration using `input()` or `input.required()` with an explicit `Order` type parameter, not just a statement that 'signal inputs should be used'",
+            "Shows reading the value by calling it as a function (e.g. `order()` in the template or class body), matching the signal-input convention"
+          ],
+          "fail_criteria": [
+            "Declares the input as a plain class field with an `@Input()` decorator as the recommended implementation for this signals-based codebase -- naming `@Input()` only to contrast it with the signal-based approach is not a failure",
+            "Reads the declared signal input as a plain property access (`this.order`) instead of calling it as a function"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Since the rest of the codebase already uses signals, declare the input as a signal input rather than a decorated field:\n\nexport class OrderSummary {\n  order = input.required<Order>();\n}\n\nRead it by calling it, both in the template (`{{ order().total }}`) and in class code (`this.order().id`), the same way you'd read any other signal. If the input is genuinely optional, use `input<Order | null>(null)` instead of `.required()` so callers that omit it get an explicit typed default rather than `undefined` leaking through untyped. Avoid mixing this with an `@Input()` decorator on a plain field in the same component -- that would give the component two different ways to receive data and break the OnPush/signal-tracking benefit the rest of the codebase relies on.",
+        "known_wrong": "Just add a normal `@Input() order!: Order;` field like a typical Angular component -- it's simpler than the new signal syntax and Angular still supports it fine. Read it as `this.order` in the template and class code as usual; there's no real need to switch to `input()` just because other parts of the app use signals elsewhere.",
+        "vague": "Use the signal-based way of declaring inputs that matches how the rest of the codebase already handles component state, and read it consistently with the signal convention.",
+        "subtle_wrong": "I declared it with the newer syntax: `order = input<Order>();` without `.required()` or a default, and read it in the template as `order()!` with a non-null assertion since I know the parent always passes it. This keeps the signal style but skips `.required()` since the assertion is shorter to write, and I left the class-body access as `this.order` in one helper method since it read more naturally there without the parentheses."
+      },
+      "anti_patterns": ["@Input()"]
+    },
+    {
+      "id": "inject-inside-injection-context-only",
+      "prompt": "In an Angular component's ngOnInit, I need to call a service method inside a setTimeout callback. Should I call inject() right there inside the setTimeout callback to grab the service?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that inject() only works inside Angular's injection context (constructor or field initializer, or code wrapped in runInInjectionContext) and must not be called inside a setTimeout callback; instead the service should be injected once in the constructor or as a field initializer and the resulting reference captured in a closure for use inside the callback.",
+          "pass_criteria": [
+            "States that inject() must be called inside an injection context (constructor/field initializer), not inside a setTimeout callback, and that calling it there will fail",
+            "Shows or names the actual fix: inject the service as a class field/constructor (e.g. `private readonly orders = inject(OrdersService);`) before the setTimeout, then reference that already-injected variable inside the callback"
+          ],
+          "fail_criteria": [
+            "Recommends calling inject() directly inside the setTimeout callback as a working solution"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- inject() only works inside Angular's injection context, which is the constructor, a field initializer, or code explicitly wrapped in runInInjectionContext(). A setTimeout callback runs later, outside that context, so calling inject() there throws at runtime instead of returning the service. Inject the service once where the class is constructed and capture the reference in a field, then use that field inside the callback:\n\nexport class OrderPanel {\n  private readonly orders = inject(OrdersService);\n\n  ngOnInit() {\n    setTimeout(() => {\n      this.orders.refresh();\n    }, 500);\n  }\n}\n\nThe closure over `this.orders` is what makes the deferred call work, not calling inject() again inside the timeout.",
+        "known_wrong": "Sure, just call inject(OrdersService) inside the setTimeout callback right where you need it -- that keeps the dependency close to where it's used instead of adding another field to the class. Angular's DI will resolve it fine whenever the callback runs.",
+        "vague": "You shouldn't call inject() just anywhere -- it needs to happen at the right time in the component's lifecycle, so grab the service earlier instead of inside the callback.",
+        "subtle_wrong": "Calling inject() inside the setTimeout callback usually throws, so instead I'd wrap the whole setTimeout callback body in runInInjectionContext(this.injector, () => { const orders = inject(OrdersService); orders.refresh(); }), passing in the component's own EnvironmentInjector -- that way inject() still runs at call time right where it's used, without moving it up to the constructor."
+      }
+    }
+  ]
+}
