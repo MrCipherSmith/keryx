@@ -1,10 +1,11 @@
 // Flow 308 (W8, Lane B, T6): session-state filenames and the append-only log.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { impactEvidenceDataRoot, loadSessionState, saveSessionState } from "./state";
+import { ContainedWriteError } from "../../lib/contained-write";
+import { appendLogRecord, impactEvidenceDataRoot, loadSessionState, saveSessionState } from "./state";
 
 describe("impact-evidence session state", () => {
   let root = "";
@@ -50,5 +51,37 @@ describe("impact-evidence session state", () => {
     await saveSessionState(root, "session-ack", { touched: [], denials: {}, pendingAck: ["src/x.ts"] });
     const state = await loadSessionState(root, "session-ack");
     expect(state.pendingAck).toEqual(["src/x.ts"]);
+  });
+});
+
+describe("impact-evidence state refuses a symlinked data root (R700-03)", () => {
+  let root = "";
+  let outside = "";
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-impact-evidence-state-"));
+    outside = await mkdtemp(path.join(tmpdir(), "keryx-impact-evidence-outside-"));
+    // .metaproject/data/security/impact-evidence -> <outside>
+    await mkdir(path.join(root, ".metaproject", "data", "security"), { recursive: true });
+    await symlink(outside, impactEvidenceDataRoot(root));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  test("appendLogRecord refuses to append through the symlink: nothing lands outside", async () => {
+    await expect(
+      appendLogRecord(root, { sessionId: "s1", event: "injected", files: ["src/x.ts"] }),
+    ).rejects.toBeInstanceOf(ContainedWriteError);
+    const outsideEntries = await readdir(outside);
+    expect(outsideEntries).toEqual([]);
+  });
+
+  test("saveSessionState refuses to write through the symlink: nothing lands outside", async () => {
+    await expect(saveSessionState(root, "s1", { touched: [], denials: {} })).rejects.toBeInstanceOf(ContainedWriteError);
+    const outsideEntries = await readdir(outside);
+    expect(outsideEntries).toEqual([]);
   });
 });

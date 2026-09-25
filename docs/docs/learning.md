@@ -40,6 +40,30 @@ skill, rule, agent, or memory file — see [What is observed, and what is
 never stored](#what-is-observed-and-what-is-never-stored) and [Consent
 guarantees](#consent-guarantees) below.
 
+**Passive observation is on by default in `keryx shell`.** The built-in
+`keryx.learning-observer` hook fires on every session-start, session-end, and
+tool event and appends one redacted, bounded observation line — see [What is
+observed, and what is never stored](#what-is-observed-and-what-is-never-stored)
+for exactly what that line contains — to
+`.metaproject/data/learning/observations/<YYYY-MM-DD>.jsonl`, a local,
+gitignored file. It never writes through a symlink that leaves the project:
+every write goes through the same containment check every other Keryx write
+into your project tree uses, so a `.metaproject/data/learning/observations`
+path that turns out to be (or contain) a symlink pointing outside the
+project is refused rather than followed — nothing lands outside your
+project, ever. Turn it off with either:
+
+```
+keryx hooks disable keryx.learning-observer
+# or, for the whole session:
+KERYX_LEARNING=off
+```
+
+(This is distinct from the [opt-in Claude Code host
+observer](#opt-in-host-observer-claude-code) below, which is a separate,
+still-opt-in integration for when Keryx runs as a hook *inside* a Claude Code
+session rather than as `keryx shell` itself.)
+
 ## CLI reference
 
 | Command | Effect |
@@ -259,6 +283,11 @@ reinforced in **two or more distinct project identities**, each indexed at
 `keryx learn accept --refresh <id>` is the one way to update an already
 -indexed entry: it overwrites only the current project's own entry with the
 source record's live confidence, without changing `status`.
+
+Team-scope learned patterns are currently local-only, not shared through
+git — see [Move skills, rules, agents, and memory between projects and
+machines](guides/portability.md) for why, and for the bundle export/import
+path that moves one to another machine explicitly.
 
 ## Consent guarantees
 

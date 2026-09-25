@@ -18,7 +18,8 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { validateAgentDefinition, type AgentDefinition } from "../agents";
-import { isNotFound, isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
+import { isNotFound, isPathInside, pathExists, withFileLock } from "../lib/fs";
+import { removeContained, writeContained } from "../lib/contained-write";
 import { loadReviewLearningConfigSafe, type ReviewLearningConfig } from "../review/review-learning";
 import { appendDecision } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
@@ -414,10 +415,9 @@ async function removeProposalFiles(root: string, proposalId: string): Promise<vo
   const summaryPath = proposalSummaryPathFor(root, proposalId);
   assertInsideLearningRoot(jsonPath, [learningDataDir(root)]);
   assertInsideLearningRoot(summaryPath, [learningDataDir(root)]);
-  const { rm } = await import("node:fs/promises");
   await withFileLock(projectLockPath(root), async () => {
-    await rm(jsonPath, { force: true });
-    await rm(summaryPath, { force: true });
+    await removeContained(root, path.relative(root, jsonPath));
+    await removeContained(root, path.relative(root, summaryPath));
   });
 }
 
@@ -655,10 +655,10 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
 
         const rewritten = buildProposalFile(target, proposalId, memberIds, cluster, configuredLogins);
         await withFileLock(projectLockPath(root), async () => {
-          await writeFileAtomic(jsonPath, `${JSON.stringify(rewritten, null, 2)}\n`);
+          await writeContained(root, path.relative(root, jsonPath), `${JSON.stringify(rewritten, null, 2)}\n`);
           const summaryPath = proposalSummaryPathFor(root, proposalId);
           assertInsideLearningRoot(summaryPath, [learningDataDir(root)]);
-          await writeFileAtomic(summaryPath, renderSummaryMarkdown(rewritten));
+          await writeContained(root, path.relative(root, summaryPath), renderSummaryMarkdown(rewritten));
         });
       }
 
@@ -696,10 +696,10 @@ export async function runGraduate(root: string, opts: RunGraduateOptions = {}): 
 
     const lockPath = projectLockPath(root);
     await withFileLock(lockPath, async () => {
-      await writeFileAtomic(jsonPath, `${JSON.stringify(proposal, null, 2)}\n`);
+      await writeContained(root, path.relative(root, jsonPath), `${JSON.stringify(proposal, null, 2)}\n`);
       const summaryPath = proposalSummaryPathFor(root, proposalId);
       assertInsideLearningRoot(summaryPath, [learningDataDir(root)]);
-      await writeFileAtomic(summaryPath, renderSummaryMarkdown(proposal));
+      await writeContained(root, path.relative(root, summaryPath), renderSummaryMarkdown(proposal));
     });
 
     const graduationRef = { target, proposalPath: projectRelativeProposalPath(proposalId) };
@@ -1022,7 +1022,7 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
 
   const lockPath = path.join(agentsDir, "agents.lock");
   await withFileLock(lockPath, async () => {
-    await writeFileAtomic(targetPath, renderAgentMarkdown(candidate));
+    await writeContained(root, path.relative(root, targetPath), renderAgentMarkdown(candidate));
   });
 
   const now = opts.now ?? new Date();

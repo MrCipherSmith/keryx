@@ -5,8 +5,9 @@
 //  - deletes daily observation files more than 30 days past their own date;
 //  - expires `status: candidate` records (either scope) whose `ttl.expiresAt`
 //    has passed, with no human decision.
-import { readdir, rm } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { removeContained } from "../lib/contained-write";
 import { observationsDir } from "./paths";
 import { listPatterns, updatePattern, type StoreEnvOptions } from "./store";
 import type { LearnedPattern, LearningScope } from "./types";
@@ -66,7 +67,7 @@ async function pruneObservationFiles(root: string, now: Date, dryRun: boolean, e
     if (ageDays <= OBSERVATION_TTL_DAYS) continue;
     if (!dryRun) {
       try {
-        await rm(path.join(dir, name), { force: true });
+        await removeContained(root, path.relative(root, path.join(dir, name)));
       } catch (error) {
         // One file's removal failing must not skip the rest of the directory.
         errors.push(`failed to delete observation file "${name}": ${error instanceof Error ? error.message : String(error)}`);

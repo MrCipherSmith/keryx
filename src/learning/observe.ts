@@ -18,9 +18,11 @@
 // byte-for-byte in sync with `builtins.ts`'s `LearningObservation`/
 // `LearningObservationSink`.
 import { createHash } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, toPosix, withFileLock } from "../lib/fs";
+import { appendContained, ContainedWriteError } from "../lib/contained-write";
+import { refuseEscapingSymlink } from "../lib/symlink-safety";
 import { assertInsideLearningRoot, learningDataDir, observationFilePath, observationsDir } from "./paths";
 import { resolveProjectIdentity, type ResolveProjectIdentityDeps } from "./identity";
 import { relativizePathForPreview, scrubPathsInText } from "./preview-scrub";
@@ -440,10 +442,27 @@ async function countLines(filePath: string): Promise<number> {
  * date of `line.observedAt`. Bounded at `deps.maxLinesPerFile` (default
  * 5000) lines per daily file: when the day's file is full, rolls to the next
  * UTC day's file early; when that is full too, the line is dropped (counted
- * via `deps.warn`, never thrown). File-locked
- * (`observations/.append.lock`), append-only (`appendFile`, never a
- * rewrite), and the target is asserted inside `learningDataDir` before any
- * write.
+ * via `deps.warn`, never thrown). File-locked (`observations/.append.lock`),
+ * append-only, and the target is both lexically asserted inside
+ * `learningDataDir` (`assertInsideLearningRoot`, which is lexical only — see
+ * below) AND, R700-03, written through `appendContained` — a symlink
+ * ANYWHERE on the chain (a committed
+ * `.metaproject/data/learning/observations -> /outside`, in particular) is
+ * refused rather than followed.
+ *
+ * `assertInsideLearningRoot` alone is not enough: it is a pure string
+ * comparison on the already-joined path and has no idea a directory
+ * component resolves elsewhere on disk. Two independent guards close that:
+ * (1) BEFORE `withFileLock` ever runs — its own `mkdir` on the observations
+ * directory happens unconditionally, so a symlinked directory must be
+ * refused earlier than that, not just at the final `appendFile` — this
+ * walks every segment of `dir` with `refuseEscapingSymlink` and drops the
+ * observation (never throws) if any segment's resolved real path leaves
+ * `root`; (2) the actual append goes through `appendContained`, which reruns
+ * the full containment walk on the file path itself and opens it with
+ * `O_NOFOLLOW`, closing the race between (1) and the write. Never throws:
+ * every failure here (refusal included) is reported through `deps.warn` and
+ * the observer moves on — it must never break a shell session.
  */
 export async function appendObservation(root: string, line: ObservationEvent, deps: AppendObservationDeps = {}): Promise<void> {
   const warn = deps.warn ?? ((): void => {});
@@ -454,14 +473,28 @@ export async function appendObservation(root: string, line: ObservationEvent, de
   const serialized = `${JSON.stringify(line)}\n`;
 
   try {
+    const relDir = path.relative(path.resolve(root), dir);
+    const dirRefusal = await refuseEscapingSymlink(root, relDir);
+    if (dirRefusal) {
+      warn(`learning observation dropped: ${dirRefusal}`);
+      return;
+    }
+
     let date = startDate;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const filePath = observationFilePath(root, date);
       assertInsideLearningRoot(filePath, [learningDataDir(root)]);
       const wrote = await withFileLock(lockPath, async () => {
-        await mkdir(dir, { recursive: true });
         if ((await countLines(filePath)) >= maxLines) return false;
-        await appendFile(filePath, serialized, "utf8");
+        try {
+          await appendContained(root, path.relative(root, filePath), serialized);
+        } catch (error) {
+          if (error instanceof ContainedWriteError) {
+            warn(`learning observation append refused: ${error.message}`);
+            return false;
+          }
+          throw error;
+        }
         return true;
       });
       if (wrote) return;

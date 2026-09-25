@@ -2,10 +2,11 @@
 // every human action that changes a record's status appends one line here,
 // so `auditAcceptedRecords` can prove "no learned pattern reaches `accepted`
 // without a recorded human accept action".
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock } from "../lib/fs";
-import { decisionsLogPath, projectLockPath, userDecisionsLogPath, userLockPath } from "./paths";
+import { appendContained } from "../lib/contained-write";
+import { decisionsLogPath, projectLockPath, userDecisionsLogPath, userLearningDir, userLockPath } from "./paths";
 import { listPatterns } from "./store";
 import type { LearningScope } from "./types";
 
@@ -62,9 +63,14 @@ export async function appendDecision(root: string, decision: AppendDecisionInput
   };
   const logPath = logPathFor(root, options);
   const lockPath = lockPathFor(root, options);
+  // R700-04: project scope is contained under the project `root`; user scope
+  // is contained under `userLearningDir` instead — `~/.keryx/learning/` is
+  // outside any project tree, so `root` itself would never be the right
+  // containment boundary for it.
+  const containmentRoot = options.scope === "project" ? root : userLearningDir(envOf(options), options.homeDir);
+  const rel = path.relative(containmentRoot, logPath);
   await withFileLock(lockPath, async () => {
-    await mkdir(path.dirname(logPath), { recursive: true });
-    await appendFile(logPath, `${JSON.stringify(record)}\n`, "utf8");
+    await appendContained(containmentRoot, rel, `${JSON.stringify(record)}\n`);
   });
 }
 

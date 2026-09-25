@@ -7,9 +7,10 @@
 // surface), not `.metaproject/data/integrations/install-state/<runtimeId>.json`
 // (W5-b's).
 
-import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
+import { removeContained, writeContained } from "../../lib/contained-write";
 import { NotARegularFileError, sha256OfRegularFile as sha256OfFile, type InstallState, type InstalledModuleRecord } from "../../integrations/install-state";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import installManifestSchemaJson from "../../../docs/requirements/keryx-agent-platform-expansion/schemas/install-manifest.schema.json" with {
@@ -246,11 +247,10 @@ export async function writeSkillsInstallState(
   const file = skillsInstallStatePath(repoRoot, target);
 
   if (installedModules.length === 0) {
-    await rm(file, { force: true });
+    await removeContained(repoRoot, path.relative(repoRoot, file));
     return;
   }
 
-  await mkdir(path.dirname(file), { recursive: true });
   const state: InstallState = {
     schemaVersion: SKILLS_INSTALL_STATE_SCHEMA_VERSION,
     target,
@@ -258,5 +258,5 @@ export async function writeSkillsInstallState(
     installedModules,
     recordedAt: new Date().toISOString(),
   };
-  await writeFile(file, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await writeContained(repoRoot, path.relative(repoRoot, file), `${JSON.stringify(state, null, 2)}\n`);
 }

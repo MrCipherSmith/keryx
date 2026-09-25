@@ -7,9 +7,9 @@
 // apply, and append a changelog line.
 
 import path from "node:path";
-import { mkdir, readFile, realpath } from "node:fs/promises";
-import { appendFile } from "node:fs/promises";
-import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../../lib/fs";
+import { readFile, realpath } from "node:fs/promises";
+import { isPathInside, pathExists, withFileLock } from "../../lib/fs";
+import { appendContained, writeContained } from "../../lib/contained-write";
 import { readJsonObjectFile } from "../../lib/json";
 import { computeAuditInternal } from "./index";
 import type { ProposalEdit } from "./types";
@@ -155,7 +155,7 @@ async function applyJsonEdit(
   } catch {
     throw new Error(`Cannot apply proposal: result is not valid JSON for ${edit.path}; refusing to write.`);
   }
-  await writeFileAtomic(absolute, serialized);
+  await writeContained(rootReal, path.relative(rootReal, absolute), serialized);
 }
 
 function countOccurrences(haystack: string, needle: string): number {
@@ -216,7 +216,7 @@ async function applyTextEdit(
       throw new Error(`Cannot apply proposal: result is not valid JSON for ${edit.path}; refusing to write.`);
     }
   }
-  await writeFileAtomic(absolute, next);
+  await writeContained(rootReal, path.relative(rootReal, absolute), next);
 }
 
 /**
@@ -288,9 +288,8 @@ export async function applyAuditProposal(
 
     const changelog = changelogPath(rootReal);
     await assertContained(rootReal, changelog, "changelog file");
-    await mkdir(dataRoot(rootReal), { recursive: true });
-    await appendFile(changelog, `${JSON.stringify(result)}\n`, "utf8");
-    await writeFileAtomic(marker, `${JSON.stringify(result, null, 2)}\n`);
+    await appendContained(rootReal, path.relative(rootReal, changelog), `${JSON.stringify(result)}\n`);
+    await writeContained(rootReal, path.relative(rootReal, marker), `${JSON.stringify(result, null, 2)}\n`);
     return result;
   });
 }

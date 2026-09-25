@@ -8,6 +8,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  appendContained,
   ContainedWriteError,
   mkdirContained,
   removeContained,
@@ -150,6 +151,47 @@ describe("writeContained", () => {
     await symlink(path.join(root, "linked-dir"), path.join(root, "alias"));
     await writeContained(root, "alias/inside.txt", "ok\n");
     expect(await readFile(path.join(root, "linked-dir/inside.txt"), "utf8")).toBe("ok\n");
+  });
+});
+
+describe("appendContained (R700-03)", () => {
+  test("creates the file and parent directories, then appends", async () => {
+    await appendContained(root, "a/b/log.jsonl", "one\n");
+    await appendContained(root, "a/b/log.jsonl", "two\n");
+    expect(await readFile(path.join(root, "a/b/log.jsonl"), "utf8")).toBe("one\ntwo\n");
+  });
+
+  test("appends to an existing file without truncating it", async () => {
+    await writeContained(root, "log.jsonl", "existing\n");
+    await appendContained(root, "log.jsonl", "new\n");
+    expect(await readFile(path.join(root, "log.jsonl"), "utf8")).toBe("existing\nnew\n");
+  });
+
+  test("refuses a symlinked PARENT directory that resolves outside root: nothing lands outside", async () => {
+    await symlink(outsideDir, path.join(root, "linked-dir"));
+    expect(await reasonOf(() => appendContained(root, "linked-dir/log.jsonl", "x\n"))).toBe("escaping-symlink");
+    const outsideEntries = await import("node:fs/promises").then((m) => m.readdir(outsideDir));
+    expect(outsideEntries).toEqual([]);
+  });
+
+  test("refuses a symlinked FINAL file that resolves outside root: nothing lands outside", async () => {
+    const outsideFile = path.join(outsideDir, "secret.jsonl");
+    await writeFile(outsideFile, "TOP SECRET\n", "utf8");
+    await symlink(outsideFile, path.join(root, "escape.jsonl"));
+    expect(await reasonOf(() => appendContained(root, "escape.jsonl", "x\n"))).toBe("escaping-symlink");
+    expect(await readFile(outsideFile, "utf8")).toBe("TOP SECRET\n");
+  });
+
+  test("refuses a dangling symlink on the path", async () => {
+    await symlink(path.join(outsideDir, "does-not-exist"), path.join(root, "broken.jsonl"));
+    expect(await reasonOf(() => appendContained(root, "broken.jsonl", "x\n"))).toBe("dangling-symlink");
+  });
+
+  test("allows a symlink that resolves back inside root, appending through it", async () => {
+    await mkdir(path.join(root, "linked-dir"));
+    await symlink(path.join(root, "linked-dir"), path.join(root, "alias"));
+    await appendContained(root, "alias/inside.jsonl", "ok\n");
+    expect(await readFile(path.join(root, "linked-dir/inside.jsonl"), "utf8")).toBe("ok\n");
   });
 });
 

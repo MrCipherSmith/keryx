@@ -1,6 +1,6 @@
 // W3-AC1 (and D3 edit-field/host-adapter coverage) for the Observe stage.
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { BUILTIN_HOOK_REGISTRATIONS } from "../harness/hooks/builtins";
@@ -800,6 +800,36 @@ describe("appendObservation bounding (5000 lines/day, rolls to next UTC day)", (
       expect(day1).toHaveLength(1);
       expect(day2).toHaveLength(1);
       expect(warnings.some((w) => w.includes("dropped"))).toBe(true);
+    });
+  });
+});
+
+describe("appendObservation refuses a symlinked observations directory (R700-03)", () => {
+  test("a committed observations symlink pointing outside the project is refused: nothing lands there", async () => {
+    await withTempRoot(async (root) => {
+      const outside = await mkdtemp(path.join(tmpdir(), "keryx-learning-outside-"));
+      try {
+        // .metaproject/data/learning/observations -> <outside>, exactly the
+        // R700-03 PoC: a repo commits this symlink and the observer appends
+        // through it on every session.
+        await mkdir(path.join(root, ".metaproject", "data", "learning"), { recursive: true });
+        await symlink(outside, observationsDir(root));
+
+        const warnings: string[] = [];
+        const line = await buildObservationLine(
+          root,
+          { event: "session-start", tool: null, sessionId: "s1", toolUseId: null, cwd: root, observedAt: "2026-09-25T12:00:00.000Z" },
+          {},
+        );
+        expect(line).not.toBeNull();
+        await appendObservation(root, line!, { warn: (m) => warnings.push(m) });
+
+        const outsideEntries = await readdir(outside);
+        expect(outsideEntries).toEqual([]);
+        expect(warnings.some((w) => w.includes("dropped"))).toBe(true);
+      } finally {
+        await rm(outside, { recursive: true, force: true });
+      }
     });
   });
 });

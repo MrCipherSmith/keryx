@@ -5,9 +5,10 @@
 // `options.force` is set — the drift-safety rule `doctor`/`uninstall` also
 // enforce.
 
-import { copyFile, mkdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
+import { writeContained } from "../../lib/contained-write";
 import { destinationRootsForTarget, type InstallPlan } from "./plan";
 import {
   NotARegularFileError,
@@ -164,8 +165,8 @@ export async function applyInstall(
         }
       }
 
-      await mkdir(path.dirname(destinationAbs), { recursive: true });
-      await copyFile(path.join(sourceRoot, file.source), destinationAbs);
+      const sourceBytes = await readFile(path.join(sourceRoot, file.source));
+      await writeContained(destRoot, file.destination, sourceBytes);
       written.push(file.destination);
       writtenPaths.push(file.destination);
       const hash = await sha256OfFile(destRoot, file.destination);
