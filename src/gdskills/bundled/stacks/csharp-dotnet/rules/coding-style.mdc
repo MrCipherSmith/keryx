@@ -8,8 +8,11 @@ metadata:
 # C#/.NET coding style
 
 Narrows `core-common-rules`' stack-agnostic style rules to modern C#
-idiom (nullable reference types on by default since C# 10/.NET 6;
-primary constructors and collection expressions since C# 12/.NET 8).
+idiom (new project templates enable nullable reference types by
+default since .NET 6/C# 10 — the language itself still defaults
+annotations/warnings off, so an existing project may need `<Nullable>
+enable</Nullable>` added explicitly; primary constructors and
+collection expressions since C# 12/.NET 8).
 Applies only to `*.cs` files — everything not C#-specific still comes
 from the common rules this file `extends`.
 

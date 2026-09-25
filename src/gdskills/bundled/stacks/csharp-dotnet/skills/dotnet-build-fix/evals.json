@@ -45,8 +45,7 @@
         "known_wrong": "Easiest fix: just change `order.Total` to `order!.Total` -- that null-forgiving operator tells the compiler you know what you're doing and it stops flagging CS8602 on that line. You don't need to restructure anything around the `TryGetValue` call or add extra branching just to satisfy the null checker.",
         "vague": "Handle the case where the lookup doesn't find anything, and the null warning should go away.",
         "subtle_wrong": "Check `orders.ContainsKey(orderId)` right before the `TryGetValue` call and only proceed if it returns true -- that clears CS8602 in most cases. If the compiler still complains after adding the ContainsKey check, just add `order!.Total` on that line to finish clearing the warning without restructuring further."
-      },
-      "anti_patterns": ["null-forgiving operator"]
+      }
     },
     {
       "id": "no-suppressmessage-analyzer",

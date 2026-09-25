@@ -59,7 +59,7 @@
             "Explains why this is more reliable than a fixed delay -- it doesn't depend on guessing how long the background work takes."
           ],
           "fail_criteria": [
-            "Recommends a fixed Thread.Sleep or Task.Delay wait, taken before or instead of a real completion signal, as the way to wait for the background operation to finish. Mentioning Thread.Sleep/Task.Delay only to warn against it is not a failure."
+            "Recommends a fixed Thread.Sleep or Task.Delay wait -- before, instead of, or added alongside/after a real completion signal as extra insurance -- as part of how the test waits for the background operation to finish. A real completion signal needs no delay bolted onto it; recommending one anyway, for any reason, is the anti-pattern this scenario is about. Mentioning Thread.Sleep/Task.Delay only to warn against it is not a failure."
           ]
         }
       ],
