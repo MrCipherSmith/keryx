@@ -54,6 +54,7 @@ import {
   profileKey,
   type ModelProfile,
 } from "../harness/routing/model-profile";
+import { readTaskCostStore, taskCostLookupFrom, type TaskCostLookup } from "../harness/routing/task-cost";
 import { mountFilterList, type KeypressEvent } from "./filter-list";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -98,18 +99,48 @@ export function routingCategoryRows(
   }));
 }
 
+/** `$1.23`/`$0.0041` — enough precision to distinguish two cheap models, never scientific notation. Shared with the CLI's own formatter shape (`src/commands/routing.ts`). */
+function formatUsdShort(value: number): string {
+  const digits = value < 0.01 ? 4 : 2;
+  return `$${value.toFixed(digits)}`;
+}
+
+/**
+ * Flow 341 (AC7) — the per-task median cost suffix for a `"derived"` row,
+ * when a matching `task-cost.ts` stats entry exists: `" · ~$0.04/task (n=37)"`.
+ * Empty for every other row (nothing recorded yet, a non-`"model"`
+ * assignment, or the row was not resolved by the `derived` layer) — never a
+ * placeholder, so an operator with no history sees the row exactly as before
+ * this flow.
+ */
+export function describeTaskCostSuffix(row: RoutingCategoryRow, lookup: TaskCostLookup): string {
+  if (row.source !== "derived" || row.assignment.kind !== "model") return "";
+  const stats = lookup(row.assignment.providerId, row.assignment.modelId, row.category);
+  if (stats === undefined || stats.medianCostUsd === undefined) return "";
+  return `  ·  ~${formatUsdShort(stats.medianCostUsd)}/task (n=${stats.n})`;
+}
+
 /**
  * The list tab's rendered lines. Exported so a test can hold it against the
  * CLI's own `list` output shape. `sessionProviderId` (flow 327) is optional —
  * omitted, a `"derived"` row (which cannot occur without a `derived` layer
  * anyway) would fall back to a bare `describeAssignment`, but no existing
  * test constructs that state, so this stays behavior-identical for AC14.
+ * `taskCostFor` (flow 341, optional and additive) drives
+ * `describeTaskCostSuffix`; omitted, every line is byte-identical to before
+ * that flow.
  */
-export function formatRoutingListLines(rows: readonly RoutingCategoryRow[], selected: number, sessionProviderId?: string): string[] {
+export function formatRoutingListLines(
+  rows: readonly RoutingCategoryRow[],
+  selected: number,
+  sessionProviderId?: string,
+  taskCostFor: TaskCostLookup = () => undefined,
+): string[] {
   return rows.map((row, index) => {
     const mark = index === selected ? ">" : " ";
     const suffix = row.rejected !== undefined ? `  (${describeRejectionNotice(row.rejected, row.assignment)})` : "";
-    return `${mark} ${row.category.padEnd(12)} ${describeCategoryResolution(row, sessionProviderId)}  [${row.source}]${suffix}`;
+    const costSuffix = describeTaskCostSuffix(row, taskCostFor);
+    return `${mark} ${row.category.padEnd(12)} ${describeCategoryResolution(row, sessionProviderId)}  [${row.source}]${suffix}${costSuffix}`;
   });
 }
 
@@ -181,6 +212,8 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   let providers: readonly FlatPickerProvider[] = [];
   /** Flow 327 (AC12) — the operator's model-profile catalogue, reloaded alongside the routing tables. */
   let profiles: Record<string, ModelProfile> = {};
+  /** Flow 341 (AC7) — the real measured task-cost store, reloaded alongside the routing tables; `formatRoutingListLines` reads from it via `taskCostFor`. */
+  let taskCostFor: TaskCostLookup = () => undefined;
   let projectIsUntrusted = false;
   let selected = 0;
   let statusText = "enter to pick a model for the selected category";
@@ -198,7 +231,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   const selectedRow = (): RoutingCategoryRow | undefined => rows[selected];
 
   const listLines = (): string[] =>
-    rows.length === 0 ? ["Reading routing table…"] : formatRoutingListLines(rows, selected, options.session?.providerId);
+    rows.length === 0 ? ["Reading routing table…"] : formatRoutingListLines(rows, selected, options.session?.providerId, taskCostFor);
 
   const paintList = (): void => {
     // Guarded on `currentTab`, not `host.handle?.activeTab()` (which is
@@ -237,11 +270,12 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     // Flow 327 (AC10/AC12) — the `derived` layer, built from the SAME
     // provider list just fetched for the picker/connected-check (no extra
     // probe), against the session's own provider only (PRD §6.3).
+    taskCostFor = taskCostLookupFrom(readTaskCostStore(location.userConfigDir));
     let derived: RoutingTable = {};
     if (options.session !== undefined) {
       const sessionProvider = providers.find((p) => p.name === options.session!.providerId);
       const models = sessionProvider?.models ?? [options.session.modelId];
-      derived = deriveDefaultTable(options.session.providerId, models, profiles, options.session.modelId);
+      derived = deriveDefaultTable(options.session.providerId, models, profiles, options.session.modelId, taskCostFor);
     }
     rows = routingCategoryRows(project, user, connected, derived, available);
     selected = Math.min(selected, Math.max(0, rows.length - 1));

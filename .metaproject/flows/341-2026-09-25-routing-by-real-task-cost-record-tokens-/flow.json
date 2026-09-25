@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "341",
+  "slug": "routing-by-real-task-cost-record-tokens-",
+  "title": "Routing by real task cost: record tokens and cost per model and category, and let the derived table prefer the model that is actually cheaper per task",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T19:41:15.605Z",
+  "updatedAt": "2026-09-25T20:03:36.320Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T20:03:21.865Z",
+      "note": "src/harness/routing/task-cost.ts: TaskCostRecord + statsForKey/allStats/statsFor, keyed by (providerId,modelId,category); 26 hermetic pure-function tests in task-cost.test.ts, no fs/network"
+    },
+    "AC2": {
+      "at": "2026-09-25T20:03:22.193Z",
+      "note": "readTaskCostStore/writeTaskCostStore/appendTaskCostRecord via ensureKeryxSubdir(['routing'])+writeOwnerOnlyFileAtomic (0600), MAX_SAMPLES_PER_KEY=200 rolling window; missing/malformed file degrades to {} (tested)"
+    },
+    "AC3": {
+      "at": "2026-09-25T20:03:22.522Z",
+      "note": "tui-shell.ts wraps io.onUsage per turn to sum THIS turn's tokens, calls recordTurnTaskCostBestEffort in the .finally() with success=!turnFailed; behavioral test in tui-shell.test.ts + wiring pin in task-cost-shell-wiring.test.ts"
+    },
+    "AC4": {
+      "at": "2026-09-25T20:03:22.849Z",
+      "note": "deriveDefaultTable gains optional taskCostLookup; preferByMeasuredCost applies only when n>=MIN_MEASURED_TASKS(20) on both sides and both medianCostUsd known, and only flips to the stronger candidate when the lighter one is NOT strictly cheaper"
+    },
+    "AC5": {
+      "at": "2026-09-25T20:03:23.202Z",
+      "note": "rule documented inline in derive-default-table.ts (preferByMeasuredCost doc comment); 6 dedicated tests: below-bar, at-bar-cheaper, at-bar-not-cheaper, equal-cost, unknown-cost, no-lookup"
+    },
+    "AC6": {
+      "at": "2026-09-25T20:03:31.308Z",
+      "note": "keryx routing stats [--json] added to src/commands/routing.ts; docs updated in cli-reference.md, help-groups.ts, commands-by-task.md (regenerated); 4 CLI tests in routing.test.ts"
+    },
+    "AC7": {
+      "at": "2026-09-25T20:03:31.651Z",
+      "note": "describeTaskCostSuffix + formatRoutingListLines threading in routing-inspector.ts; shown only for source==='derived' with known stats; 5 tests in routing-inspector.test.ts"
+    },
+    "AC8": {
+      "at": "2026-09-25T20:03:31.994Z",
+      "note": "bun run typecheck clean, bun run lint clean, task-cost.test.ts (26 pass), derive-default-table.test.ts (35 pass), tui-shell.test.ts (159 pass), routing.test.ts (32 pass), routing-inspector.test.ts + task-cost-shell-wiring.test.ts (20 pass), scripts/opentui-tests-no-skips.ts src/tui (1320 pass, 0 skipped)"
+    },
+    "AC9": {
+      "at": "2026-09-25T20:03:36.320Z",
+      "note": "live check recorded in flow journal 2026-09-25T20:01: real appendTaskCostRecord seed into the real per-user data dir, keryx routing stats + --json against it, verified 0600, then cleaned up"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered: read config-dir.ts, model-profile.ts, table.ts, derive-default-table.ts, routing.ts, routing-inspector.ts, tui-shell.ts's turn dispatch; confirmed PR #737 (routing classifier) not yet merged to origin/main"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented task-cost.ts (record/aggregate/store), derive-default-table.ts cost override, keryx routing stats CLI, /routing per-task cost display, tui-shell.ts recording hook"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "task-cost.test.ts, derive-default-table.test.ts additions, routing.test.ts additions, routing-inspector.test.ts additions, tui-shell.test.ts addition, task-cost-shell-wiring.test.ts — all passing"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T19:41:15.605Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T19:47:04.291Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T19:47:07.439Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T20:03:10.814Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T20:03:11.139Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T20:03:11.450Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T20:03:21.865Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/routing/task-cost.ts: TaskCostRecord + statsForKey/allStats/statsFor, keyed by (providerId,modelId,category); 26 hermetic pure-function tests in task-cost.test.ts, no fs/network (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:22.193Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: readTaskCostStore/writeTaskCostStore/appendTaskCostRecord via ensureKeryxSubdir(['routing'])+writeOwnerOnlyFileAtomic (0600), MAX_SAMPLES_PER_KEY=200 rolling window; missing/malformed file degrades to {} (tested) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:22.522Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tui-shell.ts wraps io.onUsage per turn to sum THIS turn's tokens, calls recordTurnTaskCostBestEffort in the .finally() with success=!turnFailed; behavioral test in tui-shell.test.ts + wiring pin in task-cost-shell-wiring.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:22.849Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: deriveDefaultTable gains optional taskCostLookup; preferByMeasuredCost applies only when n>=MIN_MEASURED_TASKS(20) on both sides and both medianCostUsd known, and only flips to the stronger candidate when the lighter one is NOT strictly cheaper (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:23.202Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: rule documented inline in derive-default-table.ts (preferByMeasuredCost doc comment); 6 dedicated tests: below-bar, at-bar-cheaper, at-bar-not-cheaper, equal-cost, unknown-cost, no-lookup (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:31.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: keryx routing stats [--json] added to src/commands/routing.ts; docs updated in cli-reference.md, help-groups.ts, commands-by-task.md (regenerated); 4 CLI tests in routing.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:31.652Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: describeTaskCostSuffix + formatRoutingListLines threading in routing-inspector.ts; shown only for source==='derived' with known stats; 5 tests in routing-inspector.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:31.995Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun run typecheck clean, bun run lint clean, task-cost.test.ts (26 pass), derive-default-table.test.ts (35 pass), tui-shell.test.ts (159 pass), routing.test.ts (32 pass), routing-inspector.test.ts + task-cost-shell-wiring.test.ts (20 pass), scripts/opentui-tests-no-skips.ts src/tui (1320 pass, 0 skipped) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:03:36.320Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: live check recorded in flow journal 2026-09-25T20:01: real appendTaskCostRecord seed into the real per-user data dir, keryx routing stats + --json against it, verified 0600, then cleaned up (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T20:03:21.865Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:22.193Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:22.522Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:22.849Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:23.202Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:31.308Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:31.651Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:31.994Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    },
+    {
+      "at": "2026-09-25T20:03:36.320Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:49ce9e49a82af3c29a041c52a99120ff8d1735973dba1c62d0ca88ed2bfdfe04"
+    }
+  ]
+}
