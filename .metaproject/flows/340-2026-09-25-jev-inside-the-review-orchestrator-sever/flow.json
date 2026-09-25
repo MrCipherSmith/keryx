@@ -8,9 +8,9 @@
   "id": "340",
   "slug": "jev-inside-the-review-orchestrator-sever",
   "title": "Jev inside the review orchestrator: severity calibration, duplicate merge, verifier queue order",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-25T19:41:13.349Z",
-  "updatedAt": "2026-09-25T20:02:52.381Z",
+  "updatedAt": "2026-09-25T20:06:27.344Z",
   "source": {
     "type": "description",
     "ref": null
@@ -59,7 +59,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/742"
   },
   "tasks": [
     {
@@ -210,6 +210,11 @@
       "at": "2026-09-25T20:02:52.381Z",
       "event": "ac-confirmed",
       "detail": "AC10: Live: env -u OPENROUTER_API_KEY keryx review jev-triage --report .metaproject/flows/327-*/reviews/327-r01 --max-calls 25 --json against the saved OpenRouter key (never printed). 9 Jev calls total (well under ~40), cost $0.00032. 8 blocker/major findings scored: severity_check all p 0.77-0.83, 0 flagged (correct — all 8 are genuine trigger+outcome majors/blockers). 9 merge_candidates found by shared file; hand-labelled: MRG2 F-001<->F-009 p=0.61 and MRG3 F-002<->F-003 p=0.58 are NOT true duplicates (different root causes sharing a file) — Jev leans a bit high on same-file pairs; MRG1 F-001<->F-006 p=0.21 and MRG9 F-006<->F-009 p=0.24 correctly scored low (different specific defects). verify_order lowest-first: F-007/F-009 (p=0.30) ahead of F-010 (p=0.46). Reported in full in the PR description and flow journal. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:06:27.344Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/742 (warning: PR is not a draft) (base: main)"
     }
   ],
   "signatures": [
@@ -323,5 +328,6 @@
       "criterion": "AC10",
       "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
