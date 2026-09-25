@@ -1,6 +1,6 @@
 ---
 name: interviewer
-description: "Use when a request is ambiguous and must be pinned down BEFORE any context is collected — the entry-point interview that turns a vague or expensive ask into a scoped brief. This is the `custom`-intent gate job-orchestrator runs at 0.1.5. NOT for: clarifying implementation specifics AFTER context is already collected — use `interview` instead."
+description: "Use when a request is ambiguous and must be pinned down BEFORE any context is collected — the entry-point interview that clarifies the real requirements and turns a vague or expensive ask into a scoped brief. This is the `custom`-intent gate job-orchestrator runs at 0.1.5. NOT for: clarifying implementation specifics AFTER context is already collected — use `interview` instead."
 triggers:
   - "ask questions"
   - "clarify requirements"
