@@ -77,8 +77,17 @@ async function buildCatalogEntry(
   fetchedAt: string,
 ): Promise<ProviderCatalogEntry | undefined> {
   if (detected.name === "fake") {
-    // Always available, needs no probe.
-    return { name: detected.name, status: "ok", models: [...detected.models], fallbackModels: [], fetchedAt };
+    // The synthetic offline test double is never part of the USER-FACING
+    // catalog (flow 309 review): it has no real status/balance to report and
+    // showing it in `providers status`/`/connect`/the flat `/routing` picker
+    // (all readers of `catalog.providers`) would present a test fixture
+    // alongside real providers. Dropping the entry here — rather than
+    // filtering it out at each of those call sites — is the single point of
+    // exclusion; every reader of `catalog.providers` inherits it for free.
+    // `fake` stays selectable everywhere else (e.g. the per-provider
+    // `/model` picker, `keryx shell --provider fake`), which never reads
+    // this catalog and is unaffected.
+    return undefined;
   }
   if (detected.name === "ollama") {
     // `detectProviders()` already ran ITS live probe (`GET {baseUrl}/api/tags`)
@@ -208,7 +217,7 @@ export async function loadOrRefreshProviderCatalog(
     }
   }
   const fresh = await refreshProviderCatalog(deps);
-  saveProviderCatalogCache(fresh, deps.dir);
+  await saveProviderCatalogCache(fresh, deps.dir);
   return fresh;
 }
 
@@ -225,7 +234,7 @@ export async function loadOrRefreshProviderCatalogFromDetected(
     }
   }
   const fresh = await refreshProviderCatalogFromDetected(detected, deps);
-  saveProviderCatalogCache(fresh, deps.dir);
+  await saveProviderCatalogCache(fresh, deps.dir);
   return fresh;
 }
 

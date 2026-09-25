@@ -59,13 +59,14 @@ test("keryx providers status (human): names the provider, status, model count an
   expect(text).toContain("fetched");
 });
 
-test("keryx providers status: with no credential configured, only the always-available fake provider shows — never a guessed real one", async () => {
+test("keryx providers status: with no credential configured, nothing shows — the synthetic fake provider is excluded and never a guessed real one", async () => {
   const dir = tempDir();
   const { logs } = await withCapturedLogs(async () => {
     await providersCommand(["status"], { fetch: fetchOk, env: {}, dir });
   });
   const text = logs.join("\n");
-  expect(text).toContain("fake");
+  expect(text).toContain("none — no provider is connected");
+  expect(text).not.toContain("fake");
   expect(text).not.toContain("deepseek");
 });
 

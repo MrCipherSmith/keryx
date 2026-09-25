@@ -113,7 +113,7 @@ describe("flow 309 AC6 — the /connect row note shows the CACHED catalog's stat
       fetchedAt: new Date().toISOString(),
       balance: { currency: "USD", total: 6.19, exact: true },
     };
-    saveProviderCatalogCache({ fetchedAt: entry.fetchedAt, providers: { deepseek: entry } }, configDir);
+    await saveProviderCatalogCache({ fetchedAt: entry.fetchedAt, providers: { deepseek: entry } }, configDir);
 
     const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
     try {

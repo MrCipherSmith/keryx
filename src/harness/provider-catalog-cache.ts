@@ -128,10 +128,50 @@ function saveCatalogUnlocked(catalog: ProviderCatalog, dir?: string): void {
   writeOwnerOnlyFileAtomic(catalogFile(dir), `${JSON.stringify(catalog, null, 2)}\n`);
 }
 
-/** Write the whole catalog (a full refresh). Best-effort — a cache write failure never breaks the caller that just refreshed it. */
-export function saveProviderCatalogCache(catalog: ProviderCatalog, dir?: string): void {
+/**
+ * Write a FULL refresh's catalog. File-locked against a concurrent
+ * `updateProviderCatalogEntry` write — the SAME lock, so the two writers can
+ * never race each other (flow 309 review, finding 2). A full refresh can run
+ * for up to `CATALOG_FETCH_TIMEOUT_MS` per provider fetched in parallel; a
+ * single-provider patch (`providers test`/the `[Test]` row button) landing
+ * on the on-disk cache WHILE that refresh is still in flight used to be
+ * silently clobbered once the older, already-in-progress refresh finally
+ * finished and overwrote the whole file unconditionally, with no lock at
+ * all — a lost-update race, not merely a missed one: the fresher single-
+ * provider read was thrown away in favour of the STALER full-refresh read
+ * for that same provider.
+ *
+ * The fix merges under the lock: for each provider THIS refresh looked at,
+ * the on-disk entry wins only when it is NEWER than this refresh's own
+ * `fetchedAt` (i.e. it was written by something else — a concurrent
+ * `updateProviderCatalogEntry` — strictly AFTER this refresh started);
+ * otherwise this refresh's (freshest) entry wins, exactly as before. A
+ * provider this refresh did not look at (e.g. disconnected mid-refresh) is
+ * NOT carried over from disk — that half of "what's connected now" is still
+ * this refresh's call, unaffected by the race fix.
+ *
+ * Best-effort — a cache write (or lock) failure never breaks the caller that
+ * just refreshed it.
+ */
+export async function saveProviderCatalogCache(catalog: ProviderCatalog, dir?: string): Promise<void> {
   try {
-    saveCatalogUnlocked(catalog, dir);
+    await withFileLock(
+      `${catalogFile(dir)}.lock`,
+      async () => {
+        const onDisk = loadProviderCatalogCache(dir);
+        const refreshStartedAtMs = Date.parse(catalog.fetchedAt);
+        const providers: Record<string, ProviderCatalogEntry> = {};
+        for (const [name, entry] of Object.entries(catalog.providers)) {
+          const onDiskEntry = onDisk?.providers[name];
+          const onDiskAtMs = onDiskEntry === undefined ? NaN : Date.parse(onDiskEntry.fetchedAt);
+          const onDiskIsNewer =
+            onDiskEntry !== undefined && Number.isFinite(onDiskAtMs) && Number.isFinite(refreshStartedAtMs) && onDiskAtMs > refreshStartedAtMs;
+          providers[name] = onDiskIsNewer ? onDiskEntry : entry;
+        }
+        saveCatalogUnlocked({ fetchedAt: catalog.fetchedAt, providers }, dir);
+      },
+      { timeoutMs: CACHE_LOCK_TIMEOUT_MS, retryMs: CACHE_LOCK_RETRY_MS, staleMs: CACHE_LOCK_STALE_MS },
+    );
   } catch {
     // Same posture as `version-check.ts`'s `saveCache`: a cache is a courtesy,
     // never a dependency a caller's real result should be blocked on.

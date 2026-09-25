@@ -196,13 +196,13 @@ test("refreshProviderCatalog: a native provider with no live listing endpoint (a
   expect(entry?.fallbackModels.length).toBeGreaterThan(0);
 });
 
-test("refreshProviderCatalog: the always-available fake provider needs no probe", async () => {
+test("refreshProviderCatalog: the synthetic fake provider is excluded from the user-facing catalog", async () => {
   const fetchFn = (async (url: string) => {
     if (ollamaRefused(url)) return { ok: false } as Response;
     throw new Error(`unexpected fetch: ${url}`);
   }) as unknown as typeof fetch;
   const catalog = await refreshProviderCatalog({ fetch: fetchFn, env: {}, platform: "linux", dir: emptyCustomProvidersDir() });
-  expect(catalog.providers.fake).toEqual({ name: "fake", status: "ok", models: ["fake-echo"], fallbackModels: [], fetchedAt: catalog.fetchedAt });
+  expect(catalog.providers.fake).toBeUndefined();
 });
 
 // --- catalogToFlatPickerProviders (AC4) -------------------------------------
@@ -275,7 +275,7 @@ test("AC4/AC8 revert-check: the catalog excludes an unconnected compat provider 
 
 test("loadOrRefreshProviderCatalog: a FRESH cache is used immediately — no fetch at all", async () => {
   const dir = tempDir();
-  saveProviderCatalogCache(
+  await saveProviderCatalogCache(
     { fetchedAt: new Date().toISOString(), providers: { deepseek: { name: "deepseek", status: "ok", models: ["deepseek-chat"], fallbackModels: [], fetchedAt: new Date().toISOString() } } },
     dir,
   );
@@ -292,7 +292,7 @@ test("loadOrRefreshProviderCatalog: a FRESH cache is used immediately — no fet
 
 test("loadOrRefreshProviderCatalog: a STALE or missing cache triggers exactly one refresh, which is then saved", async () => {
   const dir = tempDir();
-  saveProviderCatalogCache(
+  await saveProviderCatalogCache(
     { fetchedAt: "2020-01-01T00:00:00.000Z", providers: {} }, // ancient — stale under any TTL
     dir,
   );
@@ -311,7 +311,7 @@ test("loadOrRefreshProviderCatalog: a STALE or missing cache triggers exactly on
 
 test("loadOrRefreshProviderCatalog: --refresh (force: true) bypasses a fresh cache", async () => {
   const dir = tempDir();
-  saveProviderCatalogCache(
+  await saveProviderCatalogCache(
     { fetchedAt: new Date().toISOString(), providers: { deepseek: { name: "deepseek", status: "ok", models: ["stale-model"], fallbackModels: [], fetchedAt: new Date().toISOString() } } },
     dir,
   );

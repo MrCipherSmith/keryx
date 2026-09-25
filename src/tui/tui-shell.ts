@@ -5287,6 +5287,12 @@ export async function launchTuiAgentShell(opts: {
     // microtask and `announceStartupNotice` is not safe to reference before
     // this point in the function.
     void providerCatalogReady.then((catalog) => {
+      // Same guard as the bus-join callbacks below (`isDestroyed: () =>
+      // destroyed`): this shell may already be torn down by the time the
+      // catalog refresh resolves — a slow/timed-out provider probe racing
+      // Esc/exit — and painting into a destroyed surface is a use-after-free
+      // of whatever `announceStartupNotice`/`splash`/`io` now point at.
+      if (destroyed) return;
       for (const entry of Object.values(catalog.providers)) {
         if (entry.status === "auth-failed" || entry.status === "unreachable" || entry.status === "timeout") {
           announceStartupNotice(`${entry.label ?? entry.name}: ${describeCatalogStatus(entry.status)} — /connect to fix`);

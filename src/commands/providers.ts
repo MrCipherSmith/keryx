@@ -321,8 +321,15 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "OPENROUTER_API_KEY",
     models: ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001", "qwen/qwen-2.5-7b-instruct", "meta-llama/llama-3.1-8b-instruct"],
     note: "hosted · 400+ models",
-    // GET /api/v1/credits -> { credits: { total, used, remaining, total_usd, ... } }
-    balancePath: "/api/v1/credits",
+    // GET /v1/key -> { data: { limit, limit_remaining, usage, ... } } (limit is
+    // null when the key has no spending cap — see `fetchProviderBalance`'s
+    // fallback to /v1/credits -> { data: { total_credits, total_usage } }).
+    // Verified live against openrouter.ai (2026-09-25) — the PREVIOUS
+    // `/api/v1/credits` path here 404'd against this `baseUrl` (which already
+    // ends in `/api`, same as `DEFAULT_MODELS_PATH` above), and the previous
+    // parser read `body.credits.{total,used,remaining}`, a shape neither live
+    // endpoint returns (flow 309 review, finding 1).
+    balancePath: "/v1/key",
     balanceKind: "openrouter",
   },
   {
@@ -826,34 +833,94 @@ function parseDeepSeekBalance(body: unknown): ProviderBalance | undefined {
   return undefined;
 }
 
-function parseOpenRouterBalance(body: unknown): ProviderBalance | undefined {
+/**
+ * Parse `GET /v1/key`'s response: the spending LIMIT configured on the key
+ * actually in use, and how much of it remains. `data.limit` is `null` when
+ * the key has no cap ("unlimited") — there is then no per-key budget to
+ * report, and `undefined` here tells {@link fetchProviderBalance} to fall
+ * back to {@link parseOpenRouterCreditsBalance}.
+ *
+ * Verified live against openrouter.ai (2026-09-25): `{ data: { limit,
+ * limit_remaining, usage, ... } }` — no `credits` wrapper, and no `currency`
+ * field (OpenRouter is always USD). The PREVIOUS parser read
+ * `body.credits.{total,used,remaining}`, which matches neither this nor the
+ * `/v1/credits` shape below — it silently returned `undefined` on every real
+ * response (flow 309 review, finding 1).
+ */
+function parseOpenRouterKeyBalance(body: unknown): ProviderBalance | undefined {
   if (typeof body !== "object" || body === null) {
     return undefined;
   }
-  const credits = (body as { credits?: unknown }).credits;
-  if (typeof credits !== "object" || credits === null) {
+  const data = (body as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) {
     return undefined;
   }
-  const total = Number((credits as { total?: unknown }).total);
-  const used = Number((credits as { used?: unknown }).used);
-  if (!Number.isFinite(total)) {
+  const limit = (data as { limit?: unknown }).limit;
+  if (typeof limit !== "number" || !Number.isFinite(limit)) {
+    // null (unlimited) or absent — no per-key budget to report.
     return undefined;
   }
-  const usedField = Number.isFinite(used) ? { used } : {};
-  const remaining = Number.isFinite(used) ? total - used : undefined;
+  const usage = Number((data as { usage?: unknown }).usage);
+  const limitRemaining = Number((data as { limit_remaining?: unknown }).limit_remaining);
   return {
-    currency: String((credits as { currency?: unknown }).currency ?? "USD"),
-    total,
-    ...usedField,
+    currency: "USD",
+    total: limit,
+    ...(Number.isFinite(usage) ? { used: usage } : {}),
+    ...(Number.isFinite(limitRemaining) ? { remaining: limitRemaining } : {}),
+    exact: true,
+  };
+}
+
+/**
+ * Parse `GET /v1/credits`'s response: the account's total purchased credits
+ * and lifetime usage. Verified live (2026-09-25): `{ data: { total_credits,
+ * total_usage } }`. Used as OpenRouter's balance ONLY when the key has no
+ * spending limit — with no cap, the account's remaining funds ARE what
+ * "balance" means, since the key can spend all of it.
+ */
+function parseOpenRouterCreditsBalance(body: unknown): ProviderBalance | undefined {
+  if (typeof body !== "object" || body === null) {
+    return undefined;
+  }
+  const data = (body as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+  const totalCredits = Number((data as { total_credits?: unknown }).total_credits);
+  if (!Number.isFinite(totalCredits)) {
+    return undefined;
+  }
+  const totalUsage = Number((data as { total_usage?: unknown }).total_usage);
+  const remaining = Number.isFinite(totalUsage) ? totalCredits - totalUsage : undefined;
+  return {
+    currency: "USD",
+    total: totalCredits,
+    ...(Number.isFinite(totalUsage) ? { used: totalUsage } : {}),
     ...(remaining !== undefined ? { remaining } : {}),
     exact: true,
   };
 }
 
 /**
+ * Largest a balance-endpoint response body may be before it is refused
+ * rather than parsed — the same defence {@link MODELS_RESPONSE_BODY_LIMIT_BYTES}
+ * gives `/models` (flow 309 review, finding 5). A real balance payload here
+ * is well under 2 KB (OpenRouter's `/v1/key`/`/v1/credits`, DeepSeek's
+ * `/user/balance`); 1 MB is far above that and far below what would matter
+ * for memory.
+ */
+export const BALANCE_RESPONSE_BODY_LIMIT_BYTES = 1_000_000;
+
+/**
  * Fetch the current balance for a provider that exposes a balance endpoint.
  * Returns `undefined` for providers without one, on network error, or on a
- * non-2xx / malformed response. Never throws.
+ * non-2xx / malformed / oversized response. Never throws.
+ *
+ * OpenRouter is a two-call case (flow 309 review, finding 1): `/v1/key` (the
+ * registry's `balancePath`) is tried first for the key's own spending limit;
+ * only when that key has NO limit (`data.limit: null`) does this fall back
+ * to `/v1/credits` for the account's total funds. Every other `balanceKind`
+ * makes exactly one request, as before.
  */
 export async function fetchProviderBalance(
   fetchFn: typeof fetch,
@@ -864,28 +931,43 @@ export async function fetchProviderBalance(
   if (provider.balancePath === undefined || provider.balanceKind === undefined) {
     return undefined;
   }
-  const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.balancePath}`;
   const timeoutMs = opts?.timeoutMs ?? BALANCE_FETCH_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const init: RequestInit = { signal: controller.signal };
-    if (apiKey !== undefined && apiKey.length > 0) {
-      init.headers = { authorization: `Bearer ${apiKey}` };
-    }
-    const res = await fetchFn(url, init);
-    if (!res.ok) {
+  const fetchBalanceBody = async (balancePath: string): Promise<unknown | undefined> => {
+    const url = `${provider.baseUrl.replace(/\/+$/, "")}${balancePath}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const init: RequestInit = { signal: controller.signal };
+      if (apiKey !== undefined && apiKey.length > 0) {
+        init.headers = { authorization: `Bearer ${apiKey}` };
+      }
+      const res = await fetchFn(url, init);
+      if (!res.ok) {
+        return undefined;
+      }
+      const bounded = await boundedJsonBody(res, BALANCE_RESPONSE_BODY_LIMIT_BYTES);
+      return bounded.ok ? bounded.value : undefined;
+    } catch {
       return undefined;
+    } finally {
+      clearTimeout(timer);
     }
-    const body = (await res.json()) as unknown;
-    return provider.balanceKind === "deepseek"
-      ? parseDeepSeekBalance(body)
-      : parseOpenRouterBalance(body);
-  } catch {
+  };
+
+  const body = await fetchBalanceBody(provider.balancePath);
+  if (body === undefined) {
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
+  if (provider.balanceKind === "deepseek") {
+    return parseDeepSeekBalance(body);
+  }
+  const keyBalance = parseOpenRouterKeyBalance(body);
+  if (keyBalance !== undefined) {
+    return keyBalance;
+  }
+  // The key has no spending limit — fall back to the account's total funds.
+  const creditsBody = await fetchBalanceBody("/v1/credits");
+  return creditsBody === undefined ? undefined : parseOpenRouterCreditsBalance(creditsBody);
 }
 
 /** Resolve the API key for a provider from an env-like record. */

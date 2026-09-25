@@ -3,7 +3,7 @@
 // the operator switches provider mid-session (`setProvider`).
 //
 // Only providers with a real balance endpoint (DeepSeek /user/balance,
-// OpenRouter /api/v1/credits) get the row at all; for the rest the panel is
+// OpenRouter /v1/key, falling back to /v1/credits) get the row at all; for the rest the panel is
 // absent rather than a permanent "—" occupying rows in a fixed-height
 // column (see `mountBalancePanel`). A capable provider whose fetch fails
 // still renders "—" — that is a live reading that did not arrive, not a
