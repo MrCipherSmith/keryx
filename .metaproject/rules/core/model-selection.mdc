@@ -106,9 +106,9 @@ own separate, conservative version parse on top of it — nothing above
 changes for this module's own tier resolution.
 
 That version parse (`parseModelVersion`/`familyKey`, round 2) reads BOTH a
-dotted id (`claude-opus-5.5`, `gemini-3.8-flash`) and a real
+dotted id (`vendor-opus-5.5`, `gemini-3.8-flash`) and a real
 Anthropic-style HYPHENATED one, where a run of 2-3 adjacent short (1-2
-digit) numeric tokens reads as a dotted version (`claude-opus-4-8` → `4.8`).
+digit) numeric tokens reads as a dotted version (`vendor-opus-4-8` → `4.8`).
 It still refuses a date/snapshot-shaped token (6-8 bare digits) and more
 than one numeric group in the same id — no version rather than a guess. A
 `gpt-4o`-style id (a short number plus one trailing letter) parses the
@@ -132,7 +132,7 @@ is a size suffix, so `qwen2.5-coder-7b`/`qwen2.5-coder-32b` and
 `llama-3.3-70b`/`llama-3.3-8b` key to different families and are never
 version-compared against each other. A trailing `-latest`/`-preview` alias
 word is also stripped from `familyKey` only (never from the id itself), so
-`claude-3-7-sonnet-latest` joins the same family as `claude-sonnet-5`.
+`vendor-3-7-sonnet-latest` joins the same family as `vendor-sonnet-5`.
 
 ## Falling back
 
