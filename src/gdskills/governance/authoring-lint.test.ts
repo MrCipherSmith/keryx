@@ -164,7 +164,7 @@ Rule body.
     expect(STACK_EXTENSIONS.react).toEqual(["tsx", "jsx"]);
     expect(STACK_EXTENSIONS.go).toEqual(["go"]);
     expect(STACK_EXTENSIONS.rust).toEqual(["rs"]);
-    expect(STACK_EXTENSIONS["docker-k8s-terraform"]).toEqual(["dockerfile", "yml", "yaml", "tf", "tfvars"]);
+    expect(STACK_EXTENSIONS["docker-k8s-terraform"]).toEqual(["dockerfile", "containerfile", "yml", "yaml", "tf", "tfvars"]);
     expect(STACK_EXTENSIONS["ci-github-gitlab"]).toEqual(["yml", "yaml"]);
   });
 
@@ -202,6 +202,39 @@ Rule body.
       const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/*"]');
       const findings = lintStackRule(content, {
         path: "/tmp/pack/rules/security.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings.map((f) => f.rule)).toContain("stack-rule-paths-scope");
+    });
+
+    // Review round 1 (flow 338): the REVERSED Dockerfile-variant convention
+    // (`Dockerfile.dev`, `Dockerfile.prod` — the wildcard suffix, not the
+    // extensionless bare filename) needs its own branch: `Dockerfile.*`'s
+    // trailing `.*` never matches the dotted-extension regex (no letters
+    // after the dot), and its full segment contains `*` so the
+    // extensionless-filename branch above also declines it.
+    test("accepts the reversed Dockerfile.* wildcard-suffix convention", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/Dockerfile.*"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/coding-style.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings).toEqual([]);
+    });
+
+    test("accepts the literal Containerfile convention", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/Containerfile"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/coding-style.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings).toEqual([]);
+    });
+
+    test("does not accept an arbitrary Name.* glob outside the stack's allowlist", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/Jenkinsfile.*"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/coding-style.mdc",
         allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
       });
       expect(findings.map((f) => f.rule)).toContain("stack-rule-paths-scope");

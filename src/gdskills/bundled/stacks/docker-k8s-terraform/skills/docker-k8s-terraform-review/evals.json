@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Review this Dockerfile for security issues before we merge",
+      "Can someone look this Dockerfile over before it ships -- I'm worried about what it lets an attacker do",
       "Check this Kubernetes deployment manifest for a missing securityContext",
       "Review this Terraform change for hardcoded secrets",
-      "Does this Dockerfile end up running the container as root",
+      "I think this container might still be running as root after the base image swap -- can you take a look",
       "Review this Helm chart's NetworkPolicy template",
-      "Check this docker-compose file for a credential in plaintext"
+      "Is there an API key sitting in plaintext anywhere in this compose file"
     ],
     "negative": [
       "Review this Go diff for goroutine leaks",

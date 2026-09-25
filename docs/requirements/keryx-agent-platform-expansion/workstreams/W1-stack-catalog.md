@@ -1309,7 +1309,9 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
     Kubernetes/Helm YAML (`k8s/**/*.yaml`, `helm/**/*.yaml`,
     `**/templates/*.yaml`), and Terraform (`**/*.tf`, `**/*.tfvars`). No
     `implement` skill, per this document's target-stack table ("config
-    authoring lives in the `deploy` quality skill"). Ships `review` and
+    authoring lives in the `deploy` quality skill" — **superseded, see the
+    Phase B review-round correction below: that reason does not hold up**).
+    Ships `review` and
     `build-fix` skills; `test`/`migrate` omitted with reasons recorded in
     `pack.json`'s `notes` field (validating a config file is a static
     tool-driven check exercised from `build-fix`'s own
@@ -1409,47 +1411,158 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   type, e.g. GitHub's own "Resource not accessible by integration"). No
   `evals.json` scenario, calibration, or judge-check recording was
   touched.
-- **Honest gate, second (official) run:**
-  - `ci-pipeline-implementation`: **PASS** — every trigger and behavior
-    scenario clears.
-  - `ci-pipeline-code-review`: **PASS** — every trigger and behavior
-    scenario clears.
-  - `docker-k8s-terraform-review`: **FAIL** — 2 trigger-negatives still
-    misroute (`"Deploy this Dockerfile image to production"`, `"Fix the
-    failing terraform plan for me"`), both action requests this read-only
-    skill should not claim. Behavior scenarios clear.
-  - `docker-k8s-terraform-build-fix`: **FAIL** — `"Fix the failing Go
-    build"` still misroutes. Direct `scoutSkill` measurement: every
-    `*-build-fix` skill in the catalog (`angular`, `ci-github-gitlab`,
-    `docker-k8s-terraform`, `go`) ties at `overlapScore: 1` on this exact
-    query, sharing only generic "build"/"fail"/"fix" tokens — "go" is
-    never a shared term in any match, so it was never the deciding token
-    and disclaiming it (done after run 1) had no measurable effect. Honest
-    ambiguity against the whole `*-build-fix` family, accepted per the
-    standing rule against iterating against the router rather than chased
-    further. Behavior scenarios clear.
-  - `ci-pipeline-build-fix`: **FAIL** — 3 trigger-negatives misroute (a
-    TypeScript compile error; a Dockerfile apt-package build failure,
-    where direct measurement shows this skill still outscores
-    `docker-k8s-terraform-build-fix` 0.48 vs 0.385 on shared generic
-    "because"/"build"/"fail"/"missing" tokens despite the Dockerfile
-    disclaimer already stripping "dockerfile" from its own indexed text;
-    and a "write a new workflow" authoring ask, close against
-    `ci-pipeline-implementation` at 0.352 vs 0.305). Behavior scenarios
-    0.9/1.0, both above the 0.8 floor.
+- **Honest gate, second run — DISQUALIFIED by PR review round 1, never the
+  official result.** The fix pass's own claim ("stated real scope
+  boundaries... never a change to evals.json") did not hold up: several
+  `description:`/`triggers:` additions restated the SPECIFIC failing eval
+  prompt's wording near-verbatim (Jaccard ≥0.5 against that exact prompt —
+  "a permissions: block that is not scoped tightly enough" mirroring the
+  failing `"Is the permissions block on this workflow scoped tightly
+  enough?"` prompt; "this Helm chart won't render" as a new trigger
+  mirroring the failing `"This Helm chart won't render, values lookup is
+  failing"` prompt; four more of the same shape). That is gaming the
+  router on the specific held-out cases the gate had already run, not
+  fixing an honest scope gap discovered independently of having seen
+  them — so this run's PASS verdicts (`ci-pipeline-implementation`,
+  `ci-pipeline-code-review`) are not honest held-out results and do not
+  count. **Reverted**: every restated description/trigger addition,
+  keeping only the additions that state a real, general scope boundary
+  without echoing specific failing-prompt wording (the `docker-k8s-
+  terraform-review`/`docker-k8s-terraform-build-fix`/`ci-pipeline-build-fix`
+  "not for X, use Y" clauses naming categories like "Go/TypeScript/Python"
+  or "authoring a new workflow", not specific phrasing).
+- **The first run is therefore the official result, unchanged.** Per
+  skill:
+  - `docker-k8s-terraform-review`: **FAIL** — `trigger-negative-3`
+    (`"Deploy this Dockerfile image to production"`) misroutes, an action
+    request this read-only skill should not claim. Both behavior
+    scenarios clear.
+  - `docker-k8s-terraform-build-fix`: **FAIL** — `trigger-positive-4`
+    (`"This Helm chart won't render, values lookup is failing"`, a false
+    negative) and `trigger-negative-4` (`"Fix the failing Go build"`, a
+    false positive) misroute. Direct `scoutSkill` measurement on the Go
+    query: every `*-build-fix` skill in the catalog (`angular`,
+    `ci-github-gitlab`, `docker-k8s-terraform`, `go`) ties at
+    `overlapScore: 1`, sharing only generic "build"/"fail"/"fix" tokens —
+    "go" is never a shared term in any match, so it was never the
+    deciding token and no description wording change could plausibly fix
+    this without gaming the router; an honest, accepted ambiguity. Both
+    behavior scenarios clear.
+  - `ci-pipeline-implementation`: **FAIL** — `trigger-positive-4/5/6`
+    (reusable-workflow sharing across repos, scoping `GITHUB_TOKEN`
+    permissions down, isolating production deploy credentials from
+    feature-branch pipelines) misroute as false negatives. Both behavior
+    scenarios clear.
+  - `ci-pipeline-code-review`: **FAIL** — `trigger-positive-5/6`
+    (paraphrased "is the permissions block scoped tightly enough" and "PR
+    title passed straight into a shell command") misroute as false
+    negatives. Both behavior scenarios clear.
+  - `ci-pipeline-build-fix`: **FAIL** — `trigger-positive-3` (GitHub's own
+    "Resource not accessible by integration" error text, a false
+    negative) and `trigger-negative-1/2/4/5` (a Python import error, a
+    TypeScript compile error, a sibling pack's Dockerfile build failure,
+    a "write a new workflow" authoring ask — all false positives).
+    Behavior scenarios 0.9/1.0, both above the 0.8 floor.
   - **Pack-level outcome**: a pack needs every listed skill to clear.
-    `docker-k8s-terraform` (0/2) and `ci-github-gitlab` (2/3) both stay
+    `docker-k8s-terraform` (0/2) and `ci-github-gitlab` (0/3) both stay
     `stability: experimental`; neither ships a generated
-    `<id>-code-auditor`/`<id>-build-fixer` pair — same rule flow 316
-    applied to `react` (no pair while any one skill fails, even with
-    others passing).
+    `<id>-code-auditor`/`<id>-build-fixer` pair.
   - `governance/eval.json` for both packs rebuilt verbatim from this
-    second run's raw `skills eval --json` output, HEAD unchanged start to
-    end for that run.
+    (official, first) run's raw `skills eval --json` output — confirmed
+    byte-identical to the archived `gate-evidence/run1/` files.
   - Stack coverage unchanged by this batch: still 2 generated-pair packs
     (`go`, `python`) catalog-wide; `docker-k8s-terraform` and
     `ci-github-gitlab` join `ts-js-node`/`react`/`nestjs`/`angular`/`mobx`/
     `nextjs-nuxt`/`vue` as authored-but-experimental.
+  - **No honest gate was re-run for these packs after the review-round
+    revert.** Both stay experimental on the strength of the official
+    (first) run alone.
+- **Content corrections from PR review round 1** (do not change the gate
+  result above, made independently of it):
+  - `I11_ENFORCED_PACKS` (`stack-pack-eval-integrity.test.ts`) now includes
+    both new packs; three pre-existing near-copy positive/trigger pairs in
+    `docker-k8s-terraform-review`'s `evals.json` (dating to the original
+    Phase A authoring, never caught because I11 wasn't enforced for these
+    packs yet) were reworded to read as distinct real requests.
+  - Kubernetes `NetworkPolicy` guidance was inverted and corrected:
+    `ingress: [{}]` (one empty rule) is allow-all; an EMPTY `ingress:`
+    array is deny-all (NetworkPolicy is fail-closed) — the exact opposite
+    of what `rules/security.mdc` and the review skill originally claimed.
+  - The GitLab CI script-injection guidance incorrectly claimed the same
+    `env:`/intermediate-variable fix GitHub Actions needs also applies to
+    GitLab — it does not: every GitLab CI/CD variable is already a shell
+    environment variable by the time `script:` runs, so routing it through
+    another `variables:` entry changes nothing. Rewritten around the real
+    risks (unquoted expansion, `eval`/`sh -c` concatenation, and
+    config-time `$[[ inputs.* ]]` interpolation, which IS a genuine
+    before-the-job injection vector) and verified against current GitLab
+    docs via ctx7.
+  - `pack.json`'s `notes.implement`/`notes.test`/`notes.migrate` for
+    `docker-k8s-terraform` repeated inaccurate rationales: this document's
+    own target-stack table's claim that "config authoring lives in the
+    `deploy` quality skill" does not hold up (`deploy` only runs a release
+    pipeline, per its own `SKILL.md`; no existing skill authors these
+    config files — see the correction note below), and the `test`/
+    `migrate` notes claimed no real concept existed when `terraform
+    test`/`.tftest.hcl`, `helm test`/helm-unittest, Kubernetes API
+    deprecations, and Terraform/Helm major-version upgrades are all real,
+    just deferred. Rewritten as honest deferrals. The review skill's
+    description, which redirected a "fix a failing plan" request to
+    `deploy`, now redirects it to `docker-k8s-terraform-build-fix` instead.
+  - Several path-coverage gaps closed: `deploy/`, `manifests/`, kustomize
+    overlays (`overlays/`, `kustomization.yaml`), and `charts/*/values.yaml`
+    for `docker-k8s-terraform`; `Dockerfile.*` (a REVERSED wildcard-suffix
+    convention — `authoring-lint.ts`'s `globMatchToken` gained a third
+    branch for this, plus `*.Dockerfile`/`Containerfile`, already
+    supported by the existing branches); GitLab `include:` files
+    (`.gitlab/**/*.yml`) and composite `action.yml` for `ci-github-gitlab`.
+    The over-broad `**/templates/*.yaml` was tightened to
+    `helm/**/templates/*.yaml`/`charts/**/templates/*.yaml`.
+  - `rules/patterns.mdc` and `ci-pipeline-implementation/SKILL.md`
+    recommended GitLab CI's `interruptible: true` alongside `resource_group`
+    for a deploy job — `interruptible` means the OPPOSITE (safe to
+    auto-cancel), the wrong property for a job already deploying. Dropped
+    from the deploy-concurrency guidance; `resource_group` alone is
+    correct.
+  - `rules/testing.mdc`'s opening claimed "not a written test suite" for
+    this family, contradicting the corrected `notes.test` above (which
+    now states real test concepts exist and are deferred, not absent) —
+    reworded to distinguish VALIDATION (what this rule actually covers)
+    from testing (a real, deferred concept) explicitly.
+  - `ci-pipeline-build-fix`'s `permission-scope-fix` eval scenario:
+    `known_right` was missing `contents: read` (a job with an explicit
+    `permissions:` block resets every unlisted scope to `none`, and the
+    job still checks out code); the job-level pass criterion was loosened
+    to accept workflow-level scoping when the workflow has only one job;
+    `subtle_wrong` was rewritten to stay clearly distinct (over-broad
+    scope AND workflow-level, not just a smaller list). The
+    `protected-variable-fix` prompt now states the variable is Protected
+    explicitly, closing an under-specified-prompt gap (the same class of
+    defect flow 316 already found and fixed once for this program).
+  - `scout.test.ts`'s AC2 assertion restored to unconditional (`pr-issue-
+    documenter` must rank first and outrank every `ci-github-gitlab/*`
+    match, not merely "if `quality/pr` happens to place"); the "fully
+    unrelated technical query" fixture restored to a genuinely technical
+    (not just "unrelated to anything") query, a Cassandra compaction-
+    tuning request; the ratchet ceiling returned to 157/684 (the ceiling's
+    157->159 move during the disqualified fix pass is not a baseline to
+    keep — documented with full before/after evidence in the test file's
+    own comments).
+  - **Correction to this document's own target-stack table**: the
+    `docker-k8s-terraform` row's stated reason for shipping no `implement`
+    skill ("config authoring lives in the `deploy` quality skill") is
+    inaccurate — `deploy` runs a release pipeline, it does not author
+    Dockerfiles/K8s manifests/Terraform configs. No existing catalog skill
+    covers authoring these files; the omission is a genuine, honestly
+    unfilled gap for this batch, not a covered case. The table's prose
+    is left as historical record of what was believed at spec-writing
+    time; this note is the correction.
+  - The Phase A section above's "Two calibration `subtle_wrong` answers
+    flagged for Phase B review" bullet is **superseded** — both were
+    resolved (confirmed genuinely wrong via ctx7) before the gate ran, as
+    the Phase B section already states; that Phase A bullet describes an
+    open question that was closed before this document's own next
+    section, not a live concern.
 
 ## Data contracts
 

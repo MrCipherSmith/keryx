@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/Dockerfile", "**/*.dockerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "**/templates/*.yaml", "helm/**/*.yaml", "**/*.tf", "**/*.tfvars"]
+paths: ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile", "**/*.dockerfile", "**/Containerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "manifests/**/*.yaml", "manifests/**/*.yml", "deploy/**/*.yaml", "deploy/**/*.yml", "overlays/**/*.yaml", "**/kustomization.yaml", "**/kustomization.yml", "helm/**/*.yaml", "helm/**/templates/*.yaml", "charts/**/*.yaml", "charts/**/templates/*.yaml", "charts/*/values.yaml", "**/*.tf", "**/*.tfvars"]
 metadata:
   origin: authored
 ---
@@ -87,18 +87,43 @@ spec:
 then a second, narrower `NetworkPolicy` per workload allowing only the
 `podSelector`/`namespaceSelector` traffic it actually needs. Flag a
 namespace shipping workload manifests with no accompanying `NetworkPolicy`
-at all, and flag a `NetworkPolicy` broad enough (a wide-open `ingress: []`
-with no `from`, or a selector matching every pod) to defeat the point of
-having one.
+at all, and flag a per-workload `NetworkPolicy` broad enough to defeat the
+point of having one -- a `spec.ingress` entry that is a single EMPTY rule
+object (`ingress: [{}]`, no `from`/`ports` inside it) matches every source
+on every port, i.e. allow-all, not the deny-all the pattern above depends
+on (NetworkPolicy is fail-closed: `policyTypes: ["Ingress"]` with `ingress`
+omitted or `ingress: []` means NO ingress rule matches, which is deny-all
+-- do not confuse an EMPTY `ingress:` array with an array containing one
+EMPTY rule object; they are opposite policies), or a `podSelector: {}` on a
+policy meant to be workload-scoped (matches every pod in the namespace,
+not just the intended workload).
 
 ## Terraform state and secrets
 
 - Configure a remote backend with encryption at rest and state locking
-  (e.g. an S3 backend with `encrypt = true` and a DynamoDB lock table, or
-  an HCP Terraform/Terraform Cloud workspace, which encrypts state
-  automatically) — a local `terraform.tfstate` is both unencrypted on disk
-  and a single point of loss/corruption with no locking against concurrent
-  runs.
+  (e.g. an S3 backend with `encrypt = true` and `use_lockfile = true` for
+  native S3-object-based locking — the current recommended approach,
+  superseding a separate DynamoDB lock table for new configurations,
+  though an existing DynamoDB-locked backend is not itself a problem to
+  flag on its own; or an HCP Terraform/Terraform Cloud workspace, which
+  encrypts state and locks automatically) — a local `terraform.tfstate` is
+  both unencrypted on disk and a single point of loss/corruption with no
+  locking against concurrent runs.
+- Renaming or moving a resource/module block in configuration changes its
+  address, which makes an unrelated `terraform plan` show a destroy-then-
+  recreate for a resource nothing actually changed about (state still has
+  it under the old address) — fix with a `moved` block (`moved { from =
+  <old_address> to = <new_address> }`, declarative, stays in the
+  configuration for the next person who reads it) or the equivalent
+  `terraform state mv <old_address> <new_address>` (imperative, a one-off
+  CLI operation) — never by applying the destroy/recreate plan as-is for a
+  resource holding real data.
+- A `force_destroy = true` on a resource that can hold data (an S3 bucket,
+  in particular) lets `terraform destroy`/a replacement delete a
+  non-empty bucket without the safety error Terraform would otherwise
+  raise — flag it on any resource whose data matters, especially paired
+  with a `moved`/`state mv` scenario where the goal is to KEEP the
+  existing data, not clear the way for a fresh create.
 - Never commit a `.tfstate`/`.tfstate.backup` file to version control —
   state routinely contains resource attributes in plaintext (a generated
   password, a connection string) even when the variable that produced them

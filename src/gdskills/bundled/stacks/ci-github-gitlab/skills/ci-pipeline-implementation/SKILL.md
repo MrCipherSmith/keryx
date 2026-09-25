@@ -1,6 +1,6 @@
 ---
 name: ci-pipeline-implementation
-description: "Use when authoring or extending a GitHub Actions workflow (.github/workflows/*.yml) or a GitLab CI pipeline (.gitlab-ci.yml) -- trigger and job design, sharing the same steps across multiple repos via a reusable workflow/template, scoping the GITHUB_TOKEN's `permissions:` down from its default, keeping production deploy credentials out of feature-branch pipelines (GitLab protected variables, environment gates), caching, and safe handling of untrusted pull-request/merge-request input."
+description: "Use when authoring or extending a GitHub Actions workflow (.github/workflows/*.yml) or a GitLab CI pipeline (.gitlab-ci.yml) -- trigger and job design, reusable workflows/templates, caching, least-privilege permissions, and safe handling of untrusted pull-request/merge-request input."
 triggers:
   - "add a GitHub Actions workflow that runs tests on every pull request"
   - "write a .gitlab-ci.yml pipeline with build, test, and deploy stages"
@@ -8,8 +8,6 @@ triggers:
   - "split this workflow into a reusable workflow other repos can call"
   - "add a permissions block to this GitHub Actions workflow"
   - "set up a GitLab CI pipeline with protected deploy variables"
-  - "scope down the default GITHUB_TOKEN permissions for this workflow"
-  - "restrict the production deploy variable to the protected branch only"
 metadata:
   origin: authored
   category: implement
@@ -49,9 +47,10 @@ summary.
 ### Step 2: Design the trigger and permission surface first
 
 - Decide the trigger: `pull_request` (or GitLab's merge-request pipeline)
-  for anything that only builds/tests a contribution: it runs with the
-  contributor's own, typically read-only, token and cannot reach
-  base-repo secrets. Reach for `pull_request_target` only when the job
+  for anything that only builds/tests a contribution: when triggered from
+  a fork, `GITHUB_TOKEN` (the base repo's own token, scoped read-only for
+  this case — not a separate fork token) is the only secret passed to the
+  runner at all. Reach for `pull_request_target` only when the job
   genuinely needs base-repo secrets or write access, and never combine it
   with checking out and executing the pull request's own head SHA — see
   `rules/security.mdc`.
@@ -75,8 +74,9 @@ summary.
    `variables:` entry before it reaches a `run:`/`script:` shell string —
    never interpolate it directly into the script text.
 4. Add `timeout-minutes`/`timeout` to every job, and a `concurrency:`
-   group (or `resource_group`/`interruptible`) to anything that deploys
-   or mutates shared state.
+   group (or `resource_group`, GitLab CI) to anything that deploys or
+   mutates shared state — not `interruptible: true`, which means the
+   opposite (safe to auto-cancel), the wrong property for a deploy.
 5. Key any cache off the lockfile/manifest hash, and scope artifacts to
    what a later job actually consumes with an explicit retention.
 
@@ -107,9 +107,11 @@ Added: .github/workflows/pr-checks.yml
   `pull_request_target` job.
 - Never pin a third-party action to a mutable tag; pin to a full commit
   SHA.
-- Never interpolate `${{ github.event.* }}` (or an untrusted CI/CD
-  variable) directly into a `run:`/`script:` shell string — route it
-  through `env:`/`variables:` first.
+- Never interpolate `${{ github.event.* }}` directly into a `run:` shell
+  string — route it through `env:` first. For GitLab CI, always quote a
+  variable used in `script:` and never build an `eval`/`sh -c` string by
+  concatenating an untrusted variable into it (routing it through another
+  `variables:` entry does not change how the shell expands it).
 - Never leave a workflow-level `permissions: write-all` (or an unscoped
   default) when only specific jobs need write access.
 

@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: [".github/workflows/*.yml", ".github/workflows/*.yaml", ".gitlab-ci.yml"]
+paths: [".github/workflows/*.yml", ".github/workflows/*.yaml", ".github/actions/**/action.yml", ".github/actions/**/action.yaml", ".gitlab-ci.yml", ".gitlab/**/*.yml", ".gitlab/**/*.yaml"]
 metadata:
   origin: authored
 ---
@@ -19,10 +19,15 @@ already scopes to.
   branch, path filter, or event type) rather than firing on every push —
   a broad trigger wastes runner minutes and widens the surface a
   misconfigured job can affect.
-- Add a `concurrency:` group (GitHub Actions) or a `resource_group`/
-  `interruptible` rule (GitLab CI) to any workflow that deploys or mutates
-  shared state, so a second push does not race an in-flight run against
-  the same target.
+- Add a `concurrency:` group (GitHub Actions) or a `resource_group` (GitLab
+  CI) to any workflow that deploys or mutates shared state, so a second
+  push does not race an in-flight run against the same target — a
+  `resource_group` serializes/queues jobs targeting the same resource,
+  which is the property a deploy job needs. Do not reach for
+  `interruptible: true` here: that flag means the OPPOSITE (this job is
+  SAFE to auto-cancel when a newer pipeline starts), which is right for a
+  build/test job made obsolete by a newer commit, not for a deploy already
+  in flight.
 - Keep `pull_request` as the default trigger for anything that only builds
   or tests untrusted contributions; reach for `pull_request_target` only
   when the job genuinely needs base-repo secrets, and see

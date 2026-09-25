@@ -1,6 +1,6 @@
 ---
 name: ci-pipeline-code-review
-description: "Use when reviewing a GitHub Actions workflow (.github/workflows/*.yml) or GitLab CI pipeline (.gitlab-ci.yml) change for security and structural risk -- pull_request_target combined with untrusted checkout, tag-pinned third-party actions, a permissions: block that is not scoped tightly enough (missing least-privilege), script injection from an untrusted PR/MR title or other event field interpolated straight into a shell command, and unprotected access to deploy secrets. Read-only, no edits."
+description: "Use when reviewing a GitHub Actions workflow (.github/workflows/*.yml) or GitLab CI pipeline (.gitlab-ci.yml) change for security and structural risk -- pull_request_target combined with untrusted checkout, tag-pinned third-party actions, missing least-privilege permissions, script injection via unsanitized event/variable interpolation, and unprotected access to deploy secrets. Read-only, no edits."
 triggers:
   - "review this GitHub Actions workflow diff for security issues"
   - "check this .gitlab-ci.yml change for exposed secrets"
@@ -58,11 +58,17 @@ under review; a change belongs to `ci-pipeline-implementation`, not here.
   write-all`, or no `permissions:` key at all on a workflow whose jobs do
   not all need write access? Is `id-token: write` granted only to the job
   that actually performs OIDC federation?
-- **Script injection.** Does any `run:`/`script:` step interpolate
-  `${{ github.event.* }}` (a PR/MR title, issue body, branch name,
-  commit message) or an untrusted CI/CD variable directly into the shell
-  string, instead of routing it through an intermediate `env:`/
-  `variables:` entry first?
+- **Script injection.** For GitHub Actions: does any `run:` step
+  interpolate `${{ github.event.* }}` (a PR title, issue body, branch
+  name, commit message) directly into the shell string, instead of
+  routing it through an intermediate `env:` entry first? For GitLab CI:
+  does a `script:` line use an untrusted variable (an MR title, a branch
+  name) unquoted, or concatenate it into a string handed to `eval`/
+  `sh -c` — routing it through another `variables:` entry does not fix
+  this, since every GitLab CI/CD variable is already a shell environment
+  variable by the time `script:` runs; also check any `$[[ inputs.* ]]`
+  interpolation for untrusted input, since that IS substituted before the
+  job is created.
 - **GitLab protected variables/branches.** Does a deploy job that
   consumes a credential-bearing variable have `rules:` restricting it to
   the protected branch/tag that variable is actually exposed to, and is

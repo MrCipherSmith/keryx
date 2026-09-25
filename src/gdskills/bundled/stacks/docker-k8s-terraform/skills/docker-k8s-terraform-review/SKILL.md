@@ -1,6 +1,6 @@
 ---
 name: docker-k8s-terraform-review
-description: "Use when reviewing a Dockerfile, Docker Compose file, Kubernetes/Helm manifest, or Terraform change for security and config-authoring risks -- root containers, unpinned base images, secrets baked into image layers, missing Kubernetes securityContext/NetworkPolicy, and Terraform state/secrets handling. Read-only, no edits: never builds, deploys, or runs the image/manifest/plan itself (use the `deploy` quality skill for that)."
+description: "Use when reviewing a Dockerfile, Docker Compose file, Kubernetes/Helm manifest, or Terraform change for security and config-authoring risks -- root containers, unpinned base images, secrets baked into image layers, missing Kubernetes securityContext/NetworkPolicy, and Terraform state/secrets handling. Read-only, no edits: never builds an image, runs a deployment/release (use the `deploy` quality skill for that), or resolves a failing build/validate/plan (use `docker-k8s-terraform-build-fix` for that)."
 triggers:
   - "review this Dockerfile for security issues"
   - "check this Kubernetes manifest before it ships"
@@ -62,9 +62,11 @@ checked against. It does not scan a built image for known CVEs (that is
   `allowPrivilegeEscalation: false`, or a capabilities drop
   (`capabilities.drop: ["ALL"]`) — flag whichever is missing.
 - A workload manifest shipped with no accompanying `NetworkPolicy` in a
-  namespace that has none, or a `NetworkPolicy` broad enough (an empty
-  `ingress: []`/no `from` restriction, or a selector matching every pod)
-  to defeat a default-deny boundary — flag it.
+  namespace that has none, or a `NetworkPolicy` broad enough to defeat a
+  default-deny boundary — a `spec.ingress` entry that is a single empty
+  rule object (`ingress: [{}]`, allow-all — not the same as an EMPTY
+  `ingress:` array, which is deny-all) or a `podSelector: {}` on a policy
+  meant to scope one workload — flag it.
 - A container with no `resources.requests`/`resources.limits` — flag it
   per `rules/coding-style.mdc`.
 

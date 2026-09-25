@@ -8,7 +8,6 @@ triggers:
   - "the pipeline says invalid needs: reference, fix the job graph"
   - "GitLab CI says this job's rules: never match, why doesn't it run"
   - "actions/checkout is failing with an unrecognized input, fix the workflow"
-  - "the bot got a 403 posting a PR comment, resource not accessible by integration"
 metadata:
   origin: authored
   category: build-fix

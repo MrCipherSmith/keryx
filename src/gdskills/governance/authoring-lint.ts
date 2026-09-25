@@ -256,7 +256,7 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   // files; the pack's own `paths:` globs (not this table) are what scope them
   // to the right directories (compose/k8s/Helm vs. `.github/workflows/`),
   // per W1-stack-catalog.md's "plain YAML is shared" guidance.
-  "docker-k8s-terraform": ["dockerfile", "yml", "yaml", "tf", "tfvars"],
+  "docker-k8s-terraform": ["dockerfile", "containerfile", "yml", "yaml", "tf", "tfvars"],
   "ci-github-gitlab": ["yml", "yaml"],
 };
 
@@ -337,17 +337,25 @@ function parseExtendsValue(block: string): string | undefined {
  * lowercase filename as an allowed pseudo-extension (flow 338, W4 batch 6:
  * `docker-k8s-terraform` needs `Dockerfile` scoping, not just `*.dockerfile`).
  *
- * Two branches, in order:
+ * Three branches, in order:
  *  - a dotted extension at the end of the glob (`*.tf`, `**\/*.yml`) — same
  *    as before, lowercased;
  *  - otherwise, when the glob's final path segment contains no `*`/`?`
  *    wildcard (so it names one exact file, not a pattern), the lowercased
  *    segment itself is the token — allowing `STACK_EXTENSIONS` to list
  *    `"dockerfile"` as a pseudo-extension that matches the literal filename
- *    `Dockerfile` (any case) exactly, never a substring or arbitrary glob.
+ *    `Dockerfile` (any case) exactly, never a substring or arbitrary glob;
+ *  - otherwise, a REVERSED convention — a literal name followed by a
+ *    wildcard extension (`Dockerfile.*`, matching `Dockerfile.dev`,
+ *    `Dockerfile.prod`, ...) — the literal name before `.*` is the token,
+ *    lowercased, the same way the middle branch above treats the bare
+ *    literal filename. This is deliberately narrow: exactly one `*` as the
+ *    entire extension part (`Name.*`), not `Name.*x` or `Name.a*b`, so it
+ *    only recognizes the specific "prefix-name, wildcard suffix" shape
+ *    real Dockerfile-variant conventions actually use.
  *
- * Returns `undefined` when neither branch applies (e.g. a bare wildcard
- * segment like `**\/*`), which the caller treats as "outside scope".
+ * Returns `undefined` when no branch applies (e.g. a bare wildcard segment
+ * like `**\/*`), which the caller treats as "outside scope".
  */
 function globMatchToken(glob: string): string | undefined {
   const extensionMatch = /\.([A-Za-z0-9]+)$/.exec(glob);
@@ -357,6 +365,10 @@ function globMatchToken(glob: string): string | undefined {
   const segment = glob.split("/").pop();
   if (segment !== undefined && segment.length > 0 && !segment.includes("*") && !segment.includes("?")) {
     return segment.toLowerCase();
+  }
+  const reversedMatch = segment !== undefined ? /^([A-Za-z0-9]+)\.\*$/.exec(segment) : null;
+  if (reversedMatch?.[1] !== undefined) {
+    return reversedMatch[1].toLowerCase();
   }
   return undefined;
 }

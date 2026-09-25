@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: [".github/workflows/*.yml", ".github/workflows/*.yaml", ".gitlab-ci.yml"]
+paths: [".github/workflows/*.yml", ".github/workflows/*.yaml", ".github/actions/**/action.yml", ".github/actions/**/action.yaml", ".gitlab-ci.yml", ".gitlab/**/*.yml", ".gitlab/**/*.yaml"]
 metadata:
   origin: authored
 ---
@@ -14,8 +14,10 @@ workflow files under `.github/workflows/` and to `.gitlab-ci.yml`.
 ## `pull_request_target` and untrusted fork code
 
 - `pull_request_target` runs in the context of the **base** repository —
-  it has read/write access to base-repo secrets and, unless explicitly
-  narrowed, the default `GITHUB_TOKEN` permissions — even though the
+  every repo secret the workflow references is available to it (secrets
+  are consumed, not read/write-scoped, so "access" is simply yes/no here),
+  and `GITHUB_TOKEN` gets read/write repository permissions by default
+  (unless a `permissions:` block explicitly narrows it) — even though the
   triggering pull request can come from an untrusted fork.
 - Never check out and then execute the pull request's own head ref/SHA
   (`actions/checkout` with `ref: ${{ github.event.pull_request.head.sha }}`)
@@ -32,8 +34,10 @@ workflow files under `.github/workflows/` and to `.gitlab-ci.yml`.
   privileged job that only consumes safe artifacts) instead.
 - When a job only needs to build/test a contribution and does not need
   base-repo secrets or write access, use `pull_request`, not
-  `pull_request_target` — `pull_request` runs with the fork's own
-  (typically read-only) token and cannot reach base-repo secrets at all.
+  `pull_request_target` — when a `pull_request` run is triggered from a
+  fork, `GITHUB_TOKEN` (still the base repo's own token, not a separate
+  "fork token") gets read-only permissions, and no other repo secret is
+  passed to the runner at all.
 
 ## Pin third-party actions to a commit SHA
 
@@ -81,10 +85,28 @@ workflow files under `.github/workflows/` and to `.gitlab-ci.yml`.
   }}` directly into the `run:` string — the environment variable is set
   in memory and never re-enters shell-script generation, which is what
   actually neutralizes the injection.
-- The same rule applies to any other untrusted, attacker-controlled input
-  reaching a shell step: a GitLab CI `script:` line interpolating an
-  untrusted CI/CD variable or merge-request title carries the identical
-  risk and the identical `variables:` intermediate-variable fix.
+- GitLab CI's own script-injection risk is NOT the same mechanism, and the
+  `env:`-indirection fix above does not carry over: every GitLab CI/CD
+  variable (a predefined one like `CI_MERGE_REQUEST_TITLE`, or one you
+  declare under `variables:`) is already an ordinary shell environment
+  variable by the time `script:` runs — there is no separate "before the
+  shell sees it" substitution step to intercept the way `${{ }}` needs
+  routing through `env:` first. Wrapping an already-a-variable in another
+  `variables:` entry changes nothing about how the shell expands it.
+  The real risks, and their real fixes:
+  - **Unquoted expansion**: `script: - rm -rf $CI_MERGE_REQUEST_TITLE` lets
+    the shell word-split and glob-expand an untrusted value; always quote
+    (`"$CI_MERGE_REQUEST_TITLE"`), and never build a command string by
+    concatenating an untrusted variable into one for `eval`/`sh -c`
+    (`eval "some-command $CI_MERGE_REQUEST_TITLE"` is exploitable however
+    the variable got its value).
+  - **Config-time interpolation via CI/CD inputs** (`$[[ inputs.x ]]`,
+    used in a component/included config's `rules:`/`script:`): this IS
+    substituted into the YAML/expression text before the job is even
+    created, the same class of risk `${{ }}` is in GitHub Actions — do not
+    feed an untrusted value (an MR title, a branch name) into an
+    `inputs:`-driven `$[[ ]]` interpolation that reaches a `script:` line
+    or a `rules:if:` expression without validating/escaping it first.
 
 ## GitLab CI protected variables and branches
 
@@ -108,5 +130,11 @@ workflow files under `.github/workflows/` and to `.gitlab-ci.yml`.
   commit SHA for a third-party action.
 - A workflow-level `permissions: write-all`, or no `permissions:` block at
   all, on a workflow with jobs that do not all need write access.
-- `${{ github.event.* }}` interpolated directly inside a `run:`/`script:`
-  string instead of passed through `env:`/`variables:` first.
+- `${{ github.event.* }}` interpolated directly inside a `run:` string
+  instead of passed through `env:` first.
+- A GitLab CI `script:` unquoted use of a variable holding untrusted input
+  (an MR title, a branch name), or that variable concatenated into a
+  string handed to `eval`/`sh -c`.
+- An untrusted value reaching a GitLab CI/CD `inputs:`-driven `$[[ ]]`
+  interpolation in a `script:` line or a `rules:if:` expression with no
+  validation.

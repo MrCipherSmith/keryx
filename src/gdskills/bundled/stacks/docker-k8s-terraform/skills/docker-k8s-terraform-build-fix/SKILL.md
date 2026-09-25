@@ -8,7 +8,6 @@ triggers:
   - "terraform validate is failing"
   - "this Dockerfile permission denied error"
   - "kubectl apply is rejecting this manifest"
-  - "this Helm chart won't render"
 metadata:
   origin: authored
   category: build-fix
@@ -76,12 +75,15 @@ an update that the API server is correctly refusing.
 
 **Terraform error:** for a type/argument error, fix the resource/variable
 declaration `validate` names. For an unexpected destroy+recreate after a
-rename or a module refactor, use `terraform state mv <old_address>
-<new_address>` to relink the existing real resource to its new
-configuration address — never accept the destroy+recreate plan with
-`-auto-approve` (or any unreviewed apply) for a stateful resource just to
-make the plan "go through"; that actually destroys and rebuilds the real
-infrastructure the rename was never meant to touch.
+rename or a module refactor, relink the existing real resource to its new
+configuration address — either a `moved` block (`moved { from =
+<old_address> to = <new_address> }`, declarative, stays in the
+configuration) or the equivalent `terraform state mv <old_address>
+<new_address>` (imperative, a one-off CLI operation) — never accept the
+destroy+recreate plan with `-auto-approve` (or any unreviewed apply) for a
+stateful resource just to make the plan "go through"; that actually
+destroys and rebuilds the real infrastructure the rename was never meant
+to touch.
 
 ### Step 3: Verify
 
@@ -118,9 +120,9 @@ State the root cause in one sentence, not just "fixed the error."
 - NEVER fix a permission-denied error by running `chmod 777` or reverting
   to `USER root` — fix ownership at the actual `COPY`/`RUN` step instead.
 - NEVER accept an unexpected Terraform destroy/replace with
-  `-auto-approve` (or any unreviewed apply) — use `terraform state mv` (or
-  another state-preserving fix) when the resource itself was not meant to
-  change.
+  `-auto-approve` (or any unreviewed apply) — use a `moved` block or
+  `terraform state mv` (or another state-preserving fix) when the
+  resource itself was not meant to change.
 - NEVER delete a required Kubernetes manifest field just to make a
   validator stop complaining.
 - NEVER delete or skip a failing validation step to reach a green build.

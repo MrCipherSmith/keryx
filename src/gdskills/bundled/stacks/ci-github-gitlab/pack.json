@@ -22,7 +22,7 @@
       "a pull_request_target job that checks out github.event.pull_request.head.sha/.ref and then runs a build/test/lint step against it (the pwn-request pattern)",
       "a third-party uses: action pinned to a mutable tag (@v4, @main) instead of a full commit SHA",
       "a workflow-level permissions: write-all, or no permissions: block at all, on a workflow whose jobs do not all need write access",
-      "${{ github.event.* }} or an untrusted CI/CD variable interpolated directly into a run:/script: shell string instead of passed through env:/variables: first",
+      "${{ github.event.* }} interpolated directly into a run: shell string instead of passed through env: first, or a GitLab CI script: line that unquotes an untrusted variable, feeds it to eval/sh -c, or reaches it through an unvalidated $[[ inputs.* ]] interpolation",
       "a GitLab CI deploy job consuming a Protected+Masked variable with no rules: restricting it to the protected branch/tag that variable is exposed to",
       "a cache key that never changes, or a job with no timeout-minutes/timeout on a step that can hang"
     ],

@@ -1,15 +1,19 @@
 ---
 extends: common
-paths: ["**/Dockerfile", "**/*.dockerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "**/templates/*.yaml", "helm/**/*.yaml", "**/*.tf", "**/*.tfvars"]
+paths: ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile", "**/*.dockerfile", "**/Containerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "manifests/**/*.yaml", "manifests/**/*.yml", "deploy/**/*.yaml", "deploy/**/*.yml", "overlays/**/*.yaml", "**/kustomization.yaml", "**/kustomization.yml", "helm/**/*.yaml", "helm/**/templates/*.yaml", "charts/**/*.yaml", "charts/**/templates/*.yaml", "charts/*/values.yaml", "**/*.tf", "**/*.tfvars"]
 metadata:
   origin: authored
 ---
 
 # Docker / Kubernetes / Terraform validation
 
-This pack ships no separate `test` skill (see `pack.json`'s `notes.test`):
-validating these file types is a static, tool-driven check, not a written
-test suite, and it is exercised from `docker-k8s-terraform-build-fix`'s own
+This pack ships no separate `test` skill yet (see `pack.json`'s
+`notes.test` — genuine test-writing concepts exist for this family,
+`terraform test`/`.tftest.hcl` and `helm test`/helm-unittest chief among
+them; the deferral is a scope decision for this batch, not a claim that no
+such concept exists). What this rule covers instead is VALIDATION: a
+static, tool-driven check that an existing file is well-formed and
+schema-correct, exercised from `docker-k8s-terraform-build-fix`'s own
 reproduce-and-classify step. This rule states what "validated" means for
 each file type so that step — and any manual check — has a concrete bar.
 
