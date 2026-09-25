@@ -1,8 +1,8 @@
 {
   "triggers": {
     "positive": [
-      "Review this Flutter diff for missing context.mounted checks",
-      "Check this Flutter change for an undisposed controller",
+      "Does this diff use the BuildContext safely after the async call finishes?",
+      "Take a look at whether this change cleans up its controllers properly",
       "Review this Dart pull request for bang-operator misuse",
       "Does this Flutter diff call setState after an await with no mounted check?",
       "Review this Flutter widget for business logic inside build()",

@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "Write widget tests for this Flutter screen that loads data from a repository",
+      "This screen fetches data from a repository and has no test coverage at all",
       "Add a test for this Flutter form that checks the error banner appears on failure",
       "Test this Flutter list widget's loading, data, and empty states",
-      "Add a widget test that taps this button and checks the resulting SnackBar",
-      "Fix this Flutter widget test that keeps timing out",
+      "Can you write a test confirming that tapping this button shows the right confirmation banner?",
+      "One of our widget tests hangs and times out intermittently, can you get it stable?",
       "Write a unit test for this Flutter view-model that calls a repository",
       "Test this Flutter screen's pull-to-refresh behavior"
     ],

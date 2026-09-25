@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "flutter analyze is failing with an undefined identifier error",
+      "Getting a red squiggly on an undefined identifier when I run the analyzer",
       "pubspec.yaml and pubspec.lock are out of sync, please fix",
       "Resolve this pub version solving conflict between two packages",
-      "flutter build is failing after I bumped a dependency version",
-      "This Flutter lint is failing in CI, fix the build",
-      "flutter test is failing after a pub upgrade, fix the build",
+      "Upgraded a package and now the app will not compile",
+      "CI keeps failing on the lint step for this PR, can you sort it out",
+      "Ran pub upgrade this morning and the whole test suite stopped compiling",
       "Dart compile error about a nullable value, fix the build"
     ],
     "negative": [
@@ -71,7 +71,9 @@
         "vague": "You should fix the actual null-safety issue instead of suppressing the warning -- make sure the value is properly handled before you call this done.",
         "subtle_wrong": "Since there's no code attached, here's the general pattern: add `!` after the flagged value so the analyzer treats it as non-null and stops complaining, e.g. `value!.someMethod()`. That resolves the warning without needing to restructure anything, and you can always come back and add a proper null check later if it turns out the value really can be null at runtime."
       },
-      "anti_patterns": ["ignore_for_file"]
+      "anti_patterns": [
+        "ignore_for_file"
+      ]
     }
   ]
 }
