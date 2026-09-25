@@ -103,6 +103,7 @@ import { loadConformSetup, runConformForTarget } from "./conform-source";
 // other flow's concurrent work collides with any of them.
 import { isJevRulesCommand, runJevRulesForShell } from "./jev-rules-command";
 import { isJevRiskCommand, runJevRiskForShell } from "./jev-risk-command";
+import { isJevContractCommand, runJevContractForShell } from "./jev-contract-command";
 import { isJevScenariosCommand, runJevScenariosForShell } from "./jev-scenarios-command";
 // flow 333: registration only — everything else lives in
 // jev-docs-command.ts/jev-comments-command.ts so flow 326/330's concurrent
@@ -7513,6 +7514,20 @@ export async function launchTuiAgentShell(opts: {
               io.onSystem?.(`${await runOpencommentsForShell(cwd, repoArg, prNumber)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-comments: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
+          return;
+        }
+        if (isJevContractCommand(command.name)) {
+          // flow 335: a one-shot check on the working diff, not a modal —
+          // see `jev-contract-command.ts`'s own header for why.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-contract: checking claims against the working diff…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevContractForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-contract: ${error instanceof Error ? error.message : String(error)}\n`);
             }
           })();
           return;

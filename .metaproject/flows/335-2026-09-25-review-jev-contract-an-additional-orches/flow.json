@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "335",
+  "slug": "review-jev-contract-an-additional-orches",
+  "title": "review-jev-contract: an additional orchestrator reviewer that checks a PR's description claims and the flow's acceptance criteria against the diff",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T17:50:30.807Z",
+  "updatedAt": "2026-09-25T18:33:20.931Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T18:32:38.122Z",
+      "note": "src/review/jev-contract.ts (engine module), jev-contract-config.ts, review-jev-contract.ts (adapter); jev-contract.test.ts (28 tests). Registered like jev-risk/-docs: src/commands/review.ts case+USAGE, catalog.ts skill() entry, SKILL.md (bundled+installed byte-identical)."
+    },
+    "AC2": {
+      "at": "2026-09-25T18:32:47.776Z",
+      "note": "keryx review jev-contract (--pr <n>|--diff <ref>) [--flow <id>] [--json] implemented in src/commands/review-jev-contract.ts::runJevContract; usage-error and happy-path tests in review-jev-contract-cli.test.ts pass."
+    },
+    "AC3": {
+      "at": "2026-09-25T18:32:48.149Z",
+      "note": "extractClaims() in jev-contract.ts splits bullets unconditionally and prose sentences by verb-cue regex; 8 unit tests cover bullets, numbered lists, checkboxes, verb-cue sentences, no-claim, multi-claim mixed, code-fence exclusion, dedup. Live check on PR #726/#727 extracted 5 and 4 claims respectively."
+    },
+    "AC4": {
+      "at": "2026-09-25T18:32:48.557Z",
+      "note": "review-jev-contract.ts imports runCheckAc from ./flow-check-ac (which reaches check-ac.ts only via src/flow/service.ts) for --flow's AC track; also imports extractCriterionTokens/computeAcFacts-family via service.ts for claim facts. No check-ac.ts logic duplicated. Live-checked: --flow 332 and --flow 333 both merged acCheck with AC1..AC10 verdicts into the jev-contract output."
+    },
+    "AC5": {
+      "at": "2026-09-25T18:32:56.777Z",
+      "note": "computeClaimFacts() computes tokens present/absent (via extractCriterionTokens), testFilesInDiff for tests-added claims, exportedSymbolsChanged via touchedExportedSymbols (jev-risk.ts) for API-shaped no-change claims; all present per-claim in JSON output (claims[].intent, budget). Unit tests + live check confirm these facts appear in real output."
+    },
+    "AC6": {
+      "at": "2026-09-25T18:32:56.964Z",
+      "note": "batchContractClaimItems asks exactly one noul per claim; synthesizeContractFindings: contradicted facts -> major with class_scope object (schema-valid, revert-checked: breaking class_scope shape fails the CLI schema test); below-threshold noul -> minor. Unit tests cover both severities; CLI test validates against reviewer-finding.schema.json."
+    },
+    "AC7": {
+      "at": "2026-09-25T18:32:57.137Z",
+      "note": "readJevContractEnabled (review.jev.contract) gates the CLI/TUI; jevContractGateRefusal tested opt-in-off and no-credential paths. Orchestrator side: SKILL.md's 'This gate owns the description-vs-diff comparison' section and SKILL.detail.md's CLI-engine reviewers section document the opt-in-on replacement / opt-in-off fallback; no code change was needed in the by-eye path since it is prose-governed, matching how jev-risk/-docs integrate."
+    },
+    "AC8": {
+      "at": "2026-09-25T18:33:07.365Z",
+      "note": "All content is redacted via redactSensitiveText from src/security/service.ts before it reaches state/questions text (renderClaimState, questionForClaim, jev-contract.ts). No ad hoc redaction added."
+    },
+    "AC9": {
+      "at": "2026-09-25T18:33:07.527Z",
+      "note": "budget object {maxCalls, claimsScored, claimsSkipped} and tokens {jevCalls, inputTokens, outputTokens, costUsd} reported in both --json and prose (renderContractMarkdown); --max-calls truncation test confirms claimsSkipped is reported. Live check on PR #726 hit a real vendor max_tokens_exceeded on one batch; jevError field reports it and the run degrades gracefully rather than aborting (revert-checked: reverting the per-batch try/catch would have crashed the whole command, as it did before the fix)."
+    },
+    "AC10": {
+      "at": "2026-09-25T18:33:07.690Z",
+      "note": "docs/docs/cli-reference.md (table rows + 'review jev-contract' section), HELP_GROUPS (/contract entry), commands-by-task.md regenerated via scripts/generate-commands-by-task.ts, skill catalogs (.metaproject/skills/catalog.md, modules/gdskills.md, src/gdskills/catalog.ts), skill-length-ceilings.ts (new entry 193, review-orchestrator/SKILL.md held at exactly 1723 via in-place edits), routing-corpus.ts case (RANK1_FIRST/TOTAL 328/330 -> 332/334), bundled skill counts (77->78 in bundled-eval.test.ts and skills.bundled-verify.test.ts). SKILL.md/SKILL.detail.md bundled and installed copies verified byte-identical via diff. src/commands/review.ts USAGE gained jev-risk/jev-scenarios/jev-contract lines. /contract wired in tui-shell.ts, agent-commands.ts."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read metaproject, jev-risk/-docs/-scenarios patterns, check-ac.ts, service.ts, review.ts registration, orchestrator SKILL.md/detail.md."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented jev-contract.ts, jev-contract-config.ts, review-jev-contract.ts, TUI /contract, registrations across review.ts/catalog.ts/help-groups.ts/agent-commands.ts/routing-corpus.ts/skill-length-ceilings.ts, SKILL.md+SKILL.detail.md, docs."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "jev-contract.test.ts (28), jev-contract-config.test.ts (4), review-jev-contract-cli.test.ts (10), jev-contract-command.test.ts (6); typecheck/lint clean; full src/commands, src/flow, src/review, src/gdskills, src/standard, src/tui (opentui-no-skips) suites green except 2 pre-existing unrelated sandbox tests in schedule-security.test.ts; revert-checked contradiction detection and class_scope schema validity."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Live-checked on PR #726 (flow 332) and #727 (flow 333) with env -u OPENROUTER_API_KEY, opt-in on, from a scratch dir; 10 ACs confirmed with evidence."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T17:50:30.807Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T17:51:08.810Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T17:51:09.138Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T18:32:38.122Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/review/jev-contract.ts (engine module), jev-contract-config.ts, review-jev-contract.ts (adapter); jev-contract.test.ts (28 tests). Registered like jev-risk/-docs: src/commands/review.ts case+USAGE, catalog.ts skill() entry, SKILL.md (bundled+installed byte-identical). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:32:47.776Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: keryx review jev-contract (--pr <n>|--diff <ref>) [--flow <id>] [--json] implemented in src/commands/review-jev-contract.ts::runJevContract; usage-error and happy-path tests in review-jev-contract-cli.test.ts pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:32:48.150Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: extractClaims() in jev-contract.ts splits bullets unconditionally and prose sentences by verb-cue regex; 8 unit tests cover bullets, numbered lists, checkboxes, verb-cue sentences, no-claim, multi-claim mixed, code-fence exclusion, dedup. Live check on PR #726/#727 extracted 5 and 4 claims respectively. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:32:48.557Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: review-jev-contract.ts imports runCheckAc from ./flow-check-ac (which reaches check-ac.ts only via src/flow/service.ts) for --flow's AC track; also imports extractCriterionTokens/computeAcFacts-family via service.ts for claim facts. No check-ac.ts logic duplicated. Live-checked: --flow 332 and --flow 333 both merged acCheck with AC1..AC10 verdicts into the jev-contract output. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:32:56.778Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: computeClaimFacts() computes tokens present/absent (via extractCriterionTokens), testFilesInDiff for tests-added claims, exportedSymbolsChanged via touchedExportedSymbols (jev-risk.ts) for API-shaped no-change claims; all present per-claim in JSON output (claims[].intent, budget). Unit tests + live check confirm these facts appear in real output. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:32:56.964Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: batchContractClaimItems asks exactly one noul per claim; synthesizeContractFindings: contradicted facts -> major with class_scope object (schema-valid, revert-checked: breaking class_scope shape fails the CLI schema test); below-threshold noul -> minor. Unit tests cover both severities; CLI test validates against reviewer-finding.schema.json. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:32:57.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: readJevContractEnabled (review.jev.contract) gates the CLI/TUI; jevContractGateRefusal tested opt-in-off and no-credential paths. Orchestrator side: SKILL.md's 'This gate owns the description-vs-diff comparison' section and SKILL.detail.md's CLI-engine reviewers section document the opt-in-on replacement / opt-in-off fallback; no code change was needed in the by-eye path since it is prose-governed, matching how jev-risk/-docs integrate. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:33:07.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: All content is redacted via redactSensitiveText from src/security/service.ts before it reaches state/questions text (renderClaimState, questionForClaim, jev-contract.ts). No ad hoc redaction added. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:33:07.527Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: budget object {maxCalls, claimsScored, claimsSkipped} and tokens {jevCalls, inputTokens, outputTokens, costUsd} reported in both --json and prose (renderContractMarkdown); --max-calls truncation test confirms claimsSkipped is reported. Live check on PR #726 hit a real vendor max_tokens_exceeded on one batch; jevError field reports it and the run degrades gracefully rather than aborting (revert-checked: reverting the per-batch try/catch would have crashed the whole command, as it did before the fix). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:33:07.690Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: docs/docs/cli-reference.md (table rows + 'review jev-contract' section), HELP_GROUPS (/contract entry), commands-by-task.md regenerated via scripts/generate-commands-by-task.ts, skill catalogs (.metaproject/skills/catalog.md, modules/gdskills.md, src/gdskills/catalog.ts), skill-length-ceilings.ts (new entry 193, review-orchestrator/SKILL.md held at exactly 1723 via in-place edits), routing-corpus.ts case (RANK1_FIRST/TOTAL 328/330 -> 332/334), bundled skill counts (77->78 in bundled-eval.test.ts and skills.bundled-verify.test.ts). SKILL.md/SKILL.detail.md bundled and installed copies verified byte-identical via diff. src/commands/review.ts USAGE gained jev-risk/jev-scenarios/jev-contract lines. /contract wired in tui-shell.ts, agent-commands.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:33:13.490Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T18:33:13.635Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T18:33:20.788Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T18:33:20.931Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T18:32:38.122Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:32:47.776Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:32:48.149Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:32:48.557Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:32:56.777Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:32:56.964Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:32:57.137Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:33:07.365Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:33:07.527Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    },
+    {
+      "at": "2026-09-25T18:33:07.690Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:57d5ed7bc02ff7da5c01ea064c410a28414f84a687c8cc2cd0c560a3b384a503"
+    }
+  ]
+}

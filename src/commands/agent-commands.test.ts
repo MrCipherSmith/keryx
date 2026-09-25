@@ -53,6 +53,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/jevrules",
     "/staledocs",
     "/opencomments",
+    "/contract",
     "/guard",
     "/mcp",
     "/compact",
@@ -157,6 +158,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/jevrules",
     "/staledocs",
     "/opencomments",
+    "/contract",
     "/guard",
     "/mcp",
     "/compact",
@@ -291,6 +293,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/jevrules",
     "/staledocs",
     "/opencomments",
+    "/contract",
     "/guard",
     "/mcp",
     "/compact",
@@ -331,6 +334,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/copy",
     "/ci",
     "/conform",
+    "/contract",
     "/compact",
     "/clear",
   ]);
@@ -339,6 +343,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/connect",
     "/copy",
     "/conform",
+    "/contract",
     "/compact",
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
