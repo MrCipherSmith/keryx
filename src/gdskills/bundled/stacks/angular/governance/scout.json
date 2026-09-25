@@ -4,7 +4,8 @@
     "decision": "fork",
     "topMatch": "angular/angular-code-review",
     "recordedAt": "2026-09-25T06:33:13.884Z",
-    "skillName": "angular-implementation"
+    "skillName": "angular-implementation",
+    "justification": "Top match angular-code-review is this pack's own sibling sharing Angular/signal/inject() vocabulary, but is read-only review of already-written code, explicitly excluded here (this skill authors new components/services); trigger-accuracy eval confirms both route correctly on their own positive prompts. No existing catalog skill (react-implementation, vue-implementation, nestjs-implementation) covers Angular's own standalone-component/signal/inject() authoring surface."
   },
   {
     "query": "Use when writing or fixing a TestBed spec for an Angular component, service, directive, pipe, or route guard -- configuring TestBed.configureTestingModule, driving a ComponentFixture (componentRef.setInput, detectChanges, whenStable), mocking HttpClient with HttpTestingController, testing a CanActivate/CanMatch guard function, and using fakeAsync/tick for deterministic async specs. Not for Vue/React component tests, not for a full user-flow check against a deployed, running instance, and not for implementing the component/service under test (use angular-implementation).",
@@ -25,6 +26,7 @@
     "decision": "fork",
     "topMatch": "nextjs-nuxt/nextjs-nuxt-build-fix",
     "recordedAt": "2026-09-25T06:33:14.375Z",
-    "skillName": "angular-build-fix"
+    "skillName": "angular-build-fix",
+    "justification": "Top match nextjs-nuxt-build-fix shares generic 'build fails' vocabulary but targets Next.js/Nuxt compile failures (Server/Client boundary, composable resolution), not Angular's AOT/Ivy template type-checking or NgModule/DI resolution errors this skill covers; the description explicitly excludes a plain TypeScript compile failure with no Angular template involved. No existing catalog skill covers ng build/AOT-specific fixes. Confirmed distinct by clean trigger-accuracy eval."
   }
 ]

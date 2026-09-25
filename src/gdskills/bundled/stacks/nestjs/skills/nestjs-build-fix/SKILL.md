@@ -1,10 +1,10 @@
 ---
 name: nestjs-build-fix
-description: "Use when a NestJS app itself won't boot because of its own dependency graph: `Nest can't resolve dependencies` / UnknownDependenciesException, a circular-dependency warning between modules or providers, a missing @Injectable() decorator, or a provider that isn't exported from the module owning it. Applies the smallest root-cause fix to the module/provider graph and never widens scope or adds a module import blindly to silence the startup failure. Excludes a TypeScript compiler mismatch or module-loader failure with no Nest dependency-injection angle at all (use the ts-js-node build-fix skill), and excludes authoring behavior in a module that already boots cleanly (use nestjs-implementation)."
+description: "Use when a NestJS app itself won't boot because of its own dependency graph: `Nest can't resolve dependencies` / UnknownDependenciesException, a circular-dependency warning naming two @Module()-decorated NestJS modules or providers, a missing @Injectable() decorator, or a provider that isn't exported from the module owning it. Applies the smallest root-cause fix to the module/provider graph and never widens scope or blindly registers another module to silence the startup failure. Excludes a TypeScript compiler mismatch or module-loader failure with no Nest dependency-injection angle at all (use the ts-js-node build-fix skill), and excludes authoring behavior in a module that already boots cleanly (use nestjs-implementation)."
 triggers:
   - "Nest can't resolve dependencies of this provider"
   - "fix this NestJS UnknownDependenciesException"
-  - "circular dependency warning between these two NestJS modules"
+  - "circular dependency warning naming these NestJS @Module providers"
   - "NestJS app won't bootstrap, dependency injection error"
   - "this provider isn't found, NestJS DI error"
   - "NestJS app throws at startup over its own module graph"

@@ -42,7 +42,19 @@ interface PackJson {
   readonly provenance?: { readonly origin: string; readonly sourceRef?: string; readonly addedAt?: string };
   readonly stability: string;
   readonly skills: Readonly<Record<string, readonly string[]>>;
-  readonly extends?: string;
+  // A meta-framework pack (flow 318, W4 batch 2's `nextjs-nuxt`, covering both
+  // Next.js/React and Nuxt/Vue) may legitimately extend more than one base
+  // pack; `extends` is not part of install-manifest.schema.json's own
+  // `component` $def (it is pack.json-only authoring metadata, never a hard
+  // module dependency — those are wired explicitly through install-manifest's
+  // own `dependencies`), so widening it to `string | string[]` here is a
+  // content decision, not a schema change.
+  readonly extends?: string | readonly string[];
+}
+
+function extendsList(pack: PackJson): readonly string[] {
+  if (pack.extends === undefined) return [];
+  return typeof pack.extends === "string" ? [pack.extends] : pack.extends;
 }
 
 /** The five lifecycle buckets every pack.json's `skills` map must carry a key for (flow 314, W4 Wave 4) — an empty array is fine, a missing key is not. */
@@ -206,11 +218,12 @@ describe("stack pack layout (real bundled tree)", () => {
       }
     });
 
-    test(`${packId}: pack.json's "extends", when present, names an existing pack dir (flow 314 W4)`, () => {
+    test(`${packId}: pack.json's "extends", when present, names an existing pack dir for every entry (flow 314 W4; widened to string[] in flow 318 W4 batch 2 for meta-framework packs)`, () => {
       const pack = readPackJson(packDir);
-      if (pack.extends === undefined) return;
-      const extendedDir = path.join(STACKS_ROOT, pack.extends);
-      expect(existsSync(extendedDir)).toBe(true);
+      for (const extendedId of extendsList(pack)) {
+        const extendedDir = path.join(STACKS_ROOT, extendedId);
+        expect(existsSync(extendedDir), `pack.json "extends" names "${extendedId}", which has no directory under ${STACKS_ROOT}`).toBe(true);
+      }
     });
 
     test(`${packId}: agent-refs.json's listed agents each resolve to a generated agent file with a matching origin.sourceRef (flow 314 W4)`, () => {

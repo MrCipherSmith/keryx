@@ -3,13 +3,6 @@
     "query": "Use when building or changing a Vue 3 Single File Component, composable, or Pinia store -- covers <script setup> with type-based defineProps/defineEmits, choosing ref vs reactive, computed vs watch/watchEffect, composable extraction, and Pinia store/action design. Not for Options API legacy components (use vue2-to-vue3-migration) or Node.js service/CLI code with no .vue file (use nodejs-implementation).",
     "decision": "fork",
     "topMatch": "vue/vue2-to-vue3-migration",
-    "recordedAt": "2026-09-25T06:25:10.148Z",
-    "skillName": "vue-implementation"
-  },
-  {
-    "query": "Use when building or changing a Vue 3 Single File Component, composable, or Pinia store -- covers <script setup> with type-based defineProps/defineEmits, choosing ref vs reactive, computed vs watch/watchEffect, composable extraction, and Pinia store/action design. Not for Options API legacy components (use vue2-to-vue3-migration) or Node.js service/CLI code with no .vue file (use nodejs-implementation).",
-    "decision": "fork",
-    "topMatch": "vue/vue2-to-vue3-migration",
     "recordedAt": "2026-09-25T06:25:21.007Z",
     "skillName": "vue-implementation",
     "justification": "Top match vue2-to-vue3-migration (0.417) shares vue/pinia/component vocabulary inherent to any two skills in the same framework pack, but is scoped to converting legacy Options API code to Composition API, not authoring new Composition API code -- distinct trigger surface (upgrade/convert/migrate prompts vs build/implement prompts), confirmed by clean trigger-accuracy eval. Second match vue-code-review (0.350) is read-only review, not authoring."

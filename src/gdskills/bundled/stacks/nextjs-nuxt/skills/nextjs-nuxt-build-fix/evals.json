@@ -47,7 +47,7 @@
     },
     {
       "id": "narrow-use-client-not-widen",
-      "prompt": "Next.js build error: \"You're importing a component that needs useState. This React hook only works in a Client Component.\" It's pointing at a small icon-button inside my Server Component page. How should I fix it?",
+      "prompt": "Next.js flags a Server/Client boundary build error because a small icon-button inside my Server Component page uses the useState hook, and that hook needs client-side rendering to run at all. How should I fix it?",
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "'use client'" },

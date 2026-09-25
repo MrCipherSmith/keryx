@@ -20,7 +20,7 @@
   "scenarios": [
     {
       "id": "missing-export-not-import-alone",
-      "prompt": "OrdersService injects PricingService and I'm getting 'Nest can't resolve dependencies of OrdersService'. I already added PricingModule to OrdersModule's imports array, but it's still failing. What am I missing?",
+      "prompt": "OrdersService injects PricingService and Nest throws an UnknownDependenciesException naming OrdersService at bootstrap. I already added PricingModule to OrdersModule's imports array, but it's still failing. What am I missing?",
       "strictness": "high",
       "expected_behavior": [
         {
