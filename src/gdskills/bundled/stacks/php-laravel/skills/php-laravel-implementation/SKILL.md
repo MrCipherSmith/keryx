@@ -56,7 +56,9 @@ from; read them before writing code, not just this summary.
   it.
 - For a new queued job, decide its idempotency story
   (`ShouldBeUnique`/`uniqueId()`, or an explicit dedupe check) before
-  writing `handle()` — queues are at-least-once by default.
+  writing `handle()` — Laravel's queue connections are at-least-once by
+  default, but the actual guarantee is set by the project's configured
+  connection/driver (e.g. `sync` runs inline with no retry at all).
 
 ### Step 3: Implement
 
@@ -111,8 +113,9 @@ Implemented: app/Http/Controllers/OrderController.php,
 - Eager-load a relationship before accessing it inside a loop over a
   collection; a per-row relationship access with no eager load is an N+1
   query.
-- Every queued job assumes at-least-once delivery and guards its side
-  effect accordingly.
+- Every queued job assumes the configured connection can redeliver it and
+  guards its side effect accordingly -- true for any at-least-once
+  connection, which is most production configurations but not `sync`.
 
 ## Red Flags
 
@@ -121,7 +124,7 @@ Implemented: app/Http/Controllers/OrderController.php,
 | "I'll just use `$request->all()` here, the form only has a few fields" | Bypasses validation and can mass-assign any column present in the request payload, not just the form's own fields; use `validated()` |
 | "This model is internal-only, it doesn't need `$fillable`" | "Internal-only" today does not prevent a future controller or API endpoint from mass-assigning it; declare the allowlist regardless |
 | "The relationship is only accessed for a handful of rows, eager loading is overkill" | "A handful" in a test fixture can be thousands in production; eager-load by default and only skip it with a stated reason |
-| "This job basically never gets retried, idempotency can wait" | Laravel's queues are at-least-once by design — a rare retry is still a retry, and the cost of guarding it up front is small compared to a duplicated side effect in production |
+| "This job basically never gets retried, idempotency can wait" | Most production queue connections are at-least-once by design — a rare retry is still a retry, and the cost of guarding it up front is small compared to a duplicated side effect in production |
 
 ## Verification
 

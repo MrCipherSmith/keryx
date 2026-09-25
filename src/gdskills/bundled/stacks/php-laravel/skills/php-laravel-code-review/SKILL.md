@@ -1,6 +1,6 @@
 ---
 name: php-laravel-code-review
-description: "Use when auditing a PHP/Laravel diff before merge for Eloquent and Blade pitfalls -- \$fillable/\$guarded mass-assignment gaps, missing eager-loaded relationships causing N+1 queries, string-interpolated DB::raw() SQL, unescaped {!! !!} Blade output, a route dropped from VerifyCsrfToken coverage, and a queued job with no idempotency guard. Not for a Django/Python template review (use python-code-review). Read-only, no edits."
+description: "Use when auditing a PHP/Laravel diff before merge for Eloquent and Blade pitfalls -- \$fillable/\$guarded mass-assignment gaps, missing eager-loaded relationships causing N+1 queries, string-interpolated DB::raw() SQL, unescaped {!! !!} Blade output, a route dropped from VerifyCsrfToken coverage, and a queued job with no idempotency guard. Not for a template review in another web framework's own view layer (use that framework's own code-review skill). Read-only, no edits."
 triggers:
   - "review this Laravel diff for mass assignment issues"
   - "check this Eloquent change for N+1 queries"
@@ -74,7 +74,8 @@ are checked against.
 - A new `ShouldQueue` job whose `handle()` performs a side effect
   (charging a card, sending a one-time notification, creating a record)
   with no `ShouldBeUnique`/`uniqueId()` or idempotency check — flag as a
-  duplicate-delivery risk given Laravel's at-least-once queue semantics.
+  duplicate-delivery risk on any at-least-once connection, which most
+  production queue configurations are.
 
 ### Step 3: Report
 
@@ -110,7 +111,7 @@ app/Http/Controllers/OrderController.php:24 — Order::create($request->all())
 | "The form only has a few fields, `$request->all()` is fine here" | The request payload is not bounded by the form's own fields — an attacker can add extra keys; validate and use `validated()` regardless of form size |
 | "This raw SQL is only reachable from an admin route" | Admin-only is a claim about the current deployment, not a property of the code; interpolated SQL is still injectable if that assumption ever changes |
 | "I'll just fix the mass-assignment issue myself since it's a one-line change" | This skill is read-only; report the finding and its fix direction, do not edit the file |
-| "The queue job basically never gets retried in practice" | Laravel's queues are at-least-once by design; "basically never" is not a guarantee, flag the missing idempotency guard regardless |
+| "The queue job basically never gets retried in practice" | Most production queue connections are at-least-once by design; "basically never" is not a guarantee, flag the missing idempotency guard regardless |
 
 ## Verification
 

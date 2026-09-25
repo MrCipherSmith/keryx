@@ -53,8 +53,9 @@ checklist from; read them before writing code, not just this summary.
   belong on the model).
 - For a new background job, decide what makes `perform` idempotent
   before writing it — a uniqueness check, an idempotency key, or an
-  upsert — since Rails' queue adapters guarantee at-least-once, not
-  exactly-once, delivery.
+  upsert — most Active Job queue adapters (Sidekiq, SQS, Resque) are
+  at-least-once, not exactly-once, though the actual guarantee depends
+  on the configured adapter (the inline/test adapters have none).
 
 ### Step 3: Implement
 
@@ -125,7 +126,7 @@ Implemented: app/models/order.rb, app/controllers/orders_controller.rb,
 | "I'll just do `Order.new(params[:order])`, it's a small internal form" | Bypasses strong parameters entirely; any key in `params[:order]`, including ones never meant to be user-settable, gets mass-assigned |
 | "I'll call `.author` inside this `each` loop, it's just one extra query" | That "one extra query" happens once per row — N+1 queries; add `.includes(:author)` before the loop |
 | "This callback also sends a welcome email and pings analytics, but it's still 'about' the model" | A model callback doing multi-step, cross-system work is the fat-model anti-pattern; extract a service object so it's testable in isolation and the model stays about persistence |
-| "The job will basically only ever run once" | Rails' queue adapters guarantee at-least-once delivery, not exactly-once; a retried or duplicated run has to be safe |
+| "The job will basically only ever run once" | Most production Active Job adapters are at-least-once, not exactly-once; a retried or duplicated run has to be safe |
 
 ## Verification
 

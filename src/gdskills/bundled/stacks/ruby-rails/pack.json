@@ -23,7 +23,7 @@
       "a loop over an association that triggers N+1 queries because includes/preload/eager_load was not used",
       "raw/html_safe applied to a value that can contain user input, bypassing ERB's automatic HTML escaping",
       "a controller action reachable without before_action :authenticate_user! (or the app's equivalent) or an authorization check",
-      "an ActiveJob whose perform is not safe to run twice (no idempotency key or guard) given Rails' at-least-once delivery guarantee",
+      "an ActiveJob whose perform is not safe to run twice (no idempotency key or guard) on an adapter that can redeliver it -- true of most production Active Job adapters",
       "a credential, API key, or signing secret committed in source instead of Rails credentials or ENV"
     ],
     "buildCommands": [

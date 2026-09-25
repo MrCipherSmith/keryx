@@ -1,6 +1,6 @@
 ---
 name: ruby-rails-code-review
-description: "Use when reviewing a Rails change for framework-specific risks -- mass assignment gaps, N+1 queries, raw SQL interpolation, raw/html_safe XSS, missing auth/authorization filters, fat controllers/models, and non-idempotent ActiveJobs. Not for a Django/Python view (use python-code-review). Read-only, no edits."
+description: "Use when reviewing a Rails change for framework-specific risks -- mass assignment gaps, N+1 queries, raw SQL interpolation, raw/html_safe XSS, missing auth/authorization filters, fat controllers/models, and non-idempotent ActiveJobs. Not for a change in another web framework's own MVC layer (use that framework's own code-review skill). Read-only, no edits."
 triggers:
   - "review this Rails diff for mass assignment issues"
   - "check this Rails controller for N+1 queries"
@@ -82,7 +82,7 @@ are the rule set findings are checked against.
 **Background jobs**
 - An `ActiveJob#perform` whose side effect would be harmful if it ran
   twice (charge, duplicate send) with no idempotency guard — flag it,
-  given Rails' at-least-once delivery guarantee.
+  since most production Active Job adapters are at-least-once.
 
 ### Step 3: Report
 

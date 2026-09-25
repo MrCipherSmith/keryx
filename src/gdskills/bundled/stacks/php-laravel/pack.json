@@ -23,7 +23,7 @@
       "a relationship accessed inside a loop with no eager load (with()/load()) on the collection it iterates -- N+1 queries",
       "Blade {!! !!} unescaped output rendering a value that traces back to user input",
       "a state-changing route (POST/PUT/PATCH/DELETE) missing CSRF protection or excluded from the VerifyCsrfToken middleware without a stated reason",
-      "a queue job with no idempotency handling (unique(), a dedupe key, or a check before side-effecting work) despite at-least-once delivery and retries"
+      "a queue job with no idempotency handling (unique(), a dedupe key, or a check before side-effecting work) on a connection that can redeliver or retry it -- true of most production queue configurations"
     ],
     "buildCommands": [
       "composer install",
