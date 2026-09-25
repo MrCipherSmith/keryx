@@ -1311,6 +1311,7 @@ keryx routing unset <category> [--user|--project]
 keryx routing trust
 keryx routing profile list [--json]
 keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>
+keryx routing stats [--json]
 ```
 
 | Subcommand | Flags | Description |
@@ -1322,6 +1323,7 @@ keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--con
 | `trust` | — | Print `routing.config.json`'s entries and approve its current content, so the project layer starts applying. |
 | `profile list` | `--json` | Every stored model profile: strength tier, input/output price per million tokens, context length, priority, each field's source, and availability. |
 | `profile set` | `<provider>/<model>`, `--tier`\|`--price-in`\|`--price-out`\|`--context`\|`--priority <value>` | An operator correction to one profile field — stored with `source: "operator"`, never overwritten by a later refresh. |
+| `stats` | `--json` | Real measured task cost per `(provider, model, category)`: sample count, median tokens/task, median cost/task (or `unknown`), success rate. See "Real task cost" below. |
 
 In the TUI, `/routing` opens a list+detail modal: the list side shows every
 category's current resolution (with a not-connected/unavailable fallback
@@ -1441,6 +1443,35 @@ profiles:
 
 `keryx routing list` shows a derived category as
 `auto (derived from <provider>'s models) -> …`.
+
+### Real task cost (flow 341)
+
+The step-down rule above assumes a lighter model is cheaper per task. That is
+not always true: a lighter model can burn more tokens finishing the same task
+than a stronger one would have, so per-token price alone is not task cost.
+Keryx measures the real thing instead.
+
+Every finished `keryx shell` turn records one entry — provider, model,
+routing category (when assigned), input/output tokens, cost in USD (when the
+model's price is known), and whether the turn finished cleanly — into a
+rolling per-user store (`task-cost.json`, mode `0600`, atomically written,
+capped at 200 recent samples per `(provider, model, category)` key). Nothing
+in the store is a credential or a key.
+
+`keryx routing stats [--json]` prints the rolling summary: sample count `n`,
+median tokens/task, median cost/task (`unknown` when no sample in the window
+has a known price), and success rate, one row per `(provider, model,
+category)`, sorted by provider then model then category.
+
+That summary feeds back into derivation: for `subagents`/`docs`/`unattended`,
+once BOTH the structural step-down candidate and the stronger candidate have
+at least 20 measured tasks in that category AND both have a known median cost
+per task, the step-down pick is used ONLY IF its own median cost per task is
+strictly lower — otherwise the stronger candidate is used instead. Below that
+evidence bar (too few samples, or cost unknown on either side), the
+structural, size-based rule decides exactly as before. `/routing`'s list
+shows the per-task cost next to a `derived` row once it is known:
+`auto (derived from anthropic's models) -> anthropic/claude-sonnet-5  ·  ~$0.04/task (n=37)`.
 
 ---
 

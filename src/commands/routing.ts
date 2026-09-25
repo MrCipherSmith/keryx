@@ -37,6 +37,7 @@ import {
   type ModelProfile,
   type ModelProfileFieldValue,
 } from "../harness/routing/model-profile";
+import { allStats, readTaskCostStore, taskCostLookupFrom, type TaskCostStats } from "../harness/routing/task-cost";
 
 /** Seam for tests: production passes none (the real project cwd, the real per-user config dir). */
 export interface RoutingCommandDeps {
@@ -76,6 +77,8 @@ function printRoutingHelp(): void {
       "                              Every stored model profile (tier, price, context, priority, sources, availability).",
       "  keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>",
       "                              An operator correction — stored with source \"operator\", never overwritten by a later refresh.",
+      "  keryx routing stats [--json]",
+      "                              Real measured task cost per (provider, model, category): n, median tokens/task, median cost/task, success rate.",
       "",
       `Categories: ${ROUTING_CATEGORIES.join(", ")}`,
     ].join("\n"),
@@ -131,7 +134,8 @@ async function runList(args: string[], location: RoutingConfigLocation, deps: Ro
   if (session !== undefined) {
     const sessionProvider = providers.find((p) => p.name === session.providerId);
     const models = sessionProvider?.models ?? [session.modelId];
-    derived = deriveDefaultTable(session.providerId, models, profiles, session.modelId);
+    const taskCostLookup = taskCostLookupFrom(readTaskCostStore(location.userConfigDir));
+    derived = deriveDefaultTable(session.providerId, models, profiles, session.modelId, taskCostLookup);
   }
   const rows = ROUTING_CATEGORIES.map((category) => {
     const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connected, available);
@@ -310,6 +314,37 @@ async function runProfileSet(args: string[], userConfigDir: string | undefined):
   console.log(`${providerId}/${modelId}: ${formatModelProfileLine(profile)}`);
 }
 
+/** `$1.23`/`$0.0041` style — enough precision to distinguish two cheap models, never scientific notation. */
+function formatUsd(value: number): string {
+  const digits = value < 0.01 ? 4 : 2;
+  return `$${value.toFixed(digits)}`;
+}
+
+function formatStatsLine(row: TaskCostStats): string {
+  const cost = row.medianCostUsd !== undefined ? formatUsd(row.medianCostUsd) : "unknown";
+  const success = `${Math.round(row.successRate * 100)}%`;
+  return `${row.providerId}/${row.modelId}  [${row.category}]  n=${row.n}  median ${Math.round(row.medianTokens)} tok/task  ${cost}/task  ${success} success`;
+}
+
+/** `keryx routing stats [--json]` (flow 341) — real measured task cost per (provider, model, category), from `task-cost.ts`'s rolling on-disk store. Never prints a credential/key: the store holds only ids, token counts, a derived cost, and a boolean. */
+function runStats(args: string[], userConfigDir: string | undefined): void {
+  const store = readTaskCostStore(userConfigDir);
+  const rows = allStats(store);
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ stats: rows }, null, 2));
+    return;
+  }
+  console.log("# routing task cost");
+  console.log("");
+  if (rows.length === 0) {
+    console.log("(no measured tasks recorded yet)");
+    return;
+  }
+  for (const row of rows) {
+    console.log(formatStatsLine(row));
+  }
+}
+
 async function runProfile(args: string[], userConfigDir: string | undefined): Promise<void> {
   const sub = args[0];
   if (sub === "list") {
@@ -353,6 +388,10 @@ export async function routingCommand(args: string[], deps: RoutingCommandDeps = 
   }
   if (command === "profile") {
     await runProfile(args.slice(1), location.userConfigDir);
+    return;
+  }
+  if (command === "stats") {
+    runStats(args.slice(1), location.userConfigDir);
     return;
   }
   console.error(`Unknown routing command: ${command}`);

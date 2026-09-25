@@ -6,10 +6,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  describeTaskCostSuffix,
   formatRoutingListLines,
   openRouting,
   routingCategoryRows,
 } from "./routing-inspector";
+import type { TaskCostLookup } from "../harness/routing/task-cost";
 import { loadOpenTui, mountChrome, keypressSource, settle } from "./ops-sidebar.test-helpers";
 import { applyThemeId, getThemeId } from "./theme";
 import type { KeypressEvent } from "./filter-list";
@@ -100,6 +102,74 @@ test("flow 305 AC10: formatRoutingListLines shows the exact fallback notice text
   const lines = formatRoutingListLines(rows, 0);
   const reviewLine = lines.find((l) => l.includes("review"))!;
   expect(reviewLine).toContain("anthropic/claude-x - not connected, falling back to session default");
+});
+
+// ---------------------------------------------------------------------------
+// Flow 341 (AC7) — the per-task cost suffix next to a `"derived"` row.
+// ---------------------------------------------------------------------------
+
+test("describeTaskCostSuffix: empty when the lookup has nothing for this row", () => {
+  const rows = routingCategoryRows(
+    { table: {} },
+    { table: {} },
+    () => true,
+    { subagents: { kind: "model", providerId: "anthropic", modelId: "claude-x" } },
+  );
+  const subagents = rows.find((r) => r.category === "subagents")!;
+  expect(subagents.source).toBe("derived");
+  const lookup: TaskCostLookup = () => undefined;
+  expect(describeTaskCostSuffix(subagents, lookup)).toBe("");
+});
+
+test("describeTaskCostSuffix: shows the median cost and n when the row resolved from the derived layer and stats exist", () => {
+  const rows = routingCategoryRows(
+    { table: {} },
+    { table: {} },
+    () => true,
+    { subagents: { kind: "model", providerId: "anthropic", modelId: "claude-x" } },
+  );
+  const subagents = rows.find((r) => r.category === "subagents")!;
+  const lookup: TaskCostLookup = (providerId, modelId, category) =>
+    providerId === "anthropic" && modelId === "claude-x" && category === "subagents"
+      ? { providerId, modelId, category, n: 37, medianTokens: 900, medianCostUsd: 0.04, successRate: 1 }
+      : undefined;
+  expect(describeTaskCostSuffix(subagents, lookup)).toBe("  ·  ~$0.04/task (n=37)");
+});
+
+test("describeTaskCostSuffix: empty for a non-derived row even when stats exist for that provider/model/category", () => {
+  const rows = routingCategoryRows(
+    { table: { subagents: { kind: "model", providerId: "anthropic", modelId: "claude-x" } } },
+    { table: {} },
+  );
+  const subagents = rows.find((r) => r.category === "subagents")!;
+  expect(subagents.source).toBe("project"); // not "derived"
+  const lookup: TaskCostLookup = () => ({ providerId: "anthropic", modelId: "claude-x", category: "subagents", n: 100, medianTokens: 1, medianCostUsd: 1, successRate: 1 });
+  expect(describeTaskCostSuffix(subagents, lookup)).toBe("");
+});
+
+test("formatRoutingListLines: threads the cost suffix onto the derived row's line", () => {
+  const rows = routingCategoryRows(
+    { table: {} },
+    { table: {} },
+    () => true,
+    { subagents: { kind: "model", providerId: "anthropic", modelId: "claude-x" } },
+  );
+  const lookup: TaskCostLookup = () => ({ providerId: "anthropic", modelId: "claude-x", category: "subagents", n: 20, medianTokens: 500, medianCostUsd: 0.1234, successRate: 0.9 });
+  const lines = formatRoutingListLines(rows, 0, "anthropic", lookup);
+  const subagentsLine = lines.find((l) => l.includes("subagents"))!;
+  expect(subagentsLine).toContain("~$0.12/task (n=20)");
+});
+
+test("formatRoutingListLines: omitted taskCostFor — byte-identical to before flow 341", () => {
+  const rows = routingCategoryRows(
+    { table: {} },
+    { table: {} },
+    () => true,
+    { subagents: { kind: "model", providerId: "anthropic", modelId: "claude-x" } },
+  );
+  const lines = formatRoutingListLines(rows, 0, "anthropic");
+  const subagentsLine = lines.find((l) => l.includes("subagents"))!;
+  expect(subagentsLine).not.toContain("/task");
 });
 
 test("formatRoutingListLines marks the selected row", () => {

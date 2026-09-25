@@ -1506,6 +1506,19 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     sideEffects: ["writes the chosen field (source: \"operator\") to the per-user model-profile store"],
   },
+  // ---- routing stats (flow 341) --------------------------------------------
+  // Real measured task cost per (provider, model, category) — n, median
+  // tokens/task, median cost/task, success rate — from the rolling per-user
+  // task-cost store. Read-only; never the network.
+  {
+    module: "routing",
+    command: "routing stats",
+    summary: "Real measured task cost per (provider, model, category): sample count, median tokens/task, median cost/task, success rate.",
+    intent: ["сколько реально стоит модель", "real task cost", "keryx routing stats", "median cost per task"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured per-key stats list" }],
+    json: true,
+    read: true,
+  },
   // ---- retention ----------------------------------------------------------
   {
     module: "retention",

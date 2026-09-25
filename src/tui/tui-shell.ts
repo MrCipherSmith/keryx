@@ -94,7 +94,8 @@ import {
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
-import type { ProfileRefreshSummary } from "../harness/routing/model-profile";
+import { loadModelProfiles, profileKey, type ModelProfile, type ProfileRefreshSummary } from "../harness/routing/model-profile";
+import { appendTaskCostRecord } from "../harness/routing/task-cost";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
 import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
@@ -1271,6 +1272,69 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { res
       chrome.setUsage?.(0, 0);
     },
   });
+}
+
+/** `undefined` when either price is `"unknown"` or `profile` itself is — never a fabricated number, mirroring `NumericProfileField`'s own "unknown, never 0" contract. */
+function estimateTaskCostUsd(profile: ModelProfile | undefined, inputTokens: number, outputTokens: number): number | undefined {
+  if (profile === undefined) return undefined;
+  const priceIn = profile.priceInputPerMillion.value;
+  const priceOut = profile.priceOutputPerMillion.value;
+  if (priceIn === "unknown" || priceOut === "unknown") return undefined;
+  return (inputTokens / 1_000_000) * priceIn + (outputTokens / 1_000_000) * priceOut;
+}
+
+/**
+ * Flow 341 (AC3) — one best-effort `TaskCostRecord` for a finished
+ * interactive turn: provider/model from the live session, THIS turn's own
+ * summed input/output tokens (never the session's cumulative counter), cost
+ * from the operator's stored model-profile pricing when known, and
+ * `success` from the shell's existing `turnFailed` detector (the
+ * `[error]`/`[budget]`/`[stopped]` system-line signal, computed once per
+ * `runAgentTurn` dispatch above). Recorded under the `"default"` category —
+ * the interactive main turn runs the session's own model unconditionally
+ * (`SESSION_UNCHANGED_CATEGORIES`, `derive-default-table.ts`), so `"default"`
+ * is the category that actually describes it; a future classifier (PR #737)
+ * assigning a real category to this turn is a straightforward extension —
+ * pass its result through instead.
+ *
+ * A `0`/`0` turn (aborted before any provider round ever reported usage) is
+ * dropped, same guard `attachUsageIo` itself uses for the cumulative
+ * counter: it is not a real sample. Never throws — every failure mode
+ * degrades to "not recorded" (`appendTaskCostRecord`'s own contract), so a
+ * locked-file or profile-store problem can never interrupt the turn's own
+ * settle sequence.
+ */
+export async function recordTurnTaskCostBestEffort(input: {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly success: boolean;
+  readonly userConfigDir?: string;
+  readonly now?: () => number;
+}): Promise<void> {
+  if (input.inputTokens === 0 && input.outputTokens === 0) return;
+  try {
+    const profiles = loadModelProfiles(input.userConfigDir);
+    const profile = profiles[profileKey(input.providerId, input.modelId)];
+    const costUsd = estimateTaskCostUsd(profile, input.inputTokens, input.outputTokens);
+    await appendTaskCostRecord(
+      {
+        providerId: input.providerId,
+        modelId: input.modelId,
+        category: "default",
+        inputTokens: input.inputTokens,
+        outputTokens: input.outputTokens,
+        totalTokens: input.inputTokens + input.outputTokens,
+        ...(costUsd !== undefined ? { costUsd } : {}),
+        success: input.success,
+        recordedAt: (input.now ?? Date.now)(),
+      },
+      input.userConfigDir,
+    );
+  } catch {
+    // best-effort bookkeeping — never surface into the shell
+  }
 }
 
 /**
@@ -8001,6 +8065,21 @@ export async function launchTuiAgentShell(opts: {
         }
         prevOnSystem?.(text);
       };
+      // Flow 341 (AC3): THIS turn's own input/output tokens, summed
+      // independently of the session's cumulative counter (`attachUsageIo`'s
+      // `totalIn`/`totalOut`, wired once at shell setup — never reset
+      // per-turn). Same wrap-and-call-through idiom as `io.onSystem` right
+      // above: captured fresh on every `runLine`, never restored, harmless
+      // once this turn's own closure stops being read (see that block's own
+      // note on why an ever-growing chain here is fine).
+      let turnInputTokens = 0;
+      let turnOutputTokens = 0;
+      const prevOnUsageForCost = io.onUsage;
+      io.onUsage = (usage) => {
+        turnInputTokens += usage.inputTokens ?? 0;
+        turnOutputTokens += usage.outputTokens ?? 0;
+        prevOnUsageForCost?.(usage);
+      };
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
       // After a settled main turn with an empty queue, ask the model for ONE
       // short follow-up and show it as the composer placeholder. Fail-closed:
@@ -8107,6 +8186,17 @@ export async function launchTuiAgentShell(opts: {
           })();
         }
         setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
+        // Flow 341 (AC3): fired with `void`, never awaited here — same
+        // "runs after settle, must never delay the next prompt" idiom the
+        // turn-guard dispatch right above already uses for its own
+        // best-effort side effect.
+        void recordTurnTaskCostBestEffort({
+          providerId: deps.providerId,
+          modelId: deps.modelId,
+          inputTokens: turnInputTokens,
+          outputTokens: turnOutputTokens,
+          success: !turnFailed,
+        });
         try {
           flushSessionCheckpoint();
         } catch {

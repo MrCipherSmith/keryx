@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadRoutingConfig, loadRoutingConfigRaw } from "../harness/routing/config";
 import { refreshModelProfiles } from "../harness/routing/model-profile";
+import { appendTaskCostRecord } from "../harness/routing/task-cost";
 import { routingCommand, type RoutingCommandDeps } from "./routing";
 
 const roots: string[] = [];
@@ -348,4 +349,56 @@ test("flow 327 AC11: `keryx routing list --json` carries the unavailable rejecti
     source: "user",
     reason: "unavailable",
   });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 341 (AC6) — `keryx routing stats [--json]`.
+// ---------------------------------------------------------------------------
+
+test("keryx routing stats: no recorded tasks — says so, exits clean", async () => {
+  const d = await deps();
+  const { stdout } = await capture(() => routingCommand(["stats"], d));
+  expect(stdout.join("\n")).toContain("no measured tasks recorded yet");
+});
+
+test("keryx routing stats: prints n, median tokens, median cost, success rate per (provider, model, category)", async () => {
+  const d = await deps();
+  await appendTaskCostRecord(
+    { providerId: "anthropic", modelId: "claude-x", category: "subagents", inputTokens: 400, outputTokens: 100, totalTokens: 500, costUsd: 0.05, success: true, recordedAt: 1 },
+    d.userConfigDir,
+  );
+  await appendTaskCostRecord(
+    { providerId: "anthropic", modelId: "claude-x", category: "subagents", inputTokens: 600, outputTokens: 100, totalTokens: 700, costUsd: 0.07, success: false, recordedAt: 2 },
+    d.userConfigDir,
+  );
+  const { stdout } = await capture(() => routingCommand(["stats"], d));
+  const text = stdout.join("\n");
+  expect(text).toContain("anthropic/claude-x");
+  expect(text).toContain("[subagents]");
+  expect(text).toContain("n=2");
+  expect(text).toContain("600 tok/task"); // median of 500/700
+  expect(text).toContain("$0.06/task"); // median of 0.05/0.07
+  expect(text).toContain("50% success");
+});
+
+test("keryx routing stats: a key with no known cost prints \"unknown\", never a fabricated number", async () => {
+  const d = await deps();
+  await appendTaskCostRecord(
+    { providerId: "anthropic", modelId: "claude-x", category: "docs", inputTokens: 100, outputTokens: 20, totalTokens: 120, success: true, recordedAt: 1 },
+    d.userConfigDir,
+  );
+  const { stdout } = await capture(() => routingCommand(["stats"], d));
+  expect(stdout.join("\n")).toContain("unknown/task");
+});
+
+test("keryx routing stats --json: valid JSON, one row per (provider, model, category)", async () => {
+  const d = await deps();
+  await appendTaskCostRecord(
+    { providerId: "anthropic", modelId: "claude-x", category: "subagents", inputTokens: 100, outputTokens: 20, totalTokens: 120, costUsd: 0.01, success: true, recordedAt: 1 },
+    d.userConfigDir,
+  );
+  const { stdout } = await capture(() => routingCommand(["stats", "--json"], d));
+  const parsed = JSON.parse(stdout.join("")) as { stats: Array<{ providerId: string; modelId: string; category: string; n: number; medianCostUsd?: number }> };
+  expect(parsed.stats).toHaveLength(1);
+  expect(parsed.stats[0]).toMatchObject({ providerId: "anthropic", modelId: "claude-x", category: "subagents", n: 1, medianCostUsd: 0.01 });
 });
