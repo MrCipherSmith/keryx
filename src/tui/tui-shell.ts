@@ -104,6 +104,7 @@ import { loadConformSetup, runConformForTarget } from "./conform-source";
 import { isJevRulesCommand, runJevRulesForShell } from "./jev-rules-command";
 import { isJevRiskCommand, runJevRiskForShell } from "./jev-risk-command";
 import { isJevContractCommand, runJevContractForShell } from "./jev-contract-command";
+import { isJevTriageCommand, runJevTriageForShell } from "./jev-triage-command";
 import { isJevScenariosCommand, runJevScenariosForShell } from "./jev-scenarios-command";
 // flow 333: registration only — everything else lives in
 // jev-docs-command.ts/jev-comments-command.ts so flow 326/330's concurrent
@@ -7528,6 +7529,20 @@ export async function launchTuiAgentShell(opts: {
               io.onSystem?.(`${await runJevContractForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-contract: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
+          return;
+        }
+        if (isJevTriageCommand(command.name)) {
+          // flow 340: a one-shot advisory triage of the latest review
+          // package, not a modal — see `jev-triage-command.ts`'s own header.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-triage: triaging the latest review package…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevTriageForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-triage: ${error instanceof Error ? error.message : String(error)}\n`);
             }
           })();
           return;

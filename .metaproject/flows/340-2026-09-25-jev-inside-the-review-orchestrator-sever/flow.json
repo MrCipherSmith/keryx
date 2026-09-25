@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "340",
+  "slug": "jev-inside-the-review-orchestrator-sever",
+  "title": "Jev inside the review orchestrator: severity calibration, duplicate merge, verifier queue order",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T19:41:13.349Z",
+  "updatedAt": "2026-09-25T20:02:52.381Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T20:02:30.452Z",
+      "note": "src/commands/review-jev-triage.ts jevTriageGateRefusal(): opt-in check (review.jev.triage) then credential check, both before any read/network call; refusal-path tests pass in review-jev-triage-cli.test.ts and jev-triage-command.test.ts."
+    },
+    "AC2": {
+      "at": "2026-09-25T20:02:30.742Z",
+      "note": "src/review/jev-triage.ts severityCheckQuestion asks the canonical trigger+outcome noul per blocker/major finding; synthesizeTriageAnnotations records {p, flagged} with flagged=p<0.4 and never mutates severity. Live check on 327-r01: 8/8 scored, 0 flagged, all p 0.77-0.83."
+    },
+    "AC3": {
+      "at": "2026-09-25T20:02:31.032Z",
+      "note": "buildMergeCandidatePairs gates on shared file / overlapping line window / overlapping quote, capped at MAX_MERGE_CANDIDATE_PAIRS=200; one noul per pair, output as merge_candidates with p, never merged. Live check produced 9 pairs (MAX_MERGE_CANDIDATE_PAIRS untouched); hand-labelled in the flow journal."
+    },
+    "AC4": {
+      "at": "2026-09-25T20:02:31.323Z",
+      "note": "verifyOrderQuestion asks one noul per finding; synthesizeTriageAnnotations sorts scored items ascending p (lowest plausibility first), unscored appended last; purely a queue order, never a skip. Live check: verify_order lowest at F-007/F-009 p=0.30."
+    },
+    "AC5": {
+      "at": "2026-09-25T20:02:41.811Z",
+      "note": "Redaction: every state/question string passes through redactSensitiveText (src/security/service.ts) in severityCheckState/mergeCandidateState/verifyOrderState; redaction covered by a dedicated test in review-jev-triage-cli.test.ts. Batching: TRIAGE_TOKEN_BUDGET*0.4, MAX_ITEMS_PER_BATCH=3, split-retry-once mirrored from review-jev-contract.ts's attemptBatch, covered by 3 max_tokens_exceeded tests. --max-calls caps items and reports budget.itemsSkipped, tested."
+    },
+    "AC6": {
+      "at": "2026-09-25T20:02:42.196Z",
+      "note": "review-orchestrator/SKILL.md: Step 9b line added between Step 9/Step 10 in the Workflow block; net line count unchanged (compensating merge of two Job Context Awareness bullets) — wc -l confirms 1723 for both the src/gdskills/bundled and .metaproject/skills copies, diff confirms byte-identical. SKILL.detail.md gained a full '## jev-triage' section, synced identically to both copies. bundled-eval.test.ts (60 tests, including the ceiling-equality test) passes."
+    },
+    "AC7": {
+      "at": "2026-09-25T20:02:42.570Z",
+      "note": "src/tui/jev-triage-command.ts /triage: resolveLatestReviewPackage scans .metaproject/flows/*/reviews/*/findings.json by mtime; runJevTriageForShell gates then triages; wired into tui-shell.ts, agent-commands.ts, help-groups.ts (mirrors /contract exactly). jev-triage-command.test.ts (8 tests) and agent-commands.test.ts (36 tests) pass."
+    },
+    "AC8": {
+      "at": "2026-09-25T20:02:42.917Z",
+      "note": "docs/docs/cli-reference.md: subcommand table row + full '### review jev-triage' section with flags table. src/standard/help-groups.ts: /triage slash entry. docs/docs/commands-by-task.md regenerated via scripts/generate-commands-by-task.ts (test passes). keryx review USAGE text in src/commands/review.ts updated."
+    },
+    "AC9": {
+      "at": "2026-09-25T20:02:52.050Z",
+      "note": "Hermetic tests: src/review/jev-triage.test.ts (23, pure core), src/commands/review-jev-triage-cli.test.ts (12, CLI+fixtures+injected env, opt-in-off and no-credential paths covered, redaction covered), src/tui/jev-triage-command.test.ts (8). bun run typecheck: clean. bun run lint: clean. bun ./scripts/opentui-tests-no-skips.ts src/tui: 1318 pass/0 fail/0 skipped. No test reads OPENROUTER_API_KEY from the machine."
+    },
+    "AC10": {
+      "at": "2026-09-25T20:02:52.381Z",
+      "note": "Live: env -u OPENROUTER_API_KEY keryx review jev-triage --report .metaproject/flows/327-*/reviews/327-r01 --max-calls 25 --json against the saved OpenRouter key (never printed). 9 Jev calls total (well under ~40), cost $0.00032. 8 blocker/major findings scored: severity_check all p 0.77-0.83, 0 flagged (correct — all 8 are genuine trigger+outcome majors/blockers). 9 merge_candidates found by shared file; hand-labelled: MRG2 F-001<->F-009 p=0.61 and MRG3 F-002<->F-003 p=0.58 are NOT true duplicates (different root causes sharing a file) — Jev leans a bit high on same-file pairs; MRG1 F-001<->F-006 p=0.21 and MRG9 F-006<->F-009 p=0.24 correctly scored low (different specific defects). verify_order lowest-first: F-007/F-009 (p=0.30) ahead of F-010 (p=0.46). Reported in full in the PR description and flow journal."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T19:41:13.349Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T19:46:56.970Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T19:46:57.119Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T20:02:15.780Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T20:02:15.945Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T20:02:16.121Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T20:02:16.289Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T20:02:30.452Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/commands/review-jev-triage.ts jevTriageGateRefusal(): opt-in check (review.jev.triage) then credential check, both before any read/network call; refusal-path tests pass in review-jev-triage-cli.test.ts and jev-triage-command.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:30.743Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/review/jev-triage.ts severityCheckQuestion asks the canonical trigger+outcome noul per blocker/major finding; synthesizeTriageAnnotations records {p, flagged} with flagged=p<0.4 and never mutates severity. Live check on 327-r01: 8/8 scored, 0 flagged, all p 0.77-0.83. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:31.032Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: buildMergeCandidatePairs gates on shared file / overlapping line window / overlapping quote, capped at MAX_MERGE_CANDIDATE_PAIRS=200; one noul per pair, output as merge_candidates with p, never merged. Live check produced 9 pairs (MAX_MERGE_CANDIDATE_PAIRS untouched); hand-labelled in the flow journal. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:31.323Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verifyOrderQuestion asks one noul per finding; synthesizeTriageAnnotations sorts scored items ascending p (lowest plausibility first), unscored appended last; purely a queue order, never a skip. Live check: verify_order lowest at F-007/F-009 p=0.30. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:41.811Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Redaction: every state/question string passes through redactSensitiveText (src/security/service.ts) in severityCheckState/mergeCandidateState/verifyOrderState; redaction covered by a dedicated test in review-jev-triage-cli.test.ts. Batching: TRIAGE_TOKEN_BUDGET*0.4, MAX_ITEMS_PER_BATCH=3, split-retry-once mirrored from review-jev-contract.ts's attemptBatch, covered by 3 max_tokens_exceeded tests. --max-calls caps items and reports budget.itemsSkipped, tested. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:42.196Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: review-orchestrator/SKILL.md: Step 9b line added between Step 9/Step 10 in the Workflow block; net line count unchanged (compensating merge of two Job Context Awareness bullets) — wc -l confirms 1723 for both the src/gdskills/bundled and .metaproject/skills copies, diff confirms byte-identical. SKILL.detail.md gained a full '## jev-triage' section, synced identically to both copies. bundled-eval.test.ts (60 tests, including the ceiling-equality test) passes. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:42.570Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/tui/jev-triage-command.ts /triage: resolveLatestReviewPackage scans .metaproject/flows/*/reviews/*/findings.json by mtime; runJevTriageForShell gates then triages; wired into tui-shell.ts, agent-commands.ts, help-groups.ts (mirrors /contract exactly). jev-triage-command.test.ts (8 tests) and agent-commands.test.ts (36 tests) pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:42.918Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: docs/docs/cli-reference.md: subcommand table row + full '### review jev-triage' section with flags table. src/standard/help-groups.ts: /triage slash entry. docs/docs/commands-by-task.md regenerated via scripts/generate-commands-by-task.ts (test passes). keryx review USAGE text in src/commands/review.ts updated. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:52.050Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Hermetic tests: src/review/jev-triage.test.ts (23, pure core), src/commands/review-jev-triage-cli.test.ts (12, CLI+fixtures+injected env, opt-in-off and no-credential paths covered, redaction covered), src/tui/jev-triage-command.test.ts (8). bun run typecheck: clean. bun run lint: clean. bun ./scripts/opentui-tests-no-skips.ts src/tui: 1318 pass/0 fail/0 skipped. No test reads OPENROUTER_API_KEY from the machine. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:02:52.381Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Live: env -u OPENROUTER_API_KEY keryx review jev-triage --report .metaproject/flows/327-*/reviews/327-r01 --max-calls 25 --json against the saved OpenRouter key (never printed). 9 Jev calls total (well under ~40), cost $0.00032. 8 blocker/major findings scored: severity_check all p 0.77-0.83, 0 flagged (correct — all 8 are genuine trigger+outcome majors/blockers). 9 merge_candidates found by shared file; hand-labelled: MRG2 F-001<->F-009 p=0.61 and MRG3 F-002<->F-003 p=0.58 are NOT true duplicates (different root causes sharing a file) — Jev leans a bit high on same-file pairs; MRG1 F-001<->F-006 p=0.21 and MRG9 F-006<->F-009 p=0.24 correctly scored low (different specific defects). verify_order lowest-first: F-007/F-009 (p=0.30) ahead of F-010 (p=0.46). Reported in full in the PR description and flow journal. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T20:02:30.452Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:30.742Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:31.032Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:31.323Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:41.811Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:42.196Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:42.570Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:42.917Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:52.050Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    },
+    {
+      "at": "2026-09-25T20:02:52.381Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:6d761420d79b1266e3e6fde8e62213b2ccea4e2618aa00795f527f548284e9cf"
+    }
+  ]
+}

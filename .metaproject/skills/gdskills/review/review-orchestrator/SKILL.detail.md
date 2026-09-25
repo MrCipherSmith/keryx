@@ -93,3 +93,44 @@ absence, is what distinguishes it from the default (an LLM sub-agent
 dispatch). A future engine-backed reviewer follows the same pattern: gate on
 its own opt-in and reachability, dispatch as a command, merge its `--json`
 output the same way.
+
+## `jev-triage` — advisory annotations, not a reviewer (Step 9b)
+
+`review-jev-triage` (flow 340) is a DIFFERENT shape from every CLI-engine
+reviewer above: it never produces a `findings` array of its own, and it is
+never merged into the consolidated array. It runs AFTER the Sub-Agent Report
+Quality Gate has already validated/merged/deduplicated the round's findings
+(Step 9) and BEFORE Wave C verification (Step 10) — Step 9b in the Workflow
+block — annotating the findings that already exist. It is advisory and
+annotate-only by construction: nothing it returns drops or demotes a finding,
+and no downstream step is permitted to treat its output as anything but a
+hint.
+
+Run it once per round, over the round's own consolidated findings:
+
+```bash
+keryx review jev-triage --report <this round's review package dir> --json
+```
+
+Gate it the same way as every other CLI-engine reviewer: skip it — recorded
+in `Skipped reviewers` with the reason — when `review.jev.triage` is not
+`true` in `.metaproject/tasks.config.json`, or when no Jev/OpenRouter
+credential is resolvable. Either gate failing means the command itself would
+refuse before any read or network call.
+
+Its `--json` output is `{status, reviewer: "review-jev-triage", summary,
+annotations, budget, tokens}` — never a `REVIEW_RESULT` merged into the
+findings array. `annotations` carries three tracks, each read and used
+differently in the report:
+
+| Track | Shape | What to do with it |
+|---|---|---|
+| `severity_check` | `{id, p, flagged}` per blocker/major finding — `flagged` means `p < 0.4` | Show `flagged` findings as a soft note next to their existing severity ("Jev's own trigger+outcome check scored this low"). Never change the finding's `severity` field from this alone. |
+| `merge_candidates` | `{id, a, b, reason, p}` per candidate pair | A high `p` is a suggestion to a human that `a` and `b` may be the same defect — surface it in the report as a note on both findings. Never merge, drop, or renumber either finding from this alone. |
+| `verify_order` | `{id, p}`, sorted lowest-`p`-first | Feed this order into Wave C's own dispatch — verify the lowest-plausibility findings first — never as a reason to skip verifying any of them. |
+
+Show its annotations in the report as their own subsection, next to (not
+inside) the findings they annotate — same separation the finding schema
+itself draws between a reviewer's claim (`severity`, `problem`, …) and what
+became of it (`disposition`), which a reviewer never states and this pass
+does not either.

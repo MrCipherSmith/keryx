@@ -3717,6 +3717,7 @@ left off and the gate reports it as unobserved.
 | `jev-docs` | ADDITIONAL orchestrator reviewer (`engine: jev`): find doc sections that went stale because of a diff. See below. |
 | `jev-comments` | ADDITIONAL orchestrator reviewer (`engine: jev`): check whether open PR review comments were addressed. See below. |
 | `jev-contract` | ADDITIONAL orchestrator reviewer (`engine: jev`): check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff. See below. |
+| `jev-triage` | Advisory, annotate-only: severity calibration, duplicate-merge candidates, and verifier queue order over a review package's consolidated findings, scored by Jev. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
 | `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
@@ -4491,6 +4492,54 @@ network call.
 The `/contract` slash command runs the same claim check over the working diff
 (no PR description, so zero claims) and prints the result into the
 transcript.
+
+### `review jev-triage`
+
+Flow 340. An ADVISORY, ANNOTATE-ONLY pass the orchestrator runs over a review
+package's CONSOLIDATED findings, after the Sub-Agent Report Quality Gate and
+before Wave C verification (`review-orchestrator/SKILL.md`). It never drops
+or demotes a finding by itself — every field it produces is an annotation.
+Three tracks, one Jev `noul` per item:
+
+- **Severity calibration**: for every blocker/major finding, does it name a
+  concrete trigger AND a concrete observable outcome — the orchestrator's own
+  canonical `major`/`minor`/`info` boundary test? Recorded as `severity_check:
+  {p, flagged}` (`flagged` is `p < threshold`, default `0.4`) — never an
+  auto-demotion.
+- **Duplicate-merge candidates**: pairs built deterministically, never a
+  blind scan — only findings sharing a file, with overlapping line ranges, or
+  with overlapping quotes. One noul per pair: same underlying defect at the
+  same site? Recorded as `merge_candidates` with `p` — nothing is ever
+  silently merged.
+- **Verifier queue order**: one noul per finding — does the evidence
+  plausibly follow from the quoted code? Recorded as `verify_order`, sorted
+  lowest-plausibility-first. Prioritisation only; never skips verification.
+
+```bash
+keryx review jev-triage --report .metaproject/flows/327-*/reviews/327-r01 --json
+keryx review jev-triage --report ./findings.json --max-calls 20 --json
+```
+
+| Flag | Description |
+|---|---|
+| `--report <dir\|findings.json>` | Required. A review package directory (its `findings.json` is read) or a bare findings JSON file/array. Always read from the real project directory — `--fixtures` never stands in for it. |
+| `--max-calls <n>` | Caps how many items (across all three tracks, severity first) are scored by Jev, default 30. Anything beyond is reported dropped (`budget.itemsSkipped`), never silently. |
+| `--threshold <0..1>` | Below this Jev probability a severity check is `flagged`. Default `0.4`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers every Jev call (`jev-responses.json`) from a file on disk — no real network call. |
+| `--json` | Prints `{status, reviewer: "review-jev-triage", summary, annotations: {severity_check, merge_candidates, verify_order}, budget, tokens}`. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.triage: true` in `.metaproject/tasks.config.json`.
+Every finding's `problem`/`evidence`/`quote` sent to Jev is redacted first
+(`src/security/service.ts`). Batches stay conservative — at most 40% of the
+64k token budget and at most 3 items per batch, with a real vendor
+`max_tokens_exceeded` (HTTP 400) retried once, split in half. With the
+setting off, or with no OpenRouter credential, the command refuses before any
+read and makes no network call.
+
+The `/triage` slash command runs the same triage over the latest review
+package in the current flow and prints the annotations into the transcript.
 
 ### `review conform`
 
