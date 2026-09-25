@@ -49,6 +49,7 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildShellHookRuntime } from "./agent-hooks";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
@@ -60,6 +61,7 @@ import { ensureScratchParent } from "./unattended-scratch";
 import { providerByName } from "./providers";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { spendFromTokens } from "../review/caps";
 import type { FlowService, FlowTask } from "../flow/types";
@@ -322,7 +324,11 @@ export function keryxInvocation(): { readonly argv: readonly string[]; readonly 
   if (script !== undefined && /\.(?:[cm]?[jt]s)$/.test(script) && existsSync(script)) {
     const resolved = realOr(script);
     roots.add(packageRoot(resolved));
-    return { argv: [exec, resolved], roots: [...roots] };
+    // R1-01: this argv runs `keryx health run`/`gate` INSIDE the sandboxed
+    // WORKTREE — attacker-controlled if the worktree is a PR/branch checkout
+    // — so a `bun <cli.ts>` spawn here must not auto-load that worktree's
+    // own `.env`/`bunfig.toml`. See `src/lib/safe-exec.ts`.
+    return { argv: [exec, ...SAFE_BUN_SPAWN_ARGS, resolved], roots: [...roots] };
   }
   // A compiled keryx binary IS the executable.
   return { argv: [exec], roots: [...roots] };
@@ -787,6 +793,24 @@ async function dispatchLocked(
     try {
       const tools = buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox));
       const toolNames = tools.map((t) => t.definition.name);
+      // Flow 306 (W6 T9, AC9): every unattended entry point builds its hook
+      // runtime with `interactive: false` and the `unattended-untrusted`
+      // profile — no mode/approver can lift a hook `ask` here; it fails
+      // closed to `deny` exactly like `decide()`'s own headless posture
+      // (`tightenOutcome`, `../harness/hooks/compose.ts`).
+      const shellHooks = buildShellHookRuntime({
+        projectRoot: worktree,
+        sessionId: flow,
+        runId,
+        interactive: false,
+        profileId: "unattended-untrusted",
+        // R700-01/D9: hooks are read from the worktree (that is what
+        // actually runs), but trust is looked up under the MAIN project
+        // root — the one the operator actually ran `keryx hooks trust` in.
+        // A per-run worktree path would never match anything they trusted.
+        trustRoot: projectRoot,
+      });
+      for (const line of shellHooks?.notices ?? []) console.error(line);
       const agentDeps: AgentDeps = {
         provider,
         providerId: dispatch.provider,
@@ -800,6 +824,7 @@ async function dispatchLocked(
         idSeq: () => randomUUID(),
         unattended: true,
         hardDeny: unattendedRefusal,
+        ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
       const io: AgentIO = {
         write: () => {},

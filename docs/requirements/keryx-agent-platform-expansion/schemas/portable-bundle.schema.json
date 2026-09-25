@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/agent-platform/portable-bundle.schema.json",
+  "title": "Keryx portable bundle manifest",
+  "description": "planned — Declares the manifest shape at the root of a bundle produced by `keryx bundle export` and consumed by `keryx bundle import|inspect|verify` (W4). No runtime reads or writes this shape yet; it is the target contract for moving skills, rules, agent definitions, learned patterns, memory entries, and hook configs between project/team/user scopes and across harnesses, described in workstreams/W4-portability.md.",
+  "type": "object",
+  "required": ["formatVersion", "bundleId", "createdAt", "sourceKeryxVersion", "provenance", "compat", "contents"],
+  "additionalProperties": false,
+  "properties": {
+    "formatVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semver of the bundle format itself, distinct from `sourceKeryxVersion`. A consumer must fail closed on a `formatVersion` whose major it does not recognise rather than guess at an unknown shape."
+    },
+    "bundleId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "description": "Stable identifier for this bundle across re-exports. A content edit produces a new `contents[].sha256` but the same `bundleId`, so `keryx bundle inspect` can report 'this is bundle X, contents changed' instead of treating every export as unrelated."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When `keryx bundle export` produced this bundle."
+    },
+    "sourceKeryxVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The exporting Keryx build's own version string, for compatibility diagnostics distinct from `formatVersion`."
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "compat": {
+      "$ref": "#/$defs/compat"
+    },
+    "contents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/contentEntry"
+      },
+      "description": "One entry per file this bundle carries. `bundle import` verifies every entry's `sha256` before writing anything (fail closed on any mismatch, W4-AC3)."
+    }
+  },
+  "$defs": {
+    "scope": {
+      "type": "string",
+      "enum": ["project", "team", "user"],
+      "description": "Which scope this entry targets on apply. `team` is a labeling and transfer discipline over the same project-scope tree, not a separate on-disk root (see workstreams/W4-portability.md, 'Scopes'). `user` targets the `~/.keryx/` root."
+    },
+    "contentKind": {
+      "type": "string",
+      "enum": ["skill", "rule", "agent", "learned-pattern", "memory-entry", "hook-config"],
+      "description": "What kind of catalog content this entry carries. `agent` entries validate against agent-definition.schema.json (W2); `learned-pattern` entries validate against learned-pattern.schema.json (W3); `hook-config` entries validate against hook-config.schema.json (W6). This schema constrains only the envelope, not those sibling schemas' internal shape."
+    },
+    "harnessId": {
+      "type": "string",
+      "enum": [
+        "claude",
+        "codex",
+        "cursor",
+        "windsurf",
+        "gemini-cli",
+        "kiro",
+        "github-copilot-agent",
+        "zed",
+        "antigravity",
+        "opencode",
+        "generic-mcp",
+        "keryx-shell"
+      ],
+      "description": "Matches the harness ids used by the unified adapter registry (W5). `keryx-shell` denotes Keryx's own agent shell rather than a host harness."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Lowercase hex sha256 digest of the entry's exact bytes as stored in the bundle, following the sha256 content-addressing pattern already used elsewhere in Keryx (e.g. src/assets/resolver.ts, src/harness/run/run.ts canonical-JSON fingerprints) rather than a new hashing scheme."
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["producedBy", "sourceScope"],
+      "additionalProperties": false,
+      "properties": {
+        "producedBy": {
+          "type": "string",
+          "const": "keryx bundle export",
+          "description": "Fixed marker distinguishing a genuine export from a hand-assembled directory masquerading as one."
+        },
+        "sourceProject": {
+          "type": "string",
+          "description": "Never a raw absolute path (a bundle shared outside the originating machine must not leak that path). Either omitted, or a hash of a normalized project identifier."
+        },
+        "sourceScope": {
+          "$ref": "#/$defs/scope",
+          "description": "The scope this bundle was exported from."
+        }
+      }
+    },
+    "compat": {
+      "type": "object",
+      "required": ["minKeryxVersion"],
+      "additionalProperties": false,
+      "properties": {
+        "minKeryxVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lowest Keryx version expected to understand every content kind present in `contents`."
+        },
+        "targetHarnesses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/harnessId"
+          },
+          "uniqueItems": true,
+          "default": [],
+          "description": "Advisory hint only, never a hard gate: harnesses the bundle's author believes its hook-config/rule entries suit. `keryx bundle inspect` warns when a named harness is not `native`/`adapter` in the importing project's W5 capability matrix, but the source of truth for what actually works is that matrix, not this field."
+        }
+      }
+    },
+    "contentEntry": {
+      "type": "object",
+      "required": ["path", "kind", "scope", "sha256", "sizeBytes"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to the bundle root, mirroring the on-disk layout this entry's `kind` and `scope` target (e.g. a user-scope skill: `skills/<name>/SKILL.md`, matching `~/.keryx/skills/<name>/SKILL.md`), so apply is a direct copy rather than a kind-specific rewrite."
+        },
+        "kind": {
+          "$ref": "#/$defs/contentKind"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 280,
+          "description": "Optional human-readable one-liner shown in `keryx bundle inspect` output."
+        },
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "external": {
+              "type": "boolean",
+              "default": false,
+              "description": "True when this entry is referenced (not copied) from an externally-authored Agent-Skills-standard-conformant catalog, per the import path in workstreams/W4-portability.md. False or absent means the content is Keryx-authored/generated/learned and is carried inline in the bundle."
+            },
+            "sourceRef": {
+              "type": "string",
+              "description": "For an `external: true` entry, a pointer to the original catalog location (URL, path, or catalog id) the content is referenced from, so a later `verify`/`inspect` can report an unresolvable reference distinctly from a checksum mismatch."
+            }
+          }
+        }
+      }
+    }
+  }
+}

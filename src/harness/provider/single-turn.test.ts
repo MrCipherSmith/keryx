@@ -160,6 +160,51 @@ describe("runModelTurn", () => {
     expect(resolveAutoProvider({ OPENAI_API_KEY: "fixture-key" }, { preferSavedShell: false }).provider).toBe("openai");
   });
 
+  test("temperature is forwarded to the provider request's options.temperature when set", async () => {
+    let seenOptions: unknown;
+    const factory: ProviderFactory = (_name, _model, _opts) => ({
+      describe: stubProvider("x").describe,
+      async *stream(request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+        seenOptions = request.options;
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "x" };
+        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+      },
+    });
+    await runModelTurn({
+      system: "s",
+      user: "u",
+      provider: "anthropic",
+      env: {},
+      preferSavedShell: false,
+      providerFactory: factory,
+      requestId: "t-temp",
+      temperature: 0,
+    });
+    expect(seenOptions).toEqual({ temperature: 0 });
+  });
+
+  test("options.temperature is absent from the request entirely when not set — no key at all, not merely undefined", async () => {
+    let seenOptions: unknown;
+    const factory: ProviderFactory = () => ({
+      describe: stubProvider("x").describe,
+      async *stream(request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+        seenOptions = request.options;
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "x" };
+        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+      },
+    });
+    await runModelTurn({
+      system: "s",
+      user: "u",
+      provider: "anthropic",
+      env: {},
+      preferSavedShell: false,
+      providerFactory: factory,
+      requestId: "t-no-temp",
+    });
+    expect(seenOptions).toBeUndefined();
+  });
+
   test("runModelTurn without --provider uses auto provider from env keys", async () => {
     const seen: string[] = [];
     const factory: ProviderFactory = (name) => {

@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/agent-platform/harness-audit-report.schema.json",
+  "title": "Keryx harness-config security audit report",
+  "description": "planned — Output of `keryx security audit-harness` (W8, Design part A). No runtime emits this shape yet. Describes a point-in-time scan of every harness-configuration surface Keryx-aware harnesses read (instruction files, settings/permissions, MCP configs, hooks, W2 agent definitions, skill scripts, W4 imported bundles): per-surface coverage, per-finding severity/evidence/fix-proposal records, a deterministic 0-100 score with letter grade, and the baseline/suppression state applied to reach the reported totals. Findings never carry raw secret/PII values (leak-safe by construction, matching the convention already used by src/security/detect/mcp.ts).",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "root", "surfaces", "findings", "summary", "coverage"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Report format version. Bumped only on a breaking shape change."
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp the scan completed."
+    },
+    "root": {
+      "type": "string",
+      "description": "Project root the audit scanned, as an absolute path or a path relative to the invocation cwd (whichever `keryx security audit-harness` was given)."
+    },
+    "cliArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The flags this run was invoked with, recorded so a report is self-describing without needing the original command line.",
+      "properties": {
+        "fixProposals": { "type": "boolean", "default": false },
+        "ci": { "type": "boolean", "default": false },
+        "baselinePath": { "type": ["string", "null"] },
+        "severityFloor": { "$ref": "#/$defs/severity" }
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "description": "One entry per surface kind this run attempted to scan, whether or not it found anything to check — an absent surface (e.g. no .metaproject/agents/ directory) is a distinct, honestly-reported state from a scanned-and-clean one.",
+      "items": { "$ref": "#/$defs/surfaceResult" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "summary": { "$ref": "#/$defs/summary" },
+    "coverage": { "$ref": "#/$defs/coverageStatus" },
+    "baseline": {
+      "description": "State of the suppression/baseline file applied to this run, or null when none was configured. A tampered baseline (checksum mismatch) is still reported here, not silently ignored — see `tamperState`.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/baselineState" }
+      ]
+    }
+  },
+  "$defs": {
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "Shares the vocabulary already used across src/security/types.ts (SecuritySeverity) — no parallel severity scale for this report."
+    },
+    "surfaceId": {
+      "type": "string",
+      "enum": [
+        "instructions",
+        "settings",
+        "mcp-configs",
+        "hooks",
+        "agent-definitions",
+        "skills",
+        "imported-bundles"
+      ]
+    },
+    "surfaceScanStatus": {
+      "type": "string",
+      "enum": ["scanned", "not-applicable", "error"],
+      "description": "`not-applicable`: the surface has nothing to scan in this project (e.g. no MCP config file exists at all) and is NOT treated as a clean pass. `error`: the surface was discovered but could not be read/parsed; its findings list is empty and `coverage.status` for the whole report must not read `complete` while any surface is `error`."
+    },
+    "surfaceResult": {
+      "type": "object",
+      "required": ["surface", "status", "pathsScanned"],
+      "additionalProperties": false,
+      "properties": {
+        "surface": { "$ref": "#/$defs/surfaceId" },
+        "status": { "$ref": "#/$defs/surfaceScanStatus" },
+        "pathsScanned": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths (relative to `root`) this surface actually read. Empty for `not-applicable`."
+        },
+        "pathsUnreadable": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths that were discovered for this surface but could not be parsed/read; each contributes to `status: \"error\"`."
+        },
+        "error": {
+          "type": "string",
+          "description": "Human-readable reason when `status` is `error`. Leak-safe: names the path and the failure kind, never file content."
+        }
+      }
+    },
+    "checkId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "One of the check ids in workstreams/W8-harness-security-audit.md's check table (e.g. `mcp-tool-poisoning`, `unpinned-mcp-launcher`, `hook-command-injection`); additive over time, so not a closed enum here."
+    },
+    "finding": {
+      "type": "object",
+      "required": ["id", "surface", "check", "severity", "confidence", "message", "evidence", "suppressed"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for this finding, deterministic given (surface, check, path, matched-signal) so the same underlying issue produces the same id across runs — required for baseline suppression to target it reliably."
+        },
+        "surface": { "$ref": "#/$defs/surfaceId" },
+        "check": { "$ref": "#/$defs/checkId" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Detector confidence, same 0-1 scale already used by DetectorMatch.confidence in src/security/types.ts."
+        },
+        "path": {
+          "type": "string",
+          "description": "Path (relative to `root`) the finding was found in."
+        },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "line": { "type": "integer", "minimum": 1 },
+            "pointer": { "type": "string", "description": "JSON Pointer, for findings inside a parsed JSON config (e.g. an MCP manifest field)." }
+          }
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable, leak-safe description of the finding. Never includes raw secret/PII/manifest content — matches the leak-safe convention documented in src/security/detect/mcp.ts (category token, not raw text)."
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Leak-safe evidence supporting the finding.",
+          "properties": {
+            "category": { "type": "string", "description": "SecurityCategory-style token (e.g. \"prompt-injection\", \"secret\", \"egress\", \"artifact-safety\")." },
+            "policyId": { "type": "string", "description": "Detector policy id when this finding came from an existing src/security/detect/* detector (e.g. mcp.poisoning.ignore-instructions)." },
+            "matchedToken": { "type": "string", "description": "A leak-safe token identifying what matched (e.g. \"tool:search_web\"), never the matched text itself." }
+          }
+        },
+        "fixProposal": {
+          "description": "Present only when a known remediation shape exists for this check. Never applied by the audit itself — see workstreams/W8-harness-security-audit.md Design A > Fix proposals.",
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/fixProposal" }
+          ]
+        },
+        "suppressed": {
+          "type": "object",
+          "required": ["value"],
+          "additionalProperties": false,
+          "description": "Whether this finding is currently suppressed by the baseline file. A suppressed finding is still listed (never dropped from `findings`), so the report is a complete record of what was found even when some of it is accepted risk.",
+          "properties": {
+            "value": { "type": "boolean" },
+            "baselineEntryId": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "fixProposal": {
+      "type": "object",
+      "required": ["id", "rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Proposal id, used by `keryx security audit-harness apply --proposal <id>`. Never auto-applied."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this change resolves the finding."
+        },
+        "patch": {
+          "type": "string",
+          "description": "Unified-diff-shaped suggested change. Advisory text for the apply step, not a guarantee the apply step performs a literal patch application."
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["score", "grade", "countsBySeverity", "totalFindings"],
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "score = max(0, 100 - (critical*25 + high*10 + medium*4 + low*1)), computed over UNSUPPRESSED findings only. Deterministic and reproducible from `findings` + `baseline` alone."
+        },
+        "grade": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D", "F"],
+          "description": "A: 90-100, B: 75-89, C: 60-74, D: 40-59, F: <40 — EXCEPT any unsuppressed `critical` finding caps the grade at `C` regardless of the numeric score (see workstreams/W8-harness-security-audit.md Design A > Severity model)."
+        },
+        "countsBySeverity": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Counts of unsuppressed findings by severity, used to derive `score`.",
+          "properties": {
+            "critical": { "type": "integer", "minimum": 0 },
+            "high": { "type": "integer", "minimum": 0 },
+            "medium": { "type": "integer", "minimum": 0 },
+            "low": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["critical", "high", "medium", "low"]
+        },
+        "totalFindings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total findings including suppressed ones (== findings.length)."
+        }
+      }
+    },
+    "coverageStatus": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["complete", "incomplete"],
+          "description": "`incomplete` when any surface's status is `error`, or when a check that requires a prerequisite (e.g. `mcp-rug-pull` with no prior `scan-mcp --pin`) could not be evaluated. Mirrors the existing gdctx/security-scan convention that a required check which did not run is reported incomplete, never folded into a clean pass (see src/commands/security.ts scan-mcp coverage handling)."
+        },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Leak-safe, human-readable reasons for `incomplete`, one per contributing surface/check."
+        }
+      }
+    },
+    "baselineState": {
+      "type": "object",
+      "required": ["path", "tamperState", "entries"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "tamperState": {
+          "type": "string",
+          "enum": ["ok", "mismatch", "unreadable"],
+          "description": "Checksum verification of the baseline file, using the same mechanism already used for .metaproject/security.config.json (src/security/config.ts verifyConfigChecksum). `mismatch` or `unreadable` is itself a --ci gate failure (see W8-AC8)."
+        },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/baselineEntry" }
+        }
+      }
+    },
+    "baselineEntry": {
+      "type": "object",
+      "required": ["findingId", "justification"],
+      "additionalProperties": false,
+      "properties": {
+        "findingId": { "type": "string" },
+        "justification": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required, non-empty. A baseline entry with no justification fails schema validation — suppression is never silent."
+        },
+        "author": { "type": "string" },
+        "expiresAt": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "Null/absent is valid but is itself flagged by the audit as a low-severity `indefinite-suppression` finding (see W8-AC7) — baseline rot is visible, not blocked."
+        }
+      }
+    }
+  }
+}

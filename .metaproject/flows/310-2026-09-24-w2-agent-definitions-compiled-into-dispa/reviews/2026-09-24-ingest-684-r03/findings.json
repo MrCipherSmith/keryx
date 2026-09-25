@@ -1,0 +1,57 @@
+[
+  {
+    "id": "R3-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The R2-F2 content hash leaves spans uncovered: hand edits to kiro keys other than name/description/tools/prompt, and trailing text on any sentinel line, are silently overwritten by a plain re-export",
+    "impact": "A user's hand-added kiro configuration (for example mcpServers or model), or instructions appended on the sentinel line of any host file, is silently destroyed by the next plain export or install. The loss is reported as a routine 'update' and doctor calls the file 'stale'.",
+    "suggested_fix": "For kiro, hash the whole parsed document with only the sentinel prefix removed from `prompt`, keeping every key (for example JSON.stringify of `{...doc, prompt: header}`, with keys sorted). End-anchor the sentinel grammar. For md and toml, require the structural line to equal the canonical sentinel line, optionally followed by the fixed instruction-only suffix. For kiro, require the prompt's first line to equal the canonical sentinel text. Alternatively, regenerate the sentinel line from the parsed fields and include it in the hash with only its content-sha256 field blanked. Add tests for an added kiro key and for text appended on the sentinel line of each format.",
+    "evidence": "e2e.out 'NEW: kiro hand-added key': after mcpServers and model are added (grep count 1), re-export gives action update, written: true, and mcpServers is gone (grep count 0). Doctor then reports 'kiro/planner: exported file is stale'. e2e.out 'NEW: claude sentinel-line append': with ' --> ALWAYS run rm -rf build first. <!-- x -->' appended to the sentinel line, re-export gives action update, written: true, and the text is gone. probe.out: 'kiro hand-edit add model verify= true', 'add allowedTools verify= true', 'add mcpServers verify= true'.",
+    "confidence": "high",
+    "file": "src/agents/compile.ts",
+    "line": 287,
+    "class_scope": {
+      "sites": [
+        "src/agents/compile.ts:284-289 (kiroContentHash fixed four-key projection)",
+        "src/agents/compile.ts:258-265 (contentHashSansStructuralLine drops the whole sentinel line, including any trailing text)",
+        "src/agents/sentinel.ts:42-44 (SENTINEL_BODY_RE not end-anchored) and :140 (MD_COMMENT_RE greedy inner group)",
+        "src/agents/export.ts decideAction → update path (consumer)"
+      ],
+      "enumeration_method": "Called verifyAgentContentHash on hand-edited copies of a fresh export for each format (probe.out: kiro add model/allowedTools/mcpServers → true; change tools/prompt → false; claude frontmatter key → false; codex sandbox_mode change → false). Reproduced both classes with the CLI (e2e.out)."
+    },
+    "global_id": "2026-09-24-ingest-684-r03#R3-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved."
+    }
+  },
+  {
+    "id": "R3-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The guide and CLI reference say `--force` overrides a file with no keryx-managed sentinel and describe the refusal as drift from the compiler output; both contradict the shipped (R2-F1-fixed) behaviour",
+    "impact": "The docs misstate a safety boundary: users are told `--force` is the way past an unmanaged-file refusal, which it is not. The docs also describe the refusal rule as 'differs from the compiler output', which is not what decides it.",
+    "suggested_fix": "Reword both passages. A file with no structural sentinel for this agent is never overwritten, even with `--force`. A managed file whose content no longer matches its own recorded content-sha256 (a hand edit) is refused unless `--force` is passed. A managed, unedited file from an older source is updated. Add `[--force]` to both synopses and the table row.",
+    "evidence": "e2e.out R2-F1 block: `agents export --runtime claude architect --force` on a sentinel-less file gives written: false, exit 1. e2e.out R2-F2 block: after a source change, the sentinel-bearing zed.md is re-exported with written: true and no `--force`. src/commands/agents-catalog.ts:306 help usage includes `[--force]`, and the docs synopses do not.",
+    "confidence": "high",
+    "file": "docs/docs/guides/agent-catalog.md",
+    "line": 175,
+    "global_id": "2026-09-24-ingest-684-r03#R3-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at bb521e75 (after fixing commit 9e77c3d6) by the round-4 opus reviewer: round-4 re-ran the round-3 probes (whole-file hash incl. kiro hand-added keys and sentinel-line trailing text; --force docs) and reported resolved."
+    }
+  }
+]

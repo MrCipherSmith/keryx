@@ -1,0 +1,823 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "310",
+  "slug": "w2-agent-definitions-compiled-into-dispa",
+  "title": "W2: agent definitions compiled into dispatch contracts, per-harness exporters, initial generic agent catalog",
+  "status": "done",
+  "createdAt": "2026-09-24T04:09:02.681Z",
+  "updatedAt": "2026-09-24T07:08:18.847Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3b40ac93b5f232d29d99af37864cf41bb7fe042549138f7abc696a714852aa9c",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T07:06:02.682Z",
+      "note": "src/agents/schema.test.ts asserts validator enforces every field and agrees with schemas/agent-definition.schema.json (required, enums, pattern, additionalProperties); merged in #684 (097cb54d), CI green"
+    },
+    "AC2": {
+      "at": "2026-09-24T07:06:02.766Z",
+      "note": "src/agents/compile.spawn-subagent.test.ts instantiates the real spawn_subagent tool; compiled input keys subset of inputSchema.properties; field->destination table covers every definition field (input or policy sidecar with explicit enforcement record)"
+    },
+    "AC3": {
+      "at": "2026-09-24T07:06:02.864Z",
+      "note": "PROMPT_DEFENSE_BASELINE single constant (src/agents/baseline.ts); baseline.test.ts + export.test.ts: every bundled agent x every target contains it verbatim exactly once; near-copy detector; bodies with baseline text rejected"
+    },
+    "AC4": {
+      "at": "2026-09-24T07:06:02.943Z",
+      "note": "agentExportSupport reads the agents surface state via the matrix classifier; export.test.ts stubs an unverified runtime -> instruction-only prose with provenance comment"
+    },
+    "AC5": {
+      "at": "2026-09-24T07:06:03.024Z",
+      "note": "src/agents/verify.test.ts: unknown-tool / unknown-skill fail closed with named reasons, CLI exit non-zero (agents-catalog-commands.test.ts); agent-catalogue-xref.test.ts extended to resolve against loadAgentCatalog, existing assertions unchanged"
+    },
+    "AC6": {
+      "at": "2026-09-24T07:06:03.103Z",
+      "note": "verify: generated origin without sourceRef -> origin-missing-source-ref; invalid id -> invalid-source-ref; missing W1 pack dir src/gdskills/bundled/stacks/<id>/ -> stack-pack-missing (lstat, no symlink escape); injectable resolver; gate-cleared/retired status deferred to Wave 4 with W1"
+    },
+    "AC7": {
+      "at": "2026-09-24T07:06:03.183Z",
+      "note": "schema/compile use isModelTier/parseModelTier from src/gdskills/model-tier.ts; compile.model-tier.test.ts proves no compiled output (any target) contains a model name; Claude model: inherit, other hosts omit model"
+    },
+    "AC8": {
+      "at": "2026-09-24T07:06:03.264Z",
+      "note": "keryx agents list/show/export/verify implemented (src/commands/agents-catalog.ts) with --json, export --dry-run/--force, refuse-unmanaged; agents-catalog-commands.test.ts + unchanged agent-commands.test.ts pass; cli-reference coverage green in CI"
+    },
+    "AC9": {
+      "at": "2026-09-24T07:06:03.343Z",
+      "note": "exporters for claude/codex/kiro/opencode/keryx-shell per first-party docs in registry sourceDocs; opt-in agents surfaces (SurfaceAdapter.optIn) claude native, codex/kiro/opencode adapter; default install unchanged; matrix regenerated, integrations matrix --check passes"
+    },
+    "AC10": {
+      "at": "2026-09-24T07:06:03.421Z",
+      "note": "bun ./src/cli.ts agents verify --json -> ok=true, 10/10 bundled generic agents (architect, planner, code-explorer, tdd-guide, refactor-cleaner, silent-failure-hunter, doc-updater, security-reviewer, performance-reviewer, e2e-runner)"
+    },
+    "AC11": {
+      "at": "2026-09-24T07:06:03.499Z",
+      "note": "manual run: 10 agents x 4 host runtimes exported into a temp repo + canonical defs under .metaproject/agents -> keryx security audit-harness: 0 findings, coverage complete, agent-definitions scanned 50 files; export.test.ts asserts zero findings, full pathsScanned coverage, no coverage errors"
+    },
+    "AC12": {
+      "at": "2026-09-24T07:06:03.578Z",
+      "note": "journal records owner acceptance of D-2; docs/requirements/keryx-multi-agent-engine/README.md carries the D-2 revision note beside the non-goal; docs/docs/guides/agent-catalog.md + cli-reference agents catalog section; check-doc-links 0 broken, mkdocs --strict green"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/684"
+  },
+  "baseBranch": "feat/agent-platform-expansion",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:59.759Z",
+            "outcome": "started",
+            "detail": "310-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Author ten bundled generic agent definitions in src/gdskills/bundled/agents",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:14:59.840Z",
+            "outcome": "started",
+            "detail": "310-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:32:37.145Z",
+            "outcome": "started",
+            "detail": "310-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:32:37.242Z",
+            "outcome": "started",
+            "detail": "310-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:15:40.786Z",
+            "outcome": "started",
+            "detail": "310-T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Verify: every generic agent passes keryx agents verify (exit criterion)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Adversarial review round on the PR diff (opus) and fix loop",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 4,
+        "log": [
+          {
+            "at": "2026-09-24T05:08:01.407Z",
+            "outcome": "started",
+            "detail": "review round 1"
+          },
+          {
+            "at": "2026-09-24T05:36:25.225Z",
+            "outcome": "started",
+            "detail": "review round 2"
+          },
+          {
+            "at": "2026-09-24T06:13:32.803Z",
+            "outcome": "started",
+            "detail": "review round 3 (verification)"
+          },
+          {
+            "at": "2026-09-24T07:00:47.114Z",
+            "outcome": "started",
+            "detail": "final clean round r06"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T04:56:27.546Z",
+            "outcome": "started",
+            "detail": "310-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:18:05.599Z",
+            "outcome": "started",
+            "detail": "310-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:18:05.682Z",
+            "outcome": "started",
+            "detail": "310-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T05:41:34.704Z",
+            "outcome": "started",
+            "detail": "310-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Re-plan fix (after 3 review attempts): whole-file content hash at the structural hash field, end-anchored sentinel, --force docs, doctor --surface validation, uninstall refuses hand-edited exports",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:20:21.870Z",
+            "outcome": "started",
+            "detail": "310-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix R4: doctor lenient multi-runtime selectors; dry-run uninstall agrees with real run for hand-edited exports",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:43:08.258Z",
+            "outcome": "started",
+            "detail": "310-T18"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T06:53:00.278Z",
+            "outcome": "started",
+            "detail": "310-T19"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-24T04:09:02.681Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-24T04:14:33.071Z",
+      "event": "task-added",
+      "detail": "T5: Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests"
+    },
+    {
+      "at": "2026-09-24T04:14:33.153Z",
+      "event": "task-added",
+      "detail": "T6: Author ten bundled generic agent definitions in src/gdskills/bundled/agents"
+    },
+    {
+      "at": "2026-09-24T04:14:33.231Z",
+      "event": "task-added",
+      "detail": "T7: Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check"
+    },
+    {
+      "at": "2026-09-24T04:14:33.322Z",
+      "event": "task-added",
+      "detail": "T8: CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression"
+    },
+    {
+      "at": "2026-09-24T04:14:33.450Z",
+      "event": "task-added",
+      "detail": "T9: Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide"
+    },
+    {
+      "at": "2026-09-24T04:14:33.534Z",
+      "event": "task-added",
+      "detail": "T10: Verify: every generic agent passes keryx agents verify (exit criterion)"
+    },
+    {
+      "at": "2026-09-24T04:14:33.619Z",
+      "event": "task-added",
+      "detail": "T11: Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)"
+    },
+    {
+      "at": "2026-09-24T04:14:33.700Z",
+      "event": "task-added",
+      "detail": "T12: Adversarial review round on the PR diff (opus) and fix loop"
+    },
+    {
+      "at": "2026-09-24T04:14:50.243Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T04:14:50.325Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T04:14:50.404Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T04:14:59.759Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 310-T5"
+    },
+    {
+      "at": "2026-09-24T04:14:59.840Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 310-T6"
+    },
+    {
+      "at": "2026-09-24T04:15:40.786Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 310-T9"
+    },
+    {
+      "at": "2026-09-24T04:17:32.456Z",
+      "event": "task-done",
+      "detail": "T9: Docs: D-2 cross-reference in multi-agent-engine README, agent catalogue guide"
+    },
+    {
+      "at": "2026-09-24T04:19:22.582Z",
+      "event": "task-done",
+      "detail": "T6: Author ten bundled generic agent definitions in src/gdskills/bundled/agents"
+    },
+    {
+      "at": "2026-09-24T04:32:25.886Z",
+      "event": "task-done",
+      "detail": "T5: Core src/agents module: types, schema validator, frontmatter, catalog loader, baseline, tool vocabulary, policy map, compiler + tests"
+    },
+    {
+      "at": "2026-09-24T04:32:37.145Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 310-T7"
+    },
+    {
+      "at": "2026-09-24T04:32:37.243Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 310-T8"
+    },
+    {
+      "at": "2026-09-24T04:46:34.901Z",
+      "event": "task-done",
+      "detail": "T8: CLI keryx agents list/show/export/verify + xref guard extension + agent-commands regression"
+    },
+    {
+      "at": "2026-09-24T04:51:59.698Z",
+      "event": "task-done",
+      "detail": "T7: Exporters (claude/codex/kiro/opencode/keryx-shell) + opt-in W5 agents surfaces + matrix regeneration with first-party docs check"
+    },
+    {
+      "at": "2026-09-24T04:56:27.466Z",
+      "event": "task-added",
+      "detail": "T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports"
+    },
+    {
+      "at": "2026-09-24T04:56:27.546Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 310-T13"
+    },
+    {
+      "at": "2026-09-24T05:06:01.614Z",
+      "event": "task-done",
+      "detail": "T13: Fix: audit-harness hooks discovery errors on agents surfaces; extend agent-definitions scan to codex/kiro/opencode exports"
+    },
+    {
+      "at": "2026-09-24T05:06:44.528Z",
+      "event": "task-done",
+      "detail": "T10: Verify: every generic agent passes keryx agents verify (exit criterion)"
+    },
+    {
+      "at": "2026-09-24T05:06:44.615Z",
+      "event": "task-done",
+      "detail": "T11: Verify: every exporter output scanned clean by keryx security audit-harness (exit criterion)"
+    },
+    {
+      "at": "2026-09-24T05:06:44.707Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T05:07:25.493Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T05:08:01.318Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T05:08:01.407Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — review round 1"
+    },
+    {
+      "at": "2026-09-24T05:18:05.432Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle"
+    },
+    {
+      "at": "2026-09-24T05:18:05.519Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy"
+    },
+    {
+      "at": "2026-09-24T05:18:05.599Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 310-T14"
+    },
+    {
+      "at": "2026-09-24T05:18:05.682Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 310-T15"
+    },
+    {
+      "at": "2026-09-24T05:25:43.770Z",
+      "event": "task-done",
+      "detail": "T15: Fix round 1 (B): verify sourceRef/policy-tool checks, audit sentinel-scoped tier annotation, guide accuracy"
+    },
+    {
+      "at": "2026-09-24T05:35:56.347Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 1 (A): exporter escaping, symlink safety, empty-tools/policy least privilege, sidecar honesty, managed-edit detection, installer EISDIR, doctor opt-in, import cycle"
+    },
+    {
+      "at": "2026-09-24T05:36:25.225Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 2) — review round 2"
+    },
+    {
+      "at": "2026-09-24T05:41:34.626Z",
+      "event": "task-added",
+      "detail": "T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line"
+    },
+    {
+      "at": "2026-09-24T05:41:34.704Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 310-T16"
+    },
+    {
+      "at": "2026-09-24T06:13:21.508Z",
+      "event": "task-done",
+      "detail": "T16: Fix round 2: sentinel must be the managed header line, hash self-reference, null tools audit, guide codex empty-tools, doctor --surface, kiro tier line"
+    },
+    {
+      "at": "2026-09-24T06:13:32.803Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 3) — review round 3 (verification)"
+    },
+    {
+      "at": "2026-09-24T06:20:21.774Z",
+      "event": "task-added",
+      "detail": "T17: Re-plan fix (after 3 review attempts): whole-file content hash at the structural hash field, end-anchored sentinel, --force docs, doctor --surface validation, uninstall refuses hand-edited exports"
+    },
+    {
+      "at": "2026-09-24T06:20:21.870Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 310-T17"
+    },
+    {
+      "at": "2026-09-24T06:38:43.967Z",
+      "event": "task-done",
+      "detail": "T17: Re-plan fix (after 3 review attempts): whole-file content hash at the structural hash field, end-anchored sentinel, --force docs, doctor --surface validation, uninstall refuses hand-edited exports"
+    },
+    {
+      "at": "2026-09-24T06:43:08.176Z",
+      "event": "task-added",
+      "detail": "T18: Fix R4: doctor lenient multi-runtime selectors; dry-run uninstall agrees with real run for hand-edited exports"
+    },
+    {
+      "at": "2026-09-24T06:43:08.258Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 310-T18"
+    },
+    {
+      "at": "2026-09-24T06:50:34.695Z",
+      "event": "task-done",
+      "detail": "T18: Fix R4: doctor lenient multi-runtime selectors; dry-run uninstall agrees with real run for hand-edited exports"
+    },
+    {
+      "at": "2026-09-24T06:53:00.196Z",
+      "event": "task-added",
+      "detail": "T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface"
+    },
+    {
+      "at": "2026-09-24T06:53:00.278Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 310-T19"
+    },
+    {
+      "at": "2026-09-24T06:58:45.046Z",
+      "event": "task-done",
+      "detail": "T19: Fix R5-F1: multi-runtime doctor still checks runtimes without the selected surface"
+    },
+    {
+      "at": "2026-09-24T07:00:47.114Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 4) — final clean round r06"
+    },
+    {
+      "at": "2026-09-24T07:00:47.193Z",
+      "event": "task-done",
+      "detail": "T12: Adversarial review round on the PR diff (opus) and fix loop"
+    },
+    {
+      "at": "2026-09-24T07:05:48.235Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/684 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:06:02.682Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/agents/schema.test.ts asserts validator enforces every field and agrees with schemas/agent-definition.schema.json (required, enums, pattern, additionalProperties); merged in #684 (097cb54d), CI green"
+    },
+    {
+      "at": "2026-09-24T07:06:02.766Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/agents/compile.spawn-subagent.test.ts instantiates the real spawn_subagent tool; compiled input keys subset of inputSchema.properties; field->destination table covers every definition field (input or policy sidecar with explicit enforcement record)"
+    },
+    {
+      "at": "2026-09-24T07:06:02.864Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: PROMPT_DEFENSE_BASELINE single constant (src/agents/baseline.ts); baseline.test.ts + export.test.ts: every bundled agent x every target contains it verbatim exactly once; near-copy detector; bodies with baseline text rejected"
+    },
+    {
+      "at": "2026-09-24T07:06:02.943Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: agentExportSupport reads the agents surface state via the matrix classifier; export.test.ts stubs an unverified runtime -> instruction-only prose with provenance comment"
+    },
+    {
+      "at": "2026-09-24T07:06:03.024Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/agents/verify.test.ts: unknown-tool / unknown-skill fail closed with named reasons, CLI exit non-zero (agents-catalog-commands.test.ts); agent-catalogue-xref.test.ts extended to resolve against loadAgentCatalog, existing assertions unchanged"
+    },
+    {
+      "at": "2026-09-24T07:06:03.103Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verify: generated origin without sourceRef -> origin-missing-source-ref; invalid id -> invalid-source-ref; missing W1 pack dir src/gdskills/bundled/stacks/<id>/ -> stack-pack-missing (lstat, no symlink escape); injectable resolver; gate-cleared/retired status deferred to Wave 4 with W1"
+    },
+    {
+      "at": "2026-09-24T07:06:03.183Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: schema/compile use isModelTier/parseModelTier from src/gdskills/model-tier.ts; compile.model-tier.test.ts proves no compiled output (any target) contains a model name; Claude model: inherit, other hosts omit model"
+    },
+    {
+      "at": "2026-09-24T07:06:03.264Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: keryx agents list/show/export/verify implemented (src/commands/agents-catalog.ts) with --json, export --dry-run/--force, refuse-unmanaged; agents-catalog-commands.test.ts + unchanged agent-commands.test.ts pass; cli-reference coverage green in CI"
+    },
+    {
+      "at": "2026-09-24T07:06:03.343Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: exporters for claude/codex/kiro/opencode/keryx-shell per first-party docs in registry sourceDocs; opt-in agents surfaces (SurfaceAdapter.optIn) claude native, codex/kiro/opencode adapter; default install unchanged; matrix regenerated, integrations matrix --check passes"
+    },
+    {
+      "at": "2026-09-24T07:06:03.421Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: bun ./src/cli.ts agents verify --json -> ok=true, 10/10 bundled generic agents (architect, planner, code-explorer, tdd-guide, refactor-cleaner, silent-failure-hunter, doc-updater, security-reviewer, performance-reviewer, e2e-runner)"
+    },
+    {
+      "at": "2026-09-24T07:06:03.499Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: manual run: 10 agents x 4 host runtimes exported into a temp repo + canonical defs under .metaproject/agents -> keryx security audit-harness: 0 findings, coverage complete, agent-definitions scanned 50 files; export.test.ts asserts zero findings, full pathsScanned coverage, no coverage errors"
+    },
+    {
+      "at": "2026-09-24T07:06:03.578Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: journal records owner acceptance of D-2; docs/requirements/keryx-multi-agent-engine/README.md carries the D-2 revision note beside the non-goal; docs/docs/guides/agent-catalog.md + cli-reference agents catalog section; check-doc-links 0 broken, mkdocs --strict green"
+    },
+    {
+      "at": "2026-09-24T07:06:03.656Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:06:10.623Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 20 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-684#R1-F1 (blocker, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F2 (blocker, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F3 (major, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F4 (major, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F5 (major, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F6 (major, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F7 (minor, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F8 (minor, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F9 (minor, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F10 (minor, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684#R1-F11 (minor, round 2026-09-24-ingest-684): no disposition recorded | 2026-09-24-ingest-684-r02#R2-F1 (minor, round 2026-09-24-ingest-684-r02): no disposition recorded | 2026-09-24-ingest-684-r02#R2-F2 (minor, round 2026-09-24-ingest-684-r02): no disposition recorded | 2026-09-24-ingest-684-r02#R2-F3 (minor, round 2026-09-24-ingest-684-r02): no disposition recorded | 2026-09-24-ingest-684-r02#R2-F4 (minor, round 2026-09-24-ingest-684-r02): no disposition recorded | 2026-09-24-ingest-684-r03#R3-F1 (minor, round 2026-09-24-ingest-684-r03): no disposition recorded | 2026-09-24-ingest-684-r03#R3-F2 (minor, round 2026-09-24-ingest-684-r03): no disposition recorded | 2026-09-24-ingest-684-r04#R4-F1 (minor, round 2026-09-24-ingest-684-r04): no disposition recorded | 2026-09-24-ingest-684-r04#R4-F2 (minor, round 2026-09-24-ingest-684-r04): no disposition recorded | 2026-09-24-ingest-684-r05#R5-F1 (minor, round 2026-09-24-ingest-684-r05): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T07:07:34.614Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/684 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:07:34.700Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:07:41.948Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 097cb54d8be04a7c6e6e8e6aab57646df166c206, but the PR head is d3a695cbddb291bca3ed7175c59f9d67a008ada0. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T07:08:11.716Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/684 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T07:08:11.799Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T07:08:18.847Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

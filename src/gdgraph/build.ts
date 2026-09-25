@@ -67,6 +67,20 @@ type SourceCollection = {
 type PathMapping = {
   pattern: string;
   targets: string[];
+  // GDGRAPH-3 fix round 2 (R2-2): the project-root-relative directory these
+  // targets resolve against — the EFFECTIVE `baseUrl` of the whole `extends`
+  // chain when ANY config in that chain sets one (child's own `baseUrl` wins
+  // over an inherited one, per field-level override), otherwise the directory
+  // of whichever config in the chain declares the (wholesale, nearest-wins)
+  // `paths` map that ended up effective (TS 4.1 `pathsBasePath`). This can
+  // only be known once the ENTIRE chain has been walked, so it is filled in
+  // after `resolveTsconfigOptions` returns — never at the point a config's own
+  // `paths`/`baseUrl` is first read. "" means the project root itself.
+  // `paths` is taken wholesale (never merged) from the nearest config in the
+  // chain that declares it, so every mapping in a given resolved set shares
+  // this same `base` — it is carried per-mapping only so `createTsconfigResolver`
+  // does not need a second parameter to learn it.
+  base: string;
 };
 
 // A per-language import resolver, selected by the importing file's language.
@@ -609,6 +623,37 @@ export function parseGradleSourceRoots(buildGradle: string): string[] {
   return [...roots];
 }
 
+// GDGRAPH-3 (W7): the root `tsconfig.json` may itself declare no
+// `paths`/`baseUrl` and instead `extends` a shared base config (common in a
+// monorepo with one `tsconfig.base.json` carrying the alias map for every
+// package). Before this fix, only the root config's own `compilerOptions`
+// were read — an inherited alias resolved to nothing, silently, with no
+// error. `resolveTsconfigOptions` below walks the `extends` chain, merging
+// `baseUrl`/`paths` so an inherited alias resolves the same way `tsc` itself
+// would for it.
+const TSCONFIG_EXTENDS_MAX_DEPTH = 10;
+
+// GDGRAPH-3 fix round 2 (R2-2): `baseUrl` and `paths` are tracked as two
+// SEPARATE properties of the whole `extends` chain, matching `tsc`'s actual
+// resolution (verified against `tsc --traceResolution`):
+//   - `baseUrl`: the EFFECTIVE baseUrl of the chain — the nearest (most
+//     child-ward) config that sets one, full stop. It does not matter which
+//     config declared the `paths` that ended up effective; ANY config in the
+//     chain setting `baseUrl` makes every mapping resolve against it.
+//   - `pathsBasePath`: the directory of whichever config declares the
+//     (wholesale, nearest-wins) `paths` map that ended up effective. This is
+//     the fallback used ONLY when NO config anywhere in the chain sets
+//     `baseUrl`.
+// Each mapping's final `base` (`effectiveBaseUrl ?? pathsBasePath`) can only
+// be computed once the whole chain is known, so `resolveTsconfigOptions`
+// leaves it unset and `loadTsconfigResolver` fills it in on the fully merged
+// result below.
+type TsconfigOptions = {
+  baseUrl: string | null;
+  paths: Array<{ pattern: string; targets: string[] }>;
+  pathsBasePath: string | null;
+};
+
 async function loadTsconfigResolver(projectRoot: string): Promise<ImportResolver> {
   const empty = createTsconfigResolver(null, []);
   const tsconfigPath = path.join(projectRoot, "tsconfig.json");
@@ -616,30 +661,132 @@ async function loadTsconfigResolver(projectRoot: string): Promise<ImportResolver
     return empty;
   }
 
-  try {
-    const raw = await readFile(tsconfigPath, "utf8");
-    const parsed = JSON.parse(stripJsonComments(raw)) as {
-      compilerOptions?: {
-        baseUrl?: unknown;
-        paths?: unknown;
-      };
-    };
-    const options = parsed.compilerOptions ?? {};
-    const baseUrl = typeof options.baseUrl === "string"
-      ? normalizePath(path.posix.normalize(options.baseUrl)).replace(/^\.\//, "")
-      : null;
-    const paths = isRecord(options.paths)
-      ? Object.entries(options.paths)
-          .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]))
-          .map(([pattern, targets]) => ({
-            pattern,
-            targets: targets.filter((target): target is string => typeof target === "string"),
-          }))
-      : [];
-    return createTsconfigResolver(baseUrl, paths);
-  } catch {
+  const resolved = await resolveTsconfigOptions(tsconfigPath, new Set<string>(), 0, projectRoot);
+  if (!resolved) {
     return empty;
   }
+  const base = resolved.baseUrl ?? resolved.pathsBasePath ?? "";
+  const paths: PathMapping[] = resolved.paths.map((mapping) => ({ ...mapping, base }));
+  return createTsconfigResolver(resolved.baseUrl, paths);
+}
+
+// GDGRAPH-3 fix round 1 (F6): `baseUrl` and `paths` are each resolved relative
+// to the config file that DECLARES them, not relative to the project root —
+// the same rule `tsc` itself follows. A config in a subdirectory
+// (`config/tsconfig.base.json`) declaring `baseUrl: ".."` means "one level up
+// from `config/`" (the project root), never a literal `".."` measured from the
+// project root (which would escape it entirely). `toProjectRelativeDir` below
+// converts an absolute directory into this resolver's project-root-relative,
+// posix, no-leading-"./" convention ("" means the project root itself) so
+// every `baseUrl`/mapping `base` this module carries is expressed in the same
+// coordinate space regardless of which file in the `extends` chain declared
+// it.
+function toProjectRelativeDir(projectRoot: string, absoluteDir: string): string {
+  const relative = normalizePath(path.relative(projectRoot, absoluteDir)).replace(/^\.\//, "");
+  return relative === "." ? "" : relative;
+}
+
+async function readTsconfigJson(
+  configPath: string,
+): Promise<{ compilerOptions?: { baseUrl?: unknown; paths?: unknown }; extends?: unknown } | null> {
+  try {
+    const raw = await readFile(configPath, "utf8");
+    return JSON.parse(stripJsonComments(raw)) as {
+      compilerOptions?: { baseUrl?: unknown; paths?: unknown };
+      extends?: unknown;
+    };
+  } catch {
+    return null;
+  }
+}
+
+// A relative/local `extends` ("./tsconfig.base.json", "../base.json") is
+// resolved against the EXTENDING config's own directory — the same rule
+// `tsc` uses — and gets a `.json` suffix when the specifier omits one. A
+// bare package specifier (no leading "." or "/", e.g. "@tsconfig/node20")
+// is intentionally left unresolved here: following it would mean
+// replicating node_modules package resolution inside this cheap, dependency-
+// light graph-build resolver. It is skipped, not treated as an error — the
+// chain simply stops contributing inherited `paths`/`baseUrl` from that link.
+function resolveTsconfigExtendsPath(configDir: string, extendsSpecifier: string): string | null {
+  if (!extendsSpecifier.startsWith(".") && !extendsSpecifier.startsWith("/")) {
+    return null;
+  }
+  const resolved = path.resolve(configDir, extendsSpecifier);
+  return resolved.endsWith(".json") ? resolved : `${resolved}.json`;
+}
+
+// Depth-capped (10 hops — no real project chains that deep) and cycle-guarded
+// (a config that `extends` back to one already on the current chain stops
+// walking rather than looping forever). `baseUrl`/`paths` are each replaced
+// wholesale by a child that declares them (TS's own `extends` semantics —
+// not a deep merge), inherited unchanged from the base otherwise. Any parse
+// failure at any link degrades that link to "nothing inherited", never a
+// thrown error that would take the whole graph build down.
+async function resolveTsconfigOptions(
+  configPath: string,
+  visited: Set<string>,
+  depth: number,
+  projectRoot: string,
+): Promise<TsconfigOptions | null> {
+  const resolvedPath = path.resolve(configPath);
+  if (depth > TSCONFIG_EXTENDS_MAX_DEPTH || visited.has(resolvedPath)) {
+    return null;
+  }
+  visited.add(resolvedPath);
+
+  const parsed = await readTsconfigJson(resolvedPath);
+  if (!parsed) {
+    return null;
+  }
+
+  let inherited: TsconfigOptions | null = null;
+  if (typeof parsed.extends === "string") {
+    const basePath = resolveTsconfigExtendsPath(path.dirname(resolvedPath), parsed.extends);
+    if (basePath) {
+      inherited = await resolveTsconfigOptions(basePath, visited, depth + 1, projectRoot);
+    }
+  }
+
+  // R2-2: `baseUrl` resolves relative to THIS config's own directory when
+  // THIS config sets one — never the project root and never some other
+  // config's directory. `declaringDir` is this config's own directory,
+  // already expressed in the resolver's project-root-relative convention;
+  // it is the `pathsBasePath` candidate when THIS config declares `paths`.
+  const configDir = path.dirname(resolvedPath);
+  const declaringDir = toProjectRelativeDir(projectRoot, configDir);
+
+  const options = parsed.compilerOptions ?? {};
+  const ownBaseUrl = typeof options.baseUrl === "string"
+    ? toProjectRelativeDir(projectRoot, path.resolve(configDir, options.baseUrl))
+    : null;
+  // Child overrides parent per field: this config's own `baseUrl` wins when
+  // present, otherwise the (already-resolved) inherited one, otherwise none.
+  // This is the EFFECTIVE baseUrl of the chain as seen from this level —
+  // since a config's own fields are computed only after its `extends`
+  // ancestor has already been fully resolved, the outermost caller's return
+  // value carries the true effective baseUrl for the whole chain.
+  const baseUrl = ownBaseUrl ?? inherited?.baseUrl ?? null;
+
+  const ownPaths = isRecord(options.paths)
+    ? Object.entries(options.paths)
+        .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]))
+        .map(([pattern, targets]) => ({
+          pattern,
+          targets: targets.filter((target): target is string => typeof target === "string"),
+        }))
+    : null;
+  // `paths` is replaced wholesale by a child that declares its own (never
+  // merged with the parent's). Crucially, the `base` those mappings resolve
+  // against is NOT decided here: whether it ends up being THIS config's
+  // directory depends on whether ANY config anywhere in the chain (including
+  // ones not yet visited further up) sets `baseUrl`, which isn't known until
+  // the whole chain unwinds. So only `pathsBasePath` (this declaring config's
+  // own directory) is tracked here, and the real `base` is filled in once by
+  // `loadTsconfigResolver` from the final `baseUrl ?? pathsBasePath`.
+  const paths = ownPaths ?? inherited?.paths ?? [];
+  const pathsBasePath = ownPaths ? declaringDir : (inherited?.pathsBasePath ?? null);
+  return { baseUrl, paths, pathsBasePath };
 }
 
 function createTsconfigResolver(baseUrl: string | null, mappings: PathMapping[]): ImportResolver {
@@ -657,7 +804,7 @@ function createTsconfigResolver(baseUrl: string | null, mappings: PathMapping[])
           continue;
         }
         for (const target of mapping.targets) {
-          candidates.push(applyPathTarget(baseUrl, target, match));
+          candidates.push(applyPathTarget(mapping.base, target, match));
         }
       }
       if (baseUrl !== null) {
@@ -682,9 +829,9 @@ function matchPathPattern(pattern: string, specifier: string): string | null {
   return specifier.slice(prefix.length, specifier.length - suffix.length);
 }
 
-function applyPathTarget(baseUrl: string | null, target: string, wildcard: string): string {
+function applyPathTarget(base: string, target: string, wildcard: string): string {
   const replaced = target.includes("*") ? target.replace("*", wildcard) : target;
-  return normalizePath(path.posix.normalize(path.posix.join(baseUrl ?? "", replaced)));
+  return normalizePath(path.posix.normalize(path.posix.join(base, replaced)));
 }
 
 function stripJsonComments(source: string): string {

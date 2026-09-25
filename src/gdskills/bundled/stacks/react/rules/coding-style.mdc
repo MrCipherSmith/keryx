@@ -1,0 +1,58 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx"]
+metadata:
+  origin: authored
+---
+
+# React coding style
+
+Narrows `ts-js-node`'s coding style to React component files. Applies only
+to `*.tsx`/`*.jsx` — non-component TypeScript/JavaScript still
+comes from `ts-js-node`'s own coding-style rule, not this file.
+
+## Components
+
+- Write function components; a class component is a maintenance
+  regression unless the project has no alternative (e.g. an error boundary,
+  which still requires a class in current React).
+- One component per file for anything exported and reused; a small private
+  helper component used only inside its parent file can stay local.
+- Name a component file after the component it exports (`UserCard.tsx`
+  exports `UserCard`), `PascalCase` for the component, `camelCase` for
+  hooks (`useUserCard`) and plain functions.
+- Destructure props in the function signature; do not thread a whole
+  `props` object through the body when only a few fields are used.
+- Type props with an explicit `interface`/`type`, not `React.FC` — `FC`'s
+  implicit `children` and weaker generic inference are a known footgun the
+  current React types intentionally do not paper over.
+
+## Hooks and state
+
+- Call hooks only at the top level of a component or another hook, never
+  inside a condition, loop, or nested function — the react-hooks lint rule
+  enforces this; do not add an eslint-disable line to route around it (see
+  `rules/security.mdc` and `react-build-fix`'s guardrails).
+- Order hooks so the same hooks run in the same order on every render;
+  branch inside a hook's own logic (`if (x) return early` after the hook
+  call), not around the hook call itself.
+- Prefer several focused `useState` calls over one large state object when
+  the fields update independently; group into one state (or `useReducer`)
+  only when fields change together.
+- Name a custom hook's return values by what they mean in the caller
+  (`{ data, isLoading, error }`), not by the hook's internal variable
+  names.
+
+## Imports and structure
+
+- Group imports: React/framework, third-party, then local — the same
+  ordering `ts-js-node`'s coding-style rule already asks for; nothing
+  React-specific changes the grouping itself.
+- Import hooks and utilities by name (`import { useState } from "react"`);
+  do not import the whole `React` namespace unless the project's JSX
+  transform requires it (check the project's `tsconfig`/bundler config —
+  the classic transform needs `import React from "react"` in scope, the
+  automatic transform introduced in React 17 does not).
+- Co-locate a component's own styles, tests, and small subcomponents next
+  to it under one directory when the project already uses that layout;
+  match the existing convention rather than introducing a new one.

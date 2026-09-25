@@ -29,6 +29,8 @@ function stripSkillFieldQuotes(value: string): string {
 
 /** What a `SKILL.md`'s frontmatter declares for routing. Both fields optional. */
 export interface SkillFrontmatter {
+  /** The top-level `name:` scalar, when declared. */
+  readonly name?: string;
   /** The routing text, block scalars folded to one line. */
   readonly description?: string;
   /** The `triggers:` list, in declaration order. */
@@ -37,6 +39,12 @@ export interface SkillFrontmatter {
   readonly metadataCategory?: string;
   /** `metadata.version`, as the skill's author declared it. */
   readonly metadataVersion?: string;
+  /**
+   * `metadata.origin` — provenance (W1 authoring standard):
+   * `authored | generated | imported | learned`. Read as a free-form string;
+   * the closed-set check belongs to the authoring lint, not this parser.
+   */
+  readonly metadataOrigin?: string;
   /**
    * `metadata.compatible_harnesses`, split into individual harness names
    * regardless of whether the source wrote a quoted comma-separated scalar
@@ -91,12 +99,14 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
     return {};
   }
   const lines = content.slice(3, end).split("\n");
+  let name: string | undefined;
   let description: string | undefined;
   const triggers: string[] = [];
   let inTriggers = false;
   let inMetadata = false;
   let metadataCategory: string | undefined;
   let metadataVersion: string | undefined;
+  let metadataOrigin: string | undefined;
   let compatibleHarnesses: string[] | undefined;
   /** True on the line right after an empty `compatible_harnesses:`, looking for a block list next. */
   let awaitingHarnessesList = false;
@@ -115,6 +125,14 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
       }
       description = foldBlock(descriptionBlock);
       descriptionBlock = null;
+    }
+    const nameMatch = /^name:\s*(.*)$/.exec(line);
+    if (nameMatch !== null && nameMatch[1] !== undefined) {
+      name = stripSkillFieldQuotes(nameMatch[1].trim());
+      inTriggers = false;
+      inMetadata = false;
+      awaitingHarnessesList = false;
+      continue;
     }
     const descMatch = /^description:\s*(.*)$/.exec(line);
     if (descMatch !== null && descMatch[1] !== undefined) {
@@ -175,6 +193,11 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
           metadataVersion = stripSkillFieldQuotes(versionMatch[1].trim());
           continue;
         }
+        const originMatch = /^\s+origin:\s*(.+)$/.exec(line);
+        if (originMatch !== null && originMatch[1] !== undefined) {
+          metadataOrigin = stripSkillFieldQuotes(originMatch[1].trim());
+          continue;
+        }
         const harnessesMatch = /^\s+compatible_harnesses:\s*(.*)$/.exec(line);
         if (harnessesMatch !== null) {
           const inline = parseInlineHarnesses((harnessesMatch[1] ?? "").trim());
@@ -193,10 +216,12 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
     description = foldBlock(descriptionBlock);
   }
   return {
+    ...(name !== undefined ? { name } : {}),
     ...(description !== undefined ? { description } : {}),
     ...(triggers.length > 0 ? { triggers } : {}),
     ...(metadataCategory !== undefined ? { metadataCategory } : {}),
     ...(metadataVersion !== undefined ? { metadataVersion } : {}),
+    ...(metadataOrigin !== undefined ? { metadataOrigin } : {}),
     ...(compatibleHarnesses !== undefined ? { compatibleHarnesses } : {}),
   };
 }

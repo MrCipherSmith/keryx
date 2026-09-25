@@ -1,0 +1,233 @@
+# Review round 1 — PR #692 (structured)
+
+Source: review-r1.md
+
+```keryx:findings
+[
+ {
+  "id": "R1-1",
+  "reviewer": "review-orchestrator",
+  "severity": "blocker",
+  "problem": "Skill bodies were edited to teach the eval answers (answer-key sentence, token avoidance, eval snippet pasted in) and graders were loosened after failing, so recorded passes partly measure grader fit.",
+  "impact": "Two of three stable packs rely on the tuning; the stable claim is not honest evidence.",
+  "suggested_fix": "Revert the answer-key and token-avoidance edits, rewrite graders to check behavior, re-run the gate, and add contamination and answer-key guards.",
+  "evidence": "git show 287310ee -- stacks/*/skills/*; contam.ts shared 6-grams in react-code-review",
+  "confidence": "high",
+  "file": "src/gdskills/bundled/stacks/ts-js-node/skills/nodejs-esm-migration/SKILL.md",
+  "line": 48,
+  "class_scope": {
+   "sites": [
+    "nodejs-esm-migration",
+    "go-build-fix",
+    "react-build-fix",
+    "react-code-review",
+    "go-testing",
+    "react-upgrade-migration",
+    "all 18 pack SKILL.md/evals.json"
+   ],
+   "enumeration_method": "git show of 287310ee and b020e1a5 over stacks/*/skills, plus contam.ts over all 18 skills and a phrase search for verbatim/exact sentence"
+  }
+ },
+ {
+  "id": "R1-2",
+  "reviewer": "review-orchestrator",
+  "severity": "major",
+  "problem": "Behavior graders pass empty (4/36) and echoed (12/36) answers; some graders reward wrong advice.",
+  "impact": "The gate does not discriminate answers.",
+  "suggested_fix": "Every scenario gets a positive grader not matching its own prompt; a guard test makes empty and echo runners fail all scenarios; fix wrong-advice graders.",
+  "evidence": "probe.ts empty and echo runners",
+  "confidence": "high",
+  "file": "src/gdskills/bundled/stacks",
+  "class_scope": {
+   "sites": [
+    "all 36 behavior scenarios in 4 packs"
+   ],
+   "enumeration_method": "probe.ts over every pack skill"
+  }
+ },
+ {
+  "id": "R1-3",
+  "reviewer": "review-orchestrator",
+  "severity": "major",
+  "problem": "The pack gate does not bind reports to current evals.json/SKILL.md, strictness high or trials >= 5, or pack.id to the directory.",
+  "impact": "A stale or weakened eval.json clears the gate.",
+  "suggested_fix": "Bind by scenario ids/trigger prompts and a sha256 digest, and require strictness high, trials >= 5 and id == directory.",
+  "evidence": "gate.ts mutations all pass",
+  "confidence": "high",
+  "file": "src/gdskills/governance/eval.ts",
+  "line": 735,
+  "class_scope": {
+   "sites": [
+    "checkSkillReportForPackGate",
+    "checkPackEvalDocument",
+    "checkStackPackGateCleared",
+    "agents generate"
+   ],
+   "enumeration_method": "read both gate branches and both consumers"
+  }
+ },
+ {
+  "id": "R1-4",
+  "reviewer": "review-orchestrator",
+  "severity": "major",
+  "problem": "The legacy single-report eval.json bypasses pack-level rules; an empty skills map passes.",
+  "impact": "A trivial eval.json clears stack packs.",
+  "suggested_fix": "Require the pack-level form for stack packs, fail an empty skills map, and update the fixtures.",
+  "evidence": "gate.ts empty skills; verify.test fixture",
+  "confidence": "high",
+  "file": "src/gdskills/governance/eval.ts",
+  "line": 834,
+  "class_scope": {
+   "sites": [
+    "checkStablePackGate single-report branch",
+    "verify.test.ts fixture"
+   ],
+   "enumeration_method": "read checkStablePackGate branches and tests"
+  }
+ },
+ {
+  "id": "R1-5",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "A malformed pack.json skills bucket throws instead of failing.",
+  "impact": "agents verify/generate crash.",
+  "suggested_fix": "Validate buckets as string[] and wrap in try/catch.",
+  "evidence": "gate.ts skills.implement=5 throws",
+  "confidence": "high",
+  "file": "src/gdskills/governance/eval.ts",
+  "line": 786
+ },
+ {
+  "id": "R1-6",
+  "reviewer": "review-orchestrator",
+  "severity": "major",
+  "problem": "agents generate derives file names from pack.json id without matching --stack or containment; writes outside the agents dir.",
+  "impact": "Path escape plus mismatched generation.",
+  "suggested_fix": "Require pack.id === stackId and the id pattern, add a containment and lstat check, and add tests.",
+  "evidence": "gen-escape.ts wrote ../escaped-*.md",
+  "confidence": "high",
+  "file": "src/commands/agents-catalog.ts",
+  "line": 397,
+  "class_scope": {
+   "sites": [
+    "readStackPackForGeneration",
+    "asStackPackForAgentGeneration",
+    "generate write loop"
+   ],
+   "enumeration_method": "read both pack readers and the write path"
+  }
+ },
+ {
+  "id": "R1-7",
+  "reviewer": "review-orchestrator",
+  "severity": "major",
+  "problem": "Raw id, sourceRef, stacks and skills values are written into YAML frontmatter; a newline injects policy_profile/tools.",
+  "impact": "A read-only auditor can become workspace-write.",
+  "suggested_fix": "Validate ids/skill names in the generator and quote every scalar; add hostile-input tests.",
+  "evidence": "inject.ts policy=workspace-write",
+  "confidence": "high",
+  "file": "src/agents/generate.ts",
+  "line": 59,
+  "class_scope": {
+   "sites": [
+    "generate.ts frontmatter fields name/sourceRef/stacks/skills"
+   ],
+   "enumeration_method": "inject.ts over each raw field"
+  }
+ },
+ {
+  "id": "R1-8",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "An empty completion is returned as a real answer.",
+  "impact": "not-contains graders pass on nothing.",
+  "suggested_fix": "Throw on empty text; add a test.",
+  "evidence": "code read",
+  "confidence": "high",
+  "file": "src/commands/model-eval-runner.ts",
+  "line": 115
+ },
+ {
+  "id": "R1-9",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "The build-time credential check ignores saved auth.json keys.",
+  "impact": "Inconsistent refusal.",
+  "suggested_fix": "Use envWithSavedApiKeys at build time.",
+  "evidence": "hasCredential env vs envWithSavedApiKeys",
+  "confidence": "high",
+  "file": "src/commands/model-eval-runner.ts",
+  "line": 91
+ },
+ {
+  "id": "R1-10",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "defaultSkillExists accepts any stack skill dir name regardless of SKILL.md or the agent's stacks.",
+  "impact": "unknown-skill is masked.",
+  "suggested_fix": "Require SKILL.md and scope to the agent's stacks and extends chain.",
+  "evidence": "skillres.ts",
+  "confidence": "high",
+  "file": "src/agents/verify.ts",
+  "line": 362
+ },
+ {
+  "id": "R1-11",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "Eval scores against scope all (repo-local skills); a recorded positive fails under bundled scope.",
+  "impact": "The stable claim depends on the recording environment.",
+  "suggested_fix": "Honor --scope for eval and require bundled for gate documents.",
+  "evidence": "trig.ts python-implementation positive-6",
+  "confidence": "high",
+  "file": "src/commands/skills-governance.ts",
+  "line": 329
+ },
+ {
+  "id": "R1-12",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "The drift check silently skips when pack.json id differs from sourceRef.",
+  "impact": "Drift is hidden.",
+  "suggested_fix": "Report a problem when the id differs or no regenerated file matches.",
+  "evidence": "code read",
+  "confidence": "high",
+  "file": "src/agents/verify.ts",
+  "line": 520
+ },
+ {
+  "id": "R1-13",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "Technical inaccuracies: require(esm), CancelledError/except Exception, XXE rationale, implicit chaining, findDOMNode removed, per-directory React upgrade, server actions authorization.",
+  "impact": "Misleading guidance.",
+  "suggested_fix": "Correct each statement against current docs.",
+  "evidence": "see review-r1.md",
+  "confidence": "high",
+  "file": "src/gdskills/bundled/stacks/python/rules/patterns.mdc",
+  "line": 51
+ },
+ {
+  "id": "R1-14",
+  "reviewer": "review-orchestrator",
+  "severity": "minor",
+  "problem": "No CLI tests for scout exclusion or eval --runner fail-closed; hardcoded pack list; stale test text.",
+  "impact": "Wiring is unpinned.",
+  "suggested_fix": "Add CLI tests, derive the pack list, fix the stale text.",
+  "evidence": "code read",
+  "confidence": "high",
+  "file": "src/commands/skills-governance.test.ts"
+ },
+ {
+  "id": "R1-15",
+  "reviewer": "review-orchestrator",
+  "severity": "info",
+  "problem": "Reports carry no runner provenance.",
+  "impact": "The artifact cannot show which model ran.",
+  "suggested_fix": "Record runner, model and recordedAt.",
+  "evidence": "sum.ts",
+  "confidence": "high",
+  "file": "src/gdskills/bundled/stacks"
+ }
+]
+```

@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this pull request's React components for Rules of Hooks violations",
+      "Check this useEffect for a dependency array bug before we merge",
+      "Look at this diff for stale closures in the event handlers",
+      "Review this list render for key misuse",
+      "Check this component diff for a dangerouslySetInnerHTML XSS risk",
+      "Review this modal component for accessibility gaps"
+    ],
+    "negative": [
+      "Review the MobX store actions and reactions in this diff",
+      "Review this diff against our repository's CLAUDE.md frontend conventions",
+      "Write a React Testing Library test for this component",
+      "Fix the failing react-hooks lint error in this file",
+      "Review this NestJS controller's DTO validation",
+      "Build a new component that renders a paginated user list"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "flag-rules-of-hooks",
+      "prompt": "Review this snippet: `function UserPanel({ id }) { if (!id) return null; const [user, setUser] = useState(null); useEffect(() => { fetchUser(id).then(setUser); }, [id]); return <div>{user?.name}</div>; }` What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review identifies that useState and useEffect are called after an early return (`if (!id) return null`), which means the hooks run on some renders and not others — a Rules of Hooks violation, not a style nit. It recommends restructuring so every hook call sits above the first return, branching inside the JSX or inside the hook's own logic instead.",
+          "pass_criteria": [
+            "Names both hooks (useState and useEffect) and states specifically that they sit after `if (!id) return null`, so on renders where id is falsy React never reaches them — a generic 'hooks are called conditionally' without pointing at this early return does not satisfy this.",
+            "Flags this as a real correctness bug (hook call order breaking React's per-render matching) rather than a style preference.",
+            "Shows or describes the concrete restructuring: hoist useState/useEffect above the `if (!id) return null` guard (or push the id-check inside the effect body), not just 'reorder things'."
+          ],
+          "fail_criteria": [
+            "Says the code is fine or does not flag the early-return-before-hooks structure as a problem.",
+            "Treats the issue as a minor style nit rather than a correctness bug.",
+            "Proposes keeping the hooks reachable only conditionally (e.g. wrapping the hook call itself in a condition) instead of moving them above the early return."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This violates the Rules of Hooks. `useState` and `useEffect` are called after `if (!id) return null;`, so on renders where `id` is falsy the component returns before ever reaching those hook calls, while on renders where `id` is truthy it does reach them. React relies on hooks being called in the exact same order on every render of a given component instance to match state slots correctly — a conditional early return before a hook call breaks that guarantee and can cause React to throw or silently corrupt state/effect ordering, especially once `id` toggles between falsy and truthy across renders. The fix is to move `useState` and `useEffect` above the guard clause so they always run, and move the conditional logic into the returned JSX instead: keep the two hook calls first, then do `if (!id) return null;` right before the `return <div>...`, or push the id-check into the effect body itself so the effect early-returns internally rather than the component bailing out before the hook call.",
+        "known_wrong": "This looks fine to me — the early return is just a standard loading/guard pattern, and since `id` is a prop passed in from the start, in practice the component either always has an id or never does for a given usage, so the hooks effectively always run the same way in that context. I wouldn't block this; maybe add a short comment above the guard explaining why it's there, but the hook order isn't really a concern here since React only cares about hook order within a single component's re-renders, not across different components.",
+        "vague": "This has a Rules of Hooks issue — the hooks are placed after a conditional return, which isn't allowed. You'll want to restructure it.",
+        "subtle_wrong": "Good catch potential here — technically useState/useEffect come after the early return, which is a Rules of Hooks smell. I'd flag it in a comment for awareness, but since `id` only toggles rarely in this component's actual usage (it's set once from a route param) it's unlikely to bite in practice, so I wouldn't block the PR over it — worth a follow-up cleanup ticket rather than a blocking change now."
+      }
+    },
+    {
+      "id": "no-mobx-scope",
+      "prompt": "Review this component diff: it uses a MobX observer wrapping a component with a useEffect that has a missing dependency, and the store action mutates an array in place. What do you flag, and what do you leave to another reviewer?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags the missing effect dependency as a React-side correctness bug (this skill's own scope), and explicitly declines to review the MobX store's in-place array mutation, noting that MobX/store-pattern review belongs to a separate store-review skill or reviewer rather than blurring the two into one finding.",
+          "pass_criteria": [
+            "Flags the missing effect dependency as a concrete staleness bug (explains that the effect will keep using an old value from an earlier render instead of the current one), not just 'the effect is missing a dependency'.",
+            "Explicitly names MobX/store review as a separate reviewer or skill that the in-place array mutation should go to, rather than a vague 'someone else can look at that' or silently reviewing/fixing it itself."
+          ],
+          "fail_criteria": [
+            "Reviews or gives fix guidance on the MobX store action's mutation pattern as if it were this skill's own finding, instead of deferring it.",
+            "Fails to flag the missing effect dependency at all."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "I'll flag the useEffect: it's missing a dependency, which means it will use a stale value from an earlier render instead of reacting to the current one — that's a real staleness bug on the React side and squarely in scope here. Add the missing reactive value read inside the effect body to its dependency array (or confirm it's a stable ref/dispatch function if it's deliberately omitted). On the store action mutating an array in place — I'm noting it exists, but I'm not reviewing or fixing that pattern here. MobX observer/action/store correctness (whether in-place mutation is fine under MobX's own reactivity model, or should be an immutable replace) is out of scope for this skill; that needs a pass from the store-review skill/reviewer, since MobX has its own conventions for what's safe to mutate versus replace. Please route the store action to that review separately.",
+        "known_wrong": "Two things here. First, the missing effect dependency — add it in. Second, the store action mutating the array in place is also worth fixing: MobX generally wants actions to replace arrays immutably rather than push/splice in place so downstream computeds and reactions pick up the change reliably, so I'd rewrite that action to use `array = [...array, newItem]` (or the MobX-friendly equivalent) instead of `array.push(newItem)`. Both changes should go in before merging.",
+        "vague": "I'd flag the effect dependency issue since that's in scope here, and leave the store mutation question to whoever reviews the MobX side.",
+        "subtle_wrong": "The effect dependency looks off, so add whatever's missing there. On the array mutation — since it's a small, contained change and I already have context on it from this diff, I'll just note that MobX generally prefers immutable updates and suggest swapping the push for a spread; no need to route it to a separate MobX review for something this minor."
+      }
+    }
+  ]
+}

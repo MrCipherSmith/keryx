@@ -1,77 +1,76 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { pathExists } from "../lib/fs";
-import { describeExistingGuard, type CtxRuntime, type Settings } from "./runtimes";
+import { getHarnessAdapter, installIntegration, uninstallIntegration, type SettingsFileOwner } from "../integrations/service";
+// Deep import, deliberately (F10 — see the note on `src/integrations/service.ts`):
+// this is the one place outside `src/integrations` that reads the pre-merge
+// settings directly, to report what an install would upgrade
+// (`describeExistingGuard` below) before the write overwrites the evidence.
+import { readSettingsFile } from "../integrations/settings-json";
+import { describeExistingGuard, type CtxRuntime } from "./runtimes";
 
 // Opt-in, merge-safe installer for the gdctx routing guard across harnesses.
-// The per-runtime merge/strip lives in runtimes.ts; this module only owns the
-// generic read/write of a JSON settings file and the install/uninstall loop.
+// The per-runtime merge/strip is registered on the matching `SurfaceAdapter`
+// in `src/integrations/surfaces.ts`; this module owns only the drift-message
+// computation that has to happen BEFORE a write, then delegates the actual
+// install/uninstall (JSON through a `SettingsFileOwner`, non-JSON through
+// `customInstall`/`customUninstall`, and install-state recording) to the
+// installer core (flow 307, W5-b, T6) — `installIntegration`/
+// `uninstallIntegration` in `src/integrations/installer.ts` — so this and the
+// `keryx integrations` CLI share one implementation.
+//
 // Never clobbers user config: managed entries carry the `ctx-agent-hooks`
 // sentinel, so uninstall targets ONLY our entry and re-install is idempotent.
 
-async function readSettings(file: string): Promise<Settings> {
-  if (!(await pathExists(file))) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      return parsed as Settings;
-    }
-    return {};
-  } catch {
-    throw new Error(`Cannot parse ${file}: file is not valid JSON`);
-  }
-}
-
-async function writeSettings(file: string, settings: Settings): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-}
+const CTX_GUARD_SURFACE_ID = "ctx-guard";
 
 // Install the guard for one runtime; returns { path, errors } ([] errors = ok).
-// JSON runtimes go through merge + on-disk validate; runtimes that own a
-// non-JSON artifact (OpenCode plugin) delegate to customInstall.
+// JSON runtimes go through the owner; runtimes that own a non-JSON artifact
+// (OpenCode plugin) delegate to customInstall — both routed through
+// `installIntegration` now, which resolves the same "ctx-guard" surface id on
+// this runtime's `HarnessAdapter`.
 export async function installRuntimeHook(
   projectRoot: string,
   runtime: CtxRuntime,
+  ownerOverride?: SettingsFileOwner,
 ): Promise<{ path: string; errors: string[]; upgraded?: string }> {
   const file = runtime.locate(projectRoot);
-  if (runtime.customInstall) {
-    const errors = await runtime.customInstall(projectRoot);
-    return { path: file, errors };
-  }
-  const merge = runtime.merge;
-  const validate = runtime.validate;
-  if (!merge || !validate) {
+  if (!getHarnessAdapter(runtime.id)) {
     return { path: file, errors: [`${runtime.id}: no installer defined`] };
   }
-  const settings = await readSettings(file);
-  // Read BEFORE the merge: this is the only moment the pre-install state exists,
-  // and the drift it reports is overwritten by the very next line.
-  const upgraded = describeExistingGuard(settings, runtime);
-  await writeSettings(file, merge(settings));
-  const errors = validate(await readSettings(file));
+  // Read BEFORE the merge: this is the only moment the pre-install state
+  // exists, and the drift it reports is overwritten by the very next write.
+  // Only meaningful for the JSON/merge path — a runtime whose ctx-guard
+  // surface installs via `customInstall` (OpenCode) has no settings file to
+  // diff against here.
+  let upgraded: string | undefined;
+  if (!runtime.customInstall && runtime.merge && runtime.validate && runtime.relativePath) {
+    const existing = await readSettingsFile(file);
+    upgraded = describeExistingGuard(existing, runtime) ?? undefined;
+  }
+  const { errors } = await installIntegration(projectRoot, runtime.id, {
+    surfaces: [CTX_GUARD_SURFACE_ID],
+    ...(ownerOverride ? { ownerOverride } : {}),
+  });
   return { path: file, errors, ...(upgraded ? { upgraded } : {}) };
 }
 
 // Remove ONLY the managed guard for one runtime; false if nothing was present.
+// Throws when the owner refuses the uninstall (it would leave a sibling
+// surface on the same settings file invalid) — the boolean-only success shape
+// is unchanged, but a caller must not treat a thrown error as "nothing to
+// remove"; see `commands/ctx.ts::handleUninstallHook`.
 export async function uninstallRuntimeHook(
   projectRoot: string,
   runtime: CtxRuntime,
+  ownerOverride?: SettingsFileOwner,
 ): Promise<boolean> {
-  if (runtime.customUninstall) {
-    return runtime.customUninstall(projectRoot);
-  }
-  const file = runtime.locate(projectRoot);
-  if (!(await pathExists(file))) {
+  if (!getHarnessAdapter(runtime.id)) {
     return false;
   }
-  const strip = runtime.strip;
-  if (!strip) {
-    return false;
+  const { results, errors } = await uninstallIntegration(projectRoot, runtime.id, {
+    surfaces: [CTX_GUARD_SURFACE_ID],
+    ...(ownerOverride ? { ownerOverride } : {}),
+  });
+  if (errors.length > 0) {
+    throw new Error(errors.join("; "));
   }
-  const settings = await readSettings(file);
-  await writeSettings(file, strip(settings));
-  return true;
+  return results.some((r) => r.status === "removed");
 }

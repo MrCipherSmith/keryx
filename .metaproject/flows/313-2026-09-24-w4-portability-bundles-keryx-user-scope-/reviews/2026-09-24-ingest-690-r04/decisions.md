@@ -1,0 +1,27 @@
+# Decisions
+
+- R1-F20: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-F1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-F6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-F7: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-F8: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-F10: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-F13: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-F18: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-F13: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R2-F6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R2-F10: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R2-F15: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R2-F21: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F3: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F4: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F7: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F8: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F9: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R4-F10: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-I2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R3-I5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

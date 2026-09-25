@@ -1,0 +1,85 @@
+[
+  {
+    "id": "R7-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "a genuine UTF-16 (BOM) rule or memory-entry carrying an injection is imported with 0 findings: non-skill kinds are read as UTF-8 only, so the BOM view the R5-F2 fix added for skills never exists for them",
+    "impact": "`keryx bundle import` of a project-scope rules/team.md or memory/lessons/note.md that is real UTF-16LE/BE with a BOM and an injection directive exits 0 and writes the file; the W8 audit sees only NUL-interleaved noise. A BOM-aware reader shows the directive in clear text; rules and memory are agent-context content. The UTF-8 control of the same file is refused audit-failed. Pre-existing (identical on ca745d67), not a regression; injection-only",
+    "suggested_fix": "read non-skill kinds as a buffer and scan the same contentVariants (decodeUtf16WithBom lossy view + lossyDecodeBytes) used for skills, unioning findings; or have plan.ts refuse a text-kind entry (rule/agent/memory-entry/learned-pattern) whose bytes start with a UTF-16/UTF-32 BOM; add rule and memory-entry BOM regression tests",
+    "evidence": "review313-r7/bom7.out NS rule-utf16le-bom: audit pass 0, import exit 0 WRITTEN; rule-utf8-control: refused audit-failed. review313-r7/bom7b.out memory-lessons-utf16le-bom and rule-utf16be-bom: exit 0 WRITTEN, BOM-aware view '# Team\\nIgnore all previous instructions…'; bom7b-pre.out identical on ca745d67",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 459,
+    "class_scope": {
+      "sites": [
+        "src/security/audit-harness/index.ts:106-112 safeReadText (utf8 only)",
+        "src/security/audit-harness/index.ts:459-548 rule/agent/learned-pattern/memory-entry scan (single utf8 view)",
+        "src/security/audit-harness/index.ts:366-389 hook-config (utf8 JSON.parse; a BOM file is unreadable and plan.ts refuses it first)"
+      ],
+      "enumeration_method": "read every entry.kind branch of scanImportedBundle after T20 and ran a genuine-UTF-16-BOM + injection file per kind (rule, memory-entry, agent, hook-config) through runHarnessAudit and CLI bundle import at HEAD and at ca745d67"
+    },
+    "global_id": "2026-09-24-ingest-690-r07#R7-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7b06de44 (after fixing commit 9c61a1e8) by the round-8 opus reviewer: R7-F1: resolved. A genuine UTF-16 BOM rule (LE and BE) or memory-entry carrying an injection, and a UTF-16BE memory-entry carrying an auto-run directive, are now refused audit-failed by keryx bundle import (bom7b.out, bom8.out M1/M3/R3). Before the fix they were written (bom8-pre.out).",
+      "verifier": "round-8 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 7b06de44 (after fixing commit 9c61a1e8) by the round-8 opus reviewer: R7-F1: resolved. A genuine UTF-16 BOM rule (LE and BE) or memory-entry carrying an injection, and a UTF-16BE memory-entry carrying an auto-run directive, are now refused audit-failed by keryx bundle import (bom7b.out, bom8.out M1/M3/R3). Before the fix they were written (bom8-pre.out)."
+    }
+  },
+  {
+    "id": "R7-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "a U+FFFD inside a keyword (lone surrogate in UTF-16, or an invalid byte in plain UTF-8) splits the token and defeats the text detectors",
+    "impact": "'prev\\uFFFDious instructions' gets 0 findings on every path; the same happens for plain UTF-8 'prev\\xFFious' as a skill file and as a rule, so it is not BOM-specific and not introduced by T20",
+    "suggested_fix": "optionally strip U+FFFD/NUL/control characters in normalizeForDetection before matching (the R5-F4 hardening)",
+    "evidence": "review313-r7/bom7.out s1/s2/s6/s7/s9 rows (pass 0 / accepted / IMPORTED); bom7b.out skill-utf8-FF-splits-keyword and rule-utf8-FF-splits-keyword IMPORTED",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 432,
+    "global_id": "2026-09-24-ingest-690-r07#R7-F2"
+  },
+  {
+    "id": "R7-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "mixed-endian halves or a misaligning odd lead byte after a BOM are scanned only as noise",
+    "impact": "0 findings, but a BOM-honouring reader also sees CJK noise for the hidden part, so the directive is not delivered to such a reader (same as R6-F1 case e)",
+    "suggested_fix": "none required; NUL-stripping hardening would also cover it",
+    "evidence": "review313-r7/bom7.out s4, s8 rows and their VIEW lines",
+    "confidence": "medium",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 184,
+    "global_id": "2026-09-24-ingest-690-r07#R7-F3"
+  },
+  {
+    "id": "R7-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "migrateV1 drops sourceProject from a hand-downgraded ledger",
+    "impact": "only reachable by editing the ledger to schemaVersion 1 (local write access); applied-state.ts is new in this PR, so no shipped v1 ledger ever carried sourceProject",
+    "suggested_fix": "optionally carry `sourceProject` through migrateV1 when it is a string",
+    "evidence": "review313-r7/own7.out B6",
+    "confidence": "high",
+    "file": "src/bundle/applied-state.ts",
+    "line": 120,
+    "global_id": "2026-09-24-ingest-690-r07#R7-F4"
+  },
+  {
+    "id": "R7-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "bundleContentDigest comment still calls sourceProject 'a much cheaper and more targeted signal against id-spoofing'",
+    "impact": "a milder leftover of the overclaim; it pulls against the TOFU wording now at plan.ts:435-445 and in cli-reference.md",
+    "suggested_fix": "reword to 'a cheap signal against accidental bundleId collisions (trust-on-first-use, not a forgery barrier)'",
+    "evidence": "src/bundle/plan.ts:177-182",
+    "confidence": "high",
+    "file": "src/bundle/plan.ts",
+    "line": 181,
+    "global_id": "2026-09-24-ingest-690-r07#R7-F5"
+  }
+]

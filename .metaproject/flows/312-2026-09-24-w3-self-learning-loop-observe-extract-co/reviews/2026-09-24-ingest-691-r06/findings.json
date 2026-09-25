@@ -1,0 +1,110 @@
+[
+  {
+    "id": "R8-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Dropping the summary token gate reopens R6-F1 for a login configured after runGraduate",
+    "impact": "A login appears as a standalone token in an agent name/description.",
+    "suggested_fix": "At apply time re-check the derived keyword tokens (suggestedName pieces and the keyword list after 'sharing:') against current logins, token-equality only.",
+    "evidence": "r12/s.ts S3: login configured after runGraduate -> agent alice-early-returns written",
+    "confidence": "medium",
+    "file": "src/learning/graduate.ts",
+    "line": 718,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:711",
+        "graduate.ts:718-730",
+        "graduate.ts:472-475"
+      ],
+      "enumeration_method": "traced proposal.suggestedName/summary into the written agent (r12/s.ts S3)"
+    },
+    "global_id": "2026-09-24-ingest-691-r06#R8-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 50644f34 (after fixing commit 92e51e6f) by the round-r07 opus verification: s.ts S3 refused",
+      "verifier": "round-r07"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 92e51e6f; re-checked by round-r07 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R8-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "promotePattern copies login-carrying records into user scope without an attribution gate",
+    "impact": "A reviewer login is copied into the cross-project user store.",
+    "suggested_fix": "Apply the same scoped attribution gate in promote.",
+    "evidence": "r12/s.ts S4: '@alice' record promoted",
+    "confidence": "high",
+    "file": "src/learning/promote.ts",
+    "line": 134,
+    "class_scope": {
+      "sites": [
+        "promote.ts:134-175"
+      ],
+      "enumeration_method": "every non-test createPattern/updatePattern caller checked (r12/s.ts S4)"
+    },
+    "global_id": "2026-09-24-ingest-691-r06#R8-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 50644f34 (after fixing commit 92e51e6f) by the round-r07 opus verification: s.ts S4 promote refused",
+      "verifier": "round-r07"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 92e51e6f; re-checked by round-r07 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R8-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Source-scan guard misses most new unscoped call sites",
+    "impact": "A future unscoped gate can land with the guard green.",
+    "suggested_fix": "Single exported gate helper; guard bans direct containsConfiguredLogin imports outside reviewer-id.ts (allowlist reviewer-profile.ts), scanning src/** recursively.",
+    "evidence": "r12/g: a,b,c,e PASS the guard",
+    "confidence": "high",
+    "file": "src/learning/reviewer-id.test.ts",
+    "line": 271,
+    "class_scope": {
+      "sites": [
+        "reviewer-id.test.ts:252-296"
+      ],
+      "enumeration_method": "five injected mutations (r12/g/a..e); 4 of 5 pass the guard"
+    },
+    "global_id": "2026-09-24-ingest-691-r06#R8-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 50644f34 (after fixing commit 92e51e6f) by the round-r07 opus verification: guard mutations a-e caught",
+      "verifier": "round-r07"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 92e51e6f; re-checked by round-r07 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R8-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "mayCarryReviewerText JSDoc inserted between containsConfiguredLogin's doc and its function",
+    "impact": "Hover docs lose the documented limitation.",
+    "suggested_fix": "Move the block.",
+    "evidence": "lines 90/91",
+    "confidence": "high",
+    "file": "src/learning/reviewer-id.ts",
+    "line": 91,
+    "class_scope": {
+      "sites": [
+        "reviewer-id.ts:40-117"
+      ],
+      "enumeration_method": "read the file"
+    },
+    "global_id": "2026-09-24-ingest-691-r06#R8-F4"
+  }
+]

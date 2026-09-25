@@ -75,6 +75,9 @@ jobs:
       - name: Security red-team FN-rate gate (Block E / E6)
         run: bun ./src/cli.ts security eval --corpus all
 
+      - name: Harness capability matrix drift gate (W5)
+        run: bun ./src/cli.ts integrations matrix --check
+
   client-matrix:
     # AFC-19's "отдельная матрица": the client surfaces the criterion names —
     # terminal interface and line editing, streaming, cancellation, resumption —

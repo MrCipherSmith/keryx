@@ -1,8 +1,9 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { renderGlobalMetaprojectBootstrapBlock } from "../lib/agent-entrypoint-blocks";
 import { pathExists } from "../lib/fs";
+import { writeContained } from "../lib/contained-write";
 
 export const AGENT_BOOTSTRAP_START = "<!-- keryx:global-bootstrap -->";
 export const AGENT_BOOTSTRAP_END = "<!-- /keryx:global-bootstrap -->";
@@ -141,8 +142,7 @@ export async function installAgentBootstrap(
   const wrote = next !== current;
 
   if (wrote && !dryRun) {
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, next, "utf8");
+    await writeContained(homeRoot, path.relative(homeRoot, filePath), next);
   }
 
   const status = dryRun
@@ -164,7 +164,7 @@ export async function uninstallAgentBootstrap(
   const removed = next !== current;
 
   if (removed && !dryRun) {
-    await writeFile(filePath, next, "utf8");
+    await writeContained(homeRoot, path.relative(homeRoot, filePath), next);
   }
 
   const status = dryRun

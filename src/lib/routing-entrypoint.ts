@@ -1,6 +1,7 @@
-import { readFile, rm } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock } from "./fs";
+import { removeContained } from "./contained-write";
 import {
   applyInstallPlan,
   applyReportIsNoteworthy,
@@ -120,7 +121,7 @@ export async function writeRoutingEntrypointPair(
   const pair = renderRoutingEntrypointPair(options);
   const steps = [...(context.steps ?? []), ...routingEntrypointSteps(metaprojectRoot, pair)];
   const lockPath = path.join(metaprojectRoot, ROUTING_LOCK_FILENAME);
-  await reclaimAbandonedRoutingLock(lockPath);
+  await reclaimAbandonedRoutingLock(metaprojectRoot, lockPath);
   return withFileLock(lockPath, async () => {
     const plan = await buildInstallPlan({
       metaprojectRoot,
@@ -157,12 +158,18 @@ export async function writeRoutingEntrypointPair(
  * inside `withFileLock`'s narrow acquisition window and is held — never touch
  * it. Aliveness beats age, exactly as `removeStaleLock` decides it.
  */
-async function reclaimAbandonedRoutingLock(lockPath: string): Promise<void> {
+async function reclaimAbandonedRoutingLock(metaprojectRoot: string, lockPath: string): Promise<void> {
   const ownerPid = await readLockOwnerPid(path.join(lockPath, "owner.json"));
   if (ownerPid === undefined || processIsAlive(ownerPid)) {
     return;
   }
-  await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+  // Routed through removeContained (R1-F1): metaprojectRoot is the
+  // containment root, lockPath's project-relative form the target. Best
+  // effort, same as the raw `rm(..).catch(() => {})` this replaces — a
+  // refusal (e.g. an escaping symlink) or any other failure just leaves the
+  // lock directory in place; the caller's own `withFileLock` acquisition
+  // will wait it out.
+  await removeContained(metaprojectRoot, path.relative(metaprojectRoot, lockPath)).catch(() => {});
 }
 
 /**

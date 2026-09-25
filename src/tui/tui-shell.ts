@@ -1262,6 +1262,34 @@ export function isShellApproved(answer: string): boolean {
   return /^y(es)?$/i.test(answer.trim());
 }
 
+/**
+ * Flow 306 fix (review finding 5): whether the TUI's `spawn_subagent`
+ * approver may auto-approve a `read_only` spawn WITHOUT prompting the
+ * operator. Extracted as a pure predicate so the fix (a `PreToolUse` hook
+ * tightening this one call to `ask`, via `ApprovalMeta.hookAsk`, must never
+ * be waved through by the read_only fast path — the same hard floor
+ * `publishLease`/`credentials` already get) is unit-testable without
+ * mounting the whole TUI shell.
+ */
+export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | undefined): boolean {
+  return mode === "read_only" && hookAsk !== true;
+}
+
+/**
+ * Flow 306 fix round 2 (finding C): whether an `alwaysAsk`+`card` approval
+ * (`agent.ts`'s shape for both `schedule_create` and a `UserPromptSubmit`
+ * hook's `ask`) is the `user_prompt` one, which must NOT be routed to
+ * `confirmScheduleCard` — the two calls share a meta shape but not a
+ * question, and routing on the shape alone put "Create this schedule and
+ * install its background timer?" in front of an operator being asked whether
+ * their own chat message may reach the model. Extracted as a pure predicate,
+ * same reason as {@link shouldAutoApproveReadOnlySpawn}: unit-testable
+ * without mounting the whole TUI shell.
+ */
+export function isUserPromptApprovalCard(tool: string): boolean {
+  return tool === "user_prompt";
+}
+
 /** Outcomes of the interactive shell_exec approval picker (OpenCode-style). */
 export type ShellApprovalChoice = "once" | "always-exact" | "always-prefix" | "deny";
 
@@ -1352,6 +1380,12 @@ export async function pickShellApproval(
   // can name the lease instead of just flagging that one applies. Optional
   // and trailing like `publishLease`, so existing call sites keep compiling.
   publishLeaseDetail?: string,
+  // Flow 306 (W6 T9): `ShellApprovalEval.hookAsk` — a `PreToolUse` lifecycle
+  // hook tightened this call to `ask`. Same shape as `publishLease` above
+  // (trailing, defaulted, excludes both "always" grants): a hook asking
+  // about a specific call is not a property of the command text either, and
+  // must never be answerable from a remembered grant.
+  hookAsk = false,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1370,8 +1404,8 @@ export async function pickShellApproval(
   // `formatShellApprovalHints` (`../commands/shell-approval.ts`): while the
   // lease applies, neither grant is offered, whatever `suggestShellPatterns`
   // says.
-  const canOfferExact = offerExact && !publishLease;
-  const canOfferPrefix = offerPrefix && !publishLease;
+  const canOfferExact = offerExact && !publishLease && !hookAsk;
+  const canOfferPrefix = offerPrefix && !publishLease && !hookAsk;
   const options = [
     {
       id: "once",
@@ -3637,6 +3671,21 @@ export async function launchTuiAgentShell(opts: {
         // can run (and the process cannot exit) before the sweep actually
         // happened.
         liveJobs?.removeAll(); // store-side purge; synchronous, safe here
+        // Flow 306 (W6 T14): `SessionEnd` on every exit this callback covers
+        // (Ctrl+C, an exit signal, or a normal `r.destroy()` — `onDestroy` is
+        // `keryx shell`'s one TUI-wide teardown point, "session lifetime is
+        // scoped ... full stop"). `liveDeps` is read the same TDZ-safe way
+        // `sweepBackgroundJobs` below already reads it; a reason more precise
+        // than "shell-exit" is not reliably known from this synchronous
+        // callback alone. Absent `hooks`, a no-op.
+        if (liveDeps?.hooks !== undefined) {
+          const sessionEndHooks = liveDeps.hooks;
+          void sessionEndHooks.runtime
+            .fire("SessionEnd", { sessionId: sessionEndHooks.sessionId, runId: sessionEndHooks.runId, endReason: "shell-exit" })
+            .catch(() => {
+              // Best-effort; a SessionEnd hook failure must never block teardown.
+            });
+        }
         void (async () => {
           try {
             await liveDeps?.sweepBackgroundJobs?.();
@@ -3739,6 +3788,28 @@ export async function launchTuiAgentShell(opts: {
       startupIndicator.setStep("Loading agent tools and MCP servers…");
       deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
       liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+      // Flow 306 (W6 T14): `SessionStart` fires once the session's agent deps
+      // (and its `HookRuntime`, via `commands/shell.ts`'s own `getShellHooks()`
+      // the makeAgentDeps closure reads from) are ready, before the first
+      // turn. Absent `deps.hooks` (e.g. `KERYX_HOOKS=off`) this is a no-op.
+      // Fire-and-forget, same posture as `onDestroy`'s own best-effort
+      // cleanup below — a hook failure here must never block the TUI from
+      // painting its first frame.
+      if (deps.hooks !== undefined) {
+        const sessionStartHooks = deps.hooks;
+        void sessionStartHooks.runtime
+          .fire("SessionStart", {
+            sessionId: sessionStartHooks.sessionId,
+            runId: sessionStartHooks.runId,
+            projectRoot: opts.session?.cwd ?? process.cwd(),
+            policyProfile: "monitored-trusted-local",
+            provider: sel.provider,
+            model: sel.model,
+          })
+          .catch(() => {
+            // Best-effort; a SessionStart hook failure must never block the shell.
+          });
+      }
 
       // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
       // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard
@@ -4417,6 +4488,47 @@ export async function launchTuiAgentShell(opts: {
       );
       return id === "create";
     };
+    // Flow 306 fix round 2 (finding C): a `UserPromptSubmit` hook `ask` (routed
+    // here as the synthetic tool `user_prompt`, `agent.ts`'s `alwaysAsk: true` +
+    // `card`) is NOT a schedule confirmation — it was falling into
+    // `confirmScheduleCard` below purely because both shapes carry
+    // `alwaysAsk`+`card`, which put "Create this schedule and install its
+    // background timer?" in front of an operator being asked whether their own
+    // chat message may reach the model. Same card-then-choice shape, accurate
+    // wording, never remembered — like `confirmScheduleCard`, this answers a
+    // gate a hook raised, not a grant a saved pattern could stand in for.
+    const confirmUserPromptCard = async (card: readonly string[]): Promise<boolean> => {
+      for (const line of card) {
+        transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+      }
+      chrome.hideMenu();
+      setMainAgent("blocked", "approval");
+      const id = await chrome.withOverlay(() =>
+        showComposerChoice(otui, r, chrome.dock, {
+          title: "Send this message to the model?",
+          subtitle: card[0] ?? "",
+          cancelId: "cancel",
+          onOpen: () => chrome.blurComposer(),
+          signal: foregroundOperation.signal,
+          options: [
+            { id: "send", label: "Send", description: "Let the message reach the model as written" },
+            { id: "cancel", label: "Cancel", description: "The message is not sent" },
+          ],
+        }),
+      );
+      input.focus();
+      setMainAgent("running", id === "send" ? "prompt" : "denied");
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `ap${uid++}`,
+          content:
+            id === "send"
+              ? otui.t`${roleChunk(otui, "ok", "◇ message approved")}`
+              : otui.t`${roleChunk(otui, "error", "◇ message not sent")}`,
+        }),
+      );
+      return id === "send";
+    };
     io.requestApproval = async (tool, inputJson, meta) => {
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
@@ -4427,6 +4539,14 @@ export async function launchTuiAgentShell(opts: {
             content: otui.t`${roleChunk(otui, "attention", "⚠ follows untrusted external content — it cannot authorize this call; your answer does")}`,
           }),
         );
+      }
+
+      // Flow 306 fix round 2 (finding C): a `UserPromptSubmit` hook ask, before
+      // the schedule branch below — both shapes carry `alwaysAsk`+`card`, and
+      // `confirmScheduleCard`'s schedule-install wording is wrong for a chat
+      // message.
+      if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
+        return confirmUserPromptCard(meta.card);
       }
 
       // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
@@ -4454,7 +4574,13 @@ export async function launchTuiAgentShell(opts: {
         } catch {
           // raw
         }
-        if (mode === "read_only") {
+        // Flow 306 fix (review finding 5): `meta.hookAsk` is the same hard
+        // floor `ApprovalMeta`'s own doc comment already commits `apply_patch`/
+        // shell to — never satisfied from a saved allowlist or an auto-approve
+        // shortcut. A `PreToolUse` hook that tightened THIS read_only spawn to
+        // `ask` must actually reach the operator, exactly like the `general`
+        // branch below, not be waved through by the read_only fast path.
+        if (shouldAutoApproveReadOnlySpawn(mode, meta?.hookAsk)) {
           // Auto-approved without a prompt, so the transcript line is the ONLY
           // record that a child was started and at what privilege. It is not
           // dimmed: an auto-approval the user cannot notice is an auto-approval
@@ -4471,7 +4597,8 @@ export async function launchTuiAgentShell(opts: {
         setMainAgent("blocked", "approval");
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
-            title: "Spawn general subagent?",
+            title:
+              mode === "read_only" ? "Spawn read-only subagent? (policy hook asked)" : "Spawn general subagent?",
             subtitle: taskPreview,
             cancelId: "deny",
             onOpen: () => chrome.blurComposer(),
@@ -4787,6 +4914,9 @@ export async function launchTuiAgentShell(opts: {
           ev.publishLease,
           // Flow 275 F1: name the lease's holder/reason in the title when resolved.
           ev.publishLeaseDetail,
+          // Flow 306 (W6 T9): never offer to remember while a `PreToolUse`
+          // hook asked about this specific call.
+          ev.hookAsk,
         ),
       );
       input.focus();
@@ -5275,6 +5405,20 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(`${text}\n`);
       }
     };
+    // R700-01: untrusted/changed project hooks, a hook-config load failure,
+    // or a tighten-only gate warning/banner — announced on EVERY interactive
+    // session start, every time (never behind a debug flag, never
+    // suppressed after the first session). One `announceStartupNotice` call
+    // per line rather than one call with embedded newlines, because
+    // `addStatusIfShown`'s splash status area is proven to render one line
+    // reliably; a multi-line block risks being clipped or shown as one
+    // truncated line there.
+    // `takeNotices()` (R700-01 fix, flow 319) consumes these lines at most
+    // once across the whole process — if this same `ShellHookContext` later
+    // reaches `commands/shell.ts`'s readline fallback (an unrelated failure
+    // below falls through to it), that branch's own print loop sees an
+    // already-emptied notice list instead of repeating every line.
+    for (const line of liveDeps?.hooks?.takeNotices?.() ?? liveDeps?.hooks?.notices ?? []) announceStartupNotice(line);
     if (viewedReadOnly) {
       // The wordmark would sit under the read-only view it just rendered.
       splash.removeIfShown();

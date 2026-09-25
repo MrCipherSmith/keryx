@@ -75,6 +75,8 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx memory` | Store and search long-term project memory. |
 | `keryx orient` | Emit a bounded graph + wiki startup block, or install it as a turn-start hook. |
 | `keryx skills` | Manage bundled Metaproject working skills. |
+| `keryx stack` | Deterministic, offline stack detection — keryx stack detect. |
+| `keryx bundle` | Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses. |
 
 ## Managed work
 
@@ -100,6 +102,8 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
 | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
+| `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
+| `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
 
 | Shell command | Summary |
 |---|---|
@@ -116,6 +120,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx agents` | Manage optional global agent bootstrap instructions. |
 | `keryx mcp` | Retired spelling of serve-mcp / integrate; still works, names its replacement. |
 | `keryx integrate` | Wire this project into an editor or agent as an MCP server. |
+| `keryx integrations` | Install, audit and uninstall Keryx's hooks and instructions in another coding agent (see also /integrate, unrelated). |
 | `keryx serve-mcp` | Expose Metaproject services over the Model Context Protocol (opt-in). |
 | `keryx bus` | Agent bus: list peers and leases, read the log, send a message, prune. |
 | `keryx workspace` | Shared Agent Context: workspaces, FWK reads, propose/review (module sac). |
@@ -125,7 +130,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/delegate` | Hand a task to an external agent CLI — /delegate <agent> <task>. |
 | `/demote` | Move a running foreground task to the background — /demote <task_id>. |
 | `/mcp` | MCP servers keryx is connected to — status, connect/disconnect. |
-| `/integrations` | Wire this project into an editor over MCP (keryx integrate). |
+| `/integrate` | Wire this project into an editor over MCP (keryx integrate; see also keryx integrations). |
 | `/bus` | Message or view peers on the project agent bus — /bus @<name> <text>. |
 | `/workspace` | Show this session's SAC workspace and its slates. |
 

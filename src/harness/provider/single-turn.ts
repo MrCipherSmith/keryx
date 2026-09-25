@@ -150,6 +150,15 @@ export interface ModelTurnInput {
   user: string;
   /** Output token budget. Defaults to 8192 (parity with the agent turn's DEFAULT_MAX_OUTPUT_TOKENS). */
   maxOutputTokens?: number;
+  /**
+   * Sampling temperature, passed through to `NormalizedRequest.options.temperature`
+   * when set. Only reaches the wire for providers that serialize it (openai,
+   * openai-compat, gemini — see their own `request.options?.temperature`
+   * handling); anthropic ignores `options` on a turn like this one. Omitted
+   * entirely (not merely `undefined`) means "provider default", matching every
+   * pre-existing caller of this function.
+   */
+  temperature?: number;
   /** Correlation id stem. */
   requestId?: string;
   // Injected, all-optional for deterministic offline tests:
@@ -231,6 +240,7 @@ export async function runModelTurn(input: ModelTurnInput): Promise<ModelTurnResu
     stream: true,
     requestId: input.requestId ?? "keryx-model-turn",
     parentRunId: input.requestId ?? "keryx-model-turn",
+    ...(input.temperature !== undefined ? { options: { temperature: input.temperature } } : {}),
   };
 
   let text = "";

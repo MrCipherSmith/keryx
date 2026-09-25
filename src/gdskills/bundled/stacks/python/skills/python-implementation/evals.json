@@ -1,0 +1,78 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a Widget dataclass and a build_widget() function in src/mypkg/widgets.py",
+      "Add a new async function that fetches user records with asyncio.TaskGroup",
+      "Write a Python module that reads a config file and returns a typed Protocol object",
+      "I need to add type hints to this untyped Python function",
+      "Implement a context manager for our database connection pool in Python",
+      "Add a new feature to this Python service that logs each request with the logging module",
+      "Package this Python code with a src/ layout and pyproject.toml entry point"
+    ],
+    "negative": [
+      "Write pytest tests for the widgets module I just added",
+      "Review this Python pull request for bugs before I merge it",
+      "Fix this ModuleNotFoundError when importing mypkg.util",
+      "Implement this new feature in TypeScript for our Node service",
+      "Review the frontend React component for MobX store violations",
+      "Run a generic security audit across the whole repository"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "async-taskgroup-feature",
+      "prompt": "Implement a Python async function `fetch_all(urls)` that fetches several URLs concurrently and returns their results. Use current best practice for grouping the concurrent calls.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "regex",
+          "value": "[Tt]ask[Gg]roup"
+        },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer implements `fetch_all` using an async-compatible HTTP client and groups the concurrent fetches with `asyncio.TaskGroup` (structured concurrency), never a blocking synchronous call inside the async function.",
+          "pass_criteria": [
+            "groups the concurrent fetches with `asyncio.TaskGroup` in actual code, not merely stated as an intention -- a bare list of coroutines, `asyncio.gather`, or unmanaged `create_task` calls does not count",
+            "performs the HTTP fetch with an async-capable client (e.g. `httpx.AsyncClient`, `aiohttp`) shown in code, rather than a blocking call inside the coroutine",
+            "returns the aggregated results for all the URLs once the group completes"
+          ],
+          "fail_criteria": [
+            "calls a blocking function such as `requests.get` directly inside the async function instead of an async client. Mentioning it only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\nimport asyncio\nimport httpx\n\nasync def fetch_all(urls: list[str]) -> list[httpx.Response]:\n    results: list[httpx.Response] = [None] * len(urls)  # type: ignore[list-item]\n    async with httpx.AsyncClient() as client:\n        async with asyncio.TaskGroup() as tg:\n            async def fetch(i: int, url: str) -> None:\n                results[i] = await client.get(url)\n            for i, url in enumerate(urls):\n                tg.create_task(fetch(i, url))\n    return results\n```\nThis groups every fetch under one `asyncio.TaskGroup`, which gives correct sibling-cancellation: if one request fails, the group cancels the rest and raises an `ExceptionGroup` instead of leaving orphaned tasks running. Fetches go through `httpx.AsyncClient`, an async HTTP client -- never `requests.get`, which is a blocking call and would stall the event loop and defeat the concurrency entirely. Results are collected by index so the return order matches the input `urls` order.",
+        "known_wrong": "```python\nimport asyncio\nimport requests\n\nasync def fetch_all(urls):\n    results = []\n    for url in urls:\n        results.append(requests.get(url))\n    return results\n```\nThis loops through each URL and fetches it with `requests.get`, which is simple and reliable since `requests` is the standard, well-tested HTTP library everyone already knows. Wrapping the function in `async def` lets callers `await fetch_all(urls)` from other async code without needing a separate sync wrapper, and there's no need to pull in `asyncio.TaskGroup` or an async HTTP client just for a handful of URLs -- `requests.get` is a blocking function, but the sequential requests will still complete and return everything the caller needs.",
+        "vague": "Use asyncio to fire off the requests concurrently and gather the results with proper structured concurrency instead of doing them one at a time.",
+        "subtle_wrong": "```python\nimport asyncio\nimport httpx\n\nasync def fetch_all(urls):\n    async with httpx.AsyncClient() as client:\n        tasks = [asyncio.create_task(client.get(u)) for u in urls]\n        return await asyncio.gather(*tasks)\n```\nThis fires all the requests concurrently with `asyncio.create_task` and `asyncio.gather`, which is async and non-blocking throughout -- `gather` does the same job here with less new syntax, and this codebase hasn't adopted the newer structured-concurrency APIs yet."
+      }
+    },
+    {
+      "id": "resource-with-block",
+      "prompt": "Write a Python function that opens a file, reads its JSON contents, and returns the parsed data.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer guarantees the file handle is closed on every path, including when parsing raises, parses the contents with the standard `json` module, and returns the parsed data.",
+          "pass_criteria": [
+            "the file handle is closed on every path, including when parsing raises -- a `with` block around `open(...)`, or an API that closes internally such as `Path.read_text()`/`Path.read_bytes()`, both satisfy this; a bare `open()` followed by a manual `.close()` that only runs on the happy path does not",
+            "parses the file's contents with `json.load`/`json.loads` and returns the resulting data",
+            "shows the actual code implementing this, not just a description of the approach"
+          ],
+          "fail_criteria": [
+            "opens the file without a `with` block and instead calls `.close()` manually at the end, so the handle leaks if an exception occurs before that line runs. Mentioning it only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\nimport json\nfrom pathlib import Path\n\ndef read_json(path: str | Path) -> object:\n    with open(path, \"r\", encoding=\"utf-8\") as f:\n        return json.load(f)\n```\nThe `with open(...)` context manager acquires the file handle and guarantees `f.close()` runs in every case -- including when `json.load(f)` raises because the file contains invalid JSON. I deliberately didn't write this as `f = open(path); data = json.load(f); f.close()`, since calling `.close()` at the end only runs on the happy path and leaks the handle whenever the line before it raises. `encoding=\"utf-8\"` is passed explicitly rather than relying on a platform default.",
+        "known_wrong": "```python\nimport json\n\ndef read_json(path):\n    f = open(path)\n    data = json.load(f)\n    f.close()\n    return data\n```\nThis opens the file, hands it to `json.load` to parse, and closes it right after before returning the parsed data -- straightforward and easy to follow line by line. Since `.close()` is called right after `json.load`, the handle doesn't stay open for long, so this should be fine for a normal config or data file without needing the extra `with` syntax.",
+        "vague": "Make sure the file handle gets closed properly even if the JSON turns out to be malformed, then return whatever was parsed.",
+        "subtle_wrong": "```python\nimport json\n\ndef read_json(path):\n    return json.loads(open(path).read())\n```\nThis opens the file and reads it in one expression -- Python's reference counting closes the handle as soon as the temporary file object goes out of scope, so there's no separate `.close()` call to remember, and it's a common one-liner for a quick read."
+      },
+      "anti_patterns": [".close()"]
+    }
+  ]
+}

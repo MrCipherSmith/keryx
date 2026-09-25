@@ -19,9 +19,11 @@ import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { spawnSubagent, foldChildSummary, DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
+import type { HookRuntime } from "../../hooks";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
 import { runAgentTurn, type AgentDeps, type AgentIO, type RunAgentTurnResult } from "../../../commands/agent";
+import type { ShellHookContext } from "../../../commands/agent-hooks";
 import type { ProviderPort } from "../../provider/types";
 import {
   readSlate,
@@ -306,6 +308,34 @@ export interface SpawnSubagentToolDeps {
     readonly workerId: string;
     readonly label: string;
   }) => Promise<StructuredSubagentResult>;
+  /**
+   * OPTIONAL lifecycle hook runtime (flow 306 / W6, task T6). Absent ⇒
+   * byte-identical to today: neither `SubagentStart` nor `SubagentStop` ever
+   * fires, for either the external (`deps.runExternal`) or native/internal
+   * (in-process `runAgentTurn`) child path below.
+   *
+   * When present, `SubagentStart` fires before either path actually starts
+   * the child (external: before `deps.runExternal`; native: before the tools/
+   * history are built for `runAgentTurn`) with `inheritedHookIds` from
+   * `hooks.inheritedHookIds()`; a composed `deny` prevents that path from
+   * starting the child at all — the ledger reservation is still released and
+   * a `failed`/`"hook-denied"` fleet upsert is still emitted, matching every
+   * other denial path in this file. `SubagentStop` fires, observe-only, once
+   * the child's outcome is known on every exit branch (success, timeout,
+   * error) of whichever path ran.
+   *
+   * T13 (flow 306 / W6): for the NATIVE/internal path only, `hooks.forChild(...)`
+   * also derives a restricted runtime (only `inheritedHookIds()`, fresh child
+   * session/run ids, a hard-`false` interactive flag) that is threaded into
+   * the child's own `runAgentTurn` deps — so `PreToolUse`/`PostToolUse`/etc
+   * actually fire for the CHILD's tool calls too, not just the
+   * `SubagentStart`/`SubagentStop` bracket around the whole dispatch. The
+   * EXTERNAL path (`deps.runExternal`) deliberately receives no hooks at
+   * all — it is a separate vendor CLI subprocess, governed the same way
+   * `--safe-mode` already keeps a host's ambient hooks out of it, not by this
+   * runtime.
+   */
+  hooks?: HookRuntime;
 }
 
 /**
@@ -500,6 +530,62 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             ? `${labelRaw.slice(0, 15)}…`
             : labelRaw
           : `sub-${childSeq}`;
+
+      // --- SubagentStart/SubagentStop helpers (flow 306 / W6, T6). No-ops
+      // when `deps.hooks` is absent (D1: byte-identical). `fireSubagentStart`
+      // returns the composed tightened outcome so a caller can decide whether
+      // to proceed; `fireSubagentStop` is always observe-only.
+      //
+      // Flow 306 fix (review round 1, finding 4): both call sites below treat
+      // a tightened `ask` exactly like `deny`. `SpawnSubagentToolDeps` (see
+      // its doc comment above) carries no operator-facing approval callback
+      // of its own — no `requestApproval`/`io` field a `SubagentStart` `ask`
+      // could be routed to for a live decision, on either the interactive
+      // `keryx shell` path or `runOffline`/`serve`. Without an approval path
+      // to route to, "ask" read as "allow" here would be a gate hook's `ask`
+      // failing OPEN precisely where a project operator would expect it to
+      // pause. If a real approval surface is ever wired into this tool, this
+      // is the one place to change: route the `ask` to it and fall back to
+      // deny only when no approver answers. ---
+      const fireSubagentStart = async (spawnKind: "external" | "internal"): Promise<"allow" | "ask" | "deny" | undefined> => {
+        if (deps.hooks === undefined) return undefined;
+        try {
+          const fire = await deps.hooks.fire("SubagentStart", {
+            sessionId: parentSessionId,
+            runId: parentRunId,
+            subagentId: workerId,
+            parentSessionId,
+            spawnKind,
+            inheritedHookIds: deps.hooks.inheritedHookIds(),
+          });
+          return fire.tightened;
+        } catch {
+          // Flow 306 fix (review round 1, finding 10): `HookRuntime.fire()`
+          // is not expected to reject (runtime.ts's own `runOneHook` now
+          // catches every hook failure into a `buildFailureOutcome` — see
+          // that fix), but this helper stays defensive: a caller here awaits
+          // `fireSubagentStart` with NO surrounding try/catch of its own (the
+          // MAE reservation is already admitted above by this point, and
+          // `ledger.release` only runs on the explicit `deny`/`ask` branch
+          // that follows). A rejection that escaped straight through this
+          // helper would skip that release entirely and leak the
+          // reservation for the rest of the run. Reading it as `deny` here
+          // keeps every call site's existing `deny`/`ask` handling (release
+          // + failed fleet upsert + `{ok:false}` result) as the one path a
+          // failure of any kind takes — fail-closed, consistent with a gate
+          // hook's crash semantics everywhere else.
+          return "deny";
+        }
+      };
+      const fireSubagentStop = async (outcome: string): Promise<void> => {
+        if (deps.hooks === undefined) return;
+        await deps.hooks.fire("SubagentStop", {
+          sessionId: parentSessionId,
+          runId: parentRunId,
+          subagentId: workerId,
+          outcome,
+        });
+      };
 
       const parent = deps.getParentModel();
       const detected = deps.getDetectedProviders();
@@ -701,6 +787,30 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // identically to a native one.
       if (externalRuntime !== undefined && deps.runExternal !== undefined) {
         const externalStartedAt = performance.now();
+        // SubagentStart (flow 306 / W6, T6): fires BEFORE `deps.runExternal`.
+        // A composed deny prevents the external run from ever starting; the
+        // reservation is still released and a failed fleet upsert still
+        // emitted, matching every other denial path in this file.
+        const startOutcome = await fireSubagentStart("external");
+        if (startOutcome === "deny" || startOutcome === "ask") {
+          emitFleetEvent({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: "failed",
+            detail: "hook-denied",
+            task,
+            ...externalMark,
+          });
+          ledger.release(spawned.reservation.reservationId, {
+            maxRuntimeMs: Math.round(performance.now() - externalStartedAt),
+          });
+          return {
+            status: "Denied",
+            output: `spawn_subagent denied by a SubagentStart hook for ${workerId}`,
+            isError: true,
+          };
+        }
         try {
           const external = await deps.runExternal({ runtime: externalRuntime, task, mode, workerId, label });
           emitFleetEvent({
@@ -712,6 +822,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             task,
             ...externalMark,
           });
+          await fireSubagentStop(external.status);
           return external;
         } catch (err) {
           // A throwing hook is a keryx bug, not an agent failure, and must not
@@ -725,6 +836,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             task,
             ...externalMark,
           });
+          await fireSubagentStop("Error");
           return {
             status: "Error",
             output: `external runtime failed before the agent could report: ${(err as Error).message}`,
@@ -739,6 +851,26 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             maxRuntimeMs: Math.round(performance.now() - externalStartedAt),
           });
         }
+      }
+
+      // SubagentStart (flow 306 / W6, T6) for the native/internal path: fires
+      // before the child's tools/history are built or `runAgentTurn` is ever
+      // called. A composed deny yields the same `{ok:false}`-shaped
+      // `StructuredSubagentResult` as an MAE admission denial above — the
+      // ledger reservation is released and a failed fleet upsert emitted, and
+      // `runAgentTurn` is never invoked.
+      const nativeStartedAt = performance.now();
+      const nativeStartOutcome = await fireSubagentStart("internal");
+      if (nativeStartOutcome === "deny" || nativeStartOutcome === "ask") {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "hook-denied", task });
+        ledger.release(spawned.reservation.reservationId, {
+          maxRuntimeMs: Math.round(performance.now() - nativeStartedAt),
+        });
+        return {
+          status: "Denied",
+          output: `spawn_subagent denied by a SubagentStart hook for ${workerId}`,
+          isError: true,
+        };
       }
 
       const cwd = deps.cwd;
@@ -875,13 +1007,49 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             // Best-effort; the original `cause` below is what must surface.
           });
         }
+        // Flow 306 fix (review round 1, finding 10): this throw happens AFTER
+        // `fireSubagentStart("internal")` already ran (above) and the MAE
+        // reservation was already admitted (further above) — without this,
+        // both leaked on every `makeProvider` failure: no `SubagentStop` ever
+        // balanced the `SubagentStart` that already fired, and the ledger
+        // reservation was never released, so it stayed held for the rest of
+        // the run. Both are best-effort (never let a cleanup failure hide the
+        // original `cause`), matching the sibling denial/error paths around
+        // this one (e.g. the `nativeStartOutcome === "deny"` branch just
+        // above, and the `runExternal` catch further up).
+        await fireSubagentStop("Error").catch(() => {
+          // Best-effort; the original `cause` below is what must surface.
+        });
+        ledger.release(spawned.reservation.reservationId, {
+          maxRuntimeMs: Math.round(performance.now() - nativeStartedAt),
+        });
         throw cause;
       }
+      // T13 (flow 306, W6): give the native child's OWN `runAgentTurn` a
+      // restricted hook runtime — until now `deps.hooks` only fired
+      // `SubagentStart`/`SubagentStop` around this whole `invoke()` call; the
+      // child's own tool calls fired no `PreToolUse`/`PostToolUse`/etc at
+      // all, so a project's ctx-guard/security hooks silently never covered
+      // subagent tool calls. `forChild` restricts to `inheritedHookIds()`
+      // (already reported in the `SubagentStart` payload above via
+      // `fireSubagentStart`, so the two stay in sync by construction — both
+      // read the same `inheritedHookIds()`), with a fresh child session/run
+      // id so fired payloads/records are attributable to THIS child, never
+      // mixed into the parent's own hook invocation stream. Absent `deps.hooks`
+      // ⇒ `childDeps.hooks` stays undefined, byte-identical to before T13.
+      const childHooks: ShellHookContext | undefined =
+        deps.hooks === undefined
+          ? undefined
+          : (() => {
+              const childRunId = idSeq();
+              return { runtime: deps.hooks!.forChild({ sessionId: workerId, runId: childRunId }), sessionId: workerId, runId: childRunId };
+            })();
       const childDeps: AgentDeps = {
         provider,
         providerId: runModel.provider,
         modelId: runModel.model,
         tools,
+        ...(childHooks !== undefined ? { hooks: childHooks } : {}),
         systemInstruction:
           "You are a keryx subagent. Complete ONLY the assigned task. " +
           "Be concise. Use tools when needed. Do not spawn further subagents. " +
@@ -1212,6 +1380,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             releaseBudget();
             emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
             await foldChildSlateAndCleanup("incomplete");
+            await fireSubagentStop("Timeout");
             const partial = assistant.trim();
             return {
               status: "Timeout",
@@ -1265,6 +1434,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           task,
         });
         await foldChildSlateAndCleanup("completed");
+        await fireSubagentStop(status);
         return {
           status,
           isError,
@@ -1291,6 +1461,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           task,
         });
         await foldChildSlateAndCleanup("incomplete");
+        await fireSubagentStop("Error");
         return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
       }
     },

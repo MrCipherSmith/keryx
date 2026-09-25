@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-search"]
+    },
+    "pinned": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch@1.2.3"]
+    }
+  }
+}

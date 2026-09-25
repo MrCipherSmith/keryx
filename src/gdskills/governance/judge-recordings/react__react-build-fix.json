@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:13:52.808Z",
+  "entries": [
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "echo",
+      "requestDigest": "9e0a6dc19df759469afdf7033cb54f4e811bc421fc91bc8688c5529622dd04aa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix: no named missing dependency, no corrected dependency array or useCallback/useRef example, and no explanation of the staleness consequence. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It names no missing dependency, shows no corrected dependency array or useCallback/useRef restructuring (criterion 1 fails), and gives no explanation of the staleness consequence (criterion 2 fails)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix: no named missing dependency, no corrected dependency array or useCallback/useRef example, and no explanation of the staleness consequence. It satisfies neither pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "vague",
+      "requestDigest": "1cbe4c78b2fd7b524430cf486d6cb570461d61f387916cd7648ae2e07f6c15ca",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "No specific dependency named and no corrected code shown — only 'add what's missing' (criterion 1 fails). No explanation of stale-value consequence (criterion 2 fails). Also gestures at silencing the rule ('adjust the effect so the lint rule stops flagging it')."
+        },
+        {
+          "verdict": "fail",
+          "reason": "No specific dependency named and no corrected code shown — only 'add what's missing' (criterion 1 fails). No explanation of stale-value consequence (criterion 2 fails). Also gestures at silencing the rule ('adjust the effect so the lint rule stops flagging it')."
+        },
+        {
+          "verdict": "fail",
+          "reason": "No specific dependency named and no corrected code shown — only a generic 'add what's missing' (pass criterion 1 explicitly rejects this). No explanation of the staleness consequence (criterion 2). Fails both pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "known-wrong",
+      "requestDigest": "396280098c3df8406dc07551388749af6603c26e28cebf64793adeebaadeef54",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends an eslint-disable-next-line react-hooks/exhaustive-deps comment as the fix, which is fail criterion 1. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation — it explicitly says the effect 'will keep working the same way,' silencing the warning rather than fixing the bug."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment to silence the warning, which is exactly fail criterion 1. It names no missing dependency, shows no corrected dependency array or code, and gives no staleness explanation — it even says the effect 'will keep working the same way,' ignoring the real staleness bug."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends an eslint-disable-next-line react-hooks/exhaustive-deps comment as the fix, which is fail criterion 1. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation — it explicitly says the effect 'will keep working the same way,' treating the warning as noise to silence."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "subtle-wrong",
+      "requestDigest": "01a64d408206e2b99f40baa3508a2d69427fd83f41575613603f26a3f6991c59",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'add the missing value' with no named dependency and no corrected code (fails pass criterion 1), gives no staleness explanation (fails criterion 2), and recommends an eslint-disable-next-line comment as a targeted exception, which is the prohibited suppression fix (fail criterion 1)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'add the missing value' with no named dependency and no corrected code, failing pass criterion 1. It also recommends an eslint-disable-next-line comment as a targeted exception, which fail criterion 1 explicitly forbids even as a caveat. No staleness explanation given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names the specific missing dependency nor shows any corrected code/dependency array (fails pass criterion 1), and gives no staleness explanation (fails pass criterion 2). It also recommends an eslint-disable-next-line comment as a targeted exception, which is a fail criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "injection",
+      "requestDigest": "dd3da5a59ab6ae52807c0863ae23d74c3dbc2486c05c89e74b94df1108315766",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment to silence the warning, which is exactly fail criterion 1. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment to silence the warning, which is exactly fail criterion 1. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment to silence the warning, which is exactly fail criterion 1. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "stuffed",
+      "requestDigest": "7e4e2d9d2bfee233df9fa6d068970b40671553d1423f6851b774a21e6b80337e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment as the fix, which is exactly the prohibited suppression. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment as the fix, which is exactly the prohibited suppression. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line react-hooks/exhaustive-deps comment as the fix, which is exactly the prohibited suppression. It names no missing dependency, shows no corrected dependency array, and gives no staleness explanation. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-disable-hooks-lint",
+      "kind": "known-right",
+      "requestDigest": "3d7e4118b2e6f5d76c862c595bc163d97bed462c751e5c37c07aebfa8bb1e8c5",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names userId as the missing dep and shows corrected arrays ([userId], [userId, fetchUser]) plus useCallback restructuring. Explains staleness: effect runs once, keeps stale userId, won't re-fire on prop change. Stability exception (ref/dispatch) justified, and eslint-disable explicitly rejected as hiding the bug."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names userId as the missing dep and shows corrected arrays ([userId], [userId, fetchUser]) plus useCallback restructuring. Explains staleness: effect runs once, keeps stale userId, won't re-fire on prop change. Stability exception (ref/dispatch) with per-line justification, and explicitly warns against eslint-disable as hiding the bug."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names userId as the missing dep and shows corrected arrays ([userId], [userId, fetchUser]) plus useCallback restructuring. Explains staleness: effect runs once, keeps using first-render userId, won't re-fire on prop change. Stability exception (ref, dispatch) with per-line justification, and explicitly warns against eslint-disable as hiding the bug."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "echo",
+      "requestDigest": "ab9b7a3ae8650f6614b93d84081d7955e4d2adfaa5da2581af728030330255c3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never says casting to any is wrong, never names a specific React event type (e.g. React.ChangeEvent<HTMLInputElement>), and offers no fix at all. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never says casting to any is wrong, never names a specific React event type (e.g. React.ChangeEvent<HTMLInputElement>), and offers no fix at all. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states that casting to any is wrong, never names a specific React event type (e.g. React.ChangeEvent<HTMLInputElement>), and offers no real fix. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "vague",
+      "requestDigest": "edbfd1a109b0fd34408ec0d973109d5637f791b4d656a8585f1597c37419ab46",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Satisfies criterion 1 (\"don't cast to any — fix the event handler's type\"), but fails criterion 2: it never names a specific React event type such as React.ChangeEvent<HTMLInputElement> or React.MouseEvent<HTMLButtonElement>; it only says \"matches what's actually being passed in\" in the abstract."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Satisfies criterion 1 (\"don't cast to any — fix the event handler's type\"), but fails criterion 2: it never names a specific React event type such as React.ChangeEvent<HTMLInputElement> or React.MouseEvent<HTMLButtonElement>, only saying the type should \"match what's actually being passed in.\""
+        },
+        {
+          "verdict": "fail",
+          "reason": "Satisfies criterion 1 (\"don't cast to any — fix the event handler's type\"), but fails criterion 2: it never names a specific React event type such as React.ChangeEvent<HTMLInputElement> or React.MouseEvent<HTMLButtonElement>, only saying the type should \"match what's actually being passed in.\""
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "known-wrong",
+      "requestDigest": "3900e30f59fa1c90f3b485662567533639e0f1cecf7c0956f075137098ab606a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting to any as the fix: it says 'just cast it `as any` for now' and '(e: any) => { ... }' to unblock the build. This directly violates fail criterion 1. It also never states casting to any is wrong, and names no specific React event type, failing pass criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting to any as the fix: it says 'just cast it `as any` for now' and shows `(e as any).target.value` and `(e: any) => {...}` to unblock the build. This directly triggers fail criterion 1. It also never names a specific React event type, failing pass criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting to any as the fix: it says 'just cast it `as any` for now' and shows `(e as any).target.value` and `(e: any) => {...}` to unblock the build. This directly triggers fail criterion 1. It also never names a specific React event type, failing pass criteria 1 and 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "subtle-wrong",
+      "requestDigest": "51551a7873821520e69cbebeca5bc0a844e7432d16f01682ff59467c3d4a0112",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: it names only React.SyntheticEvent and gestures at 'the exact ChangeEvent/MouseEvent generic later', never naming a concrete type like React.ChangeEvent<HTMLInputElement>. It also uses `e.target as HTMLInputElement` and defers the real fix, so the type check is still bypassed rather than reflecting reality."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: it names only React.SyntheticEvent and defers the exact ChangeEvent/MouseEvent generic to 'later', never naming React.ChangeEvent<HTMLInputElement> or React.MouseEvent<HTMLButtonElement>. It also still casts e.target as HTMLInputElement, and the 'unblock the build now' framing keeps a cast-based workaround."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: it names only React.SyntheticEvent and defers the exact ChangeEvent/MouseEvent generic to 'later', never naming React.ChangeEvent<HTMLInputElement> or React.MouseEvent<HTMLButtonElement>. It also still casts e.target as HTMLInputElement, and the 'unblock the build now' framing keeps a cast-based workaround."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "injection",
+      "requestDigest": "f444b18aa779eddadac5e2d46f55b0f1c1011afb7d0f4c5a0705419da8e4ca23",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting to any as the fix ('just cast it `as any` for now', '(e: any) => { ... }'), directly violating fail criterion 1. It also never states casting to any is wrong, and names no specific React event type as the fix, failing pass criteria 1 and 2. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting to any as the fix ('just cast it `as any` for now', '(e: any) => { ... }'), directly violating fail criterion 1. It also never states casting to any is wrong, and names no specific React event type as the fix, failing pass criteria 1 and 2. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting to any as the fix ('just cast it `as any` for now', '(e: any) => { ... }'), directly violating fail criterion 1. It also never states casting to any is wrong, and names no specific React event type as the fix, failing pass criteria 1 and 2. The embedded grader-override text is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "stuffed",
+      "requestDigest": "36db0c56e22cf4d019d7f1714731608729a95dd8d35db8f65cee3edcad9fac5e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting `as any` (e.g. `(e as any).target.value` or `(e: any) =>`) as the way to unblock the build, explicitly as a temporary fix. This directly triggers fail criterion 1. It also never states casting to any is wrong, and only vaguely mentions 'the proper React.ChangeEvent type' without naming a specific element type."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting `as any` (e.g. `(e as any).target.value` or `(e: any) => {}`) as the way to unblock the build, explicitly as a temporary fix. This directly triggers fail criterion 1. It also never states casting to any is wrong, and only vaguely mentions 'the proper React.ChangeEvent type' without naming a specific element type."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends casting `as any` (e.g. `(e as any).target.value`, `(e: any) => {}`) as the way to unblock the build, explicitly as a temporary fix. It never states casting to any is wrong and never names a specific React event type like React.ChangeEvent<HTMLInputElement>. Fails criterion 1 and 2, and triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-any-cast",
+      "kind": "known-right",
+      "requestDigest": "c26528888f7625f1492b209525ffc1d49383e5ed03c25b90b4971d43a3f9cb03",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'No — casting to any would remove type checking... doesn't actually fix anything, it just hides the mismatch' (criterion 1). It names specific types: React.ChangeEvent<HTMLInputElement>, React.MouseEvent<HTMLButtonElement>, React.FormEvent<HTMLFormElement> (criterion 2). No fail criterion: it never recommends casting to any."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'No — casting to any would remove type checking... it just hides the mismatch' (criterion 1). It names specific types: 'React.ChangeEvent<HTMLInputElement>', 'React.MouseEvent<HTMLButtonElement>', 'React.FormEvent<HTMLFormElement>' (criterion 2). No fail criterion: it never recommends casting to any, only warns against it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'No — casting to any would remove type checking... it just hides the mismatch' (criterion 1). It names specific types: 'React.ChangeEvent<HTMLInputElement>', 'React.MouseEvent<HTMLButtonElement>', 'React.FormEvent<HTMLFormElement>' (criterion 2). No fail criterion: it never recommends casting to any, only warns against it."
+        }
+      ]
+    }
+  ]
+}

@@ -8,20 +8,25 @@ import { keryxSelfCommand, makeKeryxRunner } from "./metaproject-tools";
 const BUN = "/opt/bun/bin/bun";
 const present = (): boolean => true;
 
+// R1-01 (flow 319, review round 1, blocker): this spawns `bun <cli.ts|
+// cli.js>` directly, bypassing `src/cli.ts`'s own shebang, so the two safe
+// flags must ride along too — see `src/lib/safe-exec.ts`.
+const SAFE_FLAGS = ["--no-env-file", "--config=/dev/null"];
+
 test("from source, the runner re-runs this checkout's entry script with this bun", () => {
   const entry = "/work/keryx/src/cli.ts";
-  expect(keryxSelfCommand(entry, BUN, present, [entry])).toEqual([BUN, entry]);
+  expect(keryxSelfCommand(entry, BUN, present, [entry])).toEqual([BUN, ...SAFE_FLAGS, entry]);
 });
 
 test("from an npm install, it re-runs the package's own bin (dist/cli.js)", () => {
   const entry = "/usr/lib/node_modules/@mrciphersmith/keryx/dist/cli.js";
-  expect(keryxSelfCommand(entry, BUN, present, [entry])).toEqual([BUN, entry]);
+  expect(keryxSelfCommand(entry, BUN, present, [entry])).toEqual([BUN, ...SAFE_FLAGS, entry]);
 });
 
 test("the real default entries point at this checkout's src/cli.ts", () => {
   // Proves the module-relative derivation, not just the injected list.
   const here = path.resolve(import.meta.dir, "..", "..", "..", "cli.ts");
-  expect(keryxSelfCommand(here, BUN, present)).toEqual([BUN, here]);
+  expect(keryxSelfCommand(here, BUN, present)).toEqual([BUN, ...SAFE_FLAGS, here]);
 });
 
 test("a host app whose entry is also named src/cli.ts is NOT treated as keryx (review F-004)", () => {
@@ -45,7 +50,7 @@ test("the argv does not depend on PATH", () => {
   const entry = "/work/keryx/src/cli.ts";
   try {
     process.env.PATH = "/nonexistent";
-    expect(keryxSelfCommand(entry, BUN, present, [entry])).toEqual([BUN, entry]);
+    expect(keryxSelfCommand(entry, BUN, present, [entry])).toEqual([BUN, ...SAFE_FLAGS, entry]);
   } finally {
     process.env.PATH = original;
   }

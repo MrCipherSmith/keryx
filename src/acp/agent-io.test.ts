@@ -268,3 +268,121 @@ describe("createAcpAgentIo — a call approved before it is announced", () => {
     expect(toolResults(updates)[0]!.toolCallId).toBe(announced[0]!.toolCallId);
   });
 });
+
+/**
+ * Flow 306 fix round 2 (finding D): `user_prompt` (the `UserPromptSubmit`
+ * hook-ask gate in `commands/agent.ts`) asks through `requestApproval` like
+ * any other call, so `openToolCall` announces it as a `tool_call` — but it is
+ * never a real tool call: nothing ever calls `onToolCall`/`onToolResult` for
+ * it, so before this fix it stayed `pending` in the client forever.
+ */
+describe("createAcpAgentIo — the user_prompt pseudo tool_call (never a real tool)", () => {
+  function collectGated(answer: string): {
+    updates: AcpSessionUpdate[];
+    asks: AcpPermissionRequest[];
+    io: ReturnType<typeof createAcpAgentIo>;
+  } {
+    const updates: AcpSessionUpdate[] = [];
+    const asks: AcpPermissionRequest[] = [];
+    const io = createAcpAgentIo(
+      "s1",
+      (_sessionId, update) => updates.push(update),
+      async (request) => {
+        asks.push(request);
+        return { outcome: { outcome: "selected", optionId: answer } };
+      },
+    );
+    return { updates, asks, io };
+  }
+
+  const toolCalls = (updates: readonly AcpSessionUpdate[]): Extract<AcpSessionUpdate, { sessionUpdate: "tool_call" }>[] =>
+    updates.filter((u): u is Extract<AcpSessionUpdate, { sessionUpdate: "tool_call" }> => u.sessionUpdate === "tool_call");
+  const toolResults = (
+    updates: readonly AcpSessionUpdate[],
+  ): Extract<AcpSessionUpdate, { sessionUpdate: "tool_call_update" }>[] =>
+    updates.filter(
+      (u): u is Extract<AcpSessionUpdate, { sessionUpdate: "tool_call_update" }> => u.sessionUpdate === "tool_call_update",
+    );
+
+  test("an approved user_prompt closes its own announced tool_call as completed", async () => {
+    const input = JSON.stringify({ prompt: "hello" });
+    const { updates, asks, io } = collectGated(ACP_PERMISSION_OPTION_IDS.allowOnce);
+
+    const approved = await io.requestApproval?.("user_prompt", input, {
+      fingerprint: "fp",
+      destructive: false,
+      hookAsk: true,
+      alwaysAsk: true,
+      card: ["a hook wants to ask", "hello"],
+    });
+    expect(approved).toBe(true);
+
+    const announced = toolCalls(updates);
+    expect(announced).toHaveLength(1);
+    const results = toolResults(updates);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.toolCallId).toBe(announced[0]!.toolCallId);
+    expect(results[0]!.toolCallId).toBe(asks[0]!.toolCall.toolCallId);
+    expect(results[0]!.status).toBe("completed");
+  });
+
+  test("a denied user_prompt closes its own announced tool_call as failed", async () => {
+    const input = JSON.stringify({ prompt: "hello" });
+    const { updates, io } = collectGated(ACP_PERMISSION_OPTION_IDS.rejectOnce);
+
+    const approved = await io.requestApproval?.("user_prompt", input, {
+      fingerprint: "fp",
+      destructive: false,
+      hookAsk: true,
+      alwaysAsk: true,
+      card: ["a hook wants to ask", "hello"],
+    });
+    expect(approved).toBe(false);
+
+    const announced = toolCalls(updates);
+    expect(announced).toHaveLength(1);
+    const results = toolResults(updates);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.toolCallId).toBe(announced[0]!.toolCallId);
+    expect(results[0]!.status).toBe("failed");
+  });
+
+  test("a client that cannot be asked still closes the announced user_prompt call (default-deny path)", async () => {
+    const input = JSON.stringify({ prompt: "hello" });
+    const updates: AcpSessionUpdate[] = [];
+    // `askPermission` returns undefined: "the client could not be asked".
+    const io = createAcpAgentIo("s1", (_sessionId, update) => updates.push(update), async () => undefined);
+
+    const approved = await io.requestApproval?.("user_prompt", input, {
+      fingerprint: "fp",
+      destructive: false,
+      hookAsk: true,
+      alwaysAsk: true,
+      card: ["a hook wants to ask", "hello"],
+    });
+    expect(approved).toBe(false);
+
+    const announced = toolCalls(updates);
+    expect(announced).toHaveLength(1);
+    const results = toolResults(updates);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.toolCallId).toBe(announced[0]!.toolCallId);
+    expect(results[0]!.status).toBe("failed");
+  });
+
+  test("a real tool's announced call is untouched by the user_prompt close path", async () => {
+    // Sanity: closePseudoToolCall only acts on tool === "user_prompt" — a real
+    // tool approved-before-announced still relies on onToolResult to close it
+    // (covered by the sibling describe block above), not on requestApproval
+    // itself.
+    const input = JSON.stringify({ command: "echo hi" });
+    const { updates, io } = collectGated(ACP_PERMISSION_OPTION_IDS.allowOnce);
+
+    await io.requestApproval?.("shell_exec", input, { fingerprint: "fp", destructive: false, untrustedOrigin: true });
+    const announced = toolCalls(updates);
+    expect(announced).toHaveLength(1);
+    // No tool_call_update yet — requestApproval alone does not close a real
+    // tool's call.
+    expect(toolResults(updates)).toHaveLength(0);
+  });
+});

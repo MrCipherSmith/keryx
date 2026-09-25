@@ -785,6 +785,61 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // Flow 310 (W2 agent-definitions catalog): `list`/`show`/`verify` are
+  // read-only; `export` is the one subcommand that writes, and only into a
+  // keryx-managed path (a file lacking the managed sentinel is refused, never
+  // overwritten).
+  {
+    module: "agents",
+    command: "agents list",
+    summary: "List the agent-definitions catalog (bundled + project), optionally filtered to one stack.",
+    intent: ["список агентов", "list agent definitions", "agent catalog", "which agents are available"],
+    args: [
+      { name: "stack", type: "string", required: false, desc: "only definitions whose stacks[] names this stack id" },
+      { name: "json", type: "bool", required: false, desc: "emit the catalog summary as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "agents",
+    command: "agents show",
+    summary: "Render one agent definition's frontmatter and compiled keryx-shell task.",
+    intent: ["покажи агента", "show agent definition", "agent details"],
+    args: [
+      { name: "<name>", type: "string", required: true, desc: "agent name, from `agents list`" },
+      { name: "json", type: "bool", required: false, desc: "emit the definition + compiled result as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "agents",
+    command: "agents export",
+    summary: "Compile and write (or preview with --dry-run) one agent definition for one export runtime.",
+    intent: ["экспортируй агента", "export agent definition", "write agent file for claude/codex/kiro/opencode"],
+    args: [
+      { name: "runtime", type: "string", required: true, desc: "claude | codex | kiro | opencode | keryx-shell" },
+      { name: "<name>", type: "string", required: true, desc: "agent name, from `agents list`" },
+      { name: "dry-run", type: "bool", required: false, desc: "plan and print without writing a file" },
+      { name: "json", type: "bool", required: false, desc: "emit the export plan and outcome as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["writes the runtime's managed agent file (e.g. .claude/agents/<name>.md) unless --dry-run"],
+  },
+  {
+    module: "agents",
+    command: "agents verify",
+    summary: "Verify the agent-definitions catalog against its schema, tool/skill vocabulary, policy profiles, and origin rules.",
+    intent: ["проверь агентов", "verify agent definitions", "agent catalog health"],
+    args: [
+      { name: "<name>", type: "string", required: false, desc: "verify only this agent name" },
+      { name: "json", type: "bool", required: false, desc: "emit the full verification report as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
   // `agents external list`/`probe`: flow 176 made both read-only and
   // quota-free — they run the candidate CLI's own `--version` and nothing
   // else (`agents.ts`: "list/probe are read-only and quota-free"). Safe to
@@ -1070,6 +1125,152 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     args: [{ name: "json", type: "bool", required: false, desc: "print the stored report as JSON instead of markdown" }],
     json: true,
     read: true,
+  },
+  {
+    module: "hooks",
+    command: "hooks list",
+    summary:
+      "The merged, resolved keryx shell lifecycle hook set (built-in -> user -> project), with id, event(s), matcher, class, scope and enabled state. With no config files present, exactly the five built-ins, all enabled.",
+    intent: ["hooks list", "покажи хуки", "list lifecycle hooks", "какие хуки зарегистрированы"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the merged list as JSON instead of text" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "hooks",
+    command: "hooks validate",
+    summary:
+      "Validate .metaproject/hooks.json and ~/.keryx/hooks.json against hook-config.schema.json, reject an id colliding with a built-in, and best-effort (no execution) check that each hook command's argv[0] resolves.",
+    intent: ["hooks validate", "проверь конфиг хуков", "validate hook config"],
+    args: [
+      { name: "json", type: "bool", required: false, desc: "print diagnostics/result as JSON" },
+      { name: "ci", type: "bool", required: false, desc: "machine-friendly invocation for CI; same non-zero-on-error semantics as without it" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "hooks",
+    command: "hooks test",
+    summary:
+      "Run one registered hook once, through the real runner, against a synthetic (or --payload-file) event payload, and report its decision, exit code, stdout/stderr, duration and failure class.",
+    intent: ["hooks test", "протестируй хук", "test a lifecycle hook"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the hook's registered id, from `keryx hooks list`" },
+      { name: "event", type: "string", required: false, desc: "which event to run it under, when the id is registered on more than one" },
+      { name: "payload-file", type: "path", required: false, desc: "JSON file to use as the event payload instead of a synthetic one" },
+      { name: "json", type: "bool", required: false, desc: "print the run report as JSON" },
+      {
+        name: "profile",
+        type: "enum",
+        required: false,
+        values: ["read-only-review", "monitored-trusted-local", "unattended-untrusted"],
+        desc: "policy profile to evaluate failure-semantics effects under",
+      },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "spawns the hook's own command (or invokes its in-process port), which may itself write or read arbitrary state — this command's own state is unaffected",
+    ],
+  },
+  {
+    module: "hooks",
+    command: "hooks enable",
+    summary:
+      "Re-enable a hook registration: removes a Keryx-managed disable override for a built-in, or flips `enabled: true` on a project/user hook.",
+    intent: ["hooks enable", "включи хук", "enable a lifecycle hook"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the hook id to enable" },
+      { name: "user", type: "bool", required: false, desc: "target ~/.keryx/hooks.json instead of .metaproject/hooks.json" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["rewrites .metaproject/hooks.json, or ~/.keryx/hooks.json with --user, updating _keryxManaged.managedHookIds"],
+  },
+  {
+    module: "bundle",
+    command: "bundle export",
+    summary:
+      "Export skills, rules, agents, memory entries, learned patterns and hook config from one scope (project/team/user) into a portable bundle (directory or .tar.gz), sha256-content-addressed and manifest-described.",
+    intent: ["bundle export", "экспортируй bundle", "export a portable bundle"],
+    args: [
+      { name: "scope", type: "enum", required: true, values: ["project", "team", "user"], desc: "the scope to export from" },
+      { name: "include", type: "string", required: false, desc: "glob(s) restricting which bundle-relative paths are exported; repeatable" },
+      { name: "kind", type: "string", required: false, desc: "comma-separated content kinds to export (skill,rule,agent,learned-pattern,memory-entry,hook-config)" },
+      { name: "id", type: "string", required: false, desc: "override the default deterministic bundleId" },
+      { name: "target-harness", type: "string", required: false, desc: "comma-separated harness ids to record in the manifest's compat.targetHarnesses" },
+      { name: "<out>", type: "path", required: true, desc: "output directory or .tar.gz path; refuses if it already exists and is non-empty" },
+      { name: "json", type: "bool", required: false, desc: "print the export result as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["writes a new bundle directory or .tar.gz archive at <out>; never touches the source scope's own files"],
+  },
+  {
+    module: "bundle",
+    command: "bundle import",
+    summary:
+      "Plan -> W8 audit -> apply a bundle into a target scope, all-or-nothing: any unresolved conflict or audit failure writes nothing. --external instead vets and records-by-reference an Agent-Skills-standard catalog directory, copying no skill file anywhere.",
+    intent: ["bundle import", "импортируй bundle", "import a portable bundle"],
+    args: [
+      { name: "<bundle>", type: "path", required: true, desc: "bundle directory or .tar.gz (or, with --external, an Agent-Skills-standard catalog directory)" },
+      { name: "target-scope", type: "enum", required: false, values: ["project", "team", "user"], desc: "retarget every entry to this scope; defaults to each entry's own recorded scope" },
+      { name: "render-for", type: "string", required: false, desc: "comma-separated harness ids to render imported rules into; defaults to the harnesses with rules-export already installed" },
+      { name: "force", type: "string", required: false, desc: "targetRelative or displayId (scope:path) of a conflicting entry to overwrite anyway; repeatable" },
+      { name: "external", type: "bool", required: false, desc: "treat <bundle> as an Agent-Skills-standard catalog directory instead of a portable bundle" },
+      { name: "allow-hooks", type: "bool", required: false, desc: "required to import any hook-config (hooks.json) entry; without it, a bundle carrying one is refused" },
+      { name: "dry-run", type: "bool", required: false, desc: "plan (and, for --external, vet) without writing anything" },
+      { name: "json", type: "bool", required: false, desc: "print the plan/result as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "writes new/updated files into the target scope root (.metaproject/ or ~/.keryx/) and updates that scope's applied-state ledger",
+      "may render rules into one or more installed harnesses' own instruction files",
+      "--external writes only a reference entry into ~/.keryx/skills/external-imports.json; never copies a skill file",
+    ],
+  },
+  {
+    module: "bundle",
+    command: "bundle inspect",
+    summary: "Read-only preview of what `bundle import` would do: verification status, per-entry plan bucket (new/identical/update/conflict), and capability-matrix warnings for the manifest's declared target harnesses.",
+    intent: ["bundle inspect", "покажи содержимое bundle", "inspect a portable bundle"],
+    args: [
+      { name: "<bundle>", type: "path", required: true, desc: "bundle directory or .tar.gz" },
+      { name: "target-scope", type: "enum", required: false, values: ["project", "team", "user"], desc: "preview against this target scope instead of each entry's own recorded scope" },
+      { name: "json", type: "bool", required: false, desc: "print the inspection result as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "bundle",
+    command: "bundle verify",
+    summary: "Recompute every manifest entry's sha256 against the bundle's actual bytes, or (--external-imports) re-check every recorded external skill import's source files against their recorded hashes.",
+    intent: ["bundle verify", "проверь bundle", "verify a portable bundle"],
+    args: [
+      { name: "<bundle>", type: "path", required: false, desc: "bundle directory or .tar.gz; omit with --external-imports" },
+      { name: "external-imports", type: "bool", required: false, desc: "verify the recorded external skill imports instead of a bundle file" },
+      { name: "json", type: "bool", required: false, desc: "print the verification result as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "bundle",
+    command: "bundle uninstall",
+    summary: "Remove only the files a bundleId's applied-state ledger records AND that are still byte-identical to what Keryx last wrote; a file a person has since hand-edited is kept, reported, never overwritten.",
+    intent: ["bundle uninstall", "удали bundle", "uninstall a portable bundle"],
+    args: [
+      { name: "<bundleId>", type: "string", required: true, desc: "the bundleId to uninstall (from the manifest, or a prior import's report)" },
+      { name: "target-scope", type: "enum", required: true, values: ["project", "team", "user"], desc: "scope to uninstall from" },
+      { name: "dry-run", type: "bool", required: false, desc: "report what would be removed/kept without writing" },
+      { name: "json", type: "bool", required: false, desc: "print the uninstall result as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["deletes files this bundleId's applied-state ledger records as unmodified, and updates that ledger"],
   },
   {
     module: "testing",
@@ -1448,6 +1649,27 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: true,
+  },
+  // ---- stack --------------------------------------------------------------
+  {
+    module: "stack",
+    command: "stack detect",
+    summary: "Deterministic, offline detection of the repository's stack tags.",
+    intent: [
+      "определи стек",
+      "detect the stack",
+      "what stack is this",
+      "какой стек проекта",
+      "stack tags",
+    ],
+    args: [
+      { name: "cwd", type: "path", required: false, desc: "detect against this directory instead of the current one" },
+      { name: "json", type: "bool", required: false, desc: "print exactly the persisted stack.json document" },
+      { name: "no-write", type: "bool", required: false, desc: "detect and print without writing stack.json" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["writes .metaproject/data/stack/stack.json (skipped with --no-write)"],
   },
   // Flow 295: `keryx schedule` (self-contained in ./schedule-descriptors.ts).
   ...SCHEDULE_DESCRIPTORS,

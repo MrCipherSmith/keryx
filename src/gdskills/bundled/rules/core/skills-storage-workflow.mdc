@@ -66,8 +66,8 @@ gets reconciled.
 
 `SKILL.md` frontmatter follows the published Agent Skills specification
 (agentskills.io — the format Zed adopted when it dropped its own Rules
-Library), with two deliberate additions. Flow 203 removed two accidental
-divergences that had crept in; keep both fixes intact when authoring or
+Library), with two deliberate additions. Two earlier accidental divergences
+have since been removed; keep both fixes intact when authoring or
 editing a skill:
 
 - **`version` lives in `metadata.version` only.** The spec has no top-level

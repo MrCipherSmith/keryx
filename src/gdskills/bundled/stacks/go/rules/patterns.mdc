@@ -1,0 +1,65 @@
+---
+extends: common
+paths: ["**/*.go"]
+metadata:
+  origin: authored
+---
+
+# Go patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+Go design and its common anti-patterns. Applies only to `*.go` files.
+
+## Module and package layout
+
+- `cmd/<binary>/` holds one `main` package per executable; `internal/`
+  holds packages this module's own code may import but nothing outside
+  the module can — put anything not meant as a public API surface there.
+- A package should have a clear, single responsibility; a package that
+  only holds shared types with no behavior ("models", "types", "common")
+  invites import cycles as the project grows — prefer colocating a type
+  with the package that owns its behavior.
+- Avoid import cycles by depth, not by breaking them with an `internal`
+  workaround package — if package A needs package B's type and B needs
+  A's, one of the two owns too much; extract the shared piece into a
+  third package both depend on.
+
+## Idiomatic concurrency patterns
+
+- Fan-out/fan-in: bound the number of concurrent workers (a worker pool or
+  `golang.org/x/sync/errgroup`'s `SetLimit`), never spawn one goroutine per
+  input item on an unbounded input source.
+- Use `errgroup.Group` when a set of goroutines shares one cancellation
+  and you need the first error; use a plain `sync.WaitGroup` when you only
+  need to know they finished and errors are handled another way.
+- Prefer channels for signaling and handoff, mutexes for protecting shared
+  state — do not build a hand-rolled semaphore out of a channel when
+  `sync.Mutex` (or `errgroup.SetLimit`) already says what you mean.
+- Close a channel only from the sender, never the receiver, and only
+  once; a `nil` channel blocks forever on send/receive, which is
+  occasionally the correct way to disable a `select` case.
+
+## Composition over inheritance
+
+- Use struct embedding to reuse behavior only when the embedding type
+  genuinely "is-a" superset of the embedded one's API; prefer an explicit
+  field plus delegation when you would otherwise promote methods the
+  caller should not see.
+- Functional options (`func WithTimeout(d time.Duration) Option`) for a
+  constructor with many optional parameters, instead of a boolean-heavy
+  positional signature or a half-filled config struct.
+
+## Anti-patterns to flag
+
+- A large `interface{}`/`any`-typed function signature where a generic
+  type parameter or a smaller concrete interface would give compile-time
+  safety back.
+- A "god package" (`utils`, `helpers`, `common`) that accumulates
+  unrelated functions — split by what the code actually does.
+- Returning a pointer to a struct solely to allow a `nil` "not found"
+  value where a `(T, bool)` or a named error (`ErrNotFound`) return is
+  clearer and avoids nil-pointer-dereference risk at the call site.
+- Panic used for ordinary control flow (a missing map key, a failed
+  lookup); reserve `panic` for programmer errors that should crash during
+  development (a violated invariant, an unreachable `default` case), and
+  return an `error` for everything a caller could reasonably handle.

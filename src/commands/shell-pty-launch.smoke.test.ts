@@ -39,6 +39,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildGovernanceReport, writeGovernanceArtifacts } from "../governance/service";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { uniqueTestRoot } from "../lib/test-tmp";
 
 const REAL_SUBPROCESS_FLAG = process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1";
@@ -167,9 +168,15 @@ async function runPtyShell(opts: {
     // in the buffer. Without it the readline control took 34s instead of 5s, and
     // any shorter readiness deadline would have failed on flush latency rather
     // than on anything about the shell.
+    // R3 (flow 319 CI regression): the safe flags between the interpreter and
+    // CLI keep src/lib/safe-exec.ts's guard from spawning a re-exec'd
+    // wrapper — without them, execArgv lacked the safe flags on this first
+    // process, so every launch here paid for a second process start before
+    // the shell actually began drawing, eating into this test's fixed
+    // readiness window (o-6's whole point is timing-sensitive pty behaviour).
     const inner =
       (opts.size === undefined ? "" : `stty rows ${opts.size.rows} cols ${opts.size.cols}; `) +
-      `${shq(process.execPath)} ${shq(CLI)} ${opts.args.map(shq).join(" ")}; ` +
+      `${shq(process.execPath)} ${SAFE_BUN_SPAWN_ARGS.map(shq).join(" ")} ${shq(CLI)} ${opts.args.map(shq).join(" ")}; ` +
       `printf '\\n${SENTINEL}=%s\\n' "$?"`;
     const driver = [
       "i=0",

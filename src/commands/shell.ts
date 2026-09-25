@@ -146,6 +146,8 @@ import {
   resolveReasoningEffort,
   runAgentTurn,
 } from "./agent";
+import { buildShellHookRuntime, type ShellHookContext } from "./agent-hooks";
+import type { HookRuntime } from "../harness/hooks";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import type { ShellDeps, ShellIO, ShellModelParams, ShellSessionOpts } from "./shell-types";
 import {
@@ -1978,7 +1980,7 @@ export async function runAgentRepl(
       // pattern from before the lease existed must not silently answer for it
       // either (see `rememberExactShellGrant`'s own `publishLease` guard below).
       const rememberable =
-        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease;
+        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk;
       const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
       out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
       const answer = ((await readLine()) ?? "").trim();
@@ -1987,6 +1989,7 @@ export async function runAgentRepl(
       if (always && approved) {
         const stored = rememberExactShellGrant(evaled.command, sessionShellAllow, {
           publishLease: evaled.publishLease,
+          hookAsk: evaled.hookAsk,
           // Spread, not `dir: configDir`: under `exactOptionalPropertyTypes`
           // an explicit `undefined` is not the same as an absent field, and
           // absent is what reproduces the default-directory behaviour.
@@ -3422,6 +3425,34 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
   }
   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
+  // R700-01 fix (flow 319): shared across the TUI attempt AND the readline
+  // fallback below — built at most once per process (`getShellHooks` caches
+  // it) and its notices consumed at most once (`takeNotices()`, from
+  // `agent-hooks.ts`). Before this fix each branch called
+  // `buildShellHookRuntime` separately: a TUI session that starts, prints
+  // its "gate stays on"/"not trusted" notices, then hits an unrelated
+  // exception deep in the session and falls through to the readline shell
+  // (the broad `catch { return false; }` in `tui-shell.ts`'s
+  // `launchTuiAgentShell`) rebuilt the SAME hook config and printed the
+  // SAME notices a second time — the operator saw every line twice for no
+  // reason tied to the hooks themselves. One shared, lazily-built context
+  // with a consume-once notices getter fixes both the redundant rebuild and
+  // the redundant print, without changing what a single surface prints.
+  const shellHookSessionId = randomUUID();
+  let shellHooks: ShellHookContext | undefined;
+  const getShellHooks = (): ShellHookContext | undefined => {
+    if (shellHooks === undefined) {
+      shellHooks = buildShellHookRuntime({
+        projectRoot: resolveProjectRoot(process.cwd()),
+        sessionId: shellHookSessionId,
+        runId: randomUUID(),
+        interactive: true,
+        profileId: "monitored-trusted-local",
+        ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
+      });
+    }
+    return shellHooks;
+  };
   if (surface !== "readline") {
     const cwd = process.cwd();
     const tuiProviderFactory = realMakeProvider(() => {});
@@ -3464,6 +3495,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       });
       return mcpRuntime;
     };
+    // Flow 306 (W6 T9): session-scoped, built ONCE like `mcpRuntime` above —
+    // `makeAgentDeps` reruns on every `/model`/`/connect` rebuild, and a fresh
+    // `HookRuntime` per rebuild would re-read both config files and reset
+    // `HookRuntime.inheritedHookIds()`'s dedup state for no reason.
+    // `getShellHooks`/`shellHooks` themselves are declared ABOVE, shared with
+    // the readline fallback below (R700-01 fix, flow 319) — see the comment
+    // there for why.
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
       getSlateSession: () => SlateSessionRef | undefined,
@@ -3507,6 +3545,17 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       const spawnTool = createSpawnSubagentTool({
         cwd,
         onFleetEvent: emitSubagentFleet,
+        // Flow 306 (W6 T13): wire the TUI session's own hook runtime through
+        // so `SubagentStart`/`SubagentStop` actually fire for a real `keryx
+        // shell` TUI session, and — for the native/internal child path — so
+        // the child's own tool calls run under `hooks.forChild(...)` too.
+        // `getShellHooks()` is the same lazily-built-once runtime `deps.hooks`
+        // below is populated from; called here (not just later) is safe: it
+        // is idempotent (returns the cached `shellHooks` once built).
+        ...((): { hooks: HookRuntime } | Record<string, never> => {
+          const h = getShellHooks();
+          return h !== undefined ? { hooks: h.runtime } : {};
+        })(),
         onLedgerReady: (controls) => {
           resetSubagentBudget = controls.resetBudget;
         },
@@ -3654,6 +3703,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
         ...(contextWindow !== undefined ? { contextWindow } : {}),
         ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
+        ...((): { hooks: ShellHookContext } | Record<string, never> => {
+          const h = getShellHooks();
+          return h !== undefined ? { hooks: h } : {};
+        })(),
       };
       // The instruction is built from the roster it describes, so it never
       // names a tool this session was not given.
@@ -4015,6 +4068,22 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // this point and would otherwise have nothing to close.
       readlineMcp = mcpRuntime;
       reportMcpProblems(mcpRuntime);
+      // R700-01 fix (flow 319): the SAME shared, lazily-built context the TUI
+      // branch above would have used (`getShellHooks`, declared before the
+      // surface split) — never a second `buildShellHookRuntime` call. A
+      // fresh call here re-read both config files AND re-printed every
+      // "not trusted"/"gate stays on" notice a second time whenever the TUI
+      // attempt had already started (and already shown them) before an
+      // unrelated failure fell through to this readline path.
+      const shellHooks = getShellHooks();
+      // R700-01: the readline path fires SessionStart before the TUI ever
+      // paints, so the notice goes to stderr right here — the one place this
+      // branch can still say it before the hooks that would have run are
+      // silently skipped. `takeNotices()` (falling back to `.notices` for a
+      // `ShellHookContext` built by hand, e.g. in a test) returns the lines
+      // only the FIRST time anything asks — empty if the TUI attempt above
+      // already showed them.
+      for (const line of shellHooks?.takeNotices?.() ?? shellHooks?.notices ?? []) console.error(line);
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
       // CURRENT session dir at tool-invoke time, not whatever was true when
@@ -4028,6 +4097,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
+        // Flow 306 (W6 T13): same `shellHooks` as `agentDepsBase.hooks` below.
+        ...(shellHooks !== undefined ? { hooks: shellHooks.runtime } : {}),
         getParentModel: () => ({
           providerId: provider,
           modelId: model,
@@ -4100,6 +4171,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // provider/model this whole readline session was started with — no
         // rebuild-on-switch path exists in this branch, unlike the TUI).
         ...(Object.keys(initialModelParams).length > 0 ? { modelParams: initialModelParams } : {}),
+        ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
       // The instruction is built from the roster it describes, so it never
       // names a tool this session was not given.
@@ -4139,8 +4211,43 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             );
       // One REPL run per session opts: `runWithLeaseChoice` re-runs it with
       // `fork`/`takeOver`, or as a new session, after a leased refusal.
+      //
+      // Flow 306 (W6 T14): `SessionStart` fires once the session/agent deps
+      // are fully set up, before `runAgentRepl`'s first turn; `SessionEnd`
+      // fires on every exit (normal return, an operator abort surfacing as a
+      // thrown error, or any other error) via the `finally` below. Absent
+      // `shellHooks` (e.g. `KERYX_HOOKS=off`) both are no-ops, byte-identical
+      // to before this task.
       const runRepl = async (session: ShellSessionOpts): Promise<void> => {
-        await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+        if (shellHooks !== undefined) {
+          await shellHooks.runtime
+            .fire("SessionStart", {
+              sessionId: shellHooks.sessionId,
+              runId: shellHooks.runId,
+              projectRoot: resolveProjectRoot(agentCwd),
+              policyProfile: "monitored-trusted-local",
+              provider,
+              model,
+            })
+            .catch(() => {
+              // Best-effort; a SessionStart hook failure must never block the shell.
+            });
+        }
+        let endReason = "normal";
+        try {
+          await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+        } catch (cause) {
+          endReason = "error";
+          throw cause;
+        } finally {
+          if (shellHooks !== undefined) {
+            await shellHooks.runtime
+              .fire("SessionEnd", { sessionId: shellHooks.sessionId, runId: shellHooks.runId, endReason })
+              .catch(() => {
+                // Best-effort; a SessionEnd hook failure must never mask the real outcome.
+              });
+          }
+        }
       };
       try {
         finishLeased(

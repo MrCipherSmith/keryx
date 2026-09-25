@@ -1,0 +1,41 @@
+{
+  "id": "python",
+  "family": "language",
+  "modules": ["python-rules", "python-skills"],
+  "detectionMarkers": ["python"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 309 (W1 Lane D), completed in flow 314"
+  },
+  "stability": "stable",
+  "skills": {
+    "implement": ["python-implementation"],
+    "test": ["python-testing"],
+    "review": ["python-code-review"],
+    "build-fix": ["python-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Python",
+    "auditFocus": [
+      "mutable default arguments (`def f(x=[])`) instead of `None` + inside-body init",
+      "broad `except:`/`except Exception:` that swallows an unrelated failure",
+      "resource handles (files, sockets, DB connections, locks) opened without a `with` block",
+      "blocking calls (`requests`, `time.sleep`, sync file I/O) inside an `async def`",
+      "typing holes: untyped public signatures, bare `Any`, or an implicit-`None` return missing `| None`/`Optional`",
+      "security sinks: `shell=True`, `eval`/`exec`, `pickle`/`yaml.load` on untrusted input, unparameterized SQL"
+    ],
+    "buildCommands": [
+      "ruff check .",
+      "ruff format --check .",
+      "mypy . || pyright",
+      "pytest -x -q"
+    ],
+    "fixGuardrails": [
+      "never add `# type: ignore` or `# noqa` to silence a checker without fixing or explaining the underlying issue",
+      "never pin or downgrade a dependency to route around a real incompatibility without saying so in the report",
+      "never widen a narrowed exception catch or a real type hole just to make a check pass",
+      "fix the smallest root cause; do not refactor unrelated code while resolving a build/lint/type failure"
+    ]
+  }
+}

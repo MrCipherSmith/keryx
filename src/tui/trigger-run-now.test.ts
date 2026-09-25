@@ -110,7 +110,12 @@ test("AC6 (review F6): with the DEFAULT invocation, run() spawns this process's 
   expect(fake.calls).toHaveLength(1);
   expect(fake.calls[0]?.command).toBe(process.execPath);
   expect(fake.calls[0]?.command).not.toBe("keryx");
-  expect(fake.calls[0]?.args).toEqual([expected.scriptPath as string, "trigger", "run", "nightly"]);
+  // R2-02: every self-spawn goes through `invocationArgv`, which now inserts
+  // `SAFE_BUN_SPAWN_ARGS` between the interpreter and the script path — a
+  // run-now child bypasses the shebang the same way `bun dist/cli.js` does,
+  // so without this it would auto-load whatever `.env`/`bunfig.toml` sits in
+  // `root` (the child's cwd), even though the TUI itself was launched safely.
+  expect(fake.calls[0]?.args).toEqual(["--no-env-file", "--config=/dev/null", expected.scriptPath as string, "trigger", "run", "nightly"]);
   fake.exit(0);
   await done;
 });

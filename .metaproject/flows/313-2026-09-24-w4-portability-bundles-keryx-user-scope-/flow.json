@@ -1,0 +1,934 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "313",
+  "slug": "w4-portability-bundles-keryx-user-scope-",
+  "title": "W4: portability — bundles, ~/.keryx user scope, cross-harness memory handoff, instruction export",
+  "status": "done",
+  "createdAt": "2026-09-24T07:18:33.548Z",
+  "updatedAt": "2026-09-24T18:05:03.412Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0909b194f5b2a50596de74e9f29e2dcc26e8397dc5fe0037d973a14b4a6bddc0",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T17:49:59.527Z",
+      "note": "src/bundle/export.test.ts (every kind, sha256/sizeBytes match, no raw path in provenance) + src/bundle/own-repo-roundtrip.test.ts; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC2": {
+      "at": "2026-09-24T17:49:59.613Z",
+      "note": "src/bundle/verify.test.ts (byte flip -> checksum-mismatch, deleted -> missing-entry distinct) + commands/bundle.test.ts tampered verify exit 1; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC3": {
+      "at": "2026-09-24T17:49:59.697Z",
+      "note": "src/bundle/manifest.test.ts, archive.test.ts (bomb/caps), apply.test.ts (not-ok plan writes nothing), paths.test.ts (escape refused); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC4": {
+      "at": "2026-09-24T17:49:59.782Z",
+      "note": "src/bundle/plan.test.ts (user-modified/unmanaged/owned-by-other-bundle need --force) + uninstall.test.ts (keeps modified, plan-then-delete); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC5": {
+      "at": "2026-09-24T17:49:59.874Z",
+      "note": "src/bundle/inspect.test.ts (tree snapshot unchanged, no spawn, targetHarnesses advisory warnings); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC6": {
+      "at": "2026-09-24T17:49:59.969Z",
+      "note": "src/mcp/memory-harness-identity.test.ts (identity bound at launch, per-call aliases and smuggled headers refused, target filtering on every MCP read path); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC7": {
+      "at": "2026-09-24T17:50:00.064Z",
+      "note": "src/memory/handoff.test.ts + store.test.ts + commands/memory.test.ts (malformed/unreadable/CRLF/near-miss -> incomplete, exit 1); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC8": {
+      "at": "2026-09-24T17:50:00.156Z",
+      "note": "src/lib/private-dir.test.ts (conflicting/symlinked .gitignore refused, byte-identical; escaping parent refused); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC9": {
+      "at": "2026-09-24T17:50:00.258Z",
+      "note": "src/bundle/external.test.ts (scout duplicate, audit fail, polyglot/BOM rejected, reference-only, keyed registry) + gdskills/governance/scout.test.ts (--include-imports); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC10": {
+      "at": "2026-09-24T17:50:00.342Z",
+      "note": "src/integrations/rules-export.test.ts, markdown-block.test.ts, rules/export-render.test.ts, rules/distill.test.ts (only own managed block changes; keryx:index/instructions untouched); matrix drift test passes; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC11": {
+      "at": "2026-09-24T17:50:00.425Z",
+      "note": "src/bundle/plan.test.ts (scope immutable, user records land candidate, deterministic TTL) + paths.test.ts (learning/index.json reserved); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC12": {
+      "at": "2026-09-24T17:50:00.513Z",
+      "note": "src/security/audit-harness/imported-bundles.test.ts + audit-harness.test.ts + src/bundle/audit.test.ts + hook-audit.e2e.test.ts (bundle-* checks gate the import, zero writes); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC13": {
+      "at": "2026-09-24T17:50:00.597Z",
+      "note": "src/bundle/roundtrip.e2e.test.ts (export->import->inspect byte-identical; user-modified fixture refused without --force) + real-CLI e2e transcript; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC14": {
+      "at": "2026-09-24T17:50:00.683Z",
+      "note": "src/lib/keryx-home.test.ts (resolver parity with W6), src/bundle/paths.test.ts (containment, reserved learning/state paths), src/agents/verify.test.ts (imported agent origin passes); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    "AC15": {
+      "at": "2026-09-24T17:50:00.772Z",
+      "note": "src/cli-reference-coverage.test.ts + cli.test.ts (bundle and memory handoff documented); PR CI all checks green; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/690"
+  },
+  "baseBranch": "feat/agent-platform-expansion",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:51.891Z",
+            "outcome": "started",
+            "detail": "313-T6 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:51.985Z",
+            "outcome": "started",
+            "detail": "313-T7 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:52.087Z",
+            "outcome": "started",
+            "detail": "313-T8 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:30:52.171Z",
+            "outcome": "started",
+            "detail": "313-T9 lane dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T07:52:08.401Z",
+            "outcome": "started",
+            "detail": "313-T10 dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "CLI reference + portability guide + spec status notes (AC15)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Adversarial PR review rounds + fix loop",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 9,
+        "log": [
+          {
+            "at": "2026-09-24T08:33:25.271Z",
+            "outcome": "started",
+            "detail": "review round 1 on PR #690"
+          },
+          {
+            "at": "2026-09-24T08:48:02.262Z",
+            "outcome": "failed",
+            "detail": "round 1: 8 blocker, 12 major, 9 minor, 4 info; fix loop attempt 1 dispatched in 5 lanes"
+          },
+          {
+            "at": "2026-09-24T09:25:40.156Z",
+            "outcome": "started",
+            "detail": "review round 2 at 7ff8a38c"
+          },
+          {
+            "at": "2026-09-24T09:49:26.671Z",
+            "outcome": "failed",
+            "detail": "round 2: R1 20 resolved/8 partial/1 unresolved; new 0 blocker, 8 major, 13 minor, 6 info; fix attempt 2 with class-level fixes"
+          },
+          {
+            "at": "2026-09-24T10:20:48.968Z",
+            "outcome": "started",
+            "detail": "review round 3 at c4ad2a60 (last attempt)"
+          },
+          {
+            "at": "2026-09-24T10:44:08.737Z",
+            "outcome": "failed",
+            "detail": "round 3: 1 blocker (R3-F1), 6 major; three-attempt budget spent -> re-plan with choke points"
+          },
+          {
+            "at": "2026-09-24T13:57:40.896Z",
+            "outcome": "failed",
+            "detail": "closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
+          },
+          {
+            "at": "2026-09-24T14:19:31.697Z",
+            "outcome": "failed",
+            "detail": "closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
+          },
+          {
+            "at": "2026-09-24T17:43:12.666Z",
+            "outcome": "started",
+            "detail": "closure 3 check r08: 0 blocker/major, R7-F1 resolved; R8-F1 minor deferred per owner rule; merging"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix: bundle import validates --render-for harness ids before any write (exit 2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T11:15:03.684Z",
+            "outcome": "started",
+            "detail": "choke-point re-plan lanes C1-C4 at ca877166; round 4 verification"
+          },
+          {
+            "at": "2026-09-24T11:38:37.431Z",
+            "outcome": "failed",
+            "detail": "round 4: 0 blocker, 2 major remaining (R1-F20, R3-F1), 16 minor"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-24T12:05:20.606Z",
+            "outcome": "started",
+            "detail": "final pass at c8d68d62; round 5 verification"
+          },
+          {
+            "at": "2026-09-24T12:22:32.538Z",
+            "outcome": "failed",
+            "detail": "round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T13:37:39.427Z",
+            "outcome": "started",
+            "detail": "313-T19 closure fix dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T14:02:24.789Z",
+            "outcome": "started",
+            "detail": "313-T20 closure fix 2 dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T17:27:30.287Z",
+            "outcome": "started",
+            "detail": "313-T21 dispatch after merging W3 (0b983e7e)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-24T07:18:33.548Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-24T07:26:34.410Z",
+      "event": "task-added",
+      "detail": "T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.488Z",
+      "event": "task-added",
+      "detail": "T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.569Z",
+      "event": "task-added",
+      "detail": "T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.646Z",
+      "event": "task-added",
+      "detail": "T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.726Z",
+      "event": "task-added",
+      "detail": "T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.804Z",
+      "event": "task-added",
+      "detail": "T10: keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.889Z",
+      "event": "task-added",
+      "detail": "T11: CLI reference + portability guide + spec status notes (AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:34.970Z",
+      "event": "task-added",
+      "detail": "T12: Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)"
+    },
+    {
+      "at": "2026-09-24T07:26:35.048Z",
+      "event": "task-added",
+      "detail": "T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)"
+    },
+    {
+      "at": "2026-09-24T07:26:35.126Z",
+      "event": "task-added",
+      "detail": "T14: Adversarial PR review rounds + fix loop"
+    },
+    {
+      "at": "2026-09-24T07:26:40.127Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T07:26:40.211Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T07:26:40.300Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T07:29:01.511Z",
+      "event": "task-done",
+      "detail": "T5: Shared user-store resolver src/lib/keryx-home.ts (KERYX_HOME, same as W6) + tests (AC14)"
+    },
+    {
+      "at": "2026-09-24T07:30:51.892Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 313-T6 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:51.985Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 313-T7 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:52.087Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 313-T8 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:30:52.171Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 313-T9 lane dispatch"
+    },
+    {
+      "at": "2026-09-24T07:37:09.500Z",
+      "event": "task-done",
+      "detail": "T7: W8 imported-bundles audit surface + bundle-* check ids + report schema (AC12)"
+    },
+    {
+      "at": "2026-09-24T07:45:09.768Z",
+      "event": "task-done",
+      "detail": "T9: Canonical rules to per-harness instruction files: rules-export surfaces + managed block + matrix (AC10)"
+    },
+    {
+      "at": "2026-09-24T07:45:09.850Z",
+      "event": "task-added",
+      "detail": "T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test"
+    },
+    {
+      "at": "2026-09-24T07:48:35.202Z",
+      "event": "task-done",
+      "detail": "T15: Exclude SUBSYSTEM_INSTRUCTIONS from audit NON_JSON_HOOK_SURFACE_PATHS (instructions files double-counted as hook files) + test"
+    },
+    {
+      "at": "2026-09-24T07:51:39.036Z",
+      "event": "task-done",
+      "detail": "T6: Core src/bundle module: manifest+schema, paths, sha256, dir/tar.gz archive, export collectors, verify, plan, applied-state ledger, staged audit handoff, atomic apply, inspect, uninstall (AC1-AC5, AC11, AC14)"
+    },
+    {
+      "at": "2026-09-24T07:52:01.118Z",
+      "event": "task-done",
+      "detail": "T8: Cross-harness memory handoff: fields, strict scan, private gitignore, MCP identity at launch, keryx memory handoff (AC6, AC7, AC8)"
+    },
+    {
+      "at": "2026-09-24T07:52:08.401Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 313-T10 dispatch"
+    },
+    {
+      "at": "2026-09-24T07:58:35.734Z",
+      "event": "task-done",
+      "detail": "T11: CLI reference + portability guide + spec status notes (AC15)"
+    },
+    {
+      "at": "2026-09-24T08:11:36.604Z",
+      "event": "task-done",
+      "detail": "T10: keryx bundle CLI + --render-for + external catalog import + scout --include-imports wiring (AC9, AC15)"
+    },
+    {
+      "at": "2026-09-24T08:11:36.691Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T08:22:02.667Z",
+      "event": "task-done",
+      "detail": "T12: Verify Wave-3 exit: fixture bundle round trip byte-identical and user-modified file never overwritten (AC13)"
+    },
+    {
+      "at": "2026-09-24T08:22:02.773Z",
+      "event": "task-added",
+      "detail": "T16: Fix: bundle import validates --render-for harness ids before any write (exit 2)"
+    },
+    {
+      "at": "2026-09-24T08:24:07.803Z",
+      "event": "task-done",
+      "detail": "T16: Fix: bundle import validates --render-for harness ids before any write (exit 2)"
+    },
+    {
+      "at": "2026-09-24T08:24:07.886Z",
+      "event": "task-done",
+      "detail": "T13: Verify every AC has passing automated evidence; targeted tests, typecheck, eslint (AC1-AC15)"
+    },
+    {
+      "at": "2026-09-24T08:24:07.988Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T08:33:25.176Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T08:33:25.271Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — review round 1 on PR #690"
+    },
+    {
+      "at": "2026-09-24T08:48:02.262Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 2) — round 1: 8 blocker, 12 major, 9 minor, 4 info; fix loop attempt 1 dispatched in 5 lanes"
+    },
+    {
+      "at": "2026-09-24T09:25:40.156Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 3) — review round 2 at 7ff8a38c"
+    },
+    {
+      "at": "2026-09-24T09:49:26.671Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 4) — round 2: R1 20 resolved/8 partial/1 unresolved; new 0 blocker, 8 major, 13 minor, 6 info; fix attempt 2 with class-level fixes"
+    },
+    {
+      "at": "2026-09-24T10:20:48.968Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 5) — review round 3 at c4ad2a60 (last attempt)"
+    },
+    {
+      "at": "2026-09-24T10:44:08.737Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 6) — round 3: 1 blocker (R3-F1), 6 major; three-attempt budget spent -> re-plan with choke points"
+    },
+    {
+      "at": "2026-09-24T10:44:09.151Z",
+      "event": "task-added",
+      "detail": "T17: Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)"
+    },
+    {
+      "at": "2026-09-24T11:15:03.684Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — choke-point re-plan lanes C1-C4 at ca877166; round 4 verification"
+    },
+    {
+      "at": "2026-09-24T11:38:37.431Z",
+      "event": "task-attempt",
+      "detail": "T17: failed (attempt 2) — round 4: 0 blocker, 2 major remaining (R1-F20, R3-F1), 16 minor"
+    },
+    {
+      "at": "2026-09-24T11:38:37.866Z",
+      "event": "task-added",
+      "detail": "T18: Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors"
+    },
+    {
+      "at": "2026-09-24T12:05:20.606Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — final pass at c8d68d62; round 5 verification"
+    },
+    {
+      "at": "2026-09-24T12:22:32.538Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 2) — round 5: 0 blocker, 2 major (R5-F1 pre-existing on main, R5-F2 new), 2 minor, 17 info; exit rule -> stop"
+    },
+    {
+      "at": "2026-09-24T13:37:26.787Z",
+      "event": "task-added",
+      "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
+    },
+    {
+      "at": "2026-09-24T13:37:39.427Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 313-T19 closure fix dispatch"
+    },
+    {
+      "at": "2026-09-24T13:51:23.144Z",
+      "event": "task-done",
+      "detail": "T19: Closure fix (owner-approved): R5-F2 dual-decode scan of BOM files + R3-F18 same-id bundle provenance conflict needs --force"
+    },
+    {
+      "at": "2026-09-24T13:57:40.896Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 7) — closure verification r06: R5-F2 and R3-F18 partial (minor each); merge rule -> stop"
+    },
+    {
+      "at": "2026-09-24T14:02:09.737Z",
+      "event": "task-added",
+      "detail": "T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs"
+    },
+    {
+      "at": "2026-09-24T14:02:24.789Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 313-T20 closure fix 2 dispatch"
+    },
+    {
+      "at": "2026-09-24T14:11:15.470Z",
+      "event": "task-done",
+      "detail": "T20: Closure fix 2 (owner-approved): lossy UTF-16 decode for BOM files; identical entry never drops recorded sourceProject; honest provenance docs"
+    },
+    {
+      "at": "2026-09-24T14:19:31.697Z",
+      "event": "task-attempt",
+      "detail": "T14: failed (attempt 8) — closure 2 check r07: R5-F2 and R3-F18 resolved; new minor R7-F1 (UTF-16 BOM non-skill kinds scanned UTF-8 only); stop"
+    },
+    {
+      "at": "2026-09-24T17:27:30.203Z",
+      "event": "task-added",
+      "detail": "T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)"
+    },
+    {
+      "at": "2026-09-24T17:27:30.287Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 313-T21 dispatch after merging W3 (0b983e7e)"
+    },
+    {
+      "at": "2026-09-24T17:36:22.174Z",
+      "event": "task-done",
+      "detail": "T21: Closure fix 3 (owner-approved): BOM-aware dual decode for every scanned imported-bundle kind (R7-F1)"
+    },
+    {
+      "at": "2026-09-24T17:43:12.666Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 9) — closure 3 check r08: 0 blocker/major, R7-F1 resolved; R8-F1 minor deferred per owner rule; merging"
+    },
+    {
+      "at": "2026-09-24T17:49:39.112Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/690 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T17:49:46.071Z",
+      "event": "task-done",
+      "detail": "T17: Re-plan after round 3: choke-point fixes (contained-write primitive, canonical path key, audit binary rule, memory splitter, distill matcher, own-repo round-trip CI test)"
+    },
+    {
+      "at": "2026-09-24T17:49:46.156Z",
+      "event": "task-done",
+      "detail": "T18: Final surgical pass (orchestrator exception): no binary skip; project-root containment for all writers + full ratchet; cheap minors"
+    },
+    {
+      "at": "2026-09-24T17:49:46.241Z",
+      "event": "task-done",
+      "detail": "T14: Adversarial PR review rounds + fix loop"
+    },
+    {
+      "at": "2026-09-24T17:49:59.527Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/bundle/export.test.ts (every kind, sha256/sizeBytes match, no raw path in provenance) + src/bundle/own-repo-roundtrip.test.ts; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:49:59.613Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/bundle/verify.test.ts (byte flip -> checksum-mismatch, deleted -> missing-entry distinct) + commands/bundle.test.ts tampered verify exit 1; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:49:59.697Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/bundle/manifest.test.ts, archive.test.ts (bomb/caps), apply.test.ts (not-ok plan writes nothing), paths.test.ts (escape refused); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:49:59.782Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/bundle/plan.test.ts (user-modified/unmanaged/owned-by-other-bundle need --force) + uninstall.test.ts (keeps modified, plan-then-delete); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:49:59.875Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/bundle/inspect.test.ts (tree snapshot unchanged, no spawn, targetHarnesses advisory warnings); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:49:59.969Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/mcp/memory-harness-identity.test.ts (identity bound at launch, per-call aliases and smuggled headers refused, target filtering on every MCP read path); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.064Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/memory/handoff.test.ts + store.test.ts + commands/memory.test.ts (malformed/unreadable/CRLF/near-miss -> incomplete, exit 1); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.157Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/lib/private-dir.test.ts (conflicting/symlinked .gitignore refused, byte-identical; escaping parent refused); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.258Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/bundle/external.test.ts (scout duplicate, audit fail, polyglot/BOM rejected, reference-only, keyed registry) + gdskills/governance/scout.test.ts (--include-imports); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.342Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: src/integrations/rules-export.test.ts, markdown-block.test.ts, rules/export-render.test.ts, rules/distill.test.ts (only own managed block changes; keryx:index/instructions untouched); matrix drift test passes; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.425Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: src/bundle/plan.test.ts (scope immutable, user records land candidate, deterministic TTL) + paths.test.ts (learning/index.json reserved); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.513Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: src/security/audit-harness/imported-bundles.test.ts + audit-harness.test.ts + src/bundle/audit.test.ts + hook-audit.e2e.test.ts (bundle-* checks gate the import, zero writes); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.597Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: src/bundle/roundtrip.e2e.test.ts (export->import->inspect byte-identical; user-modified fixture refused without --force) + real-CLI e2e transcript; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.683Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: src/lib/keryx-home.test.ts (resolver parity with W6), src/bundle/paths.test.ts (containment, reserved learning/state paths), src/agents/verify.test.ts (imported agent origin passes); merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:00.772Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: src/cli-reference-coverage.test.ts + cli.test.ts (bundle and memory handoff documented); PR CI all checks green; merged in PR #690 (8b66697c); CI green at 80ae064a"
+    },
+    {
+      "at": "2026-09-24T17:50:05.664Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T17:50:13.777Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — terminal-dispositions (violated): 116 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-690-r01#R1-F1 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F2 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F3 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F4 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F5 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F6 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F7 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F8 (blocker, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F9 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F10 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F11 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F12 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F13 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F14 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F15 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F16 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F17 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F18 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F19 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F20 (major, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F21 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F22 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F23 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F24 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F25 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F26 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F27 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F28 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r01#R1-F29 (minor, round 2026-09-24-ingest-690-r01): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F1 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F2 (blocker, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F5 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F9 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F13 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F17 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F20 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F22 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R1-F28 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F1 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F2 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F3 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F4 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F5 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F6 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F7 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F8 (major, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F9 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F10 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F11 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F12 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F13 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F14 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F15 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F16 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F17 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F18 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F19 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F20 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r02#R2-F21 (minor, round 2026-09-24-ingest-690-r02): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F1 (blocker, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F2 (major, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F3 (major, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F4 (major, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F5 (major, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F6 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F7 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F8 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F9 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F10 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F11 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F12 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F13 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F14 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F15 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F16 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F17 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F18 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F19 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F20 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F21 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F22 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F23 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R3-F24 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R1-F13 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R1-F20 (major, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R2-F3 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R2-F5 (major, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R2-F6 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R2-F10 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R2-F12 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R2-F15 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r03#R2-F21 (minor, round 2026-09-24-ingest-690-r03): no disposition recorded | 2026-09-24-ingest-690-r04#R1-F20 (major, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R3-F1 (major, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R3-F6 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R3-F7 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R3-F8 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R3-F10 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R3-F13 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r05#R3-F18 (minor, round 2026-09-24-ingest-690-r05): no disposition recorded | 2026-09-24-ingest-690-r04#R1-F13 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R2-F6 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R2-F10 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R2-F15 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R2-F21 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R4-F1 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R4-F2 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R4-F3 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R4-F5 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r04#R4-F6 (minor, round 2026-09-24-ingest-690-r04): no disposition recorded | 2026-09-24-ingest-690-r05#R5-F1 (major, round 2026-09-24-ingest-690-r05): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-24-ingest-690-r05#R5-F2 (major, round 2026-09-24-ingest-690-r05): no disposition recorded | 2026-09-24-ingest-690-r05#R5-F3 (minor, round 2026-09-24-ingest-690-r05): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-24-ingest-690-r06#R5-F2 (minor, round 2026-09-24-ingest-690-r06): no disposition recorded | 2026-09-24-ingest-690-r06#R3-F18 (minor, round 2026-09-24-ingest-690-r06): no disposition recorded | 2026-09-24-ingest-690-r07#R7-F1 (minor, round 2026-09-24-ingest-690-r07): no disposition recorded | head-commit (violated): the latest round ran against 7b06de44530f7b4bad9069bbc3718461d67075e3, but the PR head is 80ae064a27902d8bcdf5cfdacee06864e1ab2e60. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#690 was last collected against 95473737746e775814d047ba5027919a88092428 (round 1), but the PR head is 80ae064a27902d8bcdf5cfdacee06864e1ab2e60. Everything anyone said after 95473737746e775814d047ba5027919a88092428 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 690 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-24-ingest-690-r08` ran with `verification_mode: annotate` and received 0 claims while retaining 1 finding(s) at or above `minor` (2026-09-24-ingest-690-r08#R8-F1). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T18:04:51.780Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/690 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:04:55.592Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:05:03.412Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

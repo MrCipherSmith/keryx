@@ -22,9 +22,10 @@
 // schedule, with the reason, rather than falling back to an unkeyed hash.
 
 import { createHmac, randomBytes } from "node:crypto";
-import { realpathSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import path from "node:path";
 import { createOwnerOnlyFileExclusive, ensureKeryxConfigDir, keryxConfigDir, readConfigFile } from "../lib/config-dir";
+import { realOr } from "./granted-binary";
 
 const KEY_FILE = "schedule-hmac.key";
 
@@ -69,15 +70,17 @@ export function ensureScheduleKey(dir?: string): ScheduleKeyRead {
  * `undefined` when the layout is sound.
  */
 export function configDirInsideProjectReason(projectRoot: string, dir?: string): string | undefined {
-  const real = (p: string): string => {
-    try {
-      return realpathSync(p);
-    } catch {
-      return path.resolve(p);
-    }
-  };
-  const config = real(keryxConfigDir(dir));
-  const root = real(projectRoot);
+  // R3 regression fix (flow 319 CI): use the SAME ancestor-walking realpath
+  // resolution `resolvesInsideProject` (`./granted-binary.ts`) uses, not a
+  // bare realpathSync-or-unresolved-path fallback — a config dir under
+  // XDG_DATA_HOME often does not exist yet at draft time (`ensureKeryxConfigDir`
+  // only runs once a schedule is actually confirmed), so the naive fallback
+  // left it unresolved through a symlinked ancestor (macOS's `/var` ->
+  // `/private/var`) while `projectRoot` (which does exist) got fully
+  // resolved — silently defeating this exact "inside the project" check for
+  // a not-yet-created config dir. See `realOr`'s doc comment for the detail.
+  const config = realOr(keryxConfigDir(dir));
+  const root = realOr(projectRoot);
   const rel = path.relative(root, config);
   if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
     return `keryx's config directory ${config} is inside this project (${root}); the schedule signing key and auth.json must live outside every project — point XDG_DATA_HOME elsewhere`;

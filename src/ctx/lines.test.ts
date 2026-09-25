@@ -61,6 +61,50 @@ test("classifyLine does not promote a success verdict spelled with failure words
   expect(classifyLine("0 failed, 2 errored")).toBe("failure");
 });
 
+// GDCTX-1: FAILURE_STEMS/WARNING_STEMS are English prose ("refuse this",
+// "cannot find the cat"), not a verdict vocabulary — a clean, exit-0 stdout
+// line that merely contains one of those words (a commit message, an echoed
+// sentence) is not a report of anything. A caller that knows the stream and
+// exit code should say so; a caller that does not (no `context` argument at
+// all) keeps today's unconditional behaviour.
+test("classifyLine ignores failure-shaped prose on a clean stdout line", () => {
+  for (const line of ["refuse this", "cannot find the cat", "the app will crash on Tuesdays"]) {
+    expect(classifyLine(line, { stream: "stdout", exitCode: 0 })).toBeNull();
+  }
+});
+
+test("classifyLine keeps the same prose as a verdict when it is on stderr", () => {
+  for (const line of ["refuse this", "cannot find the cat", "the app will crash on Tuesdays"]) {
+    expect(classifyLine(line, { stream: "stderr", exitCode: 0 })).toBe("failure");
+  }
+});
+
+test("classifyLine keeps the same prose as a verdict when the run's exit code is non-zero", () => {
+  for (const line of ["refuse this", "cannot find the cat", "the app will crash on Tuesdays"]) {
+    expect(classifyLine(line, { stream: "stdout", exitCode: 1 })).toBe("failure");
+  }
+});
+
+test("classifyLine keeps stream-agnostic markers on a clean stdout line regardless of context", () => {
+  expect(classifyLine("✗ test", { stream: "stdout", exitCode: 0 })).toBe("failure");
+  expect(classifyLine("(fail) something", { stream: "stdout", exitCode: 0 })).toBe("failure");
+});
+
+test("classifyLine keeps WARNING_STEMS unconditional: a clean stdout warning is still a verdict", () => {
+  // Unlike FAILURE_STEMS, WARNING_STEMS is a tool's own report vocabulary
+  // (ESLint's `warning: x`, a deprecation notice) rather than incidental
+  // failure-shaped English prose — so the stream/exit gate does not apply to
+  // it (AC1 scopes the gate to FAILURE_STEMS only).
+  expect(classifyLine("warn: heads up", { stream: "stdout", exitCode: 0 })).toBe("warning");
+  expect(classifyLine("warn: heads up", { stream: "stderr", exitCode: 0 })).toBe("warning");
+});
+
+test("classifyLine with no context argument keeps the pre-existing unconditional behaviour", () => {
+  expect(classifyLine("refuse this")).toBe("failure");
+  expect(classifyLine("cannot find the cat")).toBe("failure");
+  expect(classifyLine("warn: heads up")).toBe("warning");
+});
+
 test("compactLines carries a verdict out of the range it elides, and says so", () => {
   const lines = Array.from({ length: 5_000 }, (_, i) =>
     i === 2_499 ? "FAIL src/thing/broken.test.ts" : `pass line ${i + 1}`,

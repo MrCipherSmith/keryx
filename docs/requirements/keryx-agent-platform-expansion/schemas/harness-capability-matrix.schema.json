@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/agent-platform/harness-capability-matrix.schema.json",
+  "title": "Keryx harness capability matrix",
+  "description": "Generated from the unified harness adapter registry (W5). Each entry states, for one harness, its overall support state and the per-surface capability facts backing that state. Never hand-authored: `keryx integrations matrix [--check]` regenerates and validates this artifact against the live registry.",
+  "type": "object",
+  "required": ["version", "generatedAt", "harnesses"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema/content version of this matrix artifact, e.g. \"0.1.0\".",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp of the generation run that produced this artifact.",
+      "format": "date-time"
+    },
+    "harnesses": {
+      "type": "array",
+      "description": "One entry per registered harness adapter.",
+      "items": { "$ref": "#/$defs/harnessEntry" },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "surfaceFlag": {
+      "type": "string",
+      "enum": [
+        "block",
+        "prompt-gate",
+        "inject-context",
+        "pre-tool-context",
+        "observe",
+        "post-tool",
+        "session-start",
+        "stop",
+        "skills",
+        "agents",
+        "instructions",
+        "mcp",
+        "rules"
+      ]
+    },
+    "harnessId": {
+      "type": "string",
+      "description": "Canonical harness id (W5-multi-harness.md, Design → Target matrix).",
+      "enum": [
+        "claude",
+        "codex",
+        "cursor",
+        "windsurf",
+        "gemini-cli",
+        "kiro",
+        "github-copilot-agent",
+        "zed",
+        "antigravity",
+        "opencode",
+        "generic-mcp",
+        "keryx-shell"
+      ]
+    },
+    "adapterKind": {
+      "type": "string",
+      "enum": ["host-hook", "policy-travels-with-agent", "instruction-only"],
+      "description": "How enforcement reaches this harness: a command written into the harness's own hook config, Keryx running as the agent itself (e.g. ACP), or no runtime enforcement at all."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["native", "adapter", "instruction-only", "unsupported"],
+      "description": "native = direct, verified, actively-installing/validating surface. adapter = works through a thin bridge or experimental-confidence host hook. instruction-only = a file is written/read but nothing decides anything. unsupported = no known mechanism; registered only for a precise CLI message."
+    },
+    "unsupportedSurface": {
+      "type": "object",
+      "required": ["surface", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "surface": { "$ref": "#/$defs/surfaceFlag" },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One-line, source-backed reason this surface is unavailable for this harness (e.g. \"exit-code only hooks; no documented field injects context\")."
+        }
+      }
+    },
+    "harnessEntry": {
+      "type": "object",
+      "required": [
+        "id",
+        "state",
+        "adapterKind",
+        "confidence",
+        "surfaces_supported",
+        "surfaces_unsupported",
+        "install_command",
+        "verification_command",
+        "risk_notes",
+        "last_verified",
+        "source_docs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/harnessId" },
+        "label": {
+          "type": "string",
+          "description": "Human-readable name, e.g. \"Gemini CLI\"."
+        },
+        "state": { "$ref": "#/$defs/state" },
+        "adapterKind": { "$ref": "#/$defs/adapterKind" },
+        "confidence": {
+          "type": "string",
+          "enum": ["verified", "experimental"],
+          "description": "Overall confidence for this harness's entry. An entry with state \"native\" must be \"verified\"."
+        },
+        "surfaces_supported": {
+          "type": "array",
+          "description": "Surface flags this harness has at `state` or better, each with the settings file (if any) it is installed into.",
+          "items": { "$ref": "#/$defs/supportedSurface" },
+          "uniqueItems": true
+        },
+        "surfaces_unsupported": {
+          "type": "array",
+          "description": "Surface flags explicitly not available for this harness, each with a stated reason.",
+          "items": { "$ref": "#/$defs/unsupportedSurface" }
+        },
+        "install_command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The `keryx integrations install --runtime <id> ...` invocation for this harness."
+        },
+        "verification_command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The `keryx integrations doctor --runtime <id>` invocation that proves the install is live."
+        },
+        "risk_notes": {
+          "type": "string",
+          "description": "Free text describing known risk/uncertainty. Required non-empty whenever confidence is \"experimental\"."
+        },
+        "last_verified": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO date the source_docs were last actually read/confirmed."
+        },
+        "source_docs": {
+          "type": "array",
+          "description": "Citations backing this entry's claims: public standard/doc URLs or in-repo file paths. Must be non-empty for any entry with state \"native\".",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "state": { "const": "native" } }
+          },
+          "then": {
+            "properties": {
+              "confidence": { "const": "verified" },
+              "source_docs": { "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "confidence": { "const": "experimental" } }
+          },
+          "then": {
+            "properties": {
+              "risk_notes": { "minLength": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "supportedSurface": {
+      "type": "object",
+      "required": ["surface", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "surface": { "$ref": "#/$defs/surfaceFlag" },
+        "state": { "$ref": "#/$defs/state" },
+        "settingsFile": {
+          "type": "string",
+          "description": "Relative path of the settings file this surface installs into, when applicable (absent for policy-travels-with-agent surfaces like Zed's ACP block surface)."
+        }
+      }
+    }
+  }
+}

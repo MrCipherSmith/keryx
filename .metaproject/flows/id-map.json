@@ -238,5 +238,53 @@
     "toDir": "283-2026-09-16-background-task-execution-p2-task-tools-",
     "at": "2026-09-21T11:10:04.692Z",
     "reason": "duplicate id 266 from parallel merges: move the finished package, keep the in-progress package's documented id"
+  },
+  {
+    "from": "304",
+    "to": "320",
+    "fromDir": "304-2026-09-23-w7-gdgraph-and-gdctx-correctness-ctx-def",
+    "toDir": "320-2026-09-23-w7-gdgraph-and-gdctx-correctness-ctx-def",
+    "at": "2026-09-25T11:49:14.264Z",
+    "reason": "id collided with main's flow 304 (/connect: test connection and disconnect a provider); allocation was per working copy"
+  },
+  {
+    "from": "305",
+    "to": "321",
+    "fromDir": "305-2026-09-23-w5-a-one-harness-adapter-registry-for-th",
+    "toDir": "321-2026-09-23-w5-a-one-harness-adapter-registry-for-th",
+    "at": "2026-09-25T11:49:14.552Z",
+    "reason": "id collided with main's flow 305 (Task routing table: categories to models); allocation was per working copy"
+  },
+  {
+    "from": "306",
+    "to": "322",
+    "fromDir": "306-2026-09-24-w6-lifecycle-hooks-in-keryx-shell-that-c",
+    "toDir": "322-2026-09-24-w6-lifecycle-hooks-in-keryx-shell-that-c",
+    "at": "2026-09-25T11:49:14.834Z",
+    "reason": "id collided with main's flow 306 (Jev decision client and CI failure triage); allocation was per working copy"
+  },
+  {
+    "from": "307",
+    "to": "323",
+    "fromDir": "307-2026-09-24-w5-b-gemini-cli-kiro-copilot-and-zed-via",
+    "toDir": "323-2026-09-24-w5-b-gemini-cli-kiro-copilot-and-zed-via",
+    "at": "2026-09-25T12:03:32.355Z",
+    "reason": "id collided with main's flow 307 (CI triage v2: history and diff signals); allocation was per working copy"
+  },
+  {
+    "from": "308",
+    "to": "324",
+    "fromDir": "308-2026-09-24-w8-harness-config-security-audit-and-det",
+    "toDir": "324-2026-09-24-w8-harness-config-security-audit-and-det",
+    "at": "2026-09-25T12:03:44.975Z",
+    "reason": "id collided with main's flow 308 (keryx review conform); allocation was per working copy"
+  },
+  {
+    "from": "309",
+    "to": "325",
+    "fromDir": "309-2026-09-24-w1-stack-detection-install-profiles-and-",
+    "toDir": "325-2026-09-24-w1-stack-detection-install-profiles-and-",
+    "at": "2026-09-25T12:03:45.286Z",
+    "reason": "id collided with main's flow 309 (Live model catalog at startup); allocation was per working copy"
   }
 ]

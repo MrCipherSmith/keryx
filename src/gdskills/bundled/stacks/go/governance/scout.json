@@ -1,0 +1,31 @@
+[
+  {
+    "query": "Use when implementing or extending a feature in a Go service or module -- module layout under cmd/ and internal/, interface placement, context propagation, goroutine lifetimes with errgroup or WaitGroup, error wrapping with %w, and log/slog usage.",
+    "decision": "create",
+    "topMatch": "python/python-implementation",
+    "recordedAt": "2026-09-24T12:08:06.318Z",
+    "skillName": "go-implementation"
+  },
+  {
+    "query": "Use when a Go package's test suite needs writing, extending, or fixing -- table-driven subtests with t.Run, t.Helper/t.Cleanup/t.Context, testdata golden files, httptest, fuzz tests, -race, and b.Loop benchmarks.",
+    "decision": "create",
+    "topMatch": "ts-js-node/nodejs-testing",
+    "recordedAt": "2026-09-24T12:08:08.013Z",
+    "skillName": "go-testing"
+  },
+  {
+    "query": "Use when reviewing a Go change for concurrency and idiom risks -- ignored errors, goroutine leaks, data races, context misuse (stored on structs or Background() in handlers), defer in loops, nil map writes, and interface pollution. Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "ts-js-node/nodejs-code-review",
+    "recordedAt": "2026-09-24T12:08:09.683Z",
+    "skillName": "go-code-review"
+  },
+  {
+    "query": "Use when go build/go vet fails, or go.mod/go.sum are out of sync -- resolves module/toolchain mismatches, import cycles, generic type inference errors, staticcheck/golangci-lint failures, and a failing go test -race, with the smallest root-cause fix.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-build-fix",
+    "recordedAt": "2026-09-24T12:08:16.513Z",
+    "skillName": "go-build-fix",
+    "justification": "Nearest matches: ts-js-node/nodejs-build-fix (0.44) fixes tsc type errors, ESM/CJS module resolution, and eslint failures for Node/TS -- not Go's go vet/staticcheck/golangci-lint findings or go.mod/go.sum toolchain mismatches. python/python-build-fix (0.41) resolves pip/pyproject dependency and import errors for Python, not Go's import-cycle-via-internal/ restructuring or generic type-inference errors. react/react-build-fix (0.32) fixes JSX/TSX prop and bundler errors for React, unrelated to Go's compiler/toolchain surface. None share Go-specific vocabulary (go vet, staticcheck, golangci-lint, go.mod/go.sum, internal/) so this is a genuine fork, not a substitute."
+  }
+]

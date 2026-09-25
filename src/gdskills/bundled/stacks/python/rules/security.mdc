@@ -1,0 +1,84 @@
+---
+extends: common
+paths: ["**/*.py", "**/*.pyi"]
+metadata:
+  origin: authored
+---
+
+# Python security
+
+Narrows `core-common-rules`' stack-agnostic security guidance to Python's own
+OWASP-style sinks and the safe API each one has a direct replacement for.
+Applies only to `*.py`/`*.pyi` files.
+
+## Command and code execution
+
+- Never call `subprocess.run`/`Popen`/`call` with `shell=True` or a single
+  interpolated command string; pass an argument list
+  (`subprocess.run(["cmd", arg])`) so the shell never re-parses untrusted
+  input.
+- Never pass untrusted input to `eval`/`exec`, `compile()` of untrusted
+  source, or `os.system` — there is no safe way to sandbox these; parse the
+  input with a real parser (`json`, `ast.literal_eval` for literals) instead.
+- Treat `ast.literal_eval` as the only acceptable "eval-like" call on
+  untrusted text, and only for literal Python values, never arbitrary
+  expressions.
+
+## Deserialization
+
+- Never unpickle (`pickle.load`/`loads`, `dill`, `shelve`) data from a
+  source you do not fully trust and control — unpickling untrusted bytes is
+  equivalent to `exec`. Use `json` or a schema-validated format instead.
+- Use `yaml.safe_load`, never `yaml.load`, for any YAML that did not
+  originate from your own trusted config in the repo.
+- Parse XML with `defusedxml` instead of raw
+  `xml.etree.ElementTree`/`xml.dom.minidom` on untrusted input. Current
+  `xml.etree`/expat no longer fetch external entities by default, so classic
+  XXE is not the risk; the remaining risk is entity-expansion ("billion
+  laughs") and similar resource-exhaustion DoS attacks, which the stdlib
+  parsers do not guard against and `ET.parse` has no option to disable —
+  `defusedxml` is still the safe choice for untrusted input.
+
+## Data access
+
+- Build SQL with parameterized queries (`cursor.execute("... WHERE id = %s",
+  (id,))` or the ORM's own query builder), never by interpolating values
+  into a SQL string with f-strings/`%`/`.format()`.
+- Validate and normalize any filesystem path built from user input before
+  using it; resolve with `Path(...).resolve()` and check it stays under the
+  intended base directory to prevent path traversal (`../../etc/passwd`).
+
+## Secrets and randomness
+
+- Generate tokens, session IDs, and password-reset codes with the `secrets`
+  module (`secrets.token_urlsafe`, `secrets.compare_digest`), never `random`
+  — `random` is not cryptographically secure and its output is predictable.
+- Never hard-code a credential, API key, or secret in source; read it from
+  the project's configured secret store or environment, and never log it.
+
+## Network calls
+
+- Always pass an explicit `timeout` to `requests`/`httpx` calls — an
+  unbounded call to a slow or hung endpoint can hang the whole process.
+- Never set `verify=False` (requests) or disable TLS certificate validation
+  to work around a cert error; fix the underlying trust-store/cert issue
+  instead.
+
+## Dependencies
+
+- Run the project's dependency audit tool (`pip-audit`, or `uv pip list
+  --outdated` plus the project's configured scanner) before adding a new
+  third-party dependency with security-sensitive functionality (auth,
+  crypto, deserialization, subprocess wrapping).
+- Pin dependencies the project already pins (lockfile present) rather than
+  loosening a version constraint to resolve a conflict without checking the
+  changelog for the versions in between.
+
+## Red flags
+
+- "I'll just use `shell=True` here, the input is only ever a filename" — an
+  attacker-controlled filename can still contain shell metacharacters;
+  always pass an argument list.
+- "`eval` is fine, this string only comes from our own config file" — if the
+  config file is ever user-editable or fetched remotely, this stops being
+  true; prefer `ast.literal_eval` or `json.loads` regardless.

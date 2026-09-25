@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Python diff for mutable default argument bugs",
+      "Check this pull request for broad except clauses swallowing errors",
+      "Audit this Python module for resource leaks and unclosed files",
+      "Review this async Python code for blocking calls inside async def",
+      "Check this Python code review for typing holes like Any or missing Optional",
+      "Review this Django ORM code for N+1 query issues"
+    ],
+    "negative": [
+      "Implement a new Python feature that fetches user data",
+      "Write pytest tests for this module",
+      "Fix the mypy type errors so the build passes",
+      "Review this TypeScript React component for MobX store misuse",
+      "Run review-security-code on our whole repository for OWASP issues",
+      "Fix this ModuleNotFoundError in our Python package"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mutable-default-finding",
+      "prompt": "Review this Python function for bugs:\n\ndef add_item(item, items=[]):\n    items.append(item)\n    return items",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags `items=[]` as a mutable default argument that is created once and shared/mutated across every call that omits `items`, and gives the standard fix, without editing the code itself.",
+          "pass_criteria": [
+            "identifies that `items=[]` is a mutable default argument evaluated once at function definition, so it is shared and accumulates state across calls that don't pass their own list",
+            "gives the standard fix and shows the corrected code: default the parameter to `None` and create a new list inside the function body when it is `None`, e.g. `def add_item(item, items=None): if items is None: items = []` -- not just a description of the fix in the abstract",
+            "presents this as a specific finding on this function, not a generic style remark, and does not modify the code -- this skill only reports findings"
+          ],
+          "fail_criteria": [
+            "declares the function has no bug or is fine as written, missing the mutable-default issue entirely"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: `add_item`'s `items=[]` default is a mutable default argument. Python evaluates default argument values once, at function-definition time, so every call to `add_item(item)` that omits `items` shares and mutates the exact same list object -- items appended in one call are still there on the next call, which is almost certainly not the intended behavior and will surface as a confusing bug wherever this is called more than once without an explicit `items=`. Fix: change the signature to `def add_item(item, items=None):` and create a fresh list inside the body when needed: `if items is None: items = []`. That guarantees each call that doesn't pass its own list gets a brand-new empty one instead of the shared default. This is a correctness bug, not a style nit, so I'd flag it as the primary finding here rather than suggesting an edit myself, since this review is read-only.",
+        "known_wrong": "This function looks fine to me -- `add_item` just appends an item to a list and returns it, which is exactly what it's supposed to do. The `items=[]` default is a convenient shortcut so callers don't have to pass an empty list every time; Python handles default arguments the same way most other languages do, evaluating them fresh per call. No changes needed here, the logic is straightforward and there's nothing that would cause unexpected behavior in normal use.",
+        "vague": "There's a subtle bug with the default list argument here -- mutable defaults in Python are generally risky and worth avoiding.",
+        "subtle_wrong": "Worth a note: `items=[]` is evaluated once at definition time, so calling `add_item` repeatedly without passing `items` would reuse the same list. I'd suggest switching to `items=None` with a fallback inside the body, though in practice this is more of a minor style nit than a real bug unless the function actually gets called that way in this codebase."
+      }
+    },
+    {
+      "id": "broad-except-finding",
+      "prompt": "Review this Python code:\n\ntry:\n    process(data)\nexcept Exception:\n    pass",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags `except Exception: pass` as swallowing whatever error `process` raises rather than treating a broad catch that silently discards the error as acceptable.",
+          "pass_criteria": [
+            "identifies that `except Exception: pass` swallows the error instead of letting it propagate, being logged, or being handled specifically",
+            "explains the consequence: the caller and any monitoring keyed off the exception never see the failure, so real bugs go unnoticed",
+            "states this as a concrete finding, naming a specific alternative action -- log the exception with context (e.g. `logging.exception(...)`), re-raise, or catch a specific exception type -- not a vague 'handle it better'"
+          ],
+          "fail_criteria": [
+            "dismisses the bare `except Exception: pass` as fine or acceptable because it simply logs or prevents a crash, without flagging that the error is being hidden"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: the bare `except Exception: pass` around `process(data)` swallows any error the call raises with no logging, no re-raise, and no fallback -- the failure just vanishes. If `process` fails for a genuinely unexpected reason (bad data, a downstream service error, a bug), nothing here surfaces it: the caller sees a silent no-op success, and any monitoring or alerting that depends on the exception propagating never fires. This also catches things a broad handler shouldn't, since `Exception` covers essentially every non-system-exiting error. At minimum this should log the exception with context before continuing, e.g. `logging.exception(\"process failed\")`, and ideally it should catch only the specific exception types `process` can legitimately raise and let anything else propagate, so real bugs aren't hidden behind a passing test run.",
+        "known_wrong": "This is fine -- catching `Exception` and passing just means a failure in `process(data)` won't crash the rest of the program, which is generally what you want in production code. It's a defensive pattern: if `process` has some edge case that throws, the surrounding code keeps running instead of taking down the whole request. I wouldn't flag this as a problem; if anything it shows the author was being careful about robustness. No changes needed.",
+        "vague": "This broad except could hide problems, so it would be safer to handle errors a bit more carefully here.",
+        "subtle_wrong": "Catching `Exception` is fine as a safety net so a failure in `process` doesn't take down the caller. I'd just add a one-line `logging.exception(\"process failed\")` before the `pass` so at least it's not completely silent -- keeps the same broad catch but gives you some visibility if it ever fires."
+      }
+    }
+  ]
+}

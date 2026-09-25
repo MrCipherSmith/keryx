@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import packageJson from "../../package.json" with { type: "json" };
-import { isNotFound, writeFileAtomic } from "./fs";
+import { isNotFound } from "./fs";
+import { writeContained } from "./contained-write";
 
 /**
  * The install/update/rules-sync lifecycle plan (AFC-21 / flow 236 AC2).
@@ -201,6 +202,27 @@ export function digestOf(content: string): string {
   return `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`;
 }
 
+/**
+ * R1-F20: every write this module makes (the journal, and each step's own
+ * content) is contained against `path.dirname(metaprojectRoot)` — the
+ * project root, in every real caller (`metaprojectRoot` is always
+ * `<projectRoot>/.metaproject`, constructed by `commands/{init,update,rules}.ts`)
+ * — never against `metaprojectRoot` directly. Containing directly against
+ * `metaprojectRoot` means a `.metaproject` that is ITSELF a symlink moves the
+ * whole boundary outside the project, exactly the R1-F20 reproduction
+ * (`.metaproject -> ../../.claude`). `targetPath` must resolve under
+ * `metaprojectRoot` — every `InstallStep.path` and the journal path are built
+ * that way by `routing-entrypoint.ts` and `installJournalPath` — so the rel
+ * path handed to `writeContained` always starts with `.metaproject/…`,
+ * putting `.metaproject` itself inside the segment walk `refuseEscapingSymlink`
+ * performs.
+ */
+async function writeContainedUnderMetaproject(metaprojectRoot: string, targetPath: string, content: string): Promise<void> {
+  const root = path.dirname(metaprojectRoot);
+  const rel = path.join(path.basename(metaprojectRoot), path.relative(metaprojectRoot, targetPath)).split(path.sep).join("/");
+  await writeContained(root, rel, content);
+}
+
 export function installJournalPath(metaprojectRoot: string): string {
   return path.join(metaprojectRoot, INSTALL_JOURNAL_RELATIVE_PATH);
 }
@@ -374,7 +396,7 @@ export async function applyInstallPlan(input: {
 
   const writeJournal = async (): Promise<void> => {
     journal.updatedAt = now().toISOString();
-    await writeFileAtomic(plan.journalPath, `${JSON.stringify(journal, null, 2)}\n`);
+    await writeContainedUnderMetaproject(plan.metaprojectRoot, plan.journalPath, `${JSON.stringify(journal, null, 2)}\n`);
   };
 
   for (const [index, step] of plan.steps.entries()) {
@@ -452,7 +474,7 @@ export async function applyInstallPlan(input: {
 
     try {
       await input.beforeStepMutation?.(step.id);
-      await writeFileAtomic(step.path, step.content);
+      await writeContainedUnderMetaproject(plan.metaprojectRoot, step.path, step.content);
     } catch (error) {
       if (error instanceof InstallCrashSignal) {
         // A dead process records nothing. Leave `begun` exactly as it stands.

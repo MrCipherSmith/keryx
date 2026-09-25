@@ -896,3 +896,69 @@ describe("Flow 301 AC12: flow-next worktrees get the same scratch-parent protect
     expect(seenHide!.some((dir) => dir.includes(`${path.basename(root)}-wt`))).toBe(true);
   });
 });
+
+describe("R700-01/D9: project-hook trust is looked up under the main project root, not the worktree", () => {
+  function committedHookDoc(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [{ id: "release-hardening-poc", matcher: "*", class: "observe", command: { argv: ["true"] } }],
+      },
+    };
+  }
+
+  async function commitProjectHooks(): Promise<Record<string, unknown>> {
+    const doc = committedHookDoc();
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "hooks.json"), JSON.stringify(doc, null, 2), "utf8");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "project hooks"]);
+    return doc;
+  }
+
+  test("an untrusted project hook produces a session-start notice on stderr, naming it", async () => {
+    await writeTriggers([dispatchEntry()]);
+    await commitProjectHooks();
+    const savedHooks = process.env["KERYX_HOOKS"];
+    process.env["KERYX_HOOKS"] = "on";
+    try {
+      const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
+      await run(provider);
+      const noticeText = errored.join("\n");
+      expect(noticeText).toContain("not trusted");
+      expect(noticeText).toContain("release-hardening-poc");
+      expect(noticeText).toContain("keryx hooks trust");
+    } finally {
+      if (savedHooks === undefined) delete process.env["KERYX_HOOKS"];
+      else process.env["KERYX_HOOKS"] = savedHooks;
+    }
+  });
+
+  test("trust recorded for the MAIN root (not the per-run worktree) is honoured — the dispatch runs against a worktree, but the notice is gone", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const doc = await commitProjectHooks();
+    const config = await mkdtemp(path.join(tmpdir(), "keryx-dispatch-hook-trust-"));
+    process.env["XDG_DATA_HOME"] = config;
+    const savedHooks = process.env["KERYX_HOOKS"];
+    process.env["KERYX_HOOKS"] = "on";
+    try {
+      const { projectHooksDigestOfDoc, recordProjectHooksTrust } = await import("../harness/hooks");
+      const digest = projectHooksDigestOfDoc(doc);
+      expect(digest).toBeDefined();
+      // D9: `trustRoot` is the MAIN project root (`root`) — the same one
+      // `keryx hooks trust` would be run in — never the disposable per-run
+      // worktree path, which does not exist yet at this point and would
+      // never match anything an operator actually trusted.
+      const recorded = recordProjectHooksTrust({ trustRoot: root, digest: digest as string, hookIds: ["release-hardening-poc"] });
+      expect(recorded.ok).toBe(true);
+
+      const provider = scripted([[USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }]]);
+      await run(provider);
+      expect(errored.some((line) => line.includes("not trusted"))).toBe(false);
+    } finally {
+      if (savedHooks === undefined) delete process.env["KERYX_HOOKS"];
+      else process.env["KERYX_HOOKS"] = savedHooks;
+      await rm(config, { recursive: true, force: true });
+    }
+  });
+});

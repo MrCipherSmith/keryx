@@ -139,7 +139,7 @@ test("classifyBusyDispatch: isReview line routes to review", () => {
 test("classifyBusyDispatch: isMcp line routes to mcp", () => {
   expect(
     classifyBusyDispatch({
-      line: "/integrations",
+      line: "/integrate",
       commandName: undefined,
       ...base,
       isMcp: true,

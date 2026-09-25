@@ -888,6 +888,12 @@ always-on gateway mode (Phase 4) remains **not** implemented.
 | `security status` | print effective config: mode, raw retention, gate, config-checksum, per-policy action | 0 |
 | `security scan <path> [--json] [--source <kind>]` | scan a file, resolve a decision, write `artifacts/latest.{md,json}` | mode-gated (see below) |
 | `security scan-mcp <manifest\|dir> [--json] [--pin]` | scan MCP tool manifest(s) for injection/exfil signals against a pinned baseline (`--pin` records the baseline) | **1** with `--strict`, on a threat or incomplete coverage (independent of mode) |
+| `security audit-harness [path] [--json] [--ci] [--fix-proposals] [--baseline <file>] [--severity-floor <level>]` | read-only sweep of harness-configuration surfaces; compute score and grade with pass/fail gate; `--ci` sets exit code from gate | 0 in advisory; **1 in `ci` mode on non-passing gate** when `--ci` given |
+| `security audit-harness apply --proposal <id>` | apply a specific fix proposal by id (never auto-applies) | 0 or 1 on error |
+| `security audit-harness baseline add --finding <id> --justification <text>` | record a suppression for a finding with required justification; written to `.metaproject/security-audit-baseline.json` | 0 or 1 on error |
+| `security impact-evidence status [--json]` | print impact-evidence config (enabled, strict, exemptGlobs, dampenAfter), kill-switch status, host delivery readiness, recent log records | 0 |
+| `security impact-evidence test <file...> [--json]` | dry-run impact-evidence computation for files; writes nothing (unlike live `hook`) | 0 |
+| `security impact-evidence hook [--runtime claude] [--profile <name>]` | live hook entry for pre-tool-context injection at the agent runtime; reads JSON from stdin, outputs decision to stdout | 0 or 1 on error |
 | `security check-input [--source <kind>] [--file <path>] [--json]` | evaluate incoming content (default source `untrusted-external`; stdin if no `--file`) | mode-gated |
 | `security check-output [--target <kind>] [--file <path>] [--json]` | evaluate generated content (default source `generated`, target `unknown`) | mode-gated |
 | `security redact <path> [--out <path>]` | mask detected spans; write `--out` or print to stdout | 0 |

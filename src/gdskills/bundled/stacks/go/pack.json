@@ -1,0 +1,41 @@
+{
+  "id": "go",
+  "family": "language",
+  "modules": ["go-rules", "go-skills"],
+  "detectionMarkers": ["go"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 314, Wave 4 batch 1"
+  },
+  "stability": "stable",
+  "skills": {
+    "implement": ["go-implementation"],
+    "test": ["go-testing"],
+    "review": ["go-code-review"],
+    "build-fix": ["go-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Go",
+    "auditFocus": [
+      "an error return that is discarded or shadowed instead of checked or wrapped with %w",
+      "a goroutine started with no owned cancellation path (context, channel close, or WaitGroup) that can leak",
+      "a context.Context stored on a struct field, or a fresh context.Background()/TODO() created inside a request handler instead of threading the caller's ctx",
+      "concurrent map or slice access with no mutex/sync primitive guarding it",
+      "a defer inside a loop body that accumulates resources until the function returns",
+      "an exported type whose constructor returns an interface instead of the concrete struct, or an interface defined on the producer side instead of at the consumer"
+    ],
+    "buildCommands": [
+      "go build ./...",
+      "go vet ./...",
+      "go test -race ./...",
+      "golangci-lint run ./... (only when the project has a golangci-lint config)"
+    ],
+    "fixGuardrails": [
+      "Never silence a vet/lint finding with a blank `_ = err` or a `//nolint` comment instead of fixing the root cause.",
+      "Never change `go.mod`'s `go` directive or a dependency's major version just to make an error disappear; fix the code against the declared toolchain.",
+      "Never add a `replace` directive to route around a real compile error in a dependency without saying so in the report.",
+      "Never delete or skip a failing test to reach a green build."
+    ]
+  }
+}

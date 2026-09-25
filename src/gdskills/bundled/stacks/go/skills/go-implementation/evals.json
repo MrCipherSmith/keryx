@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a new Go package under internal/order that wraps errors with %w",
+      "Add a Go worker pool under cmd/worker that bounds concurrency with errgroup",
+      "Add a Go endpoint and wire it into cmd/ and internal/, propagating context.Context correctly",
+      "What's the right Go interface placement for this new client -- producer or consumer package?",
+      "Add a goroutine in Go that watches a channel and joins with sync.WaitGroup",
+      "Implement this feature in a Go cmd/api binary using log/slog for structured logging"
+    ],
+    "negative": [
+      "Implement this feature in Rust using tokio for async",
+      "Add this endpoint in a Python FastAPI service",
+      "Implement this React component with the new form fields",
+      "Review this Go diff for goroutine leaks and data races",
+      "Fix this failing go test -race in the worker package",
+      "Write table-driven pytest cases for this Python function"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "context-propagation",
+      "prompt": "I'm adding a new function to internal/order that calls a downstream client. How should I handle the context and errors?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "context\\.Context" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains passing context.Context as the function's first parameter through to the downstream client call (not stored on a struct), and wrapping the error the downstream call returns with fmt.Errorf(\"...: %w\", err) so callers can unwrap it with errors.Is/errors.As, rather than discarding it, replacing it with a plain %v/string, or only logging it without returning it to the caller.",
+          "pass_criteria": [
+            "States that context.Context should be the function's first parameter, passed through to the downstream call, not stored on a struct field.",
+            "Shows the concrete error-handling fix: wraps the downstream error with %w (e.g. `fmt.Errorf(\"calling downstream client: %w\", err)`) and returns it to the caller, not merely logging it or stating it 'should be handled'.",
+            "Connects the wrap to how callers use it (e.g. errors.Is/errors.As), even briefly."
+          ],
+          "fail_criteria": [
+            "Recommends discarding or swallowing the downstream error (e.g. `_ = err` with no comment) instead of wrapping and returning it.",
+            "Handles the downstream error only by logging it (with %v or otherwise) and returning a different, unwrapped, or generic error to the caller instead of propagating the real one with %w."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Add `context.Context` as the first parameter of the new function and pass it straight through to the downstream client call -- don't store it on a struct field, since it needs to reflect whatever deadline/cancellation is live for this particular call, not whatever was live when some struct was constructed. For the error, wrap whatever the downstream client returns with `fmt.Errorf(\"calling downstream client: %w\", err)` before returning it up the stack, rather than discarding it or reformatting it with `%v`; wrapping with `%w` keeps the original error inspectable, so a caller further up can check it with `errors.Is`/`errors.As` instead of relying on brittle string matching. Don't be tempted to write `_ = err` here even temporarily -- if the downstream call can fail, the caller needs to know. Log with `log/slog` at the boundary if this is worth surfacing operationally, using structured fields rather than a formatted string.",
+        "known_wrong": "For a case like this I'd keep it simple: store the context on the client struct when you construct it so you don't have to keep threading it through every function signature, and for the downstream error just do `_ = err` if the call usually succeeds -- no need to wrap or propagate every possible failure from a downstream dependency, that just adds noise to the call site. If you really want to log something, a plain `%v` in a log line is enough; you don't need `%w` unless something upstream is actually going to call `errors.Is` on it, which is rare in practice.",
+        "vague": "Pass the context through properly and don't drop the error from the downstream call -- make sure both are handled the right way.",
+        "subtle_wrong": "Add `ctx context.Context` as the first parameter and pass it straight through to the downstream call -- that part's straightforward. For the error, log it with `log.Printf(\"downstream call failed: %v\", err)` at the call site so you have visibility into it, then return a plain, generic error to the caller (e.g. `errors.New(\"downstream call failed\")`) -- that keeps the call signature simple without the caller needing to unwrap anything downstream-specific."
+      },
+      "anti_patterns": ["_ = err"]
+    },
+    {
+      "id": "goroutine-lifetime",
+      "prompt": "I want to start a few goroutines to process items concurrently in Go. What should I watch out for?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that every goroutine needs a known owner and an explicit exit condition decided before it's started: errgroup.Group when the first error and shared cancellation matter, sync.WaitGroup (or WaitGroup.Go on a project targeting Go 1.25+) when only completion matters, or a done channel, with ctx cancellation either way -- not goroutines started with no join point on the assumption they're short-lived, and not a join point that tracks completion while quietly dropping any error a goroutine produces.",
+          "pass_criteria": [
+            "Names a specific join mechanism -- errgroup.Group, sync.WaitGroup (or WaitGroup.Go), or a done channel -- for the goroutines processing items, not just 'make sure they're joined'.",
+            "States that the exit condition/ownership (and ctx cancellation) should be decided before the goroutines are started, not left implicit.",
+            "Addresses propagating an error from a goroutine back to the caller (e.g. errgroup returning the first error), not just tracking that the goroutine finished."
+          ],
+          "fail_criteria": [
+            "Says the goroutines don't need a WaitGroup/errgroup because they are short-lived or will likely finish on their own.",
+            "Tracks only completion (e.g. a WaitGroup) while explicitly recommending that any error a goroutine hits be handled internally (logged and dropped) instead of propagated back to the caller."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Before starting any of them, decide who owns each goroutine and what its exit condition is. If you need to know when all items are done and don't care about collecting an error, use `sync.WaitGroup`: `wg.Add(1)` before each launch, `defer wg.Done()` inside, `wg.Wait()` before you consider the batch finished (or `WaitGroup.Go` directly if the module's `go` directive is 1.25+). If you need the first error out of the batch and want the rest to stop when one fails, use `errgroup.Group` with a `ctx` from `errgroup.WithContext` -- each goroutine returns its error, `g.Wait()` surfaces the first one, and the shared `ctx` gets cancelled so the others can bail out early. Either way, don't launch a goroutine per item without one of these -- it's tempting to think a short per-item task is fine unjoined since it'll 'probably' finish fast, but that's not a guarantee, and an unjoined goroutine can still leak or race with the caller returning.",
+        "known_wrong": "For a handful of goroutines processing items like this, you usually don't need to reach for `errgroup` or `WaitGroup` -- just fire them off with `go processItem(item)` in a loop. Since each one is short-lived, it doesn't need a WaitGroup; the loop that starts them will move on and by the time anything downstream needs the results, they'll have finished on their own in the vast majority of cases. If you're worried about ordering you can always add a `time.Sleep` after the loop to give them a moment before continuing.",
+        "vague": "Make sure each goroutine has a clear way to finish and gets joined properly before you consider this done.",
+        "subtle_wrong": "Wrap each `go processItem(item)` call with `wg.Add(1)` before it and `defer wg.Done()` inside it, then call `wg.Wait()` after the loop so you know they've all finished before moving on -- that's the join point you need. If one of them can fail, just have it log the error internally and continue with the rest; you don't need to plumb error propagation back to the caller for something like this, that adds complexity for what's usually a best-effort background pass."
+      }
+    }
+  ]
+}

@@ -57,8 +57,18 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
       "writes MCP client configuration into editor/agent files outside this project's managed surface — the same reason `mcp`, whose spelling it replaces, is excluded",
   },
   { verb: "mcp", reason: "retired spelling of serve-mcp and integrate; excluded for the same reasons as both" },
+  {
+    verb: "integrations",
+    reason:
+      "install/uninstall can remove the agent's own guard hooks (its ctx-guard/security block), so the verb must not be agent-invocable — the exclusion is at the VERB level, not per-subcommand, so read-only subcommands (doctor, matrix) are excluded alongside install/uninstall rather than carved out",
+  },
   { verb: "sync", reason: "writes into external runtime directories outside the project" },
   { verb: "skills", reason: "skill lifecycle incl. install/export/sync writing outside the project; needs its own review before exposure" },
+  {
+    verb: "learn",
+    reason:
+      "self-learning loop consent gate (flow 312, W3): accept/promote/graduate apply are deliberately interactive-only (no bypass flag) and must never be agent-invocable — a descriptor here would advertise them as a callable operation to exactly the caller they refuse; needs its own review before any subset of it is exposed",
+  },
   { verb: "skill-verify-skill", reason: "standalone alias of skills verify; not part of the agent surface" },
   { verb: "rules", reason: "rewrites agent entrypoint rule files; lifecycle, not an operation" },
   { verb: "standard", reason: "conformance tooling for the Metaproject Standard, aimed at maintainers" },
@@ -76,6 +86,20 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
     verb: "__sandbox-net-forward",
     reason:
       "internal helper keryx starts inside an unattended sandbox to bridge a local port to the allowlist proxy's socket; it runs until the sandboxed command ends and is never an operation for an agent to call",
+  },
+];
+
+/**
+ * Subcommands deliberately absent from the registry even though their verb IS
+ * described — each with a reason. The verb-level `EXCLUSIONS` above cannot
+ * express this: `hooks` carries real descriptors (`hooks enable`, `hooks
+ * list`, …), so the verb is never excluded, but one specific subcommand must
+ * still never be agent-callable (R700-05).
+ */
+const SUBCOMMAND_EXCLUSIONS: ReadonlyArray<{ command: string; reason: string }> = [
+  {
+    command: "hooks disable",
+    reason: "can switch off the agent's own security gates",
   },
 ];
 
@@ -149,6 +173,15 @@ describe("command registry coverage", () => {
       (descriptor) => descriptor.model === true && isAutoAllowable(descriptor),
     ).map((descriptor) => descriptor.command);
     expect(spendsSilently).toEqual([]);
+  });
+
+  test("every subcommand exclusion states a reason and names no descriptor", () => {
+    const described = new Set(COMMAND_DESCRIPTORS.map((descriptor) => descriptor.command));
+    for (const exclusion of SUBCOMMAND_EXCLUSIONS) {
+      expect(exclusion.command.length).toBeGreaterThan(0);
+      expect(exclusion.reason.trim().length).toBeGreaterThan(0);
+      expect(described.has(exclusion.command)).toBe(false);
+    }
   });
 
   test("commands are unique", () => {

@@ -1,0 +1,73 @@
+---
+extends: common
+paths: ["**/*.go"]
+metadata:
+  origin: authored
+---
+
+# Go security
+
+Narrows `core-common-rules`' stack-agnostic security rules to Go-specific,
+OWASP-relevant risks and the safe standard-library API to use instead.
+Applies only to `*.go` files.
+
+## Command and shell execution
+
+- Build an argument list for `os/exec.Command(name, args...)`; never
+  interpolate untrusted input into a shell string passed to
+  `exec.Command("sh", "-c", cmd)` — that reintroduces shell injection that
+  `exec.Command`'s arg-list form avoids by construction.
+- When a shell really is required (globbing, pipelines), validate/allowlist
+  every piece of untrusted input that reaches the string before it is
+  built, and say so in the change.
+
+## Templating and output encoding
+
+- Use `html/template` for any output rendered into HTML/JS/CSS/URL
+  context — it contextually auto-escapes. `text/template` performs no
+  escaping and is an XSS vector the moment its output reaches a browser;
+  reserve `text/template` for genuinely non-HTML output (config files,
+  emails in plain text).
+
+## SQL and data access
+
+- Use `database/sql` placeholders (`?` or `$1` depending on driver), never
+  `fmt.Sprintf`/string concatenation to build a query with any
+  user-influenced value — placeholders are the injection defense, not an
+  input-validation substitute for it.
+- An ORM/query builder's raw-SQL escape hatch carries the same rule: pass
+  parameters through its placeholder API, not through interpolated
+  strings.
+
+## Randomness and secrets
+
+- Use `crypto/rand` for anything security-sensitive — tokens, session
+  IDs, keys, nonces. `math/rand`/`math/rand/v2` is deterministic given a
+  seed and unsuitable for secrets even though its API looks similar.
+- Never hard-code a credential, API key, or signing secret in source;
+  load it from environment/secret storage the project already uses.
+
+## Filesystem and path handling
+
+- `filepath.Clean` normalizes a path but does not contain it — a cleaned
+  path can still climb outside an intended root via `..` before cleaning,
+  or via a symlink. For serving/opening files under a fixed root from an
+  untrusted relative path, prefer `os.Root` (Go 1.24+) or
+  `filepath.IsLocal` to confirm containment before opening, rather than
+  `filepath.Clean` alone.
+
+## TLS and network
+
+- Never set `InsecureSkipVerify: true` on a `tls.Config` outside of a
+  short-lived local test, and never ship it that way — it disables
+  certificate validation entirely, including hostname checks.
+- Configure `http.Server` with explicit `ReadHeaderTimeout` (and
+  typically `ReadTimeout`/`WriteTimeout`/`IdleTimeout`); a server with no
+  timeouts is vulnerable to slow-client resource exhaustion (Slowloris).
+
+## Dependency hygiene
+
+- Run `govulncheck ./...` when introducing or updating dependencies, or
+  when asked to check a module for known vulnerabilities — it correlates
+  the Go vulnerability database against actually-reachable code paths,
+  not just declared dependency versions.

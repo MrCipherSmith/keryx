@@ -1,0 +1,48 @@
+[
+  {
+    "id": "R3-F1",
+    "reviewer": "opus-adversarial-r3",
+    "severity": "minor",
+    "problem": "Surface decisionCodec and HarnessAdapter.decisionCodec are two sources of truth with no coherence check",
+    "impact": "A W5-b stdout-JSON adapter could get mismatched codecs and fail open on native-search/security refusals.",
+    "suggested_fix": "Single source: surface codec derived from the adapter, or coherence check with negative control.",
+    "evidence": "Mutation: cursor adapter codec -> EXIT_CODE survives src/integrations.",
+    "confidence": "high",
+    "file": "src/integrations/registry.ts",
+    "line": 239,
+    "global_id": "2026-09-24-ingest-feat-agent-platform-expansion#R3-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 667fc74f: SurfaceAdapter has no decisionCodec; ctx runtimes take the adapter codec; literal-shape test is non-circular; mutants M1 (cursor->exit-code) and M2 (antigravity->cursor) killed.",
+      "verifier": "round-4-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 667fc74f (squashed into c61784d3, PR #675), re-checked by the narrow verification round"
+    }
+  },
+  {
+    "id": "R3-F2",
+    "reviewer": "opus-adversarial-r3",
+    "severity": "minor",
+    "problem": "R2-F4(d) does not test round-1 F1 error propagation in the installer wrappers",
+    "impact": "Round-1 F1 fix has no regression test for security install or any uninstall path.",
+    "suggested_fix": "Optional owner override on the wrappers; assert ok:false / throw with a fake-sibling owner; drop the circular assertion.",
+    "evidence": "Mutations G5/G6 survive src/integrations, src/ctx, src/security, src/commands.",
+    "confidence": "high",
+    "file": "src/integrations/owner.test.ts",
+    "line": 78,
+    "global_id": "2026-09-24-ingest-feat-agent-platform-expansion#R3-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 667fc74f: six real wrappers driven with a refusing owner; mutants G5-G10 (each wrapper forced to succeed/swallow) all killed; circular assertion removed.",
+      "verifier": "round-4-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 667fc74f (squashed into c61784d3, PR #675), re-checked by the narrow verification round"
+    }
+  }
+]

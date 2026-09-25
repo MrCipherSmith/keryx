@@ -1,12 +1,14 @@
 import path from "node:path";
 import {
   validateSerializedContentForTransport,
+  type ExfilExemption,
   type OutputValidationResult,
 } from "./output-validation";
 import { readFile } from "node:fs/promises";
 import { pathExists } from "../lib/fs";
 import { loadSecurityConfig } from "./config";
 import { runDetectorsAsync } from "./detect";
+import { randomBytes } from "node:crypto";
 import { getHmacKey, hmacHash } from "./redact";
 import {
   computeGate,
@@ -37,6 +39,7 @@ import type {
   SecuritySource,
 } from "./types";
 import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
+import { sourceForFileRead as sourceForFileReadInternal } from "./read-source";
 
 /**
  * Validate serialized JSON structurally, or ordinary text without changing its format.
@@ -54,8 +57,61 @@ import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
  */
 export { redactSensitiveText } from "./redact";
 
-export function validateSerializedOutput(content: string): OutputValidationResult {
-  return validateSerializedContentForTransport(content);
+/**
+ * Re-exported here for the same reason as `redactSensitiveText` above: this is
+ * the facade, and a caller that needs to know whether a file read is
+ * `trusted-project` or `untrusted-external` (`ctx.ts`'s `redactRaw` call,
+ * `mcp/tools.ts`'s `security.scan` path handling) must go through it
+ * instead of reaching past it into `./read-source` directly, which the import
+ * policy counts as a bypass.
+ */
+export const sourceForFileRead = sourceForFileReadInternal;
+
+// Re-exported here for the same reason: a caller of `keryx security
+// audit-harness` (`commands/security-audit-harness.ts`) needs the
+// audit-harness entry points but must not reach past this facade into
+// `security/audit-harness/index.ts` directly.
+export {
+  addBaselineEntry,
+  applyAuditProposal,
+  auditGate,
+  defaultBaselinePath,
+  runHarnessAudit,
+} from "./audit-harness";
+export type { AuditFinding, AuditReport, AuditSeverity, ImportedBundleEntryKind, RunAuditOptions } from "./audit-harness";
+
+// Re-exported here for the same reason: `commands/security-impact-evidence.ts`
+// needs both the impact-evidence config helpers and the impact-evidence
+// module's own public door, without reaching past this facade into
+// `security/config.ts` or `security/impact-evidence/index.ts` directly.
+export { resolveImpactEvidenceConfig, resolveImpactEvidenceConfigTrusted, verifyConfigChecksum } from "./config";
+// `loadSecurityConfig` is already bound above via the top-of-file import
+// (this module's own `analyze`/`createSecurityService` use it); re-exported
+// under that same binding rather than a second `from "./config"` re-export,
+// which would collide with it as a duplicate identifier.
+export { loadSecurityConfig };
+export {
+  appendLogRecord,
+  computeImpactEvidence,
+  createImpactEvidenceProvider,
+  hostDeliveryStatus,
+  normalizeRequestFiles,
+  readLogRecords,
+  renderEvidenceBlock,
+} from "./impact-evidence";
+export type {
+  ImpactEvidenceDecision,
+  ImpactEvidenceLogRecord,
+  ImpactEvidenceProfile,
+  ImpactEvidenceReason,
+  ImpactEvidenceRequest,
+} from "./impact-evidence";
+
+export function validateSerializedOutput(
+  content: string,
+  exemptExfil?: ExfilExemption,
+): OutputValidationResult {
+  return validateSerializedContentForTransport(content, exemptExfil);
 }
 
 // Result of a full analysis: the decision plus the surfaced self-protection
@@ -69,6 +125,24 @@ export type AnalysisResult = {
 
 async function hashFnFor(cwd: string): Promise<(value: string) => string> {
   const key = await getHmacKey(cwd);
+  return (value: string) => hmacHash(value, key);
+}
+
+// O2-4: `scanContent` must perform NO security-state I/O at all (see its own
+// doc comment below) — `getHmacKey` persists `.metaproject/data/security/
+// raw/hmac.key` non-atomically (`writeFile` then a best-effort `chmod`) on
+// first use, which a high-frequency caller like the learning observer's
+// per-preview redaction scan would trigger on every process's first call. A
+// fresh, process-local, never-persisted key is generated instead: findings'
+// hash fields still hash with a real random key (never a fixed/empty one),
+// they are just not stable across process restarts or comparable to
+// `analyze`'s on-disk key — which `scanContent`'s only caller
+// (`src/learning/scan.ts`) never relies on, since it only ever reads
+// `decision.findings[].category`.
+let ephemeralHmacKey: string | undefined;
+function ephemeralHashFn(): (value: string) => string {
+  if (ephemeralHmacKey === undefined) ephemeralHmacKey = randomBytes(32).toString("hex");
+  const key = ephemeralHmacKey;
   return (value: string) => hmacHash(value, key);
 }
 
@@ -121,6 +195,46 @@ export async function analyze(
   }
 
   return { decision, warnings: selfProtection.warnings, config };
+}
+
+/**
+ * Side-effect-free variant of `analyze`: runs the same detectors + decision
+ * resolution, with NO state/incident I/O (no `readState`/`writeState`, no
+ * `appendIncidents`). For a caller that scans very frequently and does not
+ * itself want to participate in the self-protection state machine — e.g.
+ * `src/learning/scan.ts`'s per-preview redaction scan, which would otherwise
+ * write `.metaproject/data/security/raw/state.json` and risk appending
+ * incidents on every observation event. Accepts an already-loaded `config`
+ * so a repeat caller in the same process can load it once (`loadSecurityConfig`)
+ * rather than re-reading it from disk on every call.
+ */
+export async function scanContent(
+  cwd: string,
+  input: SecurityCheck,
+  opts: { config?: SecurityConfig } = {},
+): Promise<{ decision: SecurityDecision; config: SecurityConfig }> {
+  const config = opts.config ?? (await loadSecurityConfig(cwd));
+  const matches = await runDetectorsAsync(cwd, input.content, config);
+  // O2-4: never `getHmacKey`/`hashFnFor` here — that reads-then-writes
+  // `.metaproject/data/security/raw/hmac.key` on first use, which is exactly
+  // the security-state I/O this function's own contract (below) promises not
+  // to do.
+  const hashFn = ephemeralHashFn();
+
+  const buildOpts: BuildFindingOptions = {
+    source: input.source,
+    content: input.content,
+    hashFn,
+  };
+  if (input.target !== undefined) {
+    buildOpts.target = input.target;
+  }
+  if (input.path !== undefined) {
+    buildOpts.path = input.path;
+  }
+
+  const decision = resolveDecision(config, { ...buildOpts, matches });
+  return { decision, config };
 }
 
 // Scan a file/content, build a report, and write committable artifacts.

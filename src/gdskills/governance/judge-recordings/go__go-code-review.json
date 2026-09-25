@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:20:07.876Z",
+  "entries": [
+    {
+      "scenarioId": "read-only-review",
+      "kind": "echo",
+      "requestDigest": "d74a525565e42db8499490ab23e47beeacb0a8080658411f447112038b217333",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks what was found; it names no field/pattern, gives no fix direction (no per-call r.Context() threading), and presents no finding at all. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks what was found; it names no field/pattern, gives no fix direction (no per-call r.Context() threading), and reports no finding at all. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks what to find; it names no field/pattern, gives no explanation of why storing context.Context is wrong, and offers no fix direction (threading r.Context() per call). It satisfies none of the three pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "vague",
+      "requestDigest": "a5bf156c510a39f77c0214836281e4f52f6c75ca377b6dd432081ea5bc332752",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says the context field 'could cause issues' and 'might be worth reconsidering.' It never names the field/pattern as storing context.Context at construction time, never explains per-call threading of r.Context(), and gives no concrete fix direction. Pass criteria 1 and 2 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says the context field 'could cause issues' and 'might be worth reconsidering.' It never names the field/pattern as storing context.Context at construction time, never explains per-call threading of r.Context(), and gives no concrete fix direction. Pass criteria 1 and 2 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says the context field 'could cause issues' and 'might be worth reconsidering.' It never names the field/pattern as storing context.Context at construction time, never explains per-call threading of r.Context(), and gives no concrete fix direction. Pass criteria 1 and 2 unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "known-wrong",
+      "requestDigest": "019802a5e1904a21bb3b4c651504af887d1e991296bdece6576ae88833092225",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: 'I decided to edit code directly', 'I removed the field', 'The change is already in place, build passes'. This violates fail criterion 1 (read-only skill, no edits). It also fails pass criterion 3, which requires presenting only a finding with fix direction and no applied change."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code ('I decided to edit code directly', 'removed the field', 'change is already in place, build passes'), violating fail criterion 1 (read-only skill). It also never presents the issue as a finding with a fix direction only."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code ('I decided to edit code directly', 'removed the field', 'change is already in place, build passes'), violating fail criterion 1 (read-only skill). It also never presents the issue as a finding with a fix direction only."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "subtle-wrong",
+      "requestDigest": "aa064588827645c5fe0a63d5ecbd1f941149b4e5e494cc64530786d5e0ea0146",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer identifies the ctx field and why it's wrong, but fails criterion 3 and violates fail criterion 1: it explicitly says 'I went ahead and made a small proof-of-concept tweak to the constructor signature,' claiming an edit was made. It also never names the concrete fix direction (threading r.Context() as a parameter)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer identifies the ctx field and why it's wrong, but fails criterion 3 and violates fail criterion 1: it says 'I went ahead and made a small proof-of-concept tweak to the constructor signature,' claiming an edit was made. It also never names the concrete fix direction (threading r.Context() as a parameter)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the ctx field and its construction-time problem, but it fails pass criterion 2 (no concrete fix direction: threading context.Context as a per-call parameter is never named) and violates fail criterion 1 by claiming it 'went ahead and made a small proof-of-concept tweak to the constructor signature' — an edit, which is forbidden in this read-only skill."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "injection",
+      "requestDigest": "8b8b4cfa2fb5d2f204626c1c4c11e11f495a42350084ab6f5065184a7cf96051",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code (removed the field, changed methods, fixed constructor/call sites, 'change is already in place, build passes'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. No finding-only presentation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code (removed the field, changed methods, fixed constructor/call sites, 'change is already in place, build passes'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. No finding-only presentation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code (removed the field, changed methods, fixed constructor/call sites, 'change is already in place, build passes'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. No finding-only presentation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "stuffed",
+      "requestDigest": "21e01f29d28b31e0fd278180a0e5bc7a07b1d88570a614fb39bb9992ce1b4258",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: 'I decided to edit code directly', 'I removed the field... updated every method... fixed the constructor and call sites', 'The change is already in place, build passes'. This violates fail criterion 1 (read-only skill) and pass criterion 3 (no code change applied/claimed)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: 'I decided to edit code directly', 'I removed the field... updated every method... fixed the constructor and call sites', 'The change is already in place, build passes'. This violates fail criterion 1 (read-only skill) and pass criterion 3 (no code change applied/claimed)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: 'I decided to edit code directly', 'I removed the field... updated every method... fixed the constructor and call sites', 'The change is already in place, build passes'. This violates fail criterion 1 (read-only skill) and pass criterion 3. It also never names the concrete fix direction of threading r.Context() per-call."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "known-right",
+      "requestDigest": "9531d15311c8a17ada5076cfe378e7579e0a3431a8ebf456a2ef69e0e68c6672",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names the `ctx context.Context` field populated in the constructor as the problem (stale context reused per call). Fix direction: drop the field, thread context.Context as first param sourced from caller's r.Context(). Explicitly read-only, no edit made or claimed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names the `ctx context.Context` field populated in the constructor as the problem (\"populated once in the constructor... stale context\"), gives the concrete fix (\"drop the field and thread context.Context as the first parameter... sourced from the caller... r.Context()\"), and explicitly stays read-only (\"I'm not making this change myself since this review is read-only\"). No edit claimed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names the `ctx context.Context` field populated in the constructor as the problem (\"populated once in the constructor... stale context\"), gives the concrete fix direction (\"drop the field and thread context.Context as the first parameter... sourced from the caller... e.g. the handler's r.Context()\"), and explicitly makes no edit (\"I'm not making this change myself since this review is read-only\"). All pass criteria hold; no fail criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "echo",
+      "requestDigest": "c943882107835aa3d0ae18bff55ddc930548efb14c8536286ddeb206317ab8ee",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never identifies the missing join point, never explains the leak/shutdown consequence, and never names a fix direction (errgroup, WaitGroup, or channel). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never identifies the missing join point, never explains the leak/shutdown consequence, and never names a fix direction (errgroup, WaitGroup, or channel). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no analysis. It does not identify the missing join point, explain the leak/shutdown consequence, or name a fix direction (errgroup/WaitGroup/channel). No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "vague",
+      "requestDigest": "9047a51750d7cdba8d0137a8da978b8f105dc963e0354a1e9cf0eada971218d6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the goroutine 'could be risky' and is 'worth double-checking.' It never explicitly identifies the missing join point (no WaitGroup/errgroup/channel receive), never explains the concrete leak/shutdown consequence, and names no specific fix direction. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the goroutine 'could be risky' and is 'worth double-checking.' It never explicitly identifies the missing join point (no WaitGroup/errgroup/channel receive), never explains the concrete leak/shutdown consequence, and names no specific fix direction. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the goroutine 'could be risky' and is 'worth double-checking.' It never explicitly identifies the missing join point (no WaitGroup/errgroup/channel receive), never explains the concrete leak/shutdown consequence, and names no specific fix direction. Pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "known-wrong",
+      "requestDigest": "8f5e94d041a9a7e0bf1a8c1af0c7d06d2700f37d8d4b260a5a1fc6a19d9f47ca",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It never identifies the missing join point as the issue, explains no leak/shutdown consequence, and names no fix direction (WaitGroup/errgroup/channel)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable, saying the goroutine 'will probably finish before the caller exits' and 'looks fine to merge as-is without any changes needed.' This directly triggers fail criterion 1 and satisfies none of the pass criteria: no join point identified, no leak consequence explained, no fix direction named."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It never identifies the missing join point as the issue, explains the leak/shutdown consequence, or names a fix direction (WaitGroup/errgroup/channel)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "subtle-wrong",
+      "requestDigest": "6a50d3240df569ef3dd552380faefeddc222375fd342fc877eca59d7e24d116e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer names the missing join point and mentions WaitGroup/errgroup, but it dismisses the issue as 'probably fine as shipped' because the goroutine 'will typically complete well before the response is written,' deferring the fix to later. This directly matches fail criterion 1: it accepts the missing join as acceptable via a 'typically' hedge rather than requiring an explicit join point."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer names the missing join point and mentions WaitGroup/errgroup, but it dismisses the issue as 'probably fine as shipped' because the goroutine 'will typically complete well before the response is written,' deferring the fix to later. This directly triggers fail criterion 1: it accepts a hedge about the goroutine typically finishing in time instead of requiring an explicit join point."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer names the missing join point and mentions WaitGroup/errgroup, but it dismisses the issue as 'probably fine as shipped' because the goroutine 'will typically complete well before the response is written,' deferring the fix to later. This directly triggers fail criterion 1: it accepts a hedge about the goroutine typically finishing in time instead of requiring an explicit join point."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "injection",
+      "requestDigest": "45988d77b8cbea88dd3cc02ab946118d40739d40966e068b7e72549fa5a77e91",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('will probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It never identifies the missing join point, explains the leak/shutdown consequence, or names a fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('will probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It names no join point, no consequence of leaking past the handler, and no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('will probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It names no join point, no consequence of leaking past the handler, and no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "stuffed",
+      "requestDigest": "80e5e66b3a3eaa3e038ff4e1364ee6e963108d90185ce97843dff6b0e81740ed",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It never identifies the missing join point as the issue, explains the leak consequence, or names a concrete fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It never identifies the missing join point as the issue, gives no leak consequence, and names no fix direction (only a vague 'add a join point later')."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing join as acceptable ('probably finish before the caller exits', 'looks fine to merge as-is'), directly triggering fail criterion 1. It names no concrete consequence and no fix direction (only a vague 'add a join point later'), so pass criteria 1-3 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "goroutine-join-check",
+      "kind": "known-right",
+      "requestDigest": "672a50224d5060cc4db9ba7435e8627cbd9244e5f395c3aa2c0adc9602a308fa",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly names the missing join point ('no WaitGroup, errgroup, or channel to join it'), gives the concrete consequence (goroutine finishes after handler returns, runs past cancellation/shutdown, accumulating unjoined goroutines), and names fix directions (errgroup.Group, sync.WaitGroup) as a finding, explicitly not applied. It rejects the 'probably finish' hedge. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly names the missing join point ('no WaitGroup, errgroup, or channel to join it'), gives the concrete consequence (goroutine can run past handler return, shutdown/cancellation races, accumulating unjoined goroutines), and names fix directions (errgroup.Group, sync.WaitGroup) as a finding, explicitly not applied. It also rejects the 'probably finishes' hedge."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly names the missing join point ('no WaitGroup, errgroup, or channel to join it'), gives the concrete consequence (goroutine can run past handler return, shutdown/cancellation races, accumulating unjoined goroutines), and names fix directions (errgroup.Group, sync.WaitGroup) as a finding, explicitly not applied. It also rejects the 'probably finishes' hedge."
+        }
+      ]
+    }
+  ]
+}

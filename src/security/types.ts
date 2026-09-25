@@ -180,6 +180,15 @@ export type SecurityReport = {
   integrations?: Record<string, unknown>;
 };
 
+// Per-(policy id, source) action override (GDCTX-2, egress-only today — see
+// `EGRESS_POLICY_SCHEMA` in schemas.ts). Keyed by the detector's `policyId`
+// (e.g. `egress.html-image-exfil`), then by `SecuritySource`. Data, not a
+// hardcoded branch: a project can tighten or loosen the shipped default by
+// editing `security.config.json`, no code change required.
+export type SourceOverrideTable = Partial<
+  Record<string, Partial<Record<SecuritySource, SecurityAction>>>
+>;
+
 export type PolicyConfig = {
   enabled: boolean;
   action: SecurityAction;
@@ -189,6 +198,12 @@ export type PolicyConfig = {
   // send-verb proximity behavior byte-for-byte (AC2.3). When non-empty it is
   // covered by `configChecksum` so tampering is detected.
   allowlist?: string[];
+  // Egress-only (GDCTX-2): per-(policyId, source) action override. `allow` for
+  // a `url`-masked match is applied only when the URL carries no
+  // credential-shaped query string (`resolve.ts#egressSourceOverrideAction`) —
+  // the override never bypasses that gate, it only decides whether the gate is
+  // consulted at all for this (policy, source) pair.
+  sourceOverrides?: SourceOverrideTable;
 };
 
 // Block E (E1): opt-in semantic injection backend on the shipped `backends`
@@ -199,6 +214,18 @@ export type InjectionModelBackend = {
   size: string; // "22M" | "86M"
   assetId: string; // resolved via Block 0 assets.lock.json
   minConfidence: number;
+};
+
+// Flow 308 (W8, Lane B, T6): the impact-evidence gate's own config block.
+// Deliberately OPTIONAL and top-level (sibling of `policies`, not nested
+// inside it) — see `config.ts#computeConfigChecksum` for why: a config file
+// written before this feature shipped has no `impactEvidence` key at all, and
+// its checksum must stay byte-identical to what it was before this landed.
+export type ImpactEvidenceConfig = {
+  enabled: boolean;
+  strict: boolean;
+  exemptGlobs: string[];
+  dampenAfter: number;
 };
 
 export type SecurityConfig = {
@@ -214,6 +241,9 @@ export type SecurityConfig = {
     egress: PolicyConfig;
     artifactSafety: PolicyConfig;
   };
+  // Present only when the source config declares it (see `mergeSecurityConfig`
+  // in `config.ts`) — absence is what keeps an old config's checksum unchanged.
+  impactEvidence?: ImpactEvidenceConfig;
   backends: {
     rules: { enabled: boolean };
     entropy: { enabled: boolean };

@@ -1,0 +1,70 @@
+{
+  "triggers": {
+    "positive": [
+      "Write Vitest tests for this order calculation function in our TypeScript service",
+      "Add node:test coverage for the new CLI command in this Node project",
+      "Fix this failing Jest test that's timing out on the debounce logic",
+      "Mock the fetch call in this node:test file so it doesn't hit the real API",
+      "Add fake timers to this test for the setInterval-based polling function",
+      "Extend the test suite for this Node library's exported parseConfig function"
+    ],
+    "negative": [
+      "Write pytest fixtures for this Flask view function",
+      "Implement the new order creation handler in this Express service",
+      "Review this diff for resource cleanup and dependency risk",
+      "Migrate this test suite's imports from CommonJS to ESM",
+      "Fix this tsc type error in the test helper module",
+      "Write Playwright end-to-end tests for the checkout page in this React app"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "discover-runner-first",
+      "prompt": "This Node.js TypeScript repo's test setup isn't described here. Write a test for a function `sumOrderTotals(orders)`. What should you check before writing the test file?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says to first discover which test runner and conventions this project actually uses (package.json scripts.test/devDependencies, config files, and existing test file layout/imports) before writing the test file.",
+          "pass_criteria": [
+            "Names the concrete places to check: package.json's scripts.test/devDependencies, or a vitest.config.*/jest.config.* file -- not just 'check the project setup' in the abstract",
+            "Says to open an existing test file to read its actual import source (e.g. from vitest, jest, or node:test) and layout convention, and match it, rather than assuming a runner"
+          ],
+          "fail_criteria": [
+            "Picks a specific runner (e.g. Jest, Vitest) and writes the test immediately without first checking what the project actually uses"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Before writing anything, find out what this project actually runs. Check package.json's scripts.test and devDependencies for vitest, jest, or neither (which usually means node:test or bun test), and look for a vitest.config.* / jest.config.* file. Then find the existing test layout -- co-located *.test.ts files next to source, or a parallel test/ / __tests__/ tree -- and open one or two existing test files to see the import source for describe/it/expect (or assert), the mocking style already in use, and how async tests are structured there. Only once that's established should the sumOrderTotals test file be created, at the same path convention and with the same runner's imports, so it matches the rest of the suite instead of introducing a second, inconsistent test style.",
+        "known_wrong": "Vitest is the standard choice for a TypeScript project these days, so I'll just write the test using vi and describe/it from vitest and put it at src/orders/sumOrderTotals.test.ts. That's the most common modern setup so it's a safe default even without checking what's already configured here -- if the project actually uses something else, the imports are easy enough to swap afterward.",
+        "vague": "Before writing the test, it's a good idea to check how this project's tests are usually set up so the new test fits in.",
+        "subtle_wrong": "First I'd check package.json's devDependencies to see whether vitest or jest is installed, and use whichever one shows up -- say it's vitest, then I'd write the test with import { describe, it, expect } from 'vitest' at src/orders/sumOrderTotals.test.ts, which is the standard co-located layout for a TS project. No need to dig through an existing test file first since the devDependency already tells you which runner, and the standard path/import style follows from that."
+      }
+    },
+    {
+      "id": "mock-boundary-not-internal",
+      "prompt": "I'm writing a test for a function that calls an internal helper `formatOrder` and also calls out to a network client `httpClient.get`. What should I mock?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says to mock the network client (httpClient.get), the process boundary, and explicitly says NOT to mock the internal helper formatOrder, since mocking internal collaborators only checks the mocks agree with each other.",
+          "pass_criteria": [
+            "Names httpClient.get specifically as the thing to mock (the network client / external boundary) -- not just 'mock the network call' in the abstract",
+            "Explicitly says NOT to mock formatOrder, naming it as an internal helper in the same package that should run for real"
+          ],
+          "fail_criteria": [
+            "Recommends mocking the internal helper formatOrder -- mentioning formatOrder only to say it should NOT be mocked, as part of a correct answer, does not count as this failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Mock httpClient.get -- that's the process boundary, a real network call to another service, which is exactly what should be mocked in a unit test so it's deterministic and doesn't hit the network. Don't mock formatOrder: it's an internal helper living in the same package, so let it run for real. If you mock it too, the test degenerates into checking that your mock of formatOrder agrees with your mock of httpClient.get -- it stops verifying that the function under test actually formats and fetches correctly together, and it'll keep passing even if formatOrder's real behavior regresses. So: stub/mock httpClient.get to return canned response data, call the function under test normally (letting it call the real formatOrder), and assert on the final output.",
+        "known_wrong": "Mock both -- mock the internal helper formatOrder so you can control exactly what it returns without depending on its real implementation, and also mock httpClient.get for the network call. Mocking formatOrder makes the test simpler and more isolated since you don't need to worry about its internals changing the assertions; you're testing the function's orchestration logic, not formatOrder itself, so stubbing it out keeps the test focused and easy to reason about.",
+        "vague": "Mock the external call so the test stays isolated and deterministic, and be careful about which other pieces you decide to mock too.",
+        "subtle_wrong": "Mock httpClient.get since that's the real network boundary -- stub it to return canned response data. For formatOrder, I'd normally let it run for real, but since it has some locale-dependent formatting that's noisy to set up deterministically in this environment, I'd mock it too just for this test so the output is stable and the assertions aren't fighting with formatting differences."
+      }
+    }
+  ]
+}

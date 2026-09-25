@@ -368,7 +368,7 @@ its model.
 | `/status` | The session id, project root, model, reasoning effort, the tools the session's turns are offered, and whether the client's MCP servers are running. |
 
 Every other shell command is left out because it needs the terminal UI —
-`/workspace`, `/review`, `/governance`, `/triggers`, `/integrations`, `/mcp`,
+`/workspace`, `/review`, `/governance`, `/triggers`, `/integrate`, `/mcp`,
 `/game` and the pickers — or
 a session feature this wire does not carry. One typed anyway is answered with
 the list above rather than sent to the model.
@@ -2136,6 +2136,147 @@ only files a run writes are its own two artifacts, below.
 
 ---
 
+## hooks
+
+```
+keryx hooks list [--json]
+keryx hooks validate [--json] [--ci]
+keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
+keryx hooks enable <id> [--user]
+keryx hooks trust [--yes]
+keryx hooks untrust
+keryx hooks disable <id> [--user] [--acknowledge-gate-risk]
+```
+
+Project command hooks run only after `keryx hooks trust`; changing the file
+revokes trust. A project file cannot disable a built-in gate; `--user
+--acknowledge-gate-risk` can.
+
+The CLI over `keryx shell`'s lifecycle hook runtime (W6): ten named events
+(`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`PostToolUseFailure`, `PreCompact`, `Stop`, `SubagentStart`, `SubagentStop`,
+`SessionEnd`), a config-file pair merged over Keryx's five built-in
+registrations: **built-in < user (`~/.keryx/hooks.json`) < project
+(`.metaproject/hooks.json`, version-controlled, highest precedence)**.
+
+| Subcommand | Description |
+|---|---|
+| `list` | Print the merged, resolved registration set — id, event(s), matcher, class, scope, enabled, appliesToChildAgents, timeoutMs, and the command/argv or `builtin` name. A built-in registered on several events (e.g. `keryx.learning-observer`) is one row with an `events` array. With no config files present, exactly the five built-ins (`keryx.ctx-guard`, `keryx.security-check-input`, `keryx.security-check-output`, `keryx.learning-observer`, `keryx.impact-evidence`), all `enabled: true`. A config error prints diagnostics and exits non-zero. |
+| `validate` | Validate both `.metaproject/hooks.json` and `~/.keryx/hooks.json` against `hook-config.schema.json`: schema conformance, a project/user id colliding with a built-in (`hook-id-collides-with-builtin`), a duplicate id, and — best-effort, no execution — that each hook command's `argv[0]` resolves (an absolute path exists, or is found on `PATH`; `keryx` always resolves). An unresolved `argv[0]` is a warning, never a reason to fail. Exit is non-zero on any diagnostic; `--ci` is accepted for a machine-friendly pipeline invocation and changes no exit-code semantics beyond what `--json` already gives. |
+| `test <id>` | Run one registered hook once, through the real runner (`createRealHookRunner`), against a synthetic payload for its event — or the JSON in `--payload-file` — and report its decision (parsed through the same codec the runtime uses), exit code, stdout/stderr (truncated), duration, failure class, and what the failure-semantics effect would be under `--profile` (default `monitored-trusted-local`). The two in-process built-ins (`keryx.learning-observer`, `keryx.impact-evidence`) report their port's result instead of a process exit code. `--event <name>` picks which event to run under when the id is registered on more than one (e.g. the observer). Exit is `0` whenever the hook ran — even when it denied, timed out or crashed — and non-zero only when the id is unknown or the config fails to load. |
+| `enable <id>` / `disable <id>` | Flip a registration's enabled state in the project file by default, or `~/.keryx/hooks.json` with `--user`, creating it with `{schemaVersion:"1.0.0", hooks:{}}` if absent. For a built-in id: `disable` writes a disable-only override (`{id, enabled:false}`) into every event list the built-in is registered on, and `enable` removes exactly that Keryx-managed override — refusing (non-zero, no write) if the override present is not one `_keryxManaged.managedHookIds` records, since that means a person wrote it by hand. For a project/user hook defined in that file: `disable`/`enable` flips its own `enabled` field, without deleting or reordering any other entry. Every write is atomic (temp file + rename) and the resulting document is re-validated against the schema before it lands — an invalid result is refused with nothing written. Unknown id: non-zero, nothing written. |
+
+### `_keryxManaged`
+
+`hooks enable`/`disable` record what THEY added or changed in
+`_keryxManaged: {tool: "keryx", version: <cli version>, managedHookIds: [...]}`,
+so a later call — or a person reading the file — can tell a Keryx-written
+entry from a hand-authored one and never silently overwrites the latter. This
+is the same discipline as the host-config installers `keryx orient
+install-hook`/`keryx security hooks install` already use for `.claude/settings.json`
+and friends, applied to Keryx's own two files.
+
+---
+
+## bundle
+
+```
+keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]
+keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run] [--json]
+keryx bundle import <catalog-dir> --external [--dry-run] [--json]
+keryx bundle inspect <bundle> [--target-scope <scope>] [--json]
+keryx bundle verify <bundle> [--json]
+keryx bundle verify --external-imports [--json]
+keryx bundle uninstall <bundleId> --target-scope <scope> [--dry-run] [--json]
+```
+
+Flow 313 (W4 portability): move skills, rules, agents, memory entries,
+learned patterns and hook config between scopes and machines as a single
+sha256-content-addressed, manifest-described bundle — a directory (with
+`bundle.json` at its root) or a deterministic `.tar.gz`. This command never
+prints file contents, only paths/sha256/counts, and every write goes through
+one lifecycle: **plan -> W8 audit -> apply**, all-or-nothing. A refusal at any
+stage means zero bytes were written; `applyBundlePlan` itself re-checks every
+target's checksum immediately before writing (a TOCTOU guard) and rolls back
+every write it already made if any single one fails.
+
+**Scope roots.** `project`/`team` share `.metaproject/` at the project root
+(`team` is a labeling discipline over the same tree, not a separate
+directory); `user` resolves to `~/.keryx/` (`KERYX_HOME`, or an explicit
+`--home-dir`-style override in tests, wins over the real home directory —
+the same resolution `keryx hooks` uses for `~/.keryx/hooks.json`).
+
+| Subcommand | Description |
+|---|---|
+| `export` | Collect every matching skill/rule/agent/memory-entry/learned-pattern/hook-config under `--scope`'s root, filtered by `--include` glob(s) and/or `--kind`, and write a bundle to `<out>` (a `.tar.gz`/`.tgz` path, or an empty/absent directory). `--id` overrides the default deterministic `bundleId`: for `project`/`team` with a git remote, a hash of that remote's normalized identity (`keryx-<scope>-<hash>`); for `user` scope, or `project`/`team` with no remote, a hash of the export's own sorted `path\tsha256` content list instead — so two unrelated exports never collide on id, and the same content always reproduces the same id. Because that default id changes whenever content changes, re-exporting the SAME logical bundle across its lifetime should pass the SAME `--id` every time (persist it alongside the bundle) — that is what keeps `bundle import`'s ownership tracking (see `import` below) recognizing a re-export as an update from the same bundle rather than a takeover requiring `--force`. `--target-harness` records advisory harness ids in the manifest's `compat.targetHarnesses`, checked back against the capability matrix by `bundle inspect`. Refuses (no bytes written) on any invalid `hook-config`/`learned-pattern` content, an unparseable agent frontmatter, a source file/directory name that is not portable (`path-escape` — ASCII letters/digits/`.`/`_`/`-` only, no leading `.`), a match set of zero entries (`empty-bundle`), or an `<out>` that already exists non-empty. |
+| `import` | **Plan**: verify every entry's checksum against the bundle first (any mismatch refuses before anything else runs). An entry whose `scope` differs from the bundle's own `provenance.sourceScope` is refused (`scope-mismatch`) unless `--target-scope` is passed, so a bundle cannot silently write into a different scope than the one it claims to be from — e.g. a "project" bundle smuggling a `scope: user` `hooks.json` into `~/.keryx/`. A `hook-config` entry additionally requires `--allow-hooks`, or it is refused (`hooks-require-opt-in`). Each surviving entry is then diffed against the target scope's disk state and applied-state ledger into a bucket — `new`, `identical`, `update` (Keryx wrote the current bytes last time, AND this same bundleId owns that ledger record), or `conflict` (the current bytes match neither the incoming nor the ledger — a hand edit, an unmanaged pre-existing file, or content unchanged since a DIFFERENT bundleId last wrote it — `owned-by-other-bundle`, so one bundle can never silently take over a file another bundle still owns). Ownership is not decided by a matching `bundleId` alone — a hand-crafted bundle can declare any `bundleId` string it likes. When the ledger record for a target carries a `provenance.sourceProject` (recorded from the bundle that last wrote it) and this import's own manifest `provenance.sourceProject` differs from it — including either side simply lacking the field while the other has one — the target is `owned-by-other-bundle` too, even though the `bundleId` itself matches. `sourceProject` is trust-on-first-use, not a forgery barrier: it is a plain sha256 hash of the source project's normalized git remote identity, computed at export time, carried in cleartext in every `bundle.json`, and reproducible by anyone who knows (or can guess) that remote — a hand-crafted bundle can trivially populate it to match a prior record. What it protects against is *accidental* cross-project clobbering — two unrelated projects that happen to reuse the same `bundleId` — not a deliberate attacker who has seen an exported bundle or knows the source repository's remote. When NEITHER the recorded entry NOR the incoming manifest has ever declared a `sourceProject` (no git remote at either bundle's export time), the two cannot be distinguished this way and the plain `bundleId` match alone decides `update` vs `new` — this is the same trust-on-first-use: the FIRST bundle to write a path under a given `bundleId` is trusted, and Keryx has no way to later prove a same-`bundleId` re-import (with or without a matching `sourceProject`) is the same producer rather than a spoof. A `conflict` entry blocks the whole import unless its `targetRelative` or `displayId` (`scope:path`) is named in `--force`; forcing an `owned-by-other-bundle` conflict transfers ownership of that path to this import's `bundleId` (recorded in the ledger, and printed with its `(owned-by-other-bundle)` reason). Every such forced takeover is also reported as its own `transferred` entry — `{displayId, from: <previous bundleId>, fromSourceProject?: <previous sourceProject>}` in `--json`, a `transferred <path> from <bundleId>` line in human output — not merged into an ordinary `written`/`+` line. `--target-scope` retargets every entry to one scope, EXCEPT a `learned-pattern`, whose scope is immutable: a `project`-scope pattern may only import at `project` or `team` scope, a `user`-scope pattern only at `user` scope (any other target refuses `learned-pattern-scope`); every imported pattern is also rewritten to `status: "candidate"` regardless of what it carried in the bundle (`keryx learn accept` is the only command that may mark one `accepted`). `--dry-run` prints the plan grouped by kind, with each entry's bucket, and stops — no audit, no write, exit `0` only when the plan itself has no unresolved refusal. Otherwise: **W8 audit** stages every entry that would be written into a temp dir and runs `runHarnessAudit`'s `imported-bundles` surface; a `high`/`critical` unsuppressed finding refuses the whole import. **Apply**: atomic per-file writes (temp + rename) with a TOCTOU re-check (checksum and symlink chain) and full rollback — files, directories `mkdir -p` created, and a newly-created private-dir `.gitignore` — on any single write or ledger-update failure. Updates the target scope's applied-state ledger (`.metaproject/data/bundles/applied-state.json` or `~/.keryx/bundles/applied-state.json`) for every WRITTEN entry unconditionally, and for an `identical` entry only when the ledger already records that exact path as owned by this same `bundleId` AND `sourceProject` — an `identical` match against a user's own pre-existing file, against a file another bundle's ledger record already owns, or against a same-`bundleId` record whose `sourceProject` differs (including one side omitting it), is left completely untouched, so this bundle's own later `uninstall` cannot delete a file it never wrote, and identical bytes alone can never relabel or erase a recorded `sourceProject`. After a successful apply that wrote at least one `rule` entry into project scope, renders the canonical rules library into `--render-for`'s harnesses, or — when `--render-for` is omitted — every harness that already has the `rules-export` surface installed (`installedRulesExportHarnesses`); per-harness `installed`/`unchanged`/`failed`/`unsupported` is reported, and the command exits `1` (not `0`) if any harness's render failed even though the import itself wrote files. |
+| `import --external` | Vets an Agent-Skills-standard catalog directory (`<catalog-dir>`, not a Keryx bundle) instead: a candidate is the directory itself or an immediate subdirectory holding a `SKILL.md`. Every regular file under a candidate is read once into an in-memory snapshot; that same snapshot is both hashed (for the registry) and audited — `SKILL.md` and every other markdown/text file are scanned for secrets, prompt-injection and auto-run directives, not just script files, and a markdown-only skill (with no script files at all) is accepted rather than rejected as inapplicable. Rejects a candidate containing a symlink anywhere, or that is itself a symlink (`symlink-refused`); with invalid frontmatter — `name` must match `^[a-z0-9]+(-[a-z0-9]+)*$` (≤64 chars) and `description` must be non-empty (≤1024 chars) — (`invalid-skill-frontmatter`); a name shared with another candidate in the same batch, where BOTH are rejected (`duplicate-name`) rather than the later one silently winning; a scout `use`/`fork` decision against the project's own skill catalog (`scout-duplicate`/`scout-overlap` — fail closed; author a fork through the normal path instead); a name already recorded with different file hashes (`already-imported`); or a failing/inapplicable W8 audit (`audit-failed`/`audit-not-applicable`). An accepted candidate is recorded **by reference only** in `~/.keryx/skills/external-imports.json` (source directory + per-file sha256, plus an HMAC integrity tag keyed by a per-user secret at `~/.keryx/skills/.external-imports.key`) — no skill file is ever copied into `.metaproject/skills/`, `~/.keryx/skills/<name>/`, or any bundle. Reading the registry recomputes and checks that HMAC, and also refuses a case-variant sibling file (e.g. `External-Imports.json` next to `external-imports.json`) — both fail closed as `corrupt-external-imports-registry`, so a bundle cannot plant a forged, "pre-vetted" registry directly. `--dry-run` vets and prints without recording. Exit `1` only when every candidate was rejected. |
+| `inspect` | Read-only: verifies the bundle and runs the same plan diff `import` would (against `--target-scope`, or each entry's own recorded scope), without writing anything — no ledger touch, no temp files, no audit. Also warns, per `compat.targetHarnesses`, when the capability matrix does not report that harness `native`/`adapter` (advisory only). |
+| `verify` | Recomputes every `contents[].sha256`/`sizeBytes` in the manifest against the bundle's actual bytes; reports any file present in the bundle but not listed in the manifest (`unlisted`) too. Exit `0` only when every entry is `ok` and nothing is unlisted. |
+| `verify --external-imports` | Re-checks every entry in `~/.keryx/skills/external-imports.json` (after the same HMAC integrity/case-variant checks `import --external` applies on read) against its live source: `unresolvable` (the source directory or a recorded file is gone), `checksum-mismatch` (a recorded file's bytes changed upstream), or `unlisted-file` (a file now present under the source that was not part of the recorded set) — each a distinct status, never folded into a generic failure. |
+| `uninstall` | Removes only the files `<bundleId>`'s applied-state ledger for `--target-scope` records AND whose current sha256 still equals what Keryx last wrote — a file a person has since hand-edited is left in place and reported `kept` (reason `user-modified`), never overwritten or deleted. Every ledger key is re-validated (path normalization, containment under the scope root, and a symlink-chain check) before it is read or unlinked, so a tampered or corrupt ledger entry refuses (`corrupt-ledger`) instead of deleting outside the scope root. Removes now-empty parent directories up to (not including) the scope's fixed kind roots (`skills/`, `rules/`, `agents/`, `memory/`, `learning/`, `data/learning/`). `--dry-run` reports `removed`/`kept`/`missing` without writing; the ledger is updated only on a real run. |
+
+`--json` on any subcommand prints a structured result matching the table
+above, with a fixed, subcommand-specific set and order of top-level fields —
+NOT alphabetically key-sorted — but stable (the same fields, in the same
+order, for a given subcommand and outcome). A usage error (a missing
+required flag, or an invalid `--scope`/`--target-scope`/`--kind` value) exits
+`2` with a one-line reason on stderr, independent of `--json`. Every other
+refusal from bundle export/import/inspect/verify/uninstall (checksum
+mismatch, unresolved conflict, audit failure, a private-dir `.gitignore`
+conflict, a scope mismatch, an unrecorded hook-config opt-in, a corrupt
+ledger, …) is one of `src/bundle/types.ts`'s named `BUNDLE_REFUSAL` reasons
+and exits `1`. `import --external`/`verify --external-imports` use one
+additional reason outside that set, `corrupt-external-imports-registry`,
+for a tampered, unverifiable, or case-shadowed external-imports registry.
+
+---
+
+## learn
+
+```
+keryx learn observe [--hook claude]
+keryx learn extract [--domain <d>] [--since <YYYY-MM-DD>] [--json]
+keryx learn list [--status <s>] [--domain <d>] [--scope <s>] [--json]
+keryx learn review [<id>] [--scope <s>]
+keryx learn accept <id> [--scope user] [--refresh]
+keryx learn reject <id> [--scope user]
+keryx learn apply <id> --skill <module/name> [--dry-run]
+keryx learn promote <id>
+keryx learn graduate [--domain <d>]
+keryx learn graduate apply <proposal-id>
+keryx learn prune [--dry-run] [--json]
+```
+
+The self-learning loop's consent CLI (flow 312, W3): passive observation
+(`observe`), deterministic extraction (`extract`) into `status: candidate`
+`learned-pattern` records, human review and consent (`review`/`accept`/
+`reject`), and the bounded paths onward from an accepted record (`apply`,
+`promote`, `graduate`).
+
+| Subcommand | Description |
+|---|---|
+| `observe --hook claude` | Reads one host-hook payload from stdin (bounded), maps it to the same observation-event shape the built-in `keryx.learning-observer` hook writes, and appends it under `.metaproject/data/learning/observations/<date>.jsonl`. Always exits `0` and prints nothing to stdout — invalid JSON on stdin is simply not written, never a failure. This is the command an opt-in Claude Code hook runs. |
+| `observe` (no `--hook`) | Manual/offline use: reports today's observation file's line count. Nothing to flush — the writer is unbuffered. |
+| `extract` | Runs the deterministic signals (repeated correction, reverted edit, failing→passing test, reviewer comments, health regression) — and, only when no deterministic signal fired and the capability is enabled, the optional model-backed extractor — over the observation window, creating or reinforcing `status: candidate` records. Also decays existing candidate/accepted records. Never writes `status: "accepted"`. |
+| `list` | Lists records, filterable by `--status`, `--domain`, `--scope`. Also prints an integrity warning for any `accepted` record with no matching `accept` decision on record (`auditAcceptedRecords`). |
+| `review [<id>]` | Prints one candidate (by id) or every candidate, with trigger, action, confidence, confidenceLevel and evidence references, for a human to read before deciding. |
+| `accept <id>` | `status: candidate → accepted`. The ONLY command that produces `accepted` — refuses outside a real interactive terminal, with no bypass flag or environment variable. For a `scope: project` record, also writes (or, with `--refresh`, overwrites only the current project's) entry in `~/.keryx/learning/index.json` (see "Cross-project evidence" in the W3 spec). Never writes a skill, rule, agent or memory entry. |
+| `reject <id>` | `status: candidate → rejected`. No terminal requirement. |
+| `apply <id> --skill <module/name>` | For a `domain` other than `review-conventions`: renders the accepted record as a `LearningProposal` and applies it through the existing `applyLearningProposal` — still the only writer. |
+| `promote <id>` | Promotes a `scope: project`, `status: accepted` record backed by `>=2` distinct project identities (each at indexed confidence `>=0.8`) to a new `scope: user`, `status: candidate` record. Interactive-only: refuses outside a terminal, with no bypass flag, and prompts you to type the pattern's id back to confirm. |
+| `graduate [--domain <d>]` | Clusters accepted records by domain and trigger-keyword overlap and writes a graduation **proposal** — never a `SKILL.md`, agent definition, or rule file directly. |
+| `graduate apply <proposal-id>` | Applies one graduation proposal. Interactive-only, same as `promote`: refuses outside a terminal, no bypass flag, and prompts you to type the proposal's id back to confirm. |
+| `prune` | Deletes observation files more than 30 days past their own date, and expires `status: candidate` records past their `ttl.expiresAt` with no decision (`status: expired`). `--dry-run` reports without writing or deleting anything. |
+
+`accept`, `promote` and `graduate apply` never take a `--yes`/`--force`/
+`--non-interactive` flag: this mirrors `keryx schedule add`/`keryx flow
+confirm`'s own rule that an action a human must consciously approve gets no
+unattended path. None of the three is reachable through MCP — `src/mcp/
+tools.ts` is a hand-curated allowlist and carries no entry for `learn`.
+
+---
+
 ## commands
 
 The agent-facing command registry: each described keryx command as a
@@ -2363,6 +2504,10 @@ keryx skills inspect <project-skill>
 keryx skills route <query-or-target>
 keryx skills catalog [--profile recommended]
 keryx skills install [--profile recommended]
+keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
+    [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]
+keryx skills doctor [--target <harness>] [--json]
+keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
 keryx skills create <target> --module <module> --name <skill-name>
 keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
 keryx skills update [<module>/<name>|--all] [--from <origin>]
@@ -2373,6 +2518,12 @@ keryx skills learn apply <proposal.json>
 keryx skills export <project-skill> --runtime codex|claude|plugin
 keryx skills sync --runtime codex|claude --target <dir>
 keryx skills contracts validate <file> --schema <name>
+keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+    [--origin learned --source-ref <id>] [--json]
+keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>[:<model>]]
+    [--judge <provider>[:<model>]] [--scope bundled|all] [--model-grader] [--json]
+keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--samples <n>] [--record] [--json]
+keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -2383,6 +2534,9 @@ keryx skills contracts validate <file> --schema <name>
 | `route <query-or-target>` | `--json` | Score/rank registry entries against a free-text query or path. |
 | `catalog` | `--profile minimal\|recommended\|full\|custom` | Print the bundled catalog for a profile. |
 | `install` | `--profile <profile>` | Install bundled skills, catalog, manifest, and contracts. Requires `.metaproject/`. |
+| `install --profile <manifest-profile>` | `--with <component>` (repeatable), `--without <component>` (repeatable), `--target <harness>`, `--include-deprecated`, `--dry-run`, `--json`, `--force` | Flow 325 (W1): resolve and apply a profile→modules/components install-manifest plan instead of the legacy profile copy. Triggered by any manifest flag, or a non-legacy `--profile` id (e.g. `core`, `react`, `nestjs`, `python`) — the four legacy ids (`minimal\|recommended\|full\|custom`) with no manifest flags still run the pre-309 behavior above. `--dry-run` prints the resolved plan without writing. Reads `.metaproject/data/stack/stack.json` (from `keryx stack detect`) when present to bias module selection; absent or unreadable fails open. `--force` overwrites drifted files; without it, a drifted/unrecorded existing file is skipped, not overwritten. v1 install destinations exist only for `--target claude` and `--target keryx-shell`. |
+| `doctor` | `--target <harness>`, `--json` | Compare the recorded install-state for a target against disk: `ok`/`drifted`/`missing`/`orphaned` per path. Exits `1` if anything is not `ok`. |
+| `uninstall` | `--target <harness>` (required), `--module <module-id>`, `--force`, `--json` | Remove only the paths recorded in install-state for a target, optionally scoped to one module. A drifted file is refused unless `--force`. |
 | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
 | `import --from <src>` | `--module <m>`, `--name <n>`, `--dry-run`, `--force`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. |
 | `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. |
@@ -2394,6 +2548,11 @@ keryx skills contracts validate <file> --schema <name>
 | `sync` | `--runtime codex\|claude`, `--target <dir>`, `--dry-run`, `--json` | Sync exported runtime skills to an explicit target dir. Requires both `--runtime` and `--target`. |
 | `contracts list` | — | Print name/path/description for all contract schemas. |
 | `contracts validate <file>` | `--schema <name>` | Validate a JSON file against a named contract schema. Exits `1` on failure. |
+| `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Flow 325 (W1): pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. `--include-imports` (flow 313, W4) additionally scores the query against every recorded entry in `~/.keryx/skills/external-imports.json` (see [bundle import --external](#bundle)), with the same lexical scorer, reporting `searched: false` and a named reason when the registry is absent or corrupt rather than a silently empty match list. |
+| `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>[:<model>]`, `--judge <provider>[:<model>]`, `--scope bundled\|all`, `--model-grader`, `--json` | Flow 325 (W1): behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. `--runner` splits at the first `:` into provider and optional model (e.g. `--runner deepseek:deepseek-chat`, `--runner ollama:llama3.1:latest`); flow 314 wires this through `src/commands/model-eval-runner.ts`, dispatching each scenario as a single-turn call with the skill's `SKILL.md` as the system prompt. `--scope` (default `all` for `eval`, unlike `scout`/`stocktake`/`judge-check`, which default to `bundled`) selects which catalog the skill id resolves against and the triggers are scored against — a stack-pack eval gate document requires `--scope bundled` explicitly; the pack gate refuses a report recorded with `scope: "all"`. Flow 316: `--judge <provider>[:<model>]` (same `provider[:model]` split as `--runner`, via `src/commands/model-eval-judge.ts`, called at `temperature: 0` for the closest a provider gets to deterministic scoring) grades every `"grader": "judge"` behavior scenario with a live LLM judge instead of leaving it `skipped`; the judge is a separate build and separate calls from the runner under test, even when both name `deepseek:deepseek-chat`. Building either an unknown `--runner`/`--judge` provider, or one with no credential, fails closed before any scenario runs. With `--judge`, the report gains `judge` (provider), `judgeModel`, and `judgePromptVersion` (the judge prompt version that produced the recorded verdicts); every report also gains `catalogDigest` (the bundled catalog the trigger scenarios were scored against, kept as informational context only — trigger scenarios are always re-scored live against the current catalog, never trusted from the report) and, per ran behavior scenario, `trialRecords` — one entry per trial (`output`, `outputSha256`, `deterministic` results, `judge` verdict, `passed`) so the report can be re-derived (`regradeRecordedReport`) without re-running the model. The stable-pack gate (`checkSkillReportForPackGate`) requires the report's `(runner, model)` and, when any scenario carries a judge expectation, its `(judge, judgeModel)` to both be in the gate's allowlisted set (`STACK_PACK_GATE_POLICY`, pinned to `deepseek`/`deepseek-chat` for both roles), `judgePromptVersion` to match the current judge prompt, and the recorded `passes`/`passRate`/trial counts to match what the trial records themselves show — a report from an unlisted runner or judge, a stale prompt version, or counts that disagree with its own records, never clears the gate. **What this proves, and what it does not:** the gate proves internal consistency — the recorded outputs, deterministic results, counts and pass rates are re-derived from the trial records, and trigger results are re-scored live, not re-declared from the report. It does not prove provenance: the trial outputs, judge verdicts, and runner/judge labels are self-declared by whoever ran the eval, and the gate never re-runs the judge model against them ("re-derive"/"re-grade" here means recomputing from what was recorded, not re-judging). The control for provenance is review of the committed `eval.json` / recording diff in the pull request. |
+| `eval --reverify <pack-dir>` | `--judge <provider>[:<model>]` (required), `--sample <n>` (default `10`), `--json` | Flow 317 (FU3): the live re-judge sampler. Re-judges a RANDOM SAMPLE of `<pack-dir>`'s already-recorded trial outputs (`governance/eval.json`, every ran behavior scenario's `trialRecords` that carry a judge verdict) against the CURRENT live judge, matched against the skill's current `evals.json` by scenario id, and reports where the live verdict disagrees with what was recorded. Read-only — never rewrites `governance/eval.json`. **Threat model:** `eval`'s own stable-pack gate (above) proves a recorded report is internally consistent (`regradeRecordedReport`) and re-scores triggers live, but it cannot prove a recorded JUDGE verdict was ever a genuine live grading rather than, say, a hand-edited recording — nor can it catch the judge PROVIDER's own weights drifting under a pinned model name over time. `--reverify` is the closest available check for exactly those two gaps: a diagnostic a human (or a scheduled job) runs and acts on, not something the gate itself enforces automatically. Exits `1` when the sampled disagreement rate exceeds `REVERIFY_DISAGREEMENT_THRESHOLD` (20%, `src/gdskills/governance/eval.ts`) — deliberately generous, since a live judge is not perfectly deterministic on identical input (flow 316 review round 1) and a single flaky call among a handful of samples is expected noise, not drift. |
+| `judge-check <skill-id>` | `--judge <provider>[:<model>]` (required), `--scope bundled\|all` (default `bundled`), `--samples <n>` (default `3`), `--record`, `--json` | Flow 316: proves a skill's judge-graded scenarios are hard to game. For every scenario carrying a `"grader": "judge"` expectation, runs the canned answer set — `empty`, `echo`, `vague`, `known-wrong`, `subtle-wrong`, `injection`, `stuffed`, `known-right` (eight kinds; fix 1 / R1-4, R1-11 added `vague` and `subtle-wrong`, authored per scenario from the required `calibration.vague`/`calibration.subtle_wrong` fields) — through the live judge named by `--judge`, using the same grading function `eval`'s own trial loop uses. Each non-`empty` canned answer is graded `--samples` times (default 3) rather than once, because the live judge is not deterministic on identical input; a canned answer is a match only when every sample agrees with the expected verdict and none errored — the recordings this command writes (with `--record`) store all of a canned answer's samples, not a single verdict. Exits `1` if any canned answer's verdict does not match what it should be (`empty`/`echo`/`vague`/`known-wrong`/`subtle-wrong`/`injection`/`stuffed` must all FAIL, `known-right` must PASS). `--record` writes the recorded samples to `src/gdskills/governance/judge-recordings/<pack>__<skill>.json`, keyed by a digest of the exact judge prompt — the integrity guard replays these offline, and a stale recording (an edited rubric, a bumped judge prompt version) is detected rather than silently reused. A recording is a hand-writable file like any other committed artifact: it proves the anti-gaming set was checked against a live judge at record time, not that nobody could have edited it afterward — the same threat model as `eval`'s report, above. |
+| `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Flow 325 (W1): periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
 
 Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
 `subagent-result`, `subagent-dispatch`, `agent-event`, `orchestrator-state`,
@@ -2514,6 +2673,32 @@ with a masked reason (the run itself is never broken).
 
 ---
 
+## stack
+
+Deterministic, offline stack detection (flow 325, W1). Reads manifest files
+(`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, …), marker files
+(`Dockerfile`, `.github/workflows/*.yml`, `*.tf`, `*.sql`, …) and runs a
+bounded extension scan — no network, no model call — and writes
+`.metaproject/data/stack/stack.json`.
+
+```
+keryx stack detect [--cwd <dir>] [--json] [--no-write]
+```
+
+| Subcommand | Flags | Notes |
+|---|---|---|
+| `detect` (only subcommand) | `--cwd <dir>`, `--json`, `--no-write` | Detects the repository's stack tags. Writes `.metaproject/data/stack/stack.json` by default; `--no-write` detects and prints without writing. `--json` prints exactly the persisted document. `--cwd` points detection at another directory instead of the current one. |
+
+Every failure mode (an unreadable/unparseable manifest, a workspace root with
+no leaf dependency, a bounded scan that hits its file cap) marks `uncertain:
+true` for only the tags that signal's family covers — never every tag —
+matching `src/review/stack.ts`'s existing fail-open discipline, generalized.
+Re-running `detect` on an unchanged tree writes a byte-identical file: the
+persisted `detectedAt` is kept whenever the content fingerprint
+(`inputsSha256`) is unchanged.
+
+---
+
 ## metrics
 
 Provenance-aware execution observability: per-run evidence, active-time
@@ -2565,6 +2750,7 @@ keryx memory assets list | verify [<id>] | pull <id>
 keryx memory ingest --from-<source> <path>
 keryx memory check
 keryx memory reflect [--narrate] [--provider <p>]
+keryx memory handoff --from <harness> --target <harness> [--scope project|user] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -2583,6 +2769,7 @@ never deletes files or changes the Git index automatically.
 | `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |
 | `check` | — | Integrity/lint pass (metadata, links, dedup, conflicts, index). Exit `1` on issues. |
 | `reflect` | `--narrate`, `--provider <p>` | Cluster entries by tag and create `pattern` drafts for clusters ≥ min size. `--narrate` adds a model-written summary of the memory and **needs a credential** — without one it exits `1`. |
+| `handoff` | `--from <harness>`, `--target <harness>` (both required), `--scope project\|user` (default `project`), `--json` | Explicit cross-harness memory read: entries whose `Source-Harness` matches `--from` and whose `Target-Harnesses` is unset or includes `--target`. Fails closed on an unreadable folder, unreadable file, or malformed entry — the result reports `status: "incomplete"` (exit `1`) rather than silently returning a partial set as if it were complete; a clean scan reports `status: "complete"` (exit `0`). An unknown harness id or scope exits `2` with a named reason. |
 
 Entry types: `lesson`, `decision`, `constraint`, `known-mistake`,
 `historical-context`, `pattern`, `task-note`, `review-note`, `incident`,
@@ -3038,13 +3225,17 @@ and exits `1`.
 
 ## agents
 
-Three unrelated surfaces share this noun: `bootstrap` manages global instruction
+Four unrelated surfaces share this noun: `bootstrap` manages global instruction
 files for coding agents, `external` inspects the vendor CLIs keryx can host as
-child agents, and `monitor` reads a recorded subagent-fleet event log.
+child agents, `monitor` reads a recorded subagent-fleet event log, and
+`list`/`show`/`export`/`verify` (flow 310) work the agent-definition catalog
+described below under "agents catalog".
 
-(It said "two" until 2026-09-05, while the router dispatched three. `monitor`
-was undocumented here from the day it shipped — the sentence counting the
-surfaces was itself the thing that had drifted.)
+(It said "two" until 2026-09-05, while the router dispatched three, then
+"three" while it dispatched four — each time the sentence counting the
+surfaces was itself the thing that had drifted, which is why the coverage
+test at `src/cli-reference-coverage.test.ts` now derives this from the router
+instead of trusting the prose.)
 
 `bootstrap` is not project initialization: it only writes a small managed block
 into the selected global `AGENTS.md` / `CLAUDE.md` file. The block tells agents to
@@ -3129,6 +3320,37 @@ for the runtime this registry feeds.
 Exit code is `0` for a successful report — including one where the capability is
 disabled or a binary is missing, both of which are answers rather than failures.
 
+### agents catalog
+
+Flow 310 (W2): `list`/`show`/`export`/`verify` are a fourth surface under this
+noun — the agent-definition catalog (`.metaproject/agents/*.md`, plus keryx's
+own bundled definitions), compiled into either `spawn_subagent` dispatch
+inputs (`keryx-shell`) or a host's own native/adapter subagent file
+(`claude`/`codex`/`kiro`/`opencode`). See the
+[agent catalog guide](guides/agent-catalog.md) for the definition schema,
+export-support levels, the content-hash sentinel `export` writes, and what
+`verify`'s named problem reasons mean.
+
+```
+keryx agents list [--stack <id>] [--json]
+keryx agents show <name>
+keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--force] [--dry-run] [--json]
+keryx agents verify [<name>] [--json]
+keryx agents generate --stack <id> [--check] [--json]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `list` | `--stack <id>`, `--json` | List every catalog definition (bundled and project-local), optionally filtered to one stack pack. Read-only. |
+| `show` | `<name>` | Print one definition's fields and its resolved export-support level for every runtime. Read-only. |
+| `export` | `--runtime <id>`, `<name>`, `--force`, `--dry-run`, `--json` | Compile one definition for one runtime and write its managed file (or, for `keryx-shell`, print the compiled dispatch input — nothing is written for that runtime). A file with no keryx-managed sentinel for this agent at all is never overwritten, even with `--force`. A managed file whose content-sha256 no longer matches its own recorded hash (hand-edited since export) is refused unless `--force` is passed. A managed, unedited file from an older source version is updated with no flag needed. |
+| `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. Also reports `stack-pack-not-gate-cleared` for a generated pair whose source stack pack is no longer gate-cleared, and `generated-drift` when a bundled generated file no longer matches a fresh run of the generator. |
+| `generate` | `--stack <id>`, `--check`, `--json` | Flow 314: write the `<stack>-code-auditor` (read-only review) and `<stack>-build-fixer` (build/lint/type/test-failure resolution, worktree-isolated) pair for one stack pack, derived from that pack's `pack.json`. Refuses a pack that is not gate-cleared (`stability: stable` and a passing stable-pack gate check). `--check` reports drift without writing, exiting non-zero if either generated file differs from what is on disk. |
+
+To export the whole catalog for one harness at once, use
+`keryx integrations install --runtime <id> --surface agents` (opt-in — the
+default install does not write agent files).
+
 ---
 
 ## orient
@@ -3195,6 +3417,7 @@ keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
                      [--repo <owner/repo>] [--explain] [--threshold <0..1>]
                      [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
+keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
 keryx review complete <review-id-or-path>
@@ -3391,12 +3614,22 @@ three things the join needs and nothing else:
 | Flag | Description |
 |---|---|
 | `--pr <n>` | The pull request to learn from. Its comments must already have been collected. |
-| `--dry-run` | Compute the proposal and write no proposal file. |
+| `--reviewer <id>` | Sibling mode (W3): apply an accepted `domain: review-conventions` learned-pattern record to `.metaproject/rules/reviewers/<id>.mdc` instead of the `--pr` path above. `--pr` is not read in this mode. |
+| `--dry-run` | Compute the proposal (or, with `--reviewer`, the rendered profile) and write nothing. |
 | `--json` | Machine-readable result, including the selection counts. |
 
 **There is no `--authors`, `--skill` or `--repo` flag, deliberately.** A flag
 would make the configured list a default, and one invocation could teach a
 project from somebody it never named.
+
+**`--reviewer <id>` applies a per-reviewer profile, not a per-skill proposal.**
+The source is an accepted `keryx learn` record (`domain: review-conventions`,
+`reviewerProfile.reviewerId` set) — a human already ran `keryx learn accept`
+on it. This mode writes `.metaproject/rules/reviewers/<id>.mdc` directly: a
+semver header comment, the generalized conventions, and a changelog entry.
+`<id>` is always the opaque `rv-`-prefixed hash `keryx learn` records —
+never the reviewer's literal login, which the rendered file is refused from
+ever containing.
 
 **A project with no config file does not learn.** That prints one line and exits
 `0`. It is a supported state, not a warning — a tool that warns about the normal
@@ -4282,6 +4515,12 @@ completion gate, and the exit code of `scan`, `report`, `check-input`, and
 keryx security status
 keryx security scan <path> [--json] [--source <kind>]
 keryx security scan-mcp <manifest.json|dir> [--json] [--pin <manifest>] [--strict]
+keryx security audit-harness [path] [--json] [--ci] [--fix-proposals] [--baseline <file>] [--severity-floor <level>]
+keryx security audit-harness apply --proposal <id> [path]
+keryx security audit-harness baseline add --finding <id> --justification <text> [--expires YYYY-MM-DD] [--author <name>] [--reseal] [--json]
+keryx security impact-evidence status [--json]
+keryx security impact-evidence test <file...> [--json]
+keryx security impact-evidence hook [--runtime claude] [--profile <name>]
 keryx security check-input [--source <kind>] [--file <path>] [--json]
 keryx security check-output [--target <kind>] [--file <path>] [--json]
 keryx security redact <path> [--out <path>]
@@ -4297,6 +4536,12 @@ keryx security eval [--corpus <name|all>] [--with-model] [--json]
 | `status` | — | Print the effective config: mode, raw-retention, gate (`failOn` + `minConfidence`), config-checksum state, and each policy with its action. |
 | `scan <path>` | `<path>`, `--json`, `--source <kind>` | Scan a file, resolve findings into a decision, and write committable artifacts (`data/security/artifacts/latest.{md,json}`). Prints the gate, action, and findings (or raw JSON with `--json`). |
 | `scan-mcp <manifest\|dir>` | `--json`, `--pin <manifest>`, `--strict` | Scan one MCP tool manifest (or every `*.json` under a directory, recursively) for MCP threats. Findings are leak-safe (category + policy id only). `--pin` records a rug-pull baseline instead of scanning; `--strict` exits `1` when any threat is found, or when the scan could not read a manifest or the pinned baseline (`coverage: incomplete`). Pure and network-free. |
+| `audit-harness [path]` | `<path>`, `--json`, `--ci`, `--fix-proposals`, `--baseline <file>`, `--severity-floor <level>` | Read-only sweep of harness-configuration surfaces, computing a security score over harness fixtures and vulnerabilities. Outputs a summary report with surface coverage, findings by severity, and a pass/fail gate (score formula: `100 - (25*critical + 10*high + 4*medium + 1*low)`, grades A 90–100 / B 75–89 / C 60–74 / D 40–59 / F <40, any critical caps at C). `--ci` sets process exit code from the gate; `--fix-proposals` includes fix recommendations (never writes anything); `--baseline <file>` uses a project suppression file `.metaproject/security-audit-baseline.json` with required justification and checksum; `--severity-floor <level>` filters findings below that severity. A suppression's `expiresAt` (`YYYY-MM-DD`) is inclusive THROUGH the end of that day in UTC — an entry expiring today still suppresses today, and stops the instant the next day begins. |
+| `audit-harness apply` | `--proposal <id>`, `[path]` | Apply a specific fix proposal by id, against `[path]` (defaults to the project root). Fix proposals never self-apply; they are generated by `audit-harness` and applied by the operator. Refuses a `path` that does not already exist as a directory rather than creating it. |
+| `audit-harness baseline add` | `--finding <id>`, `--justification <text>`, `--expires YYYY-MM-DD` (opt), `--author <name>` (opt), `--reseal` (opt), `--json` (opt) | Record a suppression for a specific finding with required justification and optional expiration date (inclusive through the end of that day, UTC — see above). Suppressed findings are excluded from scoring and the gate. Adding to a baseline whose checksum does not match its contents (tampered or unreadable) is refused unless `--reseal` is passed explicitly; a reseal backs up the pre-reseal file to `<file>.bak-<timestamp>` before overwriting it, and reports (on stdout, or in the `--json` object) which finding ids from the old file were carried over into the new one vs discarded (lost because the old file could not be read at all). |
+| `impact-evidence status` | `--json` | Print the effective impact-evidence config (enabled, strict, exemptGlobs, dampenAfter), declared state, config-checksum match, kill-switch status (`impactEvidence.enabled` and `KERYX_DISABLE_IMPACT_GATE` both logged), host delivery readiness per adapter, and recent log records. `--json` for the machine-readable form. |
+| `impact-evidence test` | `<file...>`, `--json` | Dry-run computation of impact evidence for specified files. Writes nothing — no session state, no log — unlike `hook`, which is the live path. `--json` for machine-readable output. |
+| `impact-evidence hook` | `--runtime claude` (opt), `--profile <name>` (opt) | Live hook entry for pre-tool-context injection at the agent runtime level. `--runtime` (defaults to `claude`); `--profile` accepts `monitored-trusted-local`, `read-only-review`, or `unattended-untrusted` (defaults to `monitored-trusted-local`). Reads and processes JSON from stdin; outputs decision JSON to stdout. |
 | `check-input` | `--source <kind>`, `--file <path>`, `--json` | Evaluate incoming content (defaults source `untrusted-external`). Reads from `--file` or stdin. Prints the decision. |
 | `check-output` | `--target <kind>`, `--file <path>`, `--json` | Evaluate outgoing/generated content (defaults source `generated`, target `unknown`). Reads from `--file` or stdin. Prints the decision and, when applicable, the redacted preview. |
 | `redact <path>` | `<path>`, `--out <path>` | Apply fixed-width masks to detected sensitive spans. Writes to `--out`, else prints the redacted content to stdout. Reads from the path or stdin. |
@@ -4343,13 +4588,18 @@ and prints a deprecation line.
 keryx serve-mcp [--cwd <project-root>]     # stdio JSON-RPC (default transport)
 keryx serve-mcp --http [--cwd <root>]      # HTTP/SSE, localhost only, opt-in
 keryx serve-mcp --read-only [--cwd <root>] # hide every tool marked mutating
+keryx serve-mcp --harness <id> [--cwd <root>] # bind a cross-harness memory identity (flow 313 / W4-AC6)
 ```
 
 `--cwd` names the project root whose `.metaproject` workspace is exposed; it
 defaults to the process working directory. `--http` requires
 `capabilities.http.enabled` in the workspace. `--read-only` drops every tool
 the registry marks `mutating` from `tools/list`, and a call to one by name
-answers "Unknown or unavailable tool." keryx launches its own server this way
+answers "Unknown or unavailable tool." `--harness <id>` (or the `KERYX_HARNESS`
+env var, when `--harness` is absent) binds this server process's harness
+identity once at launch — never per tool call — for `memory.search` filtering,
+`memory.handoff`, and the `Source-Harness` stamped on `memory.propose` writes.
+An unrecognised id refuses to start the server. keryx launches its own server this way
 when it hands it to a foreign agent it drives over ACP (see
 [agents external](#agents-external) and the
 [ACP client guide](guides/acp-client.md)): that agent's MCP calls go straight
@@ -4388,6 +4638,41 @@ the managed `keryx` entry and leaves other servers in the file untouched.
 These were `keryx mcp install --runtime <editor>` and `keryx mcp uninstall
 --runtime <editor>`. Both still work and print a deprecation line.
 
+## integrations
+
+Install, remove, and audit Keryx's own hooks and standing-instructions files
+in ANOTHER coding agent/IDE's config (the harness adapter registry —
+`src/integrations/`), and print or check the generated capability matrix.
+This is a distinct namespace from `keryx integrate` (MCP client
+configuration, above) and from `keryx harness` (Keryx's own agent runtime,
+below). Full details, per-harness notes, and the legacy-alias table are in
+[integrations.md](./integrations.md).
+
+```
+keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
+keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
+keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]
+keryx integrations matrix [--check] [--write] [--json] [--file <path>]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `install` | `--runtime <id>`, `--surface <flag\|id>...`, `--dry-run`, `--json` | Resolve every surface for `<id>` (or only the named ones), apply each surface's merge in deterministic order, and record what it wrote to install-state. `all` targets every adapter with at least one surface; `keryx-shell` (no surfaces yet) is reported as unsupported rather than silently skipped. `--dry-run` reports what it would write and changes nothing; `--json` prints the structured result objects only. |
+| `uninstall` | `--runtime <id>`, `--surface <flag\|id>...`, `--dry-run`, `--json` | Remove only the sentinel-tagged entries Keryx itself installed, leaving every other entry (including the operator's own) untouched. Same `--runtime`/`--surface`/`--dry-run`/`--json` shape as `install`. The `agents` surface additionally never deletes a managed export file that was hand-edited since it was exported (its content-sha256 no longer matches) — it is kept, and reported as a warning; there is no `--force` override for this on uninstall. |
+| `doctor` | `--runtime <id>`, `--surface <flag\|id>...`, `--json` | Re-validate every surface recorded in install-state against the live settings file and report drift. `--surface` is additive here, unlike `install`/`uninstall`: it names an opt-in surface (e.g. `agents`) to doctor on top of the runtime's normal (non-opt-in) surfaces, even before it has ever been installed — it never narrows what gets checked. For a single explicit `--runtime`, an unknown selector errors the same way it does for `install`/`uninstall`. For a multi-runtime selection (`--runtime all` or a comma list) combined with `--surface`, a selector a given runtime does not declare is simply dropped for that runtime (that runtime is still fully doctored over its own surfaces, never skipped) rather than erroring it — same lenient matching `install`/`uninstall` use — and the command only errors if NO selected runtime declares any of the requested selectors, in which case every runtime is annotated `<id> declares none of the requested surface(s): ...`. Exits 1 when any requested runtime's doctor result is not ok, or when every selected runtime declared none of the requested selectors. |
+| `matrix` | `--check`, `--write`, `--json`, `--file <path>` | With no flags, prints the generated capability matrix as a table (id, state, confidence, supported flags); `--json` prints the full document. `--check` regenerates and diffs against the checked-in artifact, exiting 1 on drift, writing nothing — this is what CI runs. `--write` regenerates and overwrites the artifact. `--file` overrides the artifact path (default `docs/integrations/harness-capability-matrix.json`). |
+
+`--runtime` accepts a comma-separated list or `all`; `--surface` is
+repeatable and also accepts a comma-separated value, matching either a
+`SurfaceFlag` (`block`, `prompt-gate`, `inject-context`, `instructions`, …)
+or a surface id (`ctx-guard`, `orient`, `security-check-input`,
+`security-check-output`, …) — a flag can match more than one surface on the
+same runtime, an id matches exactly one.
+
+`keryx ctx install-hook`, `keryx orient install-hook`, and `keryx security
+hooks install` are legacy aliases that already delegate to this same
+installer core (see [integrations.md](./integrations.md#legacy-command-aliases)).
+
 ## mcp
 
 Expose read-only Metaproject services (code graph, gdctx, security, flow status,
@@ -4409,7 +4694,7 @@ keryx integrate --remove <cursor|claude|opencode|vscode|generic|all>
 
 | Command | Flags / args | Description |
 |---|---|---|
-| `serve-mcp` | `--http`, `--cwd <project-root>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. Bare `mcp` is an alias for `serve-mcp`. |
+| `serve-mcp` | `--http`, `--cwd <project-root>`, `--harness <id>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. `--harness <id>` (or `KERYX_HARNESS`) binds a cross-harness memory identity once at launch; an unrecognised id refuses to start. Bare `mcp` is an alias for `serve-mcp`. |
 | `integrate` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json`, `opencode` → `opencode.json` (all project root), `vscode` → `.vscode/mcp.json`, `generic` prints a ready snippet and writes no file. `all` targets cursor + claude + opencode only — `vscode` is deliberately opt-in and must be named explicitly. `cursor`/`claude` add `mcpServers.keryx = { command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`; `opencode`'s shape differs — `mcp.keryx = { type: "local", command: ["keryx","mcp","serve","--cwd","<absolute-project-root>"], enabled: true }`; `vscode`'s shape differs again — VS Code's native MCP config uses a top-level `servers` key (not `mcpServers`), each entry requiring `"type": "stdio"`: `servers.keryx = { type: "stdio", command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`. Every runtime's entry is marked with a managed sentinel, preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
 | `integrate --remove` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (default `all`) | Remove ONLY the managed `keryx` server (and its sentinel) from each runtime's client config, leaving other servers and user content intact. A no-op when nothing is installed. |
 
@@ -4604,8 +4889,11 @@ the exact `keryx mcp trust <name>` a held one is waiting for. It reads the
 session's live state and never dials anything itself, so opening it is
 free.
 
-Do not confuse it with `/integrations`, which is the opposite direction:
-that is where keryx ITSELF is registered into an editor's MCP config.
+Do not confuse it with `/integrate`, which is the opposite direction:
+that is where keryx ITSELF is registered into an editor's MCP config. (The
+CLI `integrations` verb, one letter different, is a separate command: it
+installs Keryx's own hooks/instructions into another coding agent, not MCP
+wiring.)
 `/mcp` meant the installer before this release and now means the
 consumer, matching what `keryx mcp` has meant on the command line since
 the rename.

@@ -1,0 +1,60 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx"]
+metadata:
+  origin: authored
+---
+
+# React testing
+
+Test layout, runner, and assertion conventions for React component files
+(`*.tsx`/`*.jsx`), narrowing `ts-js-node`'s generic testing rule.
+
+## Layout and runner
+
+- Use the project's already-configured runner (Vitest or Jest) and React
+  Testing Library (`@testing-library/react` + `@testing-library/user-event`)
+  — do not introduce Enzyme or a shallow-render helper into a project that
+  does not already use one.
+- Co-locate a component's test next to it (`UserCard.test.tsx`) when the
+  project already follows that layout, or under a mirrored `__tests__`
+  tree when that is the existing convention; match, do not introduce.
+
+## Queries and interaction
+
+- Query by role/label/text the way a user or assistive technology would
+  (`getByRole`, `getByLabelText`, `getByText`) — reach for `data-testid`
+  only when no accessible query exists, and treat that as a sign the
+  markup itself may be missing an accessible name.
+- Never assert on a component's internal state, instance fields, or
+  implementation details (no reaching into a ref's internals, no snapshot
+  of a component's private props) — assert on rendered output and
+  behavior only.
+- Drive interaction through `@testing-library/user-event`
+  (`userEvent.click`/`.type`/`.tab`), not `fireEvent`, unless the project
+  is pinned to an older `user-event` major that cannot express the
+  interaction — `user-event` fires the fuller sequence of browser events a
+  real interaction would.
+
+## Async and network
+
+- Wait for async UI with `findBy*` queries or `waitFor`, never a manual
+  `setTimeout`/`sleep` — an arbitrary delay is both slow and flaky under
+  load.
+- Mock network calls at the request boundary (an MSW handler, or the
+  project's existing equivalent) rather than mocking the component's own
+  data-fetching function — a boundary mock still exercises the real
+  fetch/parse/error-handling code path.
+- Wrap a state update triggered outside React Testing Library's own query
+  helpers (e.g. a manually invoked callback) in `act` only when RTL's
+  built-in wrapping does not already cover it; an `act` warning is a
+  signal to await the right query, not to silence the console.
+
+## Coverage expectations
+
+- Cover the rendered states a component can be in: initial/loading,
+  success, error, and empty, plus any conditional branch a prop or piece
+  of state gates.
+- For a custom hook with logic worth testing on its own, use
+  `renderHook` from `@testing-library/react` rather than mounting a
+  throwaway component to exercise it.

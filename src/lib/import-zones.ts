@@ -101,7 +101,6 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // an adapter: nothing outside keryx speaks to it, and it owns no project
   // state a core module could want.
   { segment: "mcp-servers", zone: "client" },
-  { segment: "agents", zone: "client" },
   // The agent bus (flow 272): presence, event log and pause leases shared by
   // interactive shells of one clone. Client because it sits beside the session
   // store it builds on (`src/session/paths.ts`) and is consumed by the TUI,
@@ -164,6 +163,60 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `sync`/`forgetting`/`trigger` above; `src/commands/governance.ts`
   // (adapter) is what actually writes the report artifacts and prints.
   { segment: "governance", zone: "core" },
+  // Flow 309, W1 Lane A: deterministic, offline stack detection
+  // (`detectStack`) and its persisted `stack.json`. Same shape as
+  // `sync`/`forgetting`/`trigger`/`governance` above — project-state
+  // bookkeeping over the filesystem, no provider registry, no model
+  // selection, no network call. `src/commands/stack.ts` (adapter) is what
+  // actually wires it to the CLI verb.
+  { segment: "stack", zone: "core" },
+  // Flow 305, W5-a: the host-harness surface registry (which harnesses
+  // support which hook surfaces, and the JSON walkers that install them).
+  // Deterministic project-state bookkeeping over hand-authored settings
+  // files, no provider registry and no model call — same shape as
+  // `sync`/`forgetting`/`trigger` above. `src/ctx` and `src/security` (both
+  // core) were its original importers; flow 310 (W2) adds `src/agents`
+  // (also core) as a third — its `export.ts` reads this registry's `agents`
+  // surface classification (AC4) and its `agents` surfaces (T7,
+  // `surfaces-agents.ts`) call back into `src/agents`'s catalog/export
+  // functions, a deliberate two-way core-to-core dependency (see both
+  // files' headers) rather than a cycle either segment treats as an
+  // accident. `src/commands` reaches this segment only indirectly, through
+  // one of those three.
+  { segment: "integrations", zone: "core" },
+  // Flow 310, W2: the agent-definition catalog (`types`/`schema`/
+  // `frontmatter`/`catalog`/`baseline`/`tools`/`policy`/`compile`) —
+  // deterministic schema validation, catalog loading and dispatch-input
+  // compilation, no provider registry and no model call. RECLASSIFIED from
+  // `client` (this segment pre-existed as the home of `bootstrap.ts`, the
+  // unrelated `keryx agents bootstrap` global-routing-block installer, which
+  // only imports `src/lib` and stays valid under `core`). Deliberately never
+  // imports `src/harness/policy/profiles.ts` or
+  // `src/harness/child/quarantine.ts` (both `client`): `policy.ts` resolves
+  // profile NAMES only, and `baseline.ts` mirrors `quarantine.ts`'s posture
+  // in its own constant rather than importing it — see both files' headers.
+  // T7 adds `export.ts`, which DOES import `src/integrations` (also core) —
+  // see that segment's own comment above for the two-way core-to-core
+  // dependency this creates and why it is not a cycle either side treats as
+  // accidental.
+  { segment: "agents", zone: "core" },
+  // Flow 313, W4: the portable bundle export/verify/plan/apply core —
+  // deterministic filesystem bookkeeping (manifest schema validation, sha256
+  // content-addressing, tar/gzip read+write, scope/path resolution, the
+  // applied-state ledger), no provider registry, no model call, no network.
+  // Same shape as `sync`/`forgetting`/`trigger`/`governance`/`stack` above.
+  // `src/commands/bundle.ts` (adapter, T10) is what wires it to the CLI verb.
+  { segment: "bundle", zone: "core" },
+  // Flow 312, W3: the self-learning loop's record store (`learned-pattern`
+  // records, the confidence model, project identity, the observation/
+  // candidate/decision stores). Deterministic project-state bookkeeping over
+  // hand-authored JSON files, no provider registry and no model call by
+  // default — same shape as `sync`/`forgetting`/`trigger`/`stack` above. It
+  // deliberately duplicates `resolveHookHomeDir` (`src/harness/hooks/config.ts`,
+  // zone `client`) as a private two-line function in `paths.ts` rather than
+  // importing it, since core may never import client (see this table's header
+  // comment) — see that file's own comment for why the duplication is safe.
+  { segment: "learning", zone: "core" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

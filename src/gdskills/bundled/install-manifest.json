@@ -1,0 +1,530 @@
+{
+  "schemaVersion": "1.0.0",
+  "profiles": {
+    "minimal": {
+      "description": "Bare minimum: the stack-agnostic core rules plus skill-lifecycle governance. No orchestration/review/quality skills, no stack components.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": []
+    },
+    "core": {
+      "description": "Today's curated subset made explicit: common rules plus orchestration, quality, and generic review skill modules. No stack-specific components.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle",
+        "orchestration-skills",
+        "quality-skills",
+        "review-core-skills"
+      ],
+      "components": []
+    },
+    "ts-js-node": {
+      "description": "Common rules plus the TypeScript/JavaScript (Node.js) stack pack component (`ts-js-node-rules` + `ts-js-node-skills`, from src/gdskills/bundled/stacks/ts-js-node/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
+    "react": {
+      "description": "Common rules plus the React/MobX-aware review component set, installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "capability:mobx",
+        "framework:react",
+        "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
+    "go": {
+      "description": "Common rules plus the Go stack pack component (`go-rules` + `go-skills`, from src/gdskills/bundled/stacks/go/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:go"
+      ],
+      "stackDetectionAware": true
+    },
+    "nestjs": {
+      "description": "Common rules plus the NestJS-aware review component set, installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:nestjs",
+        "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
+    "python": {
+      "description": "Common rules plus the Python stack pack component (`python-rules` + `python-skills`, from src/gdskills/bundled/stacks/python/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:python"
+      ],
+      "stackDetectionAware": true
+    },
+    "full": {
+      "description": "Every registered module and component, unconditionally.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle",
+        "orchestration-skills",
+        "quality-skills",
+        "review-core-skills",
+        "react-review-skills",
+        "mobx-review-skill",
+        "mobx-store-template-rule",
+        "nestjs-review-skill",
+        "nestjs-dto-rule",
+        "python-rules",
+        "python-skills",
+        "ts-js-node-rules",
+        "ts-js-node-skills",
+        "react-rules",
+        "react-skills",
+        "go-rules",
+        "go-skills"
+      ],
+      "components": [
+        "lang:ts-js-node",
+        "framework:react",
+        "capability:mobx",
+        "framework:nestjs",
+        "lang:python",
+        "lang:go"
+      ]
+    }
+  },
+  "modules": {
+    "core-common-rules": {
+      "kind": "rule",
+      "description": "Stack-agnostic core rules (coding standards, process, review baselines) shared by every profile.",
+      "paths": [
+        "src/gdskills/bundled/rules/core/api-contracts.mdc",
+        "src/gdskills/bundled/rules/core/async-patterns.mdc",
+        "src/gdskills/bundled/rules/core/clean-architecture.mdc",
+        "src/gdskills/bundled/rules/core/cli-interface-design.mdc",
+        "src/gdskills/bundled/rules/core/code-review-ai-assistant.mdc",
+        "src/gdskills/bundled/rules/core/code-review-learned-profile.mdc",
+        "src/gdskills/bundled/rules/core/code-style-patterns.mdc",
+        "src/gdskills/bundled/rules/core/commit-message-formatting.mdc",
+        "src/gdskills/bundled/rules/core/database-patterns.mdc",
+        "src/gdskills/bundled/rules/core/definition-of-done.mdc",
+        "src/gdskills/bundled/rules/core/documentation-management.mdc",
+        "src/gdskills/bundled/rules/core/error-handling.mdc",
+        "src/gdskills/bundled/rules/core/execution-metrics.md",
+        "src/gdskills/bundled/rules/core/frontend-assistant.mdc",
+        "src/gdskills/bundled/rules/core/git-concurrency.mdc",
+        "src/gdskills/bundled/rules/core/git-rules.mdc",
+        "src/gdskills/bundled/rules/core/gproject-contracts.mdc",
+        "src/gdskills/bundled/rules/core/implementation-doc-mandate.mdc",
+        "src/gdskills/bundled/rules/core/implementation-plans.mdc",
+        "src/gdskills/bundled/rules/core/jobs-documentation.mdc",
+        "src/gdskills/bundled/rules/core/model-selection.mdc",
+        "src/gdskills/bundled/rules/core/playwright-testing.mdc",
+        "src/gdskills/bundled/rules/core/requirements-management.mdc",
+        "src/gdskills/bundled/rules/core/requirements-package-standard.mdc",
+        "src/gdskills/bundled/rules/core/rule-management-workflow.mdc",
+        "src/gdskills/bundled/rules/core/security-baseline.mdc",
+        "src/gdskills/bundled/rules/core/session-plan-bridge.mdc",
+        "src/gdskills/bundled/rules/core/shared-definitions.mdc",
+        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
+        "src/gdskills/bundled/rules/core/solid-principles.mdc",
+        "src/gdskills/bundled/rules/core/storybook-guidelines.mdc",
+        "src/gdskills/bundled/rules/core/subagent-context-construction.md",
+        "src/gdskills/bundled/rules/core/subagent-status-protocol.md",
+        "src/gdskills/bundled/rules/core/tdd-workflow.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "stable"
+    },
+    "skill-lifecycle": {
+      "kind": "rule",
+      "description": "Skill freshness verification and drift-triggered learn proposals.",
+      "paths": [
+        "src/gdskills/bundled/rules/core/skill-lifecycle.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "stable"
+    },
+    "orchestration-skills": {
+      "kind": "skill",
+      "description": "Orchestration skills: job/flow/context/task/code-verifier and analyzer pipelines.",
+      "paths": [
+        "src/gdskills/bundled/skills/orchestration/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "heavy",
+      "stability": "stable"
+    },
+    "quality-skills": {
+      "kind": "skill",
+      "description": "Quality skills: security, perf, root-cause, testing, commit/push/pr, dependency and migration workflows.",
+      "paths": [
+        "src/gdskills/bundled/skills/quality/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "heavy",
+      "stability": "stable"
+    },
+    "review-core-skills": {
+      "kind": "skill",
+      "description": "Generic (non-stack-specific) review skills: orchestrator, logic, architecture, security, performance, clean-code, highload, regression, core-boundaries, flow-graph, layout, style, testing-practices, verifier, pr-feedback, and the legacy AI/learned/style review profiles.",
+      "paths": [
+        "src/gdskills/bundled/skills/review/review-orchestrator/**",
+        "src/gdskills/bundled/skills/review/review-logic/**",
+        "src/gdskills/bundled/skills/review/review-architecture/**",
+        "src/gdskills/bundled/skills/review/review-security-code/**",
+        "src/gdskills/bundled/skills/review/review-performance/**",
+        "src/gdskills/bundled/skills/review/review-clean-code/**",
+        "src/gdskills/bundled/skills/review/review-highload/**",
+        "src/gdskills/bundled/skills/review/review-regression/**",
+        "src/gdskills/bundled/skills/review/review-core-boundaries/**",
+        "src/gdskills/bundled/skills/review/review-flow-graph/**",
+        "src/gdskills/bundled/skills/review/review-layout/**",
+        "src/gdskills/bundled/skills/review/review-style/**",
+        "src/gdskills/bundled/skills/review/review-testing-practices/**",
+        "src/gdskills/bundled/skills/review/review-verifier/**",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/**",
+        "src/gdskills/bundled/skills/review/code-ai-review/**",
+        "src/gdskills/bundled/skills/review/code-learned-review/**",
+        "src/gdskills/bundled/skills/review/code-style-review/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "heavy",
+      "stability": "stable"
+    },
+    "react-review-skills": {
+      "kind": "skill",
+      "description": "React/frontend review skills: review-frontend and review-frontend-conventions.",
+      "paths": [
+        "src/gdskills/bundled/skills/review/review-frontend/**",
+        "src/gdskills/bundled/skills/review/review-frontend-conventions/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "core-common-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "stable"
+    },
+    "mobx-review-skill": {
+      "kind": "skill",
+      "description": "Focused MobX store/state-logic review skill.",
+      "paths": [
+        "src/gdskills/bundled/skills/review/code-mobx-store-review/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "core-common-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "stable"
+    },
+    "mobx-store-template-rule": {
+      "kind": "rule",
+      "description": "MobX store authoring template/rule.",
+      "paths": [
+        "src/gdskills/bundled/rules/core/mobx-store-template.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "stable"
+    },
+    "nestjs-review-skill": {
+      "kind": "skill",
+      "description": "Backend (NestJS/Prisma) review skill.",
+      "paths": [
+        "src/gdskills/bundled/skills/review/review-backend/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "core-common-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "stable"
+    },
+    "nestjs-dto-rule": {
+      "kind": "rule",
+      "description": "NestJS DTO authoring/validation rule.",
+      "paths": [
+        "src/gdskills/bundled/rules/core/nestjs-dto.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "stable"
+    },
+    "python-rules": {
+      "kind": "rule",
+      "description": "Python stack pack rules (coding-style, patterns, security, testing; scoped to *.py/*.pyi) from src/gdskills/bundled/stacks/python/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/python/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "stable"
+    },
+    "python-skills": {
+      "kind": "skill",
+      "description": "Python stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/python/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/python/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "stable"
+    },
+    "ts-js-node-rules": {
+      "kind": "rule",
+      "description": "TypeScript/JavaScript (Node.js) stack pack rules (coding-style, patterns, security, testing; scoped to *.ts/*.js/*.mjs/*.cjs) from src/gdskills/bundled/stacks/ts-js-node/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ts-js-node/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "ts-js-node-skills": {
+      "kind": "skill",
+      "description": "TypeScript/JavaScript (Node.js) stack pack skills (implementation, testing, code review, build-fix, ESM migration) from src/gdskills/bundled/stacks/ts-js-node/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ts-js-node/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "react-rules": {
+      "kind": "rule",
+      "description": "React stack pack rules (coding-style, patterns, security, testing; scoped to *.tsx/*.jsx) from src/gdskills/bundled/stacks/react/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/react/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "react-skills": {
+      "kind": "skill",
+      "description": "React stack pack skills (implementation, testing, code review, build-fix, upgrade migration) from src/gdskills/bundled/stacks/react/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/react/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "go-rules": {
+      "kind": "rule",
+      "description": "Go stack pack rules (coding-style, patterns, security, testing; scoped to *.go) from src/gdskills/bundled/stacks/go/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/go/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "stable"
+    },
+    "go-skills": {
+      "kind": "skill",
+      "description": "Go stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/go/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/go/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "stable"
+    }
+  },
+  "components": {
+    "lang:ts-js-node": {
+      "family": "language",
+      "modules": [
+        "core-common-rules",
+        "ts-js-node-rules",
+        "ts-js-node-skills"
+      ],
+      "detectionMarkers": [
+        "typescript",
+        "javascript",
+        "node"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:react": {
+      "family": "framework",
+      "modules": [
+        "react-review-skills",
+        "react-rules",
+        "react-skills"
+      ],
+      "detectionMarkers": [
+        "react"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "capability:mobx": {
+      "family": "capability",
+      "modules": [
+        "mobx-review-skill",
+        "mobx-store-template-rule"
+      ],
+      "detectionMarkers": [
+        "mobx"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:nestjs": {
+      "family": "framework",
+      "modules": [
+        "nestjs-review-skill",
+        "nestjs-dto-rule"
+      ],
+      "detectionMarkers": [
+        "nestjs"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "lang:python": {
+      "family": "language",
+      "modules": [
+        "python-rules",
+        "python-skills"
+      ],
+      "detectionMarkers": [
+        "python"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "lang:go": {
+      "family": "language",
+      "modules": [
+        "go-rules",
+        "go-skills"
+      ],
+      "detectionMarkers": [
+        "go"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    }
+  }
+}

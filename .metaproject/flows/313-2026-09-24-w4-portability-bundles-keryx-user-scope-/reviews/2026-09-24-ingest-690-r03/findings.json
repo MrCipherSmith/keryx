@@ -1,0 +1,865 @@
+[
+  {
+    "id": "R3-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "blocker",
+    "problem": "binary-asset allowlist trusts a magic prefix: GIF/PDF/PNG-prefixed scripts and markdown with one invalid byte skip every W8 content check",
+    "impact": "remote-exec scripts and prompt-injection reference files pass external vetting (AC9) and bundle import (AC12) with zero findings; regression introduced by the R2-F12 fix (old-cb09 refuses all three)",
+    "suggested_fix": "require extension to match detected type plus structural validity; refuse allowlisted magic on script/markdown/text/JSON/extensionless names; add negative tests",
+    "evidence": "S3/ext/pl.ts: gif-magic-script, pdf-magic-md, png-magic-md VET accepted pass 0 and IMPORTED; same script without the invalid byte refused; S3/ext/old/pl.ts all refused on cb09",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 158,
+    "class_scope": {
+      "sites": [
+        "src/security/audit-harness/index.ts:158-169",
+        "src/security/audit-harness/index.ts:366-372",
+        "src/gdskills/governance/scout.ts auditSkillSnapshot (ignores coverage note)",
+        "src/bundle/audit.ts:71 (only surface error checked)"
+      ],
+      "enumeration_method": "read every knownBinaryAssetType/isTextContent caller; ran pl.ts through vetExternalCatalog and CLI bundle import on HEAD and cb09"
+    },
+    "global_id": "2026-09-24-ingest-690-r03#R3-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: The binary skip is gone: isTextContent, the allowlist and the trailer checks are all deleted (index.ts:122-150, :402). pl5.out: the r4 polyglots polyglot-gif-sh, -pdf-inj, -png-inj and -webp-inj are now rejected by vetting (fail 1-7) and refused by import. CLI keryx bundle import <catalog> --external rejects all four with audit-failed.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: The binary skip is gone: isTextContent, the allowlist and the trailer checks are all deleted (index.ts:122-150, :402). pl5.out: the r4 polyglots polyglot-gif-sh, -pdf-inj, -png-inj and -webp-inj are now rejected by vetting (fail 1-7) and refused by import. CLI keryx bundle import <catalog> --external rejects all four with audit-failed."
+    }
+  },
+  {
+    "id": "R3-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "case-variant path dodges the ownership lookup and plants colliding ledger keys that block uninstall for every bundle in the scope",
+    "impact": "bundle B's rules/X.md vs A's rules/x.md plans unmanaged-differs, or new without --force if absent; both keys recorded; all uninstalls refuse corrupt-ledger; A's other files stranded",
+    "suggested_fix": "fold-indexed ledger lookup; treat fold hit as the record (owned-by-other-bundle or own rename); replace old-cased key at apply",
+    "evidence": "S3/bundle/own.ts O2/O3/O4 (reproduced): ledger {rules/X.md:bundle-b, rules/x.md:bundle-a}; both uninstalls corrupt-ledger; O3 import without force exit 0",
+    "confidence": "high",
+    "file": "src/bundle/plan.ts",
+    "line": 391,
+    "class_scope": {
+      "sites": [
+        "src/bundle/plan.ts:391",
+        "src/bundle/plan.ts:395",
+        "src/bundle/apply.ts:205-213",
+        "src/bundle/uninstall.ts:89-103",
+        "src/bundle/uninstall.ts:111"
+      ],
+      "enumeration_method": "read every state.entries[...] read/write in src/bundle"
+    },
+    "global_id": "2026-09-24-ingest-690-r03#R3-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 6c781507) by the round-4 opus reviewer: own.ts O2/O3/O4 and r4own K3/K4 behave identically on case-insensitive and real case-sensitive APFS (6c78).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 6c781507) by the round-4 opus reviewer: own.ts O2/O3/O4 and r4own K3/K4 behave identically on case-insensitive and real case-sensitive APFS (6c78)."
+    }
+  },
+  {
+    "id": "R3-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "keryx init memory scaffold (index.md, templates/entry.md) makes every memory handoff incomplete, exit 1",
+    "impact": "AC7 complete is unreachable in any initialized project including this repo; handoff exit code meaningless",
+    "suggested_fix": "allowlist Keryx-written scaffold files; handoff test on an init-scaffolded root expecting complete",
+    "evidence": "S3/mem/p9.sh (reproduced) on a copy of this repo's memory: incomplete with index.md and templates/entry.md unexpected-entry; S3/mem/init-proj same; same on old-cb09",
+    "confidence": "high",
+    "file": "src/memory/store.ts",
+    "line": 337,
+    "class_scope": {
+      "sites": [
+        "src/memory/store.ts:337-356",
+        "src/commands/memory.ts:550",
+        "src/memory/service.ts:263",
+        "src/memory/templates.ts renderMemoryIndexScaffold/renderMemoryEntryTemplate"
+      ],
+      "enumeration_method": "read strict scan and its two callers; compared with fresh keryx init output"
+    },
+    "global_id": "2026-09-24-ingest-690-r03#R3-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p9.sh and a fresh init give complete, exit 0.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p9.sh and a fresh init give complete, exit 0."
+    }
+  },
+  {
+    "id": "R3-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "rules distill matches markers as substrings; a prose mention of <!-- keryx:index --> deletes human sections silently",
+    "impact": "silent data loss with exit 0; following rules sync overwrites the only copy",
+    "suggested_fix": "whole-line marker matching plus computeFencedRanges in both distill matchers; refuse ambiguous markers",
+    "evidence": "S3/rules/b6-distill-prose.sh, b6.out: KEEP-ME-1/2 gone after distill+sync; S3/rules/b6-old.sh same on cb09",
+    "confidence": "high",
+    "file": "src/rules/distill.ts",
+    "line": 113,
+    "class_scope": {
+      "sites": [
+        "src/rules/distill.ts:113-123",
+        "src/rules/distill.ts:135-147",
+        "src/rules/agent-entrypoints.ts:134-142"
+      ],
+      "enumeration_method": "keryx ctx rg indexOf( and marker constants across src/rules and src/integrations/markdown-block.ts"
+    },
+    "global_id": "2026-09-24-ingest-690-r03#R3-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: b6-distill-prose.sh: KEEP-ME-1 stays in CLAUDE.md and KEEP-ME-2 is extracted; nothing is lost.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: b6-distill-prose.sh: KEEP-ME-1 stays in CLAUDE.md and KEEP-ME-2 is extracted; nothing is lost."
+    }
+  },
+  {
+    "id": "R3-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "this repo's own project-scope bundle cannot be imported: W8 detector false positives refuse all 222 entries",
+    "impact": "the core W4 portability workflow fails closed on ordinary security documentation (AWS EXAMPLE key, backticked ?token=, injection-defense prose); not caused by this attempt (cb09 identical)",
+    "suggested_fix": "exempt AWS ...EXAMPLE keys; require a value after ?token=; downgrade quoted/meta-discussed/fenced injection phrases; document suppression for bundle import",
+    "evidence": "S3/roundtrip/import-1.json (audit-failed, 4 ids on 3 files); probe-secrets.out; S3/roundtrip/oldcheck same ids on old CLI",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 412,
+    "class_scope": {
+      "sites": [
+        "src/security/detect/secrets.ts aws-access-key, url-sensitive-query",
+        "src/security/detect/injection.ts ignore-instructions",
+        "src/security/audit-harness/index.ts:412-475"
+      ],
+      "enumeration_method": "full export/import round trip of this repo; each refusal id mapped to its detector rule"
+    },
+    "global_id": "2026-09-24-ingest-690-r03#R3-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit f16d34f0) by the round-4 opus reviewer: CLI round trip of 222/222; own-repo-roundtrip.test.ts passes (R4-F8 covers its hermeticity).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit f16d34f0) by the round-4 opus reviewer: CLI round trip of 222/222; own-repo-roundtrip.test.ts passes (R4-F8 covers its hermeticity)."
+    }
+  },
+  {
+    "id": "R3-F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "fence-based remote-exec downgrade can be forced by unterminated, ~~~ or deeply indented fences",
+    "impact": "remote-exec instructions in SKILL.md imported at medium",
+    "suggested_fix": "downgrade only inside closed CommonMark fences indented <=3 spaces",
+    "evidence": "S3/ext/pl.ts fence-unterminated/tilde/deep-indent accepted+imported; refused on cb09",
+    "confidence": "high",
+    "file": "src/security/audit-harness/checks.ts",
+    "line": 647,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: pl5 fence-first-then-real is rejected and refused (bundle-hook-remote-exec). The fence shapes stay refused.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 5f38eb58) by the round-5 opus reviewer: pl5 fence-first-then-real is rejected and refused (bundle-hook-remote-exec). The fence shapes stay refused."
+    }
+  },
+  {
+    "id": "R3-F7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "near-miss memory header keys parse as absent (entry visible to all, no problem)",
+    "impact": "intended restriction silently lost",
+    "suggested_fix": "NFKC + strip ignorables, loose-match keys, non-exact match = invalid",
+    "evidence": "S3/mem/p5.ts singular-key, space-key, underscore-key, fullwidth-colon, zwsp-key, u2010-hyphen-key",
+    "confidence": "high",
+    "file": "src/memory/store.ts",
+    "line": 384,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F7",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F7: partial. Still absent: the Cyrillic homoglyph (documented as a known gap at store.ts:430), a no-colon line and =. Fails open only for the entry's own author. Re-listed, info. (review-313-r5.md)"
+    }
+  },
+  {
+    "id": "R3-F8",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "guard/parser whitespace mismatch lets memory.propose write entries that wedge every handoff",
+    "impact": "any MCP harness can make handoff incomplete until a human deletes the file",
+    "suggested_fix": "one whitespace class for guard and parser with shared fixtures",
+    "evidence": "S3/mem/p7.ts: NBSP/VT/FF/BOM/U+3000 proposals written; handoff then incomplete",
+    "confidence": "high",
+    "file": "src/memory/templates.ts",
+    "line": 22,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p7b: all five near-miss spellings are now refused by memory.propose, and handoff stays complete before and after. The guard and parser share isHarnessHeaderKey and extractHeaderKey.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p7b: all five near-miss spellings are now refused by memory.propose, and handoff stays complete before and after. The guard and parser share isHarnessHeaderKey and extractHeaderKey."
+    }
+  },
+  {
+    "id": "R3-F9",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "MCP resources list hangs on a FIFO / throws EISDIR on a directory named *.md (new vs main)",
+    "impact": "one odd entry breaks or hangs listing for all resource classes",
+    "suggested_fix": "lstat and skip non-regular files in collectEntries",
+    "evidence": "S3/mem/p6.ts vs main-e047",
+    "confidence": "high",
+    "file": "src/memory/store.ts",
+    "line": 75,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p6 FIFO and directory cases skipped, no hang.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p6 FIFO and directory cases skipped, no hang."
+    }
+  },
+  {
+    "id": "R3-F10",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "lenient memory path follows symlinks while the strict scan refuses them",
+    "impact": "outside file served via memory.search, wiki.ask, MCP (already on main)",
+    "suggested_fix": "same lstat check as R3-F9",
+    "evidence": "S3/mem/p6.ts symlink case",
+    "confidence": "high",
+    "file": "src/memory/store.ts",
+    "line": 75,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p6b: with decisions -> outside, resources list, memory.search and wiki.ask serve only lessons/ok.md; the outside decisions/x.md is not served.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 0401a79e) by the round-5 opus reviewer: p6b: with decisions -> outside, resources list, memory.search and wiki.ask serve only lessons/ok.md; the outside decisions/x.md is not served."
+    }
+  },
+  {
+    "id": "R3-F11",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "writeTextIfMissing writes through a dangling escaping link before the pre-scaffold check",
+    "impact": "keryx init creates a template file outside the root, then refuses",
+    "suggested_fix": "check inside writeTextIfMissing or validate before defaults",
+    "evidence": "S3/rules/b2-dangling.sh case A",
+    "confidence": "high",
+    "file": "src/rules/agent-entrypoints.ts",
+    "line": 57,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: b2 case A: nothing is created outside; named refusal.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: b2 case A: nothing is created outside; named refusal."
+    }
+  },
+  {
+    "id": "R3-F12",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "install half-applied when a later surface refuses an escaping link",
+    "impact": "settings.json and install state written, exit 1",
+    "suggested_fix": "preflight every selected target before the first write",
+    "evidence": "S3/rules/sym1esc",
+    "confidence": "high",
+    "file": "src/integrations/installer.ts",
+    "line": 418,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: f12: gemini-cli install with an escaping GEMINI.md writes no .gemini/ and no state; the preflight is at installer.ts:387-426.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: f12: gemini-cli install with an escaping GEMINI.md writes no .gemini/ and no state; the preflight is at installer.ts:387-426."
+    }
+  },
+  {
+    "id": "R3-F13",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "in-root links into .git/ or onto another harness's managed file are accepted",
+    "impact": ".git/config corrupted (git exit 128); pre-commit hook appended (commits fail); cross-harness hook merge",
+    "suggested_fix": "refuse realpaths under <root>/.git/ and other surfaces' settings files",
+    "evidence": "S3/rules/b3-gitlinks.sh",
+    "confidence": "high",
+    "file": "src/lib/symlink-safety.ts",
+    "line": 67,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F13",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F13 (not fixed), classification: info. The link (.gemini/settings.json -> ../.claude/settings.json) and its target are both inside the project. A hostile repo gains nothing it could not get by committing .claude/settings.json directly. (review-313-r5.md)"
+    }
+  },
+  {
+    "id": "R3-F14",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "dangling/cyclic entrypoint links crash with raw ENOENT/ELOOP",
+    "impact": "no named reason; CLAUDE.md -> AGENTS.md before AGENTS.md exists crashes init",
+    "suggested_fix": "route realpath failures through the helper's named refusal",
+    "evidence": "S3/rules/b2-dangling.sh B/C, dang-k",
+    "confidence": "high",
+    "file": "src/rules/agent-entrypoints.ts",
+    "line": 207,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F14",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: b2 B/C/C2/D/E: named \"dangling symlink\" / \"symlink cycle\" refusals.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 035f7349) by the round-4 opus reviewer: b2 B/C/C2/D/E: named \"dangling symlink\" / \"symlink cycle\" refusals."
+    }
+  },
+  {
+    "id": "R3-F15",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "reserved files matched only as exact paths; registry path can be taken as a directory",
+    "impact": "import --external and verify exit 1 EISDIR until bundle uninstall; no forgery",
+    "suggested_fix": "reserve each exact name also as a directory prefix",
+    "evidence": "S3/bundle/pdir.ts",
+    "confidence": "high",
+    "file": "src/bundle/paths.ts",
+    "line": 153,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: pdir, K8.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: pdir, K8."
+    }
+  },
+  {
+    "id": "R3-F16",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "forced ownership transfer not reported in human or --json output",
+    "impact": "users cannot see a takeover; docs claim the reason is printed",
+    "suggested_fix": "print forced entries with reason and previous owner; transferred field in --json",
+    "evidence": "S3/bundle/own.out O1/O1j",
+    "confidence": "high",
+    "file": "src/commands/bundle.ts",
+    "line": 401,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F16",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: O1 human output and O1j --json transferred[].",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: O1 human output and O1j --json transferred[]."
+    }
+  },
+  {
+    "id": "R3-F17",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "uninstall deletes during the walk; a later refusal reports removed: [] for already-deleted files",
+    "impact": "ledger and output disagree with disk",
+    "suggested_fix": "validate all records first, unlink in a second pass",
+    "evidence": "S3/bundle/punin.ts",
+    "confidence": "high",
+    "file": "src/bundle/uninstall.ts",
+    "line": 150,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F17",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: punin.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: punin."
+    }
+  },
+  {
+    "id": "R3-F18",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "ownership keyed on self-declared bundle id; id spoof or --id reuse silently updates another bundle's files",
+    "impact": "silent overwrite, exit 0 (audit still runs)",
+    "suggested_fix": "record provenance in the ledger; conflict on provenance mismatch; document --id as TOFU",
+    "evidence": "S3/bundle/own.out O5",
+    "confidence": "medium",
+    "file": "src/bundle/plan.ts",
+    "line": 395,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F18",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains.",
+      "verifier": "round-7 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 17ea1884 (after fixing commit 57181ba2) by the round-7 opus reviewer: R3-F18: resolved. The identical-bucket laundering (round-6 L1/L2/L2b) is closed. Different-path, --force, --target-scope, case-variant and ledger-rewrite variants all conflict (own7.out B1-B5). The docs now describe provenance as trust-on-first-use and forgeable, and no \"unforgeable\" claim remains."
+    }
+  },
+  {
+    "id": "R3-F19",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "entry cap runs after full JSON parse and schema validation",
+    "impact": "4.6 MB manifest-only archive: 6 s, 1.68 GB before refusal",
+    "suggested_fix": "cap bundle.json size in the reader; check contents.length before schema",
+    "evidence": "S3/bundle/pquad3.ts, pquad2.ts",
+    "confidence": "high",
+    "file": "src/bundle/manifest.ts",
+    "line": 22,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F19",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: 240 MB manifest refused in 0.22 s.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: 240 MB manifest refused in 0.22 s."
+    }
+  },
+  {
+    "id": "R3-F20",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "plan re-reads the ledger per entry; 9,999-entry re-inspect takes 39 s",
+    "impact": "slow re-import of large bundles (pre-existing)",
+    "suggested_fix": "read ledger once per scope; Set lookups in commands/bundle.ts:366-368",
+    "evidence": "S3/bundle/pbig.ts",
+    "confidence": "high",
+    "file": "src/bundle/plan.ts",
+    "line": 385,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F20",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: Re-inspect of 9,999 entries in 1.4 s.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: Re-inspect of 9,999 entries in 1.4 s."
+    }
+  },
+  {
+    "id": "R3-F21",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "export refuses the whole bundle on one non-portable source name",
+    "impact": "rules/Code Style.md (round-tripped on cb09), non-ASCII names, .gitkeep abort the export",
+    "suggested_fix": "skip into skipped with a named reason, or document",
+    "evidence": "S3/bundle/w/exp-*; S3/roundtrip/export-user.json",
+    "confidence": "high",
+    "file": "src/bundle/export.ts",
+    "line": 403,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F21",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: f21: Code Style.md and ünï.md go to skipped[] with reasons; exit 0.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: f21: Code Style.md and ünï.md go to skipped[] with reasons; exit 0."
+    }
+  },
+  {
+    "id": "R3-F22",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "archive cap counts bundle.json, manifest cap does not; valid 10,000-entry bundle cannot be opened",
+    "impact": "boundary bundle refused",
+    "suggested_fix": "exclude bundle.json from the archive count; boundary test",
+    "evidence": "S3/bundle/pbig.ts",
+    "confidence": "high",
+    "file": "src/bundle/archive.ts",
+    "line": 275,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F22",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: 10,000 entries: ok.",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: 10,000 entries: ok."
+    }
+  },
+  {
+    "id": "R3-F23",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "stale external-imports lock blocks every import permanently",
+    "impact": "after a crash all --external imports refused, no documented recovery",
+    "suggested_fix": "break lock whose pid is dead; name recovery in the message",
+    "evidence": "hand-written lock in S3/ext/w/pg: 'held by another process; timed out after 3000ms'",
+    "confidence": "high",
+    "file": "src/bundle/external.ts",
+    "line": 591,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F23",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit f16d34f0) by the round-4 opus reviewer: A dead-pid or 10-minute-old lock is reclaimed with a note, and the message names the recovery step (external.ts:595-675).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit f16d34f0) by the round-4 opus reviewer: A dead-pid or 10-minute-old lock is reclaimed with a note, and the message names the recovery step (external.ts:595-675)."
+    }
+  },
+  {
+    "id": "R3-F24",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "bundle uninstall leaves empty directories",
+    "impact": "target tree differs from pre-import snapshot",
+    "suggested_fix": "prune empty ancestors under the scope root",
+    "evidence": "S3/roundtrip/dst-pre-status.txt vs dst-post-status.txt",
+    "confidence": "high",
+    "file": "src/bundle/uninstall.ts",
+    "line": 166,
+    "global_id": "2026-09-24-ingest-690-r03#R3-F24",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: The 9,999-entry uninstall prunes rules/g*/; kind roots are kept by design (PROTECTED_KIND_ROOTS).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 72d2bdd8) by the round-4 opus reviewer: The 9,999-entry uninstall prunes rules/g*/; kind roots are kept by design (PROTECTED_KIND_ROOTS)."
+    }
+  },
+  {
+    "id": "R1-F13",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "hook remote-exec denylist still misses 15 of 18 schema-valid argv shapes",
+    "impact": "python/node/perl fetch-exec, curl -o+chmod+exec, quote/var-split, base64|sh, busybox, nc -e, /dev/tcp import with --allow-hooks",
+    "suggested_fix": "treat any interpreter -c/-e/-M or network tool in a hook as at least a medium review finding; walk command.env",
+    "evidence": "S3/ext/pk.ts (15/18 IMPORTED); rexec.ts 24/24 caught",
+    "confidence": "high",
+    "file": "src/security/audit-harness/checks.ts",
+    "line": 561,
+    "global_id": "2026-09-24-ingest-690-r03#R1-F13",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+    }
+  },
+  {
+    "id": "R1-F20",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "rules sync, update, distill, OpenCode plugin and install-state writers bypass the symlink helper and write outside the project",
+    "impact": "a cloned repo shipping .metaproject/rules -> outside gets repo-controlled text written outside on keryx update/rules sync/distill; OpenCode uninstall deletes outside",
+    "suggested_fix": "one safeWriteFile/safeRm calling refuseEscapingSymlink immediately before every write; test asserting no raw writeFile in these modules",
+    "evidence": "S3/rules/b1-metarules.sh (reproduced): OUT/rules/claude-md.md, OUT/rules/core/*.mdc, OUT/entry/index.md written, exit 0; b5-otherwriters.sh",
+    "confidence": "high",
+    "file": "src/rules/agent-entrypoints.ts",
+    "line": 87,
+    "class_scope": {
+      "sites": [
+        "src/rules/agent-entrypoints.ts:76-77,87-90,94-97,221,289-304",
+        "src/rules/distill.ts:218-219,235-236,262,273-287",
+        "src/integrations/surfaces.ts:324-337",
+        "src/integrations/install-state.ts:214-215,294",
+        "update core-rules scaffold"
+      ],
+      "enumeration_method": "keryx ctx rg --all over fs write verbs in src/integrations, src/rules, src/commands/integrations.ts cross-referenced with refuseEscapingSymlink callers"
+    },
+    "global_id": "2026-09-24-ingest-690-r03#R1-F20",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main).",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: rules sync, rules distill, integrations install (claude and all) and bundle import are now CLEAN in all 21 escaping-ancestor variants, including the reviewer's .metaproject -> ../../.claude: exit 1 with a named escaping-symlink reason, or a no-op. The update writers that were routed are refused. The residual, scoped to `keryx init`, is tracked separately as R5-F1 (pre-existing on main)."
+    }
+  },
+  {
+    "id": "R2-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "hook audit walks argv but not command.env",
+    "impact": "sh -c \"$P\" with the payload in env imports",
+    "suggested_fix": "walk command.env values and cwd; variable-expanding shell argv at least medium",
+    "evidence": "S3/ext/pk.ts env-var-indirection IMPORTED",
+    "confidence": "high",
+    "file": "src/security/audit-harness/index.ts",
+    "line": 204,
+    "global_id": "2026-09-24-ingest-690-r03#R2-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: pk env-var-indirection refused; index.ts:316-337 (review-313-r4.md Round-3 verification: R2-F3 resolved).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: pk env-var-indirection refused; index.ts:316-337 (review-313-r4.md Round-3 verification: R2-F3 resolved)."
+    }
+  },
+  {
+    "id": "R2-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "U+2028/U+2029 in a memory harness header still parses as absent: restriction lost on every surface, handoff complete",
+    "impact": "codex-only entries served to claude and unbound callers via memory.search, wiki.ask, resources list/read (AC6); CLI handoff complete exit 0 with target_harnesses null (AC7)",
+    "suggested_fix": "normalize \\u2028/\\u2029/\\u0085 with CR/CRLF, or treat them in the header block as invalid; add fixtures",
+    "evidence": "S3/mem/p10.ts (reproduced): memory.search [LSSECRET,PSSECRET] for claude and unbound; handoff codex->claude exit 0 complete",
+    "confidence": "high",
+    "file": "src/memory/store.ts",
+    "line": 34,
+    "class_scope": {
+      "sites": [
+        "src/memory/store.ts:34-36",
+        "src/memory/store.ts:384",
+        "src/memory/store.ts:518",
+        "src/memory/store.ts:534",
+        "src/memory/store.ts:545",
+        "src/memory/store.ts:557",
+        "src/memory/service.ts:263,327,354",
+        "src/commands/memory.ts:550",
+        "src/mcp/resources.ts:163,247",
+        "src/wiki/ask.ts:482"
+      ],
+      "enumeration_method": "read every single-line regex in store.ts and every parseEntry consumer"
+    },
+    "global_id": "2026-09-24-ingest-690-r03#R2-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p10: no leaks; handoff hands over nothing (review-313-r4.md Round-3 verification: R2-F5 resolved).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 50d0e9e0) by the round-4 opus reviewer: p10: no leaks; handoff hands over nothing (review-313-r4.md Round-3 verification: R2-F5 resolved)."
+    }
+  },
+  {
+    "id": "R2-F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "rules-export skip: dry-run omits the warning; doctor reports invalid exit 1 right after a successful install",
+    "impact": "inconsistent status across install/dry-run/doctor",
+    "suggested_fix": "carry skip messages into dry-run warnings; doctor treats skip as warning",
+    "evidence": "S3/rules/f6-cli.sh, f6.out",
+    "confidence": "high",
+    "file": "src/integrations/surfaces-rules.ts",
+    "line": 98,
+    "global_id": "2026-09-24-ingest-690-r03#R2-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: f6.out: the dry-run shows the unsafe-rule warning in human output, and --json warnings[] carries it, identical to the real run.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: f6.out: the dry-run shows the unsafe-rule warning in human output, and --json warnings[] carries it, identical to the real run."
+    }
+  },
+  {
+    "id": "R2-F10",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "normaliser misses mathematical alphanumerics, tag characters, bidi controls, other combining marks, U+2064, double entities",
+    "impact": "directives evade auto-run and (for math/tag) injection checks",
+    "suggested_fix": "NFKC, strip all Default_Ignorable_Code_Point and tag chars, iterate entity decoding",
+    "evidence": "S3/ext/pc2.ts: math-bold 0/0, tag-chars 0/0, bidi/combining/invisible autorun 0",
+    "confidence": "high",
+    "file": "src/security/audit-harness/checks.ts",
+    "line": 43,
+    "global_id": "2026-09-24-ingest-690-r03#R2-F10",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
+    }
+  },
+  {
+    "id": "R2-F12",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "prose false positives remain (curl|python3 -m json.tool, curl|node -e); UTF-16 still refused; allowlist introduced R3-F1",
+    "impact": "legitimate docs still flagged high outside fences",
+    "suggested_fix": "see R3-F1; narrow interpreter-pipe rule to stdin-exec shapes",
+    "evidence": "S3/ext/pj.ts 3/7 flagged; pb.ts fp-utf16 audit-not-applicable",
+    "confidence": "high",
+    "file": "src/security/audit-harness/checks.ts",
+    "line": 561,
+    "global_id": "2026-09-24-ingest-690-r03#R2-F12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: json.tool prose is accepted; node -e is medium only; UTF-16 BOM is scanned. The allowlist residual is tracked under R3-F1 (review-313-r4.md Round-3 verification: R2-F12 resolved).",
+      "verifier": "round-4 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at 6c781507 (after fixing commit 8db6cb69) by the round-4 opus reviewer: json.tool prose is accepted; node -e is medium only; UTF-16 BOM is scanned. The allowlist residual is tracked under R3-F1 (review-313-r4.md Round-3 verification: R2-F12 resolved)."
+    }
+  },
+  {
+    "id": "R2-F15",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "agent-entrypoints marker matching is not fence-aware; distill still substring-matches (see R3-F4)",
+    "impact": "fenced example pair replaced, real block goes stale",
+    "suggested_fix": "reuse computeFencedRanges",
+    "evidence": "S3/rules/f15-fence.ts case B",
+    "confidence": "high",
+    "file": "src/rules/agent-entrypoints.ts",
+    "line": 134,
+    "global_id": "2026-09-24-ingest-690-r03#R2-F15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: Behaviour is fixed (f15). A: a fenced lone marker no longer refuses sync. B: the fenced example survives and the real block is replaced. agent-entrypoints and distill share src/rules/marker-matching.ts.",
+      "verifier": "round-5 opus reviewer"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Checked at c8d68d62 (after fixing commit 94ba146c) by the round-5 opus reviewer: Behaviour is fixed (f15). A: a fenced lone marker no longer refuses sync. B: the fenced example survives and the real block is replaced. agent-entrypoints and distill share src/rules/marker-matching.ts."
+    }
+  },
+  {
+    "id": "R2-F21",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "regression tests still missing: R1-F12, R1-F9 uninstall, R2-F16 retry, R2-F20 call sites, readOctal, binary-allowlist negative",
+    "impact": "regressions would go unnoticed (R3-F1 shipped because no negative allowlist test exists)",
+    "suggested_fix": "add tests that fail on cb09",
+    "evidence": "cb09..c4ad test diff; fails-on-old runs; two memory-symlink tests pass on cb09",
+    "confidence": "high",
+    "file": "src/bundle/uninstall.test.ts",
+    "line": 1,
+    "global_id": "2026-09-24-ingest-690-r03#R2-F21",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
+    }
+  },
+  {
+    "id": "R3-I1",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "trailing-dot segments and Windows device names pass the portable rule (brief claimed trailing dots rejected)",
+    "impact": "reserved-file aliases on Win32 only",
+    "suggested_fix": "refuse segments ending in '.' and device basenames if Windows is a target",
+    "evidence": "S3/bundle/pid.out, pid2.ts",
+    "confidence": "medium",
+    "file": "src/bundle/paths.ts",
+    "line": 63,
+    "global_id": "2026-09-24-ingest-690-r03#R3-I1"
+  },
+  {
+    "id": "R3-I2",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "bundle hardening leftovers: symlink tar member named with '/', writeAppliedState follows symlinked data/bundles, inspect forces allowHooks, parseUstar copy, bomb misreported",
+    "impact": "none demonstrated end to end",
+    "suggested_fix": "refuse non-regular/non-dir typeflags; lstat ledger dir chain",
+    "evidence": "S3/bundle/ptar.out; S3/ext/p9r2.ts inspect ok",
+    "confidence": "medium",
+    "file": "src/bundle/archive.ts",
+    "line": 259,
+    "global_id": "2026-09-24-ingest-690-r03#R3-I2"
+  },
+  {
+    "id": "R3-I3",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "key check ignores hardlinked key and symlinked state/; registry version comment claims replay protection it lacks",
+    "impact": "local-user-only",
+    "suggested_fix": "nlink==1, lstat state/ 0700; fix the comment or store the high-water version in state/",
+    "evidence": "code reading external.ts:69-78,185-216,239",
+    "confidence": "medium",
+    "file": "src/bundle/external.ts",
+    "line": 185,
+    "global_id": "2026-09-24-ingest-690-r03#R3-I3"
+  },
+  {
+    "id": "R3-I4",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "symlink helper accepts lexical '..' and cannot see hardlinks; agents export uses its own policy",
+    "impact": "no current caller passes '..'",
+    "suggested_fix": "reject '..' segments; check final containment",
+    "evidence": "S3/rules/b4-helper.ts 1a-1d, 4",
+    "confidence": "high",
+    "file": "src/lib/symlink-safety.ts",
+    "line": 49,
+    "global_id": "2026-09-24-ingest-690-r03#R3-I4"
+  },
+  {
+    "id": "R3-I5",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "misc: staging case-collision misses ſ (unreproduced), ZWJ joins evade auto-run, handoff problems name other harnesses' entry paths, private-dir check never fires in production, sac.review dedup unfiltered",
+    "impact": "none demonstrated end to end",
+    "suggested_fix": "see individual notes",
+    "evidence": "S3/ext/pc.ts zwj-autorun; S3/mem/p2b.ts, p8.ts; src/sac/decision-dedup.ts:195",
+    "confidence": "medium",
+    "file": "src/gdskills/governance/scout.ts",
+    "line": 760,
+    "global_id": "2026-09-24-ingest-690-r03#R3-I5"
+  }
+]

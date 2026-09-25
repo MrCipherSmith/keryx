@@ -6,17 +6,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
+import { checkInstallDestination, checkInstallFile, installGdskills } from "./install";
 import {
-  checkInstallDestination,
-  checkInstallFile,
-  installGdskills,
   normalizeRetiredRuleContent,
   removeStaleRuntimeBuilds,
   removeUnmodifiedRetiredRules,
   retiredRuleWarning,
   staleRuntimeBuildMessage,
   staleRuntimeBuildSeverity,
-} from "./install";
+} from "./guarded-fs-ops";
 import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
@@ -349,17 +347,17 @@ test("a skill directory reached through a symlink is not swept, and the target k
   }
 });
 
-// Round-5 minor: the comment above used to say a `skipped-dir` outcome could
-// not be observed through an install at all. It can — one level up. A link at a
-// CATEGORY leaves `<skillsRoot>/<category>/<name>` a real directory, because
-// `mkdir(..., { recursive: true })` follows the link and creates it INSIDE the
-// target. So the copy never meets a non-directory destination: it writes
-// through the link, into someone else's tree, and the install runs to
-// completion on every platform. Only the sweep refuses — deleting through a
-// link is the operation keryx will not perform. That asymmetry is the point of
-// this test, and it makes the carry-through from outcome to `warnings`
-// testable end to end, which is the half the direct-sweep test cannot reach.
-test("a symlinked category: the copy follows the link, the sweep refuses to, and the refusal reaches warnings", async () => {
+// R1-F1 fix: this test used to assert that a symlinked CATEGORY directory was
+// followed for the write (only the sweep refused it) — that asymmetry was
+// exactly the escape the review found (a category link lets `mkdirContained`'s
+// pre-fix `mkdir(..., { recursive: true })` predecessor create
+// `<skillsRoot>/<category>/<name>` INSIDE the linked-to tree, outside
+// `.metaproject` entirely). `mkdirContainedOrWarn` now walks every segment —
+// `skillsRoot` -> the symlinked category -> the skill name — and refuses the
+// moment the category segment resolves outside `metaprojectRoot`, so the
+// write is skipped (with a warning) the same way the sweep already refused to
+// delete through it. Nothing is written to the linked-to tree at all.
+test("a symlinked category: neither the copy nor the sweep follows the link, and both refusals reach warnings", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
   try {
     const metaprojectRoot = path.join(root, ".metaproject");
@@ -369,8 +367,8 @@ test("a symlinked category: the copy follows the link, the sweep refuses to, and
     const categoryDir = path.join(skillsRoot, category!);
 
     // Relocate the whole category behind a link, and leave a hand-written build
-    // in the target so a sweep that followed the link would have something to
-    // destroy.
+    // in the target so a sweep (or a write) that followed the link would have
+    // something to touch.
     const relocated = path.join(root, "shared-skills", category!);
     await mkdir(path.join(relocated, "job-orchestrator"), { recursive: true });
     await rm(categoryDir, { recursive: true, force: true });
@@ -383,19 +381,31 @@ test("a symlinked category: the copy follows the link, the sweep refuses to, and
 
     const result = await installGdskills(metaprojectRoot, "recommended");
 
-    // The install completed — this is the shape `fs.cp` survives — and it
-    // COPIED THROUGH the link: the canonical build now sits in the target, not
-    // in `.metaproject`. Writing through a link is not what keryx refuses;
-    // deleting through one is.
-    expect(existsSync(path.join(relocated, "job-orchestrator", "SKILL.md"))).toBe(true);
+    // Nothing was written through the link: no canonical build landed in the
+    // relocated tree, and the hand-written file is untouched.
+    expect(existsSync(path.join(relocated, "job-orchestrator", "SKILL.md"))).toBe(false);
     expect(await readFile(path.join(relocated, "job-orchestrator", "SKILL.zed.md"), "utf8")).toBe(
       "# hand-written, not keryx's\n",
     );
     expect((await lstat(categoryDir)).isSymbolicLink()).toBe(true);
-    const refusal = result.warnings.filter((warning) => warning.includes("was not swept"));
-    expect(refusal).toHaveLength(1);
-    expect(refusal[0]).toContain(`.metaproject/skills/gdskills/${category} was not swept`);
-    expect(refusal[0]).toContain("it is a symlink, and keryx will not delete through one");
+
+    // The install-side refusal (mkdirContainedOrWarn, per skill under the
+    // linked category) reaches `warnings`.
+    const installRefusal = result.warnings.filter((warning) => warning.includes("was not created because"));
+    expect(installRefusal.length).toBeGreaterThan(0);
+    for (const warning of installRefusal) {
+      expect(warning).toContain(`skills/gdskills/${category}/`);
+      expect(warning).toContain("refuses to write through a symlink");
+    }
+    expect(installRefusal.some((warning) => warning.includes("job-orchestrator"))).toBe(true);
+
+    // The sweep's own, independent refusal (removeStaleRuntimeBuilds) also
+    // still reaches `warnings` — its containment walk was not touched by this
+    // fix and keeps refusing to delete through the link.
+    const sweepRefusal = result.warnings.filter((warning) => warning.includes("was not swept"));
+    expect(sweepRefusal).toHaveLength(1);
+    expect(sweepRefusal[0]).toContain(`.metaproject/skills/gdskills/${category} was not swept`);
+    expect(sweepRefusal[0]).toContain("it is a symlink, and keryx will not delete through one");
     // A refusal is not a removal, and the category is named once, not once per
     // skill inside it.
     expect(result.notices.filter((notice) => notice.includes("was not swept"))).toEqual([]);

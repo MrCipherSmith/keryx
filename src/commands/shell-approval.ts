@@ -43,6 +43,14 @@ export type ShellApprovalEval = {
    * forced `ask`.
    */
   publishLeaseDetail?: string;
+  /**
+   * Flow 306 (W6 T9): a `PreToolUse` lifecycle hook tightened this call to
+   * `ask` (`ApprovalMeta.hookAsk`). Excluded from `autoApprove` exactly like
+   * `publishLease`/`credentials`: a saved or session allowlist pattern must
+   * not answer a prompt a hook specifically asked for, and (like
+   * `publishLease`) it is never remembered even if the caller offered to.
+   */
+  hookAsk: boolean;
   autoApprove: boolean;
   rejected: readonly PatternRejection[];
   tampered: boolean;
@@ -74,6 +82,7 @@ export function evaluateShellApproval(input: {
   const sacReviewConfirmation = touchesHumanConfirmation(command);
   const publishLease = input.meta?.publishLease === true;
   const publishLeaseDetail = input.meta?.publishLeaseDetail;
+  const hookAsk = input.meta?.hookAsk === true;
   const audit = io.loadAudit();
   for (const pattern of audit.permissions.allow) {
     input.sessionAllow.add(pattern);
@@ -84,6 +93,7 @@ export function evaluateShellApproval(input: {
     !credentials &&
     !sacReviewConfirmation &&
     !publishLease &&
+    !hookAsk &&
     isShellCommandAllowed(command, [...input.sessionAllow]);
   return {
     command,
@@ -92,6 +102,7 @@ export function evaluateShellApproval(input: {
     sacReviewConfirmation,
     publishLease,
     ...(publishLeaseDetail !== undefined ? { publishLeaseDetail } : {}),
+    hookAsk,
     autoApprove,
     rejected: audit.rejected,
     tampered,
@@ -116,9 +127,9 @@ export function evaluateShellApproval(input: {
 export function rememberExactShellGrant(
   command: string,
   sessionAllow: Set<string>,
-  options?: { publishLease?: boolean; dir?: string },
+  options?: { publishLease?: boolean; hookAsk?: boolean; dir?: string },
 ): string {
-  if (options?.publishLease === true) {
+  if (options?.publishLease === true || options?.hookAsk === true) {
     return "";
   }
   const { exact, offerExact } = suggestShellPatterns(command);
@@ -142,6 +153,9 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
   }
   if (evaled.sacReviewConfirmation) {
     lines.push("human-confirmation command (SAC confirm-review or `flow confirm`) — will not be remembered");
+  }
+  if (evaled.hookAsk) {
+    lines.push("a policy hook asked about this call — will not be remembered");
   }
   if (evaled.publishLease) {
     // Flow 275 F1 (specification §4.4): name the lease's holder and reason

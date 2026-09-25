@@ -35,6 +35,7 @@ import { resolveBusRoot } from "../bus/paths";
 import { listPresence } from "../bus/presence";
 import type { PresenceRecord } from "../bus/schema";
 import { resolveShellEnv } from "../harness/process/shell-spawn";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
 const CLI = path.join(REPO_ROOT, "src", "cli.ts");
@@ -160,7 +161,11 @@ function collect(stream: ReadableStream<Uint8Array>, sink: { text: string }): vo
 
 /** A shell whose stdin stays open until the test ends it. */
 function startShell(cwd: string, env: Record<string, string>, extraArgs: string[] = []): Shell {
-  const proc = Bun.spawn(["bun", CLI, ...SHELL_ARGS, ...extraArgs], {
+  // R3 (flow 319 CI regression): the safe flags between "bun" and CLI keep
+  // src/lib/safe-exec.ts's guard from spawning a re-exec'd wrapper, so
+  // `proc.pid` below is the real `keryx` process this test's SIGKILL/SIGSTOP
+  // (AC6) is meant to reach — not an intermediary that cannot forward either.
+  const proc = Bun.spawn(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, ...SHELL_ARGS, ...extraArgs], {
     cwd,
     env,
     stdin: "pipe",
@@ -223,7 +228,7 @@ async function waitForOnePresence(cwd: string): Promise<PresenceRecord> {
 }
 
 function busListJson(cwd: string, env: Record<string, string>): BusListJson {
-  const proc = Bun.spawnSync(["bun", CLI, "bus", "list", "--json"], { cwd, env, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawnSync(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "list", "--json"], { cwd, env, stdout: "pipe", stderr: "pipe" });
   if (proc.exitCode !== 0) {
     throw new Error(`keryx bus list --json failed: ${proc.stderr.toString()}`);
   }

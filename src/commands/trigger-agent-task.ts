@@ -39,6 +39,7 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildShellHookRuntime } from "./agent-hooks";
 import { ensureScratchParent } from "./unattended-scratch";
 import { builtinReadOnlyTools, type InteractiveTool, type InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
@@ -514,6 +515,19 @@ async function runLocked(
       const offending = tools.filter((t) => UNATTENDED_EXCLUDED_TOOLS.includes(t.definition.name));
       if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((t) => t.definition.name).join(", ")}`);
       const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
+      // Flow 306 (W6 T9, AC9): same unattended-untrusted, non-interactive
+      // hook wiring as `trigger-dispatch.ts` — see that call site's comment.
+      const shellHooks = buildShellHookRuntime({
+        projectRoot,
+        sessionId: runId,
+        runId,
+        interactive: false,
+        profileId: "unattended-untrusted",
+      });
+      // R700-01: headless — no terminal to ask "trust this?" in, so surface
+      // untrusted/changed project hooks, a load failure, tighten-only
+      // warnings and gate-off banners on stderr instead.
+      for (const line of shellHooks?.notices ?? []) console.error(line);
       const agentDeps: AgentDeps = {
         provider,
         providerId: dispatch.provider,
@@ -527,6 +541,7 @@ async function runLocked(
         idSeq: () => randomUUID(),
         unattended: true,
         hardDeny: unattendedRefusal,
+        ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
       const io: AgentIO = {
         write: () => {},

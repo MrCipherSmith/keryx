@@ -1,0 +1,27 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `keryx flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `keryx flow ac confirm <id> <ACn>`.
+
+## Criteria
+
+- AC1: (W3-AC1) With a real sink wired into the keryx shell hook runtime, the `keryx.learning-observer` hook appends a JSONL line under `.metaproject/data/learning/observations/<YYYY-MM-DD>.jsonl` for at least `tool-complete` and `session-end`, each line valid against the observation contract (schemaVersion 1, C-14 event mapping, sha256 inputDigest/cwdHash, previews <= 200 chars), and every `*Preview` field passes the security check-output analysis before write (a secret in tool output is stored as `[redacted:<category>]`); a test proves it.
+- AC2: (W3-AC2) `keryx learn extract` over a fixture observation window with a failing->passing test pair for the same test name produces exactly one `status: candidate` record with `provenance.extractor == "failing-to-passing-test"` and `evidence.length >= 1`; the other four deterministic signals (repeated correction, reverted edit, configured-reviewer comments, health regression) each have a fixture test producing a candidate, and the model extractor refuses to run unless its capability is enabled.
+- AC3: (W3-AC3) One reinforcement from confidence 0.4 at weight 1.0 yields exactly 0.61 with `confidenceLevel` `medium`; contradiction, decay (0.98^days) and the level boundaries (0.5, 0.8) are unit-tested against the documented constants.
+- AC4: (W3-AC4) `keryx learn accept` is the only code path that produces `status: accepted`; it writes only the record's own store and (project scope) exactly one index entry, never a skill/rule/agent/memory file, and refuses targets outside `.metaproject/data/learning/` or `~/.keryx/learning/`; project-skill apply (`keryx learn apply`, via `applyLearningProposal`) and reviewer-profile apply (`keryx review learn --reviewer`) each refuse a target outside their root via `isPathInside`; tests prove each refusal.
+- AC5: (W3-AC4a/AC4b) First project-scope accept adds exactly one array entry under the id with only `projectIdentity`, `identityKind`, `confidence`, `acceptedAt`; a second accept of another id adds a second top-level key; accepting a `scope: user` record changes only its status and writes no index entry.
+- AC6: (W3-AC5) `keryx learn promote` refuses in a non-TTY context with a named reason and has no bypass flag; a 1-identity fixture is refused with a named reason even interactively; a fixture proves promote uses indexed accept-time confidence rather than the live record's, and `accept --refresh` overwrites only the current project's entry; a successful promote writes a `scope: user`, `status: candidate` record under `~/.keryx/learning/patterns/`.
+- AC7: (W3-AC6) A reviewer-profile `.mdc` rendered from configured-reviewer comments contains no substring equal to the configured author's literal login (case-insensitive), carries only the opaque reviewer id, and `reviewerProfiles` must be a subset of `authors`.
+- AC8: (W3-AC7) `keryx learn graduate` writes only a graduation proposal and sets `graduation` on the source records, never a SKILL.md, agent definition or rule file; agent candidates are written only by a separate consent-gated apply as `.metaproject/agents/<name>.md` with `origin.kind: learned` and `sourceRef` = pattern id, and W1 `skills scout --record` accepts a learned origin with sourceRef.
+- AC9: (W3-AC8) Every fixture record produced by the acceptance tests validates against `learned-pattern.schema.json` via the runtime validator, and the runtime schema copy is byte-identical to the docs schema (CI test).
+- AC10: (W3-AC9) A guard test asserts `git check-ignore` matches `.metaproject/data/learning/observations/<date>.jsonl` and `.metaproject/data/learning/candidates/<id>.json` after `keryx init`'s managed ignore block is applied; the repo `.gitignore` carries the same entries.
+- AC11: (Wave-3 exit) A guard test proves zero learned patterns can reach `accepted` without a recorded human accept action: the store refuses an `accepted` write without the accept capability, extract/prune/promote/import-shaped writes never produce `accepted`, every accept appends a decision record, and `auditAcceptedRecords` flags an accepted record with no matching decision.
+- AC12: Learned trigger/action/evidence text is scanned before persistence and before apply/graduate/reviewer-profile writes; injection-shaped text ("ignore previous instructions ...") and secrets are refused, not stored (test).
+- AC13: (D-3) `.metaproject/rules/core/skill-lifecycle.mdc` and its bundled copy `src/gdskills/bundled/rules/core/skill-lifecycle.mdc` carry the "Passive observation is not mutation" amendment; `keryx learn prune` deletes observation files past 30 days and expires candidates past `ttl.expiresAt`.
+- AC14: Host-harness observation: an opt-in Claude Code `observe` surface in the W5 registry installs hooks that run `keryx learn observe --hook claude`, which maps Claude hook payloads to the same observation line shape (test), and the capability matrix artifact is regenerated with its drift test passing.
+- AC15: A deep review of Observe against the shared-agent-context "no complete session transcript" non-goal is recorded with no open finding at minor or above, and the PR's CI checks (lint, typecheck, test:core, client matrix) are green.

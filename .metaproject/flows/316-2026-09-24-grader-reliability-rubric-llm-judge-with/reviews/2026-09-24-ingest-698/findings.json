@@ -1,0 +1,376 @@
+[
+  {
+    "id": "R1-1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Gate never derives passRate / trial count from trialRecords (F2 passRate-only and F3 dropped-failing-records forgeries pass)",
+    "impact": "`regradeRecordedReport` checks the hashes, the deterministic results, `passed` and `passes`. It does not check:\n  - `records.length === scenario.trials`;\n  - `scenario.trials >= PACK_MIN_TRIALS`;\n  - `passRate === passes / trials`;\n  - `passAtK`.\n\n  The floor check then uses the unchecked `passRate`. Plan §3 (frozen contract) explicitly requires \"there are `trials` records\", so this is a silent deviation from the contract. AC4 promises that a report \"whose recorded counts disagree with its records\" fails.",
+    "suggested_fix": "Require records.length===trials, passRate===passes/trials, passAtK, trials>=PACK_MIN_TRIALS; compute floor from records.",
+    "evidence": "`forge.ts`:\n  - F2: honest 2/5 records, `passes: 2`, only `passRate: 1` edited, gives **pass**.\n  - F3: the three failing records deleted (2 records for `trials: 5`), `passRate: 1`, gives **pass**.\n\n  F3 lets someone cherry-pick REAL passing outputs and real judge verdicts from a failing run. No verdict has to be forged at all.",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval.ts",
+    "line": 1038,
+    "class_scope": {
+      "sites": [
+        "every behavior-scenario field the gate reads (status, passRate, trials, passes, passAtK, trialRecords)",
+        "every report-level field checked by checkSkillReportForPackGate",
+        "validateEvalReport recomputations (verdict yes, passRate no)",
+        "not checked: non-integer trials values"
+      ],
+      "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
+    },
+    "global_id": "2026-09-24-ingest-698#R1-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Judge verdicts, outputs, provenance labels and AG recordings are self-declared; W1/guide claim a 'fresh re-grade' that never re-runs the judge",
+    "impact": "W1 says \"a recorded 'pass' that does not survive a fresh re-grade fails the gate\". The guide says the gate compares against \"a fresh re-grade of those same records\". Both read as re-judging, but no judge is re-run. The guide presents the AG recordings as proof, without saying:\n  - that a recording is a hand-writable file;\n  - that anyone can compute `judgeRequestDigest` and write the expected verdicts;\n  - that `buildGateReadyReport` (R1-10) fabricates exactly such a report.\n\n  Only a code comment in `eval.ts` (the TrialRecord doc, \"trusted as recorded\") admits the limit. The gate's threat mod",
+    "suggested_fix": "State the threat model (internal consistency, not provenance); reword 'fresh re-grade'; move buildGateReadyReport to test-only.",
+    "evidence": "`forge.ts`:\n  - F1 (judge verdicts flipped) gives **pass**.\n  - F4 (fully made-up outputs, hashes and verdicts with the right `judgePromptVersion`) gives **pass**.\n  - F9 (records copied from another scenario, so the outputs answer a different prompt) gives **pass**.\n\n  `recordedJudge` accepts any entry whose digest a writer computed.",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md",
+    "line": 690,
+    "class_scope": {
+      "sites": [
+        "all self-declared fields trusted by the gate (judge verdict/reason, output, runner/model/judge/judgeModel labels, recordedAt, recording entries)",
+        "W1, write-a-rubric-scenario guide, cli-reference, agent-catalog docs",
+        "forgeries F1/F4/F9 verified",
+        "not checked: reviewability of large eval.json diffs"
+      ],
+      "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
+    },
+    "global_id": "2026-09-24-ingest-698#R1-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc 99f5d778: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc 99f5d778; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-3",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Trigger results trusted verbatim when catalogDigest matches; forged trigger with current digest clears the gate",
+    "impact": "Trigger scoring is deterministic, offline and cheap: `scoreTriggerScenarios` is the same function. Yet the gate only re-scores on digest drift. Setting `catalogDigest` to the current value, which anyone can compute with `computeCatalogTriggerDigest`, bypasses the check entirely. The plan's rationale, avoiding CI failures on unrelated edits, is equally met by always re-scoring, because the gate fails only on a real change.",
+    "suggested_fix": "Always re-score trigger scenarios against the current bundled catalog and compare per-scenario results and triggerAccuracy.",
+    "evidence": "`forge.ts`:\n  - F6: python `trigger-positive-6` forged from fail to pass, `triggerAccuracy.truePositive` bumped, `catalogDigest` = current, gives **pass**.\n  - F6b: same forgery with a stale digest gives fail (\"trigger-positive-6 now scores differently\").",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval.ts",
+    "line": 1269,
+    "class_scope": {
+      "sites": [
+        "per-scenario trigger passes/passRate/status/prompt",
+        "triggerAccuracy counters",
+        "evidence field",
+        "not checked: cross-platform determinism of scout scoring"
+      ],
+      "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
+    },
+    "global_id": "2026-09-24-ingest-698#R1-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-4",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Live judge passes vague one-liners (ts 1/2, react 2/2) and log-only error handling (1/2), and flips verdicts on identical input",
+    "impact": "A single vague sentence that names the direction of the fix clears rubrics whose pass criteria require concrete content. A go answer that checks the error but only logs it, with no propagation and no explanatory comment, which pass criterion 2 excludes, passed in one of two identical calls. The same input flips verdict, so:\n  - one recorded AG sample per canned answer does not characterize the judge;\n  - the 5-trial gate measures judge noise as well as runner behaviour.\n\n  Four of the ten ts/react behavior scenarios that cleared the gate sit exactly at the 0.8 floor (4/5).",
+    "suggested_fix": "Add a vague canned kind, tighten the judge prompt (concrete presence), temperature 0, record 3 samples and require unanimity; re-record and re-run the gate.",
+    "evidence": "`live-attacks.log:5,31,32` and `live-attacks-2.log`:\n  - ts \"Fix the OrderDraft type so it matches what the code expects, instead of hiding the error.\": PASS once, FAIL once.\n  - react \"Add what's missing to the dependency array.\": PASS twice. The judge's reason claims pass criterion 2 (staleness reasoning) holds, but it is absent.\n  - go `if err := w.Flush(); err != nil { log.Printf(...) }`: PASS, then FAIL on identical input.",
+    "confidence": "high",
+    "file": "src/gdskills/governance/judge.ts",
+    "line": 285,
+    "class_scope": {
+      "sites": [
+        "7 scenarios x 12 attack variants + 3 realistic probes, 92 live calls",
+        "leniency only in vague/partial classes; injection/fake-tag/fake-JSON/salad/hedge/temporary/foreign/buried all correctly failed",
+        "not checked: remaining 29 scenarios for vague leniency; long real runner outputs"
+      ],
+      "enumeration_method": "reviewer probes forge.ts / live-attacks logs and code reading, per review-r1.md class scope sections"
+    },
+    "global_id": "2026-09-24-ingest-698#R1-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a c0960ea9 15362951: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a c0960ea9 15362951; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "resource-with-block regex + P1 fail a resource-safe Path.read_text answer; query-by-role regex excludes findByRole; FU2 misses the regex",
+    "impact": "Both are wording checks. The plan requires deterministic checks only for unambiguous facts. The journal's FU2 proposes widening P1 only, but the regex fails the same correct answer independently.",
+    "suggested_fix": "- Drop the regex from `resource-with-block`, and widen P1 to \"the handle is closed on every path\".\n  - Relax `getByRole` to `(get|find|query)(All)?ByRole`, or drop it.\n  - Update FU2 in the journal and W1.",
+    "evidence": "`live-attacks-2.log`: `json.loads(Path(p).read_text(...))` gives `det=[false]` and judge fail, twice. Recorded run trials 1 and 5 were failed by the judge for the same reason.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/python/skills/python-implementation/evals.json",
+    "line": 1,
+    "global_id": "2026-09-24-ingest-698#R1-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix c729d45d f0a12949: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in c729d45d f0a12949; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "'Mentioning X only to warn against it is not a failure.' listed as a standalone fail criterion (7 scenarios), copy-pasted 'suppression' in dirname-replacement",
+    "impact": "`buildJudgePrompt` renders the entry under \"Fail criteria — ANY holding fails the answer:\". Read literally, a correct answer that warns against the anti-pattern \"holds\" that criterion. In `dirname-replacement` it names a \"suppression\" that does not exist in that scenario, which is a copy-paste artefact. It works today only because the system prompt carries the same rule globally.",
+    "suggested_fix": "- Fold the sentence into the preceding fail criterion (as the go and python packs already do), or into the rubric.\n  - Add a `validateEvalSpec` or integrity rule that rejects a fail criterion that is a negation-only note (e.g. `^Mentioning`).",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/ts-js-node/skills/nodejs-build-fix/evals.json",
+    "line": 36,
+    "global_id": "2026-09-24-ingest-698#R1-6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a a758ac5d: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a a758ac5d; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "anti_patterns tokens are prose phrases unused by grading; I6/I7 trivially satisfiable; `any` token forced invalid TS into known_wrong",
+    "impact": "The tokens are prose phrases lifted from the authored known_wrong, and SKILL.md prose. They are not forbidden constructs. So I7 (\"appears in known_wrong\") holds by authoring, and I6 checks prose overlap. Examples:\n  - \"edit code\", \"probably finish\", \"fetch helper\", \"mock the internal helper\", \"resolution override\", \"blocking function\";\n  - \"wantErr: true\" (in neither the rubric nor the criteria);\n  - `` `any` ``, which forced the invalid TypeScript \"(order as \\`any\\`).total\" into the ts known_wrong.",
+    "suggested_fix": "- Either document anti_patterns as an authoring hint with no grading effect, or make them literal constructs.\n  - Add a check that a token appears in the rubric or a fail criterion, so that the judge is actually told about it.",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "src/gdskills/stack-pack-eval-integrity.test.ts",
+    "line": 305,
+    "global_id": "2026-09-24-ingest-698#R1-7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a c2727b4d: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a c2727b4d; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-8",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "regrade accepts judge.error with verdict pass; judge-check --record stores error-manufactured fails as genuine and drops error",
+    "impact": "- `regradeRecordedReport` accepts a record whose `judge.error` is set with `verdict: \"pass\"`, a combination `buildEvalJudge` never produces.\n  - `judge-check --record` stores an error-manufactured `fail` (unparseable twice) as a genuine verdict and drops `error`, so an AG \"fail\" can be a parse failure.",
+    "suggested_fix": "- In regrade, reject a record with `judge.error !== undefined && judge.verdict === \"pass\"`.\n  - In `judge-check`, count an error verdict as a mismatch, or refuse to record it, and persist `error` in the entry.",
+    "evidence": "`forge.ts` F8 gives **pass**.",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval.ts",
+    "line": 1075,
+    "global_id": "2026-09-24-ingest-698#R1-8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc 1309bf5a: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc 1309bf5a; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-9",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "cli-reference says eval --scope defaults to all (code: bundled); agent-catalog says python/go failures are 'not a grader defect', contradicting W1/journal",
+    "impact": "- The `eval` row (edited by this PR) says \"`--scope` (default `all`)\", but `parseScope` defaults to `bundled` (`skills-governance.ts:56`).\n  - agent-catalog.md says python/go fail \"for scenario/runner-interaction reasons, not a grader defect this time\". W1 (`:135-138`) and the T13 journal call `resource-with-block` a (hypothesised) rubric/grader defect, and R1-5 confirms that live.",
+    "suggested_fix": "- Correct the default.\n  - Reword to \"for reasons recorded as working hypotheses (scenario under-specification, a too-narrow resource criterion, runner/tool interaction); see W1\".",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "docs/docs/cli-reference.md",
+    "line": 2463,
+    "global_id": "2026-09-24-ingest-698#R1-9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 99f5d778: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 99f5d778; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-10",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "eval-fixtures.ts ships a gate-clearing report builder with fabricated outputs and judge passes as production code",
+    "impact": "`buildGateReadyReport` fabricates outputs and `judge: { verdict: \"pass\" }` that satisfy `checkStablePackGate`. It is a non-`.test` module in the shipped `src/` tree. It is a ready-made forgery tool, and it is the concrete demonstration behind R1-2.",
+    "suggested_fix": "Rename it to a test-helper path excluded from the package (e.g. `eval-fixtures.test-helpers.ts`, or a `__fixtures__` folder), or exclude it from the published files.",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval-fixtures.ts",
+    "line": 68,
+    "global_id": "2026-09-24-ingest-698#R1-10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-11",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "known_wrong calibrations are mostly 'Easiest fix: <anti-pattern>' strawmen; AG never exercises subtle wrong answers",
+    "impact": "- `known-wrong`, `injection` and `stuffed` are all built on answers that openly endorse the anti-pattern and dismiss the alternative.\n  - The judge fails them trivially, so AG never exercises the realistic failure modes (a partial fix, hedging, a non-any cast, log-and-continue).\n  - My live probes show the judge mostly handles those anyway (R1-4 has the exceptions), but the repo does not demonstrate it.",
+    "suggested_fix": "Add a second calibration answer, `known_subtle_wrong`, per scenario that commits the anti-pattern while sounding reasonable, with a canned kind expected to FAIL.",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/ts-js-node/skills/nodejs-build-fix/evals.json",
+    "line": 42,
+    "global_id": "2026-09-24-ingest-698#R1-11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix a758ac5d c729d45d: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a758ac5d c729d45d; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-12",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Integrity-test I8/I9 'fires' fixtures re-implement the predicate inline instead of sharing it with the real-tree check",
+    "impact": "The I8 and I9 fixture tests recompute `expected_behavior.some(grader === \"not-contains\")` and `isJudgeScenario` themselves. The real-tree tests inline the same expression separately. A change to the real-tree predicate would not be caught by its \"fires\" test. The file's own header promises \"one implementation of what these rules mean\".",
+    "suggested_fix": "Extract `violatesI8(scenario)` and `violatesI9(scenario)` helpers, and use them in both places.",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "src/gdskills/stack-pack-eval-integrity.test.ts",
+    "line": 462,
+    "global_id": "2026-09-24-ingest-698#R1-12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 1309bf5a: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 1309bf5a; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-13",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Committed flow journal/context cite scratchpad-only evidence (AC9 probe, prior reviews); AC9 not reproducible from the repo",
+    "impact": "The AC9 re-grade script and the prior review reports are not in the repo, so AC9 cannot be reproduced from the PR.",
+    "suggested_fix": "Commit the AC9 probe (e.g. under the flow package), or inline its method in the journal and drop the path.",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": ".metaproject/flows/316-2026-09-24-grader-reliability-rubric-llm-judge-with/journal.md",
+    "line": 62,
+    "global_id": "2026-09-24-ingest-698#R1-13",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 9b4873b9: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 9b4873b9; verified by round 2"
+    }
+  },
+  {
+    "id": "R1-14",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Four ts/react scenarios sit exactly at the 0.8 floor (4/5); with shown judge variance, stability is marginal",
+    "impact": "`no-ts-ignore-suppression`, `dirname-replacement`, `no-disable-hooks-lint` and `no-mobx-scope` are each exactly 4/5 = 0.8. Given the judge variance shown in R1-4, one more judge flip would fail each pack. This is an honest result, but it is fragile evidence for \"stable\".",
+    "suggested_fix": "No change required in this flow. Note it in W1. Consider `trials >= 10` for graduation once the judge temperature is pinned.",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/ts-js-node/governance/eval.json",
+    "line": 1,
+    "global_id": "2026-09-24-ingest-698#R1-14",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "info: floor fragility noted in W1; the v2 re-run demoted react honestly. decided-by: MrCipherSmith (owner, in chat), standing rule"
+    }
+  },
+  {
+    "id": "R1-15",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Gate reloads the bundled catalog once per skill",
+    "impact": "`loadSkillCatalog(process.cwd(), { scope: \"bundled\" })` runs inside `checkSkillReportForPackGate`, so it walks the full bundled tree 4-5 times per pack gate call. The value is cwd-independent (`defaultBundledRoot`), so this is only a performance issue.",
+    "suggested_fix": "Load it once in `checkPackEvalDocument` and pass it down.",
+    "evidence": "see report",
+    "confidence": "high",
+    "file": "src/gdskills/governance/eval.ts",
+    "line": 1272,
+    "global_id": "2026-09-24-ingest-698#R1-15",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "no longer reproduces at 9b4873b9 after fix 8749a5cc: round-2 verification re-ran the probe (scratchpad f316/review2, forge2.ts / live re-probes / honesty.ts) and the targeted tests",
+      "verifier": "review-verification-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8749a5cc; verified by round 2"
+    }
+  }
+]

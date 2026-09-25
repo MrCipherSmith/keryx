@@ -39,7 +39,10 @@ function fakeHost(backend: "systemd" | "launchd" | "cron", linger = "yes"): Fake
     launchAgentsDir: agents,
     uid: 1000,
     user: "someone",
-    invocation: { execPath: "/bin/true", scriptPath: "/bin/true" },
+    // flow 319: a bun-named interpreter — SAFE_BUN_SPAWN_ARGS are inserted
+    // only for Bun (see schedule.ts's `isBunExecPath`); a node-interpreter
+    // schedule is covered by a dedicated test below.
+    invocation: { execPath: "/opt/bin/bun", scriptPath: "/bin/true" },
     calls: [],
     crontab: undefined,
     run: async (command: string, args: readonly string[], input?: string): Promise<CommandResult> => {
@@ -82,7 +85,7 @@ describe("systemd --user", () => {
     const timer = await readFile(path.join(unitDir, `${base}.timer`), "utf8");
     expect(service.startsWith(`# keryx-managed ${projectScheduleHash(root)} check-github\n`)).toBe(true);
     expect(service).toContain(`WorkingDirectory=${root}`);
-    expect(service).toContain("ExecStart=/bin/true /bin/true trigger run --schedule check-github");
+    expect(service).toContain("ExecStart=/opt/bin/bun --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github");
     expect(timer).toContain("\nOnCalendar=*-*-* 00,04,08,12,16,20:00:00\n");
     expect(timer).toContain("\nPersistent=true\n");
     expect(host.calls).toEqual(["systemctl --user daemon-reload", `systemctl --user enable --now ${base}.timer`]);
@@ -90,11 +93,67 @@ describe("systemd --user", () => {
 
   test("installing twice leaves exactly one unit pair and does not rewrite it", async () => {
     const host = fakeHost("systemd");
-    await installSchedule(root, "check-github", CRON, host);
+    const first = await installSchedule(root, "check-github", CRON, host);
+    expect(first.upgradedSafeFlags).toBe(false); // a fresh install, nothing to "upgrade" from
     const second = await installSchedule(root, "check-github", CRON, host);
     expect(second.wrote).toEqual([]);
+    expect(second.upgradedSafeFlags).toBe(false);
     expect((await readdir(unitDir)).length).toBe(2);
     expect(await isScheduleInstalled(root, "check-github", CRON, host)).toBe(true);
+  });
+
+  // R2-02: a unit installed before SAFE_BUN_SPAWN_ARGS was added to
+  // invocationArgv (a pre-existing on-disk file with the old, flag-less
+  // ExecStart=) is rewritten — not left stale — the next time this project's
+  // schedule is confirmed or resumed, and the result says so.
+  test("R2-02: a pre-existing unit missing the safe flags is rewritten on the next install, and upgradedSafeFlags says so", async () => {
+    const host = fakeHost("systemd");
+    const base = `keryx-${projectScheduleHash(root)}-check-github`;
+    await mkdir(unitDir, { recursive: true });
+    await writeFile(
+      path.join(unitDir, `${base}.service`),
+      `# keryx-managed ${projectScheduleHash(root)} check-github\n[Service]\nExecStart=/opt/bin/bun /bin/true trigger run --schedule check-github\n`,
+      "utf8",
+    );
+    await writeFile(path.join(unitDir, `${base}.timer`), `# keryx-managed ${projectScheduleHash(root)} check-github\n[Timer]\nOnCalendar=*-*-* 00,04,08,12,16,20:00:00\n`, "utf8");
+    const result = await installSchedule(root, "check-github", CRON, host);
+    expect(result.upgradedSafeFlags).toBe(true);
+    expect(result.wrote).toContain(path.join(unitDir, `${base}.service`));
+    const rewritten = await readFile(path.join(unitDir, `${base}.service`), "utf8");
+    expect(rewritten).toContain("ExecStart=/opt/bin/bun --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github");
+  });
+
+  // flow 319 (CI, R1): a schedule confirmed under NODE must never get
+  // SAFE_BUN_SPAWN_ARGS in its ExecStart= — Node refuses to start with them.
+  test("flow 319: a node-interpreter schedule installs with no SAFE_BUN_SPAWN_ARGS in ExecStart", async () => {
+    const host = { ...fakeHost("systemd"), invocation: { execPath: "/opt/node/bin/node", scriptPath: "/bin/true" } };
+    const result = await installSchedule(root, "check-github", CRON, host);
+    expect(result.upgradedSafeFlags).toBe(false);
+    const base = `keryx-${projectScheduleHash(root)}-check-github`;
+    const service = await readFile(path.join(unitDir, `${base}.service`), "utf8");
+    expect(service).toContain("ExecStart=/opt/node/bin/node /bin/true trigger run --schedule check-github");
+    expect(service).not.toContain("--no-env-file");
+  });
+
+  // flow 319: a unit previously written WITH the flags under a bun-shaped
+  // invocation is rewritten to DROP them once the confirmed runner is node
+  // (e.g. the operator's toolchain changed) — `existing !== file.content`
+  // triggers the rewrite the same way the opposite direction (R2-02) does.
+  test("flow 319: a pre-existing unit carrying the flags is rewritten to drop them when the confirmed runner is node", async () => {
+    const host = { ...fakeHost("systemd"), invocation: { execPath: "/opt/node/bin/node", scriptPath: "/bin/true" } };
+    const base = `keryx-${projectScheduleHash(root)}-check-github`;
+    await mkdir(unitDir, { recursive: true });
+    await writeFile(
+      path.join(unitDir, `${base}.service`),
+      `# keryx-managed ${projectScheduleHash(root)} check-github\n[Service]\nExecStart=/opt/node/bin/node --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github\n`,
+      "utf8",
+    );
+    await writeFile(path.join(unitDir, `${base}.timer`), `# keryx-managed ${projectScheduleHash(root)} check-github\n[Timer]\nOnCalendar=*-*-* 00,04,08,12,16,20:00:00\n`, "utf8");
+    const result = await installSchedule(root, "check-github", CRON, host);
+    expect(result.wrote).toContain(path.join(unitDir, `${base}.service`));
+    const rewritten = await readFile(path.join(unitDir, `${base}.service`), "utf8");
+    expect(rewritten).toContain("ExecStart=/opt/node/bin/node /bin/true trigger run --schedule check-github");
+    expect(rewritten).not.toContain("--no-env-file");
   });
 
   test("two projects with the same schedule name get different units", async () => {
@@ -154,7 +213,9 @@ describe("systemd --user", () => {
 
   const analyze = Bun.which("systemd-analyze");
   test.skipIf(!analyze)("the installed units pass systemd-analyze verify, with a project path containing a space", async () => {
-    const host = fakeHost("systemd");
+    // systemd-analyze checks that ExecStart's binary exists, so this test uses
+    // the real Bun running it (a Bun interpreter, so the safe flags are present).
+    const host = { ...fakeHost("systemd"), invocation: { execPath: process.execPath, scriptPath: "/bin/true" } };
     expect(root).toContain(" ");
     await mkdir(path.join(root, ".metaproject", "data", "trigger"), { recursive: true });
     await installSchedule(root, "check-github", CRON, host);

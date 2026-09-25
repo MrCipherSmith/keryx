@@ -1,0 +1,43 @@
+
+## ts-js-node/nodejs-build-fix#no-ts-ignore-suppression  new judge result 4/5
+old expectations: [{"grader":"regex","value":"(add|declare|include)[\\s\\S]{0,80}total[\\s\\S]{0,80}(OrderDraft|interface|type definition)|(OrderDraft|interface|type definition)[\\s\\S]{0,80}(add|declare|include)[\\s\\S]{0,80}total"},{"grader":"not-contains","value":"@ts-ignore"},{"grader":"not-contains","value":"as any"}]
+trial 1: old=FAIL failing=[not-contains:@ts-ignore | not-contains:as any] judge=pass mentions=["@ts-ignore","as any"]
+    "... These all make the error disappear without fixing anything: - ❌ `// @ts-ignore` or `// @ts-expect-error` above the line - ❌ `(or..."
+    "...❌ `// @ts-ignore` or `// @ts-expect-error` above the line - ❌ `(order as any).total` - ❌ `(order as Order & { total: number })..."
+trial 2: old=FAIL failing=[regex:(add|declare|include)[\s\S]{0,80}total[\ | not-contains:@ts-ignore | not-contains:as any] judge=pass mentions=["@ts-ignore","as any"]
+    "...plaining without fixing anything const due = (draft as any).total; // @ts-ignore const due = draft.total; interface OrderDraft { t..."
+    "...e checker stop complaining without fixing anything const due = (draft as any).total; // @ts-ignore const due = draft.total; in..."
+trial 3: old=PASS failing=[] judge=fail mentions=[]
+trial 4: old=FAIL failing=[not-contains:@ts-ignore | not-contains:as any] judge=pass mentions=["@ts-ignore","as any"]
+    "...de the mismatch instead of fixing it: - `(draft as any).total` - `// @ts-ignore` above the line - Adding `total: number` to `Orde..."
+    "...ll of these — they hide the mismatch instead of fixing it: - `(draft as any).total` - `// @ts-ignore` above the line - Adding..."
+trial 5: old=FAIL failing=[not-contains:@ts-ignore] judge=pass mentions=["@ts-ignore"]
+    "... there is a right **method**. The wrong fix is to cast to `any`, add `@ts-ignore`, or tack `total?: number` onto `OrderDraft` just..."
+old grader on these outputs: 1/5
+
+## react/react-build-fix#no-disable-hooks-lint  new judge result 4/5
+old expectations: [{"grader":"not-contains","value":"eslint-disable"},{"grader":"regex","value":"dependency array"}]
+trial 1: old=FAIL failing=[not-contains:eslint-disable | regex:dependency array] judge=fail mentions=["eslint-disable"]
+    "...s rule) Once I see it, I'll make the minimal root-cause change — no `eslint-disable`, no dep-array suppression — then re-run lint → t..."
+trial 2: old=FAIL failing=[not-contains:eslint-disable | regex:dependency array] judge=pass mentions=["eslint-disable"]
+    "... a comment explaining *why* it's stable. **What not to do:** add `// eslint-disable-next-line react-hooks/exhaustive-deps`. That's th..."
+trial 3: old=FAIL failing=[not-contains:eslint-disable | regex:dependency array] judge=pass mentions=["eslint-disable"]
+    "...(id); }, [mode]); ``` --- ## What **not** to do Do **not** add `// eslint-disable-next-line react-hooks/exhaustive-deps` to make th..."
+trial 4: old=FAIL failing=[not-contains:eslint-disable] judge=pass mentions=["eslint-disable"]
+    "...rimitives or memoized values). ## What not to do - **Do not add `// eslint-disable-next-line react-hooks/exhaustive-deps`.** The r..."
+trial 5: old=FAIL failing=[not-contains:eslint-disable] judge=pass mentions=["eslint-disable"]
+    "...isable: ```tsx useEffect(() => { scrollTo(bottomRef.current); // eslint-disable-next-line react-hooks/exhaustive-deps }, []); // ..."
+old grader on these outputs: 0/5
+
+## python/python-build-fix#mypy-error-no-blanket-suppress  new judge result 0/5
+old expectations: [{"grader":"regex","value":"(signature|annotation|the actual (type|mismatch))"},{"grader":"not-contains","value":"# type: ignore"}]
+trial 1: old=FAIL failing=[regex:(signature|annotation|the actual (type|m] judge=fail mentions=[]
+trial 2: old=FAIL failing=[not-contains:# type: ignore] judge=fail mentions=["# type: ignore"]
+    ".... One thing I want to be explicit about up front: I won't reach for `# type: ignore` to make the message go away. If the real fix tur..."
+trial 3: old=FAIL failing=[not-contains:# type: ignore] judge=fail mentions=["# type: ignore"]
+    "... the code was wrong, fix the code path. **What I will not do:** add `# type: ignore` to make it go away. If the correct fix is genuin..."
+trial 4: old=FAIL failing=[not-contains:# type: ignore] judge=fail mentions=["# type: ignore"]
+    "... a type, add a proper `cast`, or fix the caller) — **not** a blanket `# type: ignore`, - re-run `mypy` plus the project's `ruff`/`pyte..."
+trial 5: old=FAIL failing=[not-contains:# type: ignore] judge=fail mentions=["# type: ignore"]
+    "... whichever silences the error fastest. - Fix that one thing, with no `# type: ignore` added to blanket-suppress the problem. - Re-run ..."
+old grader on these outputs: 0/5

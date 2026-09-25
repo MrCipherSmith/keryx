@@ -42,6 +42,7 @@ import { cursorAtStart, readEvents } from "../bus/log";
 import { listLeases } from "../bus/leases";
 import { resolveBusRoot } from "../bus/paths";
 import { listPresence } from "../bus/presence";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
 const CLI = path.join(REPO_ROOT, "src", "cli.ts");
@@ -177,7 +178,11 @@ function collect(stream: ReadableStream<Uint8Array>, sink: { text: string }): vo
 
 /** A shell whose stdin stays open until the test ends it. */
 function startShell(cwd: string, env: Record<string, string>, extraArgs: string[] = []): Shell {
-  const proc = Bun.spawn(["bun", CLI, ...SHELL_ARGS, ...extraArgs], {
+  // R3 (flow 319 CI regression): the safe flags between "bun" and CLI keep
+  // src/lib/safe-exec.ts's guard from spawning a re-exec'd wrapper, so
+  // `proc.pid` below is the real `keryx` process — the one this file's
+  // SIGKILL test (AC "holder killed") signals directly.
+  const proc = Bun.spawn(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, ...SHELL_ARGS, ...extraArgs], {
     cwd,
     env,
     stdin: "pipe",
@@ -276,7 +281,7 @@ async function waitForPresence(cwd: string, count: number): Promise<void> {
 }
 
 function busListJson(cwd: string, env: Record<string, string>): BusListJson {
-  const proc = Bun.spawnSync(["bun", CLI, "bus", "list", "--json"], { cwd, env, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawnSync(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "list", "--json"], { cwd, env, stdout: "pipe", stderr: "pipe" });
   if (proc.exitCode !== 0) {
     throw new Error(`keryx bus list --json failed: ${proc.stderr.toString()}`);
   }
@@ -454,7 +459,7 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
     // `lease-expired` event; `prune.ts`'s delete-before-append ordering
     // under one lock means exactly one of them lands it.
     const pruners = Array.from({ length: 3 }, () =>
-      Bun.spawn(["bun", CLI, "bus", "prune"], { cwd: repo, env: { ...envB, ...SHORT_BUS_STALE_ENV }, stdout: "pipe", stderr: "pipe" }),
+      Bun.spawn(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "prune"], { cwd: repo, env: { ...envB, ...SHORT_BUS_STALE_ENV }, stdout: "pipe", stderr: "pipe" }),
     );
     const codes = await Promise.all(pruners.map((p) => p.exited));
     for (const code of codes) expect(code).toBe(0);
@@ -558,7 +563,7 @@ console.log(JSON.stringify({ publishLease, decision }));
     initRepo(repo);
     const env = checkoutEnv(work);
 
-    const pause1 = Bun.spawnSync(["bun", CLI, "bus", "pause", "@all", "--reason", "x", "--json"], {
+    const pause1 = Bun.spawnSync(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "pause", "@all", "--reason", "x", "--json"], {
       cwd: repo,
       env,
       stdout: "pipe",
@@ -568,7 +573,7 @@ console.log(JSON.stringify({ publishLease, decision }));
     const parsed = JSON.parse(pause1.stdout.toString()) as { leaseId: string };
     expect(typeof parsed.leaseId).toBe("string");
 
-    const pause2 = Bun.spawnSync(["bun", CLI, "bus", "pause", "@all", "--reason", "y"], {
+    const pause2 = Bun.spawnSync(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "pause", "@all", "--reason", "y"], {
       cwd: repo,
       env,
       stdout: "pipe",
@@ -577,7 +582,7 @@ console.log(JSON.stringify({ publishLease, decision }));
     expect(pause2.exitCode).not.toBe(0);
     expect(pause2.stderr.toString()).toContain("lease-already-held");
 
-    const resume = Bun.spawnSync(["bun", CLI, "bus", "resume", parsed.leaseId], {
+    const resume = Bun.spawnSync(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "resume", parsed.leaseId], {
       cwd: repo,
       env,
       stdout: "pipe",
@@ -591,7 +596,7 @@ console.log(JSON.stringify({ publishLease, decision }));
 
     // Once resumed, a fresh CLI pause is no longer refused (the clone-wide
     // limit is "at most one ACTIVE CLI lease", not "ever one").
-    const pause3 = Bun.spawnSync(["bun", CLI, "bus", "pause", "@all", "--reason", "z", "--json"], {
+    const pause3 = Bun.spawnSync(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "pause", "@all", "--reason", "z", "--json"], {
       cwd: repo,
       env,
       stdout: "pipe",

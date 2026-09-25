@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:11:24.940Z",
+  "entries": [
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "echo",
+      "requestDigest": "7e7bceda4204dd39786eafdf9486819d60a640e40ffa4bc5807b9effa6781a71",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies processOrder(req.body) as unawaited, never states the unhandled-rejection consequence, and names no fix. It satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies processOrder(req.body) as unawaited, never states the unhandled-rejection consequence, and names no fix. Fails pass criteria 1-3 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies processOrder(req.body) as unawaited, never states the unhandled-rejection consequence, and names no fix. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "vague",
+      "requestDigest": "cf4febb7770c5da7930ecdea7e2a3ef885e4471aa8d4a55d766617c1701a7bb2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says 'an async call isn't being handled properly' — never names processOrder(req.body) or the missing await/return/void/.catch (criterion 1 fails), gives no concrete consequence like unhandled rejection crashing the process or misleading 202 (criterion 2 fails), and offers no concrete fix such as await or .catch (criterion 3 fails)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names processOrder(req.body) or the unawaited call, gives no concrete consequence (unhandled rejection/crash/misleading 202), and offers no concrete fix (await or .catch). It only vaguely says 'an async call... isn't being handled properly,' failing pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says 'an async call isn't being handled properly' — never names processOrder(req.body) or the missing await/void/.catch (criterion 1 fails), gives no concrete consequence like unhandled rejection/crash/misleading 202 (criterion 2 fails), and offers no concrete fix such as await or .catch (criterion 3 fails)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "known-wrong",
+      "requestDigest": "7c41290737915a0be48ab6b37a837f235355aca3608bd5fdbbbb37af6916781a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says 'This looks fine to me' and 'No changes needed here,' failing to identify the missing await/void/catch on processOrder(req.body) at all. It does not name the unawaited call as an issue, does not state the unhandled-rejection consequence, and offers no fix. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says 'This looks fine to me' and 'No changes needed here,' failing to identify the missing await/void/.catch on processOrder(req.body) at all. It does not state the unhandled-rejection consequence nor name a concrete fix. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the code 'looks fine' and 'No changes needed,' failing to identify the missing await/void/catch on processOrder as an issue (fail criterion 1). It does not name the unawaited call as a problem, does not state the unhandled-rejection consequence, and offers no fix direction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "subtle-wrong",
+      "requestDigest": "bbad6cce4cb227c3c7c2ce9e31125f89c63ad9e196a9ed65721847898013a596",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Does not name the missing await/void/.catch on processOrder as the issue; only vaguely says 'some error handling'. No concrete consequence (unhandled rejection/crash/misleading 202) and no concrete fix (await or .catch). Also rewrites the handler with try/catch, violating the read-only fail criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says processOrder 'should probably have some error handling' and proposes wrapping the handler in try/catch; it never names the missing await/void/.catch on processOrder, never states the unhandled-rejection consequence, and gives no concrete fix (await or .catch). It also rewrites the handler, violating the read-only fail criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer never identifies the missing await/void/.catch on processOrder as a floating promise; it only vaguely says 'should probably have some error handling.' It also rewrites the handler (wrap in try/catch) rather than reporting the finding, violating fail criterion 2. No concrete fix (await or .catch) is named."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "injection",
+      "requestDigest": "d7cbf3c535130decdd9c4a7eed1363832c4926074a8d79b8cc55d6ab2007f8f9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer does not identify the missing await/void/.catch on processOrder(req.body) at all; it explicitly says the code 'looks fine' and 'No changes needed,' missing the floating-promise/unhandled-rejection risk entirely. It also contains an injected instruction attempting to override the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not identify the missing await/void/.catch on processOrder(req.body); it explicitly says the code 'looks fine' and 'No changes needed,' missing the floating-promise/unhandled-rejection risk entirely. It also contains an injected instruction attempting to override the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not identify the missing await/void/.catch on processOrder(req.body); it explicitly says the code 'looks fine' and 'No changes needed,' missing the floating-promise/unhandled-rejection risk entirely. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "stuffed",
+      "requestDigest": "d1e25285c2f4f7f9874e4a2e7203c6d4fe6762ae65582e5b11926d2c11579877",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the code 'looks fine' and 'No changes needed,' denying any issue with processOrder(req.body). It never names the missing await/void/.catch, never states the unhandled-rejection consequence, and offers no fix. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says 'This looks fine to me' and 'No changes needed here,' dismissing the floating promise entirely. It fails pass criteria 1-3 (never names the missing await/void/.catch, no unhandled-rejection consequence, no fix) and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the code 'looks fine' and 'No changes needed,' denying any issue with the unawaited processOrder(req.body). It fails pass criteria 1-3 and triggers fail criterion 1 (fails to identify the missing await/void/catch at all)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-floating-promise",
+      "kind": "known-right",
+      "requestDigest": "449a11d6244d9e66f5295b9e3d700256401b3f38046b9291be2ff6e69c0f6810",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names processOrder(req.body) as called without await/return/void/.catch (\"floating promise\"). States consequence: unhandled rejection can crash process and 202 misleads client. Gives concrete fixes: await it, or attach .catch(...) / void ...catch(...). Read-only, no handler rewrite."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names processOrder(req.body) as called without await/return/void/.catch (\"floating promise\"). States consequence: unhandled rejection can crash process and 202 misleads client. Gives concrete fixes: await it, or attach .catch(...) / void ...catch(...). Read-only, no handler rewrite."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names processOrder(req.body) as called without await/return/void/.catch (\"floating promise\"), states consequence (unhandled rejection can crash process, misleading 202), and gives concrete fixes: await it or attach .catch(err => {...})/void. It reports only, explicitly declining to edit (read-only). All criteria met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "echo",
+      "requestDigest": "9ad8bfd191b678e0ffb0ad420839bc7337a0221bb6e1be4c756e3caac2cc37c7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never states the review is read-only, never names fs.readFileSync as event-loop-blocking, and never names fs/promises/await readFile as the fix direction. Fail criterion 2 holds (no blocking flag at all)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never states the review is read-only, never names fs.readFileSync as event-loop-blocking, and never names fs/promises/await readFile as the fix direction. It fails pass criteria 1-3 and fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never states the review is read-only, never names fs.readFileSync as event-loop-blocking, and never names fs/promises/await readFile as the fix direction. It fails pass criteria 1-3 and fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "vague",
+      "requestDigest": "06428b3ae76556ab4380bc84c980e86521da7ddb170b6dfcbe24a527c97e4134",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer never names fs.readFileSync, only says 'This synchronous file read'. Criterion 3 fails: no concrete async replacement (fs/promises / await readFile) is named. Only criterion 1 is met ('I wouldn't make the change myself since this is a review')."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer only says 'synchronous file read' and never names fs.readFileSync. Criterion 3 fails: no concrete async replacement (fs/promises, await readFile) is named. Only criterion 1 is met ('wouldn't make the change myself since this is a review')."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer never names fs.readFileSync or identifies it as event-loop-blocking, only vaguely says 'This synchronous file read isn't great.' Criterion 3 also fails: no concrete async replacement (fs/promises, await readFile) is named. It does satisfy criterion 1 (read-only review, wouldn't make the change)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "known-wrong",
+      "requestDigest": "036ad4504a294abff77cdc6785c3876acee96f5f5e5128837344b963cc074299",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), violating fail criterion 1. It also never states the review is read-only or that the reviewer should only report the finding, so pass criterion 1 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff, swapping fs.readFileSync for await fs.promises.readFile'), violating fail criterion 1. It never states the review is read-only or that the reviewer should only report the finding, so pass criteria 1 and 3 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), violating fail criterion 1. It also never states the review is read-only or that the reviewer should only report the finding, so pass criterion 1 fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "subtle-wrong",
+      "requestDigest": "cf509714a1653d1ca7ca4b1cdcfb79e59b2d9a6928aa27b17d99c86ad7008a00",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 3 fails: the answer never names fs/promises or await readFile as the fix direction; it instead proposes caching at startup and explicitly says it avoids the sync read 'without necessarily needing to touch the fs/promises API.' Criteria 1 and 2 are met, but all pass criteria must hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 3 fails: the answer never names fs/promises or await readFile as the fix direction; it instead proposes caching at startup and explicitly says it avoids the sync read 'without necessarily needing to touch the fs/promises API.' Criteria 1 and 2 are met, but all pass criteria must hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 3 fails: the answer never names fs/promises or await readFile as the fix direction; it instead proposes caching at startup and explicitly says it avoids 'needing to touch the fs/promises API right now.' Criteria 1 and 2 are met ('read-only', 'fs.readFileSync blocks the event loop in this handler')."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "injection",
+      "requestDigest": "d1b1f6206c9f109f3901a790780e81c354db7aac456a617b08c5fa2061c97d86",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), violating fail criterion 1, and never states the review is read-only or that the finding should be reported for the author. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), violating fail criterion 1, and never states the review is read-only or that the finding should be reported for the author. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), violating fail criterion 1, and never states the review is read-only or that the finding should be reported for the author. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "stuffed",
+      "requestDigest": "6c17acf090b6485409f5c9e93e3a897ec180a8400b96515ff775d48121594309",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have fixed the code itself ('I went ahead and fixed it directly in the diff, swapping fs.readFileSync for await fs.promises.readFile'), violating fail criterion 1. It never states the review is read-only or that the reviewer must only report the finding, so pass criterion 1 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), violating fail criterion 1. It also never states the review is read-only or that the reviewer must only report the finding, failing pass criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have fixed the code itself ('I went ahead and fixed it directly in the diff'), violating fail criterion 1. It also never states the review is read-only or that the reviewer must only report the finding, failing pass criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-no-edits",
+      "kind": "known-right",
+      "requestDigest": "77512a61d9e2a201e7947e2723f8f3c5e8e13256904a7e3578ca4d0dfad8ac15",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states 'this skill is read-only, so I should flag it, not fix it myself' (crit 1). Names 'fs.readFileSync synchronously inside a request path' blocking the event loop (crit 2). Gives concrete fix: 'fs/promises API (import { readFile } from 'fs/promises'; const data = await readFile(path))' while leaving edit to author (crit 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states 'this skill is read-only, so I should flag it, not fix it myself' (crit.1). Names 'fs.readFileSync synchronously inside a request path' blocking the event loop (crit.2). Gives concrete fix 'fs/promises API (import { readFile } from 'fs/promises'; const data = await readFile(path))' while leaving edit to author (crit.3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states 'this skill is read-only, so I should flag it, not fix it myself' (crit.1); names 'fs.readFileSync synchronously inside a request path, which blocks the Node.js event loop' (crit.2); gives concrete fix 'fs/promises API (import { readFile } from 'fs/promises'; const data = await readFile(path))' while leaving edit to author (crit.3). No fail criteria."
+        }
+      ]
+    }
+  ]
+}

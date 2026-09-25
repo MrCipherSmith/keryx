@@ -17,6 +17,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { closeSync, constants, openSync, readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import path from "node:path";
 import { appendOwnerOnlyLine } from "../lib/config-dir";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import type { DebugRun } from "./debug-log";
 
 const EPOLLIN = 0x1;
@@ -261,7 +262,11 @@ async function makeTtyProbes(): Promise<{ pending: PendingReader; termios: Termi
 export function spawnDebugWatcher(run: DebugRun): number | undefined {
   const entry = process.argv[1];
   const args = [
-    ...(entry !== undefined ? [entry] : []),
+    // R1-01: when `entry` is a bun-run source/bundle path, this respawns
+    // `bun <entry>` directly, bypassing the shebang — the safe flags must
+    // ride along too (they would be nonsense args to a compiled `keryx`
+    // binary, so only added alongside `entry`). See `src/lib/safe-exec.ts`.
+    ...(entry !== undefined ? [...SAFE_BUN_SPAWN_ARGS, entry] : []),
     "shell",
     "--debug-watcher",
     "--pid",

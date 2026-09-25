@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import type { Dirent } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { isPathInside, pathExists, writeFileAtomic } from "../lib/fs";
+import { isPathInside, pathExists } from "../lib/fs";
+import { mkdirContained, writeContained } from "../lib/contained-write";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { collectGitProvenance } from "../metrics/provenance";
 import { readArtifactPointer } from "../metrics/lifecycle";
@@ -10,6 +11,13 @@ import { guardOutput, redactRaw, formatGuardWarning, prepareOutputForPersistence
 import { isTestingCapabilityEnabled } from "./capability";
 import { loadCoverageMap, selectByCoverageMap, coveredFilesInMap } from "./coverage-map";
 import { relatedByNamingAndDirectory as relatedNaming, resolveSmokeSet, staticChangedSelection } from "./selection";
+// Re-exported so a client (`commands/test.ts`) can build the shared `--json`
+// report through this facade rather than reaching past it into
+// `testing/related-report.ts` directly (`src/lib/import-policy.ts`'s
+// facade rule). `related-report.ts` itself imports only named functions
+// from this module (no top-level call), so this re-export closes a cycle
+// without either module needing the other's exports at load time.
+export { buildRelatedTestsReport, type RelatedTestsReport } from "./related-report";
 import type {
   CoverageMap,
   TestingConfig,
@@ -415,10 +423,11 @@ async function ensureContext(cwd: string): Promise<TestingContext> {
 
 async function writeContext(cwd: string, context: TestingContext): Promise<void> {
   const root = testingDataRoot(cwd);
-  await mkdir(root, { recursive: true });
-  await writeFile(path.join(root, "context.json"), `${JSON.stringify(context, null, 2)}\n`, "utf8");
-  await writeFile(path.join(root, "context.md"), renderContextMarkdown(context), "utf8");
-  await writeFile(path.join(root, "recommendations.md"), renderRecommendationsMarkdown(context), "utf8");
+  const rel = (p: string) => path.relative(cwd, p);
+  await mkdirContained(cwd, rel(root));
+  await writeContained(cwd, rel(path.join(root, "context.json")), `${JSON.stringify(context, null, 2)}\n`);
+  await writeContained(cwd, rel(path.join(root, "context.md")), renderContextMarkdown(context));
+  await writeContained(cwd, rel(path.join(root, "recommendations.md")), renderRecommendationsMarkdown(context));
 }
 
 async function writeReport(
@@ -428,8 +437,9 @@ async function writeReport(
   const root = testingDataRoot(cwd);
   const artifacts = path.join(root, "artifacts");
   const history = path.join(root, "history");
-  await mkdir(artifacts, { recursive: true });
-  await mkdir(history, { recursive: true });
+  const rel = (p: string) => path.relative(cwd, p);
+  await mkdirContained(cwd, rel(artifacts));
+  await mkdirContained(cwd, rel(history));
   const stamp = report.generatedAt.replace(/[:.]/g, "-");
   const json = path.join(artifacts, "latest.json");
   const markdown = path.join(artifacts, "latest.md");
@@ -438,10 +448,13 @@ async function writeReport(
     const runJson = path.join(artifacts, "runs", `${report.runId}.json`);
     const runMarkdown = path.join(artifacts, "runs", `${report.runId}.md`);
     if (await pathExists(runJson)) throw new Error(`immutable testing run already exists: ${report.runId}`);
-    await writeFileAtomic(runJson, serialized);
-    await writeFileAtomic(runMarkdown, renderReportMarkdown(report));
-    await writeFileAtomic(
-      json,
+    // writeContained is atomic (temp file + rename), the same guarantee
+    // writeFileAtomic used to provide — see contained-write.ts's header.
+    await writeContained(cwd, rel(runJson), serialized);
+    await writeContained(cwd, rel(runMarkdown), renderReportMarkdown(report));
+    await writeContained(
+      cwd,
+      rel(json),
       `${JSON.stringify({
         run_id: report.runId,
         commit: report.provenance?.commit ?? null,
@@ -452,10 +465,10 @@ async function writeReport(
       }, null, 2)}\n`,
     );
   } else {
-    await writeFile(json, serialized, "utf8");
+    await writeContained(cwd, rel(json), serialized);
   }
-  await writeFile(markdown, renderReportMarkdown(report), "utf8");
-  await writeFile(path.join(history, `${stamp}.json`), serialized, "utf8");
+  await writeContained(cwd, rel(markdown), renderReportMarkdown(report));
+  await writeContained(cwd, rel(path.join(history, `${stamp}.json`)), serialized);
   return {
     markdownPath: path.relative(cwd, markdown),
     jsonPath: path.relative(cwd, json),
@@ -464,9 +477,10 @@ async function writeReport(
 
 async function writeRawLog(cwd: string, raw: string): Promise<string> {
   const logs = path.join(testingDataRoot(cwd), "logs");
-  await mkdir(logs, { recursive: true });
+  const rel = (p: string) => path.relative(cwd, p);
+  await mkdirContained(cwd, rel(logs));
   const latest = path.join(logs, "latest.raw.log");
-  await writeFile(latest, raw, "utf8");
+  await writeContained(cwd, rel(latest), raw);
   return path.relative(cwd, latest);
 }
 

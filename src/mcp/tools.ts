@@ -10,16 +10,26 @@
 
 import { getAffected, getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
-import { createSecurityService, runScan } from "../security/service";
+import { createSecurityService, runScan, sourceForFileRead } from "../security/service";
 import { scanMcpManifest } from "../security/detect/mcp";
+import { resolveContainedPath, resolveProjectRoot } from "../lib/contained-path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { createCodeHealthService } from "../health/service";
 import { createGdWikiService } from "../wiki/service";
 import { createFlowService } from "../flow/service";
 import { runValidate } from "../standard/service";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, realpath, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
+import {
+  containsHarnessHeaderLine,
+  isMemoryHarnessId,
+  memoryHandoff,
+  memoryHarnessVisibilityByPath,
+  memoryPropose,
+  MEMORY_TYPE_VALUES,
+} from "../memory/service";
 import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
@@ -55,6 +65,20 @@ function stringParam(params: Record<string, unknown>, key: string): string | und
   const value = params[key];
   return typeof value === "string" ? value : undefined;
 }
+
+// Flow 313 (W4) review R1-F3 / R3-F8 (choke point d): an early,
+// friendlier-error pre-check for `memory.propose` at the MCP boundary.
+// `src/mcp/` may import only service facades (M-3), never `../memory/
+// templates` internals — `containsHarnessHeaderLine` is imported from
+// `../memory/service` (which re-exports the real `../memory/templates.ts`
+// function) rather than re-derived here, so the guard and the parser can
+// never drift apart on what counts as a line break or a near-miss header
+// key. `renderMemoryEntry` (`../memory/templates.ts`) is still the
+// authoritative defense for EVERY caller, including the CLI's `keryx memory
+// new --title`; this pre-check exists only to fail fast with a
+// tool-specific message before a write is even attempted.
+// eslint-disable-next-line no-control-regex -- matching control characters is the point of this guard.
+const MCP_CONTROL_OR_LINE_BREAK_RE = new RegExp("[\\u0000-\\u001F\\u007F\\u2028\\u2029]");
 
 /**
  * A page-size argument: absent, or a positive integer. Anything else throws.
@@ -102,6 +126,42 @@ async function loadGraphSafe(cwd: string): Promise<GraphData> {
   } catch {
     return { nodes: [], edges: [] };
   }
+}
+
+// Flow 313 (W4-AC6 / R1-F4 / R1-F14): drops `memory.search` hits whose entry
+// is not visible to the bound `harnessIdentity`, per the single
+// `filterEntriesForHarness` primitive (`../memory/service`, the only
+// memory-module import `src/mcp/` may make, M-3) — never a second,
+// independently-maintained filter. The adapter's structured hit shape does
+// not itself carry `targetHarnesses`, so this cross-references
+// `memoryHarnessVisibilityByPath` by relative path rather than duplicating
+// the adapter's ranking/validation logic here.
+async function filterMemorySearchHitsByHarness(
+  cwd: string,
+  result: Record<string, unknown>,
+  harnessIdentity: string | null,
+): Promise<Record<string, unknown>> {
+  const hits = Array.isArray(result.hits) ? (result.hits as Array<Record<string, unknown>>) : [];
+  if (hits.length === 0) {
+    return result;
+  }
+  const visibility = await memoryHarnessVisibilityByPath(cwd, harnessIdentity);
+  const filteredHits = hits.filter((hit) => {
+    const path = typeof hit.path === "string" ? hit.path : null;
+    // R2-I1 (evaluated, not applied): a `path` present in the map is decided
+    // by the map (the normal case — the map is built from every on-disk
+    // entry, R1-F4/R1-F14). A `path` absent from the map is `?? true`
+    // deliberately — never true in production, where this map and
+    // `memorySearch`'s ranking read the identical on-disk store, but real
+    // for a decoupled/fake `MetaprojectPort` (e.g. `memory-p0.test.ts`'s
+    // "MCP fake port fixture" purity test), which the review round itself
+    // rates info/"none demonstrated". Flipping this to fail-closed excludes
+    // every such fixture hit with no real on-disk store to match against,
+    // breaking that intentional decoupled-dispatch test for no production
+    // security gain — see `memoryHarnessVisibilityByPath`'s doc comment.
+    return path === null || (visibility.get(path) ?? true);
+  });
+  return { ...result, hits: filteredHits };
 }
 
 const OBJECT_SCHEMA = (
@@ -648,7 +708,22 @@ export function buildToolRegistry(): ToolEntry[] {
       mutating: false,
       async invoke(cwd, params) {
         const content = stringParam(params, "content") ?? "";
-        const source = (stringParam(params, "source") ?? "untrusted-external") as SecuritySource;
+        // F3 (review round 1): `source` is model-supplied over MCP, and
+        // `trusted-project` means "already in the repository the OPERATOR
+        // chose to work in — vetted by committing it" (`types.ts`). A caller
+        // on the other side of this tool call can claim anything in that
+        // string field; letting it claim `trusted-project` would let it grant
+        // its own content the shipped egress source-override allowance
+        // (`resolve.ts#egressSourceOverrideAction`) that exists for a
+        // committed README badge, not for a model's own say-so. Every other
+        // recognized value is passed through unchanged — this clamps the one
+        // value a caller must never be able to self-assign, it does not
+        // restrict which sources this tool may otherwise report.
+        const requestedSource = stringParam(params, "source") ?? "untrusted-external";
+        const source: SecuritySource =
+          requestedSource === "trusted-project"
+            ? "untrusted-external"
+            : (requestedSource as SecuritySource);
         return createSecurityService(cwd).check({ content, source });
       },
     },
@@ -665,11 +740,67 @@ export function buildToolRegistry(): ToolEntry[] {
       async invoke(cwd, params) {
         const filePath = stringParam(params, "path");
         const inline = stringParam(params, "content");
-        const content = inline ?? (filePath ? await readFile(filePath, "utf8") : "");
+        // R2-4 (flow 304, fix round 2): this hard-coded `trusted-project` for
+        // BOTH inline `content` and a `path` read, unconditionally. That is
+        // the same mistake `read-source.ts` documents at length for `ctx
+        // read` — `trusted-project` grants the shipped egress source-override
+        // allowance (`resolve.ts#egressSourceOverrideAction`), meant for a
+        // committed file the operator vetted by committing it, never for
+        // caller-supplied bytes with no such provenance.
+        //
+        // Inline `content` has no provenance at all — it is bytes the MCP
+        // caller typed into this call, exactly the shape `security.check`
+        // already clamps below — so it is always `untrusted-external`.
+        //
+        // A `path` is contained to the project root with the same helper
+        // `read-source.ts` uses (never a module internal — `lib/contained-path`
+        // is a shared lib), and its actual trust is derived from
+        // `sourceForFileRead`: tracked-by-git inside the root is
+        // `trusted-project`, everything else untracked or ignored is
+        // `untrusted-external`. A path that resolves outside the root is
+        // refused outright rather than silently scanned as untrusted, so a
+        // traversal attempt is surfaced instead of quietly downgraded. A
+        // directory never reaches `sourceForFileRead` at all — the
+        // `readFile` call just above it throws EISDIR first, so this tool
+        // rejects a directory path outright rather than classifying it as
+        // any particular source.
+        let content: string;
+        let source: SecuritySource;
+        // R3-2 (flow 304, fix round 3): reported RELATIVE to the project
+        // root, exactly like `commands/security.ts`'s `handleScan` does — the
+        // absolute realpath `resolveContainedPath` returns is machine-specific
+        // (home directory, worktree location, …) and this report is committed
+        // to `.metaproject/data/security/artifacts/latest.json`.
+        let reportPath: string | undefined;
+        if (inline !== undefined) {
+          content = inline;
+          source = "untrusted-external";
+        } else if (filePath) {
+          const projectRoot = resolveProjectRoot(cwd);
+          const contained = await resolveContainedPath(projectRoot, filePath);
+          if (!contained.ok) {
+            throw new Error(`security.scan: ${contained.message}`);
+          }
+          content = await readFile(contained.path, "utf8");
+          source = await sourceForFileRead(cwd, contained.path);
+          // `contained.path` is realpath'd (`lib/contained-path.ts`), but
+          // `projectRoot` is not — on a host where the project root itself
+          // sits behind a symlink (e.g. macOS's tmpdir, `/var` -> `/private/
+          // var`), relativizing against the non-realpath'd root produces a
+          // path that walks back OUT through the symlink and in again
+          // (`../../../private/var/...`) instead of a short in-project
+          // relative path. Realpath `projectRoot` too so both sides of the
+          // comparison agree.
+          const projectRootReal = await realpath(projectRoot).catch(() => projectRoot);
+          reportPath = path.relative(projectRootReal, contained.path) || ".";
+        } else {
+          content = "";
+          source = "untrusted-external";
+        }
         const result = await runScan(cwd, {
           content,
-          source: "trusted-project",
-          ...(filePath ? { path: filePath } : {}),
+          source,
+          ...(reportPath ? { path: reportPath } : {}),
         });
         return { decision: result.decision, report: result.report };
       },
@@ -731,17 +862,152 @@ export function buildToolRegistry(): ToolEntry[] {
         ["query"],
       ),
       mutating: false,
-      async invoke(cwd, params) {
+      async invoke(cwd, params, context) {
         const query = stringParam(params, "query") ?? "";
         const module = stringParam(params, "module");
         const memoryClass = stringParam(params, "class");
         const limit = typeof params.limit === "number" ? params.limit : undefined;
-        return createMetaprojectAdapter(cwd).memorySearch({
+        const result = await createMetaprojectAdapter(cwd).memorySearch({
           query,
           ...(module !== undefined && module.length > 0 ? { module } : {}),
           ...(memoryClass !== undefined && memoryClass.length > 0 ? { class: memoryClass } : {}),
           ...(limit !== undefined ? { limit } : {}),
         });
+        return filterMemorySearchHitsByHarness(cwd, result as unknown as Record<string, unknown>, context?.harnessIdentity ?? null);
+      },
+    },
+    {
+      name: "memory.handoff",
+      module: "memory",
+      description:
+        "Explicit cross-harness memory read (flow 313, W4-AC6/AC7). Returns entries whose " +
+        "`Source-Harness` matches `from` and whose `Target-Harnesses` is unset or includes THIS " +
+        "server's bound harness identity — the target is always the identity this server was " +
+        "launched with (`keryx serve-mcp --harness <id>`), never a caller-supplied param. Fails " +
+        "closed on an incomplete underlying scan: `status: \"incomplete\"` means the result is not " +
+        "the full answer, not that fewer entries simply matched. Calling this on a server launched " +
+        "without `--harness`/`KERYX_HARNESS` returns an error result.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          from: { type: "string", description: "Source harness id (e.g. \"claude\", \"codex\")." },
+          scope: { type: "string", enum: ["project"], description: "Memory scope to read. Only \"project\" is supported here." },
+        },
+        ["from"],
+      ),
+      mutating: false,
+      async invoke(cwd, params, context) {
+        const harnessIdentity = context?.harnessIdentity ?? null;
+        if (harnessIdentity === null) {
+          return {
+            status: "error" as const,
+            error: "harness identity not bound at launch (keryx serve-mcp --harness <id>)",
+          };
+        }
+        const from = stringParam(params, "from") ?? "";
+        if (!isMemoryHarnessId(from)) {
+          return { status: "error" as const, error: `unknown source harness: ${from}` };
+        }
+        const scopeParam = stringParam(params, "scope") ?? "project";
+        if (scopeParam !== "project") {
+          return { status: "error" as const, error: `unsupported scope: ${scopeParam}` };
+        }
+        const result = await memoryHandoff({ cwd, from, target: harnessIdentity, scope: "project" });
+        return {
+          status: result.status,
+          entries: result.entries.map((entry) => ({
+            path: entry.path,
+            title: entry.title,
+            source_harness: entry.sourceHarness,
+            target_harnesses: entry.targetHarnesses,
+          })),
+          problems: result.problems,
+        };
+      },
+    },
+    {
+      name: "memory.propose",
+      module: "memory",
+      description:
+        "Write a new `draft` memory entry (flow 313, W4-AC6). Its `Source-Harness` header is " +
+        "stamped from THIS server's bound `--harness`/`KERYX_HARNESS` launch identity — never a " +
+        "caller-supplied value: any of `source_harness`, `sourceHarness`, `harness`, or " +
+        "`Source-Harness` in params is refused as an unknown/disallowed field, and a " +
+        "`Source-Harness:` line smuggled into `summary`/`details` is refused rather than silently " +
+        "overriding the stamped value. Mutating.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          type: { type: "string", description: MEMORY_TYPE_VALUES.join(" | ") },
+          summary: { type: "string" },
+          details: { type: "string" },
+          target_harnesses: { type: "array", items: { type: "string" } },
+        },
+        required: ["title", "type", "summary"],
+        additionalProperties: false,
+      },
+      mutating: true,
+      async invoke(cwd, params, context) {
+        for (const disallowed of ["source_harness", "sourceHarness", "harness", "Source-Harness"]) {
+          if (Object.prototype.hasOwnProperty.call(params, disallowed)) {
+            throw new Error(`memory.propose does not accept "${disallowed}"; Source-Harness is stamped from the server's bound launch identity.`);
+          }
+        }
+        const title = stringParam(params, "title");
+        const type = stringParam(params, "type");
+        const summary = stringParam(params, "summary");
+        if (!title || !type || !summary) {
+          throw new Error("memory.propose requires title, type and summary.");
+        }
+        if (!MEMORY_TYPE_VALUES.includes(type)) {
+          throw new Error(`memory.propose: unknown type "${type}". Supported: ${MEMORY_TYPE_VALUES.join(", ")}`);
+        }
+        const details = stringParam(params, "details") ?? "";
+        const rawTargets = Array.isArray(params.target_harnesses) ? params.target_harnesses : undefined;
+        if (rawTargets !== undefined) {
+          for (const value of rawTargets) {
+            if (typeof value !== "string" || !isMemoryHarnessId(value)) {
+              throw new Error(`memory.propose: target_harnesses contains an unknown harness id: ${String(value)}`);
+            }
+          }
+        }
+        // Flow 313 (W4) review R1-F3: `title` is rendered as `# ${title}` on
+        // the file's first line — a control character or any line-terminator
+        // codepoint in it (not only `\n`; CR, U+2028 and U+2029 too) can turn
+        // one "line" into two, the second of which can smuggle a
+        // `Source-Harness:`/`Target-Harnesses:` header line above the real
+        // one. Refused outright, before summary/details are even checked.
+        if (MCP_CONTROL_OR_LINE_BREAK_RE.test(title)) {
+          throw new Error(
+            "memory.propose: title may not contain control characters or line separators (CR, LF, U+2028, U+2029).",
+          );
+        }
+        // A smuggled `Source-Harness:`/`Target-Harnesses:` header in free
+        // text must not be able to override the values stamped below —
+        // checked before anything is written. Line-terminator-aware (CR,
+        // U+2028, U+2029), not only `\n`, and checks BOTH header names, not
+        // only Source-Harness.
+        if (containsHarnessHeaderLine(summary) || containsHarnessHeaderLine(details)) {
+          throw new Error(
+            "memory.propose: summary/details may not contain a Source-Harness:/Target-Harnesses: line.",
+          );
+        }
+        const harnessIdentity = context?.harnessIdentity ?? null;
+        const result = await memoryPropose({
+          cwd,
+          title,
+          type,
+          summary,
+          ...(details.length > 0 ? { details } : {}),
+          ...(harnessIdentity ? { sourceHarness: harnessIdentity } : {}),
+          ...(rawTargets ? { targetHarnesses: rawTargets as string[] } : {}),
+        });
+        if (result.status === "invalid-type") {
+          throw new Error(`memory.propose: ${result.message}`);
+        }
+        return result.status === "skipped"
+          ? { path: result.path, status: result.status, securitySkipped: result.securitySkipped }
+          : { path: result.path, status: result.status };
       },
     },
     {
@@ -820,10 +1086,18 @@ export function buildToolRegistry(): ToolEntry[] {
         ["question"],
       ),
       mutating: false,
-      async invoke(cwd, params) {
+      async invoke(cwd, params, context) {
         const question = stringParam(params, "question") ?? "";
         const k = typeof params.k === "number" ? params.k : undefined;
-        return createGdWikiService().ask({ cwd, question, ...(k ? { k } : {}) });
+        // Flow 313 (W4) review R1-F4: the bound launch identity, never a
+        // caller param — `wikiAsk`'s memory citations must obey the same
+        // `target_harnesses` restriction `memory.search` does.
+        return createGdWikiService().ask({
+          cwd,
+          question,
+          ...(k ? { k } : {}),
+          harnessIdentity: context?.harnessIdentity ?? null,
+        });
       },
     },
     {
@@ -851,7 +1125,7 @@ export function buildToolRegistry(): ToolEntry[] {
         ["question"],
       ),
       mutating: false,
-      async invoke(cwd, params) {
+      async invoke(cwd, params, context) {
         const question = stringParam(params, "question") ?? "";
         const k = typeof params.k === "number" ? params.k : undefined;
         const budgetTokens = typeof params.budgetTokens === "number" ? params.budgetTokens : undefined;
@@ -859,13 +1133,18 @@ export function buildToolRegistry(): ToolEntry[] {
         // The live service object this file already constructs for `wiki.ask`
         // and `wiki.query`. The envelope is returned as-is: a re-map here would
         // be a second place for fields to go missing, which is the exact defect
-        // this tool was added to close.
+        // this tool was added to close. Flow 313 (W4) review R1-F4: threaded
+        // through to the underlying `wikiAsk` the same way `wiki.ask` is —
+        // `evidence()` currently never surfaces a memory citation as an item
+        // (only sectioned wiki citations seed the evidence package), so this
+        // closes the gap defensively rather than because a leak was proven.
         return createGdWikiService().evidence({
           cwd,
           question,
           ...(k !== undefined ? { k } : {}),
           ...(budgetTokens !== undefined ? { budgetTokens } : {}),
           ...(maxItems !== undefined ? { maxItems } : {}),
+          harnessIdentity: context?.harnessIdentity ?? null,
         });
       },
     },

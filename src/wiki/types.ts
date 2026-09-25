@@ -231,6 +231,14 @@ export type WikiAskInput = {
   // `WikiAskCitation` below) so a reader can never mistake it for current
   // guidance.
   asOf?: string | undefined;
+  // Flow 313 (W4) review R1-F4: the MCP server's bound `--harness`/
+  // `KERYX_HARNESS` launch identity (`null` when unbound), threaded through
+  // so a memory citation whose `Target-Harnesses` excludes this identity is
+  // never admitted as a candidate — the same restriction `memory.search`
+  // already applies. Absent -> `undefined`, treated identically to `null`
+  // (unbound) by `memoryCandidates` in `./ask.ts`, so every existing caller
+  // that predates this field is unaffected.
+  harnessIdentity?: string | null | undefined;
 };
 /**
  * AFC-07 / AFC-M03 (flow 235) T5. A retrieval outcome is a CODE, not a shape

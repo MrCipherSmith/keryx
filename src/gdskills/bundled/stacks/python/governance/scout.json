@@ -1,0 +1,34 @@
+[
+  {
+    "query": "Use when a Python project's pytest test suite needs writing, extending, or fixing -- covers fixture design, parametrization, mocking, and coverage gaps in existing pytest test files.",
+    "decision": "fork",
+    "topMatch": "review/review-testing-practices",
+    "recordedAt": "2026-09-24T04:48:38.183Z",
+    "skillName": "python-testing",
+    "justification": "top match review/review-testing-practices (0.37) is a review skill that checks existing tests against convention, not an authoring workflow; quality/test-gen (0.23) is a generic cross-language test generator with no pytest-specific fixture/parametrization/mocking guidance and no stack awareness. Decision is fork (below use threshold 0.55), and neither candidate is a substitute for a stack-scoped pytest authoring skill, so create."
+  },
+  {
+    "query": "Use when implementing or extending a feature in a modern Python (3.12/3.13) codebase -- covers project tooling discovery (pyproject.toml, uv/poetry/pip, ruff, mypy/pyright), typing (generics, Protocol, TypedDict, dataclasses), context managers, exception chaining, asyncio TaskGroup, logging, and src/-layout packaging.",
+    "decision": "create",
+    "topMatch": "python/python-build-fix",
+    "recordedAt": "2026-09-24T11:57:31.665Z",
+    "skillName": "python-implementation",
+    "justification": "top match python/python-build-fix (0.23) only shares generic Python-tooling vocabulary (mypy, ruff, pyright, pip/poetry) from its own build-fix scope, not implementation/typing/asyncio guidance; go/go-implementation (0.15) is a different language's implementation skill. Decision is create (below fork threshold 0.3), so a Python-specific implementation skill is genuinely new."
+  },
+  {
+    "query": "Use when reviewing Python changes for correctness and safety risks -- checks mutable default arguments, broad except clauses, resource leaks missing a with block, blocking calls inside async functions, typing holes (Any, missing Optional), N+1/ORM query misuse, and security sinks. Read-only: reports findings, does not edit code.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-code-review",
+    "recordedAt": "2026-09-24T11:58:18.113Z",
+    "skillName": "python-code-review",
+    "justification": "top match ts-js-node/nodejs-code-review (0.40) is the same review category but for a different language stack (JS/TS-specific mutable-default/resource/async checks do not transfer to Python's own except/typing/ORM idioms); go/go-code-review (0.22) is likewise a different language. Decision is fork (below use threshold 0.55, above fork threshold 0.3): the review category is shared across stacks by design, but no candidate covers Python's own mutable-default/except/async/typing/N+1/security vocabulary, so a Python-scoped fork is warranted."
+  },
+  {
+    "query": "Use when a Python project fails to import, build, type-check, or lint -- resolves ModuleNotFoundError/ImportError, packaging or editable-install failures, dependency resolver conflicts (pip/uv/poetry), mypy/pyright type errors, ruff failures, and pytest collection errors with the smallest root-cause fix.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-build-fix",
+    "recordedAt": "2026-09-24T11:58:25.230Z",
+    "skillName": "python-build-fix",
+    "justification": "top match ts-js-node/nodejs-build-fix (0.45) and go/go-build-fix (0.37) are the same build-fix category but for other languages' own toolchains (npm/tsc vs. pip/uv/mypy/ruff), not substitutes; python/python-implementation (0.33) is this same pack's implementation skill, sharing only generic tooling-discovery vocabulary, not a build-fix workflow. Decision is fork (below use threshold 0.55, above fork threshold 0.3): the build-fix category is shared across stacks by design, but no candidate resolves Python-specific ModuleNotFoundError/packaging/resolver/mypy/ruff/pytest-collection failures, so a Python-scoped fork is warranted."
+  }
+]

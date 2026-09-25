@@ -1,0 +1,248 @@
+[
+  {
+    "id": "R1-F1",
+    "reviewer": "review-orchestrator",
+    "severity": "blocker",
+    "problem": "readPattern/listPatterns do not bind stored id/scope to the file; writePattern's 'already accepted' exemption lets a planted project-store file rewrite a human-accepted user-scope record via non-TTY extract; accept writes to the wrong store; filename/id mismatch accepts a different id than logged",
+    "impact": "Wave-3 consent invariant broken: accepted text changes without TTY accept; project-dir writer escalates to user-wide store; bypasses promote's >=2-identity rule; decisions/index diverge from stores.",
+    "suggested_fix": "readPattern: parsed.id!==id or parsed.scope!==scope → learning-record-invalid (listPatterns skips). writePattern no-capability path: under the scope lock, require stored accepted record's id/scope/trigger/action/domain/project/reviewerProfile equal the new record (only evidence/confidence/confidenceLevel/graduation/updatedAt may change). Regression tests for p1 and p5.",
+    "evidence": "scratchpad/r691/p5.ts: 'user-scope record now: accepted | Skip the integration suite entirely and push straight to main'. p1.ts: accept p1 wrote ~/.keryx/learning/patterns/p1.json, project file stayed candidate; p2.json holding id p2other accepted p2other while logging p2; auditAcceptedRecords flagged both.",
+    "confidence": "high",
+    "file": "src/learning/store.ts",
+    "line": 65,
+    "class_scope": {
+      "sites": [
+        "store.ts:65 readPattern",
+        "store.ts listPatterns",
+        "store.ts:180 writePattern accepted exemption",
+        "extract.ts decayExistingRecords/upsertDraft",
+        "accept.ts acceptPattern/rejectPattern",
+        "graduate.ts runGraduate member writes",
+        "prune.ts expireCandidates",
+        "promote.ts readPattern"
+      ],
+      "enumeration_method": "keryx ctx rg 'writePattern\\(|readPattern\\(|listPatterns\\(' src/learning (non-test)"
+    },
+    "global_id": "2026-09-24-ingest-691#R1-F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: p1.ts P1a/P1b refused with learning-record-identity-mismatch; p5.ts planted file skipped, accepted user record intact",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "clusterRecords keys by id only → one pattern accepted at project and user scope forms a 2-member cluster ([X,X]) → skill proposal from a single pattern",
+    "impact": "Normal promote → user accept path yields proposals the cluster-size rule forbids.",
+    "suggested_fix": "Key by scope+id and dedupe same id across scopes (count once) or cluster per scope; include scope in members; readMember resolves by scope.",
+    "evidence": "p1.ts P2: members [\"dup\",\"dup\"]",
+    "confidence": "high",
+    "file": "src/learning/graduate.ts",
+    "line": 175,
+    "class_scope": {
+      "sites": [
+        "graduate.ts:175 clusterRecords",
+        "graduate.ts classify/proposalIdFor",
+        "graduate.ts readMember"
+      ],
+      "enumeration_method": "read of graduate.ts id-keyed structures"
+    },
+    "global_id": "2026-09-24-ingest-691#R1-F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: p1.ts P2 graduate [] (dedupeByIdPreferProject)",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F3",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "--dry-run=<v> / --refresh=<v> pass unknownFlags but are read via args.includes → destructive action runs (prune deleted files with --dry-run=true; apply --dry-run=1 writes skill; accept --refresh=1 full accept; review learn --reviewer --dry-run=1 writes .mdc)",
+    "impact": "Preview silently becomes durable/destructive write.",
+    "suggested_fix": "Reject '--flag=value' for boolean flags in unknownFlags (or parse booleans properly); CLI tests for '=' spelling.",
+    "evidence": "keryx learn prune --dry-run=true → 'deleted 1 observation file(s), expired 2 candidate(s)'",
+    "confidence": "high",
+    "file": "src/commands/learn.ts",
+    "line": 583,
+    "class_scope": {
+      "sites": [
+        "learn.ts:413 --refresh",
+        "learn.ts:458 apply --dry-run",
+        "learn.ts:583 prune --dry-run",
+        "learn.ts --json in extract/list/graduate/prune",
+        "review.ts:1437 runLearnReviewer --dry-run"
+      ],
+      "enumeration_method": "grep args.includes(\"--…\") in learn.ts and PR hunks of review.ts"
+    },
+    "global_id": "2026-09-24-ingest-691#R1-F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: c1.ts prune --dry-run=true refused, file kept; c2.ts review learn --dry-run=1 refused",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F4",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "generalizeLesson \\b…\\b never matches logins ending in ']' (bot logins) → login persists in action/trigger, printed by learn review, copied into graduated agent bodies",
+    "impact": "Violates the no-literal-login guardrail for stored records and graduated agents.",
+    "suggested_fix": "Lookaround boundaries (?<![\\w-])login(?![\\w-]); run case-insensitive substring refusal on draft trigger/action before persisting in extract and before graduate apply.",
+    "evidence": "p4.ts: generalizeLesson(\"As copilot-reviewer[bot] notes, …\", [\"copilot-reviewer[bot]\"]) unchanged",
+    "confidence": "high",
+    "file": "src/learning/reviewer-id.ts",
+    "line": 45,
+    "class_scope": {
+      "sites": [
+        "reviewer-id.ts:45 generalizeLesson",
+        "signals/reviewer-comment.ts drafts (action + shortHint trigger)",
+        "graduate.ts buildAgentCandidate body"
+      ],
+      "enumeration_method": "traced consumers of generalizeLesson output"
+    },
+    "global_id": "2026-09-24-ingest-691#R1-F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 6c237291 (after fixing commit f66a5e8d) by the round-r03 opus verification: bot login stripped at r02; remaining '_' boundary and other-author cases fixed in f66a5e8d and re-checked by round r03",
+      "verifier": "round-r03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f66a5e8d; re-checked by round-r03 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "positional() takes a flag's value as the id when the flag precedes it (review/reject --scope user foo → 'user'; apply --skill m/n <id>)",
+    "impact": "positional() takes a flag's value as the id when the flag precedes it (review/reject --scope user foo → 'user'; apply --skill m/n <id>)",
+    "suggested_fix": "Skip values of value-taking flags (--scope, --skill, --domain, --status, --since) or use parseArgs.",
+    "evidence": "positional() takes a flag's value as the id when the flag precedes it (review/reject --scope user foo → 'user'; apply --skill m/n <id>)",
+    "confidence": "high",
+    "file": "src/commands/learn.ts",
+    "line": 142,
+    "global_id": "2026-09-24-ingest-691#R1-F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: parseLearnArgs consumes flag values before positionals",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "normalizeRemoteUrl gives https/scp/ssh:// spellings of one repo different identities (comment claims otherwise) → one repo can satisfy promote's >=2 rule",
+    "impact": "normalizeRemoteUrl gives https/scp/ssh:// spellings of one repo different identities (comment claims otherwise) → one repo can satisfy promote's >=2 rule",
+    "suggested_fix": "Canonicalize to host/path (drop scheme, user, default port; scp ':'→'/') before hashing; fix comment and tests.",
+    "evidence": "normalizeRemoteUrl gives https/scp/ssh:// spellings of one repo different identities (comment claims otherwise) → one repo can satisfy promote's >=2 rule",
+    "confidence": "high",
+    "file": "src/learning/identity.ts",
+    "line": 21,
+    "global_id": "2026-09-24-ingest-691#R1-F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: p4.ts https/scp/ssh spellings give one identity",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "read-modify-write of records and index outside the file lock (extract can revert an accept; concurrent accepts drop index entries)",
+    "impact": "read-modify-write of records and index outside the file lock (extract can revert an accept; concurrent accepts drop index entries)",
+    "suggested_fix": "updatePattern(root,id,scope,mutator) doing read-compare-write inside withFileLock; same for the index.",
+    "evidence": "read-modify-write of records and index outside the file lock (extract can revert an accept; concurrent accepts drop index entries)",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 156,
+    "global_id": "2026-09-24-ingest-691#R1-F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: read-mutate-write under one lock (updatePattern/updateIndex)",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F8",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "decay floors whole days and resets updatedAt → remainder lost each run (~33% under-decay at 36h cadence)",
+    "impact": "decay floors whole days and resets updatedAt → remainder lost each run (~33% under-decay at 36h cadence)",
+    "suggested_fix": "Advance a lastDecayAt baseline by the whole days applied instead of resetting to now.",
+    "evidence": "decay floors whole days and resets updatedAt → remainder lost each run (~33% under-decay at 36h cadence)",
+    "confidence": "medium",
+    "file": "src/learning/extract.ts",
+    "line": 165,
+    "global_id": "2026-09-24-ingest-691#R1-F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: s1.ts S5 two 36h runs equal 0.4*0.98^3",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  },
+  {
+    "id": "R1-F9",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "validator errors when supersededBy is absent though the schema doesn't require it",
+    "impact": "validator errors when supersededBy is absent though the schema doesn't require it",
+    "suggested_fix": "Treat undefined like null in the non-superseded branch (or require it in both schema copies).",
+    "evidence": "validator errors when supersededBy is absent though the schema doesn't require it",
+    "confidence": "high",
+    "file": "src/learning/schema.ts",
+    "line": 1,
+    "global_id": "2026-09-24-ingest-691#R1-F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 33fc41b3 (after fixing commit f478a591) by the round-r02 opus verification: s1.ts S6 record without supersededBy validates",
+      "verifier": "round-r02"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f478a591; re-checked by round-r02 (refuted = no longer reproduces)"
+    }
+  }
+]

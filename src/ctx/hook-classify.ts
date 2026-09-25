@@ -10,6 +10,15 @@
 // diff/log/show) and passes everything else through, so a generic output-
 // compressing proxy can coexist. An explicit escape marker
 // (`# keryx:raw <reason>`) always allows a raw command and self-documents why.
+//
+// A small set of read-only `git` subcommands is allowed WITHOUT routing —
+// never blocked, no escape marker needed — because their output is already
+// bounded and there is no compaction/redaction value to add: `git status`,
+// `git blame`, `git branch`, `git tag`, bounded `git log --oneline -N`, and
+// `git diff --stat`/`--shortstat`/`--numstat` (see `isGitReadonlyAllowed`,
+// checked before `GIT_ROUTABLE`, W7-AC9). Plain
+// `git diff`/`git log` (unbounded, or with a patch/stat modifier like `-p`)
+// and `git show` still route through `GIT_ROUTABLE`.
 
 export interface HookClassification {
   block: boolean;
@@ -74,6 +83,193 @@ const ROUTES: readonly Route[] = [
 
 // `git <sub>` sub-commands whose output is long enough to route through ctx.
 const GIT_ROUTABLE = /^(diff|log|show)$/;
+
+// `git` global options that appear BEFORE the subcommand and take a value as
+// a separate token (unless already `=`-attached, e.g. `--git-dir=/x`).
+// `git -C <path> status` and friends are otherwise misread as subcommand
+// `-C` — a real gap this fixes as a side effect of AC9, not a new promise
+// about full `git` global-option coverage.
+const GIT_GLOBAL_VALUE_OPTS = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace"]);
+
+/** The `git` subcommand and its remaining args, skipping global options. */
+function gitSubcommand(tokens: readonly string[]): { sub: string; args: string[] } | null {
+  let i = 1; // tokens[0] === "git"
+  while (i < tokens.length) {
+    const token = tokens[i] ?? "";
+    if (!token.startsWith("-")) {
+      return { sub: token, args: tokens.slice(i + 1) };
+    }
+    const [flag] = splitFlagValue(token);
+    if (GIT_GLOBAL_VALUE_OPTS.has(flag) && !token.includes("=")) {
+      i += 2; // value-taking global opt: skip the flag AND its value token
+      continue;
+    }
+    i += 1; // boolean global opt (--no-pager, -p, …) or an already `=`-attached one
+  }
+  return null;
+}
+
+// W7-AC9: bounded `git log --oneline -N` — both `--oneline` AND a numeric
+// bound are required. `-N` (`-5`), `-n N`/`-nN`, and `--max-count[= ]N` all
+// count as a bound; anything else (plain `git log`, `git log --oneline` with
+// no bound) stays routed via GIT_ROUTABLE below.
+const GIT_LOG_BOUND_SHORT = /^-\d+$/;
+const GIT_LOG_BOUND_ATTACHED = /^-n\d+$/;
+const GIT_LOG_BOUND_MAX_COUNT_EQ = /^--max-count=\d+$/;
+
+// `git diff` forms whose output is a bounded summary rather than a patch.
+// The W7 spec requires `--stat`; `--shortstat`/`--numstat` are the same
+// bounded-summary family (one line, or one line per file with no hunk
+// bodies) so they are allowed on the same rationale — documented here since
+// the spec only named `--stat` explicitly.
+//
+// Exact tokens only — no `--stat=200` (a width argument, still a distinct
+// token shape from the bare flag and not spelled out by the spec) and no
+// other modifier riding alongside it. This is an explicit SAFE-flag
+// allowlist, not a denylist of known-unsafe modifiers: a denylist admits
+// anything it forgot to name (`-p`, `--dirstat`, `--word-diff`, `--cc`, …),
+// which is exactly how `git diff --stat -p` (a 4297-line patch) got through
+// the previous, modifier-based check.
+const GIT_DIFF_SAFE_FLAGS = new Set(["--stat", "--shortstat", "--numstat", "--cached", "--staged"]);
+
+/**
+ * `git diff` is read-only-allowed only when every token is either one of
+ * `GIT_DIFF_SAFE_FLAGS`, a `--` separator, or a non-flag operand (a revision
+ * or a path — a diff is bounded by which paths/revisions it covers, never by
+ * which flags name them). Any other flag falls through unclassified, which
+ * routes it. At least one of `--stat`/`--shortstat`/`--numstat` must be
+ * present — `git diff --cached` or `git diff HEAD~1` alone still emit a full
+ * patch and must stay routed.
+ */
+function isGitDiffReadonlyAllowed(args: readonly string[]): boolean {
+  let hasSummaryFlag = false;
+  let sawDashDash = false;
+  for (const arg of args) {
+    if (sawDashDash) continue; // path operand after `--`: always fine
+    if (arg === "--") {
+      sawDashDash = true;
+      continue;
+    }
+    if (GIT_DIFF_SAFE_FLAGS.has(arg)) {
+      if (arg === "--stat" || arg === "--shortstat" || arg === "--numstat") {
+        hasSummaryFlag = true;
+      }
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      return false; // any other flag (`-p`, `--dirstat`, `--stat=200`, …): not allowlisted
+    }
+    // revision or path operand (does not start with `-`): fine
+  }
+  return hasSummaryFlag;
+}
+
+// `git log` flags that are safe alongside a bounded `--oneline` summary:
+// cosmetic/filtering options that do not turn one line-per-commit into
+// unbounded per-commit output. Exact tokens only, same rationale as the diff
+// allowlist above.
+const GIT_LOG_SAFE_FLAGS = new Set([
+  "--oneline",
+  "--decorate",
+  "--graph",
+  "--no-merges",
+  "--first-parent",
+  "--reverse",
+]);
+
+// W7-AC9 bound was previously accepted with no upper limit, so
+// `git log --oneline -100000` slipped through as "bounded". A bound only
+// counts as safe when it is capped at a size the guard's own rationale
+// (bounded, no compaction value to add) actually holds for.
+const GIT_LOG_MAX_BOUND = 200;
+
+/**
+ * `git log --oneline` is read-only-allowed only when every token is
+ * `--oneline`, one of `GIT_LOG_SAFE_FLAGS`, a commit-count bound (`-N`,
+ * `-n N`/`-nN`, `--max-count=N`/`--max-count N`) capped at
+ * `GIT_LOG_MAX_BOUND`, a `--` separator, or a non-flag operand (a revision
+ * range). Any other flag — `-p`, `--stat`, `--word-diff`, `--cc`, `-L…`,
+ * `--remerge-diff`, `--format=…`, `--pretty=…`, an uncapped bound, and so on
+ * — falls through unclassified, which routes it, rather than being
+ * individually named as unsafe.
+ */
+function isGitLogReadonlyAllowed(args: readonly string[]): boolean {
+  if (!args.includes("--oneline")) {
+    return false;
+  }
+  let sawDashDash = false;
+  let bound: number | null = null;
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i] ?? "";
+    if (sawDashDash) continue; // path/range operand after `--`: always fine
+    if (token === "--") {
+      sawDashDash = true;
+      continue;
+    }
+    if (GIT_LOG_SAFE_FLAGS.has(token)) continue;
+    if (GIT_LOG_BOUND_SHORT.test(token)) {
+      bound = Number(token.slice(1));
+      continue;
+    }
+    if (GIT_LOG_BOUND_ATTACHED.test(token)) {
+      bound = Number(token.slice(2));
+      continue;
+    }
+    if (GIT_LOG_BOUND_MAX_COUNT_EQ.test(token)) {
+      bound = Number(token.slice("--max-count=".length));
+      continue;
+    }
+    if (token === "-n" || token === "--max-count") {
+      const next = args[i + 1];
+      if (!next || !/^\d+$/.test(next)) {
+        return false; // malformed: no numeric value follows
+      }
+      bound = Number(next);
+      i += 1;
+      continue;
+    }
+    if (token.startsWith("-")) {
+      return false; // any other flag: not allowlisted
+    }
+    // revision range operand (does not start with `-`): fine
+  }
+  return bound !== null && bound <= GIT_LOG_MAX_BOUND;
+}
+
+/**
+ * W7-AC9 read-only allowlist, checked BEFORE `GIT_ROUTABLE`: these pass
+ * through exactly like `git status` already does today — never blocked,
+ * never routed, no `# keryx:raw` needed — because their output is already
+ * bounded and there is no compaction/redaction value `keryx ctx` would add.
+ *
+ * `branch`/`tag` are allowed unconditionally, including a mutating-looking
+ * form like `git branch -D x` — this hook is a ROUTING guard, not a safety
+ * gate, so a delete flag on a bounded-output subcommand is not this hook's
+ * concern (see module header: it flags only commands whose output floods
+ * context).
+ *
+ * `log`/`diff` are each checked against an explicit SAFE-flag allowlist
+ * (`isGitLogReadonlyAllowed`/`isGitDiffReadonlyAllowed`) rather than a
+ * denylist of known-unsafe modifiers — a denylist is only as complete as the
+ * modifiers someone thought to name, which is how `--stat -p`, `--word-diff`,
+ * `--cc`, `-L…`, `--remerge-diff`, `--dirstat`, `--format=…`, `--pretty=…`
+ * and an uncapped `-100000` bound all got through the previous check.
+ */
+function isGitReadonlyAllowed(sub: string, args: readonly string[]): boolean {
+  switch (sub) {
+    case "status":
+    case "blame":
+    case "branch":
+    case "tag":
+      return true;
+    case "log":
+      return isGitLogReadonlyAllowed(args);
+    case "diff":
+      return isGitDiffReadonlyAllowed(args);
+    default:
+      return false;
+  }
+}
 
 // Split a command line into independently-executed STATEMENTS. A shallow split
 // on sequencing connectors is enough to catch `cd x && rg y` without a full
@@ -357,12 +553,18 @@ export function classifyCommand(command: string): HookClassification {
       return { block: true, matched: "ls -R", suggestion: "keryx ctx run -- <command>" };
     }
 
-    if (first === "git" && tokens[1] && GIT_ROUTABLE.test(tokens[1])) {
-      const suggestion =
-        tokens[1] === "diff"
-          ? "keryx ctx diff [--staged|--stat|<revision>]"
-          : `keryx ctx run -- git ${tokens[1]} …`;
-      return { block: true, matched: `git ${tokens[1]}`, suggestion };
+    if (first === "git") {
+      const gitCmd = gitSubcommand(tokens);
+      if (gitCmd && isGitReadonlyAllowed(gitCmd.sub, gitCmd.args)) {
+        continue; // W7-AC9: allowed without routing, never blocked, no escape marker needed
+      }
+      if (gitCmd && GIT_ROUTABLE.test(gitCmd.sub)) {
+        const suggestion =
+          gitCmd.sub === "diff"
+            ? "keryx ctx diff [--staged|--stat|<revision>]"
+            : `keryx ctx run -- git ${gitCmd.sub} …`;
+        return { block: true, matched: `git ${gitCmd.sub}`, suggestion };
+      }
     }
   }
 

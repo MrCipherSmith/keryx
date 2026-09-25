@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/agent-platform/hook-config.schema.json",
+  "title": "Keryx shell hook configuration",
+  "description": "planned — Declares the lifecycle hook registrations read by `keryx shell`'s own hook runtime (W6): `~/.keryx/hooks.json` (user scope) and `.metaproject/hooks.json` (project scope), merged over Keryx's built-in registrations by the precedence in workstreams/W6-shell-hooks.md (built-in < user < project). No runtime reads this shape yet; it is the target contract for the hook runtime described there. Field and I/O-contract naming intentionally mirrors the public Claude Code hooks convention (stdin JSON, exit-code semantics, stdout JSON decision) so the same hook command can run unmodified under `keryx shell` and under a host harness's own hook installer.",
+  "type": "object",
+  "required": ["schemaVersion", "hooks"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Config format version. Bumped only on a breaking shape change; a consumer must fail closed (refuse to load, not silently ignore) on an unrecognised major."
+    },
+    "_keryxManaged": {
+      "type": "object",
+      "description": "Sentinel block Keryx writes into a file it manages so `keryx hooks enable|disable` and doctor/uninstall can distinguish Keryx-owned entries from a human's own edits without deleting the latter. Present only on the merged project/user artifact `keryx hooks` itself writes, never required on a hand-authored source file. Intentionally shaped as an object here, not the string/string-array sentinel some host settings files (e.g. `.claude/settings.json`) use, because this file must record per-entry `managedHookIds` for `keryx hooks enable|disable` to target individually, which a bare marker string cannot express.",
+      "additionalProperties": false,
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": { "type": "string", "const": "keryx" },
+        "version": { "type": "string", "description": "Keryx CLI version that last wrote this block." },
+        "managedHookIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hook registration ids this file's Keryx-managed block currently owns, so a later `keryx hooks disable` removes exactly those entries."
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "One array of hook registrations per lifecycle event. Unknown event keys are rejected (additionalProperties: false) so a typo fails closed instead of silently registering nothing.",
+      "additionalProperties": false,
+      "properties": {
+        "SessionStart": { "$ref": "#/$defs/hookList" },
+        "UserPromptSubmit": { "$ref": "#/$defs/hookList" },
+        "PreToolUse": { "$ref": "#/$defs/hookList" },
+        "PostToolUse": { "$ref": "#/$defs/hookList" },
+        "PostToolUseFailure": { "$ref": "#/$defs/hookList" },
+        "PreCompact": { "$ref": "#/$defs/hookList" },
+        "Stop": { "$ref": "#/$defs/hookList" },
+        "SubagentStart": { "$ref": "#/$defs/hookList" },
+        "SubagentStop": { "$ref": "#/$defs/hookList" },
+        "SessionEnd": { "$ref": "#/$defs/hookList" }
+      }
+    }
+  },
+  "$defs": {
+    "hookList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/hookRegistration" },
+      "description": "Registrations for this event, in the deterministic execution order defined by workstreams/W6-shell-hooks.md (built-ins first by fixed id order, then user-scope, then project-scope, each in file order; ties broken by `id`)."
+    },
+    "hookRegistration": {
+      "type": "object",
+      "description": "Either a full registration (all required fields, `id` without the `keryx.` prefix, and no `acknowledge`) or a project/user disable override of a built-in (`id` with the `keryx.` prefix, `enabled: false`, optionally `acknowledge`) — see the `oneOf` below. Disable overrides of a built-in GATE (class `gate`/`gate-advisory`) are ignored at project scope (a project file can never turn one off) and, at user scope, need `acknowledge: \"disable-builtin-gate\"` or they are ignored too; `observe`/`context` built-ins may be disabled from either scope without `acknowledge`.",
+      "oneOf": [
+        {
+          "required": ["id", "matcher", "command", "class"],
+          "not": { "required": ["acknowledge"] },
+          "properties": { "id": { "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$" } }
+        },
+        {
+          "required": ["id", "enabled"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "pattern": "^keryx\\.[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$" },
+            "enabled": { "const": false },
+            "acknowledge": { "const": "disable-builtin-gate" }
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(keryx\\.)?[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$",
+          "description": "Stable identifier, unique within one event's list after merge. Built-in ids are namespaced `keryx.<name>` (e.g. `keryx.ctx-guard`) so a project/user id can never collide with or silently shadow a built-in. A project/user file may use a `keryx.<name>` id only in the disable-override form (`{id, enabled: false}`, see `oneOf`) — never in a full registration."
+        },
+        "acknowledge": {
+          "type": "string",
+          "const": "disable-builtin-gate",
+          "description": "Only in a USER-scope disable override of a built-in gate (class gate or gate-advisory): the operator's explicit acknowledgement that the gate is turned off. Without it the override is ignored with a warning. A project file can never disable a built-in gate."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Human-readable purpose, shown by `keryx hooks list`."
+        },
+        "matcher": {
+          "type": "string",
+          "description": "Tool-name filter for PreToolUse/PostToolUse/PostToolUseFailure (regex over the tool name, e.g. `Bash|Write|Edit`); ignored (must be `\"*\"`) for events that are not per-tool (SessionStart, UserPromptSubmit, PreCompact, Stop, SubagentStart, SubagentStop, SessionEnd).",
+          "default": "*"
+        },
+        "class": {
+          "type": "string",
+          "enum": ["gate", "gate-advisory", "observe", "context"],
+          "description": "`gate`: this hook's decision can tighten the policy-engine outcome (deny/ask/add-context) and its failure semantics follow the fail-closed row in workstreams/W6-shell-hooks.md's failure table, fail-closed in every profile. `gate-advisory`: same tightening power as `gate` when it runs successfully, but its failure semantics are profile-aware — fail-open with a recorded warning in `read-only-review` and `monitored-trusted-local`, fail-closed in `unattended-untrusted` (see the failure-semantics table). `observe`: side-effect-free (e.g. a learning/evidence recorder); it can never change the outcome and its failure is always fail-open-with-warning, regardless of profile. `context`: may add `additionalContext` but never a decision; failure is always fail-open."
+        },
+        "command": {
+          "type": "object",
+          "required": ["argv"],
+          "additionalProperties": false,
+          "description": "The hook process to run. Always a command; there is no in-process/prompt/HTTP handler type in v1 (see workstreams/W6-shell-hooks.md Design > Non-goals).",
+          "properties": {
+            "argv": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Argv vector, e.g. [\"keryx\", \"security\", \"check-input\"]. Never shell-interpolated; spawned directly to close the command-injection-via-interpolation class W8 audits for."
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Working directory, resolved relative to the project root. Defaults to the project root."
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": { "type": "string" },
+              "description": "Extra environment entries. Merged over the fixed env allowlist described in workstreams/W6-shell-hooks.md Execution; a key not on that allowlist and not listed here is stripped, not merely unset."
+            }
+          }
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60000,
+          "default": 5000,
+          "description": "Hard wall-clock budget for one invocation. A hook that exceeds it is killed and treated as a timeout failure (see failure-semantics table)."
+        },
+        "runsIn": {
+          "type": "string",
+          "enum": ["sandbox", "unsandboxed"],
+          "default": "sandbox",
+          "description": "`sandbox` (default): spawned through the existing OS sandbox adapter (src/harness/process/sandbox), no network unless `network` is set. `unsandboxed` requires the profile's `requiredControls.isolation` to allow it and is refused otherwise (fail closed)."
+        },
+        "network": {
+          "type": "string",
+          "enum": ["none", "restricted"],
+          "default": "none",
+          "description": "Network posture for the hook's sandbox, reusing the sandbox's own two-state model. Never `full`; a hook that needs broader egress is out of scope for v1."
+        },
+        "appliesToChildAgents": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether a spawned Keryx subagent inherits this registration as part of its explicit parent hook set (see workstreams/W6-shell-hooks.md Design > Child agents). A child never inherits a host harness's own ambient hooks, mirroring the --safe-mode rationale for external claude -p children."
+        },
+        "profiles": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["read-only-review", "monitored-trusted-local", "unattended-untrusted"] },
+          "description": "Security profiles this registration is active under. Omitted or empty means all profiles."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Set to false by `keryx hooks disable <id>` without deleting the registration, so re-enabling restores prior config exactly."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,79 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx"]
+metadata:
+  origin: authored
+---
+
+# React patterns
+
+Idiomatic component design and anti-patterns for React 19-era code,
+narrowed to `*.tsx`/`*.jsx`.
+
+## Derive, don't sync
+
+- If a value can be computed from existing props/state during render,
+  compute it during render — do not `useState` + `useEffect` to mirror one
+  piece of state into another. A `useEffect` that only calls `setState`
+  from a change in props/state is almost always replaceable by a plain
+  computed value (optionally memoized with `useMemo` when the computation
+  is expensive).
+- Reset local state on a prop change by giving the component a `key` tied
+  to that prop (React unmounts and remounts a fresh component), not by
+  watching the prop in an effect and calling a setter.
+- Effects are for synchronizing with something outside React: the DOM,
+  a subscription, a network request, browser storage, a third-party widget.
+  An effect with no external system on the other end is a sign the logic
+  belongs in an event handler or in render itself.
+
+## Lists and keys
+
+- Every element in a list rendered with `.map` gets a stable `key` drawn
+  from the data (an id), never the array index, unless the list is
+  provably static and never reordered/filtered/inserted into.
+- Do not use `key` as a prop for anything other than list identity inside
+  the component receiving it — reading `props.key` returns `undefined`.
+
+## Forms and events
+
+- Prefer a controlled input (`value` + `onChange`) for anything the
+  component needs to validate, transform, or react to as the user types;
+  use an uncontrolled input (`defaultValue` + a ref) only for simple
+  fire-and-forget fields where per-keystroke reactivity is not needed.
+- For form submission with a pending/error/optimistic result, prefer an
+  Action (a function passed to a `<form action={...}>`,
+  `useActionState`, and `useOptimistic` for the optimistic update) over
+  hand-rolled `isSubmitting`/`error` state plus a submit handler that calls
+  `preventDefault` — the Actions API already tracks pending and error state
+  and integrates with Suspense.
+- Reach for `useTransition` to mark a state update as non-urgent (keeps the
+  UI responsive during an expensive re-render) rather than debouncing or
+  deferring the update by hand.
+
+## Refs, Suspense, and composition
+
+- In React 19, `ref` is an ordinary prop on function components — no
+  `forwardRef` wrapper is needed for a new component that accepts a ref.
+  Keep `forwardRef` only in code that must still support pre-19 React.
+- Read an async resource inside render with the `use` API (for a promise
+  or a context) instead of stuffing the result into state via an effect;
+  pair it with a `Suspense` boundary for the pending state and an error
+  boundary for the rejected state.
+- Prefer composition (children, render props, or a small set of focused
+  components) over one component branching on a `type`/`variant` prop into
+  unrelated render trees.
+- In a framework that supports server and client components, keep data
+  fetching and secrets in server components; a component needs
+  `"use client"` only once it uses state, effects, refs, or browser-only
+  APIs — do not mark a whole subtree client just because one leaf needs it.
+
+## Compiler awareness
+
+- When the project has the React Compiler enabled (check its babel/swc
+  config or `babel-plugin-react-compiler`/`react-compiler` dependency),
+  do not hand-add `memo`, `useMemo`, or `useCallback` purely to prevent
+  re-renders — the compiler already memoizes automatically, and manual
+  memoization on compiled code is dead weight that can also mask a bug the
+  compiler would otherwise have caught. Without the compiler, manual
+  memoization is still a valid, deliberate optimization for a measured
+  re-render cost.

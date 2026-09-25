@@ -1,4 +1,17 @@
-import path from "node:path";
+import {
+  HARNESS_ADAPTERS,
+  ORIENT_SENTINEL,
+  UNSUPPORTED_ORIENT,
+  installIntegration,
+  surfacesOf,
+  uninstallIntegration,
+  type Confidence as IntegrationConfidence,
+  type Settings as IntegrationSettings,
+  type SettingsFileOwner,
+  type SurfaceAdapter,
+} from "../integrations/service";
+
+const ORIENT_SURFACE_ID = "orient";
 
 // Multi-harness registry for the graph+wiki ORIENTATION injector — the A+B
 // enforcement layer (availability + freshness), distinct from the ctx guard.
@@ -7,95 +20,37 @@ import path from "node:path";
 // model's context. Only harnesses whose hooks can inject context are registered;
 // harnesses with block-only hooks (e.g. Windsurf) are listed as unsupported.
 //
+// This module is a VIEW over `src/integrations` (flow 305, W5-a): `ORIENT_RUNTIMES`
+// is BUILT by mapping over `HARNESS_ADAPTERS` + `surfacesOf(adapter,
+// {subsystem:"orient"})` (flow 305 review fix, F4) — `label`/`relativePath`
+// come from the surface, never a second hand-written literal — and
+// `merge`/`strip`/`validate` below are the SAME function objects registered
+// on the matching `SurfaceAdapter` in `src/integrations/surfaces.ts`. The
+// walker logic lives once, in `src/integrations/settings-json.ts`.
+//
 // Verified against current official docs:
 //   claude — UserPromptSubmit, stdout added as context (.claude/settings.json)
 //   codex  — UserPromptSubmit, stdout added as context (.codex/hooks.json)
 //   cursor — sessionStart, stdout JSON { additional_context } (.cursor/hooks.json)
 
-export const ORIENT_SENTINEL = "ctx-orient-hooks";
-const MANAGED_KEY = "_keryxManaged";
+export { ORIENT_SENTINEL };
 
-export type Settings = Record<string, unknown>;
-export type Confidence = "verified" | "experimental";
+export type Settings = IntegrationSettings;
+export type Confidence = IntegrationConfidence;
 
 export interface OrientRuntime {
   readonly id: string;
   readonly label: string;
   readonly confidence: Confidence;
+  /** Path relative to the project root, for `SettingsFileOwner` lookup — the
+   *  one true source, so nothing derives it from a second per-id switch (F8). */
+  readonly relativePath: string;
   // Format the orientation Markdown for this harness's injection mechanism.
   format(orientation: string): string;
   locate(projectRoot: string): string;
   merge(settings: Settings): Settings;
   strip(settings: Settings): Settings;
   validate(settings: Settings): string[];
-}
-
-function hookCommand(id: string): string {
-  return `keryx orient ${id}`;
-}
-
-// --- shared sentinel + array helpers -----------------------------------------
-
-function isManaged(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<string, unknown>)[MANAGED_KEY] === ORIENT_SENTINEL
-  );
-}
-function stripManaged(existing: unknown): unknown[] {
-  return Array.isArray(existing) ? existing.filter((g) => !isManaged(g)) : [];
-}
-function addSentinel(s: Settings): void {
-  const m = Array.isArray(s[MANAGED_KEY]) ? (s[MANAGED_KEY] as unknown[]).filter((v) => v !== ORIENT_SENTINEL) : [];
-  s[MANAGED_KEY] = [...m, ORIENT_SENTINEL];
-}
-function removeSentinel(s: Settings): void {
-  if (!Array.isArray(s[MANAGED_KEY])) return;
-  const m = (s[MANAGED_KEY] as unknown[]).filter((v) => v !== ORIENT_SENTINEL);
-  if (m.length > 0) s[MANAGED_KEY] = m;
-  else delete s[MANAGED_KEY];
-}
-function hooksObject(s: Settings): Settings {
-  return typeof s.hooks === "object" && s.hooks !== null && !Array.isArray(s.hooks)
-    ? { ...(s.hooks as Settings) }
-    : {};
-}
-function mergeInto(s: Settings, key: string, group: Settings): Settings {
-  const hooks = hooksObject(s);
-  hooks[key] = [...stripManaged(hooks[key]), group];
-  s.hooks = hooks;
-  addSentinel(s);
-  return s;
-}
-function stripFrom(s: Settings, key: string): Settings {
-  if (typeof s.hooks !== "object" || s.hooks === null || Array.isArray(s.hooks)) {
-    removeSentinel(s);
-    return s;
-  }
-  const hooks = { ...(s.hooks as Settings) };
-  if (Array.isArray(hooks[key])) {
-    const remaining = stripManaged(hooks[key]);
-    if (remaining.length > 0) hooks[key] = remaining;
-    else delete hooks[key];
-  }
-  if (Object.keys(hooks).length > 0) s.hooks = hooks;
-  else delete s.hooks;
-  removeSentinel(s);
-  return s;
-}
-function hasManaged(s: Settings, key: string, command: string): boolean {
-  const hooks = s.hooks as Settings | undefined;
-  const groups = Array.isArray(hooks?.[key]) ? (hooks?.[key] as unknown[]) : [];
-  return groups.some((g) => {
-    if (!isManaged(g)) return false;
-    const inner = g as { hooks?: unknown; command?: unknown };
-    if (inner.command === command) return true;
-    return (
-      Array.isArray(inner.hooks) &&
-      (inner.hooks as Array<{ command?: unknown }>).some((h) => h?.command === command)
-    );
-  });
 }
 
 // --- formatting mechanisms ---------------------------------------------------
@@ -109,65 +64,54 @@ function cursorAdditionalContext(orientation: string): string {
   return JSON.stringify({ additional_context: orientation });
 }
 
-// --- runtime definitions -----------------------------------------------------
-
-export const CLAUDE_ORIENT: OrientRuntime = {
-  id: "claude",
-  label: ".claude/settings.json (UserPromptSubmit)",
-  confidence: "verified",
-  format: plainStdout,
-  locate: (root) => path.join(root, ".claude", "settings.json"),
-  merge: (s) =>
-    mergeInto(s, "UserPromptSubmit", {
-      hooks: [{ type: "command", command: hookCommand("claude") }],
-      [MANAGED_KEY]: ORIENT_SENTINEL,
-    }),
-  strip: (s) => stripFrom(s, "UserPromptSubmit"),
-  validate: (s) => (hasManaged(s, "UserPromptSubmit", hookCommand("claude")) ? [] : ["claude: missing UserPromptSubmit orientation hook"]),
+// The injection-formatting mechanism differs per harness for a reason outside
+// the registry's own concerns (it is about rendering the orientation text,
+// not about the settings-file shape), so it stays a small local table keyed
+// by harness id rather than a field forced onto every surface.
+const FORMAT_BY_ID: Record<string, (orientation: string) => string> = {
+  cursor: cursorAdditionalContext,
 };
 
-export const CODEX_ORIENT: OrientRuntime = {
-  id: "codex",
-  label: ".codex/hooks.json (UserPromptSubmit)",
-  confidence: "verified",
-  format: plainStdout,
-  locate: (root) => path.join(root, ".codex", "hooks.json"),
-  merge: (s) =>
-    mergeInto(s, "UserPromptSubmit", {
-      hooks: [{ type: "command", command: hookCommand("codex") }],
-      [MANAGED_KEY]: ORIENT_SENTINEL,
-    }),
-  strip: (s) => stripFrom(s, "UserPromptSubmit"),
-  validate: (s) => (hasManaged(s, "UserPromptSubmit", hookCommand("codex")) ? [] : ["codex: missing UserPromptSubmit orientation hook"]),
-};
+// --- runtime definitions: built from the registry's orient surfaces --------
 
-export const CURSOR_ORIENT: OrientRuntime = {
-  id: "cursor",
-  label: ".cursor/hooks.json (sessionStart)",
-  confidence: "verified",
-  format: cursorAdditionalContext,
-  locate: (root) => path.join(root, ".cursor", "hooks.json"),
-  merge: (s) => {
-    s.version = typeof s.version === "number" ? s.version : 1;
-    return mergeInto(s, "sessionStart", {
-      command: hookCommand("cursor"),
-      [MANAGED_KEY]: ORIENT_SENTINEL,
-    });
-  },
-  strip: (s) => stripFrom(s, "sessionStart"),
-  validate: (s) => (hasManaged(s, "sessionStart", hookCommand("cursor")) ? [] : ["cursor: missing sessionStart orientation hook"]),
-};
+function runtimeFromSurface(adapterId: string, surface: SurfaceAdapter): OrientRuntime {
+  const relativePath = surface.relativePath!;
+  return {
+    id: adapterId,
+    label: surface.label ?? `${relativePath} (orient)`,
+    confidence: surface.confidence,
+    relativePath,
+    format: FORMAT_BY_ID[adapterId] ?? plainStdout,
+    locate: (root) => surface.settingsFile!(root),
+    merge: (s) => surface.merge!(s),
+    strip: (s) => surface.strip!(s),
+    validate: (s) => surface.validate!(s),
+  };
+}
+
+const ORIENT_SURFACES: ReadonlyArray<{ adapterId: string; surface: SurfaceAdapter }> = HARNESS_ADAPTERS.flatMap(
+  (adapter) => surfacesOf(adapter, { subsystem: "orient" }).map((surface) => ({ adapterId: adapter.id, surface })),
+);
+
+export const ORIENT_RUNTIMES: OrientRuntime[] = ORIENT_SURFACES.map(({ adapterId, surface }) =>
+  runtimeFromSurface(adapterId, surface),
+);
+
+function runtimeFor(id: string): OrientRuntime {
+  const runtime = ORIENT_RUNTIMES.find((r) => r.id === id);
+  if (!runtime) throw new Error(`integrations registry: no orient surface registered for "${id}"`);
+  return runtime;
+}
+
+// Named exports every existing caller/test imports directly, derived from the
+// built list rather than declared a second time.
+export const CLAUDE_ORIENT: OrientRuntime = runtimeFor("claude");
+export const CODEX_ORIENT: OrientRuntime = runtimeFor("codex");
+export const CURSOR_ORIENT: OrientRuntime = runtimeFor("cursor");
 
 // Harnesses whose hooks CANNOT inject context (block-only / exit-code only), so
 // the availability-injection approach does not apply.
-export const UNSUPPORTED_ORIENT: Record<string, string> = {
-  windsurf: "Windsurf hooks are exit-code only (block/allow); no documented field injects context. Use its rules/memories for standing context.",
-  zed: "Zed has no scriptable session/prompt hook. Use static agent settings.",
-  opencode: "OpenCode's chat.message / experimental.chat.system.transform can inject context in theory, but propagation is undocumented and known-buggy (sst/opencode#17100, oh-my-openagent#885). Left out until stable — use AGENTS.md for standing context.",
-  antigravity: "Antigravity's context-injection hook is unverified (no first-party docs). Its pre-exec block hook IS supported — see `keryx ctx install-hook --runtime antigravity`.",
-};
-
-export const ORIENT_RUNTIMES: OrientRuntime[] = [CLAUDE_ORIENT, CODEX_ORIENT, CURSOR_ORIENT];
+export { UNSUPPORTED_ORIENT };
 
 export function orientRuntimeIds(): string[] {
   return ORIENT_RUNTIMES.map((r) => r.id);
@@ -175,6 +119,48 @@ export function orientRuntimeIds(): string[] {
 export function getOrientRuntime(id: string): OrientRuntime | undefined {
   return ORIENT_RUNTIMES.find((r) => r.id === id);
 }
+/**
+ * Install the orient surface for one runtime, through the installer core
+ * (flow 307, W5-b, T6: `installIntegration` in `src/integrations/installer.ts`)
+ * so a re-install can never leave a ctx-guard/security surface sharing the
+ * same file invalid without saying so, and so this and `keryx integrations`
+ * share one implementation (and one install-state record). Returns the
+ * rendered file's validation errors ([] = ok).
+ */
+export async function installOrientRuntime(
+  projectRoot: string,
+  runtimeId: string,
+  ownerOverride?: SettingsFileOwner,
+): Promise<string[]> {
+  const runtime = getOrientRuntime(runtimeId);
+  if (!runtime) return [`${runtimeId}: unknown orient runtime`];
+  const { errors } = await installIntegration(projectRoot, runtimeId, {
+    surfaces: [ORIENT_SURFACE_ID],
+    ...(ownerOverride ? { ownerOverride } : {}),
+  });
+  return errors;
+}
+
+/**
+ * The uninstall counterpart of `installOrientRuntime`. Throws when the owner
+ * refuses (it would leave a sibling surface on the same settings file
+ * invalid) — see `commands/orient.ts::handleUninstall`, which reports it.
+ */
+export async function uninstallOrientRuntime(
+  projectRoot: string,
+  runtimeId: string,
+  ownerOverride?: SettingsFileOwner,
+): Promise<void> {
+  if (!getOrientRuntime(runtimeId)) return;
+  const { errors } = await uninstallIntegration(projectRoot, runtimeId, {
+    surfaces: [ORIENT_SURFACE_ID],
+    ...(ownerOverride ? { ownerOverride } : {}),
+  });
+  if (errors.length > 0) {
+    throw new Error(errors.join("; "));
+  }
+}
+
 export function resolveOrientRuntimes(ids: string[]): {
   runtimes: OrientRuntime[];
   unknown: string[];

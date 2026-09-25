@@ -1,0 +1,478 @@
+// `SubagentStart`/`SubagentStop` hook wiring on both `spawn_subagent` paths
+// (flow 306, W6, task T6): the external `deps.runExternal` seam and the
+// native/internal in-process `runAgentTurn` path.
+import { expect, test } from "bun:test";
+import {
+  createSpawnSubagentTool,
+  DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+  type StructuredSubagentResult,
+} from "./spawn-subagent-tool";
+import type { HookFireResult, HookRegistration, HookRuntime } from "../../hooks";
+import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
+
+function stubProvider(text: string): ProviderPort {
+  return {
+    describe() {
+      return {
+        capabilities: {
+          streaming: true,
+          toolCalls: false,
+          parallelToolCalls: false,
+          structuredOutput: false,
+          reasoningMetadata: false,
+          promptCaching: false,
+          vision: false,
+          tokenCounting: false,
+          modelListing: false,
+        },
+        descriptor: { providerId: "stub" },
+      };
+    },
+    async *stream(_req, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  };
+}
+
+/** A minimal fake `HookRuntime`: scripted per-event outcome, records every `fire()` call. */
+function fakeHookRuntime(opts: {
+  inherited?: string[];
+  outcomeByEvent?: Partial<Record<string, HookFireResult["tightened"]>>;
+}): { runtime: HookRuntime; fires: { event: string; payload: Record<string, unknown> }[] } {
+  const fires: { event: string; payload: Record<string, unknown> }[] = [];
+  const runtime: HookRuntime = {
+    interactive: true,
+    registrations: (): readonly HookRegistration[] => [],
+    inheritedHookIds: () => opts.inherited ?? ["keryx.ctx-guard", "keryx.security-check-input"],
+    forChild: () => runtime,
+    fire: async (event, payload): Promise<HookFireResult> => {
+      fires.push({ event, payload });
+      const tightened = opts.outcomeByEvent?.[event];
+      return {
+        decisions: [],
+        ...(tightened !== undefined ? { tightened } : {}),
+        additionalContext: [],
+        records: [],
+        warnings: [],
+        anomalies: [],
+      };
+    },
+  };
+  return { runtime, fires };
+}
+
+const EXTERNAL_RESULT: StructuredSubagentResult = {
+  status: "Completed",
+  output: "external child says hi",
+  isError: false,
+};
+
+// ---------------------------------------------------------------------------
+// External path.
+// ---------------------------------------------------------------------------
+
+test("external: SubagentStart deny prevents runExternal and releases the reservation", async () => {
+  const { runtime, fires } = fakeHookRuntime({ outcomeByEvent: { SubagentStart: "deny" } });
+  let externalCalled = false;
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("native answer"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+    runExternal: async () => {
+      externalCalled = true;
+      return EXTERNAL_RESULT;
+    },
+  });
+
+  const result = await tool.invoke({
+    task: "Review auth module",
+    mode: "read_only",
+    label: "auth-check",
+    runtime: { kind: "external", agent: "codex-cli" },
+  });
+
+  expect(externalCalled).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+
+  const startFire = fires.find((f) => f.event === "SubagentStart");
+  expect(startFire).toBeDefined();
+  expect(startFire?.payload.spawnKind).toBe("external");
+  expect(startFire?.payload.inheritedHookIds).toEqual(["keryx.ctx-guard", "keryx.security-check-input"]);
+  // Denied — no SubagentStop for a child that never started.
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+});
+
+// Flow 306 fix round 1, finding 4/9: `SpawnSubagentToolDeps` carries no
+// operator-facing approval callback, so a tightened `ask` must be treated
+// exactly like `deny` here — including on this fake runtime's
+// `interactive: true` (the exact combination that previously read as
+// "allow" and let `runExternal` run anyway).
+test("external: SubagentStart ask ALSO prevents runExternal and releases the reservation (no approval path on this tool)", async () => {
+  const { runtime, fires } = fakeHookRuntime({ outcomeByEvent: { SubagentStart: "ask" } });
+  let externalCalled = false;
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("native answer"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+    runExternal: async () => {
+      externalCalled = true;
+      return EXTERNAL_RESULT;
+    },
+  });
+
+  const result = await tool.invoke({
+    task: "Review auth module",
+    mode: "read_only",
+    label: "auth-check",
+    runtime: { kind: "external", agent: "codex-cli" },
+  });
+
+  expect(externalCalled).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+});
+
+test("external: SubagentStart allow runs runExternal as before, and SubagentStop fires with its outcome", async () => {
+  const { runtime, fires } = fakeHookRuntime({});
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("native answer"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+    runExternal: async () => EXTERNAL_RESULT,
+  });
+
+  const result = await tool.invoke({
+    task: "Review auth module",
+    mode: "read_only",
+    label: "auth-check",
+    runtime: { kind: "external", agent: "codex-cli" },
+  });
+
+  expect(result).toEqual(EXTERNAL_RESULT);
+  const stopFire = fires.find((f) => f.event === "SubagentStop");
+  expect(stopFire?.payload.outcome).toBe("Completed");
+});
+
+// ---------------------------------------------------------------------------
+// Native/internal path.
+// ---------------------------------------------------------------------------
+
+test("native: SubagentStart deny prevents runAgentTurn (provider never streams) and releases the reservation", async () => {
+  const { runtime, fires } = fakeHookRuntime({ outcomeByEvent: { SubagentStart: "deny" } });
+  let streamed = false;
+  const provider: ProviderPort = {
+    ...stubProvider("native answer"),
+    async *stream(_req, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      streamed = true;
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "should not run" };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  const result = await tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" });
+
+  expect(streamed).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+  const startFire = fires.find((f) => f.event === "SubagentStart");
+  expect(startFire?.payload.spawnKind).toBe("internal");
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+});
+
+test("native: SubagentStart ask ALSO prevents runAgentTurn and releases the reservation (no approval path on this tool)", async () => {
+  const { runtime, fires } = fakeHookRuntime({ outcomeByEvent: { SubagentStart: "ask" } });
+  let streamed = false;
+  const provider: ProviderPort = {
+    ...stubProvider("native answer"),
+    async *stream(_req, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      streamed = true;
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "should not run" };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  const result = await tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" });
+
+  expect(streamed).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+});
+
+test("native: SubagentStart allow runs the child as before, and SubagentStop fires with the completion status", async () => {
+  const { runtime, fires } = fakeHookRuntime({});
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("native child answer"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  const result = await tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" });
+
+  expect(result.isError).toBe(false);
+  expect(result.output).toMatch(/native child answer/);
+  const stopFire = fires.find((f) => f.event === "SubagentStop");
+  expect(stopFire?.payload.outcome).toBe("Completed");
+});
+
+test("native: the child's OWN tool calls fire PreToolUse under a restricted, per-child hook runtime (flow 306, W6, T13)", async () => {
+  const { runtime, fires } = fakeHookRuntime({});
+  const base = stubProvider("unused");
+  let requests = 0;
+  const provider: ProviderPort = {
+    ...base,
+    describe: () => ({ ...base.describe(), capabilities: { ...base.describe().capabilities, toolCalls: true } }),
+    async *stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      requests += 1;
+      if (requests === 1) {
+        yield { kind: "tool_call_start", sequence: 0, attemptId: opts.attemptId, toolCallId: "c1", toolName: "get_cwd" };
+        yield { kind: "tool_call_end", sequence: 1, attemptId: opts.attemptId, toolCallId: "c1", input: "{}" };
+      } else {
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "the cwd is /proj" };
+      }
+      yield { kind: "model_end", sequence: 2, attemptId: opts.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  const result = await tool.invoke({ task: "Read the cwd", mode: "read_only", label: "cwd-check", max_rounds: 2 });
+
+  expect(result.isError).toBe(false);
+  const startFire = fires.find((f) => f.event === "SubagentStart");
+  expect(startFire).toBeDefined();
+  const preToolUseFires = fires.filter((f) => f.event === "PreToolUse");
+  expect(preToolUseFires.length).toBeGreaterThan(0);
+  const childPreToolUse = preToolUseFires.find((f) => f.payload.toolName === "get_cwd");
+  expect(childPreToolUse).toBeDefined();
+  // Fired under the CHILD's own session/run identity, never the parent's
+  // `sessionId`/`runId` the fake `fakeHookRuntime` was constructed with
+  // (`forChild` mints a fresh pair) — and never mixed into the
+  // `SubagentStart`/`SubagentStop` bracket's own payloads.
+  expect(childPreToolUse?.payload.sessionId).not.toBe(startFire?.payload.sessionId);
+});
+
+test("native: a registration scoped appliesToChildAgents:false is absent from the child's own fires", async () => {
+  // Tracks which REGISTRATION IDS actually matched a fired event — not just
+  // that `fire()` was called (the runtime always "fires" the event even with
+  // zero matching registrations; that alone proves nothing about exclusion).
+  const ranHookIds: { event: string; hookIds: string[] }[] = [];
+  const runtime: HookRuntime = {
+    interactive: true,
+    registrations: (): readonly HookRegistration[] => [
+      { id: "parent-only", event: "PreToolUse", matcher: "*", class: "observe", handler: { kind: "command", argv: ["x"] }, timeoutMs: 1000, runsIn: "sandbox", network: "none", appliesToChildAgents: false, profiles: [], enabled: true, scope: "project", order: 0 },
+    ],
+    inheritedHookIds: () => [],
+    forChild() {
+      // Mirrors the REAL implementation's own filter (enabled &&
+      // appliesToChildAgents !== false) so this fake actually exercises the
+      // same exclusion the production `HookRuntimeImpl.forChild` performs.
+      const childRegs = this.registrations().filter((r) => r.enabled && r.appliesToChildAgents !== false);
+      const child: HookRuntime = {
+        interactive: false,
+        registrations: () => childRegs,
+        inheritedHookIds: () => childRegs.map((r) => r.id),
+        forChild: () => child,
+        fire: async (event) => {
+          const matched = childRegs.filter((r) => r.event === event).map((r) => r.id);
+          ranHookIds.push({ event, hookIds: matched });
+          return { decisions: [], additionalContext: [], records: [], warnings: [], anomalies: [] };
+        },
+      };
+      return child;
+    },
+    fire: async (event) => {
+      const matched = runtime.registrations().filter((r) => r.event === event).map((r) => r.id);
+      ranHookIds.push({ event, hookIds: matched });
+      return { decisions: [], additionalContext: [], records: [], warnings: [], anomalies: [] };
+    },
+  };
+  const base = stubProvider("unused");
+  let requests = 0;
+  const provider: ProviderPort = {
+    ...base,
+    describe: () => ({ ...base.describe(), capabilities: { ...base.describe().capabilities, toolCalls: true } }),
+    async *stream(_request, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      requests += 1;
+      if (requests === 1) {
+        yield { kind: "tool_call_start", sequence: 0, attemptId: opts.attemptId, toolCallId: "c1", toolName: "get_cwd" };
+        yield { kind: "tool_call_end", sequence: 1, attemptId: opts.attemptId, toolCallId: "c1", input: "{}" };
+      } else {
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "the cwd is /proj" };
+      }
+      yield { kind: "model_end", sequence: 2, attemptId: opts.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+  await tool.invoke({ task: "Read the cwd", mode: "read_only", label: "cwd-check", max_rounds: 2 });
+  // "parent-only" never actually RAN for any fired event — the parent-level
+  // brackets only fire SubagentStart/SubagentStop (a different event, so it
+  // could never match a PreToolUse registration anyway), and the child's own
+  // PreToolUse fire matched zero registrations because `forChild` already
+  // excluded it (`appliesToChildAgents: false`).
+  expect(ranHookIds.some((r) => r.hookIds.includes("parent-only"))).toBe(false);
+  expect(ranHookIds.some((r) => r.event === "PreToolUse")).toBe(true); // the fire still happens...
+  expect(ranHookIds.find((r) => r.event === "PreToolUse")?.hookIds).toEqual([]); // ...but with nothing to run
+});
+
+// Flow 306 fix round 2 (finding G, missing regression test — review round 1
+// finding 10 fixed the bug, nothing pinned it). Before that fix, a
+// `makeProvider` throw AFTER `fireSubagentStart("internal")` already ran
+// leaked BOTH the `SubagentStart`/`SubagentStop` bracket (no `SubagentStop`
+// ever balanced it) and the ledger reservation (never released, held for the
+// rest of the run — eventually starving every later `spawn_subagent` call
+// with a `spawned.ok: false` MAE denial that never even reaches
+// `fireSubagentStart`).
+test("native: makeProvider throwing AFTER SubagentStart fires SubagentStop and releases the ledger reservation", async () => {
+  const { runtime, fires } = fakeHookRuntime({});
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => {
+      throw new Error("provider construction boom");
+    },
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  await expect(
+    tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" }),
+  ).rejects.toThrow("provider construction boom");
+
+  const startFire = fires.find((f) => f.event === "SubagentStart");
+  expect(startFire).toBeDefined();
+  const stopFire = fires.find((f) => f.event === "SubagentStop");
+  expect(stopFire).toBeDefined();
+  expect(stopFire?.payload.outcome).toBe("Error");
+
+  // The reservation was released, not leaked. Each reservation requests
+  // `5 * 60_000`ms (the tool's own fixed per-spawn runtime request) against a
+  // `DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS` (30 minutes) pool — exactly 6
+  // admissions' worth. `maxChildren` (16) is a LIFETIME cap the ledger never
+  // gives back, so it cannot tell release apart from a leak; the BUDGET can,
+  // because it is returned on release and NOT on a leak. Six further calls
+  // (each hitting the same throwing `makeProvider`) must EACH still reach
+  // `fireSubagentStart` — if the first call's reservation had leaked, the
+  // budget would already be half-spent, and this loop alone would exhaust it
+  // (6 more reservations against 1_500_000ms remaining) before the last one,
+  // which would then be denied by MAE admission BEFORE `SubagentStart` ever
+  // fires, never reaching `makeProvider` at all.
+  const perChildReservationMs = 5 * 60_000;
+  const rounds = DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS / perChildReservationMs;
+  for (let i = 0; i < rounds; i++) {
+    await expect(
+      tool.invoke({ task: "again", mode: "read_only", label: `auth-check-${i}` }),
+    ).rejects.toThrow("provider construction boom");
+  }
+  const startFires = fires.filter((f) => f.event === "SubagentStart");
+  expect(startFires.length).toBe(1 + rounds);
+});
+
+// Flow 306 fix round 2 (finding G, missing regression test — review round 1
+// finding 10 fixed this too). `fireSubagentStart`'s own `try/catch` reads a
+// REJECTING `HookRuntime.fire()` as `deny` specifically so the reservation
+// (already admitted before this fires) is released on the SAME path an
+// explicit `deny` decision takes — a rejection that escaped that helper would
+// skip the release entirely.
+test("native: a rejecting fire() on SubagentStart is treated as deny and releases the reservation", async () => {
+  const fires: { event: string; payload: Record<string, unknown> }[] = [];
+  const runtime: HookRuntime = {
+    interactive: true,
+    registrations: (): readonly HookRegistration[] => [],
+    inheritedHookIds: () => [],
+    forChild: () => runtime,
+    fire: async (event, payload) => {
+      fires.push({ event, payload });
+      if (event === "SubagentStart") {
+        throw new Error("hook runner crashed (simulated)");
+      }
+      return { decisions: [], additionalContext: [], records: [], warnings: [], anomalies: [] };
+    },
+  };
+  let streamed = false;
+  const provider: ProviderPort = {
+    ...stubProvider("native answer"),
+    async *stream(_req, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+      streamed = true;
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "should not run" };
+      yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    hooks: runtime,
+  });
+
+  const result = await tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" });
+
+  expect(streamed).toBe(false);
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+  // Denied before the child ever started — no SubagentStop for it (mirrors
+  // the ordinary `deny` case above).
+  expect(fires.some((f) => f.event === "SubagentStop")).toBe(false);
+
+  // The reservation was released despite the rejection (same budget-based
+  // proof as the sibling test above — see its comment for why the BUDGET,
+  // not the lifetime `maxChildren` count, is what actually distinguishes a
+  // release from a leak here). Six further calls must EACH still reach the
+  // point of invoking `fire()` for SubagentStart.
+  const perChildReservationMs = 5 * 60_000;
+  const rounds = DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS / perChildReservationMs;
+  for (let i = 0; i < rounds; i++) {
+    const again = await tool.invoke({ task: "again", mode: "read_only", label: `auth-check-${i}` });
+    expect(again.status).toBe("Denied");
+  }
+  const startFires = fires.filter((f) => f.event === "SubagentStart");
+  expect(startFires.length).toBe(1 + rounds);
+});
+
+test("hooks absent: neither SubagentStart nor SubagentStop ever fires (byte-identical)", async () => {
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => stubProvider("native child answer"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+  });
+  const result = await tool.invoke({ task: "Review auth module", mode: "read_only", label: "auth-check" });
+  expect(result.isError).toBe(false);
+});

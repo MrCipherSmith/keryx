@@ -1,0 +1,52 @@
+[
+  {
+    "id": "R4-01",
+    "reviewer": "adversarial-opus-r4",
+    "severity": "major",
+    "problem": "collectCwdDotenvKeyNames skips any .env* entry whose stat size exceeds MAX_DOTENV_READ_BYTES (line 332). It does not read the file and contributes no key names. Bun has no such cap and loads the file. The doc comment says the skip 'cannot be used to widen what \"no dotenv here\" means'. For a stripping guard, however, contributing no key names is exactly the unsafe direction: the same principle the R3-01 fix applied to symlinks.",
+    "impact": "Same as R3-01. In the bypass forms (`bun src/cli.ts`, `bun dist/cli.js`, `bun node_modules/.bin/keryx`, and the Windows-shim case), a cloned repository can again set any variable keryx reads: KERYX_HOME, KERYX_HOOKS=off, provider base URLs next to the user's exported keys, and so on. It needs no unusual syntax, only a single 16 MiB+ comment line followed by the payload, either as a plain `.env` or through a symlink such as `.env.local -> pad`. Git and GitHub accept files of that size, and diff views collapse them. The shipped shebang form (a) is not affected. BUN_OPTIONS/BUN_CONFIG_* remain stripped by name, so this is not a code-execution path.",
+    "suggested_fix": "Do not skip. Either scan any size (the scanner is linear, and Bun reads the whole file anyway), or treat an over-cap or unreadable .env* regular file as a reason to refuse to start. In the refusal case, exit non-zero with the exact safe command (`bun --no-env-file --config=/dev/null …`) instead of re-execing with an incomplete strip list. Apply the same rule to a readFile failure on a file that stat reports as regular (line 334).",
+    "evidence": "Guard harness (adv4/g.ts), in the form 'Bun loads it / the guard leaves it': `.env.local -> pad`, where pad is a 17 MiB `#xxx…` line followed by KERYX_HOME=det: yes / yes (not stripped). End to end with `printf '/exit\\n' | <cli> shell --provider fake`: case `big` (symlinked .env.local) FIRED in b and bd, and gave no MARK in a. Case `bigplain` (a regular 17 MiB .env) FIRED in b and bd, and gave no MARK in a. As a control, a 2 MiB single line followed by the key is stripped.",
+    "confidence": "high",
+    "file": "src/lib/safe-exec.ts",
+    "line": 332,
+    "class_scope": {
+      "sites": [
+        "src/lib/safe-exec.ts:301 MAX_DOTENV_READ_BYTES",
+        "src/lib/safe-exec.ts:332 collectCwdDotenvKeyNames size skip",
+        "src/lib/safe-exec.ts:333-334 readFile undefined -> continue (same skip-on-failure shape)"
+      ],
+      "enumeration_method": "Enumerated every `continue` in collectCwdDotenvKeyNames that can drop a file Bun still loads (non-regular, over the cap, read failure). For each, compared bare `bun -e` in the directory (does Bun bind the key?) with the guard harness (does the key survive the re-exec?). The positives were confirmed end to end with the real CLI in forms a, b and bd."
+    },
+    "global_id": "2026-09-25-ingest-706-r04#R4-01",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 83b8e1bd; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: r5 re-ran the 17 MiB .env and .env.local symlink: dev form refuses to start with exit 78; sparse and at-limit variants; safe-exec tests.",
+      "verifier": "adversarial-opus-r5"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "83b8e1bd; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
+  },
+  {
+    "id": "R4-02",
+    "reviewer": "adversarial-opus-r4",
+    "severity": "info",
+    "problem": "R3-03's suggestion to have fail() apply terminalSafe to the whole message was not taken. The file-derived messages (validateBeforeWrite, JSON parse error, trust summary) are escaped at their source, but the 'Unknown hook id \"…\"' message interpolates argv unescaped.",
+    "impact": "None from repository content: the string is the operator's own argument. It would matter only if an agent or script passed attacker-chosen text as the id.",
+    "suggested_fix": "Optional: apply terminalSafe inside fail() so every sink is covered.",
+    "evidence": "adv4/r3.sh case 'disable unknown-id-with-esc': raw-ESC-lines=1. Every file-derived surface had 0.",
+    "confidence": "high",
+    "file": "src/commands/hooks.ts",
+    "line": 1,
+    "class_scope": {
+      "sites": [
+        "src/commands/hooks.ts fail() callers that interpolate argv (Unknown hook id)"
+      ],
+      "enumeration_method": "Drove hooks disable/enable with an ESC-bearing id on top of the round-3 payload repository."
+    },
+    "global_id": "2026-09-25-ingest-706-r04#R4-02"
+  }
+]

@@ -1,0 +1,3 @@
+{
+  "agents": ["python-code-auditor", "python-build-fixer"]
+}

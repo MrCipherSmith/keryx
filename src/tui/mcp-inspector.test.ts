@@ -112,7 +112,7 @@ describe("AC5 — the hanging wrap helper", () => {
   });
 });
 
-describe("AC5 — /integrations MCP client rows wrap the same way", () => {
+describe("AC5 — /integrate MCP client rows wrap the same way", () => {
   test("at width 60 the tail hangs under the status column and no line overflows", () => {
     const lines = formatMcpListLines(RUNTIMES, 0, { kind: "idle" }, 60)[0]?.split("\n") ?? [];
     expect(lines.length).toBeGreaterThan(1);
@@ -530,7 +530,7 @@ test("[d] never arms for generic (no file to disconnect)", () => {
   );
 });
 
-test("/integrations opens this view and /mcp no longer does", () => {
+test("/integrate opens this view and /mcp no longer does", () => {
   // CHANGED IN P2, deliberately. This asserted that `/mcp` still opened
   // the installer, on the grounds that "the rename must not make a
   // command vanish under someone mid-session" — a real concern, and the
@@ -541,7 +541,7 @@ test("/integrations opens this view and /mcp no longer does", () => {
   // the original concern than pointing it at the installer forever,
   // because the installer is the surface this file's own header warns is
   // "easy to misread as 'the MCP servers this agent is connected to'".
-  expect(isMcpToolsCommand("/integrations")).toBe(true);
+  expect(isMcpToolsCommand("/integrate")).toBe(true);
   expect(isMcpToolsCommand("/mcp")).toBe(false);
 
   // And `/mcps` is still nobody's command — it would differ from `/mcp` by one

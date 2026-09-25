@@ -44,7 +44,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/routing",
     "/schedule",
     "/schedules",
-    "/integrations",
+    "/integrate",
     "/ci",
     "/conform",
     "/mcp",
@@ -139,7 +139,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/routing",
     "/schedule",
     "/schedules",
-    "/integrations",
+    "/integrate",
     "/ci",
     "/conform",
     "/mcp",
@@ -266,7 +266,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/routing",
     "/schedule",
     "/schedules",
-    "/integrations",
+    "/integrate",
     "/ci",
     "/conform",
     "/mcp",
@@ -320,13 +320,13 @@ test("filterCommands: prefix narrows the set (agent)", () => {
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
   expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reasoning"]);
-  // `/integrations` shares this prefix with `/interrupt` — a cost of the name
+  // `/integrate` shares this prefix with `/interrupt` — a cost of the name
   // chosen for the MCP publisher view. Unlike `/mcp` vs `/mcps` the two are
   // plainly different words and the completion menu shows both, so the prefix
   // is ambiguous rather than dangerous. Pinned so the pair is a decision on
   // record, not a surprise the next person rediscovers at the prompt.
   expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual([
-    "/integrations",
+    "/integrate",
     "/interrupt",
   ]);
   expect(filterCommands("/s", "agent").map((c) => c.name)).toEqual([
@@ -338,7 +338,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/schedules",
   ]);
   expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
-    "/integrations",
+    "/integrate",
     "/interrupt",
   ]);
   expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows"]);

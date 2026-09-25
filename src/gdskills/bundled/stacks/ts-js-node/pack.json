@@ -1,0 +1,41 @@
+{
+  "id": "ts-js-node",
+  "family": "language",
+  "modules": ["ts-js-node-rules", "ts-js-node-skills"],
+  "detectionMarkers": ["typescript", "javascript", "node"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 314, Wave 4 batch 1"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["nodejs-implementation"],
+    "test": ["nodejs-testing"],
+    "review": ["nodejs-code-review"],
+    "build-fix": ["nodejs-build-fix"],
+    "migrate": ["nodejs-esm-migration"]
+  },
+  "agentProfile": {
+    "displayName": "TypeScript/JavaScript (Node.js)",
+    "auditFocus": [
+      "Every Promise is awaited, returned, or explicitly voided -- no floating promises",
+      "Async work has a rejection handler somewhere in its chain -- no unhandled rejections",
+      "No new `any` on a changed signature or a cast that erases a narrower type the code already had",
+      "No synchronous fs/crypto/zlib call on a request-handling or otherwise hot path",
+      "Opened resources (file handles, DB connections, timers, listeners, child processes) are closed or cleared on every exit path, including errors",
+      "A new runtime dependency is justified -- no unvetted package added for one small utility"
+    ],
+    "buildCommands": [
+      "npm run build",
+      "npx tsc --noEmit",
+      "npx eslint .",
+      "npm test"
+    ],
+    "fixGuardrails": [
+      "Never silence a `tsc` error with `@ts-ignore`, `@ts-expect-error` without a linked issue, or a cast to `any`",
+      "Never add an eslint-disable comment to make a lint failure go away instead of fixing the underlying code",
+      "Never flip `strict`/`noImplicitAny`/`skipLibCheck` or widen `moduleResolution` in tsconfig.json to make an error disappear",
+      "Never delete or skip a failing test to turn the suite green"
+    ]
+  }
+}

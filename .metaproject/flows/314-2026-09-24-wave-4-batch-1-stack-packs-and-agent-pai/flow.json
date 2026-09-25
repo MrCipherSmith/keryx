@@ -1,0 +1,1215 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "314",
+  "slug": "wave-4-batch-1-stack-packs-and-agent-pai",
+  "title": "Wave 4 batch 1: stack packs and agent pairs for ts-js-node, react, python, go",
+  "status": "done",
+  "createdAt": "2026-09-24T11:38:46.681Z",
+  "updatedAt": "2026-09-24T18:45:14.689Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-24T18:42:37.274Z",
+      "note": "stack-packs.test.ts: strict lintStackRule/lintSkill pass for the 16 rules and 18 skills; react pack.json extends ts-js-node; migrate for ts-js-node and react, empty for python and go (PR #692, e9f4e94b)"
+    },
+    "AC2": {
+      "at": "2026-09-24T18:42:37.417Z",
+      "note": "evals.json guards in stack-packs.test.ts (>=10 prompts, >=4 negatives, deterministic behavior scenarios) plus the I1-I5 integrity guard; scout records written by the CLI with candidate exclusion, no use decisions, forks justified"
+    },
+    "AC3": {
+      "at": "2026-09-24T18:42:37.558Z",
+      "note": "18 skills evaluated once with deepseek:deepseek-chat, high strictness, 5 trials, bundled scope; eval.json verbatim with digest, runner and model; checkStablePackGate fails all four packs, which stay experimental (review r2/r3 verified provenance and digests)"
+    },
+    "AC4": {
+      "at": "2026-09-24T18:42:37.702Z",
+      "note": "model-eval-runner.test.ts with an injected provider, empty-completion refusal and saved-key resolution; without --runner behavior scenarios are not-run (eval.test.ts)"
+    },
+    "AC5": {
+      "at": "2026-09-24T18:42:37.843Z",
+      "note": "generate.test.ts and agents-catalog-commands.test.ts: refusal of packs that are not gate-cleared, id must equal the directory, quoted frontmatter, two-pass containment and symlink checks; no pair ships; agent-refs empty with notes; agents verify ok (10 agents)"
+    },
+    "AC6": {
+      "at": "2026-09-24T18:42:37.986Z",
+      "note": "verify.test.ts: stack skills resolve only for agents on that stack (SKILL.md required); stack-pack-not-gate-cleared, generated-drift and generated-source-mismatch reasons tested"
+    },
+    "AC7": {
+      "at": "2026-09-24T18:42:38.128Z",
+      "note": "install-manifest has separate rule and skill modules plus a component and profile per pack; dry-runs of ts-js-node, react, python, go and full show no duplicates and reproducible output; stability pinned to pack.json by test"
+    },
+    "AC8": {
+      "at": "2026-09-24T18:42:38.273Z",
+      "note": "stocktake --scope bundled: merge set equals the six-skill baseline; all 18 pack skills keep (lane E and review r2)"
+    },
+    "AC9": {
+      "at": "2026-09-24T18:42:38.421Z",
+      "note": "audit-harness on a temp project with the full profile installed for claude: score 100/A, 0 findings; no generated agents exist to export"
+    },
+    "AC10": {
+      "at": "2026-09-24T18:42:38.566Z",
+      "note": "targeted suites green (pre-existing install.test.ts EACCES on macOS reproduces on base); typecheck and eslint clean; CI green on 29dc906b"
+    },
+    "AC11": {
+      "at": "2026-09-24T18:42:38.709Z",
+      "note": "W2 0.1.6 names code-auditor/build-fixer with no pair shipped; W1 0.2.2 records the DeepSeek outcome and the llama3.1 supplementary run; journal records coverage unchanged at 2 and corrects the earlier 2 -> 5 entry"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/692"
+  },
+  "baseBranch": "feat/agent-platform-expansion",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by specific tasks T5-T11"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by verification tasks T12-T13 and per-task tests"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-24T16:21:38.587Z",
+            "outcome": "started",
+            "detail": "review round 1 on PR #692"
+          },
+          {
+            "at": "2026-09-24T16:34:39.617Z",
+            "outcome": "failed",
+            "detail": "round 1: 1 blocker, 6 major, 7 minor, 1 info -> T17"
+          },
+          {
+            "at": "2026-09-24T18:16:22.656Z",
+            "outcome": "started",
+            "detail": "round 2: narrow verification of fix attempt 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:43.824Z",
+            "outcome": "started",
+            "detail": "314-T5 wave A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:43.913Z",
+            "outcome": "started",
+            "detail": "314-T6 wave A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:44.002Z",
+            "outcome": "started",
+            "detail": "314-T7 wave A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Pack python: complete rules and skills, evals incl. python-testing, scout records",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:44.083Z",
+            "outcome": "started",
+            "detail": "314-T8 wave A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Pack go: rules, skills (implement/test/review/build-fix), evals, scout records",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T11:46:44.163Z",
+            "outcome": "started",
+            "detail": "314-T9 wave A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Agent pair generator + 8 generated agents + agent-refs.json",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:06:01.628Z",
+            "outcome": "started",
+            "detail": "314-T10"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Install manifest: rule/skill modules, components, profiles for the four packs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:06:01.723Z",
+            "outcome": "started",
+            "detail": "314-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:07:11.910Z",
+            "outcome": "started",
+            "detail": "314-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T15:53:27.199Z",
+            "outcome": "started",
+            "detail": "314-T13a generation refusal + react agents removal"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Docs: W1/W2 spec updates, coverage count in journal after gate",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T16:16:49.351Z",
+            "outcome": "started",
+            "detail": "314-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T12:02:51.978Z",
+            "outcome": "started",
+            "detail": "314-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-24T15:52:58.861Z",
+            "outcome": "started",
+            "detail": "314-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Review round-1 fixes (R1-1..R1-15): gate honesty, gate binding, generate safety, content accuracy, tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-24T16:34:39.536Z",
+            "outcome": "started",
+            "detail": "fix attempt 1: lanes A (gate code) + C1-C4 (pack content)"
+          },
+          {
+            "at": "2026-09-24T18:26:39.122Z",
+            "outcome": "started",
+            "detail": "fix attempt 2: R2-1 (AC rewrite, orchestrator) + R2-2..R2-5 (worker)"
+          },
+          {
+            "at": "2026-09-24T18:39:13.028Z",
+            "outcome": "started",
+            "detail": "round 3 clean (info only); no further fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-24T11:38:46.681Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-24T11:44:26.135Z",
+      "event": "task-added",
+      "detail": "T5: Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers"
+    },
+    {
+      "at": "2026-09-24T11:44:32.789Z",
+      "event": "task-added",
+      "detail": "T6: Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:32.882Z",
+      "event": "task-added",
+      "detail": "T7: Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:32.964Z",
+      "event": "task-added",
+      "detail": "T8: Pack python: complete rules and skills, evals incl. python-testing, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:33.042Z",
+      "event": "task-added",
+      "detail": "T9: Pack go: rules, skills (implement/test/review/build-fix), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T11:44:33.124Z",
+      "event": "task-added",
+      "detail": "T10: Agent pair generator + 8 generated agents + agent-refs.json"
+    },
+    {
+      "at": "2026-09-24T11:44:33.202Z",
+      "event": "task-added",
+      "detail": "T11: Install manifest: rule/skill modules, components, profiles for the four packs"
+    },
+    {
+      "at": "2026-09-24T11:44:33.283Z",
+      "event": "task-added",
+      "detail": "T12: Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable"
+    },
+    {
+      "at": "2026-09-24T11:44:33.367Z",
+      "event": "task-added",
+      "detail": "T13: Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs"
+    },
+    {
+      "at": "2026-09-24T11:44:33.451Z",
+      "event": "task-added",
+      "detail": "T14: Docs: W1/W2 spec updates, coverage count in journal after gate"
+    },
+    {
+      "at": "2026-09-24T11:44:58.435Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-24T11:44:58.517Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-24T11:44:58.599Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-24T11:44:58.691Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-24T11:44:58.779Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-24T11:46:43.824Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 314-T5 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:43.913Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 314-T6 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:44.002Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 314-T7 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:44.083Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 314-T8 wave A"
+    },
+    {
+      "at": "2026-09-24T11:46:44.163Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 314-T9 wave A"
+    },
+    {
+      "at": "2026-09-24T12:02:42.721Z",
+      "event": "task-done",
+      "detail": "T6: Pack ts-js-node: rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T12:02:51.886Z",
+      "event": "task-added",
+      "detail": "T15: Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions"
+    },
+    {
+      "at": "2026-09-24T12:02:51.978Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 314-T15"
+    },
+    {
+      "at": "2026-09-24T12:03:26.581Z",
+      "event": "task-done",
+      "detail": "T9: Pack go: rules, skills (implement/test/review/build-fix), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T12:03:37.692Z",
+      "event": "task-done",
+      "detail": "T7: Pack react (extends ts-js-node): rules, skills (implement/test/review/build-fix/migrate), evals, scout records"
+    },
+    {
+      "at": "2026-09-24T12:05:20.356Z",
+      "event": "task-done",
+      "detail": "T8: Pack python: complete rules and skills, evals incl. python-testing, scout records"
+    },
+    {
+      "at": "2026-09-24T12:06:01.628Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 314-T10"
+    },
+    {
+      "at": "2026-09-24T12:06:01.723Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 314-T11"
+    },
+    {
+      "at": "2026-09-24T12:06:16.821Z",
+      "event": "task-done",
+      "detail": "T5: Gate plumbing: eval --runner wiring, multi-skill pack eval gate, pack guards, agents verify resolvers"
+    },
+    {
+      "at": "2026-09-24T12:07:11.911Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 314-T12"
+    },
+    {
+      "at": "2026-09-24T12:09:20.752Z",
+      "event": "task-done",
+      "detail": "T15: Scout self-match: --record/--skill-name excludes the candidate's own catalog entry; re-record new pack skills' scout decisions"
+    },
+    {
+      "at": "2026-09-24T12:11:22.377Z",
+      "event": "task-done",
+      "detail": "T11: Install manifest: rule/skill modules, components, profiles for the four packs"
+    },
+    {
+      "at": "2026-09-24T12:18:16.934Z",
+      "event": "task-done",
+      "detail": "T10: Agent pair generator + 8 generated agents + agent-refs.json"
+    },
+    {
+      "at": "2026-09-24T15:52:58.699Z",
+      "event": "task-done",
+      "detail": "T12: Gate run: eval every pack skill with ollama runner (high, 5 trials), record governance/eval.json, mark stable"
+    },
+    {
+      "at": "2026-09-24T15:52:58.783Z",
+      "event": "task-added",
+      "detail": "T16: ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate"
+    },
+    {
+      "at": "2026-09-24T15:52:58.861Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 314-T16"
+    },
+    {
+      "at": "2026-09-24T15:53:27.199Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 314-T13a generation refusal + react agents removal"
+    },
+    {
+      "at": "2026-09-24T16:06:16.968Z",
+      "event": "task-done",
+      "detail": "T16: ts-js-node trigger overlap: nodejs-code-review vs nodejs-testing routing, re-run evals, re-check pack gate"
+    },
+    {
+      "at": "2026-09-24T16:06:26.919Z",
+      "event": "ac-updated",
+      "detail": "The model-backed gate (T12/T16) cleared go, python and ts-js-node; react-code-review scenario flag-rules-of-hooks reached 0.6 after two tuning passes, below the 0.8 floor, so react ships experimental rather than weakening the grader"
+    },
+    {
+      "at": "2026-09-24T16:06:27.013Z",
+      "event": "ac-updated",
+      "detail": "Per W2 D-7, per-stack pairs are generated only from gate-cleared packs; react stayed experimental (react-code-review behavior eval 0.6 < 0.8), so its pair was removed and generation now refuses non-cleared packs"
+    },
+    {
+      "at": "2026-09-24T16:16:39.188Z",
+      "event": "task-done",
+      "detail": "T13: Gate check: agents verify, stocktake vs baseline, guard tests, audit-harness on temp install+export, install dry-runs"
+    },
+    {
+      "at": "2026-09-24T16:16:49.351Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 314-T14"
+    },
+    {
+      "at": "2026-09-24T16:20:38.965Z",
+      "event": "task-done",
+      "detail": "T14: Docs: W1/W2 spec updates, coverage count in journal after gate"
+    },
+    {
+      "at": "2026-09-24T16:21:38.587Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1 on PR #692"
+    },
+    {
+      "at": "2026-09-24T16:34:18.069Z",
+      "event": "task-added",
+      "detail": "T17: Review round-1 fixes (R1-1..R1-15): gate honesty, gate binding, generate safety, content accuracy, tests"
+    },
+    {
+      "at": "2026-09-24T16:34:39.536Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — fix attempt 1: lanes A (gate code) + C1-C4 (pack content)"
+    },
+    {
+      "at": "2026-09-24T16:34:39.617Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 1 blocker, 6 major, 7 minor, 1 info -> T17"
+    },
+    {
+      "at": "2026-09-24T18:03:15.359Z",
+      "event": "ac-updated",
+      "detail": "After review round 1 (skills and graders had been tuned to each other), the owner moved the gate to deepseek-chat, kept the 0.8 floor and forbade tuning. The honest run failed all four packs (e.g. nodejs-build-fix no-ts-ignore-suppression 0, react-build-fix no-disable-hooks-lint 0, python-build-fix mypy-error-no-blanket-suppress 0, go-testing table-driven-subtests 0.4). The criterion now pins the honest process and the recorded outcome, not a pass."
+    },
+    {
+      "at": "2026-09-24T18:03:15.443Z",
+      "event": "ac-updated",
+      "detail": "The honest DeepSeek gate run left all four packs experimental, so by W2 D-7 no pair may ship. The generator and its safety fixes from review round 1 are the deliverable."
+    },
+    {
+      "at": "2026-09-24T18:03:15.529Z",
+      "event": "ac-updated",
+      "detail": "No pack cleared the honest gate, so the coverage count must not rise (metrics-and-validation: increases only after a batch passes its gate). The earlier 2 -> 5 journal entry was based on the grader-tuned run that review round 1 invalidated."
+    },
+    {
+      "at": "2026-09-24T18:16:22.656Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — round 2: narrow verification of fix attempt 1"
+    },
+    {
+      "at": "2026-09-24T18:26:02.479Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`keryx skills eval <id> --runner ollama:llama3.1:latest --strictness high --trials 5` reports verdict pass with evidence authored, all positives selected, zero false positives and every behavior scenario passRate >= 0.8 for every pack skill; the reports are stored in each pack's governance/eval.json, those packs are marked stable and checkStablePackGate returns pass for them.\" -> \"Every one of the 18 batch-1 pack skills was evaluated once through the real CLI with `keryx skills eval <id> --scope bundled --runner deepseek:deepseek-chat --strictness high --trials 5` (DeepSeek deepseek-chat, the owner-chosen gate model), with no content edits during the run. Each pack's governance/eval.json holds those reports verbatim, bound by digest to the current SKILL.md and evals.json and stamped with runner, model, scope and recordedAt. checkStablePackGate decides stability: a pack is stable only if every skill passes and every behavior scenario is at or above 0.8. The recorded outcome for this batch is that all four packs (ts-js-node, react, python, go) stay experimental, with the failing scenarios named in the W1 spec and in each pack's agent-refs.json note.\" (Review round 1 found skills and graders tuned to each other; the owner moved the gate to deepseek-chat with the 0.8 floor and no tuning, and the honest run failed all four packs)"
+    },
+    {
+      "at": "2026-09-24T18:26:10.636Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"Eight generated agents (<stack>-code-auditor and <stack>-build-fixer for each pack) exist in src/gdskills/bundled/agents with origin.kind generated, origin.sourceRef = pack id and stacks [pack id]; auditors are read-only with no write/shell tools, fixers are workspace-write with worktree isolation; a test proves each file equals the generator's output; each pack's agent-refs.json lists its pair; `keryx agents verify` reports ok.\" -> \"Per-stack agent pairs (<stack>-code-auditor, read-only; <stack>-build-fixer, workspace-write with worktree isolation) are produced only by the deterministic generator through `keryx agents generate --stack <id>`. The generator refuses a pack that is not gate-cleared, refuses a pack.json id that differs from its directory, quotes every frontmatter value, validates identifiers, and checks containment and symlinks for both targets before writing, all covered by tests. Because no batch-1 pack cleared the gate, no generated pair ships, every pack's agent-refs.json is empty with a note naming the failing scenario, and `keryx agents verify` reports ok.\" (No pack cleared the honest gate, so under W2 D-7 no pair ships; the generator and its safety guarantees are the deliverable)"
+    },
+    {
+      "at": "2026-09-24T18:26:10.772Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"The W2 spec's per-stack table names the pair <stack>-code-auditor / <stack>-build-fixer with its Version bumped, the W1 spec records batch 1, and the journal records the stack-coverage count increase only after the gate passed.\" -> \"The W2 spec's per-stack table names the pair <stack>-code-auditor / <stack>-build-fixer, with a bumped Version and a batch-1 status of no pair shipped. The W1 spec records batch 1: the DeepSeek gate model, the per-pack results with the failing scenarios, and the llama3.1 run as a supplementary signal. The journal records that the stack-coverage count stays at 2, because no batch-1 pack cleared the gate, and corrects the earlier premature 2 -> 5 entry.\" (No pack cleared the gate, so the coverage count must not rise; the earlier 2 -> 5 entry came from the grader-tuned run that review round 1 invalidated)"
+    },
+    {
+      "at": "2026-09-24T18:26:39.122Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 2) — fix attempt 2: R2-1 (AC rewrite, orchestrator) + R2-2..R2-5 (worker)"
+    },
+    {
+      "at": "2026-09-24T18:39:13.028Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 3) — round 3 clean (info only); no further fixes"
+    },
+    {
+      "at": "2026-09-24T18:41:28.516Z",
+      "event": "task-done",
+      "detail": "T17: Review round-1 fixes (R1-1..R1-15): gate honesty, gate binding, generate safety, content accuracy, tests"
+    },
+    {
+      "at": "2026-09-24T18:41:28.657Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-24T18:41:43.914Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (program owner; flow init did not record it)"
+    },
+    {
+      "at": "2026-09-24T18:41:46.534Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:42:37.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: stack-packs.test.ts: strict lintStackRule/lintSkill pass for the 16 rules and 18 skills; react pack.json extends ts-js-node; migrate for ts-js-node and react, empty for python and go (PR #692, e9f4e94b) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.417Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: evals.json guards in stack-packs.test.ts (>=10 prompts, >=4 negatives, deterministic behavior scenarios) plus the I1-I5 integrity guard; scout records written by the CLI with candidate exclusion, no use decisions, forks justified (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.558Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: 18 skills evaluated once with deepseek:deepseek-chat, high strictness, 5 trials, bundled scope; eval.json verbatim with digest, runner and model; checkStablePackGate fails all four packs, which stay experimental (review r2/r3 verified provenance and digests) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.702Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: model-eval-runner.test.ts with an injected provider, empty-completion refusal and saved-key resolution; without --runner behavior scenarios are not-run (eval.test.ts) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.844Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: generate.test.ts and agents-catalog-commands.test.ts: refusal of packs that are not gate-cleared, id must equal the directory, quoted frontmatter, two-pass containment and symlink checks; no pair ships; agent-refs empty with notes; agents verify ok (10 agents) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:37.986Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verify.test.ts: stack skills resolve only for agents on that stack (SKILL.md required); stack-pack-not-gate-cleared, generated-drift and generated-source-mismatch reasons tested (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.128Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: install-manifest has separate rule and skill modules plus a component and profile per pack; dry-runs of ts-js-node, react, python, go and full show no duplicates and reproducible output; stability pinned to pack.json by test (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.273Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: stocktake --scope bundled: merge set equals the six-skill baseline; all 18 pack skills keep (lane E and review r2) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.421Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: audit-harness on a temp project with the full profile installed for claude: score 100/A, 0 findings; no generated agents exist to export (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.566Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: targeted suites green (pre-existing install.test.ts EACCES on macOS reproduces on base); typecheck and eslint clean; CI green on 29dc906b (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:38.709Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: W2 0.1.6 names code-auditor/build-fixer with no pair shipped; W1 0.2.2 records the DeepSeek outcome and the llama3.1 supplementary run; journal records coverage unchanged at 2 and corrects the earlier 2 -> 5 entry (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-24T18:42:43.634Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:42:51.394Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-24T18:42:51.395Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T18:43:37.019Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:43:37.188Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:43:44.540Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-24T18:43:44.542Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T18:44:46.675Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:44:46.827Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:44:54.648Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-09-24T18:44:54.649Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 54f59e71e670472e503ddbb4f4af83f0d7b27679, but the PR head is 29dc906bbdeac1f5c001080c89cda58ac793dbd9. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-24T18:45:06.768Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/692 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-24T18:45:06.927Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-24T18:45:14.687Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: passed"
+    },
+    {
+      "at": "2026-09-24T18:45:14.689Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-09-24T18:42:37.274Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.417Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.558Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.702Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.843Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:37.986Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.128Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.273Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.421Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.566Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:42:38.709Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:45:14.689Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc",
+      "headCommit": "29dc906bbdeac1f5c001080c89cda58ac793dbd9"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-24T18:42:51.394Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): no disposition recorded | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): no disposition recorded | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:43:44.540Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 19 finding(s) at or above `minor` are not terminal: 2026-09-24-ingest-692-r04#R1-1 (blocker, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-2 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-3 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-4 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-5 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-6 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-7 (major, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-8 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-9 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-10 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-11 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-12 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-13 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692-r04#R1-14 (minor, round 2026-09-24-ingest-692-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-1 (major, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-2 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-3 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-4 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-24-ingest-692#R2-5 (minor, round 2026-09-24-ingest-692): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:44:54.648Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against 54f59e71e670472e503ddbb4f4af83f0d7b27679, but the PR head is 29dc906bbdeac1f5c001080c89cda58ac793dbd9. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    },
+    {
+      "at": "2026-09-24T18:45:14.687Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:c89b0e01ca5b3a7c5d611f7cac259bcc6b429799f37974a864f0691b5969bcdc"
+    }
+  ]
+}

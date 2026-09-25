@@ -1,8 +1,45 @@
 import { spawn } from "node:child_process";
-import { chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdirContained, writeContained } from "../lib/contained-write";
+import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
+
+// R1-F20: `writeTextIfChanged`/`writeTextIfMissing`/`copyFileIfChanged`/the
+// module-directory scaffolders below all receive an absolute path already
+// built as `path.join(metaprojectRoot, ...)` — never touching every one of
+// their ~45 call sites to thread `projectRoot` through, this derives the
+// containment root from the path itself: everything up to and including the
+// LAST `.metaproject` path segment is the boundary that must not be escaped,
+// and `writeContained`/`mkdirContained` then walk that boundary segment by
+// segment (the same walk `refuseEscapingSymlink` does), refusing
+// (`escaping-symlink`) the moment `.metaproject` itself — or anything between
+// it and the target — is a symlink resolving outside the project. The git
+// hooks writer (`installManagedHook`/`removeManagedHook`) is the one
+// documented exception: it writes into `.git/hooks` by design, which
+// `contained-write.ts` categorically refuses (`git-directory`) — it now
+// lives in the shared `src/lib/managed-git-hook.ts` (R1-F3/R1-F6), which
+// runs its own containment check before writing rather than relying on
+// `resolveGitHooksRoot`'s resolution alone.
+export function containFromMetaprojectPath(filePath: string): { root: string; rel: string } {
+  const marker = `${path.sep}.metaproject${path.sep}`;
+  // R700-14: LAST `.metaproject` segment, per the comment above — a project
+  // nested under an ancestor `.metaproject/` directory (e.g. a worktree
+  // checked out inside another project's own `.metaproject/`) must bound
+  // containment at the innermost `.metaproject`, not the outermost one.
+  const idx = filePath.lastIndexOf(marker);
+  if (idx < 0) {
+    if (filePath.endsWith(`${path.sep}.metaproject`)) {
+      const root = filePath.slice(0, filePath.length - ".metaproject".length - path.sep.length);
+      return { root, rel: ".metaproject" };
+    }
+    throw new Error(`${filePath}: expected a path under a .metaproject directory`);
+  }
+  const root = filePath.slice(0, idx);
+  const rel = filePath.slice(idx + path.sep.length).split(path.sep).join("/");
+  return { root, rel };
+}
 import { installGdskills } from "../gdskills/install";
 import { moduleCommands } from "./module-commands";
 import {
@@ -243,9 +280,12 @@ export async function updateCommand(args: string[] = []): Promise<void> {
       note(notice);
     }
   }
-  if (summary.gdskillsWarnings.length > 0) {
+  if (summary.gdskillsWarnings.length > 0 || summary.hookWarnings.length > 0) {
     heading("Warnings");
     for (const warning of summary.gdskillsWarnings) {
+      note(warning);
+    }
+    for (const warning of summary.hookWarnings) {
       note(warning);
     }
   }
@@ -289,6 +329,13 @@ type RefreshSummary = {
    * `keryx update`, and none of it is a warning.
    */
   gdskillsNotices: string[];
+  /**
+   * R2-F2: "skipped this hook, here's why" messages from the git-hook
+   * installers below (a symlinked hook that escapes both the git common dir
+   * and the project root, or a dangling link) — surfaced under the same
+   * "Warnings" heading as gdskillsWarnings instead of aborting the update.
+   */
+  hookWarnings: string[];
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
@@ -330,7 +377,8 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
         ? "metaproject.json is readable; module flags come from it."
         : "metaproject.json is missing or unreadable; a real run would recover it from the folders on disk.",
       "Not digest-planned by this release: module manifests, skills, templates, the dashboard, " +
-        "the managed runtime, metaproject.json (it carries an updatedAt timestamp and is rewritten on every run), " +
+        "the managed runtime, metaproject.json (it carries an updatedAt timestamp and is only rewritten " +
+        "when something besides that timestamp changed), " +
         "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
       "Hooks are merged into existing files by their own installers and are not digest-planned; " +
         "a real run reports which of them it touched.",
@@ -344,7 +392,10 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const manifest = manifestState.manifest;
   const recoveredManifest = !manifestState.exists || !manifestState.valid;
   if (manifestState.migrated) {
-    await writeFile(path.join(metaprojectRoot, "metaproject.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    {
+      const { root, rel } = containFromMetaprojectPath(path.join(metaprojectRoot, "metaproject.json"));
+      await writeContained(root, rel, `${JSON.stringify(manifest, null, 2)}\n`);
+    }
   }
   const enableGdgraph = moduleEnabled(manifest, "gdgraph");
   const enableGdctx = moduleEnabled(manifest, "gdctx");
@@ -355,6 +406,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const enableMemory = moduleEnabled(manifest, "memory");
   const enableSecurity = moduleEnabled(manifest, "security");
   const enableSac = moduleEnabled(manifest, "sac");
+  const hookWarnings: string[] = [];
 
   // Task Manager backfill: projects initialized before the tasks module have a
   // bare `tasks: { enabled: false }` stub. `update` enables and scaffolds it
@@ -463,7 +515,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "gdgraph", "SKILL.md"), renderGdgraphSkillReadme());
     await seedAssetsLock(metaprojectRoot);
     if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -479,7 +532,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "modules", "gdwiki.md"), renderGdwikiManifest());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "gdwiki", "SKILL.md"), renderGdwikiSkillReadme());
     if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -495,7 +549,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsWarnings = gdskillsInstallResult.warnings;
     gdskillsNotices = gdskillsInstallResult.notices;
     if (manifest.modules?.gdskills?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -505,7 +560,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "core", "health", "README.md"), renderHealthCoreReadme());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "health", "SKILL.md"), renderHealthSkillReadme());
     if (manifest.modules?.health?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
@@ -525,20 +581,23 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       await writeTextIfMissing(path.join(metaprojectRoot, "wiki", "testing", "conventions.md"), renderTestingWikiConventions());
     }
     if (manifest.modules?.testing?.hooks?.gitPostCommit) {
-      await installManagedHook(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+      if (warning) hookWarnings.push(warning);
     }
     if (manifest.modules?.testing?.hooks?.prePush) {
-      await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+      if (warning) hookWarnings.push(warning);
     }
   }
 
   if (await shouldInstallDashboardPostCommitHook(projectRoot, manifest)) {
-    await installManagedHook(
+    const warning = await installManagedHookOrWarn(
       projectRoot,
       "post-commit",
       "metaproject-dashboard-post-commit",
       renderMetaprojectDashboardPostCommitHook(),
     );
+    if (warning) hookWarnings.push(warning);
   }
 
   if (enableMemory) {
@@ -566,7 +625,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     // Refresh the security hooks only when the manifest already records them;
     // both installers are merge-safe and never touch data/security or user content.
     if (manifest.modules?.security?.hooks?.prePush) {
-      await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+      const warning = await installManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+      if (warning) hookWarnings.push(warning);
     }
     if (manifest.modules?.security?.hooks?.agent) {
       await installSecurityAgentHooks(projectRoot);
@@ -587,7 +647,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     !manifest.modules?.security?.hooks?.prePush &&
     (await prePushHasSecurityBlock(projectRoot))
   ) {
-    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
+    const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
+    if (warning) hookWarnings.push(warning);
   }
 
   if (!manifestState.exists || !manifestState.valid) {
@@ -630,6 +691,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsProfile,
     gdskillsWarnings,
     gdskillsNotices,
+    hookWarnings,
     backfilledTasks: backfillTasks,
     recoveredManifest,
   };
@@ -1281,7 +1343,10 @@ async function writeRecoveredManifest(
     },
   };
 
-  await writeFile(path.join(metaprojectRoot, "metaproject.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  {
+    const { root, rel } = containFromMetaprojectPath(path.join(metaprojectRoot, "metaproject.json"));
+    await writeContained(root, rel, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
 }
 
 // Enables the tasks module in metaproject.json without disturbing other keys.
@@ -1305,7 +1370,10 @@ async function enableTasksInManifest(metaprojectRoot: string): Promise<void> {
     commands: moduleCommands("tasks"),
   };
   raw.modules = modules;
-  await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  {
+    const { root, rel } = containFromMetaprojectPath(manifestPath);
+    await writeContained(root, rel, `${JSON.stringify(raw, null, 2)}\n`);
+  }
 }
 
 async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSources: string[]): Promise<void> {
@@ -1314,8 +1382,11 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
     return;
   }
   let raw: Record<string, unknown>;
+  let onDisk: Record<string, unknown>;
   try {
-    raw = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    const text = await readFile(manifestPath, "utf8");
+    raw = JSON.parse(text) as Record<string, unknown>;
+    onDisk = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return;
   }
@@ -1324,7 +1395,20 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
   agentEntrypoints.metaproject = ".metaproject/index.md";
   raw.agentEntrypoints = agentEntrypoints;
   applyStandardManifestFields(raw);
-  await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  // R700-06: `applyStandardManifestFields` always stamps a fresh `updatedAt`,
+  // but on a repo where nothing else changed that turns `keryx update` into
+  // pure timestamp churn (a dirty git tree with no real diff). When the only
+  // difference from what's on disk is `updatedAt` itself, skip the write
+  // entirely so the file — and its mtime — stay untouched. A real change
+  // (module flags, entrypoints, profiles, …) still writes with a fresh
+  // timestamp as before.
+  if (manifestsEqualIgnoringUpdatedAt(raw, onDisk)) {
+    return;
+  }
+  {
+    const { root, rel } = containFromMetaprojectPath(manifestPath);
+    await writeContained(root, rel, `${JSON.stringify(raw, null, 2)}\n`);
+  }
 }
 
 // Ensure the manifest carries the schema-required `standardVersion` and the
@@ -1332,6 +1416,11 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
 // manifest created before the standard fields existed is backfilled in place,
 // and `profiles` stays in sync with the currently enabled module set. Mirrors
 // the fields written by `init` (see src/commands/init.ts buildManifest).
+//
+// Always stamps a fresh `updatedAt` on `raw` — callers that want idempotence
+// on an unchanged manifest compare against the on-disk copy with
+// `manifestsEqualIgnoringUpdatedAt` and skip the write when that's the only
+// difference (see `updateManifestAgentEntrypoints`).
 function applyStandardManifestFields(raw: Record<string, unknown>): void {
   raw.standardVersion = STANDARD_VERSION;
   const modules = (raw.modules ?? {}) as Record<string, { enabled?: boolean }>;
@@ -1340,6 +1429,38 @@ function applyStandardManifestFields(raw: Record<string, unknown>): void {
     .map(([key]) => key);
   raw.profiles = computeProfiles(enabledModuleKeys);
   raw.updatedAt = new Date().toISOString();
+}
+
+// Deep-equal comparison that ignores object key order (JSON round-tripping
+// and rebuilding an object literal can reorder keys without changing
+// meaning) but is order-sensitive for arrays. Used to detect whether a
+// rebuilt metaproject.json manifest is substantively unchanged from what's
+// already on disk, aside from a fresh `updatedAt` stamp.
+function deepEqualIgnoringKeyOrder(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((value, index) => deepEqualIgnoringKeyOrder(value, b[index]));
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const aKeys = Object.keys(a as Record<string, unknown>).sort();
+    const bKeys = Object.keys(b as Record<string, unknown>).sort();
+    if (aKeys.length !== bKeys.length || aKeys.some((key, index) => key !== bKeys[index])) {
+      return false;
+    }
+    return aKeys.every((key) =>
+      deepEqualIgnoringKeyOrder((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+    );
+  }
+  return false;
+}
+
+// True when two metaproject.json manifests are identical in every field
+// except `updatedAt`.
+function manifestsEqualIgnoringUpdatedAt(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const { updatedAt: _aUpdatedAt, ...restA } = a;
+  const { updatedAt: _bUpdatedAt, ...restB } = b;
+  return deepEqualIgnoringKeyOrder(restA, restB);
 }
 
 async function updateRuntime(projectRoot: string): Promise<void> {
@@ -1432,12 +1553,20 @@ async function createServiceDirs(
     ] : []),
   ];
 
-  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+  await Promise.all(
+    dirs.map((dir) => {
+      const { root, rel } = containFromMetaprojectPath(dir);
+      return mkdirContained(root, rel);
+    }),
+  );
 }
 
 async function installGdgraphCoreScripts(metaprojectRoot: string): Promise<void> {
   const gdgraphCoreRoot = path.join(metaprojectRoot, "core", "gdgraph");
-  await mkdir(gdgraphCoreRoot, { recursive: true });
+  {
+    const { root, rel } = containFromMetaprojectPath(gdgraphCoreRoot);
+    await mkdirContained(root, rel);
+  }
   // Shared with `init` — see the note there. Two hand-maintained copies of this
   // list is how the copied core silently stopped being import-closed.
   for (const file of GDGRAPH_CORE_SOURCES) {
@@ -1446,70 +1575,13 @@ async function installGdgraphCoreScripts(metaprojectRoot: string): Promise<void>
   await writeTextIfChanged(path.join(gdgraphCoreRoot, "cli.ts"), renderGdgraphCoreCli());
 }
 
-async function installManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-  content: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, hookName);
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const managedBlock = `${blockStart}\n${content.trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(`${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`);
-  // `() => managedBlock`, not `managedBlock`. The string form of
-  // String.replace reads `$'`, "$`", `$&` and `$$` in the replacement as
-  // substitution patterns, and these blocks are shell scripts full of `$`.
-  // `$'` means "everything after the match", so a hook containing it spliced
-  // the rest of the file back in and silently duplicated every managed block
-  // below it. The function form has no such reading.
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, () => managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
-}
-
-// Strip a single keryx managed block from a git hook, preserving all other
-// managed blocks and user-authored content. No-op when the hook or block is
-// absent.
-async function removeManagedHook(
-  projectRoot: string,
-  hookName: "post-commit" | "pre-push",
-  blockId: string,
-): Promise<void> {
-  const hooksRoot = await resolveGitHooksRoot(projectRoot);
-  if (!hooksRoot) {
-    return;
-  }
-  const hookPath = path.join(hooksRoot, hookName);
-  if (!(await pathExists(hookPath))) {
-    return;
-  }
-  const existing = await readFile(hookPath, "utf8");
-  const blockStart = `# keryx:${blockId}:begin`;
-  const blockEnd = `# keryx:${blockId}:end`;
-  const blockPattern = new RegExp(
-    `\\n*${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}\\n*`,
-  );
-  if (!blockPattern.test(existing)) {
-    return;
-  }
-  const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
-}
+// R1-F3/R1-F6: `installManagedHook`/`removeManagedHook` used to be a local,
+// byte-for-byte copy of `init.ts`'s pair, which let the ratchet's
+// file-granularity ALLOWLIST silently exempt every OTHER raw write this file
+// might grow, and carried a false claim that `resolveGitHooksRoot` itself
+// checked for an escaping symlink (it does not). Both commands now share the
+// one implementation in `src/lib/managed-git-hook.ts`, which actually runs
+// that containment check before writing — see its file header.
 
 // True when the git pre-push hook still carries the managed security block.
 async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
@@ -1691,16 +1763,16 @@ async function writeTextIfChanged(filePath: string, content: string): Promise<vo
   if ((await pathExists(filePath)) && (await readFile(filePath, "utf8")) === content) {
     return;
   }
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, "utf8");
+  const { root, rel } = containFromMetaprojectPath(filePath);
+  await writeContained(root, rel, content);
 }
 
 async function writeTextIfMissing(filePath: string, content: string): Promise<void> {
   if (await pathExists(filePath)) {
     return;
   }
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, "utf8");
+  const { root, rel } = containFromMetaprojectPath(filePath);
+  await writeContained(root, rel, content);
 }
 
 async function copyFileIfChanged(from: string, to: string): Promise<void> {
@@ -1708,8 +1780,8 @@ async function copyFileIfChanged(from: string, to: string): Promise<void> {
   if ((await pathExists(to)) && (await readFile(to, "utf8")) === next) {
     return;
   }
-  await mkdir(path.dirname(to), { recursive: true });
-  await writeFile(to, next, "utf8");
+  const { root, rel } = containFromMetaprojectPath(to);
+  await writeContained(root, rel, next);
 }
 
 function runtimeSourcePath(relativePath: string): string {
@@ -1731,10 +1803,6 @@ function runtimeSourcePath(relativePath: string): string {
   }
 
   return directPath;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function printHelp(): void {

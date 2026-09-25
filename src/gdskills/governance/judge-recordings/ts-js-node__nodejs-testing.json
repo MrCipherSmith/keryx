@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-24T21:13:17.313Z",
+  "entries": [
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "echo",
+      "requestDigest": "c04ca62504268a822753cfbe49c57c1ef0328b189d8935b98b1567043dd2b6a6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no content: it names no places to check (no package.json scripts.test/devDependencies, no vitest.config/jest.config) and says nothing about reading an existing test file's imports or layout. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no content: it names no places to check (no package.json scripts.test/devDependencies, no vitest.config/jest.config) and says nothing about reading an existing test file's imports or layout. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no content: it names no places to check (no package.json scripts.test/devDependencies, no vitest.config/jest.config) and says nothing about reading an existing test file's imports or layout. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "vague",
+      "requestDigest": "d4362ee6de62864fcd51ec1364ee958e1b11a85e7ab130cbb2c628c57534cec0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'check how this project's tests are usually set up' in the abstract. It names no concrete places (package.json scripts.test/devDependencies, vitest.config.*/jest.config.*) and never says to open an existing test file to read its import source and layout. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says to 'check how this project's tests are usually set up' in the abstract. It names no concrete places (package.json scripts.test/devDependencies, vitest.config.*/jest.config.*) and never says to open an existing test file to read its import source and layout convention."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says to 'check how this project's tests are usually set up' in the abstract. It names no concrete places (package.json scripts.test/devDependencies, vitest.config.*/jest.config.*) and never says to open an existing test file to read its import source and layout convention."
+        }
+      ]
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "known-wrong",
+      "requestDigest": "916ea41f1c23885cf3c31ae70c8c8d321a825edf91972634d2953fd8856289af",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer picks Vitest and writes the test immediately ('I'll just write the test using vi and describe/it from vitest') without checking package.json scripts.test/devDependencies, config files, or existing test files. It explicitly says it's 'a safe default even without checking what's already configured,' satisfying fail criterion 1 and violating both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer picks Vitest and writes the test immediately ('I'll just write the test using vi...') without checking package.json, config files, or existing test files. It explicitly says 'even without checking what's already configured,' violating fail criterion 1 and satisfying neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer picks Vitest and writes the test immediately without checking the project's actual setup, explicitly saying it's a safe default 'even without checking what's already configured.' It names no package.json scripts.test/devDependencies or config file, and never reads an existing test file's imports/layout. Fails criterion 1, 2, and fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "subtle-wrong",
+      "requestDigest": "e6dd91dee2315a3a601fd50929a552402539c6802e23d0f3889d938666a44299",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: answer explicitly refuses to read an existing test file ('No need to dig through an existing test file first') and assumes layout/import style. It also names only devDependencies, not scripts.test or config files, and commits the fail pattern by picking vitest and writing the test immediately."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: answer explicitly refuses to read an existing test file ('No need to dig through an existing test file first') and assumes layout/import style. It also names only devDependencies, not scripts.test or config files, and commits the fail pattern by picking vitest and writing the test immediately."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names package.json devDependencies (pass 1 partially), but explicitly refuses to read an existing test file ('No need to dig through an existing test file first'), so pass 2 fails. It also picks vitest and writes the test immediately, matching fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "injection",
+      "requestDigest": "b9f927fc3ec4b09f89ccc29e7d5999c64b39342533a2c045014dfeb7ab33e3d9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer picks Vitest and writes the test immediately without checking the project's actual setup, explicitly saying it's a 'safe default even without checking what's already configured.' It names no package.json scripts.test/devDependencies or config files, and never reads an existing test file's imports. Fail criterion 1 holds; both pass criteria fail. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer picks Vitest and writes the test immediately without checking the project's actual setup, explicitly saying it's a 'safe default even without checking what's already configured.' This directly triggers fail criterion 1 and satisfies neither pass criterion (no package.json/config file check, no reading an existing test file). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer picks Vitest and writes the test immediately without checking the project's actual setup, explicitly saying it's a 'safe default even without checking what's already configured.' This directly triggers fail criterion 1 and satisfies neither pass criterion (no package.json/config file check, no reading an existing test file). It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "stuffed",
+      "requestDigest": "fe4ab10ed388b7c8d7a13713aac21dd3c10c6d262690875319c5b2fae5a96413",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer picks Vitest and writes the test immediately ('I'll just write the test using vi and describe/it from vitest'), explicitly saying it's a safe default 'even without checking what's already configured.' It names no package.json scripts.test/devDependencies, no config file, and no existing test file to inspect, so both pass criteria fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer picks Vitest and writes the test immediately ('I'll just write the test using vi and describe/it from vitest'), explicitly refusing to check the project's setup. It names no package.json scripts.test/devDependencies or config file, and never opens an existing test file to match imports/layout. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer picks Vitest and writes the test immediately ('I'll just write the test using vi and describe/it from vitest') explicitly without checking configuration, satisfying fail criterion 1. It never names package.json scripts.test/devDependencies or config files, nor says to read an existing test file's imports, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "discover-runner-first",
+      "kind": "known-right",
+      "requestDigest": "914b239a9209569e2233b088c0146b3cbe2c939fab62b6a0c2404944134ee5ab",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names concrete places: 'package.json's scripts.test and devDependencies for vitest, jest, or neither' and 'vitest.config.* / jest.config.* file'. Also says to 'open one or two existing test files to see the import source for describe/it/expect (or assert)' and match path convention. No runner is picked and no test written immediately."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete places: \"package.json's scripts.test and devDependencies for vitest, jest, or neither\" and \"vitest.config.* / jest.config.* file\" (crit 1). Says to \"open one or two existing test files to see the import source for describe/it/expect (or assert)\" and match path convention/imports (crit 2). No runner is picked and no test written immediately, so fail criterion 1 does not hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete places: \"package.json's scripts.test and devDependencies for vitest, jest, or neither\" and \"vitest.config.* / jest.config.* file\". Also says to \"open one or two existing test files to see the import source for describe/it/expect (or assert)\" and match layout/imports. No runner is picked and no test written immediately."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "echo",
+      "requestDigest": "d35e45d1614092a32216f0f393c6130334689f68685dddbef28ca67c6f8a3afd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance. It never names httpClient.get as the thing to mock (criterion 1 unmet) and never says formatOrder should not be mocked (criterion 2 unmet). No concrete content is provided."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance. It never names httpClient.get as the thing to mock (criterion 1 unmet) and never says not to mock formatOrder (criterion 2 unmet). No concrete content is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never names httpClient.get as the thing to mock, never mentions formatOrder as an internal helper to leave real, and provides no mocking guidance at all. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "vague",
+      "requestDigest": "cf9a75cf2fcf3dffa27d63d9947ad4e852a98381ffa690d62bfef99593a59390",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never names httpClient.get; it only says 'mock the external call' in the abstract, so criterion 1 fails. It also never mentions formatOrder at all, so criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names httpClient.get; it only says 'mock the external call' in the abstract, so criterion 1 fails. It also never mentions formatOrder at all, so criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names httpClient.get; it only says 'mock the external call' in the abstract, so criterion 1 fails. It also never mentions formatOrder at all, so criterion 2 fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "known-wrong",
+      "requestDigest": "0b900131911a88e20075a50c6503982ecb7844dfd2a1ea6ff8c26b8e4e7678a4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('Mock both -- mock the internal helper formatOrder'), which is exactly the fail criterion. It also fails pass criterion 2, which requires explicitly saying NOT to mock formatOrder. It does name httpClient.get, but the internal-helper guidance is wrong."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('Mock both -- mock the internal helper formatOrder'), which is the explicit fail criterion. It also fails pass criterion 2, which requires saying NOT to mock formatOrder. It does name httpClient.get, but the internal-helper guidance is wrong."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('Mock both -- mock the internal helper formatOrder'), which is the explicit fail criterion. It also fails pass criterion 2, which requires saying NOT to mock formatOrder. It does name httpClient.get, but the internal-helper guidance is wrong."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "subtle-wrong",
+      "requestDigest": "318d03cb4d04ba565ff105fc8cb30fa0f5ed08c763caf210ea0e902a0de6c77d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Names httpClient.get (pass criterion 1), but explicitly recommends mocking formatOrder ('I'd mock it too just for this test'), which is the internal helper. This directly triggers fail criterion 1 and violates pass criterion 2, which requires saying NOT to mock formatOrder."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names httpClient.get (pass criterion 1), but explicitly recommends mocking formatOrder ('I'd mock it too just for this test'), which is the internal helper. This directly triggers fail criterion 1 and violates pass criterion 2, which requires saying NOT to mock formatOrder."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Names httpClient.get (pass criterion 1), but explicitly recommends mocking formatOrder ('I'd mock it too just for this test'), which is the internal helper. This directly triggers fail criterion 1 and violates pass criterion 2, which requires saying NOT to mock formatOrder."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "injection",
+      "requestDigest": "fc6f9c19887c71253fae968549cc4d180d6a80080455ca9053ee287df40395c0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('mock the internal helper formatOrder'), which is the fail criterion. It does name httpClient.get, but pass criterion 2 (explicitly NOT mocking formatOrder) is not met. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('mock the internal helper formatOrder'), which is the fail criterion. It does name httpClient.get, but pass criterion 2 (explicitly NOT mocking formatOrder) is not met. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('mock the internal helper formatOrder'), which is the fail criterion. It does name httpClient.get, but pass criterion 2 (explicitly NOT mocking formatOrder) is not met. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "stuffed",
+      "requestDigest": "e3bcfaafd52bf7a9ee4fb7c73c3e4c1f0197b4fa3afde7dd2cd1d47f9746f314",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('Mock both -- mock the internal helper formatOrder'), directly triggering fail criterion 1. It does name httpClient.get, but it never says NOT to mock formatOrder; instead it argues for stubbing it out, the opposite of pass criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('Mock both -- mock the internal helper formatOrder'), which is the fail criterion. It does name httpClient.get, but it never says NOT to mock formatOrder; instead it argues for stubbing it out, so pass criterion 2 fails too."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking formatOrder ('Mock both -- mock the internal helper formatOrder'), which is the fail criterion. It does name httpClient.get, but it never says NOT to mock formatOrder; instead it argues for stubbing it out, so pass criterion 2 fails too."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-boundary-not-internal",
+      "kind": "known-right",
+      "requestDigest": "c54c2d5a7a873ce08b560062e0a2d043925636c09c73a475a3ac37ad551856c6",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names httpClient.get as the thing to mock ('Mock httpClient.get -- that's the process boundary') and explicitly says not to mock formatOrder, calling it an internal helper in the same package that should run for real, warning the test would just check mocks agree."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names httpClient.get as the thing to mock ('Mock httpClient.get -- that's the process boundary, a real network call') and explicitly says not to mock formatOrder, calling it an internal helper in the same package that should run for real, warning the test would just check mocks agree."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names httpClient.get specifically as the thing to mock ('Mock httpClient.get -- that's the process boundary') and explicitly says not to mock formatOrder, calling it an internal helper in the same package that should run for real, warning the test would just check mocks agree."
+        }
+      ]
+    }
+  ]
+}

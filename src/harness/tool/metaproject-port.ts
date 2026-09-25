@@ -776,8 +776,18 @@ export interface MetaprojectPort {
   /**
    * Deterministic lexical Q&A over the project's wiki + memory (gdwiki).
    * `k` caps the citation count, exactly as `keryx wiki ask --k` does.
+   *
+   * `harnessIdentity` (Flow 313 (W4) review R1-F4) is OPTIONAL and, when
+   * given, is the MCP server's bound `--harness`/`KERYX_HARNESS` launch
+   * identity — never a caller-supplied param at the tool-call boundary.
+   * `undefined`/absent (every existing caller: the interactive agent tool,
+   * the CLI, the `ToolRegistry` projection) means "unbound", identical to
+   * the pre-existing behaviour byte-for-byte. Only the MCP `wiki_ask`
+   * projection (`src/mcp/metaproject-tools.ts`) sets it, so a memory
+   * citation whose `Target-Harnesses` excludes the bound identity is never
+   * admitted — the same restriction `memory.search`/`memory_search` apply.
    */
-  wikiAsk?(input: { question: string; k?: number }): Promise<WikiAskResult>;
+  wikiAsk?(input: { question: string; k?: number; harnessIdentity?: string | null }): Promise<WikiAskResult>;
 
   // --- AFC (flow 240): the two capabilities that existed with no boundary ----
   // Same OPTIONAL contract as every batch above: an absent method is an

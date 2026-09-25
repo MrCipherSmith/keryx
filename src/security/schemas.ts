@@ -246,6 +246,18 @@ const EGRESS_POLICY_SCHEMA: JsonSchema = {
     },
     minConfidence: { type: "number", minimum: 0, maximum: 1 },
     allowlist: { type: "array", items: { type: "string" } },
+    // GDCTX-2: per-(policyId, source) action override, e.g.
+    // `{ "egress.html-image-exfil": { "trusted-project": "allow" } }`.
+    sourceOverrides: {
+      type: "object",
+      additionalProperties: {
+        type: "object",
+        additionalProperties: {
+          type: "string",
+          enum: ["allow", "redact", "block", "require-approval", "warn"],
+        },
+      },
+    },
   },
 };
 
@@ -296,6 +308,18 @@ export const SECURITY_CONFIG_SCHEMA: JsonSchema = {
       },
     },
     configChecksum: { type: "string" },
+    // Flow 308 (W8, Lane B, T6): optional — absent is the ordinary
+    // "not configured" case (see `config.ts#mergeSecurityConfig`).
+    impactEvidence: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        enabled: { type: "boolean" },
+        strict: { type: "boolean" },
+        exemptGlobs: { type: "array", items: { type: "string" } },
+        dampenAfter: { type: "integer", minimum: 0 },
+      },
+    },
   },
 };
 

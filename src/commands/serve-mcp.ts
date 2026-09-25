@@ -28,8 +28,9 @@ export async function serveMcpCommand(
   const http = args.includes("--http");
   const readOnly = args.includes("--read-only");
   const projectRoot = path.resolve(resolveServeRoot(optionValue(args, "--cwd"), cwd, process.env));
+  const harness = resolveServeHarness(args, process.env);
   try {
-    await serveMcp({ cwd: projectRoot, http, readOnly });
+    await serveMcp({ cwd: projectRoot, http, readOnly, ...(harness !== undefined ? { harness } : {}) });
   } catch (error) {
     // AC10: the single opt-in command allowed to hard-fail. Print the
     // actionable message and exit non-zero.
@@ -42,12 +43,28 @@ export async function serveMcpCommand(
   }
 }
 
+/**
+ * Flow 313 (W4-AC6): `--harness` wins over `KERYX_HARNESS` when both are
+ * set; resolved once here, bound once at launch (`serveMcp`), never
+ * re-resolved per call. Pure so precedence is directly testable without
+ * starting a real server.
+ */
+export function resolveServeHarness(args: string[], env: NodeJS.ProcessEnv): string | undefined {
+  const harnessFlag = optionValue(args, "--harness");
+  if (harnessFlag !== undefined) {
+    return harnessFlag;
+  }
+  const harnessEnv = env.KERYX_HARNESS;
+  return harnessEnv && harnessEnv.length > 0 ? harnessEnv : undefined;
+}
+
 export function printServeMcpHelp(): void {
   helpTitle("keryx serve-mcp", "expose Metaproject services over the Model Context Protocol");
   helpUsage([
     "keryx serve-mcp [--cwd <project-root>]          # stdio JSON-RPC MCP server (default)",
     "keryx serve-mcp --http [--cwd <project-root>]   # HTTP/SSE opt-in (requires capabilities.http.enabled)",
     "keryx serve-mcp --read-only [--cwd <project-root>]  # expose only tools that change nothing",
+    "keryx serve-mcp --harness <id> [--cwd <project-root>]  # bind a cross-harness memory identity",
   ]);
   helpOptions([
     { flag: "--http", desc: "Use the isolated HTTP/SSE transport (localhost only) instead of stdio." },
@@ -55,6 +72,10 @@ export function printServeMcpHelp(): void {
     {
       flag: "--read-only",
       desc: "Hide every tool marked mutating. keryx uses this when it hands its own MCP server to a foreign ACP agent, whose MCP calls never pass keryx's permission bridge.",
+    },
+    {
+      flag: "--harness",
+      desc: "Bind this server process's cross-harness memory identity once at launch (or set KERYX_HARNESS; --harness wins). Used by memory.search filtering, memory.handoff, and the Source-Harness stamped on memory.propose writes. Unknown id refuses to start.",
     },
   ]);
   heading("Notes");

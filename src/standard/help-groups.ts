@@ -254,6 +254,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     summary: "Emit a bounded graph + wiki startup block, or install it as a turn-start hook.",
   },
   { kind: "cli", name: "skills", group: "Project knowledge", summary: "Manage bundled Metaproject working skills." },
+  {
+    kind: "cli",
+    name: "stack",
+    group: "Project knowledge",
+    summary: "Deterministic, offline stack detection — keryx stack detect.",
+  },
+  {
+    kind: "cli",
+    name: "bundle",
+    group: "Project knowledge",
+    summary: "Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses.",
+  },
 
   // ---- Managed work -----------------------------------------------------
   { kind: "cli", name: "flow", group: "Managed work", summary: "Agent-first flow lifecycle (Task Manager)." },
@@ -316,6 +328,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
   },
   {
+    kind: "cli",
+    name: "hooks",
+    group: "Automation",
+    summary: "Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration.",
+  },
+  {
+    kind: "cli",
+    name: "learn",
+    group: "Automation",
+    summary: "Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune.",
+  },
+  {
     kind: "slash",
     name: "/triggers",
     group: "Automation",
@@ -367,6 +391,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "integrations",
+    group: "External agents, ACP and MCP",
+    summary: "Install, audit and uninstall Keryx's hooks and instructions in another coding agent (see also /integrate, unrelated).",
+  },
+  {
+    kind: "cli",
     name: "serve-mcp",
     group: "External agents, ACP and MCP",
     summary: "Expose Metaproject services over the Model Context Protocol (opt-in).",
@@ -403,9 +433,9 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
-    name: "/integrations",
+    name: "/integrate",
     group: "External agents, ACP and MCP",
-    summary: "Wire this project into an editor over MCP (keryx integrate).",
+    summary: "Wire this project into an editor over MCP (keryx integrate; see also keryx integrations).",
   },
   {
     kind: "slash",

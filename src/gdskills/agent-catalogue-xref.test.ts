@@ -48,6 +48,7 @@ import { BUNDLED_GDSKILLS } from "./catalog";
 import { KNOWN_EXTERNAL_SKILL_REFERENCES } from "./bundled-eval";
 import { defaultPlan } from "../job/plans";
 import type { JobIntent } from "../job/types";
+import { loadAgentCatalog } from "../agents/catalog";
 
 const REPO_ROOT = path.join(import.meta.dir, "..", "..");
 
@@ -85,6 +86,22 @@ const NON_SKILL_AGENT_LABELS: ReadonlyMap<string, string> = new Map([
   ["reviewers", "the set of `review-*` skills, dispatched individually"],
   ...KNOWN_EXTERNAL_SKILL_REFERENCES,
 ]);
+
+/**
+ * Flow 310 (W2 agent-definitions catalog): a dispatch position may also name
+ * one of the `src/agents/` catalog's own generic agents (`agent:
+ * "codebase-navigator"`, `Agent("design-advisor")`, ...), which are real dispatchable
+ * units this tree ships but are not gdskills — a separate catalog with its
+ * own loader (`loadAgentCatalog`). A catalog-load failure here (unreadable
+ * file, invalid frontmatter/schema, duplicate name) does not fail this
+ * xref sweep — that failure has its own test coverage in
+ * `src/agents/catalog.test.ts` — but it does mean fewer names are known,
+ * which only makes this guard stricter, never looser.
+ */
+function knownAgentCatalogNames(): Set<string> {
+  const catalog = loadAgentCatalog(REPO_ROOT);
+  return new Set(catalog.agents.map((loaded) => loaded.definition.name));
+}
 
 /**
  * Dispatch positions. Each names something to RUN, so a name in one of them is
@@ -150,6 +167,7 @@ function knownAgentNames(): Set<string> {
       }
     }
   }
+  for (const name of knownAgentCatalogNames()) names.add(name);
   return names;
 }
 
@@ -255,6 +273,29 @@ describe("a shipped skill never dispatches an agent this tree does not have", ()
       '  5.  { id: "implement", type: "implement", agent: "task-implementer", depends: [] }',
       'Agent("review-orchestrator")',
       'subagent_type: "review-logic"',
+    ];
+    for (const line of legitimate) {
+      for (const pattern of DISPATCH_PATTERNS) {
+        for (const match of line.matchAll(pattern)) {
+          expect(known.has(match[1] as string)).toBe(true);
+        }
+      }
+    }
+  });
+
+  // Flow 310 (W2): a dispatch position naming one of `src/agents/`'s own
+  // generic agents resolves too, not just gdskills — the two catalogs share
+  // this one xref sweep rather than each needing its own.
+  test("the agent-definitions catalog is non-empty and a dispatch-position reference to it resolves", () => {
+    const agentCatalogNames = knownAgentCatalogNames();
+    expect(agentCatalogNames.size).toBeGreaterThan(0);
+    expect(agentCatalogNames.has("design-advisor")).toBe(true);
+
+    const known = knownAgentNames();
+    const legitimate = [
+      'Agent("design-advisor")',
+      'subagent_type: "codebase-navigator"',
+      '{ id: "plan", type: "plan", agent: "work-planner", depends: [] }',
     ];
     for (const line of legitimate) {
       for (const pattern of DISPATCH_PATTERNS) {

@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
 import { uniqueTestRoot } from "../lib/test-tmp";
+import { ContainedWriteError } from "../lib/contained-write";
 import {
   analyzeTestingProject,
   computeTestingContext,
@@ -405,6 +406,46 @@ test("computeTestingContext computes the same context as analyzeTestingProject w
 
   const related = await relatedTestsInContext(root, context, "src/step.ts");
   expect(related).toEqual(["src/step.test.ts"]);
+});
+
+// Flow 315 T5 (R5-F1 major): if `.metaproject/data/testing` (the directory
+// `testingDataRoot` points every writer in this module at) is a symlink that
+// escapes the project, the pre-fix raw `mkdir`/`writeFile` calls followed it
+// and planted context.json/context.md/recommendations.md wherever the link
+// pointed — including outside the project entirely. `analyzeTestingProject`
+// now refuses (ContainedWriteError, reason "escaping-symlink") instead of
+// writing through it: refusing the whole write is safer than silently
+// skipping just the persistence half of "analyze", since a caller reading a
+// stale/absent context.json would otherwise never learn the analysis ran.
+test("analyzeTestingProject refuses to write through a symlinked .metaproject/data/testing directory that escapes the project", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-escape");
+  await reset(root);
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+
+  const outsideRoot = uniqueTestRoot(tmpdir(), "keryx-testing-escape-outside");
+  await reset(outsideRoot);
+  const sentinelPath = path.join(outsideRoot, "sentinel.txt");
+  await writeFile(sentinelPath, "ORIGINAL\n");
+
+  const metaprojectData = path.join(root, ".metaproject", "data");
+  await mkdir(metaprojectData, { recursive: true });
+  await symlink(outsideRoot, path.join(metaprojectData, "testing"));
+
+  let caught: unknown;
+  try {
+    await analyzeTestingProject(root);
+  } catch (error) {
+    caught = error;
+  }
+
+  expect(caught).toBeInstanceOf(ContainedWriteError);
+  expect((caught as ContainedWriteError).reason).toBe("escaping-symlink");
+  expect(await readFile(sentinelPath, "utf8")).toBe("ORIGINAL\n");
+  expect(existsSync(path.join(outsideRoot, "context.json"))).toBe(false);
+  expect(existsSync(path.join(outsideRoot, "context.md"))).toBe(false);
+  expect(existsSync(path.join(outsideRoot, "recommendations.md"))).toBe(false);
+
+  await rm(outsideRoot, { recursive: true, force: true });
 });
 
 async function reset(root: string): Promise<void> {

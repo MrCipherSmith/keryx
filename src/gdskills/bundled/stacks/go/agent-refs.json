@@ -1,0 +1,3 @@
+{
+  "agents": ["go-code-auditor", "go-build-fixer"]
+}

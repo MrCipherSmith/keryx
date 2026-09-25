@@ -5,10 +5,13 @@ import { pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { SECURITY_CONFIG_SCHEMA, validateAgainstSchema } from "./schemas";
 import type {
+  ImpactEvidenceConfig,
   InjectionModelBackend,
   PolicyConfig,
+  SecurityAction,
   SecurityConfig,
   SecurityMode,
+  SourceOverrideTable,
 } from "./types";
 
 // Default config from specification.md §5. `configChecksum` is intentionally
@@ -23,7 +26,14 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     secrets: { enabled: true, action: "block" },
     pii: { enabled: true, action: "redact" },
     promptInjection: { enabled: true, action: "require-approval" },
-    egress: { enabled: true, action: "block" },
+    egress: {
+      enabled: true,
+      action: "block",
+      // GDCTX-2: `sourceOverrides` is deliberately ABSENT here — see
+      // `SHIPPED_EGRESS_SOURCE_OVERRIDES` below for why, and
+      // `resolve.ts#egressSourceOverrideAction` for where the shipped default
+      // is actually applied.
+    },
     artifactSafety: { enabled: true, action: "redact" },
   },
   backends: {
@@ -40,6 +50,45 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     },
   },
   gate: { failOn: "critical", minConfidence: 0.5 },
+};
+
+// Flow 308 (W8, Lane B, T6): defaults for the optional `impactEvidence`
+// block (per the Lane B design: enabled true, strict false, no exemptions,
+// dampen after 3 denials). Not part of `DEFAULT_SECURITY_CONFIG` itself —
+// see `mergeSecurityConfig` below for why the key is filled in only when the
+// parsed config actually declares it.
+export const DEFAULT_IMPACT_EVIDENCE_CONFIG: ImpactEvidenceConfig = {
+  enabled: true,
+  strict: false,
+  exemptGlobs: [],
+  dampenAfter: 3,
+};
+
+// GDCTX-2's shipped default: a static, committed badge/logo `<img src>`/
+// markdown-image URL (CI badge, npm badge, license badge — see README.md)
+// reads as an exfil-shaped egress finding under `trusted-project` content even
+// though nobody's secret ever reaches it. `resolve.ts#egressSourceOverrideAction`
+// still gates this on the URL's query string: a credential-shaped parameter
+// (or a value a secret/PII detector flags) keeps the ordinary `action` above.
+//
+// F1 (T-review): this used to live INSIDE `DEFAULT_SECURITY_CONFIG.policies.egress`
+// and `mergeEgressPolicy` always copied it onto every merged config — including
+// one loaded from a `security.config.json` a user never touched. `configChecksum`
+// (§14) is `sha256(policies)` (`computeConfigChecksum` below), so every config
+// file rendered before this feature shipped, with a checksum computed over a
+// `policies.egress` that had NO `sourceOverrides` key at all, started reading as
+// TAMPERED the moment this build loaded it (`security status` → MISMATCH,
+// `security policy validate` → fail) — a false self-protection incident with no
+// actual edit behind it. A shipped default is not something the OPERATOR wrote,
+// so it must never enter the block their checksum protects; it is applied at
+// RESOLUTION time instead (`egressSourceOverrideAction`), never materialized
+// into `config.policies`. A project that wants its own override — including
+// turning this shipped one back to `"redact"`/`"block"` — writes it into
+// `security.config.json` directly; only THAT explicit entry is merged and
+// checksummed (see `mergeEgressPolicy`).
+export const SHIPPED_EGRESS_SOURCE_OVERRIDES: SourceOverrideTable = {
+  "egress.html-image-exfil": { "trusted-project": "allow" },
+  "egress.markdown-image-exfil": { "trusted-project": "allow" },
 };
 
 /**
@@ -89,12 +138,69 @@ function mergePolicy(base: PolicyConfig, override?: Partial<PolicyConfig>): Poli
   return merged;
 }
 
+const VALID_ACTIONS: ReadonlySet<string> = new Set<SecurityAction>([
+  "allow",
+  "redact",
+  "block",
+  "require-approval",
+  "warn",
+]);
+
+function isSecurityAction(value: unknown): value is SecurityAction {
+  return typeof value === "string" && VALID_ACTIONS.has(value);
+}
+
+// Merge `sourceOverrides` (GDCTX-2) per policyId: the override config replaces
+// the DEFAULT'S entry for a policyId it names (so a project can turn the
+// shipped `trusted-project -> allow` for `egress.html-image-exfil` back to
+// `redact`/`block` with a two-line config, or add its own entries for other
+// policy ids/sources) while every policyId it does not mention keeps the
+// default untouched. A malformed leaf (not a recognized `SecurityAction`
+// string) is dropped rather than merged, so a typo in the config file cannot
+// silently produce `undefined`-as-allow.
+export function mergeSourceOverrides(
+  base: SourceOverrideTable | undefined,
+  override: unknown,
+): SourceOverrideTable | undefined {
+  if (override === undefined) {
+    return base;
+  }
+  if (typeof override !== "object" || override === null || Array.isArray(override)) {
+    return base;
+  }
+  const merged: SourceOverrideTable = { ...(base ?? {}) };
+  for (const [policyId, sources] of Object.entries(override as Record<string, unknown>)) {
+    if (typeof sources !== "object" || sources === null || Array.isArray(sources)) {
+      continue;
+    }
+    const bySource: Partial<Record<string, SecurityAction>> = { ...(merged[policyId] ?? {}) };
+    for (const [source, action] of Object.entries(sources as Record<string, unknown>)) {
+      if (isSecurityAction(action)) {
+        bySource[source] = action;
+      }
+    }
+    merged[policyId] = bySource;
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 // Merge the egress policy, carrying through a user-provided host allowlist
-// (Block E, E3). The allowlist is only materialized when the source config
-// provides a valid string[] — an absent or malformed value leaves the field
-// undefined so the default config, its rendered form, and its `configChecksum`
-// stay byte-identical to today (AC0.1, AC2.3). A non-empty allowlist IS included
-// (and thus checksummed) so tampering is detected (§5).
+// (Block E, E3) and per-source policy overrides (GDCTX-2). The allowlist is
+// only materialized when the source config provides a valid string[] — an
+// absent or malformed value leaves the field undefined so the default config,
+// its rendered form, and its `configChecksum` stay byte-identical to today
+// (AC0.1, AC2.3). A non-empty allowlist IS included (and thus checksummed) so
+// tampering is detected (§5).
+//
+// `sourceOverrides` (F1): unlike the allowlist, the SHIPPED default
+// (`SHIPPED_EGRESS_SOURCE_OVERRIDES`) is never merged in here — `base` is
+// `DEFAULT_SECURITY_CONFIG.policies.egress`, whose own `sourceOverrides` is
+// intentionally absent (see that constant's comment), so `base.sourceOverrides`
+// is always `undefined`. Only a `sourceOverrides` block the OPERATOR actually
+// wrote in `security.config.json` is merged and thus checksummed; the shipped
+// default is applied later, at resolution time
+// (`resolve.ts#egressSourceOverrideAction`), never stored on the config object
+// this function returns.
 function mergeEgressPolicy(
   base: PolicyConfig,
   override?: Partial<PolicyConfig>,
@@ -106,6 +212,10 @@ function mergeEgressPolicy(
     if (hosts.length > 0) {
       merged.allowlist = hosts;
     }
+  }
+  const sourceOverrides = mergeSourceOverrides(base.sourceOverrides, override?.sourceOverrides);
+  if (sourceOverrides !== undefined) {
+    merged.sourceOverrides = sourceOverrides;
   }
   return merged;
 }
@@ -145,6 +255,113 @@ function mergePiiModel(
   return merged;
 }
 
+// Merge the optional `impactEvidence` block field-by-field over its defaults,
+// but ONLY when the parsed config actually has the key — an absent key stays
+// absent on the merged result (see `mergeSecurityConfig` below), which is
+// what keeps `computeConfigChecksum` byte-identical for every config written
+// before this feature shipped.
+function mergeImpactEvidence(
+  override: Partial<ImpactEvidenceConfig> | undefined,
+): ImpactEvidenceConfig {
+  const base = DEFAULT_IMPACT_EVIDENCE_CONFIG;
+  const exemptGlobs = Array.isArray(override?.exemptGlobs)
+    ? override.exemptGlobs.filter((g): g is string => typeof g === "string")
+    : base.exemptGlobs;
+  // F17 (review round 1): `dampenAfter` is a denial COUNT — zero or negative
+  // would dampen (or never inject at all) on the very first touch, silently
+  // neutering the gate. A valid override is clamped to a whole number >= 1;
+  // anything else (including 0, negative, NaN, Infinity) falls back to the
+  // default rather than being merged as-is.
+  const dampenAfter =
+    typeof override?.dampenAfter === "number" && Number.isFinite(override.dampenAfter) && override.dampenAfter >= 1
+      ? Math.trunc(override.dampenAfter)
+      : base.dampenAfter;
+  return {
+    enabled: override?.enabled ?? base.enabled,
+    strict: override?.strict ?? base.strict,
+    exemptGlobs,
+    dampenAfter,
+  };
+}
+
+/**
+ * The effective `impactEvidence` block for `config` — defaults filled in
+ * whether or not the config declared the key at all. Distinct from
+ * `config.impactEvidence` itself, which stays `undefined` on a config that
+ * never mentioned it (see `mergeSecurityConfig`); a caller that only wants
+ * to KNOW the effective policy (the impact-evidence provider, `security
+ * impact-evidence status`) should call this rather than read the field
+ * directly and risk treating an absent block as "disabled".
+ */
+export function resolveImpactEvidenceConfig(config: SecurityConfig): ImpactEvidenceConfig {
+  return config.impactEvidence ? mergeImpactEvidence(config.impactEvidence) : DEFAULT_IMPACT_EVIDENCE_CONFIG;
+}
+
+/**
+ * F11 (review round 1, blocker-adjacent; round 2 fix was incomplete — see the
+ * "trusted" definition below): `resolveImpactEvidenceConfig` above takes
+ * `config.impactEvidence` on trust — including its `enabled: false` kill
+ * switch — regardless of whether a `configChecksum` was ever recorded. A
+ * hand-written `security.config.json` with `{"impactEvidence":{"enabled":
+ * false}}` and NO `configChecksum` at all defeats the gate just as surely as
+ * a tampered checksum does, and the round-1 fix missed it because
+ * `verifyConfigChecksum` (below) treats an ABSENT checksum as a match —
+ * correct for its other callers (`policy validate`, `status`: "nothing to
+ * tamper with yet" on a fresh/default config), wrong here, where the block's
+ * presence is itself the thing that must be provably the operator's own
+ * doing.
+ *
+ * The rule this function enforces: the `impactEvidence` block is trusted for
+ * LOOSENING fields (`enabled: false`, `strict: false` when the default would
+ * be tighter — the default is already `false` so only `enabled`,
+ * `exemptGlobs` non-empty, or `dampenAfter` above the default loosen
+ * anything) ONLY when `configChecksum` is PRESENT and it matches. Absent or
+ * mismatched, every loosening field is ignored (defaults are used in their
+ * place) — but a TIGHTENING field, `strict: true`, may still apply, because a
+ * false claim of strict mode is strictly more protective, never a bypass, so
+ * there is no reason to distrust it even from data we otherwise cannot
+ * trust. `configUnreadable` (the file did not parse at all) is untrusted the
+ * same way.
+ *
+ * This is a STRICTER rule than `verifyConfigChecksum` implements generally,
+ * so it is implemented here rather than by changing that function's
+ * behavior — `verifyConfigChecksum` is depended on by other callers
+ * (`security.test.ts` among them) whose "absent checksum = nothing to tamper
+ * with" reading must stay exactly as it is.
+ */
+export function resolveImpactEvidenceConfigTrusted(config: SecurityConfig): {
+  config: ImpactEvidenceConfig;
+  tampered: boolean;
+  /** Present only when `tampered`: which of the two untrusted cases this is. */
+  detail?: "absent" | "mismatch";
+} {
+  const resolved = resolveImpactEvidenceConfig(config);
+  const checksum = verifyConfigChecksum(config);
+  const checksumPresent = config.configChecksum !== undefined && config.configChecksum !== null;
+  const unreadable = config.configUnreadable === true;
+  const blockDeclared = config.impactEvidence !== undefined;
+  // When the config never declares an `impactEvidence` block at all, there
+  // is no operator-written loosening to distrust — `resolved` is already
+  // exactly the shipped defaults (`resolveImpactEvidenceConfig` above), and
+  // the ordinary `verifyConfigChecksum` reading applies (an absent checksum
+  // is "nothing to tamper with yet"). The stricter "a checksum must be
+  // PRESENT and match" rule applies only once the block itself exists —
+  // that presence is the thing that must be provably the operator's own.
+  const trusted = blockDeclared ? checksumPresent && checksum.match && !unreadable : checksum.match && !unreadable;
+  if (trusted) {
+    return { config: resolved, tampered: false };
+  }
+  const detail: "absent" | "mismatch" = checksumPresent ? "mismatch" : "absent";
+  return {
+    config: {
+      ...DEFAULT_IMPACT_EVIDENCE_CONFIG,
+      strict: resolved.strict === true ? true : DEFAULT_IMPACT_EVIDENCE_CONFIG.strict,
+    },
+    tampered: true,
+    detail,
+  };
+}
+
 // Deep-merge a partial user config over the defaults. Unknown keys are ignored;
 // each known block falls back field-by-field to the default.
 export function mergeSecurityConfig(parsed: Partial<SecurityConfig>): SecurityConfig {
@@ -179,6 +396,13 @@ export function mergeSecurityConfig(parsed: Partial<SecurityConfig>): SecurityCo
   };
   if (parsed.configChecksum !== undefined) {
     merged.configChecksum = parsed.configChecksum;
+  }
+  // Flow 308 (W8, Lane B, T6): filled in ONLY when the parsed config
+  // actually has the key — an absent key must stay absent on `merged` too
+  // (never defaulted-in), which is what keeps `computeConfigChecksum`
+  // byte-identical for a config written before this feature shipped.
+  if (parsed.impactEvidence !== undefined) {
+    merged.impactEvidence = mergeImpactEvidence(parsed.impactEvidence);
   }
   return merged;
 }
@@ -283,9 +507,29 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/**
+ * sha256 (hex) of `value` under the same key-sorted canonical JSON the config
+ * checksum uses. Exported so other checksum-guarded config artifacts (flow 308:
+ * the harness-audit baseline file) reuse this one mechanism instead of a second.
+ */
+export function computeObjectChecksum(value: unknown): string {
+  return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
 // §14: `configChecksum` = sha256 of the normalized `policies` block.
+//
+// Flow 308 (W8, Lane B, T6): when `impactEvidence` is present, the checksum
+// covers `{policies, impactEvidence}` instead — so tampering with the kill
+// switch (`impactEvidence.enabled: false` without resealing) is caught the
+// same way tampering with `policies` always was. When it is ABSENT the
+// checksum is exactly `computeObjectChecksum(config.policies)`, unchanged
+// from before this block existed, so every config written before this
+// feature shipped keeps verifying against its existing checksum.
 export function computeConfigChecksum(config: SecurityConfig): string {
-  return createHash("sha256").update(stableStringify(config.policies)).digest("hex");
+  if (config.impactEvidence === undefined) {
+    return computeObjectChecksum(config.policies);
+  }
+  return computeObjectChecksum({ policies: config.policies, impactEvidence: config.impactEvidence });
 }
 
 export function verifyConfigChecksum(config: SecurityConfig): {

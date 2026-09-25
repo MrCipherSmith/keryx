@@ -8,11 +8,12 @@
 //   env > project policy > global sandbox.json > built-in
 // All loaders are best-effort and never throw.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { resolveProjectRoot } from "../session/paths";
 import type { SandboxMaskModeDefault } from "./sandbox-config";
 import { parseMaskSpec } from "../harness/process/sandbox/network-run";
+import { writeContained } from "./contained-write";
 
 /** Relative path under the project root. */
 export const PROJECT_SANDBOX_POLICY_REL = path.join(".keryx", "sandbox-policy.json");
@@ -120,19 +121,28 @@ export function projectSandboxPolicySkeleton(): string {
 }
 
 /**
- * Write skeleton if missing. Does not overwrite an existing policy.
- * Returns true when a new file was written. Never throws.
+ * Write skeleton if missing. Does not overwrite an existing policy. Routed
+ * through `writeContained` (root = project root, rel = the policy's
+ * project-relative path) so a symlink at `.keryx/` or `.keryx/sandbox-policy.json`
+ * that escapes the project is refused rather than followed (R5-F1-style
+ * containment, mirrors the flow 313/315 T5 retrofit of init's other writers).
+ * `exclusive: true` gives the "if missing" semantics directly — no separate
+ * `existsSync` check, so there is no TOCTOU gap between the check and the
+ * write. Returns true when a new file was written, false when a policy
+ * already existed OR the write was refused (escaping symlink, cycle, etc.).
+ * Never throws.
  */
-export function writeProjectSandboxPolicySkeletonIfMissing(cwdOrRoot: string): boolean {
+export async function writeProjectSandboxPolicySkeletonIfMissing(cwdOrRoot: string): Promise<boolean> {
   try {
-    const file = projectSandboxPolicyPath(cwdOrRoot);
-    if (existsSync(file)) {
-      return false;
-    }
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, projectSandboxPolicySkeleton(), { mode: 0o644 });
+    const root = resolveProjectRoot(cwdOrRoot);
+    await writeContained(root, PROJECT_SANDBOX_POLICY_REL, projectSandboxPolicySkeleton(), {
+      mode: 0o644,
+      exclusive: true,
+    });
     return true;
   } catch {
+    // Any refusal (already-exists, escaping-symlink, symlink-cycle, ...) or
+    // unexpected I/O error is treated as "did not write" — see doc above.
     return false;
   }
 }

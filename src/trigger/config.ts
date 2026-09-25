@@ -46,6 +46,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readConfigFile } from "../lib/config-dir";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import type { BinaryPin } from "./granted-binary";
 import { grantedToolProblems } from "./granted-tools";
 
@@ -291,13 +292,52 @@ export interface ConfirmedRunner {
   readonly env: Readonly<Record<string, string>>;
 }
 
+/**
+ * True for every argv shape `invocationArgv` (`./schedule.ts`) actually
+ * produces: `[binary]` (a compiled keryx), `[interpreter, script]` (the
+ * pre-R2-02 shape, still accepted so an entry stored before that fix keeps
+ * validating — and, since flow 319's fix, also the current shape for a
+ * NODE interpreter, which never gets the flags inserted), or `[interpreter,
+ * ...SAFE_BUN_SPAWN_ARGS, script]` (the current shape for a BUN interpreter
+ * — R2-02 inserts the two safe re-exec flags BETWEEN the interpreter and the
+ * script for a bun-based invocation, so this argv is 2 longer than the
+ * 2-element shape for that case). This validator is deliberately shape-only
+ * and does not itself decide which interpreter gets which shape — that
+ * decision lives in `invocationArgv`/`isBunExecPath` (`./schedule.ts`); both
+ * shapes are always accepted here so a stored entry from either interpreter,
+ * or from before/after either fix, keeps validating.
+ */
+function isValidRunnerArgv(argv: readonly unknown[]): boolean {
+  const isAbsString = (a: unknown): a is string => typeof a === "string" && path.isAbsolute(a);
+  if (argv.length === 1) return isAbsString(argv[0]);
+  if (argv.length === 2) return argv.every(isAbsString);
+  if (argv.length === 2 + SAFE_BUN_SPAWN_ARGS.length) {
+    return (
+      isAbsString(argv[0]) &&
+      SAFE_BUN_SPAWN_ARGS.every((flag, i) => argv[1 + i] === flag) &&
+      isAbsString(argv[argv.length - 1])
+    );
+  }
+  return false;
+}
+
 /** Problems with a stored `install` block; empty means valid. */
 export function confirmedRunnerProblems(value: unknown): string[] {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return ["install: must be an object {argv, env}"];
   const raw = value as { argv?: unknown; env?: unknown };
   const problems: string[] = [];
-  if (!Array.isArray(raw.argv) || raw.argv.length < 1 || raw.argv.length > 2 || !raw.argv.every((a) => typeof a === "string" && path.isAbsolute(a))) {
-    problems.push("install.argv: must be one or two absolute paths (the keryx binary, or the interpreter and keryx's entry script)");
+  // R3 regression (flow 319 CI): this used to accept only 1 or 2 absolute
+  // paths, predating R2-02's SAFE_BUN_SPAWN_ARGS insertion into every
+  // script-based `invocationArgv` — so `draftSchedule` (which builds its
+  // `install` block from `currentRunner`, which calls `invocationArgv`)
+  // could never pass its own validation for any interpreter+script
+  // invocation, only for a compiled-binary one. `isValidRunnerArgv` accepts
+  // both the current 4-element shape and the legacy 1/2-element ones.
+  if (!Array.isArray(raw.argv) || !isValidRunnerArgv(raw.argv)) {
+    problems.push(
+      "install.argv: must be one absolute path (the keryx binary), two absolute paths (the interpreter and keryx's entry " +
+        "script), or the interpreter, the two safe re-exec flags, and the entry script",
+    );
   }
   if (raw.env === null || typeof raw.env !== "object" || Array.isArray(raw.env)) {
     problems.push("install.env: must be an object of string values");

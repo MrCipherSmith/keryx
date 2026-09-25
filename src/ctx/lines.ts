@@ -64,38 +64,103 @@ const CLEAN_COUNT =
   /\b(0|no|zero)\s+(errors?|failures?|failed|failing|problems?|warnings?|issues?|violations?)\b/gi;
 
 /**
+ * What a caller knows about where a line came from.
+ *
+ * `FAILURE_STEMS`/`WARNING_STEMS` are English prose ("refuse this", "cannot
+ * find the cat"), not a verdict vocabulary — on a clean, successful stdout
+ * line they are noise, not a report. A tool only spells one of these words as
+ * its OWN verdict on its stderr, or when the run it belongs to exited
+ * non-zero. `REPO_FAILURE_MARKERS`/`FAILURE_MARKERS` stay stream-agnostic:
+ * they are markers this repo's own summarisers already key on (`(fail)`,
+ * `✗`) or verdicts with no prose reading at all (`ERR!`, `exit code 1`), so a
+ * clean stdout line cannot spell one by accident the way it can spell
+ * "cannot".
+ */
+export type LineContext = {
+  /** Which stream this line came from, when the caller can tell. */
+  stream?: "stdout" | "stderr";
+  /** Exit code of the command that produced this line, when known. */
+  exitCode?: number;
+};
+
+/** Per-line stream/exit-code lookup for a whole `lines` array. */
+export type LineStreamContext = {
+  /** Exit code of the command that produced `lines`, when known. */
+  exitCode?: number;
+  /** True when the line at this index came from stderr. */
+  isStderr?: (index: number) => boolean;
+};
+
+function contextAt(lines: LineStreamContext | undefined, index: number): LineContext | undefined {
+  if (!lines) return undefined;
+  const context: LineContext = {};
+  if (lines.isStderr?.(index)) context.stream = "stderr";
+  if (lines.exitCode !== undefined) context.exitCode = lines.exitCode;
+  return context;
+}
+
+/**
  * The verdict a line reports, or null when it reports none.
  *
  * Exported so the predicate can be asserted directly: a behaviour-level test
  * over a 5,000-line log proves the rescue works for the one line it plants, but
  * not that the vocabulary is right.
+ *
+ * `context` is optional and defaults to today's behaviour: no context means
+ * the caller cannot say which stream a line is from or whether the command
+ * failed, so `FAILURE_STEMS`/`WARNING_STEMS` are applied unconditionally, as
+ * they always were. A caller that DOES know — a command result with separate
+ * stdout/stderr and an exit code — should pass `context` so a clean, exit-0
+ * stdout line that merely contains failure-shaped English prose (a commit
+ * message, a echoed sentence) is not misread as a verdict.
  */
-export function classifyLine(line: string): LineVerdict | null {
+export function classifyLine(line: string, context?: LineContext): LineVerdict | null {
   if (REPO_FAILURE_MARKERS.some((pattern) => pattern.test(line))) {
     return "failure";
   }
   const claim = line.replace(CLEAN_COUNT, " ");
-  if (FAILURE_STEMS.test(claim) || FAILURE_MARKERS.some((pattern) => pattern.test(claim))) {
+  if (FAILURE_MARKERS.some((pattern) => pattern.test(claim))) {
+    return "failure";
+  }
+  // Stream-agnostic markers matched above regardless of context. The
+  // FAILURE_STEMS prose below only counts as a verdict when the line is known
+  // to be stderr, or the run it came from failed — or when the caller has no
+  // idea (no context at all), which is the pre-existing, unconditional
+  // behaviour. This gate is scoped to FAILURE_STEMS only: a WARNING_STEMS hit
+  // (e.g. ESLint's `warning: x` on a clean, exit-0 stdout) is a tool's own
+  // verdict spelled in its normal report, not incidental English prose the
+  // way "cannot"/"fail" can be — gating it the same way made those lines
+  // vanish from Errors / Warnings and from compaction rescue (AC1 scopes the
+  // gate to FAILURE_STEMS only).
+  const stemsApply =
+    context === undefined ||
+    context.stream === "stderr" ||
+    (context.exitCode !== undefined && context.exitCode !== 0);
+  if (stemsApply && FAILURE_STEMS.test(claim)) {
     return "failure";
   }
   return WARNING_STEMS.test(claim) ? "warning" : null;
 }
 
 /** Failures first, then warnings; original order within a tier; deduplicated. */
-export function rankByVerdict(lines: string[]): string[] {
+export function rankByVerdict(lines: string[], context?: LineStreamContext): string[] {
   const failures: string[] = [];
   const warnings: string[] = [];
-  for (const line of lines) {
-    const verdict = classifyLine(line);
+  lines.forEach((line, index) => {
+    const verdict = classifyLine(line, contextAt(context, index));
     if (verdict === "failure") failures.push(line);
     else if (verdict === "warning") warnings.push(line);
-  }
+  });
   return [...new Set([...failures, ...warnings])];
 }
 
 /** Verdict lines, ranked, with the total so the caller can disclose the cut. */
-export function importantLines(lines: string[], max: number): { kept: string[]; total: number } {
-  const ranked = rankByVerdict(lines);
+export function importantLines(
+  lines: string[],
+  max: number,
+  context?: LineStreamContext,
+): { kept: string[]; total: number } {
+  const ranked = rankByVerdict(lines, context);
   return { kept: ranked.slice(0, max), total: ranked.length };
 }
 
@@ -164,6 +229,7 @@ export function compactLines(
   lines: string[],
   limit: number,
   verdictBudget: number,
+  context?: LineStreamContext,
 ): Compaction {
   if (lines.length <= limit) {
     return { lines, omitted: 0, rescued: 0, droppedVerdicts: 0, omittedRanges: [] };
@@ -172,7 +238,18 @@ export function compactLines(
   const head = Math.ceil(limit * 0.45);
   const tail = Math.floor(limit * 0.45);
   const middle = lines.slice(head, lines.length - tail);
-  const verdicts = rankByVerdict(middle);
+  // `middle` is a slice, so its indices are offset from `lines`' — shift the
+  // lookup back onto the original array the caller's context was built for.
+  let middleContext: LineStreamContext | undefined;
+  if (context) {
+    middleContext = {};
+    if (context.exitCode !== undefined) middleContext.exitCode = context.exitCode;
+    if (context.isStderr) {
+      const isStderr = context.isStderr;
+      middleContext.isStderr = (index: number) => isStderr(index + head);
+    }
+  }
+  const verdicts = rankByVerdict(middle, middleContext);
   const rescued = verdicts.slice(0, Math.max(0, verdictBudget));
   const omitted = middle.length - rescued.length;
 

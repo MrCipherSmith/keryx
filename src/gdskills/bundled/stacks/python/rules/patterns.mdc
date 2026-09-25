@@ -1,0 +1,88 @@
+---
+extends: common
+paths: ["**/*.py", "**/*.pyi"]
+metadata:
+  origin: authored
+---
+
+# Python patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+Python 3.12/3.13 patterns and the anti-patterns they replace. Applies only to
+`*.py`/`*.pyi` files.
+
+## Data and typing
+
+- Model a fixed set of related fields with `@dataclass` (or `attrs` if the
+  project already depends on it) instead of a `dict` with string keys — a
+  typo in a dict key fails at runtime, a typo in a dataclass field fails at
+  lint/type-check time.
+- Use `TypedDict` for a dict shape that genuinely must stay a `dict` (e.g. a
+  JSON payload), not for data your own code constructs and passes around.
+- Reach for `typing.Protocol` to type "anything with this method" instead of
+  requiring a concrete base class when the caller only needs structural
+  compatibility — this keeps callers free to pass any matching object.
+- Use `Generic[T]`/type parameter syntax (`class Box[T]:` on 3.12+) for a
+  container or wrapper whose element type varies by call site, rather than
+  typing it `Any` and re-casting at every use.
+
+## Control flow and resources
+
+- Acquire any closable/lockable resource (file, socket, DB connection, lock,
+  temp directory) with a `with` (or `async with`) block; never rely on `del`,
+  garbage collection, or a manual `.close()` that a raised exception can skip.
+- Write a custom context manager as a generator decorated
+  `@contextlib.contextmanager` rather than a hand-rolled
+  `__enter__`/`__exit__` class, unless the class also needs other methods.
+- Raise a new exception `from` the one being handled
+  (`raise ValueError(...) from exc`) instead of a bare `raise ValueError(...)`
+  inside an `except` block — this preserves the causal chain instead of
+  presenting the new exception as unrelated.
+- Prefer early return over nested `if`/`else` for guard conditions; a
+  function whose happy path is indented inside three levels of conditionals
+  should invert its guards.
+
+## Async
+
+- Group a set of related concurrent awaitables with `asyncio.TaskGroup`
+  (3.11+) instead of manually tracking a list of tasks and awaiting them
+  with `asyncio.gather` — a `TaskGroup` cancels its siblings automatically
+  when one fails.
+- Treat `asyncio.CancelledError` as a signal to clean up and re-raise. Since
+  Python 3.8 it subclasses `BaseException`, not `Exception`, so a broad
+  `except Exception` does *not* catch it; only a bare `except:` or an
+  explicit `except BaseException` does, and either one must re-raise it
+  rather than swallow it.
+- Never call a blocking function (`requests.get`, `time.sleep`, synchronous
+  file I/O, a CPU-bound loop) directly inside an `async def` — use the async
+  client, `asyncio.sleep`, or `asyncio.to_thread`/an executor instead.
+
+## Iteration and collections
+
+- Prefer a generator or generator expression over building an intermediate
+  list when the caller only iterates the result once.
+- Use `itertools`/`collections` (`defaultdict`, `Counter`, `chain`,
+  `groupby`) instead of hand-rolled loops that reimplement them.
+- Avoid a mutable default argument (`def f(items=[])`); default to `None`
+  and initialize inside the function body — a mutable default is shared and
+  mutated across every call that omits the argument.
+
+## Logging
+
+- Use the standard `logging` module (or the project's configured structured
+  logger), not `print`, for anything beyond a throwaway script.
+- Pass interpolation arguments to the logging call
+  (`logger.info("got %s", value)`), not an f-string
+  (`logger.info(f"got {value}")`) — the f-string formats even when the log
+  level is disabled, and the lazy form does not.
+
+## Anti-patterns to flag, not introduce
+
+- Wrapping an entire function body in `try/except Exception: pass` to make a
+  flaky call "just work" — this hides real failures instead of handling the
+  specific one expected.
+- Reassigning a loop variable's type mid-loop, or reusing one name for two
+  unrelated purposes in the same function — confuses both readers and type
+  checkers.
+- Deep inheritance chains built to share a few methods — prefer composition
+  or a `Protocol` unless the hierarchy models a genuine is-a relationship.

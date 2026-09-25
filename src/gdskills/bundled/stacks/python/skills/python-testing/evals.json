@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "Write pytest tests for the new widgets module",
+      "Add test coverage for this Python function I just wrote",
+      "Fix this failing pytest test in test_client.py",
+      "Add a pytest fixture for the database connection used across these tests",
+      "Parametrize this pytest test to cover empty, None, and negative inputs",
+      "Fix this failing pytest test that forgot pytest.mark.asyncio for the coroutine"
+    ],
+    "negative": [
+      "Implement the feature this test suite will eventually cover",
+      "Review this Python pull request for mutable default arguments and broad except clauses",
+      "Fix this ModuleNotFoundError breaking pytest collection",
+      "Write Jest tests for this TypeScript React component",
+      "Run a generic quality/test-gen pass across the whole repository",
+      "Review this Python diff for security and resource-leak issues"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "fixture-scope-guidance",
+      "prompt": "I need a pytest fixture used by only one test file. Where should it live and what scope should it have?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer places a single-file fixture directly in that test file, keeps it at the default function scope, and only mentions promoting it to a conftest.py once a second file needs it.",
+          "pass_criteria": [
+            "says the fixture should be defined directly in that one test file, not in any conftest.py, because only one file currently uses it",
+            "recommends the default `function` scope for this fixture -- not `module` or `session` -- naming the scope choice explicitly (a bare `@pytest.fixture` or `scope=\"function\"`)",
+            "states that promotion to a conftest.py (the narrowest one that covers every file needing it) happens only once a second test file needs the same fixture"
+          ],
+          "fail_criteria": [
+            "recommends putting the fixture in the root/suite-root conftest.py even though only one file needs it. Mentioning that pattern only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Put it directly in that test file, not in any `conftest.py`. A fixture that only one module needs doesn't benefit from the extra visibility a `conftest.py` gives it -- it just makes the fixture harder to find (readers have to check conftest.py instead of the test file itself) and implies it's shared when it isn't. Give it the default `function` scope (a bare `@pytest.fixture` with no `scope=` argument); `function` scope is pytest's default and avoids state bleeding between tests that assume isolation. Only move the fixture out to a `conftest.py` once a second test file needs the exact same fixture, and at that point put it in the narrowest `conftest.py` that covers both files -- not automatically the root conftest.py -- so its scope of influence matches its actual scope of use.",
+        "known_wrong": "Just put it in the root `conftest.py` -- that way it's available everywhere in the suite, including this file, and if some other test happens to need something similar down the line it's already there for them too. I'd also bump it to `session` scope so the setup cost only gets paid once across the whole run instead of being recreated per test, which keeps the suite fast. It's a little more visible than strictly necessary right now, but centralizing fixtures in the root conftest.py from the start saves you from having to move them around later.",
+        "vague": "Keep the fixture close to where it's actually used and don't give it a broader scope than it needs right now.",
+        "subtle_wrong": "I'd put it in the test file for now, but go ahead and scope it to `module` since fixture setup can be a bit expensive and this way it's only built once per test file instead of rebuilt for every test -- you can always move it out to a conftest.py later if a second file ends up needing it."
+      },
+      "anti_patterns": ["conftest.py"]
+    },
+    {
+      "id": "mock-external-not-internal",
+      "prompt": "Write a pytest test for a function that calls an internal helper in the same package and also calls an external HTTP API. What should be mocked?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer mocks only the external HTTP call and leaves the internal helper in the same package unmocked, so the test still verifies the real integration between the function and its internal collaborator.",
+          "pass_criteria": [
+            "mocks the external HTTP API call at the point of use, shown concretely in code (e.g. `mocker.patch(\"mypkg.service.httpx_client.get\", ...)`, `monkeypatch.setattr`, or a `responses`/`respx` HTTP mock) -- not just described as an intention",
+            "explicitly leaves the internal helper in the same package unmocked -- not patched, wrapped, or spied on -- so the test exercises the real integration between the function and the helper",
+            "explains why: mocking or wrapping the internal collaborator would only verify the mocks agree with each other, not that the real code works together"
+          ],
+          "fail_criteria": [
+            "mocks, patches, or wraps the internal helper (in addition to or instead of the external API), including a spy that still intercepts the call. Mentioning that this would be wrong is not itself a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Mock only the external HTTP call, not the internal helper. Patch the HTTP client at the point of use in the module under test, e.g. `mocker.patch(\"mypkg.service.httpx_client.get\")`, and have it return a canned response so the test doesn't hit the network. Leave the internal helper alone and let the real function call it: it's part of the same package, so exercising it for real is exactly what proves the function and its collaborator actually integrate correctly, not just that two mocks were configured consistently with each other. If the helper itself has expensive or non-deterministic behavior, that's a sign it needs its own separate unit test, not that this test should mock it away. Something like:\n```python\ndef test_fetches_and_processes(mocker):\n    mocker.patch(\"mypkg.service.httpx_client.get\", return_value=fake_response)\n    result = process_user(user_id=1)\n    assert result.status == \"ok\"\n```",
+        "known_wrong": "Mock both: patch the external HTTP call so the test doesn't hit the network, and also mock the internal helper so the test only has to think about one code path at a time and stays fast and predictable. Something like:\n```python\ndef test_process(mocker):\n    mocker.patch(\"mypkg.service.internal_helper\", return_value=\"stubbed\")\n    mocker.patch(\"mypkg.service.httpx_client.get\", return_value=fake_response)\n    result = process_user(user_id=1)\n    assert result == \"stubbed\"\n```\nMocking the internal helper keeps the test isolated from any changes inside that helper, so it won't break just because someone edits unrelated internal logic later -- it only checks that `process_user` calls the helper and the HTTP client correctly.",
+        "vague": "Only mock the outside call, not the stuff that lives inside the same package, so the test still checks real behavior end to end.",
+        "subtle_wrong": "Mock the external HTTP call directly, and since the internal helper does some non-trivial parsing, wrap it with a thin spy -- `mocker.patch(\"mypkg.service.internal_helper\", wraps=internal_helper)` -- so we can assert it was called with the right arguments while the real logic still runs underneath. That way the test both checks the integration and documents the call contract."
+      }
+    }
+  ]
+}

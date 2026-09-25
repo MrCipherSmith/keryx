@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-09-23-ingest-feat-agent-platform-expansion-r02",
+  "mode": "ingest",
+  "status": "closed",
+  "target": {
+    "kind": "branch",
+    "ref": "feat/agent-platform-expansion",
+    "head": "f004d1c359796316d63d6017e6be45cafcc00c16"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/321-2026-09-23-w5-a-one-harness-adapter-registry-for-th/reviews/2026-09-23-ingest-feat-agent-platform-expansion-r02/scope.md",
+    "coverage": ".metaproject/flows/321-2026-09-23-w5-a-one-harness-adapter-registry-for-th/reviews/2026-09-23-ingest-feat-agent-platform-expansion-r02/coverage.md",
+    "report": ".metaproject/flows/321-2026-09-23-w5-a-one-harness-adapter-registry-for-th/reviews/2026-09-23-ingest-feat-agent-platform-expansion-r02/report.md",
+    "findings": ".metaproject/flows/321-2026-09-23-w5-a-one-harness-adapter-registry-for-th/reviews/2026-09-23-ingest-feat-agent-platform-expansion-r02/findings.json",
+    "learning": ".metaproject/flows/321-2026-09-23-w5-a-one-harness-adapter-registry-for-th/reviews/2026-09-23-ingest-feat-agent-platform-expansion-r02/learning.md",
+    "decisions": ".metaproject/flows/321-2026-09-23-w5-a-one-harness-adapter-registry-for-th/reviews/2026-09-23-ingest-feat-agent-platform-expansion-r02/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "opus-adversarial-r2",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 4,
+    "dropped_prefilter": null,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": null,
+    "dropped_findings_cap": 0,
+    "retained": 4,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "prefilter",
+        "reason": "no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      },
+      {
+        "stage": "scope_b",
+        "reason": "no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart."
+      }
+    ]
+  },
+  "repairs": [
+    {
+      "finding": "R2-F1",
+      "field": "problem",
+      "source": "the finding's own title"
+    },
+    {
+      "finding": "R2-F2",
+      "field": "problem",
+      "source": "the finding's own title"
+    },
+    {
+      "finding": "R2-F3",
+      "field": "problem",
+      "source": "the finding's own title"
+    },
+    {
+      "finding": "R2-F4",
+      "field": "problem",
+      "source": "the finding's own title"
+    }
+  ],
+  "createdAt": "2026-09-24T03:56:19.548Z",
+  "updatedAt": "2026-09-24T03:56:30.566Z",
+  "flow": {
+    "id": "321",
+    "path": ".metaproject/flows/321-2026-09-23-w5-a-one-harness-adapter-registry-for-th"
+  }
+}
