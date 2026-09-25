@@ -3,6 +3,32 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.163] — 2026-09-25
+
+### Added
+- **A prompting rule for Claude Opus 5.5, loaded only by Claude.** Opus 5.5
+  reasons before every reply, so an instruction telling it to think is spent
+  context that buys nothing and can over-constrain how it breaks the work up.
+  `rules/core/opus-5-5-prompting.mdc` says to delete those instructions and
+  state a completion criterion instead, to give a task its finish line rather
+  than hand-written steps, to name the patterns to avoid instead of directing
+  in the abstract, to keep stopping rules and destructive-command prompts in
+  the entrypoint, to keep long-run state in a file because the early context is
+  summarized away, to verify a subagent's evidence rather than its claim, to
+  read blockers before the summary, and to attach finished artifacts instead of
+  paraphrasing them.
+  - **The rule is Claude-scoped by construction.** It is cited from `CLAUDE.md`
+    only, in a section outside the managed `keryx:index` block, so
+    `keryx rules sync` carries it into `.metaproject/rules/claude-md.md` at
+    high priority and leaves `agents-md.md` untouched — an agent that reads
+    only `AGENTS.md` never loads it. `agent_requires: ["claude"]` records the
+    same restriction in frontmatter, alongside the existing `stack_requires`
+    convention. It is deliberately absent from `.metaproject/index.md`, which
+    every agent reads.
+  - Its Output Contract puts output-format instructions, safety and permission
+    rules, and anything written for non-Claude agents out of scope, so a
+    cleanup pass driven by the rule cannot strip them.
+
 ## [0.2.162] — 2026-09-25
 
 The first two pieces of the Jev plan: keryx can send each kind of task to a
