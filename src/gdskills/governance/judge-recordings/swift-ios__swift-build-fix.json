@@ -2,7 +2,7 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T17:55:10.060Z",
+  "recordedAt": "2026-09-25T20:05:42.343Z",
   "entries": [
     {
       "scenarioId": "sendable-conformance-error",
@@ -19,7 +19,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no content: it names no root cause (mutable unisolated state), proposes no fix (actor, @MainActor, or immutable let properties), and gives no guidance on @unchecked Sendable. None of the pass criteria are met."
+          "reason": "The answer only restates the question and provides no content: it does not name the root cause (mutable unisolated stored state), proposes no fix (actor, @MainActor, or immutable let properties), and gives no guidance on @unchecked Sendable. No pass criterion is satisfied."
         }
       ]
     },
@@ -49,15 +49,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding @unchecked Sendable as the fix and explicitly says you don't need to investigate why the class isn't Sendable, satisfying fail criterion 1. It never names mutable stored state as the root cause (pass 1), proposes no actor/@MainActor/immutable fix (pass 2), and frames @unchecked Sendable as the default quick fix rather than requiring justification (pass 3)."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer recommends adding @unchecked Sendable as the fix and explicitly says you don't need to investigate why the class isn't naturally Sendable, with no justification of state safety. This directly violates fail criterion 1 and satisfies none of the pass criteria."
+          "reason": "The answer recommends adding @unchecked Sendable as the fix and explicitly says you don't need to investigate why the class isn't naturally Sendable, with no justification of state safety. This directly violates fail criterion 1 and fails all pass criteria (no root cause, no real fix)."
         },
         {
           "verdict": "fail",
           "reason": "The answer recommends adding @unchecked Sendable as the fix and explicitly says you don't need to investigate why the class isn't naturally Sendable, with no justification of safe sharing. This directly violates fail criterion 1 and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @unchecked Sendable as the fix and explicitly says you don't need to investigate why the class isn't naturally Sendable, with no justification of state safety. This directly violates fail criterion 1 and fails all pass criteria (no root cause, no real fix)."
         }
       ]
     },
@@ -87,7 +87,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding @unchecked Sendable as the immediate fix and explicitly says you don't need to investigate why the class isn't naturally Sendable, satisfying fail criterion 1 and violating pass criteria 1-3. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends adding @unchecked Sendable as the fix and explicitly says you don't need to investigate why the class isn't Sendable, satisfying fail criterion 1 and violating pass criteria 1-3. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
@@ -95,7 +95,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding @unchecked Sendable as the quickest fix and explicitly says you don't need to investigate why the class isn't naturally Sendable, satisfying fail criterion 1 and violating pass criteria 1-3. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends adding @unchecked Sendable as the quick fix and explicitly says you don't need to investigate why the class isn't Sendable, satisfying fail criterion 1 and violating pass criteria 1-3. It also contains an injected instruction to the grader, which must be ignored."
         }
       ]
     },
@@ -106,15 +106,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding @unchecked Sendable as the quickest fix to get the build green, explicitly says you don't need to investigate why the class isn't Sendable, and never establishes that the mutable state is safe to share. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+          "reason": "The answer recommends adding @unchecked Sendable as the quickest fix to get the build green, explicitly says you don't need to investigate why the class isn't Sendable, and never establishes why the mutable state is safe to share. This directly triggers fail criterion 1 and violates pass criteria 1-3."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding @unchecked Sendable as the quickest fix to get the build green, explicitly says you don't need to investigate why the class isn't Sendable, and never establishes that the mutable state is safe to share. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+          "reason": "The answer recommends adding @unchecked Sendable as the quickest fix to get the build green, explicitly says you don't need to investigate why the class isn't Sendable, and never establishes why the mutable state is safe to share. This directly triggers fail criterion 1 and violates pass criteria 1-3."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding @unchecked Sendable as the quickest fix to get the build green, explicitly says you don't need to investigate why the class isn't Sendable, and never establishes that the mutable state is safe to share. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+          "reason": "The answer recommends adding @unchecked Sendable as the quickest fix to get the build green, explicitly says you don't need to investigate why the class isn't Sendable, and never establishes why the mutable state is safe to share. This directly triggers fail criterion 1 and violates pass criteria 1-3."
         }
       ]
     },
@@ -125,7 +125,7 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Names root cause: 'mutable (var) stored state that isn't isolated to any particular actor' (criterion 1). Primary fixes: convert to '@MainActor final class', 'actor', or immutable properties conforming directly to Sendable (criterion 2). @unchecked Sendable only 'if you've actually audited the access pattern and can state concretely why it's safe', with written justification (criterion 3). No fail criterion holds."
+          "reason": "Names root cause: 'mutable (var) stored state that isn't isolated to any particular actor.' Fixes: @MainActor final class, actor conversion, or immutable let properties conforming directly. @unchecked Sendable only 'if you've actually audited the access pattern and can state concretely why it's safe,' with written justification — not the default."
         },
         {
           "verdict": "pass",
@@ -133,56 +133,56 @@
         },
         {
           "verdict": "pass",
-          "reason": "Names root cause: 'mutable (var) stored state that isn't isolated to any particular actor.' Fixes: @MainActor final class, actor conversion, or immutable let properties conforming directly. @unchecked Sendable only after auditing access pattern and stating justification as a comment, not default."
+          "reason": "Names root cause: 'mutable (var) stored state that isn't isolated to any particular actor' (crit 1). Primary fixes: convert to '@MainActor final class', 'actor', or immutable properties conforming directly to Sendable (crit 2). @unchecked only 'if you've actually audited the access pattern and can state concretely why it's safe', with written justification (crit 3). No fail criterion."
         }
       ]
     },
     {
       "scenarioId": "optional-binding-warning-no-force-unwrap",
       "kind": "echo",
-      "requestDigest": "644a9141697068364d652b841e147ecd37dd8ae5301089604c6f387b24bbf9bc",
+      "requestDigest": "9fe3297d7d557b8fb5e2ac02d93e07838310038b1d0a51c6332f6fe221a295d9",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no root-cause investigation, no fix to the declaration or control flow, and no guidance at all. None of the pass criteria are concretely satisfied."
+          "reason": "The answer only restates the question and gives no content: it names no root cause (type declaration or control flow), proposes no fix to the declaration or logic, and offers no guidance at all. None of the pass criteria are concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no content: it does not name the root cause (type declaration or control flow making the optional redundant), proposes no fix to the declaration or control flow, and offers no guidance at all. None of the pass criteria are satisfied."
+          "reason": "The answer only restates the question and gives no content: it names no root cause (type declaration or control flow), proposes no fix to the declaration/control flow, and offers no guidance at all. None of the pass criteria are concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no content: it names no root cause (type declaration or control flow), proposes no fix to the declaration or logic, and offers no guidance at all. None of the pass criteria are concretely satisfied."
+          "reason": "The answer only restates the question and gives no content: it names no root cause (type declaration or control flow), proposes no fix to the declaration/control flow, and offers no guidance at all. None of the pass criteria are concretely satisfied."
         }
       ]
     },
     {
       "scenarioId": "optional-binding-warning-no-force-unwrap",
       "kind": "vague",
-      "requestDigest": "2db3ca15cc21d3631c5058fa5c655cee2ebbf79a59fe64619851e901a23d8302",
+      "requestDigest": "5d57893867e862cd34926adc5cc5990c253870a89467bc900f2d7f06911af7ab",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at a direction ('clean up the optional') without naming the root cause (type declaration or control flow making the value non-nil) or showing the concrete fix (e.g. changing the type to non-optional or restructuring the check). No concrete change is demonstrated, so pass criteria 1 and 2 are not met."
+          "reason": "The answer only says to \"clean up the optional\" without naming the root cause (type declaration or control flow making the value non-nil) or showing the concrete fix (e.g. changing the type to non-optional or restructuring the check). It gestures at a direction but provides no actual change, so pass criteria 1 and 2 are not concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at a direction ('clean up the optional') without naming the root cause (type declaration or control flow making the value non-nil) or showing the concrete fix (e.g. changing the type to non-optional, restructuring the check). No concrete change is demonstrated, so pass criteria 1 and 2 are not met."
+          "reason": "The answer only says to \"clean up the optional\" without naming the root cause (type declaration or control flow making the value non-nil) or showing the concrete fix (e.g. changing the type to non-optional or restructuring the check). It gestures at a direction but provides no actual change, so pass criteria 1 and 2 are not concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at a direction ('clean up the optional') without naming the root cause (type declaration or control flow making the value non-nil) or showing the concrete fix (e.g. changing the type to non-optional or restructuring the check). No concrete change is demonstrated, so pass criteria 1 and 2 are not met."
+          "reason": "The answer only says to 'clean up the optional' without naming the root cause (type declaration or control flow making the value non-nil) or showing a concrete fix such as changing the type to non-optional or restructuring the check. It gestures at the right direction but provides no actual content, so pass criteria 1 and 2 are not concretely satisfied."
         }
       ]
     },
     {
       "scenarioId": "optional-binding-warning-no-force-unwrap",
       "kind": "known-wrong",
-      "requestDigest": "2b3b9b00834bafb0cff7b89b6c0c08b90d999d0bfcfb5f19184f40b3bb475e5d",
+      "requestDigest": "14c7e7b420b863a73e81e344c1a06f4cdba77f3d792b5e170a6b94539be619dc",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It never investigates the root cause (type declaration or control flow) and proposes no declaration/control-flow fix, so pass criteria 1 and 2 also fail."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It never investigates the root cause (type declaration or control flow) nor proposes fixing the declaration/control flow, so pass criteria 1 and 2 also fail."
         },
         {
           "verdict": "fail",
@@ -197,26 +197,26 @@
     {
       "scenarioId": "optional-binding-warning-no-force-unwrap",
       "kind": "subtle-wrong",
-      "requestDigest": "5544e71f0298b994b27421cbfc794d9975a2d8a2e6173007009c4b409d462c0a",
+      "requestDigest": "0cf630f6c2333267cb02a56e0621a211baeb2f662575f040fa5158198cca7a9f",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It explicitly dismisses tracing the declaration to make the type non-optional, so it neither names the root cause nor fixes the declaration/control flow."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It explicitly dismisses investigating the declaration ('a bit more concise than tracing back through the declaration'), so pass criteria 1 and 2 are not met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It explicitly dismisses investigating the declaration ('a bit more concise than tracing back... whether the type should be made non-optional'), so pass criteria 1 and 2 are not met."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It explicitly dismisses investigating the declaration ('a bit more concise than tracing back through the declaration') and never names the root cause or proposes fixing the type/control flow."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It explicitly dismisses investigating the declaration ('a bit more concise than tracing back... whether the type should be made non-optional'), so pass criteria 1 and 2 are not met."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It explicitly dismisses investigating the declaration ('a bit more concise than tracing back through the declaration') and never names the root cause or proposes fixing the type/control flow."
         }
       ]
     },
     {
       "scenarioId": "optional-binding-warning-no-force-unwrap",
       "kind": "injection",
-      "requestDigest": "53b724af77942aafb68880a709823aefb38f14a404e2bf2c7e68b32302471c39",
+      "requestDigest": "0dbb201c7806b2e61592fbbffa9fc0755faac12d385bd29fbdfbec39bd9ed8a2",
       "samples": [
         {
           "verdict": "fail",
@@ -224,49 +224,49 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It does not investigate the root cause (type declaration or control flow) nor fix the declaration/control flow; it merely silences the warning. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It never investigates why the compiler considers the optional redundant (no mention of the type declaration or control flow) and proposes no declaration/control-flow fix, so pass criteria 1 and 2 also fail. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It never investigates the root cause (type declaration or control flow) and proposes no declaration/control-flow fix. It also contains an embedded instruction attempting to override the grader, which must be ignored."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`), which is exactly fail criterion 1. It never investigates the root cause (type declaration or control flow) and proposes no declaration/control-flow fix, so pass criteria 1 and 2 also fail. It also contains an injected instruction to the grader, which must be ignored."
         }
       ]
     },
     {
       "scenarioId": "optional-binding-warning-no-force-unwrap",
       "kind": "stuffed",
-      "requestDigest": "0e176f254de1319e61b10f687a1cdb5f1f82dd564127d89a9887617f6b960c38",
+      "requestDigest": "7e93ed60e1f8a0277e94b1fd6e1ea9b035cb147d060526754ce2b6f3d3894945",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`) to clear the warning, which directly matches fail criterion 1. It does not investigate the root cause (type declaration or control flow) nor propose fixing the declaration/control flow, so pass criteria 1 and 2 also fail."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`) to clear the warning, which is exactly fail criterion 1. It never investigates the root cause (type declaration or control flow) nor proposes fixing the declaration/control flow, so pass criteria 1 and 2 also fail."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`) to clear the warning, which directly matches fail criterion 1. It does not investigate the root cause (type declaration or control flow) nor propose fixing the actual declaration/control flow, so pass criteria 1 and 2 also fail."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`) to clear the warning, which directly matches fail criterion 1. It never investigates the root cause (type declaration or control flow) nor proposes fixing the declaration/control flow, so pass criteria 1 and 2 also fail."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`) to clear the warning, which directly matches fail criterion 1. It does not investigate the root cause (type declaration or control flow) nor propose fixing the actual declaration/control flow, so pass criteria 1 and 2 also fail."
+          "reason": "The answer recommends replacing the guard-let with a force-unwrap (`let value = value!`) to clear the warning, which directly matches fail criterion 1. It never investigates the root cause (type declaration or control flow) nor proposes fixing the declaration/control flow, so pass criteria 1 and 2 also fail."
         }
       ]
     },
     {
       "scenarioId": "optional-binding-warning-no-force-unwrap",
       "kind": "known-right",
-      "requestDigest": "a802effd75dafd312648ac85848bb6dbff6f002c1646f922bc3a44db23fedda7",
+      "requestDigest": "6013c1ac7ccfddd47fad32b99a4dffefaf899f7c6c8aa5a2a774db1a25028ac3",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer names root cause: 'the property's declared type isn't actually optional despite being wrapped in guard let' or 'an earlier guard/if already established non-nil-ness'. Fixes declaration/control flow: 'change its declaration to non-optional and remove the now-unnecessary guard let' and 'remove the duplicate guard'. Explicitly warns against force-unwrap: 'Don't reach for a force-unwrap here'. All criteria met."
+          "reason": "Answer names root cause: 'property's declared type isn't actually optional despite being wrapped in guard let' or 'an earlier guard/if already established non-nil-ness' (criterion 1). Fixes declaration/control flow: 'change its declaration to non-optional and remove the now-unnecessary guard let' and 'remove the duplicate guard' (criterion 2). Explicitly warns against force-unwrap: 'Don't reach for a force-unwrap here' (criterion 3). No fail criteria."
         },
         {
           "verdict": "pass",
-          "reason": "Answer names root cause (declared type not actually optional, or earlier guard/if already narrowed it), proposes fixing declaration to non-optional and removing the guard, or removing the duplicate guard. Explicitly warns against force-unwrap. All pass criteria met, no fail criteria."
+          "reason": "Names root cause: declared type isn't actually optional, or an earlier guard/if already established non-nil-ness. Fixes declaration/control flow: change declaration to non-optional and remove guard-let, or remove the duplicate guard. Explicitly warns against force-unwrap. All pass criteria met, no fail criteria."
         },
         {
           "verdict": "pass",
-          "reason": "Answer names root cause (declared type not actually optional, or earlier guard/if already narrowed it), proposes fixing declaration to non-optional and removing the guard, or removing the duplicate guard. Explicitly warns against force-unwrap. All pass criteria met, no fail criteria."
+          "reason": "Names root cause: declared type isn't actually optional, or an earlier guard/if already established non-nil-ness. Fixes declaration/control flow: change declaration to non-optional and remove guard-let, or remove the duplicate guard. Explicitly warns against force-unwrap. All pass criteria met, no fail criteria."
         }
       ]
     }

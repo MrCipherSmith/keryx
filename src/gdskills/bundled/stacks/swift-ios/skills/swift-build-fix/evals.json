@@ -47,7 +47,7 @@
     },
     {
       "id": "optional-binding-warning-no-force-unwrap",
-      "prompt": "The compiler flags a guard-let in my code with a warning that the value can never actually be nil at that point, and the build treats warnings as errors. How should I fix this?",
+      "prompt": "A static analysis pass on my code flags a guard-let as redundant, saying the value can never actually be nil at that point, and the build treats these findings as errors. How should I fix this?",
       "strictness": "high",
       "expected_behavior": [
         {

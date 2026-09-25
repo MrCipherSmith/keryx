@@ -19,14 +19,20 @@ files.
 - Start concurrent child work with `async let` (a small, fixed number of
   parallel tasks) or `TaskGroup`/`withThrowingTaskGroup` (a dynamic or
   unbounded set of child tasks); both guarantee every child task is
-  awaited or cancelled before the parent scope exits, unlike a detached
-  `Task {}` with no owner.
-- Reach for a bare `Task {}` only at a genuine "fire from non-async
-  context" boundary (a SwiftUI `.task` modifier, a button action); give
-  it an explicit reason it does not need to be joined, and prefer
-  `.task { }` on a SwiftUI view over a manually created `Task` when the
-  work should be tied to the view's lifetime (it is cancelled
-  automatically when the view disappears).
+  awaited or cancelled before the parent scope exits, unlike a bare
+  unstructured `Task {}` with no owner to join it. (`Task {}` is
+  "unstructured" — it inherits the creating context's actor and priority
+  but nothing tracks its lifetime; `Task.detached {}` is a stronger,
+  rarely-needed form that inherits neither — do not use the two names
+  interchangeably.)
+- SwiftUI's `.task { }` modifier closure is already async — it is the
+  boundary, not a place to wrap another `Task {}` inside it. Reach for a
+  bare `Task {}` only at a genuine synchronous-to-async boundary with no
+  async closure already available (a button action's `Void`-returning
+  handler, a delegate callback); give it an explicit reason it does not
+  need to be joined. Prefer `.task { }` directly on a SwiftUI view over a
+  manually created `Task` when the work should be tied to the view's
+  lifetime (it is cancelled automatically when the view disappears).
 - Respect cancellation in long-running async work: check
   `Task.isCancelled`/call `try Task.checkCancellation()` in a loop, so a
   cancelled parent actually stops the child's work instead of running to

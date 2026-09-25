@@ -75,9 +75,15 @@ this summary.
 3. Use `guard let`/`guard` for early exits on optionals; never force-
    unwrap (`!`) or force-try (`try!`) a network response, decoded value,
    or anything else that is not a guaranteed-safe programmer invariant.
-4. Keep a closure that outlives its creating call (`Task`, completion
-   handler, Combine `sink`) from retaining `self` strongly when that
-   would create a cycle — capture `[weak self]` and unwrap.
+4. Keep a closure STORED past its creating call (a completion handler
+   held as a property, a Combine `sink` kept in a `Set<AnyCancellable>`)
+   from retaining `self` strongly when that would create a genuine
+   retain cycle — capture `[weak self]` and unwrap. A `Task {}` closure
+   is different: it runs once and releases its captures when it
+   finishes, so it does not create a persistent cycle the way a stored
+   closure does; still prefer `[weak self]` there when the task can
+   outlive something short-lived (the view/screen it was launched from)
+   and would otherwise keep it alive for no reason while it runs.
 5. Format with the project's configured formatter as you go.
 
 ### Step 4: Verify
