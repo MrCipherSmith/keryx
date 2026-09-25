@@ -1597,6 +1597,14 @@ fullstack / paired PR, reads `templates/pr-comment-frontend.md`. Backend-only
 reads `templates/pr-comment-backend.md`. A paired PR always uses the frontend
 file and must include the wire-contract line.
 
+## Stage counts
+
+Required in **How this review was run**, copied from `scope.md`, not re-counted
+by hand. State what each stage removed. Never state it as a precision
+improvement: no precision baseline exists to improve on. The line carries
+`verification_mode` (`off | annotate | filter`), confirmed / refuted /
+unverifiable / unverified, and retained.
+
 `## Checked and cleared` is now **Verified clean**. Same rule: a hypothesis
 that was tested and died, with the evidence, not a list of virtues. There is
 no Positive Notes section. A compliment is not a result.

@@ -165,7 +165,7 @@ const CEILINGS_BY_KEY = {
   "review/review-highload": 550,
   "review/review-layout": 238,
   "review/review-logic": 377,
-  "review/review-orchestrator": 1715,
+  "review/review-orchestrator": 1723,
   "review/review-performance": 374,
   "review/review-pr-feedback": 895,
   "review/review-regression": 216,
