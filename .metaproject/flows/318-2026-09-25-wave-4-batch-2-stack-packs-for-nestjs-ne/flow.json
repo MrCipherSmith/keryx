@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 2: stack packs for nestjs, nextjs-nuxt, vue, angular, mobx",
   "status": "in-progress",
   "createdAt": "2026-09-25T06:09:18.148Z",
-  "updatedAt": "2026-09-25T06:14:10.570Z",
+  "updatedAt": "2026-09-25T06:44:57.071Z",
   "source": {
     "type": "description",
     "ref": null
@@ -99,7 +99,7 @@
       "id": "T5",
       "title": "Extend STACK_EXTENSIONS for nestjs/vue/angular/nextjs-nuxt/mobx",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -107,49 +107,71 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Author nestjs pack (extends ts-js-node)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:07.865Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Author nextjs-nuxt pack (extends react+vue)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.001Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Author vue pack (extends ts-js-node)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.130Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -158,8 +180,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.259Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -169,15 +197,22 @@
       "id": "T10",
       "title": "Author mobx pack (extends react)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.394Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -357,6 +392,56 @@
     {
       "at": "2026-09-25T06:14:10.570Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-25T06:14:26.984Z",
+      "event": "task-done",
+      "detail": "T5: Extend STACK_EXTENSIONS for nestjs/vue/angular/nextjs-nuxt/mobx"
+    },
+    {
+      "at": "2026-09-25T06:16:07.865Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.001Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.130Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.259Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.394Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:28:55.344Z",
+      "event": "task-done",
+      "detail": "T8: Author vue pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T06:29:07.610Z",
+      "event": "task-done",
+      "detail": "T10: Author mobx pack (extends react)"
+    },
+    {
+      "at": "2026-09-25T06:34:07.420Z",
+      "event": "task-done",
+      "detail": "T6: Author nestjs pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T06:44:57.071Z",
+      "event": "task-done",
+      "detail": "T7: Author nextjs-nuxt pack (extends react+vue)"
     }
   ]
 }
