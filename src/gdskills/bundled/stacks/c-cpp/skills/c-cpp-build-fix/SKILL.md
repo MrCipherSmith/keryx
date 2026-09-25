@@ -5,8 +5,8 @@ triggers:
   - "cmake build is failing"
   - "fix this linker error"
   - "AddressSanitizer reports a heap-buffer-overflow"
-  - "UndefinedBehaviorSanitizer reports signed overflow"
-  - "ThreadSanitizer reports a data race"
+  - "UBSan reports signed overflow"
+  - "ThreadSanitizer flags an unsynchronized access to this shared counter"
   - "fix this C++ template instantiation error"
 metadata:
   origin: authored

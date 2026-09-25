@@ -1,9 +1,9 @@
 {
   "triggers": {
     "positive": [
-      "Review this diff for memory safety before we merge it",
-      "Check this pull request for a use-after-free",
-      "Any dangling pointers introduced by this change",
+      "I refactored Buffer::resize to use raw pointers instead of std::vector -- can you look for memory bugs before I open the PR",
+      "This PR frees the connection object on the error path -- does anything later in the function still touch it",
+      "I'm returning a reference to a local Session inside this function -- could that reference outlive the object it points to",
       "Review this change for unsynchronized access to the shared cache",
       "Look over this diff for iterator invalidation risk",
       "Check whether this new parser code has any bounds issues",

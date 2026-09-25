@@ -1,10 +1,10 @@
 {
   "triggers": {
     "positive": [
-      "Write GoogleTest cases for this new TokenStream class",
+      "TokenStream::peek() has zero test coverage right now -- can you set up GoogleTest scenarios covering its end-of-buffer behavior",
       "Add a TEST_F fixture that covers the parser's error paths",
-      "This ctest run is failing, help me get it green",
-      "Add a death test for the assertion in this constructor",
+      "CI shows three ParserTest cases going red after my last commit and I can't tell which line broke it",
+      "Constructor of ConfigLoader should abort if the path is empty -- how do I write a test that checks the process actually crashes there",
       "How do I actually verify this reported heap-buffer-overflow fix is correct",
       "Add a parameterized test that runs this case across several inputs",
       "Write a regression test for the use-after-free that was just fixed"

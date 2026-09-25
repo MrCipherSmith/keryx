@@ -1,7 +1,7 @@
 {
   "triggers": {
     "positive": [
-      "AddressSanitizer reports a heap-buffer-overflow in this test run",
+      "Our ctest suite segfaults inside the ASan build after the latest merge, can you track down what's reading past the buffer",
       "ThreadSanitizer flagged a data race, help me fix it",
       "UndefinedBehaviorSanitizer is reporting signed integer overflow here",
       "Our CMake configure step is failing with an undefined reference",
