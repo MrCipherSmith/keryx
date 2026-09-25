@@ -1,0 +1,69 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx", "**/*.vue"]
+metadata:
+  origin: authored
+---
+
+# Next.js / Nuxt coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to the two
+meta-frameworks this pack covers: Next.js (App Router, React) and Nuxt
+(Vue 3). Applies to `.tsx`/`.jsx` (Next.js) and `.vue` (Nuxt) files — a
+project using only one of the two frameworks still gets guidance scoped to
+that framework from the sections below; a monorepo with both gets both.
+
+## File and directory naming
+
+- Next.js App Router: route segment folders are `kebab-case`
+  (`app/order-history/page.tsx`); reserved file names (`page.tsx`,
+  `layout.tsx`, `loading.tsx`, `error.tsx`, `route.ts`) stay exactly as the
+  framework requires them — do not rename them for house style.
+- Nuxt: page files under `pages/` are `kebab-case` and map to routes by
+  file-system convention (`pages/order-history.vue` ->
+  `/order-history`); a dynamic segment is `pages/orders/[id].vue`, a
+  catch-all `pages/[...slug].vue`. Component files are `PascalCase.vue`.
+- Composables (Nuxt) and custom hooks (Next.js/React) both start with
+  `use` (`useOrderTotals.ts`, `useOrderTotals`), one export per file for a
+  non-trivial composable/hook.
+
+## Component and directive placement
+
+- Next.js: every component file is a Server Component by default; add
+  `'use client'` as the FIRST line of a file only when that file itself
+  needs browser state (`useState`, `useEffect`), event handlers, or a
+  browser-only API — not because an ancestor or descendant needs it. Keep
+  the directive on the smallest leaf component that actually needs it.
+- Nuxt: use `<script setup lang="ts">` for new single-file components
+  instead of the Options API or a bare `<script>` with `defineComponent` —
+  it is the current idiomatic form and gives auto-imported
+  `ref`/`computed`/`watch` without explicit imports.
+- Type props explicitly: Next.js components take a typed `props` object
+  (an interface or inline type, not `any`); Nuxt SFCs declare props with
+  `defineProps<{ ... }>()` (the type-only generic form), not the runtime
+  object form, for anything beyond a trivial component.
+
+## Imports and auto-imports
+
+- Nuxt auto-imports composables from `composables/`, components from
+  `components/`, and utils from `utils/` — do not hand-import something
+  Nuxt already auto-imports (it adds a redundant, easily-stale import
+  line); DO explicitly import anything outside those conventional
+  directories.
+- Next.js has no auto-import convention — import explicitly, using the
+  project's configured path aliases (`@/components/...`) instead of long
+  relative chains once the project has one configured.
+
+## Formatting and typing
+
+- Format with the project's configured formatter (Prettier is standard for
+  both ecosystems); do not hand-format around one that is already
+  configured.
+- Avoid `any` for props, route params, and fetch responses in either
+  framework — type route params from Next.js's generated `PageProps`
+  types (or the project's own param type) and Nuxt's `useRoute().params`
+  by name, not by casting.
+- Server-only code (`'use server'` files, Nuxt `server/` routes) and
+  client-only code should not share a barrel import file that re-exports
+  both — that is how a server-only secret or a `node:` import ends up
+  bundled into client JavaScript.

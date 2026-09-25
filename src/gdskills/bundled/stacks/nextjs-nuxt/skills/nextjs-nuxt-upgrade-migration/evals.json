@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Migrate this Next.js app from the pages router to the app router",
+      "Upgrade this Next.js project's pages/api routes to app router route handlers",
+      "Migrate this Nuxt 2 project to Nuxt 3",
+      "Convert getServerSideProps in this page to the app router equivalent",
+      "Move this Nuxt 2 asyncData call to useAsyncData for the Nuxt 3 migration",
+      "Migrate this Vuex store to Pinia as part of the Nuxt 3 upgrade",
+      "Replace this Options API component with script setup during the Nuxt 3 migration"
+    ],
+    "negative": [
+      "Add a brand new page to this already-on-app-router Next.js project",
+      "Review this Next.js server action for auth issues",
+      "Write a test for this Nuxt composable",
+      "Fix this build error blocking next build right now",
+      "Upgrade this plain React 18 app to React 19 with no routing framework involved",
+      "Migrate this Python 2 script to Python 3 syntax"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "getserversideprops-to-app-router",
+      "prompt": "I have a Next.js Pages Router page using getServerSideProps to fetch an order by ID before render. How do I migrate this to the App Router?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "getServerSideProps" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer replaces getServerSideProps with fetching the order data directly inside the App Router page component (a Server Component, app/.../page.tsx), reading the route param instead of context.params, and notes that any interactive part of the old page needs its own 'use client' component once moved.",
+          "pass_criteria": [
+            "States that data fetching moves from getServerSideProps into the page component's own body (an async Server Component in app/.../page.tsx) rather than a separate exported function",
+            "Names that the route param (previously from context.params in getServerSideProps) is now read from the page component's own params argument",
+            "Notes that any interactive UI on the old page (event handlers, useState) needs to be extracted into a component with its own 'use client' directive, since the App Router defaults to server rendering"
+          ],
+          "fail_criteria": [
+            "Recommends keeping getServerSideProps as-is and calling it from inside the new App Router page as a workaround, instead of rewriting the fetch into the Server Component itself"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Move the fetch logic directly into the App Router page component. Where you had:\n\nexport async function getServerSideProps(context) {\n  const order = await getOrder(context.params.id);\n  return { props: { order } };\n}\n\n...you now write app/orders/[id]/page.tsx as an async Server Component that fetches inline and reads the route param from its own `params` prop instead of context.params:\n\nexport default async function OrderPage({ params }: { params: { id: string } }) {\n  const order = await getOrder(params.id);\n  return <OrderView order={order} />;\n}\n\nThis renders per-request by default, matching getServerSideProps's original behavior. If the old page also had client-side interactivity (a button, local state), extract that into its own component file with 'use client' at the top, since the App Router page itself is now a Server Component by default and won't support hooks directly.",
+        "known_wrong": "Simplest migration: keep the old getServerSideProps function exactly as it is in a separate file, and just call it manually from inside the new app/orders/[id]/page.tsx to get the props, then render the same way you did before.",
+        "vague": "You'll need to move the data fetching into the new page component somehow and adjust how you read the route parameter.",
+        "subtle_wrong": "Move the fetch into the page component like this: async function OrderPage({ params }) { const order = await getOrder(params.id); return <OrderView order={order} /> } -- good so far, but I'd also add 'use client' to the top of this same page file just to be safe, in case any part of OrderView needs client-side hooks, rather than tracking down exactly which nested component needs it."
+      },
+      "anti_patterns": []
+    },
+    {
+      "id": "pinia-not-vuex-wrapper",
+      "prompt": "I'm migrating a Nuxt 2 project with a Vuex store module to Nuxt 3. Should I just wrap the existing Vuex module inside Pinia's defineStore to save time?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "defineStore" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says no -- wrapping the old Vuex module object unchanged inside defineStore does not satisfy Pinia's actual API, and the store should be rewritten to Pinia's state/getters/actions shape instead.",
+          "pass_criteria": [
+            "States clearly that wrapping the Vuex module object as-is inside defineStore is not a valid approach",
+            "Describes rewriting the store to Pinia's actual shape: a state function/object, getters, and actions as the store's own methods, replacing Vuex's mutations/actions/getters pattern"
+          ],
+          "fail_criteria": [
+            "Endorses wrapping the existing Vuex module object directly inside defineStore as a time-saving shortcut -- naming this only to reject it is not a failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No, don't just wrap the Vuex module inside defineStore -- Pinia has a genuinely different shape and Vuex's mutations/actions/getters object won't function correctly just dropped into Pinia's API. Rewrite the module: Vuex's `state` becomes Pinia's `state: () => ({...})`, Vuex `getters` map directly to Pinia `getters`, and Vuex's `mutations` + `actions` combine into Pinia's single `actions` (since Pinia actions can mutate state directly, no separate mutation-commit step is needed). For example, a Vuex module with state.orders, a SET_ORDERS mutation, and a fetchOrders action that commits it becomes a Pinia store with state: () => ({ orders: [] }) and an actions.fetchOrders() that calls the API and does `this.orders = result` directly. It takes more effort than a wrapper, but a wrapper wouldn't actually work -- Pinia doesn't recognize Vuex's mutation-commit contract.",
+        "known_wrong": "Sure, just export the existing Vuex module object as the store option passed to defineStore -- that saves rewriting all the mutations and actions, and Pinia is flexible enough to handle it since they're both just state management libraries.",
+        "vague": "It's better to migrate the store properly to Pinia's own patterns rather than trying to shortcut it.",
+        "subtle_wrong": "You're right not to wrap it directly -- I'd rewrite the getters and state to Pinia's format, but keep the original Vuex mutations object as a plain helper object referenced from inside one catch-all Pinia action, so you don't have to convert every individual mutation into its own Pinia action right away."
+      },
+      "anti_patterns": []
+    }
+  ]
+}

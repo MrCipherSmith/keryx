@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "Write a test for this Next.js server action that creates an order",
+      "How do I test this Nuxt composable that calls useAsyncData internally?",
+      "I need a mountSuspended test for this Nuxt component that reads useRoute",
+      "How do I write a test for what this Next.js App Router server component actually renders?",
+      "Write a test for this server/api/orders.ts handler in Nuxt covering the unauthenticated case",
+      "This Next.js route handler's auth check needs a test",
+      "My Next.js page test is flaky because of Date.now, how do I fix that"
+    ],
+    "negative": [
+      "Add a new page to this Next.js app router project",
+      "Review this Nuxt server/api/orders.ts route for security issues",
+      "Fix this Nuxt build error about a composable being called outside setup",
+      "Migrate this Nuxt 2 asyncData call to useAsyncData",
+      "Write a Jest test for a plain React hook with no routing or SSR concern",
+      "Fix this generic ESLint no-floating-promises failure in a plain Node.js script"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mock-network-not-hook",
+      "prompt": "I'm writing a test for a Nuxt page that calls useFetch to load a list of orders. Should I mock useFetch directly to return canned data, or something else?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "MSW|network" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer recommends mocking at the network/HTTP boundary (e.g. with MSW) rather than mocking useFetch itself, because mocking the hook only tests the mock and skips the component's real request/response handling.",
+          "pass_criteria": [
+            "Recommends mocking the HTTP/network layer (e.g. MSW, or the project's equivalent network mock) rather than mocking useFetch's return value directly",
+            "Explains that mocking useFetch itself tests the mock rather than the component's real request/response/loading/error handling"
+          ],
+          "fail_criteria": [
+            "Recommends mocking useFetch's return value (e.g. vi.mock of the composable) as the primary approach -- mentioning that approach only to warn against it is not a failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Mock at the network boundary, not the composable. Use MSW (or whatever network-mocking layer the project already has set up) to intercept the actual HTTP request useFetch makes under the hood, and return the canned orders response from there. That way the test still exercises the real useFetch call, including how the component handles the loading state, the data once it resolves, and an error response if you want to test that path too. If you instead mock useFetch itself to just return { data: ordersFixture } directly, you're only proving your mock works -- the test would still pass even if the component's actual request logic, URL, or error handling were broken.",
+        "known_wrong": "Just mock useFetch directly with vi.mock so it returns { data: ref(ordersFixture), pending: ref(false) } -- that's the simplest way to control exactly what the component sees without dealing with setting up a network mocking library.",
+        "vague": "Try to test the real data flow rather than just stubbing things out, that gives you more confidence.",
+        "subtle_wrong": "Set up MSW to intercept the request, that's the right instinct -- but register the MSW handler to intercept the internal Nuxt $fetch wrapper's resolved promise rather than the actual HTTP endpoint URL the orders API is served from, so you don't have to figure out the real URL pattern; it still counts as 'network-level' since it's below the composable itself."
+      },
+      "anti_patterns": []
+    },
+    {
+      "id": "server-action-handler-test-coverage",
+      "prompt": "I wrote a Next.js server action that creates an order and only has a happy-path test so far. What else should the test cover?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer states that the server action's own auth/authorization check and input validation failure paths need their own test coverage, calling the handler directly (or through its real invocation path) rather than only asserting the successful-creation case, since the client's own form validation does not substitute for server-side test coverage.",
+          "pass_criteria": [
+            "Names testing the auth/authorization failure path (e.g. an unauthenticated or unauthorized caller) as missing coverage that should be added",
+            "Names testing at least one input-validation failure path (bad/missing input) as missing coverage that should be added",
+            "States or implies these should call the real server action handler (with a mocked downstream dependency like the database) rather than only testing the UI form that calls it"
+          ],
+          "fail_criteria": [
+            "States that the happy-path test alone is sufficient because the form already validates input client-side, or that server-side auth/validation testing can be skipped since the client already checks it"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The happy path alone isn't enough -- add tests that call the server action directly (with the database client mocked) covering: an unauthenticated caller (no session) should be rejected before any write happens; an authenticated caller without permission on this resource should also be rejected; and at least one bad-input case (missing or malformed order fields) should fail validation rather than reaching the database call. Each of these exercises the action's own auth and validation logic in isolation, since the server action is a directly reachable endpoint regardless of whether the calling form already validates -- client-side validation doesn't give you any server-side test coverage.",
+        "known_wrong": "The happy-path test is probably enough since the form itself already validates required fields before submitting and the user has to be logged in to see the form at all, so those cases shouldn't really be reachable in practice.",
+        "vague": "You should probably add a few more test cases for edge cases and errors, not just the success case.",
+        "subtle_wrong": "Good idea to add more coverage -- I'd add a test where the form is submitted with an empty title field and assert the submit button stays disabled, plus a test that the login redirect happens if you're not authenticated. That covers the important failure modes on the client side that lead into this action."
+      },
+      "anti_patterns": []
+    }
+  ]
+}

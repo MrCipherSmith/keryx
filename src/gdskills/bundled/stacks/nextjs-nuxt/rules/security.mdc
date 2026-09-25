@@ -1,0 +1,72 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx", "**/*.vue"]
+metadata:
+  origin: authored
+---
+
+# Next.js / Nuxt security
+
+Stack-specific risks for Next.js's App Router and Nuxt's server layer, with
+the safe pattern to use instead of each. Narrows `core-common-rules`;
+generic web risks (XSS, CSRF fundamentals) still come from there — this
+file covers where each framework's own boundary can leak.
+
+## Environment variable and secret exposure
+
+- Next.js: only a variable prefixed `NEXT_PUBLIC_` is inlined into the
+  client bundle; every other `process.env.*` read in a file that ships to
+  the client is `undefined` at runtime, which itself is a signal — but the
+  real risk is the reverse: never prefix a secret (API key, DB URL, signing
+  secret) with `NEXT_PUBLIC_` just to make a client read succeed, and never
+  read a non-`NEXT_PUBLIC_` secret from a file that lacks a `'use server'`/
+  server-only boundary and could be pulled into a client bundle by an
+  import chain.
+- Nuxt: `nuxt.config.ts`'s `runtimeConfig` splits `public` (sent to the
+  client) from the top-level/private keys (server-only). Never move a
+  secret into the `public` block to reach it from a component — read it
+  server-side only (`server/api/*` handlers, or a server-only composable)
+  and expose only the derived, non-sensitive result to the client.
+
+## Server Actions and server routes
+
+- Every Next.js Server Action (`'use server'`) and Nuxt `server/api/**`
+  handler is a public HTTP endpoint even though it looks like an internal
+  function call — re-check auth/authorization inside the action/handler
+  itself; do not rely on the calling component having already checked,
+  since the endpoint is reachable directly.
+- Re-validate every argument a Server Action or Nuxt server route receives
+  server-side (type, ownership, range) even when the client already
+  validated the form — client-side validation is a UX affordance, not a
+  security boundary.
+- Nuxt: read cookies/headers via `useRequestEvent()`/`getCookie(event, ...)`
+  inside `server/api/**`, not by trusting a value the client sent in the
+  request body for something that should be derived from an authenticated
+  session.
+
+## Rendering and injection
+
+- Next.js: `dangerouslySetInnerHTML` with unsanitized user content is an
+  XSS vector in a Server Component exactly as much as a Client one —
+  server rendering does not sanitize it; run it through a sanitizer (e.g.
+  DOMPurify server-side) before it reaches the prop, or avoid raw HTML
+  injection entirely.
+- Nuxt/Vue: `v-html` with unsanitized user content is the equivalent risk
+  in a `.vue` template — sanitize before binding, never bind raw user
+  input directly.
+- Both: a value interpolated into a `<script>` tag, an inline event
+  handler string, or a redirect URL built from user input (open-redirect
+  risk) needs the same scrutiny as any other untrusted-input sink — encode
+  or allowlist, don't string-concatenate.
+
+## Route and middleware auth
+
+- Next.js: `middleware.ts` runs on the Edge runtime and can check auth
+  before a route renders, but it cannot be the ONLY check — a Server
+  Component/Route Handler that skips its own auth check because
+  "middleware already handles it" breaks the moment middleware's matcher
+  config changes; check again where the data is actually read.
+- Nuxt: a route middleware (`defineNuxtRouteMiddleware`) guards
+  client-side navigation but does not protect the underlying
+  `server/api/**` endpoint — protect the API handler itself, not just the
+  page route.

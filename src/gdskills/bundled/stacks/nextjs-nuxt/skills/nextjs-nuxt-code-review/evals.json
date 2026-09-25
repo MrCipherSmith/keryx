@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Next.js server action diff for missing auth checks before it merges",
+      "Check this diff for use client boundary mistakes in the app router pages",
+      "Review this new Nuxt server/api/orders.ts route for security issues",
+      "Does this Nuxt composable get called outside setup context anywhere in this diff",
+      "Review whether this Next.js route's rendering mode choice actually matches its data",
+      "Check this component for hydration mismatch risk before we ship it",
+      "Review this nuxt.config.ts routeRules change for correctness"
+    ],
+    "negative": [
+      "Implement a new Next.js server action for creating an order",
+      "Write a test for this Nuxt composable that calls useAsyncData",
+      "Fix this nuxi typecheck failure on an auto-imported composable",
+      "Migrate this Next.js pages router app to the app router",
+      "Review this plain React component for accessibility issues, no App Router concern",
+      "Review this Python data pipeline function for missing exception handling"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "flag-missing-server-action-auth",
+      "prompt": "Here's a Next.js server action: it's marked 'use server', takes an orderId and a new status, and calls db.order.update({ where: { id: orderId }, data: { status } }) with no other logic. What should this review flag?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "auth" },
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that the server action has no authentication/authorization check before performing the database write, explaining that a Server Action is a directly reachable endpoint and must check the caller's identity and permission on that specific order, not rely on the calling UI having already checked.",
+          "pass_criteria": [
+            "Explicitly flags the missing auth/authorization check as the finding, not a minor style note",
+            "States that a Server Action is directly callable/reachable regardless of which UI called it, so it must check auth itself",
+            "Names what the fix should verify: the caller is authenticated and is authorized to modify this specific order (not just any orderId)"
+          ],
+          "fail_criteria": [
+            "Concludes the code is fine as-is because the form/UI that calls it already checks permissions -- mentioning that this is not sufficient is not itself a failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This is missing an auth check and should not merge as-is. A 'use server' action is a directly reachable server endpoint -- anyone who can trigger a POST to it (not just users going through your UI) can call updateOrderStatus(orderId, status) with an arbitrary orderId. Before the db.order.update call, it needs to: get the current session/user, reject if there's no authenticated session, and confirm that user is actually authorized to modify the specific order identified by orderId (e.g. owns it, or has an admin role) -- not just that they're logged in. Right now nothing stops any authenticated (or even unauthenticated, depending on how it's wired) caller from updating any order's status.",
+        "known_wrong": "This looks fine -- the button that calls this action only shows up on the order owner's own order page, so by the time this action runs we already know it's the right user.",
+        "vague": "This action should probably have some kind of permission check before it modifies data.",
+        "subtle_wrong": "This needs an auth check, good catch -- I'd add a check that `session` exists and reject if not. That covers making sure the caller is logged in before the update runs, which is the main gap here."
+      },
+      "anti_patterns": []
+    },
+    {
+      "id": "flag-page-level-use-client",
+      "prompt": "This Next.js diff adds 'use client' at the top of app/dashboard/page.tsx because one small stat card in the middle of the page needs a hover tooltip with local state. Everything else on the page is static server-rendered content. What should the review say?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "'use client'" },
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that 'use client' on the whole page is too broad, and recommends extracting the stat card (or just its tooltip) into its own small client component, keeping the rest of the page as a Server Component.",
+          "pass_criteria": [
+            "States that putting 'use client' on the whole page.tsx is too broad given only one small element needs it",
+            "Recommends extracting the stat card/tooltip into its own separate component file marked 'use client', while the page itself stays a Server Component"
+          ],
+          "fail_criteria": [
+            "Approves the page-level 'use client' as fine because it's simpler than splitting into two files -- mentioning that tradeoff only to reject it is not a failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This is too broad -- putting 'use client' on the whole page.tsx ships the entire dashboard's JS to the browser and turns every other static element on the page into client-rendered content, purely for one stat card's hover tooltip. Instead, extract that stat card (or just the tooltip part of it) into its own component file, e.g. StatCardWithTooltip.tsx, and put 'use client' at the top of that file only. Keep app/dashboard/page.tsx itself with no directive so it stays a Server Component and the rest of the dashboard keeps being server-rendered. Pass whatever data the card needs down to it as props from the page.",
+        "known_wrong": "It's fine -- 'use client' on the whole page is simpler than splitting components apart, and the performance difference for one dashboard page probably doesn't matter much.",
+        "vague": "It might be better to scope the client directive more narrowly instead of putting it on the whole page.",
+        "subtle_wrong": "Agreed this should be narrowed -- I'd move 'use client' from page.tsx down to just wrapping the dashboard's main content section as its own client component, so it's not the very top-level page file anymore. That's still a lot of the page's content inside one client component, but it's an improvement over the top-level directive."
+      },
+      "anti_patterns": []
+    }
+  ]
+}

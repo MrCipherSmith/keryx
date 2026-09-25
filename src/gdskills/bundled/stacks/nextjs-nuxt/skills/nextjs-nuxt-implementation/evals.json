@@ -1,0 +1,78 @@
+{
+  "triggers": {
+    "positive": [
+      "I need to add a new order-history page to my Next.js app router project, should the data fetching happen in a server component?",
+      "Write a Next.js server action that creates a post and revalidates the posts list",
+      "This Nuxt page needs to fetch orders on load, should I use useFetch or a plain fetch call?",
+      "Add a Nuxt server/api route that returns the current user's profile",
+      "Set up ISR on this Next.js product page so it revalidates every hour",
+      "Configure routeRules in nuxt.config.ts so this one Nuxt route renders as SPA-only",
+      "My Nuxt composable needs to call the API as soon as the page loads, how should I wire that up",
+      "Should this new Next.js component be a client component or a server component?"
+    ],
+    "negative": [
+      "Write a test for this Next.js page's server component",
+      "Review this Next.js server action diff for missing auth checks",
+      "Fix this Next.js build error about a Server Component importing useState",
+      "Migrate this Next.js app from the pages router to the app router",
+      "Add a plain React hook that debounces an input value, no routing involved",
+      "Fix this Go compile error about an unused import"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "server-client-boundary-placement",
+      "prompt": "I have a Next.js app router page that shows an order summary with a 'mark as paid' button. Where should the client-side interactivity live, and how should the data get there?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "'use client'" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer keeps the page/order-summary rendering as a Server Component that fetches the order data, and isolates 'use client' to only the small interactive button/form component that needs the click handler, passing the needed data down as a prop rather than marking the whole page a Client Component.",
+          "pass_criteria": [
+            "States that the page itself (or the bulk of the order summary) stays a Server Component with no 'use client' directive",
+            "Names 'use client' as belonging only on the small button/action component, not the page or a shared layout",
+            "Describes passing the necessary order data down as a prop from the server-rendered parent to that client leaf, rather than having the leaf re-fetch it itself"
+          ],
+          "fail_criteria": [
+            "Recommends adding 'use client' to the whole page or a layout component to make the button work -- naming 'use client' only to warn against placing it there is not a failure",
+            "Has the client button component independently re-fetch the order data client-side instead of receiving it as a prop from the server-rendered parent"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Keep the order-summary page itself a Server Component -- fetch the order data there with no 'use client' directive. Extract just the 'mark as paid' button into its own small component, e.g. MarkAsPaidButton.tsx, and put 'use client' at the top of that file only, since it's the piece that actually needs an onClick handler and client state (a pending/loading flag while the mutation runs). Pass the orderId (and any other data the button needs) down to it as a prop from the server-rendered page -- don't have the button component fetch the order itself. The button's onClick calls a Server Action ('use server') that performs the mutation and calls revalidatePath so the page reflects the new status afterward.",
+        "known_wrong": "Easiest way: put 'use client' at the top of the page.tsx file itself, then you can use useState for the button's pending state and onClick directly in the same component without worrying about the server/client split. It's one extra client-side render but it's much simpler than splitting into two files.",
+        "vague": "Keep most of it server-rendered and only make the interactive part a client component, that keeps things fast.",
+        "subtle_wrong": "I'd extract the button into its own component and mark it 'use client', which is the right idea -- but to keep things simple I'd have that client component call a route handler with fetch() on mount to pull the order data itself, rather than threading it down as a prop from the server page, since that way the button component is fully self-contained and doesn't need any props from its parent."
+      },
+      "anti_patterns": []
+    },
+    {
+      "id": "nuxt-composable-setup-context",
+      "prompt": "In my Nuxt page, I want to fetch the current user's orders as soon as the page mounts, using a composable I wrote. Where should I call it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "setup" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer calls the composable synchronously at the top level of <script setup> (not inside an async callback, onMounted-with-await, or after an await), explaining that Nuxt resolves a composable's injection context synchronously at call time.",
+          "pass_criteria": [
+            "States the composable must be called at the top level of <script setup>, synchronously, not inside an async callback or after an await",
+            "Explains why: Nuxt resolves the composable's context (route/app/plugin injection) synchronously at call time, so a deferred call loses access to it"
+          ],
+          "fail_criteria": [
+            "Recommends calling the composable inside an onMounted callback with an await before it, or inside a setTimeout, as the primary recommended placement -- mentioning that placement only to warn against it is not a failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Call the composable directly at the top level of your <script setup> block, synchronously -- for example `const { data: orders } = await useOrdersComposable()` right in setup, not wrapped in onMounted or any async callback. Nuxt resolves a composable's access to its injection context (the current route, the app instance, plugin-provided services) synchronously when the composable function is first invoked; if you defer the call into an async callback or fire it after an earlier await inside setup, that context is no longer reliably available and the composable can throw or silently lose access to what it needs. If the composable itself does async work internally (like useFetch does), that's fine -- the call site just needs to be the synchronous top level of setup.",
+        "known_wrong": "Just call it inside onMounted(async () => { await useOrdersComposable() }) so you're sure the DOM is ready before fetching -- that's the safest place to put any data-fetching logic in a Vue/Nuxt component.",
+        "vague": "Nuxt composables need to be called at the right point in the component lifecycle for the context to work properly.",
+        "subtle_wrong": "Call it at the top of setup like usual, but if you need to fetch on mount specifically (not immediately on component creation), wrap just that call in onMounted so it only runs client-side after mount: onMounted(() => { useOrdersComposable() }) -- this still feels like it's 'in setup' since onMounted is registered during setup, so the composable should still have access to its context."
+      },
+      "anti_patterns": []
+    }
+  ]
+}
