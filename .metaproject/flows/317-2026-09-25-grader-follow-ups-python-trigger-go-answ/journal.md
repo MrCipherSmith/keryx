@@ -198,3 +198,38 @@ for `no-disable-hooks-lint` until a higher trial count (FU4, FU7) shows
 whether 3/5 was a real ~60% rate or noise around the 0.8 floor — the fix for
 "unlucky trials" is more trials, not a rubric edit.
 
+- 2026-09-25T05:01:17.424Z - task-done: T9: FU5: react no-disable-hooks-lint defect check
+- 2026-09-25T05:01:21.538Z - task-attempt: T10: started (attempt 1) — getter-accessor calibration variant
+
+## FU6 (T10): getter-accessor calibration variant
+
+The schema (`validateEvalSpec` in `eval.ts`) requires `calibration.known_right`
+to be exactly one non-empty string — it does not support multiple known-right
+answers structurally, so per plan.md this is a rubric note, not a schema
+change (a schema change to support an array would ripple through
+`antiGamingAnswers`, `judge-check`, and every consumer of `ScenarioCalibration`
+for one scenario's benefit).
+
+Extended `ts-js-node/nodejs-build-fix/evals.json`'s `no-ts-ignore-suppression`:
+pass_criteria[0] now explicitly names the getter-accessor form (`get total():
+number`) as satisfying "adds a total property" alongside the plain-field and
+derived-value shapes already there; `known_right`'s prose gained a third
+paragraph describing the same shape. This documents what review round 2
+(R2-1, scratchpad/f316/review-r2.md) already found the judge correctly
+generalizing to — "a third concrete variant of the same two calibrated
+answers... not a bypass" — so a future prompt/rubric edit is tested against
+it too, per review round 3's own optional-follow-up note (decided-by:
+MrCipherSmith, owner, in chat).
+
+This is a scenario clarification, not tuning to force a pass: the judge
+already passed this shape correctly before the edit (R2-1's own finding);
+the edit only makes the calibration set match what the rubric already
+allows, so a future edit to either does not accidentally regress it.
+
+Expected consequence, confirmed: editing the rubric/known_right text changes
+`judgeRequestDigest` for this scenario, which invalidates the offline
+judge-recording replay for its known-right/vague/subtle-wrong/stuffed
+anti-gaming samples (`stack-pack-eval-integrity.test.ts`: 8 new failures,
+"no recorded judge verdict... re-record with judge-check --record"). This is
+exactly what FU7's re-record step exists for — not worked around here.
+`bun run typecheck`: exit 0. JSON validated with `python3 -c "json.load(...)"`.
