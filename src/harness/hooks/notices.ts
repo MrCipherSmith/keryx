@@ -47,8 +47,20 @@ export function formatHookLoadNotices(
   result: LoadHookConfigResult,
   opts: { projectRoot: string; userFile: string; surface: HookNoticeSurface },
 ): string[] {
+  // R2-03 (flow 319 review round 2): every returned line goes through
+  // `terminalSafe` exactly once, right here at the single point every one of
+  // them passes through before reaching a caller — see the return statements
+  // below. This is on top of (not instead of) the per-id escaping already
+  // applied where an id is interpolated (`describeIds`): a schema-invalid
+  // load failure quotes the offending JSON PATH straight from the validator,
+  // and an unconstrained property name in that path is attacker-controlled
+  // and was reaching every surface (TUI, `hooks list`, `hooks validate`, and
+  // ACP/serve through this same formatter) with raw ESC/CSI bytes intact.
+  // Re-running `terminalSafe` over text that was already escaped is a no-op
+  // (the escaped form contains no unsafe code points), so this never
+  // double-escapes.
   if (!result.ok) {
-    return [formatLoadFailure(result.diagnostics)];
+    return [terminalSafe(formatLoadFailure(result.diagnostics)).text];
   }
 
   const lines: string[] = [];
@@ -98,7 +110,7 @@ export function formatHookLoadNotices(
       `keryx hooks: built-in gate ${gate.id} is OFF (disabled in ${gate.file}). Turn it back on with: keryx hooks enable ${gate.id} --user`,
     );
   }
-  return lines;
+  return lines.map((line) => terminalSafe(line).text);
 }
 
 function formatLoadFailure(diagnostics: readonly HookConfigDiagnostic[]): string {

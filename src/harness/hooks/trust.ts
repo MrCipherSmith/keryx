@@ -25,7 +25,7 @@
 // USER-scope hooks (`~/.keryx/hooks.json`) need none of this: the operator
 // wrote that file themselves, on this machine.
 import { createHash } from "node:crypto";
-import { realpathSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   ensureKeryxConfigDir,
@@ -66,12 +66,65 @@ export function hooksTrustFile(configDir?: string): string {
  * test fixture) must still produce a stable, usable key — both the lookup
  * and the record side call this SAME function so they never disagree.
  */
+/**
+ * Realpath when possible, falling back to a plain resolve — trying the
+ * nearest EXISTING ancestor before giving up, so a not-yet-created
+ * directory under a symlinked tmp/home root (macOS: `/var` ->
+ * `/private/var`) still compares correctly against an already-realpath'd
+ * sibling. A second copy of the identical logic in `./config.ts` — see that
+ * copy's doc comment for why (same reason `gitToplevelRoot` is duplicated:
+ * `config.ts` imports FROM this module).
+ */
 function realpathOrResolve(p: string): string {
+  const abs = path.resolve(p);
   try {
-    return realpathSync(p);
+    return realpathSync(abs);
   } catch {
-    return path.resolve(p);
+    const parent = path.dirname(abs);
+    if (parent === abs) return abs;
+    return path.join(realpathOrResolve(parent), path.basename(abs));
   }
+}
+
+/**
+ * Nearest ancestor of `startDir` containing `.git`, or `startDir` itself
+ * when none is found. A second small copy of `gitToplevelRoot` in
+ * `./config.ts` — see that copy's doc comment for why it is duplicated
+ * rather than shared (same reasoning as `realpathOrResolve` above, and for
+ * the same reason: `config.ts` imports FROM this module, so the reverse
+ * import would cycle).
+ */
+function gitToplevelRoot(startDir: string): string {
+  const abs = path.resolve(startDir);
+  let dir = abs;
+  for (;;) {
+    if (existsSync(path.join(dir, ".git"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return abs;
+}
+
+/**
+ * R2-04 (flow 319 review round 2, minor): true when the trust store's
+ * resolved directory sits inside — or equals — the project's real root.
+ * `XDG_DATA_HOME` (`keryxConfigDir` honours it on macOS too) is an ordinary
+ * environment variable a cloned repository can set via a cwd dotenv (one of
+ * R2-01's dev-form holes), the exact same shape `guardUserHomeDir` in
+ * `./config.ts` closes for `KERYX_HOME` — without this, a repo-local trust
+ * store can pre-trust the repository's own hooks for a predictable checkout
+ * path (CI and devcontainer checkouts land at well-known paths). Uses the
+ * git toplevel as the boundary, not merely `trustRoot` itself, so a nested
+ * `.metaproject` cannot narrow the check (R2-05's fix, applied here too).
+ * Both sides go through the same `realpathOrResolve`, so a case-insensitive
+ * volume and a symlinked tmp dir compare equal on either side.
+ */
+export function trustStoreInsideProject(trustRoot: string, configDir?: string): boolean {
+  const resolvedConfigDir = keryxConfigDir(configDir);
+  const projectReal = realpathOrResolve(gitToplevelRoot(trustRoot));
+  const configReal = realpathOrResolve(resolvedConfigDir);
+  return configReal === projectReal || configReal.startsWith(projectReal + path.sep);
 }
 
 /** The key one project's trust entry is filed under. */
@@ -106,8 +159,17 @@ function isStoredShape(value: unknown): value is StoredShape {
  * fail closed: the cost of a bad read is re-approving, the alternative is a
  * corrupt/tampered file being read as blanket permission. A malformed
  * individual entry is dropped rather than poisoning the whole read.
+ *
+ * R2-04: `{}` too — i.e. nothing trusted — when `projectRoot` is given and
+ * the store resolves inside it (see `trustStoreInsideProject`). `projectRoot`
+ * is optional so every existing test seam that has no project concept at all
+ * (a bare configDir, no containment question to ask) is unaffected; every
+ * production call site now passes it.
  */
-export function loadHooksTrustStore(configDir?: string): HooksTrustStore {
+export function loadHooksTrustStore(configDir?: string, projectRoot?: string): HooksTrustStore {
+  if (projectRoot !== undefined && trustStoreInsideProject(projectRoot, configDir)) {
+    return {};
+  }
   const read = readConfigFile(hooksTrustFile(configDir));
   if (!read.ok) return {};
   let parsed: unknown;
@@ -208,6 +270,15 @@ export function recordProjectHooksTrust(input: {
   configDir?: string;
   now?: () => Date;
 }): HooksTrustResult {
+  // R2-04: refuse to write into a trust store that resolves inside the
+  // project — writing there would be no different from letting the
+  // repository pre-trust itself.
+  if (trustStoreInsideProject(input.trustRoot, input.configDir)) {
+    return {
+      ok: false,
+      error: `Refusing to trust project hooks: the trust store (${keryxConfigDir(input.configDir)}) resolves inside this project. Set XDG_DATA_HOME (or the platform's app-data directory) outside the project and try again.`,
+    };
+  }
   const file = hooksTrustFile(input.configDir);
   const read = readConfigFile(file);
   if (!read.ok && !isDefiniteAbsence(read.reason)) {
@@ -231,6 +302,14 @@ export function revokeProjectHooksTrust(input: {
   trustRoot: string;
   configDir?: string;
 }): HooksTrustResult & { removed?: boolean } {
+  // R2-04: same refusal as recordProjectHooksTrust — do not write into a
+  // trust store the project itself can steer.
+  if (trustStoreInsideProject(input.trustRoot, input.configDir)) {
+    return {
+      ok: false,
+      error: `Refusing to update the trust store: it (${keryxConfigDir(input.configDir)}) resolves inside this project. Set XDG_DATA_HOME (or the platform's app-data directory) outside the project and try again.`,
+    };
+  }
   const file = hooksTrustFile(input.configDir);
   const read = readConfigFile(file);
   if (!read.ok && !isDefiniteAbsence(read.reason)) {
@@ -248,7 +327,12 @@ export function revokeProjectHooksTrust(input: {
   return { ok: true, file, removed: true };
 }
 
-/** One argv token, JSON-quoted only when it contains whitespace (so a plain command line stays readable). */
+/**
+ * One RAW argv token, JSON-quoted only when it contains whitespace (so a
+ * plain command line stays readable). Takes the token BEFORE
+ * `TerminalSafeTracker.render` — see the R2-06 comment at its call site for
+ * why the order matters.
+ */
 function quoteArg(arg: string): string {
   return /\s/.test(arg) ? JSON.stringify(arg) : arg;
 }
@@ -321,7 +405,17 @@ export function describeProjectHookForApproval(
   const header = `  ${id}  ${reg.event} matcher=${matcher}  class=${reg.class}  runsIn=${
     reg.runsIn === "unsandboxed" ? "UNSANDBOXED" : "sandbox"
   }  network=${reg.network}${disabledSuffix}`;
-  const argvLine = `    ${reg.handler.argv.map((arg) => quoteArg(safe.render(arg))).join(" ")}`;
+  // R2-06 (flow 319 review round 2): this used to be `quoteArg(safe.render(arg))`
+  // — escape, THEN JSON-quote. `JSON.stringify` re-escapes any backslash
+  // `terminalSafe` had just introduced (e.g. a raw \r becomes the text
+  // `\x0d`, and JSON.stringify then doubles that backslash to `\\x0d`),
+  // which reads as a literal backslash rather than the intended escape.
+  // Quoting the RAW token first and sanitising the RESULT fixes it: sanitise
+  // exactly once, at the end. `JSON.stringify` already escapes control bytes
+  // and backslashes/quotes correctly on its own; `safe.render` afterward
+  // only needs to catch what JSON.stringify leaves alone (bidi overrides,
+  // zero-width characters, and the rest of `terminalSafe`'s non-ASCII list).
+  const argvLine = `    ${reg.handler.argv.map((arg) => safe.render(quoteArg(arg))).join(" ")}`;
   const lines = [header, argvLine];
   const extras: string[] = [];
   if (reg.handler.cwd !== undefined) extras.push(`cwd=${safe.render(reg.handler.cwd)}`);

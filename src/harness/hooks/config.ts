@@ -12,7 +12,7 @@
 // `schemaVersion`, a full registration colliding with a built-in id, or a
 // duplicate full-registration id within one event — is an error diagnostic
 // and the whole load reports `ok: false`. Nothing is silently dropped.
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveKeryxHomeDir } from "../../lib/keryx-home";
@@ -25,6 +25,7 @@ import {
   PROJECT_HOOKS_REL,
   projectHooksTrustKey,
   projectHooksTrustState,
+  trustStoreInsideProject,
 } from "./trust";
 import type { HooksTrustStore, ProjectHooksTrustState } from "./trust";
 import { HOOK_EVENT_NAMES } from "./types";
@@ -39,7 +40,8 @@ export type HookConfigDiagnosticCode =
   | "hook-id-duplicate"
   | "project-gate-disable-ignored"
   | "gate-disable-unacknowledged"
-  | "user-home-inside-project";
+  | "user-home-inside-project"
+  | "trust-store-inside-project";
 
 export interface HookConfigDiagnostic {
   code: HookConfigDiagnosticCode;
@@ -133,12 +135,67 @@ export function resolveHookHomeDir(env: NodeJS.ProcessEnv, homeDir?: string): st
  * path that does not exist yet (e.g. `~/.keryx` before it has ever been
  * created) must still produce a stable, comparable value.
  */
+/**
+ * Realpath when possible, falling back to a plain resolve — but tries harder
+ * than a single `realpathSync` attempt first: when `p` itself does not exist
+ * yet (a `KERYX_HOME`/trust-store directory nobody has created), realpath
+ * the nearest EXISTING ancestor and re-append what does not, rather than
+ * giving up and returning `path.resolve(p)` for the whole thing unresolved.
+ *
+ * This matters because the two sides of a containment check
+ * (`guardUserHomeDir` below, `trustStoreInsideProject` in `./trust.ts`) are
+ * not symmetric: the project root passed in almost always exists, so it
+ * realpaths cleanly, while a candidate `.keryx`/trust-store directory often
+ * does not. On a host where the tmp/home root is itself a symlink (macOS:
+ * `/var` -> `/private/var`), realpathing only the side that exists and
+ * plain-resolving the side that does not compares a canonical path against
+ * a non-canonical one and silently fails to detect real containment (or, on
+ * a case-insensitive volume, silently fails to detect a case-variant
+ * escape) — this was caught by a real-tmp-dir test where the fake, never-
+ * existing fixture paths this file's own tests otherwise use had
+ * accidentally hidden the asymmetry.
+ */
 function realpathOrResolve(p: string): string {
+  const abs = path.resolve(p);
   try {
-    return realpathSync(p);
+    return realpathSync(abs);
   } catch {
-    return path.resolve(p);
+    const parent = path.dirname(abs);
+    if (parent === abs) return abs; // filesystem root, still unresolved
+    return path.join(realpathOrResolve(parent), path.basename(abs));
   }
+}
+
+/**
+ * R2-05 (flow 319 review round 2, minor): nearest ancestor of `startDir`
+ * containing `.git` (dir or gitfile — worktrees use a gitfile), or
+ * `startDir` itself when none is found. Mirrors `resolveProjectRoot` in
+ * `src/session/paths.ts` (duplicated rather than cross-imported: that module
+ * lives in `src/session`, and neither this file nor `trust.ts`, which needs
+ * the same walk for R2-04, should reach into a different layer for one
+ * eight-line loop — the same call this file already makes for
+ * `realpathOrResolve`, which is duplicated in `trust.ts` for the identical
+ * reason).
+ *
+ * This is the boundary `guardUserHomeDir` (below) and `trustStoreInsideProject`
+ * (`./trust.ts`) refuse KERYX_HOME / a trust-store directory INSIDE of — not
+ * `projectRoot` itself. `projectRoot` is wherever `keryx` was invoked from,
+ * which can be a SUBDIRECTORY that happens to have its own nested
+ * `.metaproject` (a workspace inside a monorepo, say). Comparing against
+ * that subdirectory only would let `KERYX_HOME=<repo>/.kx` pass as "outside
+ * the project" merely because the session started one level down — the
+ * whole clone is still the same attacker-controlled checkout either way.
+ */
+function gitToplevelRoot(startDir: string): string {
+  const abs = path.resolve(startDir);
+  let dir = abs;
+  for (;;) {
+    if (existsSync(path.join(dir, ".git"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return abs;
 }
 
 /**
@@ -174,7 +231,13 @@ function guardUserHomeDir(
   projectRoot: string,
 ): { homeDir: string; warning?: HookConfigDiagnostic } {
   const userKeryxDir = path.join(homeDir, ".keryx");
-  const projectReal = realpathOrResolve(projectRoot);
+  // R2-05: the git toplevel, not the (possibly nested) `.metaproject` root —
+  // see gitToplevelRoot's doc comment. Both sides are realpath'd the SAME
+  // way (`realpathOrResolve`) before comparison, so a case-insensitive
+  // volume (macOS APFS canonicalises case on realpath) and a `/var` vs
+  // `/private/var`-style symlink resolve to the identical string on either
+  // side regardless of which form the caller passed in.
+  const projectReal = realpathOrResolve(gitToplevelRoot(projectRoot));
   const userReal = realpathOrResolve(userKeryxDir);
   const inside = userReal === projectReal || userReal.startsWith(projectReal + path.sep);
   if (!inside) return { homeDir };
@@ -571,7 +634,24 @@ export function loadHookConfig(input: LoadHookConfigInput): LoadHookConfigResult
   // hooks.json digests differently and reports `changed`, never silently
   // running content the operator never saw.
   const trustRoot = input.projectTrust?.trustRoot ?? input.projectRoot;
-  const trustStore = input.projectTrust?.store ?? loadHooksTrustStore(input.projectTrust?.configDir);
+  // R2-04: refuse a trust store that resolves inside the project, the same
+  // way `homeGuard` above refuses a KERYX_HOME inside it — `loadHooksTrustStore`
+  // reads as `{}` (nothing trusted) when that is the case, and the warning
+  // below is how the operator finds out why. Skipped when a caller passes an
+  // already-loaded `store` (e.g. `keryx hooks list` rendering several
+  // sections from one read) — that read already went through this same
+  // guard.
+  const trustStore =
+    input.projectTrust?.store ?? loadHooksTrustStore(input.projectTrust?.configDir, trustRoot);
+  const trustStoreGuardWarning: HookConfigDiagnostic | undefined =
+    input.projectTrust?.store === undefined && trustStoreInsideProject(trustRoot, input.projectTrust?.configDir)
+      ? {
+          code: "trust-store-inside-project",
+          scope: "project",
+          message:
+            "keryx hooks: ignored the hook-trust store because it resolves inside this project: set XDG_DATA_HOME (or the platform's app-data directory) outside the project. Project command hooks are treated as not trusted until then.",
+        }
+      : undefined;
   const trustKey = projectHooksTrustKey(trustRoot);
   const projectRegs = extractProjectRegistrations(project?.hooks ?? {});
   const digest = projectRegs.length > 0 ? digestProjectHooks(projectRegs) : undefined;
@@ -586,11 +666,15 @@ export function loadHookConfig(input: LoadHookConfigInput): LoadHookConfigResult
     registrations = registrations.filter((r) => r.scope !== "project");
   }
 
+  const guardWarnings = [
+    ...(homeGuard.warning !== undefined ? [homeGuard.warning] : []),
+    ...(trustStoreGuardWarning !== undefined ? [trustStoreGuardWarning] : []),
+  ];
   return {
     ok: true,
     registrations,
     diagnostics: [],
-    warnings: homeGuard.warning !== undefined ? [homeGuard.warning, ...merged.warnings] : merged.warnings,
+    warnings: guardWarnings.length > 0 ? [...guardWarnings, ...merged.warnings] : merged.warnings,
     projectHooks: {
       state,
       filePath: projectPath,

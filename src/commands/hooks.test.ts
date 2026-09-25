@@ -130,6 +130,45 @@ describe("keryx hooks list", () => {
     expect(row).toBeDefined();
     expect(row!.refused).toBe(false);
   });
+
+  // R2-06 (flow 319 review round 2): `hooks trust` already printed a
+  // "contains control or invisible characters" warning when it escaped
+  // something; `list` escaped the same values but said nothing.
+  test("R2-06: prints an escaped-characters warning when a hook's argv needed escaping, none when clean", async () => {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [{ id: "csi-hook", matcher: "*", class: "observe", command: { argv: ["echo", "a\u001b[2Kb"] } }],
+      },
+    });
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    logs = [];
+    errors = [];
+    await hooksCommand(["list"], { cwd: project, homeDir: home });
+    const printed = logs.join("\n");
+    expect(printed).not.toContain("\u001b");
+    expect(printed).toContain("\\x1b[2Kb");
+    expect(errors.some((e) => e.includes("contain control or invisible characters"))).toBe(true);
+  });
+
+  test("R2-06: no escaped-characters warning when nothing needed escaping", async () => {
+    errors = [];
+    await hooksCommand(["list"], { cwd: project, homeDir: home });
+    expect(errors.some((e) => e.includes("contain control or invisible characters"))).toBe(false);
+  });
+
+  // R2-03 (flow 319 review round 2): a schema-invalid diagnostic quotes the
+  // offending JSON path verbatim, including an attacker-chosen property
+  // name under `hooks` — this used to reach the plain-text listing raw.
+  test("R2-03: a schema diagnostic quoting an attacker property name is escaped", async () => {
+    await writeProjectHooks({ schemaVersion: "1.0.0", hooks: { "Bad\u001b[1Aevent": [] } });
+    errors = [];
+    await hooksCommand(["list"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    const combined = errors.join("\n");
+    expect(combined).not.toContain("\u001b");
+    expect(combined).toContain("\\x1b[1A");
+  });
 });
 
 describe("keryx hooks validate", () => {
@@ -182,6 +221,18 @@ describe("keryx hooks validate", () => {
     expect(process.exitCode).toBe(0);
     const result = jsonOutput() as { hooks: Array<{ id: string }> };
     expect(result.hooks.map((h) => h.id)).toContain("sub-cwd-hook");
+  });
+
+  // R2-03 (flow 319 review round 2): same class as the `list` case above —
+  // `hooks validate`'s plain-text diagnostics must escape an attacker
+  // property name too, not just the JSON output (already safe on its own).
+  test("R2-03: a schema diagnostic quoting an attacker property name is escaped", async () => {
+    await writeProjectHooks({ schemaVersion: "1.0.0", hooks: { "Bad\u001b[1Aevent": [] } });
+    await hooksCommand(["validate"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    const combined = errors.join("\n");
+    expect(combined).not.toContain("\u001b");
+    expect(combined).toContain("\\x1b[1A");
   });
 });
 

@@ -14,7 +14,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { ContainedWriteError, mkdirContained, writeContained } from "../lib/contained-write";
 import { confirm as realConfirm } from "../lib/prompt";
-import { terminalSafe } from "../lib/terminal-safe";
+import { TerminalSafeTracker, terminalSafe } from "../lib/terminal-safe";
 import { resolveHooksHomeDir, resolveHooksProjectRoot } from "./agent-hooks";
 import { bothStreamsAreATerminal } from "./mcp-servers";
 import {
@@ -206,14 +206,21 @@ function groupById(registrations: readonly HookRegistration[], profileId: Policy
 // through `terminalSafe` before printing. The JSON output (`--json`) is left
 // alone: it is already JSON-escaped, so a control character there cannot
 // act on a terminal the way raw text can.
-function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileId): string {
+// R2-06 (flow 319 review round 2): `hooks trust` prints a "contains control
+// or invisible characters" warning when anything it rendered needed
+// escaping; `hooks list` escaped the same way but said nothing, so an
+// operator reading the plain listing had no signal that a row was hiding
+// something. `TerminalSafeTracker` reports whether ANY row escaped so the
+// caller can print the same warning once, not per row.
+function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileId): { text: string; escaped: boolean } {
+  const safe = new TerminalSafeTracker();
   const lines = rows.map((row) => {
     const command =
       row.handler.kind === "command"
-        ? row.handler.argv.map((arg) => terminalSafe(arg).text).join(" ")
+        ? row.handler.argv.map((arg) => safe.render(arg)).join(" ")
         : `builtin:${row.handler.name}`;
-    const id = terminalSafe(row.id).text;
-    const matcher = terminalSafe(row.matcher).text;
+    const id = safe.render(row.id);
+    const matcher = safe.render(row.matcher);
     const trustLine =
       row.scope === "project"
         ? [`  scope=project trust=${row.trust === "changed" ? "changed since trusted" : (row.trust ?? "untrusted")} class=${row.class}`]
@@ -227,7 +234,7 @@ function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileI
       `  command: ${command}`,
     ].join("\n");
   });
-  return lines.join("\n\n");
+  return { text: lines.join("\n\n"), escaped: safe.escaped };
 }
 
 async function runList(args: readonly string[], deps: HooksCommandDeps): Promise<void> {
@@ -293,8 +300,16 @@ async function runList(args: readonly string[], deps: HooksCommandDeps): Promise
       `Project hooks in ${loaded.projectHooks.filePath} are not trusted and do not run${suffix}. Review and trust them with: keryx hooks trust`,
     );
   }
-  console.log(renderListText(allRows, profileId));
-  for (const w of loaded.warnings) console.error(w.message);
+  const rendered = renderListText(allRows, profileId);
+  console.log(rendered.text);
+  if (rendered.escaped) {
+    console.error(
+      "WARNING: some of the values above contain control or invisible characters (shown escaped).",
+    );
+  }
+  // R2-03: `w.message` is attacker-controlled diagnostic/notice text — see
+  // formatLoadFailure in notices.ts for the same class of hole.
+  for (const w of loaded.warnings) console.error(terminalSafe(w.message).text);
   for (const g of loaded.disabledBuiltinGates) {
     console.error(`keryx hooks: built-in gate ${g.id} is OFF (disabled in ${g.file}). Turn it back on with: keryx hooks enable ${g.id} --user`);
   }
@@ -336,13 +351,18 @@ function checkArgvResolutions(registrations: readonly HookRegistration[]): ArgvR
   return out;
 }
 
+// R2-03: `d.message` for a schema-invalid file quotes the offending JSON
+// path straight from the validator — including an unconstrained property
+// name a hostile hooks.json is free to choose. The JSON branch is left
+// alone: it is already JSON-escaped, so a control character there cannot
+// act on a terminal the way raw text can.
 function printDiagnostics(diagnostics: readonly { code: string; message: string; scope: string }[], asJson: boolean): void {
   if (asJson) {
     console.log(JSON.stringify({ ok: false, diagnostics }, null, 2));
     return;
   }
   for (const d of diagnostics) {
-    console.error(`[${d.scope}] ${d.code}: ${d.message}`);
+    console.error(`[${d.scope}] ${d.code}: ${terminalSafe(d.message).text}`);
   }
 }
 
@@ -393,7 +413,8 @@ async function runValidate(args: readonly string[], deps: HooksCommandDeps): Pro
       `WARNING: ${terminalSafe(warning.hookId).text}: argv[0] "${terminalSafe(warning.argv0).text}" did not resolve (absolute path or PATH lookup).`,
     );
   }
-  for (const w of loaded.warnings) console.log(`WARNING: ${w.message}`);
+  // R2-03: same attacker-controlled diagnostic text as printDiagnostics.
+  for (const w of loaded.warnings) console.log(`WARNING: ${terminalSafe(w.message).text}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1133,7 +1154,10 @@ async function setProjectOrUserHookEnabled(
 function projectFileTrustState(doc: HooksDoc, cwd: string, deps: HooksCommandDeps): ProjectHooksTrustState {
   const digest = projectHooksDigestOfDoc(doc);
   if (digest === undefined) return "none";
-  const store = loadHooksTrustStore(deps.configDir);
+  // R2-04: same inside-project guard `loadHookConfig` applies — pass `cwd`
+  // as the project root so a trust store resolving inside it reads as empty
+  // here too.
+  const store = loadHooksTrustStore(deps.configDir, cwd);
   return projectHooksTrustState(projectHooksTrustKey(cwd), digest, store);
 }
 

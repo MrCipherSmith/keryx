@@ -1166,7 +1166,13 @@ test.skipIf(!detectSandboxLauncher().available)(
       // test's own point is the REAL runtime denying a real call, not the
       // trust prompt, so trust it directly the way `keryx hooks trust`
       // itself would record it.
-      const configDir = path.join(dir, "config");
+      //
+      // R2-04 (flow 319 review round 2): `configDir` must be OUTSIDE `dir`
+      // (the project root / trust root), not a subdirectory of it —
+      // `recordProjectHooksTrust` now refuses to write a trust store that
+      // resolves inside the project, the same defence `home` above already
+      // gets for the exact same reason (R1-01).
+      const configDir = path.join(home, "config");
       const digest = projectHooksDigestOfDoc(doc);
       if (digest === undefined) throw new Error("expected a digest for a project file with one full registration");
       const trustResult = recordProjectHooksTrust({ trustRoot: dir, digest, hookIds: ["real-deny-bash"], configDir });

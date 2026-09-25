@@ -23,18 +23,51 @@
 // both of which this class of attack needs (evidence: review round 1,
 // finding R1-02).
 
-/** True for a code point that must never reach the terminal unescaped. */
+/**
+ * True for a code point that must never reach the terminal unescaped.
+ *
+ * R2-06 (flow 319 review round 2): the round-1 list covered C0/C1 controls,
+ * ESC-based sequences, bidi overrides, and the common zero-width characters
+ * — a probe swept the wider "invisible or format" categories and found
+ * several still passing through raw: soft hyphen, a second Mongolian/format
+ * space character and a combining joiner, the Unicode invisible math
+ * operators, four Hangul filler code points (render as a blank glyph, so one
+ * visible token can actually be two "characters" wide, the same trick a
+ * zero-width joiner plays), the W3C/Unicode tag block (invisible-by-design,
+ * also the vehicle for the 2023 "ASCII smuggling" prompt-injection
+ * technique), and U+2028/U+2029 (line/paragraph separators — invisible in a
+ * terminal but a real line break to anything that parses the output).
+ *
+ * Variation selectors (U+FE00-FE0F) are ALSO escaped here, a deliberate
+ * decision rather than an oversight: they are legitimately used to select an
+ * emoji presentation (U+2764 U+FE0F is a red heart emoji, not just the plain
+ * heart glyph), so escaping them means such a pair prints as its base
+ * character plus a visible `️` instead of rendering as the emoji — a
+ * cosmetic-only change. It is accepted because these code points are also a
+ * documented steganographic channel (hiding arbitrary text inside what looks
+ * like ordinary content) and this module's whole job is "nothing invisible
+ * or format-only reaches the terminal", not "nothing invisible except the
+ * popular case".
+ */
 function isUnsafeCodePoint(code: number): boolean {
   if (code <= 0x1f) return true; // C0 controls, incl. ESC (0x1b), \n \r \t
   if (code === 0x7f) return true; // DEL
   if (code >= 0x80 && code <= 0x9f) return true; // C1 controls
+  if (code === 0x00ad) return true; // soft hyphen — invisible outside a line-break decision
+  if (code === 0x034f) return true; // combining grapheme joiner — invisibly glues two glyphs into one
   if (code === 0x061c) return true; // Arabic Letter Mark
+  if (code === 0x180e) return true; // Mongolian vowel separator — renders as a blank
   if (code === 0x200e || code === 0x200f) return true; // LRM / RLM
   if (code >= 0x200b && code <= 0x200d) return true; // ZW space / ZWNJ / ZWJ
   if (code === 0x2060) return true; // word joiner
+  if (code >= 0x2061 && code <= 0x2064) return true; // invisible math operators (function application, times, separator, plus)
   if (code >= 0x202a && code <= 0x202e) return true; // LRE/RLE/PDF/LRO/RLO
   if (code >= 0x2066 && code <= 0x2069) return true; // LRI/RLI/FSI/PDI
+  if (code === 0x2028 || code === 0x2029) return true; // line separator / paragraph separator
   if (code === 0xfeff) return true; // BOM / zero-width no-break space
+  if (code === 0x115f || code === 0x1160 || code === 0x3164 || code === 0xffa0) return true; // Hangul fillers
+  if (code >= 0xfe00 && code <= 0xfe0f) return true; // variation selectors (see doc comment)
+  if (code >= 0xe0000 && code <= 0xe007f) return true; // tag characters
   return false;
 }
 

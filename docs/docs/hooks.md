@@ -219,7 +219,13 @@ for what that closes and how to opt back in. As additional defence in depth,
 a `KERYX_HOME` that resolves inside the current project is refused outright
 for user-scope hooks: keryx falls back to your real home directory and warns,
 rather than ever treating a project-supplied directory as "the operator's own
-machine".
+machine". The same refusal applies to the trust store itself — if
+`XDG_DATA_HOME`/`%APPDATA%` resolves inside the current project, keryx treats
+project hooks as not trusted (and `keryx hooks trust`/`untrust` refuse to
+write there) rather than ever reading or writing trust state a project could
+plant for itself. Both checks compare against the real project root — the
+git toplevel, not merely the directory keryx happened to be started from —
+so a nested `.metaproject` inside the same clone cannot narrow either check.
 
 ## Schema
 

@@ -1,6 +1,6 @@
 // Tests for R700-01/R700-02's project-hook trust store (flow 319, lane A).
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -11,6 +11,7 @@ import {
   projectHooksTrustState,
   recordProjectHooksTrust,
   revokeProjectHooksTrust,
+  trustStoreInsideProject,
 } from "./trust";
 import { formatHookLoadNotices } from "./notices";
 import type { LoadHookConfigResult } from "./config";
@@ -147,6 +148,74 @@ describe("recordProjectHooksTrust / loadHooksTrustStore", () => {
 
     const result = recordProjectHooksTrust({ trustRoot: base, digest: "sha256:x", hookIds: [], configDir });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("R2-04 (flow 319 review round 2): trust store resolving inside the project", () => {
+  test("trustStoreInsideProject: true for a configDir under trustRoot, false for one outside it", () => {
+    const base = tmpDir("keryx-trust-inside-basic-");
+    const inside = path.join(base, "config");
+    const outside = tmpDir("keryx-trust-outside-basic-");
+    expect(trustStoreInsideProject(base, inside)).toBe(true);
+    expect(trustStoreInsideProject(base, outside)).toBe(false);
+  });
+
+  test("trustStoreInsideProject: true even when the configDir sits outside a nested projectRoot but inside the real git toplevel (R2-05 parity)", () => {
+    const repoRoot = tmpDir("keryx-trust-git-");
+    mkdirSync(path.join(repoRoot, ".git"), { recursive: true });
+    const nested = path.join(repoRoot, "nest");
+    mkdirSync(nested, { recursive: true });
+    const configDir = path.join(repoRoot, "config"); // outside `nested`, inside `repoRoot`
+    expect(trustStoreInsideProject(nested, configDir)).toBe(true);
+  });
+
+  test("loadHooksTrustStore reads as empty when projectRoot is given and the store resolves inside it, even though a real file is there", () => {
+    const base = tmpDir("keryx-trust-inside-load-");
+    const configDir = path.join(base, "config");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "hooks-trust.json"),
+      JSON.stringify({
+        version: 1,
+        projects: { k: { digest: "sha256:x", trustedAt: "2020-01-01T00:00:00.000Z", hookIds: [] } },
+      }),
+      "utf8",
+    );
+    // Without a projectRoot to check against, the store reads normally —
+    // this is the pre-existing test-seam behaviour every other test in this
+    // file relies on.
+    expect(loadHooksTrustStore(configDir)).not.toEqual({});
+    // With projectRoot given and the store inside it, it reads as {} —
+    // nothing trusted, fail-closed, same as a corrupt file.
+    expect(loadHooksTrustStore(configDir, base)).toEqual({});
+  });
+
+  test("recordProjectHooksTrust refuses to write a trust store inside the project, with a clear message, and creates nothing", () => {
+    const base = tmpDir("keryx-trust-inside-record-");
+    const configDir = path.join(base, "config");
+    const result = recordProjectHooksTrust({ trustRoot: base, digest: "sha256:x", hookIds: [], configDir });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("resolves inside this project");
+    expect(existsSync(configDir)).toBe(false);
+  });
+
+  test("revokeProjectHooksTrust refuses the same way", () => {
+    const base = tmpDir("keryx-trust-inside-revoke2-");
+    const configDir = path.join(base, "config");
+    const result = revokeProjectHooksTrust({ trustRoot: base, configDir });
+    expect(result.ok).toBe(false);
+  });
+
+  test("a configDir outside the project is unaffected: record, load and revoke all work as before", () => {
+    const base = tmpDir("keryx-trust-outside-record-");
+    const configDir = path.join(tmpDir("keryx-trust-outside-config-"), "config");
+    const result = recordProjectHooksTrust({ trustRoot: base, digest: "sha256:x", hookIds: ["h"], configDir });
+    expect(result.ok).toBe(true);
+    expect(loadHooksTrustStore(configDir, base)[projectHooksTrustKey(base)]?.digest).toBe("sha256:x");
+    const revoked = revokeProjectHooksTrust({ trustRoot: base, configDir });
+    expect(revoked.ok).toBe(true);
+    if (revoked.ok) expect(revoked.removed).toBe(true);
   });
 });
 
@@ -299,6 +368,45 @@ describe("formatHookLoadNotices", () => {
     expect(line).toContain("\\u202e");
   });
 
+  // R2-03 (flow 319 review round 2): the reviewer's payload — an
+  // unconstrained JSON property name (an additional-property schema
+  // diagnostic quotes the offending key verbatim) carrying an ESC/CSI
+  // sequence, reaching `keryx shell`'s session-start line raw.
+  test("escapes an attacker property name inside a schema-invalid diagnostic message", () => {
+    const result: LoadHookConfigResult = {
+      ok: false,
+      diagnostics: [
+        {
+          code: "schema-invalid",
+          scope: "project",
+          message: '.metaproject/hooks.json: $.hooks.Bad\u001b[1Aevent: Additional property is not allowed.',
+        },
+      ],
+    };
+    const [line] = formatHookLoadNotices(result, { projectRoot: "/proj", userFile: "/h", surface: "terminal" });
+    expect(line).not.toContain("\u001b");
+    expect(line).toContain("\\x1b[1A");
+    expect(line).toContain("Bad");
+    expect(line).toContain("event");
+  });
+
+  test("escapes an attacker-controlled tighten-only warning message", () => {
+    const result: LoadHookConfigResult = {
+      ...okBase,
+      projectHooks: { state: "none", filePath: "/proj/.metaproject/hooks.json", trustKey: "k", hooks: [] },
+      warnings: [
+        {
+          code: "gate-disable-unacknowledged",
+          scope: "user",
+          message: "keryx hooks: ignored the disable\u001b[2K of built-in gate keryx.ctx-guard",
+        },
+      ],
+    };
+    const [line] = formatHookLoadNotices(result, { projectRoot: "/proj", userFile: "/home/.keryx/hooks.json", surface: "terminal" });
+    expect(line).not.toContain("\u001b");
+    expect(line).toContain("\\x1b[2K");
+  });
+
   test("warnings and gate banner", () => {
     const result: LoadHookConfigResult = {
       ...okBase,
@@ -364,6 +472,21 @@ describe("describeProjectHookForApproval", () => {
     expect(joined).not.toContain("\u001b");
     expect(joined).not.toContain("​");
     expect(escaped).toBe(true);
+  });
+
+  // R2-06 (flow 319 review round 2): this used to be `quoteArg(safe.render(arg))`
+  // — escape a control byte to `\xHH` text, THEN `JSON.stringify` that text,
+  // which doubles the backslash `terminalSafe` just introduced. Fixed by
+  // quoting the RAW token first and sanitising the result exactly once.
+  test("R2-06: a whitespace-containing token with a control byte is not double-escaped", () => {
+    const { lines } = describeProjectHookForApproval(
+      reg({ handler: { kind: "command", argv: ["echo harmless\rrm -rf ~"] } }),
+      { projectRoot: "/proj" },
+    );
+    const joined = lines.join("\n");
+    expect(joined).not.toContain("\r"); // no raw control byte reaches the terminal
+    expect(joined).not.toMatch(/\\\\/); // never a doubled backslash (the double-escape bug)
+    expect(joined).toContain("rm -rf ~");
   });
 
   test("adds a NOTE when an argv token resolves to an existing file inside the project (R1-03)", () => {

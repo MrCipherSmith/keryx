@@ -226,10 +226,25 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
 
 // --- R700-01: project-hook trust wiring (flow 319, lane A) -----------------
 
-async function makeTrustProject(): Promise<{ dir: string; homeDir: string; configDir: string }> {
+// R2-05/R2-04 (flow 319 review round 2): `homeDir` and `configDir` must both
+// be OUTSIDE `dir` (the project root), not `dir` itself or a subdirectory of
+// it — mirrors the R1-01 comment on the gate-off test below, extended to the
+// trust store. `guardUserHomeDir` (`src/harness/hooks/config.ts`) refuses a
+// user-scope home inside the project, and `trustStoreInsideProject` (`src/
+// harness/hooks/trust.ts`) refuses a trust store inside it the same way — a
+// fixture that co-located either one here used to make the very thing this
+// suite is testing (trust wiring) silently refuse to apply, and the tests
+// only caught it because CI's Linux `/tmp` (no `/var`-vs-`/private/var`
+// symlink to paper over it) makes the containment check actually fire.
+async function makeTrustProject(): Promise<{
+  dir: string;
+  homeDir: string;
+  configDir: string;
+  cleanup: () => Promise<void>;
+}> {
   const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-trust-"));
-  const homeDir = dir;
-  const configDir = path.join(dir, "config");
+  const homeDir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-trust-home-"));
+  const configDir = path.join(homeDir, "config");
   await mkdir(path.join(dir, ".metaproject"), { recursive: true });
   await writeFile(
     path.join(dir, ".metaproject", "hooks.json"),
@@ -239,11 +254,19 @@ async function makeTrustProject(): Promise<{ dir: string; homeDir: string; confi
     }),
     "utf8",
   );
-  return { dir, homeDir, configDir };
+  return {
+    dir,
+    homeDir,
+    configDir,
+    cleanup: async () => {
+      await rm(dir, { recursive: true, force: true });
+      await rm(homeDir, { recursive: true, force: true });
+    },
+  };
 }
 
 test("R700-01: a trusted project SessionStart hook runs (present in registrations)", async () => {
-  const { dir, homeDir, configDir } = await makeTrustProject();
+  const { dir, homeDir, configDir, cleanup } = await makeTrustProject();
   try {
     const { recordProjectHooksTrust, projectHooksDigestOfDoc } = await import("../harness/hooks");
     const raw = JSON.parse(await import("node:fs/promises").then((m) => m.readFile(path.join(dir, ".metaproject", "hooks.json"), "utf8")));
@@ -264,12 +287,12 @@ test("R700-01: a trusted project SessionStart hook runs (present in registration
     expect(result?.runtime.registrations().some((r) => r.id === "marker-hook")).toBe(true);
     expect(result?.notices).toEqual([]);
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
 test("R700-01: untrusted project hooks produce a start-of-session notice naming them", async () => {
-  const { dir, homeDir, configDir } = await makeTrustProject();
+  const { dir, homeDir, configDir, cleanup } = await makeTrustProject();
   try {
     const result = buildShellHookRuntime({
       projectRoot: dir,
@@ -285,12 +308,12 @@ test("R700-01: untrusted project hooks produce a start-of-session notice naming 
     expect(result?.notices?.some((n) => n.includes("marker-hook") && n.includes("not trusted"))).toBe(true);
     expect(result?.notices?.some((n) => n.includes("keryx hooks trust"))).toBe(true);
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
 test("R700-01: the notice is produced on EVERY build of the runtime, not suppressed after the first", async () => {
-  const { dir, homeDir, configDir } = await makeTrustProject();
+  const { dir, homeDir, configDir, cleanup } = await makeTrustProject();
   try {
     const opts = {
       projectRoot: dir,
@@ -307,12 +330,12 @@ test("R700-01: the notice is produced on EVERY build of the runtime, not suppres
     expect(first?.notices?.length).toBeGreaterThan(0);
     expect(second?.notices ?? []).toEqual(first?.notices ?? []);
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
 test("R700-01 fix (flow 319): takeNotices() returns the lines once, then [] on the SAME context", async () => {
-  const { dir, homeDir, configDir } = await makeTrustProject();
+  const { dir, homeDir, configDir, cleanup } = await makeTrustProject();
   try {
     const result = buildShellHookRuntime({
       projectRoot: dir,
@@ -339,7 +362,7 @@ test("R700-01 fix (flow 319): takeNotices() returns the lines once, then [] on t
     // still reflects what was computed, for any reader that only wants that.
     expect(result?.notices?.length).toBeGreaterThan(0);
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
@@ -380,7 +403,7 @@ test("R700-01: a user-disabled gate produces the OFF banner", async () => {
 });
 
 test("R700-01: forChild/inheritedHookIds never include an untrusted project hook", async () => {
-  const { dir, homeDir, configDir } = await makeTrustProject();
+  const { dir, homeDir, configDir, cleanup } = await makeTrustProject();
   try {
     const result = buildShellHookRuntime({
       projectRoot: dir,
@@ -397,7 +420,7 @@ test("R700-01: forChild/inheritedHookIds never include an untrusted project hook
     expect(child.registrations().some((r) => r.id === "marker-hook")).toBe(false);
     expect(child.inheritedHookIds()).not.toContain("marker-hook");
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
@@ -405,8 +428,14 @@ test("R700-01/D9: trust recorded for the main root applies to a worktree copy wi
   const { recordProjectHooksTrust, projectHooksDigestOfDoc } = await import("../harness/hooks");
   const mainRoot = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-main-"));
   const worktree = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-worktree-"));
-  const configDir = path.join(mainRoot, "config");
-  const homeDir = mainRoot;
+  // R2-05/R2-04 (flow 319 review round 2): a directory OUTSIDE both project
+  // roots — see the comment on `makeTrustProject` above; `mainRoot` itself
+  // (the trust ROOT, not just "a" project root) is exactly what
+  // `trustStoreInsideProject` must refuse a trust store inside of, so
+  // reusing it here would defeat the very test this proves.
+  const home = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-main-home-"));
+  const configDir = path.join(home, "config");
+  const homeDir = home;
   try {
     const doc = {
       schemaVersion: "1.0.0",
@@ -454,6 +483,7 @@ test("R700-01/D9: trust recorded for the main root applies to a worktree copy wi
     expect(changed?.runtime.registrations().some((r) => r.id === "marker-hook")).toBe(false);
     expect(changed?.notices?.some((n) => n.includes("changed since you trusted it"))).toBe(true);
   } finally {
+    await rm(home, { recursive: true, force: true });
     await rm(mainRoot, { recursive: true, force: true });
     await rm(worktree, { recursive: true, force: true });
   }

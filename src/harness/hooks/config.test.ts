@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadHookConfig, validateHookConfigDocument } from "./config";
 import { BUILTIN_HOOK_IDS } from "./builtins";
@@ -286,6 +287,57 @@ describe("loadHookConfig", () => {
         projectRoot: PROJECT,
         homeDir: HOME,
         readFile: makeReadFile({ [USER_PATH]: JSON.stringify(plantedDoc) }),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.registrations.some((r) => r.id === "planted-gate")).toBe(true);
+      expect(result.warnings.some((w) => w.code === "user-home-inside-project")).toBe(false);
+    });
+  });
+
+  describe("R2-05 (flow 319 review round 2): containment uses the git toplevel, not a nested .metaproject", () => {
+    test("a KERYX_HOME inside the real repo root is refused even when projectRoot is a nested workspace with its own .metaproject", () => {
+      const repoRoot = mkdtempSync(path.join(tmpdir(), "keryx-r205-"));
+      mkdirSync(path.join(repoRoot, ".git"), { recursive: true });
+      const nested = path.join(repoRoot, "nest");
+      mkdirSync(path.join(nested, ".metaproject"), { recursive: true });
+      // `evilHome` is OUTSIDE `nested` (the session's projectRoot) but still
+      // squarely inside `repoRoot` (the git toplevel, and the real boundary
+      // of "this clone") — exactly the repro from the review: comparing
+      // against `nested` alone would wrongly call this "outside the
+      // project".
+      const evilHome = path.join(repoRoot, ".evil-home");
+      const evilUserPath = path.join(evilHome, ".keryx", "hooks.json");
+      const plantedDoc = {
+        schemaVersion: "1.0.0",
+        hooks: { PreToolUse: [{ id: "planted-gate", matcher: "Bash", class: "gate", command: { argv: ["echo", "hi"] } }] },
+      };
+      const result = loadHookConfig({
+        projectRoot: nested,
+        homeDir: evilHome,
+        readFile: makeReadFile({ [evilUserPath]: JSON.stringify(plantedDoc) }),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.registrations.some((r) => r.id === "planted-gate")).toBe(false);
+      expect(result.warnings.some((w) => w.code === "user-home-inside-project")).toBe(true);
+    });
+
+    test("a KERYX_HOME outside the git toplevel entirely is still unaffected", () => {
+      const repoRoot = mkdtempSync(path.join(tmpdir(), "keryx-r205-outside-"));
+      mkdirSync(path.join(repoRoot, ".git"), { recursive: true });
+      const nested = path.join(repoRoot, "nest");
+      mkdirSync(path.join(nested, ".metaproject"), { recursive: true });
+      const realHome = mkdtempSync(path.join(tmpdir(), "keryx-r205-realhome-"));
+      const userPath = path.join(realHome, ".keryx", "hooks.json");
+      const plantedDoc = {
+        schemaVersion: "1.0.0",
+        hooks: { PreToolUse: [{ id: "planted-gate", matcher: "Bash", class: "gate", command: { argv: ["echo", "hi"] } }] },
+      };
+      const result = loadHookConfig({
+        projectRoot: nested,
+        homeDir: realHome,
+        readFile: makeReadFile({ [userPath]: JSON.stringify(plantedDoc) }),
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
