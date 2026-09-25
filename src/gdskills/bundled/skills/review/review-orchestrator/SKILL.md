@@ -42,6 +42,7 @@ Review Orchestrator Progress:
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
 - [ ] Step 8: Dispatch selected reviewers in PARALLEL with reviewer-input schema
 - [ ] Step 9: Collect reviewer-finding schema results and handle NEEDS_CONTEXT
+- [ ] Step 9b: `jev-triage` — advisory, annotate-only severity/duplicate/verify-order annotations over the consolidated findings (opt-in `review.jev.triage`)
 - [ ] Step 10: Wave C — dispatch `review-verifier` over the consolidated findings
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
 - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
@@ -1691,8 +1692,7 @@ CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 If provided and the file exists, read the context document **before** running scope detection.
 Use it to understand:
 - Intentionally chosen libraries and patterns (do not flag as issues)
-- Architectural decisions already agreed upon
-- Acceptance criteria to drive the Stage 1 spec compliance gate
+- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
 
 If absent, proceed normally — context is optional and non-blocking.
 
