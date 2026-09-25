@@ -90,7 +90,7 @@ test.
 ### Step 6: Report
 
 ```
-Generated: billing/tests/test_views.py
+Generated: blog/tests/test_views.py
   - 6 test cases (authorized + unauthorized paths for ArticleDetailView)
   - all passing via pytest-django
 ```
