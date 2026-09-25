@@ -1,0 +1,4 @@
+{
+  "//": "Flow 331 — a scratch project root the review-conform adapter runs `keryx review conform` in (as its cwd), so opting this benchmark into review.jev.conform does not touch this repository's own .metaproject/tasks.config.json.",
+  "review": { "jev": { "conform": true } }
+}
