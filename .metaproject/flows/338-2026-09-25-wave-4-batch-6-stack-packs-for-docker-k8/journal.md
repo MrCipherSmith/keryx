@@ -577,3 +577,38 @@ content (run 1 stays official, no gate re-run):
 
 Verified: full offline sweep green (3211 pass); `tsc --noEmit`/`eslint`
 clean.
+- 2026-09-25T19:34:01.312Z - task-done: T15: Opus adversarial review against stack-pack lessons checklist
+- 2026-09-25T19:34:01.658Z - task-attempt: T16: started (attempt 1) — runner: waiting for CI on PR #733 after round 2 + follow-ups
+
+## CI failure: runStocktake skill-specific-reason guard, fixed
+
+`typecheck-and-tests` CI job failed on `runStocktake > every entry carries
+a non-empty, skill-specific reason (never reused verbatim)` (W1-AC11's
+guard, `src/gdskills/governance/stocktake.ts`/`stocktake.test.ts`) — not
+caught by any of this flow's own targeted local runs, since it lives
+under `src/gdskills/governance/stocktake.test.ts`, outside the file list
+this flow had been running locally. `ci-github-gitlab/ci-pipeline-build-fix`
+and `orchestration/feature-dev` (a pre-existing, unrelated orchestration
+skill) produced byte-identical stocktake evidence once each skill's own
+id is stripped: same trigger count (6), same closest neighbor
+(`ci-github-gitlab/ci-pipeline-implementation`), same rounded overlap
+score (0.29) — a coincidental tie from adding this flow's packs to the
+catalog, not a copy-pasted reason in either skill.
+
+Fixed by adding one new, realistic trigger to `ci-pipeline-build-fix`
+("this step references a repo secret that doesn't exist, the job just
+fails silently") rather than touching the out-of-scope `feature-dev`
+skill — changes its trigger count from 6 to 7, breaking the tie. Verified
+with the reviewer's own `i11.ts`: still 0 near-copy matches. Re-measured
+`scout.test.ts`'s ratchet: 157/684 -> 158/685, a clean +1 for the +1 new
+trigger (the trigger is itself an honest miss on
+`checkSkillSelectedLeaveOneOut`, not reworded to force a pass; no other
+trigger's pass/fail state moved). Ceiling updated with full before/after
+evidence in the test file's own comments, same discipline as every prior
+ratchet move this flow made.
+
+Does not touch the honest-gate content or governance/eval.json in any
+way — run 1 stays the official gate result. Full offline sweep green
+(3226 pass, 0 fail, adding `stocktake.test.ts` to the locally-run set
+going forward); `tsc --noEmit` clean; `checkStablePackGate` for
+`go`/`python` still pass.

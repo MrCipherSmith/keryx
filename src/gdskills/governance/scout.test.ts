@@ -974,17 +974,31 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // 159/688 ceiling this comment used to cite was never the honest number
   // and should not be treated as a prior baseline.
   //
+  // RE-MEASURED AGAIN (same review, one more fix): `runStocktake`'s
+  // skill-specific-reason guard (W1-AC11) found `ci-pipeline-build-fix`
+  // and `orchestration/feature-dev` producing byte-identical stocktake
+  // evidence once each skill's own id is stripped -- a coincidental tie
+  // (same trigger count, same closest neighbor, same rounded overlap
+  // score), not a copy-paste defect in either skill. Broke the tie with
+  // one new, realistic trigger on `ci-pipeline-build-fix` ("this step
+  // references a repo secret that doesn't exist, the job just fails
+  // silently") rather than touching the unrelated, out-of-scope
+  // `feature-dev` skill. 119 skills, 685 triggers, 158 failing -- the new
+  // trigger is itself an honest miss (not reworded to force a pass); no
+  // other trigger's pass/fail state changed (157 -> 158 is a clean +1 for
+  // the +1 new trigger, no redistribution noise this time).
+  //
   // This asserts "at most", not "exactly", so a future genuine improvement
   // lowering the count further does not itself fail this test — only a
   // REGRESSION (more failures than this) does.
   // `checkSkillSelectedLeaveOneOut` rebuilds the full lexical index from
-  // scratch on every call (no cross-call caching), so scanning all 684
+  // scratch on every call (no cross-call caching), so scanning all 685
   // triggers against the 119-skill catalog is O(triggers x catalog) —
   // CI's runner (slower/cold-cache) exceeded bun's default 5000ms test
   // timeout once the catalog grew past the #719 merge; kept generous here
   // too. Explicit timeout, not a product change.
   test(
-    "ratchet: no more than 157 of the 684 bundled triggers fail checkSkillSelectedLeaveOneOut",
+    "ratchet: no more than 158 of the 685 bundled triggers fail checkSkillSelectedLeaveOneOut",
     () => {
       let failing = 0;
       for (const entry of catalog) {
@@ -992,7 +1006,7 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
           if (!checkSkillSelectedLeaveOneOut(trigger, entry.id, catalog, trigger).selected) failing++;
         }
       }
-      expect(failing).toBeLessThanOrEqual(157);
+      expect(failing).toBeLessThanOrEqual(158);
     },
     20000,
   );

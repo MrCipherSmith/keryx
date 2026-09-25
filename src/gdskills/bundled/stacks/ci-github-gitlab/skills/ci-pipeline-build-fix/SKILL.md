@@ -8,6 +8,7 @@ triggers:
   - "the pipeline says invalid needs: reference, fix the job graph"
   - "GitLab CI says this job's rules: never match, why doesn't it run"
   - "actions/checkout is failing with an unrecognized input, fix the workflow"
+  - "this step references a repo secret that doesn't exist, the job just fails silently"
 metadata:
   origin: authored
   category: build-fix

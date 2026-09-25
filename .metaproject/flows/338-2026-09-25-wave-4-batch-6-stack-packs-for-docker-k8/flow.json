@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 6: stack packs for docker-k8s-terraform, ci-github-gitlab",
   "status": "in-progress",
   "createdAt": "2026-09-25T15:14:53.313Z",
-  "updatedAt": "2026-09-25T19:00:23.429Z",
+  "updatedAt": "2026-09-25T19:34:01.658Z",
   "source": {
     "type": "description",
     "ref": null
@@ -336,7 +336,7 @@
       "id": "T15",
       "title": "Opus adversarial review against stack-pack lessons checklist",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 3,
@@ -360,7 +360,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
@@ -369,8 +370,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T19:34:01.658Z",
+            "outcome": "started",
+            "detail": "runner: waiting for CI on PR #733 after round 2 + follow-ups"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -670,6 +677,16 @@
       "at": "2026-09-25T19:00:23.429Z",
       "event": "task-attempt",
       "detail": "T15: started (attempt 3) — narrow opus verification of review round 2 fixes"
+    },
+    {
+      "at": "2026-09-25T19:34:01.312Z",
+      "event": "task-done",
+      "detail": "T15: Opus adversarial review against stack-pack lessons checklist"
+    },
+    {
+      "at": "2026-09-25T19:34:01.658Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — runner: waiting for CI on PR #733 after round 2 + follow-ups"
     }
   ],
   "signatures": [
