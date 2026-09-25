@@ -114,3 +114,4 @@
   on opus. Authoring/fix workers stay on sonnet. Gate discipline (10 trials, no content edits during
   the run, agent pairs only for packs that clear the gate) and the git-hygiene rules (no stash, no
   `add -A`, no trailers) are unchanged.
+- 2026-09-25T12:41:36.640Z - task-done: T9: Author angular pack (extends ts-js-node)

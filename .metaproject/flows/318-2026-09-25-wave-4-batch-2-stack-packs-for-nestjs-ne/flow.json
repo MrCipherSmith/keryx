@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 2: stack packs for nestjs, nextjs-nuxt, vue, angular, mobx",
   "status": "in-progress",
   "createdAt": "2026-09-25T06:09:18.148Z",
-  "updatedAt": "2026-09-25T06:44:57.071Z",
+  "updatedAt": "2026-09-25T12:41:36.640Z",
   "source": {
     "type": "description",
     "ref": null
@@ -177,7 +177,7 @@
       "id": "T9",
       "title": "Author angular pack (extends ts-js-node)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -191,7 +191,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -442,6 +443,11 @@
       "at": "2026-09-25T06:44:57.071Z",
       "event": "task-done",
       "detail": "T7: Author nextjs-nuxt pack (extends react+vue)"
+    },
+    {
+      "at": "2026-09-25T12:41:36.640Z",
+      "event": "task-done",
+      "detail": "T9: Author angular pack (extends ts-js-node)"
     }
   ]
 }
