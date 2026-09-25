@@ -132,6 +132,19 @@ export interface ShellConfig {
    * as `--permission-mode` never persists `permissionMode`.
    */
   turnGuard?: { enabled?: boolean };
+  /**
+   * Flow 338 — the routing classifier's per-user, opt-in setting: `enabled:
+   * true` turns automatic per-turn category classification on for every
+   * future `keryx shell` session until turned off again, persisted by the
+   * `/route on|off` command (mirrors `turnGuard`, above). Default off (absent
+   * or `enabled !== true`) until the live check has measured accuracy.
+   * `classifier: "jev"` additionally opts INTO Jev (PRD §9.2) when a
+   * credential resolves — absent/anything else means "Jev not opted into",
+   * so classification falls back to the main-model classifier even with a
+   * valid `OPENROUTER_API_KEY` present, matching the routing PRD's "opt-in,
+   * not implied by merely connecting openrouter" rule.
+   */
+  routingClassifier?: { enabled?: boolean; classifier?: "jev" };
 }
 
 /**
