@@ -31,6 +31,12 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
 import { runImportReviewers } from "../review/import-reviewers";
+// flow 333: registration only. The command itself, and every helper it
+// needs, lives in `review-jev-docs.ts`/`review-jev-comments.ts` — NEW files,
+// mirroring flow 330's `review-jev-rules.ts` registration pattern, so this
+// file's own conform/comments parts are touched only additively.
+import { runJevDocs } from "./review-jev-docs";
+import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -542,6 +548,17 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "conform") {
       await runConform(args.slice(1));
+      return;
+    }
+    // flow 333: two ADDITIONAL, CLI-driven reviewers — see
+    // `src/commands/review-jev-docs.ts`/`review-jev-comments.ts` for
+    // everything past registration.
+    if (command === "jev-docs") {
+      await runJevDocs(args.slice(1));
+      return;
+    }
+    if (command === "jev-comments") {
+      await runJevComments(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -1333,6 +1350,22 @@ async function runCommentsReply(args: string[]): Promise<void> {
   console.log(`posted: ${result.posted.length}`);
   console.log(`already answered (skipped): ${result.skipped.length}`);
   console.log(`backlog beyond the reply cap: ${result.backlog.length}${result.backlog.length === 0 ? "" : ` — ${result.backlog.join(", ")}`}`);
+  // flow 333, AC4: an ADDITIVE advisory-only hook — a comment's Jev label
+  // (from the most recent `keryx review jev-comments` run, when there is
+  // one) is printed for context beside comments this pass is still
+  // unanswered about. It never changes `pass`/`outcomes`/what gets posted
+  // above, and it never auto-replies or auto-resolves anything; a missing or
+  // unparsable label file prints nothing here, exactly as if this hook did
+  // not exist.
+  const advisoryLabels = await readCommentAdvisoryLabels(cwd, repo, number);
+  const stillUnanswered = unansweredComments(state).filter((comment) => advisoryLabels[comment.id] !== undefined);
+  if (stillUnanswered.length > 0) {
+    console.log("");
+    console.log("advisory (review-jev-comments labels, informational only):");
+    for (const comment of stillUnanswered) {
+      console.log(`  ${comment.id} (${comment.author}): ${advisoryLabels[comment.id]!.choice}`);
+    }
+  }
   if (result.escalated.length > 0) {
     console.error(
       `ESCALATE: ${result.escalated.length} comment(s) block progress rather than report a problem and were NOT replied to: ${result.escalated.join(
@@ -3524,6 +3557,17 @@ Usage:
                        [--repo <owner/repo>] [--explain] [--threshold <0..1>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
                        [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
+  keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
+                        [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                        [--fixtures <dir>] [--json]
+                        An ADDITIONAL reviewer, engine: jev. Finds doc sections that went
+                        stale because of the diff. Opt-in via review.jev.docs in
+                        .metaproject/tasks.config.json.
+  keryx review jev-comments --pr <n> --repo <owner/repo>
+                            [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+                            An ADDITIONAL reviewer, engine: jev. Checks whether open PR review
+                            comments (from the existing ledger) were addressed. Opt-in via
+                            review.jev.comments in .metaproject/tasks.config.json.
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]

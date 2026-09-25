@@ -96,6 +96,8 @@ Resolution order:
 | review-frontend | review | Review frontend components, state boundaries, rendering behavior, and UI integration patterns. | gdskills/review/review-frontend/SKILL.md |
 | review-frontend-conventions | review | Review frontend code against repository-local frontend conventions and agent entrypoints. | gdskills/review/review-frontend-conventions/SKILL.md |
 | review-highload | review | Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks. | gdskills/review/review-highload/SKILL.md |
+| review-jev-comments | review | Check whether open PR review comments were addressed, scored by Jev. | gdskills/review/review-jev-comments/SKILL.md |
+| review-jev-docs | review | Find documentation sections that went stale because of a diff, scored by Jev. | gdskills/review/review-jev-docs/SKILL.md |
 | review-layout | review | Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry. | gdskills/review/review-layout/SKILL.md |
 | review-logic | review | Review logic correctness, contracts, edge cases, nullability, and async behavior. | gdskills/review/review-logic/SKILL.md |
 | review-orchestrator | review | Route review requests to specialized reviewers and consolidate findings. | gdskills/review/review-orchestrator/SKILL.md |

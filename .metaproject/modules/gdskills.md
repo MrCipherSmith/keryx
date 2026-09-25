@@ -100,6 +100,8 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-frontend`: Review frontend components, state boundaries, rendering behavior, and UI integration patterns.
 - `review-frontend-conventions`: Review frontend code against repository-local frontend conventions and agent entrypoints.
 - `review-highload`: Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks.
+- `review-jev-comments`: Check whether open PR review comments were addressed, scored by Jev.
+- `review-jev-docs`: Find documentation sections that went stale because of a diff, scored by Jev.
 - `review-layout`: Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry.
 - `review-logic`: Review logic correctness, contracts, edge cases, nullability, and async behavior.
 - `review-orchestrator`: Route review requests to specialized reviewers and consolidate findings.

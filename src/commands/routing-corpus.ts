@@ -211,11 +211,14 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Flow 295 added `scheduled-tasks` with three positives, all ranking first:
  * 305/307 + 3 = 308/310.
  *
+ * Flow 333 added `review-jev-docs` and `review-jev-comments` with four
+ * positives each, all ranking first: 308/310 + 8 = 316/318.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 308;
-export const RANK1_TOTAL = 310;
+export const RANK1_FIRST = 316;
+export const RANK1_TOTAL = 318;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -481,6 +484,32 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "audit our dependencies for known CVEs", owner: "security-audit" },
+      { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-jev-docs",
+    positives: [
+      "check if our docs are stale after this diff",
+      "run jev docs on this pull request",
+      "point me at doc sections that went stale because of this diff",
+      "scan the diff for doc sections that are now inaccurate",
+    ],
+    negatives: [
+      { prompt: "generate documentation for this codebase", owner: "autodoc-orchestrator" },
+      { prompt: "review a PR, a report, or a diff against a reference document's clauses", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-jev-comments",
+    positives: [
+      "check whether the open review comments on this PR were actually addressed",
+      "are there any unanswered PR comments still open",
+      "triage the leftover review comments with jev",
+      "run jev comments on PR 712",
+    ],
+    negatives: [
+      { prompt: "collect the review comments left on this PR", owner: "review-pr-feedback" },
       { prompt: "review my code", owner: "review-orchestrator" },
     ],
   },

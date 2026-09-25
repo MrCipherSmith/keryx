@@ -216,6 +216,22 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 333 (AC6): stale-doc detection — links doc sections to changed
+    // code deterministically, then asks Jev whether each linked section is
+    // now inaccurate. TUI-only, same reasoning as `/conform`.
+    name: "/staledocs",
+    description: "List doc sections that likely went stale because of the working diff, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 333 (AC6): open PR review comment triage — reads the existing
+    // comment ledger and asks Jev a resolved-by-fix/still-open/not-
+    // actionable/needs-escalation choice per open comment. TUI-only.
+    name: "/opencomments",
+    description: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>",
+    modes: AGENT_ONLY,
+  },
+  {
     // P2 flipped this, as the entry it replaces said it would: `/mcp` was
     // "Deprecated alias of /integrations", kept pointing at the installer
     // only because the consumer view did not exist and a slash command

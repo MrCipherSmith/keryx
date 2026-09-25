@@ -300,6 +300,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Managed work",
     summary: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev.",
   },
+  {
+    kind: "slash",
+    name: "/staledocs",
+    group: "Managed work",
+    summary: "List doc sections that likely went stale because of the working diff, with Jev.",
+  },
+  {
+    kind: "slash",
+    name: "/opencomments",
+    group: "Managed work",
+    summary: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>.",
+  },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {
     kind: "slash",

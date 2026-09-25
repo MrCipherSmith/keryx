@@ -107,8 +107,11 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // the one that walks a published spelling out of the surface without
     // handing its callers a successful-looking run that does nothing. Plus
     // `scheduled-tasks` (flow 295): when to propose an operator-confirmed schedule.
+    // Plus `review-jev-docs` and `review-jev-comments` (flow 333): two
+    // CLI-engine reviewers, dispatched as a `keryx review jev-docs`/
+    // `jev-comments` command rather than an LLM sub-agent.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(72);
+    expect(files.length).toBe(74);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);
