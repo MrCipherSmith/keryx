@@ -3,36 +3,92 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.3.0] — 2026-09-25
+
+The agent platform release. keryx now detects a project's stack and installs
+stack packs and agents for it. It learns from how you work, carries that
+knowledge between machines and coding agents, and runs its own lifecycle
+hooks inside `keryx shell`.
+
+### Added
+- **Stack packs, promoted only through a strict eval with an LLM judge.**
+  `keryx stack detect` reads a project's manifests offline, and `keryx skills
+  install --profile` installs the matching pack. `skills doctor`,
+  `uninstall`, `scout`, `eval` and `stocktake` keep the catalog honest. A
+  pack becomes stable only after a behavioural eval graded by a rubric-based
+  LLM judge with anti-gaming checks. The Python and Go packs are stable and
+  ship with their agents. TypeScript/Node and React packs are included too.
+- **Agent definitions and exporters.** An agent is defined once, compiled
+  into a dispatch contract, and exported to each supported coding agent's
+  own format with `keryx agents list/show/export/verify/generate`. The ten
+  bundled agents carry keryx's own names.
+- **A self-learning loop.** `keryx learn` records redacted, bounded session
+  observations and extracts candidate patterns from them. Nothing is applied
+  until you accept it on a terminal. An accepted pattern can feed a reviewer
+  profile, be promoted to your user scope, or graduate into a skill, and
+  `learn prune` retires stale ones.
+- **Portability.** `keryx bundle export/import/inspect/verify/uninstall`
+  moves skills, rules, agents, memory and hooks between a project, a team and
+  your user scope in `~/.keryx`, rendered for the coding agent you name.
+  Memory can be handed off from one agent to another, and rules export as
+  the instruction files each agent reads.
+- **One harness adapter registry and `keryx integrations`.** Every supported
+  coding agent is described in one registry, now including Gemini CLI, Kiro,
+  GitHub Copilot and Zed over ACP. `keryx integrations install`,
+  `uninstall` and `doctor` manage keryx's hooks and instructions in each one,
+  and `integrations matrix` generates the capability matrix from the
+  registry.
+- **Lifecycle hooks in `keryx shell`.** Built-in, user and project hooks run
+  on session, prompt and tool events, and they can only tighten the policy
+  engine. `keryx hooks list/validate/test/enable/disable` manage them.
+  Project hooks run only after `keryx hooks trust` (see Changed).
+- **Harness security audit and impact evidence.** `keryx security
+  audit-harness` scores a project's instruction files, permission settings,
+  MCP launchers, hook commands, agent definitions and skill scripts, with a
+  CI mode and fix proposals you apply separately. On a session's first edit
+  of a file, keryx injects impact evidence: the file's importers, related
+  tests and memory caveats.
+
+### Fixed
+- **gdgraph and gdctx correctness.** Several `keryx ctx` defects are fixed,
+  read-only git commands pass through an allowlist, a correctness benchmark
+  guards the graph, and the routing index is slimmer.
+
+### Changed
+- **`/integrations` is now `/integrate`** in the shell, so it no longer sits
+  one letter from the `keryx integrations` CLI verb.
+- **Project hooks need trust.** Command hooks in `.metaproject/hooks.json`
+  run only after `keryx hooks trust` shows every command and records that
+  exact version. Any edit to the file voids the trust, and `keryx hooks
+  untrust` withdraws it. Non-interactive surfaces never trust on their own.
+- **A project file cannot disable a built-in gate.** The ctx guard, the input
+  and output security checks and impact evidence can be turned off only from
+  your own `~/.keryx/hooks.json`, with an explicit acknowledgement
+  (`keryx hooks disable <id> --user --acknowledge-gate-risk`).
+- **keryx refuses to start on an oversized or unreadable `.env*` file** when
+  launched as `bun <file>` (`bun src/cli.ts`, `bun dist/cli.js`), because it
+  cannot check which variables Bun would load from it. The installed
+  launcher never reads `.env` files and is unaffected.
 
 ### Security
-- **`keryx` no longer auto-loads a cloned project's `.env`/`bunfig.toml`.**
-  Bun's default shebang auto-loads both from the current working directory —
-  a repository could commit a `.env` setting `KERYX_HOME` to a directory
-  inside itself, planting a fully trusted, un-gated user-scope
-  `hooks.json` that ran on a plain `keryx shell` with no prompt. `keryx`'s
-  shipped binary now starts with `--no-env-file --config=/dev/null`, every
-  place it spawns itself carries the same flags, and a `KERYX_HOME` that
-  still resolves inside the current project is refused for user-scope hooks
-  as defence in depth. If you relied on a project `.env` for provider keys or
-  other settings, see "Environment isolation" in the onboarding guide for how
-  to opt back in.
-- **The startup guard for `bun src/cli.ts`/`bun dist/cli.js`/`bunx keryx`
-  invocations no longer trusts an environment variable to decide it is
-  already safe, and no longer skips re-executing just because a project's
-  `.env`/`bunfig.toml` happened not to exist under those exact names.** It
-  now re-execs whenever the actual interpreter flags are missing, for every
-  `.env*` filename Bun itself auto-loads, and strips by variable NAME (never
-  by re-deriving and comparing a value), which closes several ways the
-  previous version could be bypassed — including one where a single `.env`
-  reached code execution through `BUN_OPTIONS`. Every place `keryx` spawns
-  its own interpreter to run a `trigger`/schedule now carries the same two
-  safe flags too, including an installed cron/systemd/launchd unit's command
-  line — a schedule installed before this change is rewritten with the
-  flags the next time it is confirmed or reinstalled. Re-execing the guard's
-  child now forwards `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT`/`SIGWINCH` to it,
-  so a signal sent to a bypassing invocation reaches the real process the
-  same way it would without the guard in the way.
+- **Bun no longer loads a project's `.env` or `bunfig.toml` into keryx.** The
+  CLI now runs with `--no-env-file --config=/dev/null`, and so does every
+  interpreter keryx starts itself: triggers, schedules, and installed
+  cron/systemd/launchd units. Earlier versions loaded both files from the
+  current directory, so a cloned repository could inject environment
+  variables or a preload script, for example by pointing `KERYX_HOME` at a
+  directory it controls. This affects every earlier version. The `bun
+  <file>` guard now re-executes whenever those flags are missing and strips
+  variables by name. If you relied on a project `.env` for provider keys,
+  see "Environment isolation" in the onboarding guide. A schedule installed
+  before this release is rewritten with the flags the next time it is
+  confirmed or reinstalled.
+- **Contained writes.** `keryx init`, `keryx update` (the testing service
+  and `.gitignore`), the learning observer and impact evidence write only
+  inside the project, and refuse a symlink that points outside it.
+- **Terminal-safe hook display.** `keryx hooks` output and the trust prompt
+  neutralise control characters, so a hook's command cannot rewrite the
+  terminal to hide what it runs.
 
 ## [0.2.163] — 2026-09-25
 
