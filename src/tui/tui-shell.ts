@@ -91,6 +91,8 @@ import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
+import { isConformCommand, openConform } from "./conform-inspector";
+import { loadConformSetup, runConformForTarget } from "./conform-source";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
@@ -5665,6 +5667,18 @@ export async function launchTuiAgentShell(opts: {
         ...inspectorKeys,
       });
     };
+    /** `/conform` (flow 308, AC8): pick a reference document and a target, then walk its clauses. */
+    const showConform = (): void => {
+      const cwd = inspectorCwd();
+      openConform(otui, chrome, {
+        cwd,
+        loadSetup: loadConformSetup,
+        run: (cwd, refPath, target, signal) => runConformForTarget(cwd, refPath, target, signal),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...inspectorKeys,
+      });
+    };
     /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
     const showBus = (): void => {
       if (liveBus === undefined) {
@@ -7057,6 +7071,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isCiTriageCommand(command.name)) {
           showCiTriage();
+          return;
+        }
+        if (isConformCommand(command.name)) {
+          showConform();
           return;
         }
         if (command.name === "/bus") {

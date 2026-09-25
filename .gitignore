@@ -95,3 +95,10 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # run is watched, since Bun buffers stdout to a pipe.
 .mutation-sweep-journal
 .mutation-sweep-progress
+
+# `keryx review conform` (flow 308): the clause-tag cache and recent-docs list
+# name local reference-document paths and their per-clause tags — project-
+# local runtime state, not something to commit. Written 0o600. Added by hand,
+# outside the `keryx:begin`/`keryx:end` managed block above, since a hand
+# edit inside that block is regenerated away by the next `keryx update`.
+.metaproject/data/review-conform/
