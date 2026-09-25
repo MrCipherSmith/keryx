@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,14 +8,14 @@
   "id": "337",
   "slug": "wave-4-batch-5-stack-packs-for-php-larav",
   "title": "Wave 4 batch 5: stack packs for php-laravel, ruby-rails, c-cpp, sql-db",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-25T15:14:49.978Z",
-  "updatedAt": "2026-09-25T15:14:49.978Z",
+  "updatedAt": "2026-09-25T15:36:42.323Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:27eb261aefc9476099fedbde79659550312ab7a27760e68a9728e4d080065329",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -32,34 +32,315 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by per-stack tasks T5-T8"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T10 offline verification"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T11 commit/push/return"
+    },
+    {
+      "id": "T5",
+      "title": "Implement php-laravel stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:09.567Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Implement ruby-rails stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:09.842Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement c-cpp stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:10.119Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Implement sql-db stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:10.375Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Offline verification: lint + integrity + manifest tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Commit packs separately, push branch, return READY_FOR_GATE",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-25T15:14:49.978Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-25T15:18:42.538Z",
+      "event": "task-added",
+      "detail": "T5: Implement php-laravel stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:42.799Z",
+      "event": "task-added",
+      "detail": "T6: Implement ruby-rails stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:43.065Z",
+      "event": "task-added",
+      "detail": "T7: Implement c-cpp stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:43.359Z",
+      "event": "task-added",
+      "detail": "T8: Implement sql-db stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:43.632Z",
+      "event": "task-added",
+      "detail": "T9: Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs"
+    },
+    {
+      "at": "2026-09-25T15:18:43.909Z",
+      "event": "task-added",
+      "detail": "T10: Offline verification: lint + integrity + manifest tests"
+    },
+    {
+      "at": "2026-09-25T15:18:44.186Z",
+      "event": "task-added",
+      "detail": "T11: Commit packs separately, push branch, return READY_FOR_GATE"
+    },
+    {
+      "at": "2026-09-25T15:18:50.973Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T15:18:51.230Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T15:18:51.492Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T15:18:55.978Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T15:19:04.395Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T15:19:04.688Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T15:19:09.567Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — dispatch-337-T5"
+    },
+    {
+      "at": "2026-09-25T15:19:09.842Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — dispatch-337-T6"
+    },
+    {
+      "at": "2026-09-25T15:19:10.120Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — dispatch-337-T7"
+    },
+    {
+      "at": "2026-09-25T15:19:10.375Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — dispatch-337-T8"
+    },
+    {
+      "at": "2026-09-25T15:30:32.937Z",
+      "event": "task-done",
+      "detail": "T5: Implement php-laravel stack pack"
+    },
+    {
+      "at": "2026-09-25T15:31:22.863Z",
+      "event": "task-done",
+      "detail": "T6: Implement ruby-rails stack pack"
+    },
+    {
+      "at": "2026-09-25T15:32:36.209Z",
+      "event": "task-done",
+      "detail": "T7: Implement c-cpp stack pack"
+    },
+    {
+      "at": "2026-09-25T15:32:57.987Z",
+      "event": "task-done",
+      "detail": "T8: Implement sql-db stack pack"
+    },
+    {
+      "at": "2026-09-25T15:36:19.040Z",
+      "event": "task-done",
+      "detail": "T9: Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs"
+    },
+    {
+      "at": "2026-09-25T15:36:42.323Z",
+      "event": "task-done",
+      "detail": "T10: Offline verification: lint + integrity + manifest tests"
     }
   ]
 }

@@ -1,3 +1,28 @@
 # Flow Journal
 
 - 2026-09-25T15:14:49.978Z - flow created
+- 2026-09-25T15:18:42.538Z - task-added: T5: Implement php-laravel stack pack
+- 2026-09-25T15:18:42.799Z - task-added: T6: Implement ruby-rails stack pack
+- 2026-09-25T15:18:43.065Z - task-added: T7: Implement c-cpp stack pack
+- 2026-09-25T15:18:43.359Z - task-added: T8: Implement sql-db stack pack
+- 2026-09-25T15:18:43.632Z - task-added: T9: Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs
+- 2026-09-25T15:18:43.909Z - task-added: T10: Offline verification: lint + integrity + manifest tests
+- 2026-09-25T15:18:44.186Z - task-added: T11: Commit packs separately, push branch, return READY_FOR_GATE
+- 2026-09-25T15:18:50.973Z - task-done: T2: Implement per plan
+- 2026-09-25T15:18:51.230Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-25T15:18:51.492Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-25T15:18:55.978Z - task-done: T1: Collect remaining context
+- 2026-09-25T15:19:04.395Z - frozen: 8 criteria; checksum recorded
+- 2026-09-25T15:19:04.688Z - started
+- 2026-09-25T15:19:09.567Z - task-attempt: T5: started (attempt 1) — dispatch-337-T5
+- 2026-09-25T15:19:09.842Z - task-attempt: T6: started (attempt 1) — dispatch-337-T6
+- 2026-09-25T15:19:10.120Z - task-attempt: T7: started (attempt 1) — dispatch-337-T7
+- 2026-09-25T15:19:10.375Z - task-attempt: T8: started (attempt 1) — dispatch-337-T8
+- 2026-09-25T15:30:32.937Z - task-done: T5: Implement php-laravel stack pack
+- php-laravel worker reported DONE_WITH_CONCERNS: (1) `keryx skills scout` recorded a "use" decision for `php-laravel-code-review` against `ruby-rails-code-review` (0.58 overlap, shared risk vocabulary), with a justification recorded per F21 policy — this scorer predates flow 334's negation-aware trigger scorer; decision deferred to Phase B, re-run `skills scout` for both packs' code-review skills after flow 334 lands and settle for real whether the overlap is a genuine near-duplicate or coincidental shared vocabulary between two new, otherwise-unrelated stacks. (2) judge-check AG recordings are Phase B work as planned, not missing by mistake. Committed as-is; both concerns tracked here rather than blocking the commit.
+- 2026-09-25T15:31:22.863Z - task-done: T6: Implement ruby-rails stack pack
+- 2026-09-25T15:32:36.209Z - task-done: T7: Implement c-cpp stack pack
+- 2026-09-25T15:32:57.987Z - task-done: T8: Implement sql-db stack pack
+- 2026-09-25T15:36:19.040Z - task-done: T9: Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs
+- T10 offline verification results: `stack-packs.test.ts` 122 pass / 2 fail (go/python stable-pack-gate check, pre-existing on main since PR #700, unrelated to this batch — all four new packs pass every check including manifest-stability agreement now that T9 wired the modules). `authoring-lint.test.ts` + `authoring-lint-guard.test.ts`: 31/31 pass. `manifest/*.test.ts`: 62/62 pass after updating the hardcoded profile-id list in `manifest.test.ts`. `stack-pack-eval-integrity.test.ts`: 1458 pass, 256 fail (every failure is an AG anti-gaming judge-recording check — expected, Phase B work per each pack's agent-refs.json note), 32 skip; I1-I9 all pass with zero non-AG failures. I11 (flow 334's negation-aware trigger scorer) does not exist in this worktree yet — not run, deferred to Phase B rebase per the pause point. AC2-AC6 evidenced by these runs.
+- 2026-09-25T15:36:42.323Z - task-done: T10: Offline verification: lint + integrity + manifest tests
