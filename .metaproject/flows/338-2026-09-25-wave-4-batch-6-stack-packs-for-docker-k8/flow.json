@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 6: stack packs for docker-k8s-terraform, ci-github-gitlab",
   "status": "in-progress",
   "createdAt": "2026-09-25T15:14:53.313Z",
-  "updatedAt": "2026-09-25T16:20:50.078Z",
+  "updatedAt": "2026-09-25T16:21:22.253Z",
   "source": {
     "type": "description",
     "ref": null
@@ -219,15 +219,22 @@
       "id": "T11",
       "title": "Push branch, report READY_FOR_GATE, wait for go-ahead",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T16:21:04.308Z",
+            "outcome": "started",
+            "detail": "runner: pushing branch, reporting READY_FOR_GATE"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -353,6 +360,16 @@
       "at": "2026-09-25T16:20:50.078Z",
       "event": "task-done",
       "detail": "T10: Offline integrity/lint checks + commit per pack"
+    },
+    {
+      "at": "2026-09-25T16:21:04.308Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — runner: pushing branch, reporting READY_FOR_GATE"
+    },
+    {
+      "at": "2026-09-25T16:21:22.253Z",
+      "event": "task-done",
+      "detail": "T11: Push branch, report READY_FOR_GATE, wait for go-ahead"
     }
   ]
 }

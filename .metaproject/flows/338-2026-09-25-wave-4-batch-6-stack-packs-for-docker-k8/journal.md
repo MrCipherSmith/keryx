@@ -70,3 +70,5 @@
 - 2026-09-25T16:20:14.521Z - task-done: T9: Update W1/W2 docs with batch 6 implementation notes
 - 2026-09-25T16:20:20.779Z - task-attempt: T10: started (attempt 1) — runner: final targeted offline check sweep
 - 2026-09-25T16:20:50.078Z - task-done: T10: Offline integrity/lint checks + commit per pack
+- 2026-09-25T16:21:04.308Z - task-attempt: T11: started (attempt 1) — runner: pushing branch, reporting READY_FOR_GATE
+- 2026-09-25T16:21:22.253Z - task-done: T11: Push branch, report READY_FOR_GATE, wait for go-ahead
