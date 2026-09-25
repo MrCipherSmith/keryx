@@ -298,7 +298,9 @@ export function isPlaceholderClauseText(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length === 0) return true;
   if (CODE_FENCE_ONLY_RE.test(trimmed)) return true;
-  const placeholders = trimmed.match(PLACEHOLDER_TOKEN_RE) ?? [];
+  // A `<...>` inside backticks is code the rule names (`<script>`,
+  // `Array<T>`), never an unfilled placeholder — only bare ones count.
+  const placeholders = trimmed.replace(/`[^`]*`/g, "code").match(PLACEHOLDER_TOKEN_RE) ?? [];
   if (placeholders.length === 0) return false;
   if (CHECKLIST_MARKER_RE.test(trimmed)) return true;
   const withoutPlaceholders = trimmed.replace(PLACEHOLDER_TOKEN_RE, "").replace(/[\s\-–—:.,;]+/g, "");

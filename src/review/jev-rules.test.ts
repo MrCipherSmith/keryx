@@ -574,3 +574,9 @@ describe("synthesizeFindingsFromViolations", () => {
     expect(findingStats(findings)).toEqual({ blocker: 0, major: 1, minor: 1, info: 0 });
   });
 });
+
+test("a tag or generic inside backticks is code, not a placeholder (review round 2 of PR #722)", () => {
+  expect(isPlaceholderClauseText("Avoid `<script>`.")).toBe(false);
+  expect(isPlaceholderClauseText("Ban `<iframe>`.")).toBe(false);
+  expect(isPlaceholderClauseText("[x] <criterion 1> — verified by <test>")).toBe(true);
+});
