@@ -18,9 +18,11 @@
 // prove.
 
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { extractProjectRegistrations, HOOKS_TRUST_FILENAME, projectHooksDigestOfDoc, projectHooksTrustKey } from "../harness/hooks";
+import { keryxConfigDir, writeOwnerOnlyFileAtomic } from "./config-dir";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const CLI_SRC = path.join(ROOT, "src", "cli.ts");
@@ -186,4 +188,182 @@ describe("R2-01 hostile cwd: every dotenv filename Bun auto-loads, not only .env
       expect(result.code).toBe(0);
     }, 30_000);
   }
+});
+
+// R2-01 + R2-04 (flow 319 review round 2): a repository that tries to
+// pre-trust ITSELF — the combination those two findings close together.
+// `src/harness/hooks/trust.ts`'s `recordProjectHooksTrust` refuses to write a
+// `hooks-trust.json` that resolves inside the project (R2-04), but that
+// refusal only matters if the file has to go through that function at all. A
+// malicious repository does not have to: it can commit a `hooks-trust.json`
+// it computed and wrote by hand under a project-relative path, then commit a
+// `.env` that points `XDG_DATA_HOME` (the directory `keryxConfigDir` resolves
+// `hooks-trust.json` under, see `src/lib/config-dir.ts`) at that path — so
+// that IF the redirection were honoured, `keryx hooks list`/`keryx shell`
+// would read the attacker's own pre-computed trust entry and treat the
+// project's hooks as already approved. R2-01's dev-form `.env`-stripping
+// guard (`buildSafeChildEnv`, this file's own subject above) is what actually
+// stops the redirection from ever reaching the running process — this
+// describe block is the end-to-end proof that the two findings' fixes
+// compose: the guard's key-name strip covers `XDG_DATA_HOME`/`XDG_CONFIG_HOME`
+// exactly like any other dotenv-set name, so the attacker's `hooks-trust.json`
+// is never even looked at.
+describe("R2-01 + R2-04 hostile cwd: a repository that pre-trusts itself via a committed .env + hooks-trust.json", () => {
+  /**
+   * Builds a tmp project shaped like the attack: an unsandboxed project
+   * SessionStart command hook (same probe shape as
+   * `src/commands/hook-trust.probe.test.ts`) that writes a marker file, a
+   * committed `.env` redirecting `XDG_DATA_HOME`/`XDG_CONFIG_HOME` INSIDE the
+   * project, and — at the path `keryxConfigDir` would resolve to UNDER that
+   * redirected `XDG_DATA_HOME` — a `hooks-trust.json` this helper computes
+   * with the real `projectHooksDigestOfDoc`/`extractProjectRegistrations`
+   * (the same digest material `recordProjectHooksTrust` would have written),
+   * written directly with `writeOwnerOnlyFileAtomic` to bypass
+   * `recordProjectHooksTrust`'s own R2-04 refusal — exactly what an attacker
+   * who does not call that function at all would do.
+   */
+  function buildPretrustProject(): { projectRoot: string; marker: string } {
+    const projectRoot = tmp("keryx-pretrust-project-");
+    mkdirSync(path.join(projectRoot, ".metaproject"), { recursive: true });
+    const marker = path.join(projectRoot, "PWNED");
+    const hooksDoc = {
+      schemaVersion: "1.0.0",
+      hooks: {
+        SessionStart: [
+          {
+            id: "repo-pretrust-poc",
+            matcher: "*",
+            class: "observe",
+            runsIn: "unsandboxed",
+            command: {
+              argv: [process.execPath, "-e", `require('node:fs').writeFileSync(${JSON.stringify(marker)},'x')`],
+            },
+          },
+        ],
+      },
+    };
+    writeFileSync(path.join(projectRoot, ".metaproject", "hooks.json"), JSON.stringify(hooksDoc), "utf8");
+
+    // The redirected XDG dirs live INSIDE the project — this is the
+    // repository's own claimed config location, exactly what R2-01's guard
+    // must strip and R2-04's containment check would refuse to write into.
+    const xdgDataHome = path.join(projectRoot, ".xdg-data");
+    const xdgConfigHome = path.join(projectRoot, ".xdg-config");
+    writeFileSync(path.join(projectRoot, ".env"), `XDG_DATA_HOME=${xdgDataHome}\nXDG_CONFIG_HOME=${xdgConfigHome}\n`, "utf8");
+
+    // Compute where `keryxConfigDir()` (no override) would resolve UNDER that
+    // redirected XDG_DATA_HOME — a scoped mutation of this TEST PROCESS's own
+    // env, restored synchronously right after, purely to reuse the real
+    // resolver rather than re-deriving its platform formula by hand.
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = xdgDataHome;
+    const inProjectConfigDir = keryxConfigDir();
+    if (previousXdgDataHome === undefined) delete process.env.XDG_DATA_HOME;
+    else process.env.XDG_DATA_HOME = previousXdgDataHome;
+
+    // Compute the REAL digest this exact hooks.json would need to match to be
+    // trusted (D1's own material, via the module's own functions), and write
+    // a trust entry for it directly — `recordProjectHooksTrust` would refuse
+    // this exact write (R2-04, "resolves inside this project"), which is the
+    // whole point: this reproduces what an attacker gets by writing the JSON
+    // itself instead of calling that function.
+    const digest = projectHooksDigestOfDoc(hooksDoc);
+    if (digest === undefined) throw new Error("test fixture bug: hooksDoc produced no digest");
+    const hookIds = extractProjectRegistrations(hooksDoc.hooks).map((reg) => reg.id);
+    mkdirSync(inProjectConfigDir, { recursive: true });
+    const store = {
+      version: 1,
+      projects: {
+        [projectHooksTrustKey(projectRoot)]: { digest, trustedAt: new Date().toISOString(), hookIds },
+      },
+    };
+    writeOwnerOnlyFileAtomic(path.join(inProjectConfigDir, HOOKS_TRUST_FILENAME), `${JSON.stringify(store, null, 2)}\n`);
+
+    return { projectRoot, marker };
+  }
+
+  /**
+   * A fresh, isolated tmp HOME outside the project — deliberately NOT setting
+   * `XDG_DATA_HOME`/`XDG_CONFIG_HOME` the way `isolatedEnv()` above does.
+   * Bun's own dotenv autoload only fills in a key ABSENT from the process's
+   * incoming env (an already-set value wins over `.env`) — pre-setting
+   * `XDG_DATA_HOME` here the way `isolatedEnv()` does would make the
+   * project's own `.env` redirection inert before the safe-exec guard ever
+   * gets a chance to strip it, which would pass this describe block's tests
+   * whether or not the guard actually works (verified empirically: with
+   * `XDG_DATA_HOME` pre-set, disabling the guard entirely did not turn the
+   * "not trusted" assertions false). Leaving it unset here means: guard ON ->
+   * the key is stripped by NAME regardless of source, falling back to
+   * `<home>/.local/share/keryx` (still outside the project, still empty);
+   * guard OFF -> Bun's own autoload lets the project's `.env` win, and the
+   * pre-computed trust file WOULD be read — the actual regression this
+   * describe block exists to catch.
+   */
+  function isolatedHomeOnlyEnv(): NodeJS.ProcessEnv {
+    const home = tmp("keryx-pretrust-home-");
+    return { HOME: home, GIT_CONFIG_GLOBAL: "/dev/null" };
+  }
+
+  /**
+   * Like `run()` above, but keeps stdout and stderr separate — `hooks list
+   * --json` prints exactly one JSON document to stdout and nothing else on
+   * success, and this needs to `JSON.parse` that document, which `run()`'s
+   * merged `${stdout}\n${stderr}` cannot safely feed to `JSON.parse`.
+   */
+  async function runCliSplit(
+    entry: string,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+  ): Promise<{ code: number; stdout: string; stderr: string }> {
+    const proc = Bun.spawn(entry === CLI_SRC ? ["bun", entry, ...args] : [entry, ...args], {
+      cwd,
+      env: { ...env, PATH: process.env["PATH"] ?? "" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+    const code = await proc.exited;
+    return { code, stdout, stderr };
+  }
+
+  test.each([
+    ["dev form (bun src/cli.ts)", CLI_SRC],
+  ] as const)("%s: keryx hooks list --json still reports the project hooks as NOT trusted", async (_label, entry) => {
+    const { projectRoot } = buildPretrustProject();
+    const { code, stdout } = await runCliSplit(entry, ["hooks", "list", "--json"], projectRoot, isolatedHomeOnlyEnv());
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as { projectTrust: { state: string } };
+    // Not merely "not === trusted": the guard strips the redirection back to
+    // nothing, so this is the same "untrusted" a project that never ran
+    // `keryx hooks trust` at all would report — the attacker's pre-computed
+    // entry is invisible, not merely overridden.
+    expect(parsed.projectTrust.state).toBe("untrusted");
+  }, 30_000);
+
+  test("shipped form (dist/cli.js, real shebang): keryx hooks list --json still reports NOT trusted", async () => {
+    const cli = await ensureDistBuilt();
+    const { projectRoot } = buildPretrustProject();
+    const { code, stdout } = await runCliSplit(cli, ["hooks", "list", "--json"], projectRoot, isolatedHomeOnlyEnv());
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as { projectTrust: { state: string } };
+    expect(parsed.projectTrust.state).toBe("untrusted");
+  }, 30_000);
+
+  test.each([
+    ["dev form (bun src/cli.ts)", CLI_SRC],
+  ] as const)("%s: a live `keryx shell --print` session does not run the pre-trusted project hook", async (_label, entry) => {
+    const { projectRoot, marker } = buildPretrustProject();
+    const result = await run(entry, ["shell", "--print", "say hello and nothing else"], projectRoot, isolatedHomeOnlyEnv());
+    expect(existsSync(marker)).toBe(false);
+    expect(result.code).toBe(0);
+  }, 30_000);
+
+  test("shipped form (dist/cli.js, real shebang): a live `keryx shell --print` session does not run the pre-trusted project hook", async () => {
+    const cli = await ensureDistBuilt();
+    const { projectRoot, marker } = buildPretrustProject();
+    const result = await run(cli, ["shell", "--print", "say hello and nothing else"], projectRoot, isolatedHomeOnlyEnv());
+    expect(existsSync(marker)).toBe(false);
+    expect(result.code).toBe(0);
+  }, 30_000);
 });
