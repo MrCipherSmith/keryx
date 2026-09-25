@@ -264,9 +264,21 @@ describe("R4-2: an unreadable skill is named, not silently dropped or misreporte
     }
   }
 
+  // `--quick` (flow 335 review round 2 finding): the bundled catalog has
+  // grown pack-by-pack across Wave 4 (110 -> 170+ skills as of this flow),
+  // and this test's assertions (the "Unreadable: 1" line and the specific
+  // unreadable file's own EACCES message) come from catalog LOADING, before
+  // `evaluateEntry` runs per-skill at all -- an unreadable SKILL.md can't be
+  // parsed into a CatalogEntry to score in the first place. `--quick` only
+  // skips evaluateEntry's non-quick trigger-accuracy pass (an O(n) extra
+  // check per skill against the whole catalog), which this test never
+  // exercises or asserts on, so it keeps the same meaning while removing
+  // the now-unaffordable cost of a full non-quick run at this catalog size
+  // under CI's default 5000ms per-test timeout (it measured 7013ms without
+  // this flag).
   test.skipIf(isRoot)("stocktake --scope all human output names the unreadable skill (not --json only)", async () => {
     await withUnreadableProjectSkill(async (_root, badSkillMd) => {
-      await skillsGovernanceCommand(["stocktake", "--scope", "all"]);
+      await skillsGovernanceCommand(["stocktake", "--scope", "all", "--quick"]);
       expect(logs.some((line) => line.includes("Unreadable: 1"))).toBe(true);
       expect(logs.some((line) => line.includes(badSkillMd) && line.includes("EACCES"))).toBe(true);
     });
