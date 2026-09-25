@@ -225,6 +225,16 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Check retries, idempotency, backpressure, locks, queues, and connection pools.",
     "Prioritize issues that can fail under load.",
   ]),
+  // flow 330: an ADDITIONAL, CLI-engine reviewer (`engine: jev`, `keryx review
+  // jev-rules`) — not an LLM sub-agent. Checks every changed hunk against
+  // every applicable project rule clause; Jev supplies only a probability,
+  // keryx writes every word of every finding. Opt-in via `review.jev.rules`.
+  skill("review-jev-rules", "review", ["recommended", "full"], "Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx.", [
+    "Discover rule sources: .metaproject/rules/**, rules/**, and any coding-convention skill.",
+    "Ask Jev one noul question per applicable (hunk, clause) pair: does this hunk violate this clause?",
+    "Synthesize findings deterministically — Jev supplies only a probability, never prose.",
+    "Dispatched via `keryx review jev-rules`, not a platform-native agent.",
+  ]),
   skill("review-regression", "review", ["recommended", "full"], "Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round.", [
     "Read the dependency path back to the change before reading the file.",
     "Ask only whether the change breaks an existing behaviour here; style and architecture in untouched code are rejected in code, not discouraged.",
@@ -268,6 +278,16 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Run a command or test that fails if the finding is real; record the command and its output.",
     "Fall back to confirming the class_scope sites exist; reasoning alone is capped at unverifiable.",
     "Emit one verdict per finding checked; never add a finding, raise a severity, or edit a finding's text.",
+  ]),
+  skill("review-jev-risk", "review", ["recommended", "full"], "Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency.", [
+    "Score every retained hunk on security, data/migration, public-API, concurrency, and error-handling.",
+    "Emit a finding only above threshold and with no nearby test; severity capped at info/minor.",
+    "Feed a routing hint for review-security-code/review-highload when a hunk crosses threshold on that dimension.",
+  ]),
+  skill("review-jev-scenarios", "review", ["recommended", "full"], "Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario.", [
+    "Discover scenarios from gdwiki user-scenario pages, PRD requirement sections, and README/docs how-to sections.",
+    "Ask only scenarios whose linked code this diff touches.",
+    "Emit the ranked manual-check list, and a minor finding for a likely-affected scenario with no covering test.",
   ]),
   skill("review-frontend-conventions", "review", ["recommended", "full"], "Review frontend code against repository-local frontend conventions and agent entrypoints.", [
     "Load local AGENTS.md/CLAUDE.md and matched frontend rules.",

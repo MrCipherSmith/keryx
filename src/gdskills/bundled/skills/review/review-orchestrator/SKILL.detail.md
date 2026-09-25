@@ -46,30 +46,39 @@ review: it is a fact about the review, not about the diff.
 
 ## CLI-engine reviewers — dispatched as a command, not a sub-agent
 
-`review-jev-docs` and `review-jev-comments` (flow 333) are ADDITIONAL
-reviewers, never replacing any other, and their dispatch mechanism differs
-from every reviewer named in SKILL.md's own Wave B line above: there is no
-platform-native agent to invoke, because each is a deterministic **keryx
-program**. Run `keryx review jev-docs (--diff <ref>|--pr <n>) --json` and
-`keryx review jev-comments --pr <n> --repo <owner/repo> --json` — the same
-diff/PR target every other reviewer's dispatch already checks. Read each
-`--json` output as a `REVIEW_RESULT` and merge its `findings` into the
-consolidated array exactly like a sub-agent reviewer's: same Sub-Agent
-Report Quality Gate, same dedup, same Wave C verification.
+`review-jev-rules` (flow 330), `review-jev-risk` and `review-jev-scenarios`
+(both flow 332), and `review-jev-docs` and `review-jev-comments` (flow 333)
+are ADDITIONAL reviewers, never replacing any other, and their dispatch
+mechanism differs from every reviewer named in SKILL.md's Routing Table:
+there is no platform-native agent to invoke, because each is a deterministic
+**keryx program**. Run them with `keryx review jev-rules --scope
+<scope.json> --json`, `keryx review jev-risk --scope <scope.json> --json`,
+and `keryx review jev-scenarios --scope <scope.json> --json` — the SAME
+`scope.json` every other Wave A/B reviewer's dispatch already reads, so each
+checks exactly the same hunks. `review-jev-docs` and `review-jev-comments`
+take a diff/PR target instead: `keryx review jev-docs (--diff <ref>|--pr
+<n>) --json` and `keryx review jev-comments --pr <n> --repo <owner/repo>
+--json`. Read each `--json` output as a `REVIEW_RESULT` and merge its
+`findings` into the consolidated array exactly like a sub-agent reviewer's:
+same Sub-Agent Report Quality Gate, same dedup, same Wave C verification.
+`review-jev-risk` additionally emits `ranked` and `routingHints`;
+`review-jev-scenarios` additionally emits `checklist` — see each reviewer's
+own SKILL.md for what to do with its extra.
 
 Gate each BEFORE running its command, not after: skip it — recorded in
 `Skipped reviewers` with the reason, never silently absent — when its own
-opt-in (`review.jev.docs`/`review.jev.comments`) is not `true` in
+opt-in (`review.jev.rules` / `review.jev.risk` / `review.jev.scenarios` /
+`review.jev.docs` / `review.jev.comments`) is not `true` in
 `.metaproject/tasks.config.json`, or when no Jev/OpenRouter credential is
 resolvable. Either gate failing means the command itself would refuse before
-any read or network call, so checking first saves a doomed dispatch.
-`review-jev-comments` additionally needs a comment ledger to already exist
-(`keryx review comments collect` run first) — it refuses, before any read,
-when there is none.
+any read or network call, so checking first saves a doomed dispatch. The
+five opt-ins are independent: any subset may be on. `review-jev-comments`
+additionally needs a comment ledger to already exist (`keryx review comments
+collect` run first) — it refuses, before any read, when there is none.
 
-`keryx review reviewers --json` marks a CLI-engine reviewer with `"engine":
-"jev"` on its `bundled` entry — the field's presence, not its absence, is
-what distinguishes it from the default (an LLM sub-agent dispatch). The same
-pattern applies to `review-jev-rules` (flow 330, when present) and to any
-future engine-backed reviewer: gate on its own opt-in and reachability,
-dispatch as a command, merge its `--json` output the same way.
+`keryx review reviewers --json` marks a CLI-engine reviewer with
+`"engine": "jev"` on its `bundled` entry — the field's presence, not its
+absence, is what distinguishes it from the default (an LLM sub-agent
+dispatch). A future engine-backed reviewer follows the same pattern: gate on
+its own opt-in and reachability, dispatch as a command, merge its `--json`
+output the same way.

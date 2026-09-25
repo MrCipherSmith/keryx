@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "Before I merge this Angular component, can you check whether any of its .subscribe() calls are missing takeUntilDestroyed or another teardown?",
+      "Does this Angular pull request handle change detection correctly, or is it mutating an @Input array in place under OnPush?",
+      "This Angular service pipes some HTML through DomSanitizer's bypassSecurityTrustHtml — can you check whether that's actually safe here?",
+      "Take a look at where this Angular component calls inject() — are any of those calls happening outside a valid injection context?",
+      "In this standalone Angular component, does the way its computed() signal is written look like an anti-pattern worth flagging in review?",
+      "Check this Angular diff for mixing NgModule and standalone components before merge"
+    ],
+    "negative": [
+      "Review this NestJS controller diff for DTO validation and guard usage",
+      "Review this MobX store diff for observable/action correctness",
+      "Review this React component diff for missing hook dependencies",
+      "Add retry and error handling to this Angular service's outgoing HTTP call chain",
+      "Write a TestBed spec asserting this Angular route guard blocks an unauthenticated user",
+      "Review this Node.js Express route diff for injection vulnerabilities"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "flag-subscription-without-teardown",
+      "prompt": "Reviewing this Angular component diff:\n\n```ts\nexport class OrderPanel implements OnInit {\n  private readonly orders = inject(OrdersService);\n  order?: Order;\n\n  ngOnInit() {\n    this.orders.watchOrder(this.orderId).subscribe(order => {\n      this.order = order;\n    });\n  }\n}\n```\n\nWhat, if anything, should be flagged?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags the .subscribe() call in ngOnInit as having no teardown path -- no takeUntilDestroyed, no async pipe, and no ngOnDestroy unsubscribe -- and names the concrete fix (piping through takeUntilDestroyed(), or switching to the async pipe / toSignal()) rather than leaving the subscription open for the component's full lifetime.",
+          "pass_criteria": [
+            "Identifies that the .subscribe() call has no teardown/unsubscribe mechanism and flags it as a leak risk",
+            "Names a concrete fix: takeUntilDestroyed() piped into the subscription, converting to the async pipe, or using toSignal() -- not just 'add cleanup' in the abstract"
+          ],
+          "fail_criteria": [
+            "Says the code has no issues worth flagging",
+            "Proposes fixing the subscription by editing the code directly instead of reporting it as a finding"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag this: `this.orders.watchOrder(this.orderId).subscribe(...)` in ngOnInit has no teardown -- no takeUntilDestroyed(), no async pipe, no ngOnDestroy unsubscribe. As written, the subscription stays open for the component's entire lifetime and beyond if the observable is long-lived (a websocket-backed stream, a polling interval), which is a leak. Fix: pipe it through takeUntilDestroyed() (inject() is already called in a valid field-initializer context here, so takeUntilDestroyed() can be called the same way), e.g. `this.orders.watchOrder(this.orderId).pipe(takeUntilDestroyed()).subscribe(order => this.order = order);` -- or, since this is just mirroring an observable into a field for template use, convert it to `order = toSignal(this.orders.watchOrder(this.orderId))` and drop the manual subscription entirely.",
+        "known_wrong": "This looks fine -- the component subscribes once in ngOnInit and just updates a local field, nothing unusual there. No changes needed.",
+        "vague": "There might be a subscription cleanup concern here worth double-checking before merging.",
+        "subtle_wrong": "Worth a note: I'd suggest adding a comment above the subscribe() call documenting that it's expected to live for the component's full lifetime, so future readers know it's intentional rather than an oversight. That way the review concern is addressed without needing to change the subscription handling itself."
+      }
+    },
+    {
+      "id": "flag-onpush-inplace-mutation",
+      "prompt": "Reviewing this Angular diff. `CartList` is a child OnPush component; `CartPage` is its parent and passes `items` down as an `@Input`:\n\n```ts\n@Component({\n  selector: 'app-cart-list',\n  changeDetection: ChangeDetectionStrategy.OnPush,\n  template: `@for (item of items; track item.id) { <div>{{ item.name }}</div> }`\n})\nexport class CartList {\n  @Input() items: CartItem[] = [];\n}\n\n@Component({ selector: 'app-cart-page', template: `<app-cart-list [items]=\"items\" />` })\nexport class CartPage {\n  items: CartItem[] = [];\n\n  addItem(item: CartItem) {\n    this.items.push(item);\n  }\n}\n```\n\n`CartPage.addItem` runs (e.g. from a button click in `CartPage`'s own template), but `CartList`'s rendered list doesn't update. What should be flagged?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that CartPage.addItem mutates the items array in place (push) rather than reassigning it, so the SAME array reference is still bound to CartList's @Input -- CartList is OnPush, and OnPush only re-checks a child on a new input reference (or its own event/async-pipe/signal), so a mutation of the same object the parent already passed down produces no reference change for the child to notice. Names the fix: the parent reassigns items to a new array (e.g. this.items = [...this.items, item]) or items is modeled as a signal.",
+          "pass_criteria": [
+            "States that `this.items.push(item)` in CartPage mutates the array in place, so the SAME object reference is still bound to CartList's `items` @Input -- object identity did not change",
+            "States that CartList is OnPush and only re-checks on a new @Input reference (or its own event/async-pipe/signal source), so the child's own re-render is what fails to happen here -- CartPage re-rendering itself (the click handler ran inside CartPage) does not, on its own, make CartList re-check",
+            "Names a concrete fix: CartPage reassigns items to a new array before/instead of mutating in place (e.g. `this.items = [...this.items, item];`), or items is modeled as a signal passed down and read via `input<CartItem[]>()`"
+          ],
+          "fail_criteria": [
+            "Says the code is correct as-is with no OnPush-related concern",
+            "Claims reassigning items to itself (e.g. `this.items = this.items;`) forces CartList to update -- this is a no-op: the reference is identical to what it already was, so CartList's own @Input identity check has nothing new to see. (Spreading into a genuinely new array, e.g. `this.items = [...this.items, item]`, IS a real fix and must not be flagged here -- it produces an actual new reference.)"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag `CartPage.addItem`: `this.items.push(item)` mutates the array CartPage already passed to CartList's `items` @Input, so CartList still holds a reference to the SAME object -- its identity never changed. CartList is OnPush, and OnPush only re-checks a component on a new @Input reference, an event that happens inside that component itself, an async pipe emission, or a signal read -- none of which fired for CartList here; CartPage's own click handler running is CartPage's event, not CartList's. Fix by having CartPage reassign the reference: `this.items = [...this.items, item];`, or better, model `items` as a signal input (`items = input<CartItem[]>([]);` on CartList, updated via a signal on CartPage) so the template's `@for` tracks the signal directly.",
+        "known_wrong": "This is fine -- `items` is declared as a regular array field and push() is the normal way to add to it. OnPush doesn't need anything special here since CartList's template just iterates over items and Angular tracks array mutations automatically.",
+        "vague": "Something about how items get passed down here might not play well with OnPush -- worth a second look at how the child picks up the change.",
+        "subtle_wrong": "The real fix is simpler than restructuring the array: right after `this.items.push(item)`, just do `this.items = this.items;` in CartPage. Since Angular's input binding re-evaluates on the parent's own change detection pass, reassigning the field (even to itself) is enough to make CartList see it as a fresh binding and re-render."
+      }
+    }
+  ]
+}

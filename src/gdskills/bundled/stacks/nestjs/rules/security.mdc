@@ -1,0 +1,73 @@
+---
+extends: common
+paths: ["**/*.ts"]
+metadata:
+  origin: authored
+---
+
+# NestJS security
+
+Stack-specific request-pipeline risks for a NestJS application — where an
+unvalidated or unauthorized request can reach application code — narrowing
+the OWASP-style guidance in the common rules. Applies only to `*.ts` files
+in a NestJS project; SQL/ORM-specific injection risk is covered by the
+`review-backend` skill and the project's ORM rules, not duplicated here.
+
+## Input validation
+
+- Every controller method that accepts a body, query, or route param has a
+  typed DTO class validated by a global `ValidationPipe` (registered once,
+  in `main.ts` via `app.useGlobalPipes(new ValidationPipe(...))`, or as an
+  `APP_PIPE` provider) — a per-controller `@UsePipes(ValidationPipe)` that
+  some controllers omit is the same gap as no `ValidationPipe` at all for
+  the endpoints that skip it.
+- Enable `whitelist: true` (strip unknown properties) and
+  `forbidNonWhitelisted: true` (reject a request carrying an unknown
+  property) on the global `ValidationPipe` — without them, a DTO's
+  `class-validator` decorators only validate the fields they name; any
+  extra field the client sends still reaches the handler untouched.
+- Never trust a query/param value's type from the route alone — a route
+  param typed `id: string` in the controller signature is still a raw
+  string at runtime; convert and validate it (`ParseIntPipe`,
+  `ParseUUIDPipe`, or a DTO with `@IsInt()`/`@IsUUID()`) rather than
+  passing it straight to a repository call.
+
+## AuthN/AuthZ
+
+- Protect every route that must not be public with a guard
+  (`@UseGuards(...)` or a global `APP_GUARD`); a route with neither a guard
+  nor an explicit `@Public()`-style marker is not provably intentional —
+  treat an undecorated route in an otherwise-guarded controller as a gap to
+  confirm, not assume-safe.
+- Read the authenticated principal from the guard-populated request object
+  (e.g. a custom `@CurrentUser()` param decorator backed by
+  `request.user`) — never from a client-supplied header, body field, or
+  query param that claims who the caller is.
+- A role/permission check belongs in a guard evaluated before the handler
+  runs, not as an `if` inside the service after data has already been
+  fetched or mutated.
+
+## Response and error handling
+
+- An exception filter (global `APP_FILTER`, or `app.useGlobalFilters(...)`)
+  must translate an unexpected internal error into a generic response —
+  never let a raw `error.message`/`error.stack` from an ORM, an HTTP
+  client, or an uncaught exception reach the HTTP response body; that
+  leaks internal schema, file paths, or connection details to the caller.
+- Use NestJS's built-in `HttpException` subclasses (or your own subclass of
+  `HttpException`) for expected error conditions so the status code and
+  the response shape stay in the framework's own exception-filter
+  pipeline, instead of manually setting `response.status(...)` in a
+  controller and bypassing filters.
+
+## Secrets and configuration
+
+- Read secrets (API keys, DB credentials, JWT signing keys) through
+  `ConfigService`/`@nestjs/config`, never hardcoded in a provider or
+  committed default value — a `useFactory` provider that falls back to a
+  literal secret when an env var is unset is the same risk as hardcoding
+  it.
+- Do not log a full request/response body in an interceptor or middleware
+  applied globally without redacting known-sensitive DTO fields (passwords,
+  tokens, card numbers) — a broad request logger is a common accidental
+  secret-leak path into log storage.

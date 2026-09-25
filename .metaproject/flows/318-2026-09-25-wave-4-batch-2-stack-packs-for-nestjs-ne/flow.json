@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,14 +8,14 @@
   "id": "318",
   "slug": "wave-4-batch-2-stack-packs-for-nestjs-ne",
   "title": "Wave 4 batch 2: stack packs for nestjs, nextjs-nuxt, vue, angular, mobx",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-25T06:09:18.148Z",
-  "updatedAt": "2026-09-25T06:09:18.148Z",
+  "updatedAt": "2026-09-25T13:56:26.928Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:324fc1760f6bf5de0a52270a5c6533406e5d9675ed347eda8c24257cd43fc81e",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -32,34 +32,463 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by specific tasks T5-T16 covering the same scaffold categories (context/implement/test/review) for this batch's five packs"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by specific tasks T5-T16 covering the same scaffold categories (context/implement/test/review) for this batch's five packs"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by specific tasks T5-T16 covering the same scaffold categories (context/implement/test/review) for this batch's five packs"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by specific tasks T5-T16 covering the same scaffold categories (context/implement/test/review) for this batch's five packs"
+    },
+    {
+      "id": "T5",
+      "title": "Extend STACK_EXTENSIONS for nestjs/vue/angular/nextjs-nuxt/mobx",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Author nestjs pack (extends ts-js-node)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:07.865Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Author nextjs-nuxt pack (extends react+vue)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.001Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Author vue pack (extends ts-js-node)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.130Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Author angular pack (extends ts-js-node)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.259Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Author mobx pack (extends react)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T06:16:08.394Z",
+            "outcome": "started",
+            "detail": "dispatched parallel sonnet pack-authoring worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Extend install-manifest.json for all 5 packs (modules/components/profiles)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Judge calibration: judge-check --record for every new skill until AG green",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Honest gate run (deepseek runner+judge, trials=10) for every new skill",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Stability promotion + agents generate for packs that clear the gate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Update W1/W2 docs with batch-2 implementation notes",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Adversarial review loop, PR, CI, merge",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T13:56:26.928Z",
+            "outcome": "started",
+            "detail": "PR #719 opened (draft) against main"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-25T06:09:18.148Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-25T06:13:54.315Z",
+      "event": "task-added",
+      "detail": "T5: Extend STACK_EXTENSIONS for nestjs/vue/angular/nextjs-nuxt/mobx"
+    },
+    {
+      "at": "2026-09-25T06:13:54.463Z",
+      "event": "task-added",
+      "detail": "T6: Author nestjs pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T06:13:54.599Z",
+      "event": "task-added",
+      "detail": "T7: Author nextjs-nuxt pack (extends react+vue)"
+    },
+    {
+      "at": "2026-09-25T06:13:54.731Z",
+      "event": "task-added",
+      "detail": "T8: Author vue pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T06:13:54.864Z",
+      "event": "task-added",
+      "detail": "T9: Author angular pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T06:13:54.996Z",
+      "event": "task-added",
+      "detail": "T10: Author mobx pack (extends react)"
+    },
+    {
+      "at": "2026-09-25T06:14:00.582Z",
+      "event": "task-added",
+      "detail": "T11: Extend install-manifest.json for all 5 packs (modules/components/profiles)"
+    },
+    {
+      "at": "2026-09-25T06:14:00.714Z",
+      "event": "task-added",
+      "detail": "T12: Judge calibration: judge-check --record for every new skill until AG green"
+    },
+    {
+      "at": "2026-09-25T06:14:00.842Z",
+      "event": "task-added",
+      "detail": "T13: Honest gate run (deepseek runner+judge, trials=10) for every new skill"
+    },
+    {
+      "at": "2026-09-25T06:14:00.973Z",
+      "event": "task-added",
+      "detail": "T14: Stability promotion + agents generate for packs that clear the gate"
+    },
+    {
+      "at": "2026-09-25T06:14:01.102Z",
+      "event": "task-added",
+      "detail": "T15: Update W1/W2 docs with batch-2 implementation notes"
+    },
+    {
+      "at": "2026-09-25T06:14:01.235Z",
+      "event": "task-added",
+      "detail": "T16: Adversarial review loop, PR, CI, merge"
+    },
+    {
+      "at": "2026-09-25T06:14:06.253Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T06:14:06.388Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T06:14:06.527Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T06:14:06.663Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T06:14:10.436Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T06:14:10.570Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T06:14:26.984Z",
+      "event": "task-done",
+      "detail": "T5: Extend STACK_EXTENSIONS for nestjs/vue/angular/nextjs-nuxt/mobx"
+    },
+    {
+      "at": "2026-09-25T06:16:07.865Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.001Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.130Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.259Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:16:08.394Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — dispatched parallel sonnet pack-authoring worker"
+    },
+    {
+      "at": "2026-09-25T06:28:55.344Z",
+      "event": "task-done",
+      "detail": "T8: Author vue pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T06:29:07.610Z",
+      "event": "task-done",
+      "detail": "T10: Author mobx pack (extends react)"
+    },
+    {
+      "at": "2026-09-25T06:34:07.420Z",
+      "event": "task-done",
+      "detail": "T6: Author nestjs pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T06:44:57.071Z",
+      "event": "task-done",
+      "detail": "T7: Author nextjs-nuxt pack (extends react+vue)"
+    },
+    {
+      "at": "2026-09-25T12:41:36.640Z",
+      "event": "task-done",
+      "detail": "T9: Author angular pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T12:55:51.026Z",
+      "event": "task-done",
+      "detail": "T11: Extend install-manifest.json for all 5 packs (modules/components/profiles)"
+    },
+    {
+      "at": "2026-09-25T13:10:25.089Z",
+      "event": "task-done",
+      "detail": "T12: Judge calibration: judge-check --record for every new skill until AG green"
+    },
+    {
+      "at": "2026-09-25T13:51:19.258Z",
+      "event": "task-done",
+      "detail": "T13: Honest gate run (deepseek runner+judge, trials=10) for every new skill"
+    },
+    {
+      "at": "2026-09-25T13:51:38.213Z",
+      "event": "task-done",
+      "detail": "T14: Stability promotion + agents generate for packs that clear the gate"
+    },
+    {
+      "at": "2026-09-25T13:53:45.593Z",
+      "event": "task-done",
+      "detail": "T15: Update W1/W2 docs with batch-2 implementation notes"
+    },
+    {
+      "at": "2026-09-25T13:56:26.928Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — PR #719 opened (draft) against main"
     }
   ]
 }

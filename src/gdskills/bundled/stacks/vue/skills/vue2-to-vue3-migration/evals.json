@@ -1,0 +1,71 @@
+{
+  "triggers": {
+    "positive": [
+      "this component still has data(), methods, and a beforeDestroy hook from vue 2 -- how do I bring it onto vue 3's composition api",
+      "we're on vue 2 and moving the whole app to vue 3 -- what's going to break across filters, v-model, and our vuex store",
+      "we're replacing vuex in this app with pinia -- how do I carry this store's state, mutations, and actions over",
+      "this vue app's custom input broke v-model after the vue 3 upgrade -- how do I fix the binding",
+      "this vue 2 template formats a price with a global filter -- vue 3 removed filters entirely, so what replaces that syntax",
+      "migrate this app's global Vue.use plugin registration from Vue 2's new Vue() to Vue 3's createApp"
+    ],
+    "negative": [
+      "build a new vue 3 component with script setup",
+      "write a vitest test for this vue 3 component",
+      "review this vue 3 component diff for reactivity bugs",
+      "fix this vue-tsc build error in this component",
+      "upgrade this react app from react 18 to react 19",
+      "migrate this node.js package from commonjs to esm"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "vue2-filter-to-computed",
+      "prompt": "This Vue 2 template uses a filter: `{{ price | currency }}`, defined as a global filter that formats a number as `$X.XX`. I'm converting this component to Vue 3 <script setup>. What do I do about the filter?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that Vue 3 removed filters entirely, and replaces the filter with an equivalent computed property (or a plain function call in the template) that applies the same currency formatting, rather than dropping the formatting behavior.",
+          "pass_criteria": [
+            "States that filters were removed in Vue 3 and the pipe syntax (`{{ price | currency }}`) no longer works",
+            "Shows the concrete replacement as code: a `computed()` (or plain function) that applies the same currency formatting, used in the template in place of the filter (e.g. `{{ formattedPrice }}` backed by `const formattedPrice = computed(() => currency(price.value))`)"
+          ],
+          "fail_criteria": [
+            "Suggests just removing the filter from the template and rendering the raw `price` value, losing the currency formatting"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Vue 3 removed filters entirely, so `{{ price | currency }}` won't work anymore -- the pipe syntax isn't valid template syntax at all in Vue 3. Replace it with a computed property that applies the same formatting the filter used to:\n```ts\nconst formattedPrice = computed(() => currency(price.value))\n```\n```vue\n<template>{{ formattedPrice }}</template>\n```\nIf `currency` was a global filter function used across many components, keep it as a plain importable function (from a `utils/currency.ts` module) and wrap it in a local `computed()` wherever it's used in a template -- that reproduces the same formatting behavior without the removed filter syntax.",
+        "known_wrong": "Filters don't exist in Vue 3, so just drop the `| currency` part and render the raw value: `{{ price }}`. You can always add formatting back later if someone notices.",
+        "vague": "Filters aren't supported anymore in Vue 3, you'll need to replace it with something else that formats the value the same way.",
+        "subtle_wrong": "Since filters are gone, I'd move the formatting into the parent component before the data even reaches this one, so `price` is passed in already formatted as a string. That avoids needing any change inside this component's own template or script."
+      }
+    },
+    {
+      "id": "vmodel-single-to-multiple-bindings",
+      "prompt": "We just upgraded this Vue app's major version. A custom input component that used to work fine with `v-model` back on the Options API release now doesn't update the parent's data at all. The component still defines `props: ['value']` and `emit('input', newVal)`. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "modelValue" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that Vue 3 changed v-model's default contract from a `value` prop + `input` event to a `modelValue` prop + `update:modelValue` event, and fixes the component to use the new default names (or an explicit named v-model) instead of the old Vue 2 contract.",
+          "pass_criteria": [
+            "Explains that Vue 3's default v-model contract changed from `value`/`input` to `modelValue`/`update:modelValue`, which is why the old prop/emit names no longer sync",
+            "Shows the concrete fix: rename the prop to `modelValue` and the emitted event to `update:modelValue` (e.g. `defineProps<{ modelValue: string }>()` and `emit('update:modelValue', newVal)`)"
+          ],
+          "fail_criteria": [
+            "Attributes the breakage to something unrelated to the v-model prop/event contract change, such as a build cache or a missing import, without addressing the value/input vs modelValue/update:modelValue mismatch"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This is the Vue 3 v-model breaking change: Vue 2's default `v-model` wired up a `value` prop and an `input` event, but Vue 3 changed the default contract to a `modelValue` prop and an `update:modelValue` event. The component is still declaring the old Vue 2 names (`props: ['value']`, `emit('input', newVal)`), so when the parent's `v-model` now emits/listens for `update:modelValue` under the hood, this component never receives or fires the events the parent actually expects. Fix it by renaming to the Vue 3 default contract:\n```ts\nconst props = defineProps<{ modelValue: string }>()\nconst emit = defineEmits<{ 'update:modelValue': [value: string] }>()\n\nfunction onInput(e: Event) {\n  emit('update:modelValue', (e.target as HTMLInputElement).value)\n}\n```\n```vue\n<template>\n  <input :value=\"modelValue\" @input=\"onInput\" />\n</template>\n```\nAlternatively, keep the old prop/event names but require every call site to use the explicit form `v-model:value=\"...\"` instead of bare `v-model` -- either works, but pick one consistently across the codebase.",
+        "known_wrong": "That's probably just a stale build cache after the dependency upgrade -- try clearing node_modules/.vite and restarting the dev server, that usually clears up weird binding issues right after a major version bump like this.",
+        "vague": "v-model works a bit differently in Vue 3 now, you'll probably need to update the prop and event names in this component.",
+        "subtle_wrong": "I'd keep the component's internal prop named `value` and event named `input` as-is to avoid touching its internals, and instead wrap every usage site with the explicit long form `:value=\"x\" @input=\"x = $event\"` instead of `v-model`, so it keeps working without needing to rename anything inside the component."
+      }
+    }
+  ]
+}

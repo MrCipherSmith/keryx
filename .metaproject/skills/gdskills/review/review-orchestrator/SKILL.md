@@ -1177,7 +1177,7 @@ whoever reads the merge commit a year later reads the body.
 Dispatch selected reviewers in parallel when independent. Use waves when token budget is tight or when one reviewer needs another result:
 
 1. Wave A - core correctness/risk reviewers: logic, architecture, security/highload when selected.
-2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files. `review-jev-docs`/`review-jev-comments` (flow 333, CLI-engine reviewers, `"engine": "jev"` in `keryx review reviewers --json`) also run here, gated on their own opt-in and a resolvable Jev/OpenRouter credential — see SKILL.detail.md's "CLI-engine reviewers" section for the dispatch/gate/merge mechanics.
+2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files. `review-jev-rules` (flow 330), `review-jev-risk`/`review-jev-scenarios` (flow 332), `review-jev-docs`/`review-jev-comments` (flow 333) also run here, CLI-engine not sub-agent, `"engine": "jev"` in `keryx review reviewers --json`, gated on their own opt-in and a resolvable Jev/OpenRouter credential — `SKILL.detail.md` § "CLI-engine reviewers".
 3. Wave C - **verification**: `review-verifier` over the consolidated findings, when blockers/majors
    exist, `--verify` is set, or the PR is high-risk. See below.
 

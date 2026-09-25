@@ -552,8 +552,14 @@ function generateCommand(args: string[], depsIn: AgentsCatalogDeps): void {
   // refusal on the fixer's target (e.g. a planted symlink) left the auditor
   // already written to disk — a half-written pair with exit 1. Now nothing
   // is written until both targets have cleared every check.
-  const prepared: { file: typeof pair.auditor; filePath: string; existed: boolean }[] = [];
-  for (const file of [pair.auditor, pair.fixer]) {
+  const generatedFiles = [pair.auditor, pair.fixer].filter((file): file is NonNullable<typeof file> => file !== undefined);
+  if (generatedFiles.length === 0) {
+    error(`Stack pack "${stackId}" produced no generated file (both skills.review and skills["build-fix"] are empty).`);
+    process.exitCode = 1;
+    return;
+  }
+  const prepared: { file: (typeof generatedFiles)[number]; filePath: string; existed: boolean }[] = [];
+  for (const file of generatedFiles) {
     const filePath = path.join(bundledAgentsRoot, file.fileName);
 
     // R1-6: `file.fileName` is derived from `pack.id`, which is now checked

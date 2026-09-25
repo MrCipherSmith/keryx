@@ -102,6 +102,9 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-highload`: Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks.
 - `review-jev-comments`: Check whether open PR review comments were addressed, scored by Jev.
 - `review-jev-docs`: Find documentation sections that went stale because of a diff, scored by Jev.
+- `review-jev-risk`: Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency.
+- `review-jev-rules`: Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx.
+- `review-jev-scenarios`: Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario.
 - `review-layout`: Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry.
 - `review-logic`: Review logic correctness, contracts, edge cases, nullability, and async behavior.
 - `review-orchestrator`: Route review requests to specialized reviewers and consolidate findings.

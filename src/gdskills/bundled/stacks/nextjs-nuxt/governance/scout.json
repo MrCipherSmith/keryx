@@ -1,0 +1,42 @@
+[
+  {
+    "query": "Use when implementing a new page, route, or data-fetching feature in a Next.js App Router or Nuxt 3+ project: choosing Server vs. Client Components ('use client' placement), a Nuxt composable/page fetching data with useFetch/useAsyncData, a Server Action ('use server') or Nuxt server/api route, or a route's rendering mode (static/ISR/revalidate vs. Nuxt's ssr/routeRules). Not for plain React component logic with no meta-framework routing/data concern (use react-implementation), plain Vue SFC logic outside Nuxt's routing/server layer (use vue-implementation), or fixing an existing build/type error (use nextjs-nuxt-build-fix).",
+    "decision": "use",
+    "topMatch": "nextjs-nuxt/nextjs-nuxt-testing",
+    "recordedAt": "2026-09-25T06:43:38.521Z",
+    "skillName": "nextjs-nuxt-implementation",
+    "justification": "extends react-implementation/vue-implementation coverage to Next.js App Router / Nuxt 3 routing+data-fetching specifically; existing react/vue implementation skills explicitly excluded via disclaimer, no meta-framework skill exists"
+  },
+  {
+    "query": "Use when writing or fixing tests for a Next.js App Router page/Server Action or a Nuxt page/composable/server route: testing a Server Component's rendered output, a Client Component's interactivity with React Testing Library, a Nuxt composable that calls useFetch/useAsyncData with @nuxt/test-utils' mountSuspended, or a server/api handler's auth and validation paths. Not for plain React/Vue component unit tests with no meta-framework routing, SSR, or server-route concern (use react-testing/vue-testing), and not for implementing the feature under test (use nextjs-nuxt-implementation).",
+    "decision": "use",
+    "topMatch": "nextjs-nuxt/nextjs-nuxt-implementation",
+    "recordedAt": "2026-09-25T06:43:51.459Z",
+    "skillName": "nextjs-nuxt-testing",
+    "justification": "mutual same-pack overlap with nextjs-nuxt-implementation (both describe the same App Router/Nuxt surface, scores 0.594/0.621); accepted per flow 318 journal as a lexical-scorer limitation applied to two genuinely distinct skill categories (implement vs. test), not a duplicate skill"
+  },
+  {
+    "query": "Use when reviewing a diff that touches Next.js App Router files ('use client'/'use server' directives, Route Handlers, revalidatePath/revalidateTag) or Nuxt files (composables, server/api routes, nuxt.config.ts routeRules/runtimeConfig) for meta-framework-specific risk: a misplaced Server/Client boundary, a composable called outside setup context, a hydration-mismatch-prone render, a rendering-mode choice that doesn't match the data's actual freshness need, or an unauthenticated Server Action/server route. Does not edit code. Not for general React/Vue component review with no App Router/Nuxt-specific concern (use review-frontend or a react/vue pack review skill), and not for NestJS backend review (use review-backend).",
+    "decision": "fork",
+    "topMatch": "nextjs-nuxt/nextjs-nuxt-implementation",
+    "recordedAt": "2026-09-25T06:43:59.476Z",
+    "skillName": "nextjs-nuxt-code-review",
+    "justification": "shares review vocabulary with review-frontend/review-backend/vue/react review skills but scoped specifically to App Router / Nuxt meta-framework files (Server Actions, routeRules, composables) that no existing review skill covers"
+  },
+  {
+    "query": "Use when resolving a Next.js build/type error ('use client'/'use server' boundary violation, a Server Component importing a client-only hook, an invalid Route Handler export) or a Nuxt build/type error (an auto-imported composable/component that fails to resolve, a nuxi typecheck failure, a hydration-mismatch warning) blocking `next build` or `nuxi build`. Applies the smallest root-cause fix and never silences it with ssr: false, suppressHydrationWarning, or a widened tsconfig. Not for generic tsc/ESM module-resolution errors with no meta-framework cause (use nodejs-build-fix), and not for implementing a new feature (use nextjs-nuxt-implementation).",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-build-fix",
+    "recordedAt": "2026-09-25T06:44:07.524Z",
+    "skillName": "nextjs-nuxt-build-fix",
+    "justification": "shares generic build-fix vocabulary with nodejs-build-fix but is scoped to Next.js/Nuxt-specific compile failures (Server/Client boundary violations, composable auto-import resolution, nuxi typecheck) that nodejs-build-fix's own disclaimer explicitly excludes"
+  },
+  {
+    "query": "Use when migrating a Next.js project from the Pages Router to the App Router, upgrading a Next.js major version, or migrating a Nuxt 2 project to Nuxt 3+ (Options API to Composition API, the Vuex-to-Pinia move, module/plugin API changes). Covers rewriting data-fetching (getServerSideProps/getStaticProps to Server Components and route rendering config; asyncData/fetch to useAsyncData/useFetch), routing conventions, and rendering-mode equivalents between the old and new APIs. Not for a same-version bug fix or new feature (use nextjs-nuxt-implementation/nextjs-nuxt-build-fix), and not for a plain React/Vue version bump with no meta-framework routing change (use react-upgrade-migration or the vue pack's migration skill).",
+    "decision": "fork",
+    "topMatch": "nextjs-nuxt/nextjs-nuxt-implementation",
+    "recordedAt": "2026-09-25T06:44:07.697Z",
+    "skillName": "nextjs-nuxt-upgrade-migration",
+    "justification": "shares Next.js/Nuxt vocabulary with nextjs-nuxt-implementation but is scoped specifically to version-migration mechanics (Pages->App Router, Vue 2 Options API->Vue 3 Composition API, Vuex->Pinia) that react-upgrade-migration's own disclaimer explicitly excludes for the meta-framework case"
+  }
+]

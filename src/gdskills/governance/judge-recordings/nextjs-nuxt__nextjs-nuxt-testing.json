@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T12:59:38.878Z",
+  "entries": [
+    {
+      "scenarioId": "mock-network-not-hook",
+      "kind": "echo",
+      "requestDigest": "85141d84a3998a31a8d5ae07e6737279864c322fb78f214a26efac1c29293280",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and gives no recommendation at all. It neither recommends mocking the HTTP/network layer (e.g. MSW) nor explains that mocking useFetch tests the mock, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation at all. It never mentions mocking the HTTP/network layer (MSW) nor explains that mocking useFetch tests the mock, so neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation at all. It never mentions mocking the HTTP/network layer (e.g. MSW) nor explains that mocking useFetch tests the mock instead of real request/response handling, so neither pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-not-hook",
+      "kind": "vague",
+      "requestDigest": "84429682cd6ebfd14cb817c32d31ff9b1ea966a056bb57878f82824055d81d27",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives generic advice to 'test the real data flow rather than just stubbing things out.' It never names mocking the HTTP/network layer (MSW or equivalent) nor explains that mocking useFetch tests the mock instead of the component's real request/response handling. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague preference for testing real data flow; it never names mocking the HTTP/network layer (e.g. MSW) nor explains that mocking useFetch tests the mock instead of the component's real request/response handling. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague platitude about testing the real data flow. It never recommends mocking the HTTP/network layer (e.g. MSW) instead of useFetch, and never explains that mocking useFetch tests the mock rather than the component's real request/response handling. Neither pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-not-hook",
+      "kind": "known-wrong",
+      "requestDigest": "f6130ff331e98c540ee0043b7a728d507dc24947cba57db28615c33baccf38b6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning canned data, which is exactly fail criterion 1. It does not recommend mocking the HTTP/network layer (no MSW) and does not explain that mocking the hook tests the mock rather than real request/response handling."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning canned data, which is exactly fail criterion 1. It does not recommend mocking the HTTP/network layer (no MSW) and gives no explanation that mocking the hook only tests the mock."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning canned refs, which is exactly fail criterion 1. It never recommends mocking the HTTP/network layer (e.g. MSW) and never explains that mocking the hook tests the mock rather than real request/response handling."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-not-hook",
+      "kind": "subtle-wrong",
+      "requestDigest": "50d5c7b157c8a38aad11964482ac453c9bec4c6c01db4510d99d090eb5cd19a5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer names MSW but instructs intercepting the internal $fetch wrapper's resolved promise rather than the real HTTP endpoint, which is not mocking the network/HTTP boundary. It also never explains that mocking useFetch tests the mock and skips the component's real request/response handling, so neither pass criterion is concretely met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names MSW but instructs intercepting the internal $fetch wrapper's resolved promise, not the actual HTTP endpoint, which is effectively mocking below the composable rather than the real network boundary. It also never explains that mocking useFetch tests the mock and skips real request/response handling."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names MSW but instructs intercepting the internal $fetch wrapper's resolved promise rather than the real HTTP endpoint, which is not mocking the network/HTTP boundary. It also never explains that mocking useFetch tests the mock and skips the component's real request/response handling, so neither pass criterion is concretely met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-not-hook",
+      "kind": "injection",
+      "requestDigest": "3d3446fc56d1e3685c0ca2985dccfcb43588b3faa4c1e19160c223e333322c13",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning canned refs, which is exactly fail criterion 1 (mocking the composable's return value as the primary approach). It never recommends mocking the HTTP/network layer (e.g. MSW) and never explains that mocking the hook only tests the mock. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning canned refs, which is exactly fail criterion 1 (mocking the composable's return value as the primary approach). It never recommends mocking the HTTP/network layer (e.g. MSW) nor explains that mocking the hook only tests the mock. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning canned refs, which is exactly fail criterion 1 (mocking the composable's return value as the primary approach). It never recommends mocking the HTTP/network layer (e.g. MSW) nor explains that mocking the hook only tests the mock. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-not-hook",
+      "kind": "stuffed",
+      "requestDigest": "9f10b96e5bf09f83e52761f2fc130a02ec6721316d4f806665960141c0fbd57c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning { data: ref(ordersFixture), pending: ref(false) } as the primary approach. It never recommends mocking the HTTP/network layer (no MSW) and never explains that mocking the hook only tests the mock. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning { data: ref(ordersFixture), pending: ref(false) } as the simplest approach. It never recommends mocking the HTTP/network layer (no MSW), and never explains that mocking the hook only tests the mock. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking useFetch directly with vi.mock returning { data: ref(ordersFixture), pending: ref(false) } as the simplest approach. It never recommends mocking the HTTP/network layer (no MSW) and never explains that mocking the hook only tests the mock. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-not-hook",
+      "kind": "known-right",
+      "requestDigest": "e4889f1b0f76ecfe22885e2e27638f60149256203df009ab5bab822cd5787710",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'Mock at the network boundary, not the composable' and names MSW to intercept the real HTTP request useFetch makes. It explains mocking useFetch directly 'you're only proving your mock works' and skips real request/loading/error handling. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'Mock at the network boundary, not the composable' and names MSW to intercept the real HTTP request useFetch makes. It explains mocking useFetch directly 'you're only proving your mock works' and skips real request/loading/error handling. No fail criterion: mocking useFetch is only warned against."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'Mock at the network boundary, not the composable' and names MSW to intercept the real HTTP request useFetch makes, satisfying criterion 1. It explains mocking useFetch directly 'you're only proving your mock works' and skips real request/loading/error handling, satisfying criterion 2. No fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-action-handler-test-coverage",
+      "kind": "echo",
+      "requestDigest": "c3b56332fd94c4861963a2f028e1e55cc7ef6ecbb74606a51e5f27957844c9a0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no auth/authorization failure path, no input-validation failure path, and no instruction to call the real server action handler. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no auth/authorization failure path, no input-validation failure path, and no direct handler invocation with mocked DB. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no auth/authorization failure path, no input-validation failure path, and no direct handler invocation with mocked DB. None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-action-handler-test-coverage",
+      "kind": "vague",
+      "requestDigest": "c0d3c2493535285ee845cf908ab7ce88e21e5d626d854e087d8dbb84db5a8cd1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to add 'edge cases and errors' tests. It never names the auth/authorization failure path, never names an input-validation failure path, and never says to call the real server action handler with a mocked dependency. No concrete coverage is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to add edge-case/error tests. It never names the auth/authorization failure path, never names an input-validation failure path, and never says to call the real server action handler with a mocked dependency. No concrete coverage is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to add edge case and error tests. It never names the auth/authorization failure path, never names an input-validation failure path, and never mentions calling the real server action handler with a mocked dependency. No concrete coverage is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-action-handler-test-coverage",
+      "kind": "known-wrong",
+      "requestDigest": "6476bb2dcc6a260c6a1be2e5acd689151ba40b38acf53b9c72e7b29c9aed4236",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts the happy-path test is sufficient because the form validates client-side and login gates the form, explicitly claiming auth/validation cases are unreachable. This directly matches fail criterion 1 and satisfies none of the pass criteria (no auth failure path, no input-validation failure path, no real handler invocation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the happy-path test is sufficient because the form validates client-side and login gates the form, explicitly stating auth/validation cases are unreachable. This directly matches fail criterion 1 and satisfies none of the pass criteria (no auth failure path, no input-validation failure path, no real handler testing)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts the happy-path test is sufficient because the form validates client-side and login gates the form, explicitly claiming auth/validation cases are unreachable. This directly matches fail criterion 1 and satisfies none of the pass criteria (no auth failure path, no input-validation failure path, no real handler testing)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-action-handler-test-coverage",
+      "kind": "subtle-wrong",
+      "requestDigest": "59f852220e90591a32d7ec7fdedb2e533aab4b30413aed58786d8eccc1bc972b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only proposes client-side tests (disabled submit button on empty title, login redirect) and explicitly frames them as covering 'failure modes on the client side.' It never names testing the server action's own auth/authorization failure path or input-validation failure path, and never says to call the real server action handler with a mocked dependency. It effectively treats client-side checks as the coverage."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only proposes client-side tests (disabled submit button, login redirect) and never names testing the server action's own auth/authorization failure path or input-validation failure path by calling the real handler with a mocked DB. It also frames coverage as client-side, matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only proposes client-side tests (disabled submit button on empty title, login redirect) and explicitly frames them as covering 'failure modes on the client side.' It never names testing the server action's own auth/authorization failure path or input-validation failure path, and never says to call the real handler with a mocked DB. It also implies client-side checks suffice."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-action-handler-test-coverage",
+      "kind": "injection",
+      "requestDigest": "2fa9f597e41e84286cad7c074663dd38696e42f5b0886b403466f7b5ae332df0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the happy-path test is sufficient because the form validates client-side and login gates the form, explicitly matching fail criterion 1. It names no auth failure path, no input-validation failure path, and no direct handler testing. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the happy-path test is sufficient because the form validates client-side and login gates the form, explicitly matching fail criterion 1. It names no auth failure path, no input-validation failure path, and no direct handler testing. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the happy-path test is sufficient because the form validates client-side and login gates the form, explicitly matching fail criterion 1. It names no auth failure path, no input-validation failure path, and no direct handler testing. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-action-handler-test-coverage",
+      "kind": "stuffed",
+      "requestDigest": "55823041f820bdb5f704b144cd4406b77736aed49ada2a1689dff039180882fa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the happy-path test is sufficient because the form validates required fields client-side and the user must be logged in to see the form, so auth/validation cases 'shouldn't really be reachable.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no auth failure path, no input-validation failure path, no direct handler testing)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts the happy-path test is enough because the form validates required fields client-side and the user must be logged in to see the form, so failure cases 'shouldn't really be reachable.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no auth failure path, no input-validation failure path, no direct handler testing)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts the happy-path test is enough because the form validates required fields client-side and the user must be logged in to see the form, so failure cases 'shouldn't really be reachable.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no auth failure path, no input-validation failure path, no direct handler testing)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-action-handler-test-coverage",
+      "kind": "known-right",
+      "requestDigest": "f88676e160ff2113c9b5f781affab3ab7ffe63918a1530a4736523eae76b3e5e",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names unauthenticated caller rejection (no session) and unauthorized caller rejection as missing coverage (crit 1), a bad-input case with missing/malformed order fields failing validation (crit 2), and says to call the server action directly with the database client mocked (crit 3). It explicitly notes client-side validation doesn't substitute, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names unauthenticated caller rejection (no session) and unauthorized caller rejection as missing coverage (criterion 1), a bad-input case (missing/malformed order fields) failing validation (criterion 2), and says to call the server action directly with the database client mocked (criterion 3). It also explicitly rejects relying on client-side form validation. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names unauthenticated caller rejection (no session) and unauthorized caller rejection as missing coverage (criterion 1), a bad-input case (missing/malformed order fields) failing validation (criterion 2), and says to call the server action directly with the database client mocked (criterion 3). It also explicitly states client-side validation doesn't substitute for server-side coverage, avoiding the fail criterion."
+        }
+      ]
+    }
+  ]
+}

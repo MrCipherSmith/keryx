@@ -235,6 +235,20 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   react: ["tsx", "jsx"],
   go: ["go"],
   rust: ["rs"],
+  // Wave 4 batch 2 (flow 318).
+  nestjs: ["ts"],
+  // R1 review, PR #719 (M4): "ts" added — Pinia stores and composables are
+  // routinely plain .ts files, not always .vue SFCs, and patterns.mdc's own
+  // guidance for them needs to actually load for those files.
+  vue: ["vue", "ts"],
+  angular: ["ts", "html"],
+  // R1 review, PR #719 (M4): "ts" added — security.mdc is almost entirely
+  // about Server Actions (actions.ts), Route Handlers (route.ts),
+  // middleware.ts, and Nuxt's server/api/**/*.ts and nuxt.config.ts, all of
+  // which are .ts files; scoped to tsx/jsx/vue only, the rule never loaded
+  // for the files it is actually about.
+  "nextjs-nuxt": ["tsx", "jsx", "vue", "ts"],
+  mobx: ["ts", "tsx"],
 };
 
 export interface LintStackRuleOptions {

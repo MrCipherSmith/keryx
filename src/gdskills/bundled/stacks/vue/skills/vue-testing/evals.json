@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "write a vue test utils spec that clicks this component's button and asserts the result",
+      "I want a vitest spec that verifies the values this vue composable returns are correct",
+      "debug why this vue test utils test fails intermittently",
+      "assert what payload this vue component's update event actually carries in its vue test utils spec",
+      "this vue component's vue test utils wrapper still triggers a real fetch call during its vitest spec -- how do I mock that out",
+      "how do I set up a test for this component that depends on a pinia store without hitting the real store"
+    ],
+    "negative": [
+      "add React Testing Library coverage for this React component's onClick handler",
+      "write vitest tests for this node.js service function",
+      "review this vue component diff for bugs",
+      "implement this vue composable for fetching orders",
+      "fix this vue-tsc build error",
+      "migrate this vuex store to pinia"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "await-trigger-before-assert",
+      "prompt": "This Vue Test Utils test clicks a button and immediately asserts the counter text updated, but it fails intermittently:\n```ts\nwrapper.find('button').trigger('click')\nexpect(wrapper.find('span').text()).toBe('1')\n```\nWhat's wrong and how do I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "await" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that trigger() is asynchronous because Vue batches DOM updates, so the assertion right after an un-awaited trigger() can read stale DOM, and fixes it by awaiting the trigger() call (and, where relevant, nextTick) before asserting.",
+          "pass_criteria": [
+            "Explains that Vue's reactive DOM updates are asynchronous/batched, so trigger() must be awaited before the DOM reflects the click",
+            "Shows the fix as code: `await wrapper.find('button').trigger('click')` before the assertion"
+          ],
+          "fail_criteria": [
+            "Attributes the flakiness to something other than the missing await (e.g. a slow CI machine, a random test order) and proposes retries or a fixed setTimeout delay instead of awaiting trigger()"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The test is flaky because `trigger('click')` is asynchronous -- Vue Test Utils' `trigger()` returns a promise that resolves after Vue has flushed the resulting reactive DOM update (by default on the 'pre' flush timing). Calling it without `await` fires the click, but the assertion right after can run before the DOM has actually updated, so it sometimes reads the old text and sometimes the new one depending on timing. The fix is to await it:\n\n```ts\nawait wrapper.find('button').trigger('click')\nexpect(wrapper.find('span').text()).toBe('1')\n```\n\nIf the counter update itself depends on an async composable or store call beyond the synchronous reactive update, also await `flushPromises()` before the assertion.",
+        "known_wrong": "Test flakiness like this is usually just CI being slow under load -- I'd add a short `await new Promise(r => setTimeout(r, 100))` after the trigger to give it time to settle, or mark the test as retry: 2 in the Vitest config so a transient failure doesn't block the run.",
+        "vague": "trigger() is async so you need to wait for it before checking the result.",
+        "subtle_wrong": "Since `trigger()` needs time to propagate, I'd wrap the assertion in `await vi.waitFor(() => expect(wrapper.find('span').text()).toBe('1'))` so it polls until the DOM catches up, without changing the `trigger('click')` call itself."
+      },
+      "anti_patterns": ["setTimeout"]
+    },
+    {
+      "id": "assert-emitted-payload-not-presence",
+      "prompt": "My component test checks that clicking save fires the 'submit' event: `expect(wrapper.emitted('submit')).toBeTruthy()`. The test passes, but a teammate says it wouldn't catch a bug where the wrong data is submitted. What should the assertion actually check?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that checking only that the event was emitted proves the event fired but not that it carried the right data, and fixes it by asserting the emitted event's actual payload array.",
+          "pass_criteria": [
+            "States that `toBeTruthy()` on `wrapper.emitted('submit')` only proves the event fired, not that its payload was correct",
+            "Shows the concrete fix: asserting the payload, e.g. `expect(wrapper.emitted('submit')![0]).toEqual([expectedData])`"
+          ],
+          "fail_criteria": [
+            "Recommends leaving the assertion as just `toBeTruthy()`/presence-only and relying on a different, unrelated test to cover the payload instead of fixing this assertion"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "`expect(wrapper.emitted('submit')).toBeTruthy()` only proves the event fired at least once -- it says nothing about what was passed with it. A component that emits `submit` with completely wrong or stale data still passes that check. `wrapper.emitted('eventName')` returns an array of argument arrays, one per emit call, so assert against the actual payload:\n\n```ts\nawait wrapper.find('form').trigger('submit')\nexpect(wrapper.emitted('submit')).toBeTruthy()\nexpect(wrapper.emitted('submit')![0]).toEqual([{ name: 'Ada', email: 'ada@example.com' }])\n```\nNow a bug that emits the right event with the wrong data actually fails the test.",
+        "known_wrong": "toBeTruthy() is fine here -- the point of this test is just to confirm the submit flow wires up the event at all. Checking the exact payload is really the job of a separate unit test on the form's own validation logic, not this component test.",
+        "vague": "You should check what data was actually emitted, not just that the event happened.",
+        "subtle_wrong": "I'd strengthen it by checking the emitted count instead: `expect(wrapper.emitted('submit')!.length).toBe(1)`, so at least we know it only fired once and isn't double-submitting."
+      }
+    }
+  ]
+}

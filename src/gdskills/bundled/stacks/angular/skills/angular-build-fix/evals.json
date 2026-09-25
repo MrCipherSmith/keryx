@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "My Angular template throws 'Property does not exist on type OrderDraft' the moment I run a production build — how do I get it compiling again?",
+      "My Angular app throws a NullInjectorError -- 'No provider for OrdersService' -- the instant it bootstraps after a clean build; what's the right way to resolve this DI resolution error?",
+      "Fix this Angular error: 'app-order-card' is not a known element",
+      "After wiring a signal into a brand-new @if block, `ng build` now reports a template type-checking error it didn't throw before -- what's the right way to fix this Angular build failure?",
+      "My standalone Angular component won't compile because I forgot to import CommonModule for @if — how do I track down and fix missing imports like this?",
+      "Angular build fails with a template type mismatch on this @for loop"
+    ],
+    "negative": [
+      "Fix this tsc type error in our Node.js backend with no Angular involved",
+      "Fix this Vue Vite build error about an unresolved SFC import",
+      "Implement a new Angular service that calls this REST API",
+      "Review this Angular component diff for OnPush mutation bugs",
+      "Fix this eslint no-floating-promises failure in our Express service",
+      "Write TestBed tests for this Angular component's HTTP calls"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-dollar-any-template-escape",
+      "prompt": "ng build fails with a template type error: Property 'total' does not exist on type 'OrderDraft' in the template expression `{{ order.total }}`. What's the right way to fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer treats the template error as a genuine mismatch between the OrderDraft type and the template expression reading a total property from it, and fixes the type (or reads the correct property/derives the value) rather than silencing the checker with a $any() template escape hatch.",
+          "pass_criteria": [
+            "Names the concrete fix: adds a typed `total` property/accessor to OrderDraft, or changes the template to read/compute the correct existing property instead of a nonexistent `total`",
+            "Shows the corrected type declaration or corrected template expression, not just a statement that the type needs fixing"
+          ],
+          "fail_criteria": [
+            "Recommends wrapping the expression in `$any(order).total` (or any `$any()` usage) as the fix",
+            "Recommends disabling strictTemplates/fullTemplateTypeCheck in tsconfig instead of fixing the actual mismatch"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The template is telling the truth: OrderDraft genuinely has no `total` property, so `{{ order.total }}` fails Angular's template type check. Trace where OrderDraft objects are built to see which case applies. If every OrderDraft is meant to carry a running total, add it to the type:\n\ninterface OrderDraft {\n  items: LineItem[];\n  total: number;\n}\n\nIf total is meant to be derived, change the template (or a computed() the template reads) instead of adding a stored field:\n\ntotal = computed(() => this.order().items.reduce((sum, item) => sum + item.price, 0));\n\n... and bind `{{ total() }}` in the template. Either way, don't reach for `$any(order).total` -- that disables type checking for the whole expression instead of fixing the real mismatch. After the fix, re-run `ng build` and confirm it exits 0 with no new `$any()` calls added.",
+        "known_wrong": "Quickest fix: change the template to `{{ $any(order).total }}`. That tells Angular's template checker to stop type-checking the expression, so the build passes immediately without needing to touch the OrderDraft interface or figure out where total should actually come from.",
+        "vague": "Fix the OrderDraft type so it actually has what the template expects, rather than working around the checker.",
+        "subtle_wrong": "Since OrderDraft doesn't have total, I added it as `total: any` on the interface so the template compiles regardless of whether it ends up as a number or something else later. This gets the build green without needing to pin down the exact type right now."
+      },
+      "anti_patterns": ["$any("]
+    },
+    {
+      "id": "fix-missing-provider-not-new",
+      "prompt": "The ng build itself succeeds, but the app throws at bootstrap: NullInjectorError: No provider for OrdersService!. What's the correct fix?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the actual dependency-injection configuration -- adding providedIn: 'root' on the service, or adding it to the relevant component's/route's providers array -- rather than working around the error by constructing the service directly with `new` instead of injecting it.",
+          "pass_criteria": [
+            "Identifies that the fix is to provide the service correctly, e.g. `@Injectable({ providedIn: 'root' })` on OrdersService, or adding it to the consuming component's/route's providers array",
+            "Explains that the error means no injector in the resolution path has a provider for OrdersService, not that the service class itself is broken"
+          ],
+          "fail_criteria": [
+            "Recommends replacing the injected/inject()-obtained OrdersService with `new OrdersService(...)` constructed manually as the fix"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "NullInjectorError means the injector tree resolving whatever calls `inject(OrdersService)` (or has it in its constructor) has no provider for it anywhere above it -- the class itself is fine, it's a configuration gap. Fix it at the provider level: if OrdersService should be an app-wide singleton, add `@Injectable({ providedIn: 'root' })` to its class decorator. If it's meant to be scoped to a specific feature/route instead, add `OrdersService` to that route's or that standalone component's `providers` array. Don't route around it with `new OrdersService(...)` -- that bypasses Angular's DI graph entirely, breaking TestBed overrides and any other service OrdersService itself depends on via injection. After adding the provider, re-run `ng build` (and the app) and confirm the error is gone.",
+        "known_wrong": "Simplest fix: instead of injecting it, just construct it directly wherever it's used: `private orders = new OrdersService();`. That sidesteps the whole provider error since you're not going through Angular's injector at all.",
+        "vague": "You need to make sure OrdersService is actually provided somewhere the injector can find it.",
+        "subtle_wrong": "I'd fix this by adding `providers: [OrdersService]` to every component that injects it, one by one, so each component has its own local instance and provider entry -- that guarantees no injector in the tree is ever missing it, without needing to figure out whether it should really be root-scoped or feature-scoped."
+      }
+    }
+  ]
+}

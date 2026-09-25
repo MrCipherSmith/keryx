@@ -131,7 +131,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "routing",
     group: "Connect a model provider",
-    summary: "Category -> model routing table: list, set, unset (per-user default; --project for the project layer).",
+    summary: "Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set).",
   },
   { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
   {
@@ -305,6 +305,24 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/conform",
     group: "Managed work",
     summary: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev.",
+  },
+  {
+    kind: "slash",
+    name: "/risk",
+    group: "Managed work",
+    summary: "Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked, highest risk first.",
+  },
+  {
+    kind: "slash",
+    name: "/scenarios",
+    group: "Managed work",
+    summary: "Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked.",
+  },
+  {
+    kind: "slash",
+    name: "/jevrules",
+    group: "Managed work",
+    summary: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule.",
   },
   {
     kind: "slash",

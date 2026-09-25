@@ -211,14 +211,15 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Flow 295 added `scheduled-tasks` with three positives, all ranking first:
  * 305/307 + 3 = 308/310.
  *
- * Flow 333 added `review-jev-docs` and `review-jev-comments` with four
- * positives each, all ranking first: 308/310 + 8 = 316/318.
+ * Flow 332 added `review-jev-risk` and `review-jev-scenarios` cases, and
+ * flow 333 added `review-jev-docs` and `review-jev-comments` with four
+ * positives each, all ranking first.
  *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 316;
-export const RANK1_TOTAL = 318;
+export const RANK1_FIRST = 328;
+export const RANK1_TOTAL = 330;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -576,6 +577,32 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
+    skill: "review-jev-risk",
+    positives: [
+      "rank these hunks by how risky they are, security and concurrency especially",
+      "give me a hunk-by-hunk risk breakdown of this diff, ranked highest first",
+      "jev risk check on this PR",
+      "give me a risk map of this diff before I look at it myself",
+    ],
+    negatives: [
+      { prompt: "security review of this diff", owner: "review-security-code" },
+      { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-jev-scenarios",
+    positives: [
+      "which user scenarios does this PR change",
+      "walk me through what functional behavior this diff touches",
+      "jev scenarios check on this PR",
+      "functional review of what this change actually does for a user",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "give me a risk map of this diff before I look at it myself", owner: "review-jev-risk" },
+    ],
+  },
+  {
     skill: "review-regression",
     positives: [
       "does this change break anything else",
@@ -651,6 +678,19 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "write tests", owner: "test-gen" },
       { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-jev-rules",
+    positives: [
+      "jev rules check on this diff",
+      "check my changes against our project's documented rule clauses with jev",
+      "run the jev rules reviewer over this pull request",
+      "does this hunk violate any of our written-down rules, score it with jev",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "style review, naming and readability only", owner: "review-style" },
     ],
   },
   {

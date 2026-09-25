@@ -1,0 +1,71 @@
+{
+  "triggers": {
+    "positive": [
+      "We're adding an invoices feature to our NestJS API -- I need the module scaffolding: a controller, a service, and the provider wired up.",
+      "I need to wire OrdersService into the DI container for this new module",
+      "Implement a NestJS guard that checks the JWT and only allows admins through",
+      "Every response from our NestJS app should get its duration logged automatically -- I need an interceptor wired in globally rather than per-controller.",
+      "Right now if anything throws in our NestJS app, the client gets the raw stack trace back in the response -- I want every uncaught error across the whole app to come back as a clean, generic error instead.",
+      "A NestJS provider I'm writing reads something off the incoming request -- should that make it request-scoped, or is the default singleton still fine?",
+      "Move this business logic out of the controller and into a proper service method"
+    ],
+    "negative": [
+      "Review this NestJS PR for missing DTO validation and N+1 queries in the repository layer",
+      "Fix this NestJS build error: Nest can't resolve dependencies of UsersService",
+      "Write @nestjs/testing unit tests for this NestJS service with a mocked repository",
+      "Add class-validator decorators to this DTO for the new signup endpoint",
+      "Implement a React component that displays the user's profile card",
+      "Fix this tsc module resolution error in a plain Node.js script with no framework"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "global-guard-with-public-escape-hatch",
+      "prompt": "I want to protect most routes in my NestJS app with a JWT auth guard, but let a few endpoints stay public. What's the right way to set this up?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer registers the auth guard globally as an APP_GUARD provider (not app.useGlobalGuards() on the bootstrapped instance) so it stays inside Nest's DI graph, and adds a custom metadata decorator (e.g. a Public() decorator built with SetMetadata) that the guard checks via Reflector to let specific routes opt out, rather than protecting routes one controller at a time.",
+          "pass_criteria": [
+            "Names registering the guard globally via the APP_GUARD provider token in a module's providers array, not app.useGlobalGuards() called on the app instance",
+            "Names creating a custom decorator (e.g. @Public()) built with SetMetadata, and reading that metadata inside the guard via Reflector to allow the exception"
+          ],
+          "fail_criteria": [
+            "Recommends decorating every protected controller individually with @UseGuards(...) instead of registering the guard globally -- naming @UseGuards for the few endpoints that need controller-specific behavior on top of the global guard is not this failure, only proposing it as the whole mechanism for making most routes protected"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Register the guard globally so it applies to every route by default, then carve out the public ones explicitly. Register it as an APP_GUARD provider (not app.useGlobalGuards() in main.ts) so it stays part of Nest's DI graph and can inject things like Reflector or a UsersService:\n\n@Module({\n  providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],\n})\nexport class AppModule {}\n\nThen add a metadata-based escape hatch: a decorator built on SetMetadata, e.g.\n\nexport const IS_PUBLIC_KEY = 'isPublic';\nexport const Public = () => SetMetadata(IS_PUBLIC_KEY, true);\n\nand have JwtAuthGuard read that metadata with Reflector before enforcing auth:\n\ncanActivate(context: ExecutionContext) {\n  const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [\n    context.getHandler(),\n    context.getClass(),\n  ]);\n  if (isPublic) return true;\n  // ... normal auth check\n}\n\nNow every new controller is protected by default, and only routes explicitly marked @Public() opt out -- adding a new controller and forgetting to guard it can't silently leave it open.",
+        "known_wrong": "Easiest way: just add @UseGuards(JwtAuthGuard) to every controller that should be protected, and skip it on the couple of public ones. No need to touch app.module.ts at all, and you don't need any Reflector metadata stuff -- just remember which controllers need the decorator.",
+        "vague": "Set the guard up so it applies to most routes by default, and give the public ones a way to opt out of it.",
+        "subtle_wrong": "Call app.useGlobalGuards(new JwtAuthGuard()) in main.ts right after creating the app, that applies it to every route without touching each controller. For the public ones, just check the request path against an allow-list inside the guard's canActivate instead of a decorator, since that's simpler than wiring up SetMetadata."
+      }
+    },
+    {
+      "id": "request-scoped-into-singleton",
+      "prompt": "I have a small provider that reads the current user off the request (it's REQUEST-scoped). I want to inject it directly into UsersService, which is a plain singleton used all over the app. Is that fine to do as-is?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that Nest propagates provider scope up the dependency graph, so injecting a REQUEST-scoped provider directly into UsersService makes UsersService itself request-scoped -- re-instantiated per request along with everything that depends on it -- and recommends not injecting the request-scoped dependency straight into the broadly-shared singleton, instead passing the needed value explicitly as an argument from a layer that is already request-scoped, or isolating the request-scoped need into its own narrow provider.",
+          "pass_criteria": [
+            "States that injecting the REQUEST-scoped provider into UsersService makes UsersService (and its own consumers) request-scoped too, because Nest propagates scope up the injection graph -- not an isolated, contained change",
+            "Recommends against injecting the request-scoped provider directly into the shared singleton, proposing instead to pass the needed value explicitly (e.g. as a method argument from the controller) or to isolate the request-scoped logic in a small dedicated provider instead of UsersService"
+          ],
+          "fail_criteria": [
+            "States or implies it is fine to inject the REQUEST-scoped provider into UsersService with no mention of the scope-propagation consequence for UsersService and its own consumers"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- doing that directly will make UsersService itself request-scoped. Nest propagates provider scope up the dependency graph: once UsersService depends on a REQUEST-scoped provider, Nest has to re-instantiate UsersService (and everything downstream that injects UsersService) on every request instead of once. Since UsersService is used all over the app as a shared singleton, that's a much bigger behavioral and performance change than it looks like from the diff. Better options: pass the current user in explicitly as a method argument from the controller (which already has it from the guard-populated request), rather than injecting the REQUEST-scoped provider into UsersService at all; or, if several places genuinely need the current-user-aware behavior, pull that slice of logic into its own small REQUEST-scoped provider instead of adding the dependency to the shared singleton.",
+        "known_wrong": "Yeah that's fine, just inject it in the constructor like any other provider -- Nest's DI handles the wiring automatically so there's nothing special to worry about with the scopes being different.",
+        "vague": "Be careful with mixing scopes like that, it can cause unexpected behavior, so you might want to rethink the design a bit.",
+        "subtle_wrong": "It'll work at runtime since Nest resolves the dependency graph either way, but to keep things clean I'd just mark UsersService as @Injectable({ scope: Scope.REQUEST }) too so the scopes match up consistently -- that avoids any DI errors and keeps the code simple."
+      }
+    }
+  ]
+}

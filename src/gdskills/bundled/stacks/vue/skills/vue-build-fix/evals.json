@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "our CI pipeline breaks on a type mismatch coming from vue-tsc, pointing at an expression inside this component's template block -- how do I resolve it",
+      "vite refuses to bundle this vue single file component because it can't resolve one of the imports inside it",
+      "our vue.js CI job fails because eslint's no-mutating-props check rejects a change in this component",
+      "defineProps type error, generic doesn't match the props being passed",
+      "vite's build step can't locate this single file component when something else imports it, and throws a not found error",
+      "vue template type check fails calling toFixed on this value"
+    ],
+    "negative": [
+      "fix this tsc error in a plain typescript service file",
+      "fix this tsx build error in this react component",
+      "review this vue component diff for reactivity bugs",
+      "write a vitest test for this vue component",
+      "implement a new vue component with typed props and emits",
+      "migrate this vue 2 component to vue 3 composition api"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-mutating-props-lint-fix",
+      "prompt": "eslint-plugin-vue reports `vue/no-mutating-props` on this line inside a child component: `props.count = props.count + 1`. What's the right fix?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the vue/no-mutating-props violation by replacing the direct prop write with an emitted event so the parent updates its own state, rather than suppressing the rule.",
+          "pass_criteria": [
+            "States that the prop must not be written to directly and the fix is to emit an event for the parent to update the value instead",
+            "Shows the fix as code: a defineEmits declaration and the emit() call (e.g. emit('update:count', props.count + 1)) replacing the direct assignment"
+          ],
+          "fail_criteria": [
+            "Recommends adding an eslint-disable comment (line or file level) for vue/no-mutating-props instead of removing the direct prop write. Mentioning eslint-disable only to say it is the wrong move does not count as this failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "`vue/no-mutating-props` is correct here: `props.count = props.count + 1` writes directly to a prop, which is one-way data from the parent and Vue warns about at runtime too. Fix it by emitting an event and letting the parent own the update:\n```ts\nconst emit = defineEmits<{ 'update:count': [value: number] }>()\nfunction increment() {\n  emit('update:count', props.count + 1)\n}\n```\nIn the parent, bind `v-model:count=\"count\"` (or listen for `@update:count`) so the actual state change happens where `count` is owned. Re-run eslint to confirm the rule is now satisfied without a suppression.",
+        "known_wrong": "Easiest way to unblock this: add `// eslint-disable-next-line vue/no-mutating-props` above the line. The mutation is harmless in this component since nothing else reads `count` from the parent side right now.",
+        "vague": "Don't mutate the prop, emit an event instead so the parent handles the update.",
+        "subtle_wrong": "I'd copy the prop into local component state on mount and increment that local copy instead: `const localCount = ref(props.count); function increment() { localCount.value++ }`, then render `localCount` in the template. That way nothing writes to `props.count` anymore and the lint rule passes."
+      },
+      "anti_patterns": ["eslint-disable"]
+    },
+    {
+      "id": "template-union-type-narrowing",
+      "prompt": "vue-tsc reports a template type error: `Property 'toFixed' does not exist on type 'string'` on `{{ total.toFixed(2) }}`, where `total` is typed `ref<string | number>`. How do I fix this without breaking the type check?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that the template calls a number-only method on a value that can also be a string, and fixes it so the rendered result is consistently a formatted number in both cases -- either via a computed that converts the value to a number before formatting, or converting the value at its source -- rather than casting the expression to bypass the checker or narrowing only enough to satisfy the type checker while leaving the string case unformatted.",
+          "pass_criteria": [
+            "Explains that `total` being typed `string | number` means the template cannot assume it's a number, and the fix converts/narrows it before the template uses `.toFixed`",
+            "Shows a concrete fix as code that produces a consistently formatted number for BOTH the string and number cases, e.g. `computed(() => Number(total.value).toFixed(2))`, or converting the value at its source so it is genuinely a `number` at that point"
+          ],
+          "fail_criteria": [
+            "Recommends bypassing the check with a template cast to `any` (e.g. `(total as any).toFixed(2)`) or a `@ts-ignore`-equivalent instead of narrowing the type",
+            "Narrows only enough to satisfy the type checker (e.g. a template `typeof total === 'number' ? total.toFixed(2) : total` ternary) while leaving the string branch rendered as the raw unformatted string instead of a consistently formatted number"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The template error is real: `total` is typed `ref<string | number>`, and `.toFixed()` only exists on `number`, so calling it directly on a value that could be a string is a genuine mismatch vue-tsc is right to catch. Rather than casting past it, narrow the value before the template touches it -- a computed that guarantees a number:\n```ts\nconst formattedTotal = computed(() => Number(total.value).toFixed(2))\n```\n```vue\n<template>{{ formattedTotal }}</template>\n```\nIf `total` should genuinely always be a number by the time it reaches the template, the better fix is at the source: change wherever it's assigned a string to convert it there instead, and narrow the ref's type to `ref<number>`.",
+        "known_wrong": "Quickest fix: change the template to `{{ (total as any).toFixed(2) }}`. That satisfies vue-tsc immediately and the runtime behavior doesn't change either way.",
+        "vague": "You need to make sure total is a number before calling toFixed on it in the template.",
+        "subtle_wrong": "I'd add a template-level check instead: `{{ typeof total === 'number' ? total.toFixed(2) : total }}`. This satisfies the type checker's narrowing inside the ternary and avoids a cast, without needing to add a computed property."
+      }
+    }
+  ]
+}

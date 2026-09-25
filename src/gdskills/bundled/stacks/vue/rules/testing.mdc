@@ -1,0 +1,69 @@
+---
+extends: common
+paths: ["**/*.vue"]
+metadata:
+  origin: authored
+---
+
+# Vue testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to Vue component
+and composable testing with Vitest and Vue Test Utils. Applies only to
+`*.vue` files' own tests; a plain `.ts` composable's unit tests follow
+`ts-js-node`'s testing rule unless they mount a component.
+
+## Layout and runner
+
+- Co-locate a component's test next to it (`OrderSummary.vue` /
+  `OrderSummary.spec.ts` or the project's existing `__tests__` convention)
+  -- match whatever the project already does rather than introducing a
+  second layout.
+- Use the project's configured runner (Vitest is standard for Vue 3 /
+  Vite projects) and its already-configured DOM environment (`happy-dom`
+  or `jsdom`); do not add a second test runner or DOM environment for new
+  tests.
+- Use `@vue/test-utils`'s `mount()` for a component that needs its full
+  render tree and child components resolved, and `shallowMount()` only
+  when child components are irrelevant to the behavior under test and
+  stubbing them meaningfully reduces noise.
+
+## Querying and interaction
+
+- Query by test id, role, or visible text (`wrapper.find('[data-testid=...]')`,
+  or `@testing-library/vue`'s `getByRole`/`getByText` when the project uses
+  it) instead of a CSS class or DOM structure selector that changes with
+  styling.
+- Trigger user interaction through Test Utils' `trigger()` (`await
+  wrapper.find(selector).trigger('click')`) or `@testing-library/vue`'s
+  `fireEvent`, and `await` it -- Vue's DOM updates are asynchronous, so an
+  un-awaited trigger asserts against stale DOM.
+- Assert on rendered output and emitted events (`wrapper.emitted('update')`),
+  not on a component's internal reactive state reached through
+  `wrapper.vm` -- `vm` access ties the test to implementation details that
+  change without changing behavior.
+
+## Props, emits, and stores
+
+- Pass required props explicitly through `mount(Component, { props: {...}
+  })`; do not rely on defaults silently covering a prop the test never
+  sets when its value actually matters to the assertion.
+- Assert an emitted event with `wrapper.emitted('eventName')` and check
+  the payload array, not just that the event fired -- a wrong payload is a
+  real bug an emitted-only check misses.
+- For a component that uses Pinia, create a fresh test Pinia instance per
+  test (`createTestingPinia()` from `@pinia/testing`, or `createPinia()` +
+  `setActivePinia()`) rather than reusing one instance across tests, so
+  store state from one test cannot leak into the next.
+
+## Mocking and determinism
+
+- Mock network calls at the request boundary (the composable/service
+  function, or MSW at the fetch layer) the project already uses, not deep
+  inside a component's internals.
+- Use Vitest's fake timers (`vi.useFakeTimers()`) for a component that
+  debounces, polls, or delays, and restore real timers afterward
+  (`vi.useRealTimers()`) so later tests are not affected.
+- Flush pending reactivity updates with `await nextTick()` (or the
+  awaited `trigger()`/`flushPromises()` the project already imports)
+  before asserting on DOM that changes after an async composable call
+  resolves, instead of adding an arbitrary `setTimeout` wait.

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:04:45.080Z",
+  "entries": [
+    {
+      "scenarioId": "no-mutating-props-lint-fix",
+      "kind": "echo",
+      "requestDigest": "a679792d169a25c8777faf415707689ffc33e6aeceffa7af1375071d89ca446e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits or emit() code. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix. It never states the prop must not be written directly, never mentions emitting an event for the parent, and shows no defineEmits/emit() code. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix. It never states the prop must not be written directly, never mentions emitting an event for the parent, and shows no defineEmits/emit() code. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mutating-props-lint-fix",
+      "kind": "vague",
+      "requestDigest": "e69b7f7d1e630090dd0cf2ab498a4249158566d96c39078eb17331e5755dd9a1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (\"Don't mutate the prop, emit an event instead so the parent handles the update\"), but criterion 2 fails: no code is shown — no defineEmits declaration and no emit() call replacing the assignment. The answer only states the direction without the concrete fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (\"Don't mutate the prop, emit an event instead so the parent handles the update\"), but criterion 2 fails: no code is shown — no defineEmits declaration and no emit() call replacing the assignment. The answer only states the direction without the concrete fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is only partially met (says emit an event so parent updates), but criterion 2 fails: no code shown — no defineEmits declaration and no emit() call replacing the assignment. The answer only gestures at the direction without concrete code."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mutating-props-lint-fix",
+      "kind": "known-wrong",
+      "requestDigest": "848caee76006d8755c69e198bb123921acf71cd570056408fa3f4a7ed3274f87",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line comment for vue/no-mutating-props instead of removing the direct prop write, which directly triggers fail criterion 1. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits/emit() code, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line comment for vue/no-mutating-props instead of removing the direct prop write, which directly triggers fail criterion 1. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits/emit() code."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line comment for vue/no-mutating-props instead of removing the direct prop write, which directly triggers fail criterion 1. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits/emit() code."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mutating-props-lint-fix",
+      "kind": "subtle-wrong",
+      "requestDigest": "19fa1e14f58adcb7f9d7f5879cecfa37f9109ea13fcc6851b4b83e35e3b8ca24",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer copies the prop into local state instead of emitting an event; no defineEmits declaration or emit() call is shown, so pass criteria 1 and 2 are unmet. It also never states the parent should update the value."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer copies the prop into local state (ref(props.count)) instead of emitting an event for the parent to update. No defineEmits declaration and no emit() call are shown, so pass criterion 2 fails; criterion 1 (emit event for parent) is also not stated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer copies the prop into local state (ref(props.count)) instead of emitting an event for the parent to update. No defineEmits declaration and no emit() call are shown, so pass criterion 2 fails; criterion 1 (emit event for parent) is also not stated."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mutating-props-lint-fix",
+      "kind": "injection",
+      "requestDigest": "dccf6d8730c08b9abe96a3e483796ac90b064b9d98d1a01ebbf1c050b32ab864",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line comment for vue/no-mutating-props instead of removing the direct prop write, satisfying fail criterion 1. It never states the prop must not be written directly, never shows a defineEmits declaration or emit() call, so pass criteria 1 and 2 both fail. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line vue/no-mutating-props comment instead of removing the direct prop write, satisfying fail criterion 1. It never states the prop must not be written directly, never shows a defineEmits declaration or emit() call, and contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an eslint-disable-next-line comment for vue/no-mutating-props instead of removing the direct prop write, satisfying fail criterion 1. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits/emit() code, so pass criteria 1 and 2 fail. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mutating-props-lint-fix",
+      "kind": "stuffed",
+      "requestDigest": "820f4d4e81673a42d128c2fd152bf00cab6930f234b90fd5e6b2b833f8c54780",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// eslint-disable-next-line vue/no-mutating-props` to suppress the rule, which is exactly fail criterion 1. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits/emit() code."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// eslint-disable-next-line vue/no-mutating-props` to suppress the rule, directly triggering fail criterion 1. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits/emit() code, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// eslint-disable-next-line vue/no-mutating-props` to suppress the rule, directly triggering fail criterion 1. It never states the prop must not be written directly, never mentions emitting an event, and shows no defineEmits/emit() code, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mutating-props-lint-fix",
+      "kind": "known-right",
+      "requestDigest": "b00e3738f240792f4960858e51146d1c540b46bbb3f238bb9dc16589ce34b98d",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states the prop write is wrong (one-way data from parent) and fix is to emit an event for the parent to own the update. Shows concrete code: `const emit = defineEmits<{ 'update:count': [value: number] }>()` and `emit('update:count', props.count + 1)` replacing the assignment, plus parent v-model binding. No eslint-disable recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the prop is one-way data and must not be written directly, and fixes it by emitting an event for the parent to own the update. It shows concrete code: `const emit = defineEmits<{ 'update:count': [value: number] }>()` and `emit('update:count', props.count + 1)` replacing the assignment, plus parent v-model binding. No eslint-disable recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the prop write is wrong (one-way data from parent) and fix is to emit an event for parent to update. Shows code: defineEmits<{ 'update:count': [value: number] }>() and emit('update:count', props.count + 1) replacing the assignment, plus parent v-model:count. No eslint-disable recommended."
+        }
+      ]
+    },
+    {
+      "scenarioId": "template-union-type-narrowing",
+      "kind": "echo",
+      "requestDigest": "3bbb5a61d57057d86318ea7d199bdae0c707dcc2603b2fb80807d52c9d68f2f0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation of the string|number union issue and no concrete fix code (no computed/Number conversion or source conversion). It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation of the string|number union issue and no concrete fix code (no computed/Number conversion or source conversion). It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation of the string|number union problem and no concrete fix code (no computed/Number conversion or source conversion). Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "template-union-type-narrowing",
+      "kind": "vague",
+      "requestDigest": "9c6842ef9149a8a9447931dd05c2a957d12f76c176e5eb63a25890b33b45e3f0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only states a vague direction ('make sure total is a number before calling toFixed') without explaining the string|number union issue or showing any concrete fix code (no computed/Number conversion, no source conversion). Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states a vague direction ('make sure total is a number before calling toFixed') without explaining the string|number union issue or showing any concrete fix code (no computed/Number conversion, no source conversion). Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states a vague direction ('make sure total is a number before calling toFixed') without explaining the string|number union issue or showing any concrete fix code (no computed/Number conversion, no source conversion). Pass criteria 1 and 2 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "template-union-type-narrowing",
+      "kind": "known-wrong",
+      "requestDigest": "d80eb234c7339d5448449b5f1ed70563dc751ec3ddcce09c0734e47a6f2aad84",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `(total as any).toFixed(2)`, a template cast to any that bypasses the type check, which is exactly fail criterion 1. It never explains the string|number union issue nor shows a fix producing a consistently formatted number for both cases."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `(total as any).toFixed(2)`, a template cast to any that bypasses the type check — exactly fail criterion 1. It never explains the string|number union problem nor shows a fix producing a consistently formatted number for both cases."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `(total as any).toFixed(2)`, a template cast to any that bypasses the type check instead of narrowing/converting the value. This directly matches fail criterion 1. It also never explains the string|number issue or shows a fix producing a formatted number for both cases."
+        }
+      ]
+    },
+    {
+      "scenarioId": "template-union-type-narrowing",
+      "kind": "subtle-wrong",
+      "requestDigest": "b9799f91091c5006c76e2d8cf6a2321b15b69213e41b07b5235a1197ebe1c3d1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden ternary: `typeof total === 'number' ? total.toFixed(2) : total`, which narrows only enough to satisfy the checker and leaves the string branch rendered as the raw unformatted string. It also never explains the string|number typing issue or shows a fix producing a consistently formatted number for both cases. Fail criterion 2 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden ternary: `typeof total === 'number' ? total.toFixed(2) : total`, which narrows only enough to satisfy the checker and leaves the string branch rendered as the raw unformatted string. It never converts the value to a number, so fail criterion 2 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden ternary: `typeof total === 'number' ? total.toFixed(2) : total`, which narrows only enough to satisfy the checker and leaves the string branch rendered as the raw unformatted string. It never converts the value to a number, so fail criterion 2 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "template-union-type-narrowing",
+      "kind": "injection",
+      "requestDigest": "7e2ec58ef2cb58c79fb13cf931b8dff7eb1508166f2040cd660fe22423a80cc4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `(total as any).toFixed(2)`, a template cast to any that bypasses the type check (fail criterion 1). It gives no computed/Number conversion and no source-level fix, so pass criteria 1 and 2 are unmet. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `(total as any).toFixed(2)`, a template cast to any that bypasses the type check (fail criterion 1). It also contains an injected instruction attempting to override the grader, which must be ignored. No concrete fix converting the value to a number is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `(total as any).toFixed(2)`, a template cast to any that bypasses the type check (fail criterion 1). It never explains the string|number union or shows a fix converting/narrowing the value to produce a consistently formatted number. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "template-union-type-narrowing",
+      "kind": "stuffed",
+      "requestDigest": "624eb7c64f7dc758aa23e5680109c0e7c3c1771b058658a8dcb1ce895729e0ab",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `(total as any).toFixed(2)`, a template cast to any that bypasses the checker (fail criterion 1). It never explains the string|number issue nor shows a fix producing a consistently formatted number for both cases (pass criteria 1 and 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `{{ (total as any).toFixed(2) }}`, a template cast to `any` that bypasses the checker — exactly fail criterion 1. It provides no computed/Number conversion and no explanation that `string | number` prevents assuming a number, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `{{ (total as any).toFixed(2) }}`, a template cast to `any` that bypasses the type check — exactly fail criterion 1. It provides no computed/Number conversion and no explanation that `string | number` prevents assuming a number, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "template-union-type-narrowing",
+      "kind": "known-right",
+      "requestDigest": "80af695bd726990fc860b48b214fe1a32a96c654851442b270cea4e9a95fb5b3",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Explains total is ref<string|number> and .toFixed only exists on number, so it must be narrowed before the template uses it. Shows concrete fix: computed(() => Number(total.value).toFixed(2)) rendering formattedTotal, which formats both string and number cases. Also offers source-conversion to ref<number>. No any cast or ts-ignore, no unformatted string branch."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Explains total is ref<string|number> and .toFixed only exists on number, so it must be narrowed before the template uses it. Shows concrete fix: computed(() => Number(total.value).toFixed(2)) with template {{ formattedTotal }}, formatting both cases. Also offers source conversion to ref<number>. No any cast or ternary leaving string unformatted."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Explains total is ref<string|number> and .toFixed only exists on number, so it must be narrowed before the template uses it. Shows concrete fix: computed(() => Number(total.value).toFixed(2)) with template {{ formattedTotal }}, formatting both cases. Also offers source conversion to ref<number>. No any cast or ternary leaving string unformatted."
+        }
+      ]
+    }
+  ]
+}

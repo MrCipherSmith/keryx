@@ -720,6 +720,22 @@ describe("AC17: the model-selection rule permits adaptive selection", () => {
       expect(text).not.toMatch(/\bfable\b|\bterra\b|\bsol\b|claude-[a-z0-9]/i);
     }
   });
+
+  // Item 2 (review of PR #718 / operator decision 2026-09-25): the rule
+  // documents that THIS module's own tier resolution deliberately never
+  // ranks by version, and separately documents the routing "derived
+  // default table"'s own, different, version-within-family rule — so a
+  // reader of either text cannot mistake one consumer's policy for the
+  // other's.
+  test("documents version is not ranked here, and the routing layer's separate 2026-09-25 version-within-family decision", () => {
+    for (const file of trees) {
+      const text = readFileSync(file, "utf8");
+      expect(text).toMatch(/version is deliberately not ranked here/i);
+      expect(text).toContain("deriveDefaultTable");
+      expect(text).toContain("2026-09-25");
+      expect(text).toMatch(/same family and vendor/i);
+    }
+  });
 });
 
 test("a catalogue nothing can rank is a fallback, not a ranking that found nothing above", () => {

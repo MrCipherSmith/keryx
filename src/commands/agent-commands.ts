@@ -221,6 +221,28 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 332 (AC6): the risk-map one-shot over `keryx review jev-risk`'s
+    // working-diff run. TUI-only, same reasoning as `/conform`.
+    name: "/risk",
+    description: "Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 332 (AC6): the functional-review one-shot over `keryx review
+    // jev-scenarios`'s working-diff run. TUI-only, same reasoning as `/conform`.
+    name: "/scenarios",
+    description: "Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 330 (AC7): a one-shot check of the working diff's hunks against
+    // every applicable project rule clause, with Jev, printed grouped by
+    // rule. TUI-only, same reasoning as `/ci`/`/conform`.
+    name: "/jevrules",
+    description: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 333 (AC6): stale-doc detection — links doc sections to changed
     // code deterministically, then asks Jev whether each linked section is
     // now inaccurate. TUI-only, same reasoning as `/conform`.

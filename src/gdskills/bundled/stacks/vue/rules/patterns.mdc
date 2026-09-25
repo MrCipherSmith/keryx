@@ -1,0 +1,84 @@
+---
+extends: common
+paths: ["**/*.vue", "**/*.ts"]
+metadata:
+  origin: authored
+---
+
+# Vue patterns
+
+Narrows `core-common-rules`' stack-agnostic design-pattern guidance to
+idiomatic Vue 3 Composition API design and its common anti-patterns.
+Applies to `*.vue` files and plain `*.ts` files alike (R1 review, PR #719,
+M4): a composable (`useX()`) is routinely a standalone `.ts` file, not a
+`.vue` SFC, and the reactivity/composable guidance below (`ref()` vs.
+`reactive()`, lifecycle-hook-in-composables rules, the return-shape rule)
+is exactly what a `.ts` composable needs — `ts-js-node`'s own generic
+patterns rule has no notion of Vue's reactivity primitives at all.
+
+## Reactivity
+
+- Use `ref()` for a single primitive or a value that is often reassigned
+  wholesale; use `reactive()` for a fixed-shape object whose properties are
+  mutated in place. Do not wrap a `reactive()` object in a `ref()` "for
+  safety" -- pick one.
+- Never destructure a `reactive()` object or a raw (non-`defineProps`)
+  props object into loose variables (`const { count } = state`) -- that
+  copies the current value and breaks the reactive link. Use `toRefs()`
+  (whole object) or `toRef()` (one property) when a template or composable
+  needs individual reactive references out of a `reactive()` object.
+- Prefer a `computed()` over a `watch` that just re-derives and assigns a
+  value on every dependency change; reach for `watch`/`watchEffect` only
+  for a genuine side effect (a fetch, a DOM measurement, a log, syncing to
+  an external system).
+- Give every `watch` an explicit, minimal source (`watch(() => props.id,
+  ...)`, not `watch(props, ...)` with `{ deep: true }` when only one field
+  actually needs to be observed) -- a whole-object deep watch fires on every
+  unrelated field change and is expensive on large objects.
+- Stop a `watch`/`watchEffect` created outside a component's own setup
+  scope (e.g. inside a manually managed subscription) using the stop handle
+  it returns; one created directly inside `setup`/`<script setup>` is
+  auto-stopped on unmount and needs no manual cleanup.
+
+## Composables
+
+- Extract a composable (`useX()`) when the same stateful logic (a fetch +
+  loading/error state, a subscription, a computed derivation) is needed in
+  more than one component, instead of copy-pasting the `ref`/`watch` block.
+- Call composables that use lifecycle hooks (`onMounted`, `onUnmounted`,
+  `provide`/`inject`) only from another composable or directly inside
+  `setup`/`<script setup>` -- never from inside a callback, `watch`
+  handler, or `async` continuation after an `await`, where the active
+  component instance is no longer bound.
+- A composable returns refs/computed values and functions, not a plain
+  object of dereferenced values -- return `{ count, increment }` (where
+  `count` is the `ref` itself), not `{ count: count.value, increment }`,
+  or the caller loses reactivity.
+
+## Component design
+
+- Emit an event (`emit('update:modelValue', v)`) instead of mutating a
+  prop in place; a prop is one-way data flow from the parent, and Vue warns
+  at runtime when a child writes to it directly.
+- Use `v-model` (or a named `v-model:propName`) for two-way bindable state
+  instead of hand-wiring a prop plus a separately-named update event when
+  the semantics are genuinely two-way.
+- Keep template `v-if`/`v-for` on the same element simple; when both are
+  needed, wrap the `v-for` in a `<template>` with the `v-if` on each item,
+  or filter the source list in a `computed()`, rather than relying on
+  `eslint-plugin-vue`'s default precedence to make an implicit filter
+  correct.
+- Prefer `provide`/`inject` for state genuinely shared down an arbitrary
+  depth of the component tree (theme, current user); prop-drilling two or
+  three levels does not need it, and a store (Pinia) is the better fit for
+  state shared across unrelated branches of the tree.
+
+## Anti-patterns
+
+- A `ref`/`reactive` object stored in module scope and mutated from
+  multiple unrelated components as an ad hoc global store, instead of a
+  Pinia store with named actions -- it works but loses devtools tracking,
+  action naming, and testability.
+- A deeply nested `reactive()` object mutated from many call sites with no
+  action layer -- prefer a Pinia store (or a composable with named mutator
+  functions) so state changes have one discoverable entry point.

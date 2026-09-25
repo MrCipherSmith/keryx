@@ -31,10 +31,14 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
 import { runImportReviewers } from "../review/import-reviewers";
-// flow 333: registration only. The command itself, and every helper it
-// needs, lives in `review-jev-docs.ts`/`review-jev-comments.ts` — NEW files,
-// mirroring flow 330's `review-jev-rules.ts` registration pattern, so this
-// file's own conform/comments parts are touched only additively.
+// flow 330/332/333: registration only. The command itself, and every helper
+// it needs, lives in `review-jev-rules.ts`/`review-jev-risk.ts`/
+// `review-jev-scenarios.ts`/`review-jev-docs.ts`/`review-jev-comments.ts` —
+// NEW files, so no other flow's concurrent work on this file collides with
+// any of them.
+import { runJevRules } from "./review-jev-rules";
+import { runJevRisk } from "./review-jev-risk";
+import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
 import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
 import {
@@ -562,7 +566,24 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runConform(args.slice(1));
       return;
     }
-    // flow 333: two ADDITIONAL, CLI-driven reviewers — see
+    // flow 330: an ADDITIONAL, CLI-driven reviewer — see
+    // `src/commands/review-jev-rules.ts` for everything past registration.
+    if (command === "jev-rules") {
+      await runJevRules(args.slice(1));
+      return;
+    }
+    // flow 332: two more ADDITIONAL, CLI-driven reviewers — see
+    // `src/commands/review-jev-risk.ts`/`review-jev-scenarios.ts` for
+    // everything past registration.
+    if (command === "jev-risk") {
+      await runJevRisk(args.slice(1));
+      return;
+    }
+    if (command === "jev-scenarios") {
+      await runJevScenarios(args.slice(1));
+      return;
+    }
+    // flow 333: two more ADDITIONAL, CLI-driven reviewers — see
     // `src/commands/review-jev-docs.ts`/`review-jev-comments.ts` for
     // everything past registration.
     if (command === "jev-docs") {
@@ -3632,6 +3653,13 @@ Usage:
                        [--repo <owner/repo>] [--explain] [--threshold <0..1>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
                        [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
+  keryx review jev-rules (--diff <ref> | --pr <n> | --scope <scope.json>)
+                         [--rules <paths>] [--max-calls <n>] [--threshold <0..1>]
+                         [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                         [--fixtures <dir>] [--json]
+                         An ADDITIONAL reviewer, engine: jev. Checks every changed hunk
+                         against every applicable project rule clause. Opt-in via
+                         review.jev.rules in .metaproject/tasks.config.json.
   keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
                         [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
                         [--fixtures <dir>] [--include <glob>]... [--json]

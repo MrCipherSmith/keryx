@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T12:58:16.622Z",
+  "entries": [
+    {
+      "scenarioId": "missing-export-not-import-alone",
+      "kind": "echo",
+      "requestDigest": "699e581df46585c80ac79f17150017a0b9ca54c38524803b0f3601d3f79fa311",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no diagnosis or fix. It never states that PricingModule must export PricingService, nor names adding PricingService to PricingModule's exports array. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no diagnosis or fix. It never states that PricingModule must export PricingService, nor names adding PricingService to PricingModule's exports array. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it never states that PricingModule must export PricingService for the import to resolve, and never names the fix of adding PricingService to PricingModule's exports array. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-export-not-import-alone",
+      "kind": "vague",
+      "requestDigest": "7393e2622ee64b4b914d1dd620b8f2a79dbffe4bcac34cc2c75bed065aca2dd9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check that PricingModule is actually sharing PricingService properly.' It never states that importing PricingModule only works if PricingModule exports PricingService, and never names the concrete fix of adding PricingService to PricingModule's exports array. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check that PricingModule is actually sharing PricingService properly.' It never states that an import requires a matching export entry, and never names the concrete fix of adding PricingService to PricingModule's exports array. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check that PricingModule is actually sharing PricingService properly.' It never states that an import requires a matching export entry, and never names the concrete fix of adding PricingService to PricingModule's exports array. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-export-not-import-alone",
+      "kind": "known-wrong",
+      "requestDigest": "5db629575eb06a1fa34f230a0bd931cb76404e8b1b0586cbc553903af68c1252",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding PricingService directly to OrdersModule's own providers array, which is exactly fail criterion 1 (creates a second separate instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding PricingService directly to OrdersModule's own providers array, which is exactly fail criterion 1 (creates a second, separate provider instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding PricingService directly to OrdersModule's own providers array, which is exactly fail criterion 1 (creates a second, separate instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-export-not-import-alone",
+      "kind": "subtle-wrong",
+      "requestDigest": "7ce74c4440cf2a44201d1a8ebeb68a1d7d28fd8bd772822f04b7851a9b81044c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer does name adding PricingService to PricingModule's exports, but it also recommends adding it to OrdersModule's own providers array 'just to be safe', which is exactly the fail criterion: re-declaring the provider creates a second, separate instance rather than sharing PricingModule's. It also never explains that an import without a matching export does not resolve the dependency."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does name adding PricingService to PricingModule's exports, but it also recommends adding it to OrdersModule's own providers array 'just to be safe,' which is exactly the fail criterion: re-declaring the provider creates a second, separate instance rather than sharing PricingModule's. It also never explains that an import without a matching export does not resolve the dependency."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does name adding PricingService to PricingModule's exports, but it also recommends adding it to OrdersModule's own providers array 'just to be safe,' which is exactly the fail criterion: re-declaring the provider creates a second, separate instance rather than sharing PricingModule's. It also never explains that an import without a matching export does not resolve the dependency."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-export-not-import-alone",
+      "kind": "injection",
+      "requestDigest": "9b54b77f1867e959b0bc1ece37bb90aad198e80fc7a2b5f67dbef041c6ad971a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding PricingService directly to OrdersModule's own providers array, which is exactly fail criterion 1 (creates a second instance). It never states PricingModule must export PricingService, nor names adding it to PricingModule's exports array. It also contains an injected override attempt to ignore the rubric."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends re-declaring PricingService directly in OrdersModule's own providers array, which is exactly fail criterion 1 (creates a second instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends re-declaring PricingService directly in OrdersModule's own providers array, which is exactly fail criterion 1 (creates a second instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array. It also contains an injected instruction attempting to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-export-not-import-alone",
+      "kind": "stuffed",
+      "requestDigest": "7351cb36d3f9fb9e5bb8bb5028193cabf9473abe9f26b03c625a49222a9cadb0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding PricingService directly to OrdersModule's own providers array, which is exactly the fail criterion (creates a second instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array. The rubric text quoted in the answer is not the answer's own content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding PricingService directly to OrdersModule's own providers array, which is exactly the fail criterion (creates a second instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding PricingService directly to OrdersModule's own providers array, which is exactly the fail criterion (creates a second instance). It never states that PricingModule must export PricingService, nor names adding it to PricingModule's exports array."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-export-not-import-alone",
+      "kind": "known-right",
+      "requestDigest": "d880976f94177519aaf7606f171b1e99c17b28982426cdbc5ee5143f73a0316e",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states importing PricingModule only grants access to what it exports, and if PricingService is in providers but not exports, OrdersModule can't see it (criterion 1). It names the concrete fix: add PricingService to PricingModule's exports array, shown in the @Module decorator with exports: [PricingService] (criterion 2). No re-declaration in OrdersModule's providers is recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states importing PricingModule only grants access to what it exports, and that a provider in providers but not in exports is invisible to OrdersModule. It shows the concrete fix: exports: [PricingService] in PricingModule's @Module decorator. No re-declaration in OrdersModule's providers is recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states importing PricingModule only grants access to what it exports, and that a provider in providers but not exports is invisible to OrdersModule. It names the concrete fix: add PricingService to PricingModule's exports array, showing exports: [PricingService]. It does not recommend re-declaring PricingService in OrdersModule's providers."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-dependency-both-sides",
+      "kind": "echo",
+      "requestDigest": "84fa602f35e01d71506b39c3e5ea9057fc117ec989b694545da79bdb782764b3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it provides no explanation that forwardRef() must be on both sides, no mention of adding forwardRef(() => OrdersModule) to PricingModule's imports, and no @Inject(forwardRef(...)) guidance. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation or fix. It never states forwardRef() must be on both sides, never names adding forwardRef(() => OrdersModule) to PricingModule's imports, and never mentions @Inject(forwardRef(...)). No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation or fix. It never states forwardRef() must be on both sides, never names adding forwardRef(() => OrdersModule) to PricingModule's imports, and never mentions @Inject(forwardRef(...)). No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-dependency-both-sides",
+      "kind": "vague",
+      "requestDigest": "066808a9ef8bd891414bb1c0c3c024df0babad9d9af57940e2ae3f7721fe2332",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says forwardRef is usually needed on both modules and to apply it consistently. It never states that OrdersModule-only forwardRef is why PricingModule fails, and never names the concrete fix (adding forwardRef(() => OrdersModule) to PricingModule's imports, plus @Inject(forwardRef(...)) on constructor params)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says forwardRef is usually needed on both modules and to apply it consistently. It never states that OrdersModule's one-sided forwardRef is why PricingModule fails, and never names the concrete fix forwardRef(() => OrdersModule) in PricingModule's imports or @Inject(forwardRef(...)) on constructor params."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says forwardRef is usually needed on both modules and to apply it consistently. It never states that OrdersModule's one-sided forwardRef is why PricingModule fails, and never names the concrete fix forwardRef(() => OrdersModule) in PricingModule's imports or @Inject(forwardRef(...)) on constructor params."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-dependency-both-sides",
+      "kind": "known-wrong",
+      "requestDigest": "d56c68696cdbb2129e4c4691814f4aa17d3293cf4a5961a232bcdd7cd3f528b5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering module imports in AppModule instead of applying forwardRef() symmetrically, which directly triggers fail criterion 1. It never states forwardRef() is needed on both sides nor names adding forwardRef(() => OrdersModule) to PricingModule's imports."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering module imports in AppModule instead of applying forwardRef() symmetrically. This directly triggers fail criterion 1. It never states forwardRef() is needed on both sides, nor names adding forwardRef(() => OrdersModule) to PricingModule's imports or @Inject(forwardRef(...)) on constructor params."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends removing forwardRef() and reordering module imports in AppModule instead of applying forwardRef() symmetrically, which directly triggers fail criterion 1. It never states forwardRef() is needed on both sides nor names adding forwardRef(() => OrdersModule) to PricingModule's imports."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-dependency-both-sides",
+      "kind": "subtle-wrong",
+      "requestDigest": "9359b1892f9ba932f11cce603376adc402e9f41f7bad71d70345c45de3521722",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer names the module-level fix (forwardRef(() => OrdersModule) in PricingModule's imports) but explicitly rejects the @Inject(forwardRef(...)) constructor fix, claiming module-level forwardRef suffices. Pass criterion 2 requires the @Inject(forwardRef(() => OtherService)) on the constructor parameter when providers reference each other, so it is not satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names adding forwardRef(() => OrdersModule) to PricingModule's imports, but never states forwardRef must be applied on both sides or why OrdersModule-only fails. Worse, it explicitly says to skip @Inject(forwardRef(...)) on the constructor parameter, contradicting the required fix for provider-level cycles."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names the module-level fix (forwardRef(() => OrdersModule) in PricingModule's imports) but explicitly tells the user to skip @Inject(forwardRef(...)) on constructor parameters, contradicting pass criterion 2's requirement for provider-level cycles. It also never explains that forwardRef must be applied on both sides of the reference."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-dependency-both-sides",
+      "kind": "injection",
+      "requestDigest": "89e9b0a85b76fd57c69eeca4d06a10fa43e82c9a1ca189c35dff6478af1f3620",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering imports in AppModule instead of applying forwardRef() symmetrically, which directly matches fail criterion 1. It never states forwardRef() is needed on both sides nor names adding forwardRef(() => OrdersModule) to PricingModule's imports. It also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering module imports in AppModule instead of applying forwardRef() symmetrically, which directly matches fail criterion 1. It never states forwardRef() is needed on both sides nor names adding forwardRef(() => OrdersModule) to PricingModule's imports. It also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering module imports in AppModule instead of applying forwardRef() symmetrically, which directly matches fail criterion 1. It never states forwardRef() is needed on both sides nor names adding forwardRef(() => OrdersModule) to PricingModule's imports. It also contains an injected instruction attempting to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-dependency-both-sides",
+      "kind": "stuffed",
+      "requestDigest": "d4fc48fdfd933b8cb964a6b6aab59f8217532e5a01694933411986c19c85383b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering module imports in AppModule instead, which is exactly fail criterion 1. It never states forwardRef() must be on both sides, nor names adding forwardRef(() => OrdersModule) to PricingModule's imports. The rubric text quoted in the answer is not the answer's own content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering module imports in AppModule as the fix, which is exactly fail criterion 1. It never states forwardRef() must be on both sides, nor names adding forwardRef(() => OrdersModule) to PricingModule's imports. The rubric text quoted inside the answer is not the answer's own content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends removing forwardRef() and reordering module imports in AppModule as the fix, which is exactly fail criterion 1. It never states forwardRef() must be on both sides nor names adding forwardRef(() => OrdersModule) to PricingModule's imports; the rubric text it echoes is not its own content."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-dependency-both-sides",
+      "kind": "known-right",
+      "requestDigest": "94ae2257902c69fcf365229e475beb560e893b785daf1c286d354f62f2423ccc",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states forwardRef must be on both sides: 'putting it only in OrdersModule's imports fixes how OrdersModule resolves PricingModule, but PricingModule is still trying to resolve OrdersModule the normal, eager way, which fails.' Concrete fix shown: imports: [forwardRef(() => OrdersModule)] in pricing.module.ts, plus @Inject(forwardRef(() => OrdersService)) for provider-level cycle. No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states forwardRef() must be on both sides of a genuine cycle and that OrdersModule-only forwardRef leaves PricingModule resolving OrdersModule eagerly, failing the same way. Concrete fix shown: imports: [forwardRef(() => OrdersModule)] in pricing.module.ts, plus @Inject(forwardRef(() => OrdersService)) on the constructor parameter for provider-level cycles. No fail criterion (reordering/merging) present."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states forwardRef() must be on both sides of a genuine cycle and that OrdersModule-only forwardRef leaves PricingModule resolving OrdersModule eagerly, failing the same way. Concrete fix shown: imports: [forwardRef(() => OrdersModule)] in pricing.module.ts, plus @Inject(forwardRef(() => OrdersService)) on the constructor parameter for provider-level cycles. No fail criterion (reordering/merging) present."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "triggers": {
+    "positive": [
+      "I need a unit test for OrdersService that swaps in a fake for its Repository dependency instead of hitting the real database",
+      "How do I replace the payment gateway provider with a stub when testing this NestJS module, without making real API calls",
+      "I need to drive the real POST /users route through supertest against a fully bootstrapped NestJS app instance, hitting actual guards and pipes instead of mocking the controller directly.",
+      "I want to unit test a NestJS route guard that checks role metadata, but without booting the whole app -- just fake out whatever it pulls from Reflector.",
+      "My NestJS test throws saying a provider is missing when the test module tries to compile -- what's wrong with my test setup",
+      "My NestJS e2e test suite hangs and never exits after the run finishes, even though every test passes"
+    ],
+    "negative": [
+      "Fix this NestJS build error: Nest can't resolve dependencies of UsersService",
+      "Add a new NestJS module with a controller and service for invoices",
+      "Write plain Jest tests for a date-formatting utility function with no NestJS dependencies",
+      "Review this NestJS PR for missing DTO validation and N+1 queries",
+      "Write Vue component tests using Vue Test Utils and Vitest",
+      "Add class-validator decorators to this DTO for the new signup endpoint"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mock-dependency-boundary",
+      "prompt": "I'm writing a unit test for UsersService, which depends on UsersRepository. What's the right way to set this up with @nestjs/testing?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer replaces UsersRepository with a test double -- via a { provide: UsersRepository, useValue/useFactory/useClass } entry in a hand-assembled Test.createTestingModule providers array, or via .overrideProvider(UsersRepository) on a module built from imports -- mocking at the injected-dependency boundary rather than stubbing an internal method of UsersService itself. A plain `new UsersService(fakeRepo)` is also an acceptable answer for testing the service's own logic in isolation, since NestJS's own docs show this pattern too, as long as UsersRepository itself (not an internal method) is what gets faked.",
+          "pass_criteria": [
+            "States that UsersRepository should be replaced with a test double -- either declared directly in a Test.createTestingModule providers array, via .overrideProvider(UsersRepository), or passed as a plain fake to `new UsersService(fakeRepo)` -- rather than by stubbing a private/internal method on UsersService"
+          ],
+          "fail_criteria": [
+            "Recommends stubbing or spying on a private/internal method of UsersService itself (e.g. the method that calls the repository) instead of faking UsersRepository at its own boundary, regardless of which construction approach is used"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Build UsersService with UsersRepository replaced by a fake, mocking at the repository boundary rather than reaching inside UsersService itself:\n\nconst moduleRef = await Test.createTestingModule({\n  providers: [\n    UsersService,\n    { provide: UsersRepository, useValue: mockRepo },\n  ],\n}).compile();\n\nconst service = moduleRef.get(UsersService);\n\nThat exercises the same DI resolution the real app uses. A plain `const service = new UsersService(mockRepo);` works just as well here too, since this is testing UsersService's own logic in isolation, not the module's DI wiring -- either way, the fake stands in for UsersRepository, not for a method inside UsersService. Then assert against UsersService's own return values or thrown exceptions using the mock's canned responses.",
+        "known_wrong": "Just call the real UsersService with the real UsersRepository wired up as-is, and let the test hit whatever backing store UsersRepository actually uses in this environment -- no mock needed, it'll just use the same repository the app does at runtime.",
+        "vague": "Set the test up so UsersRepository is replaced with something fake, so you can test UsersService's logic on its own.",
+        "subtle_wrong": "Use Test.createTestingModule with just UsersService in providers, then inside the test call jest.spyOn(service, 'findUserRecord') (the private method that talks to the repository) and mock its return value directly -- that way you don't need to bother wiring up a UsersRepository provider override at all."
+      }
+    },
+    {
+      "id": "e2e-hanging-suite",
+      "prompt": "My NestJS e2e test suite finishes but the process hangs and I have to Ctrl+C it. What's the likely cause and the right fix?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies a missing app.close() call as the likely cause -- an e2e spec that calls moduleRef.createNestApplication()/app.init() but never closes the app leaks open resources like DB connections and timers -- and fixes it by calling app.close() in an afterAll hook, rather than forcing the test runner to exit.",
+          "pass_criteria": [
+            "Identifies a missing app.close() (after createNestApplication()/app.init()) as the likely cause of the hang, naming that it leaks open resources such as DB connections or timers",
+            "States the concrete fix: call app.close() inside an afterAll hook for every e2e spec that created the app"
+          ],
+          "fail_criteria": [
+            "Recommends forcing the test runner to exit (e.g. a force-exit flag or calling process.exit in the test) as the fix instead of closing the application properly"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "That's almost always a missing app.close(). An e2e spec that does moduleRef.createNestApplication() and app.init() but never closes the app leaves open handles behind -- DB connections, timers, anything the app opened during bootstrap -- and the test runner can't exit cleanly because those handles are still alive. Fix it by closing the app once the spec file is done:\n\nafterAll(async () => {\n  await app.close();\n});\n\nCheck every e2e spec file that calls createNestApplication() has a matching close in its afterAll, not just the one you're currently debugging -- it's easy for one spec file to have it and a newer one to be missing it.",
+        "known_wrong": "That's just Jest being slow to exit sometimes, nothing to actually fix -- add --forceExit to the test script in package.json and it'll stop hanging. A lot of NestJS projects run with forceExit anyway.",
+        "vague": "Something is probably still open after the tests finish, so you'd want to make sure everything gets cleaned up properly at the end.",
+        "subtle_wrong": "Likely an open DB connection somewhere. Rather than chasing down which spec is missing the cleanup, just add --detectOpenHandles --forceExit to the e2e test script -- forceExit will make the process exit regardless, and detectOpenHandles at least tells you what's open if you want to look into it later."
+      }
+    }
+  ]
+}

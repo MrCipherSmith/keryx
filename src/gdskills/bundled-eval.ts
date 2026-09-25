@@ -215,6 +215,31 @@ export const HARNESS_HOME_ROOTS: readonly string[] = [
 ];
 
 /**
+ * `~/` is ALSO a bundler root-alias, not a shell home-directory reference, in
+ * Nuxt (`srcDir` alias) — `~/pages/orders.vue` resolves to
+ * `<project>/pages/orders.vue` on every machine, same as `~/.claude`
+ * resolves to a harness's own config directory; neither names a particular
+ * person's home. Recognized only for the specific top-level directories a
+ * DeepSeek-recorded eval trial answer actually needed (flow 318, W4 batch
+ * 2, R1 review PR #719 minor-1) — trimmed deliberately short rather than
+ * Nuxt's full conventional set, since several of those names (`server`,
+ * `public`, `utils`, `app`) are also plausible real personal home
+ * subdirectories and this list is a named security exception, not a style
+ * preference. Widen it only when new shipped content genuinely needs
+ * another entry, one name at a time.
+ */
+const FRAMEWORK_TILDE_ALIAS_DIRS: readonly string[] = ["~/pages", "~/components", "~/composables", "~/layouts"];
+
+/**
+ * The two packs whose shipped content may legitimately use a Nuxt `~/`
+ * alias (their own eval trial recordings and rule/skill prose) — checked as
+ * a substring of the FILE PATH the offender was found in, never applied
+ * repo-wide. A `filePath` outside this scope gets no tilde-alias exemption
+ * at all, regardless of what the matched text looks like.
+ */
+const FRAMEWORK_TILDE_ALIAS_SCOPE: readonly string[] = ["stacks/nextjs-nuxt/", "stacks/vue/"];
+
+/**
  * The account names a documentation example is allowed to use.
  *
  * `/Users/dev/<PROJECT>` in a schema's `examples` is not a personal path: it
@@ -255,9 +280,19 @@ export function personaOffenders(text: string): { line: number; kind: "name" | "
   return out;
 }
 
-/** Every path into a particular person's home directory, as `{ line, why }`. */
-export function homePathOffenders(text: string): { line: number; why: string }[] {
+/**
+ * Every path into a particular person's home directory, as `{ line, why }`.
+ * `filePath` (R1 review, PR #719, minor-1) is the file the text was read
+ * from — the `FRAMEWORK_TILDE_ALIAS_DIRS` exemption applies only when it is
+ * provided AND falls under `FRAMEWORK_TILDE_ALIAS_SCOPE`; omitted, every
+ * `~/` match outside `HARNESS_HOME_ROOTS` is flagged, same as before this
+ * fix. A match carrying a literal `..` segment is NEVER exempted, regardless
+ * of scope — `~/pages/../.ssh/id_rsa` is a traversal out of the alias, not
+ * an alias reference.
+ */
+export function homePathOffenders(text: string, filePath?: string): { line: number; why: string }[] {
   const out: { line: number; why: string }[] = [];
+  const tildeAliasInScope = filePath !== undefined && FRAMEWORK_TILDE_ALIAS_SCOPE.some((scope) => filePath.includes(scope));
   text.split("\n").forEach((raw, index) => {
     for (const match of raw.matchAll(ABSOLUTE_HOME)) {
       const account = match[1] ?? "";
@@ -270,6 +305,11 @@ export function homePathOffenders(text: string): { line: number; why: string }[]
       // expansion is the thing being checked.
       const normalised = match.replace(/^.*:-/, "");
       if (HARNESS_HOME_ROOTS.some((root) => normalised.startsWith(root))) continue;
+      const isFrameworkAlias =
+        tildeAliasInScope &&
+        !normalised.split("/").includes("..") &&
+        FRAMEWORK_TILDE_ALIAS_DIRS.some((root) => normalised.startsWith(`${root}/`));
+      if (isFrameworkAlias) continue;
       out.push({ line: index + 1, why: `home path outside the known harness roots — ${match}` });
     }
   });
@@ -2041,7 +2081,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     for (const offender of personaOffenders(text)) {
       add(offender.kind === "name" ? "persona:name" : "persona:marker", offender.line, offender.why);
     }
-    for (const offender of homePathOffenders(text)) {
+    for (const offender of homePathOffenders(text, file)) {
       add("path:personal-home", offender.line, offender.why);
     }
 
