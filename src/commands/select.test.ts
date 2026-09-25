@@ -201,10 +201,12 @@ describe("AC1 — detectProviders: ollama /api/tags, env-gated anthropic, always
     expect(openai.models.length).toBeGreaterThan(0);
   });
 
-  test("openai is absent when OPENAI_API_KEY is unset", async () => {
+  test("OpenAI API and ChatGPT / Codex are offered separately before credentials exist", async () => {
     const deps: DetectProvidersDeps = { fetch: fixedFetch("", 500), env: {} };
     const detected = await detectProviders(deps);
-    expect(detected.find((d) => d.name === "openai")).toBeUndefined();
+    expect(detected.find((d) => d.name === "openai")?.label).toBe("OpenAI API");
+    expect(detected.find((d) => d.name === "openai-codex")?.label).toBe("ChatGPT / Codex");
+    expect(detected.find((d) => d.name === "openai-codex")?.models.length).toBeGreaterThan(0);
   });
 
   test("gemini is present with a non-empty model list when GEMINI_API_KEY is set", async () => {

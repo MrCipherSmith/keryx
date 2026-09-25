@@ -80,8 +80,13 @@ export const PROVIDER_AUTH_CATALOG: readonly ProviderAuthCatalog[] = [
   },
   {
     provider: "openai",
-    label: "OpenAI",
-    methods: ["oauth-pkce-loopback", "device-code", "api-key"],
+    label: "OpenAI API",
+    methods: ["api-key"],
+  },
+  {
+    provider: "openai-codex",
+    label: "ChatGPT / Codex subscription",
+    methods: ["device-code"],
   },
   {
     provider: "github-copilot",
@@ -121,7 +126,7 @@ export function catalogRefusal(provider: string): string | undefined {
 export function deviceCodeMethodLabel(provider: string): string {
   if (provider === "grok") return "SuperGrok Subscription";
   if (provider === "github-copilot") return "Login with GitHub Copilot";
-  if (provider === "openai") return "ChatGPT Plus/Pro (headless)";
+  if (provider === "openai-codex") return "ChatGPT Plus/Pro (headless)";
   return "Device authorization";
 }
 

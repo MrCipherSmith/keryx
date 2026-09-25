@@ -4,11 +4,14 @@
 
 import { DeviceCodeError } from "./device-code";
 import type { DeviceTokenSet } from "./device-code";
+import { codexTokenMetadata } from "./openai-token";
+
+export interface CodexTokenSet extends DeviceTokenSet { accountId?: string; expiresAt?: number }
 
 export const OPENAI_CODEX_ISSUER = "https://auth.openai.com";
 export const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 
-const POLL_SAFETY_MARGIN_MS = 3_000;
+const DEVICE_LOGIN_TIMEOUT_MS = 15 * 60 * 1000;
 
 export interface CodexDeviceChallenge {
   deviceAuthId: string;
@@ -20,7 +23,9 @@ export interface CodexDeviceChallenge {
 type OAuthFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 function withSignal(base: RequestInit, signal?: AbortSignal): RequestInit {
-  return signal === undefined ? base : { ...base, signal };
+  if (signal?.aborted === true) throw new DeviceCodeError("cancelled", "device authorization was cancelled");
+  const timeout = AbortSignal.timeout(30_000);
+  return { ...base, signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]) };
 }
 
 export async function requestCodexDeviceCode(
@@ -41,8 +46,9 @@ export async function requestCodexDeviceCode(
   if (!response.ok || typeof json !== "object" || json === null) {
     throw new DeviceCodeError("failed", `ChatGPT device authorization failed (HTTP ${response.status})`);
   }
-  const rec = json as { device_auth_id?: unknown; user_code?: unknown; interval?: unknown };
-  if (typeof rec.device_auth_id !== "string" || typeof rec.user_code !== "string") {
+  const rec = json as { device_auth_id?: unknown; user_code?: unknown; usercode?: unknown; interval?: unknown };
+  rec.user_code ??= rec.usercode;
+  if (typeof rec.device_auth_id !== "string" || rec.device_auth_id.length === 0 || typeof rec.user_code !== "string" || rec.user_code.length === 0 || [...rec.user_code].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
     throw new DeviceCodeError("failed", "ChatGPT device authorization is missing device_auth_id / user_code");
   }
   const intervalSeconds = Number(rec.interval);
@@ -57,10 +63,10 @@ export async function requestCodexDeviceCode(
 export async function pollCodexDeviceToken(
   challenge: CodexDeviceChallenge,
   http: { fetch: OAuthFetch; sleep?: (ms: number) => Promise<void>; now?: () => number; signal?: AbortSignal },
-): Promise<DeviceTokenSet> {
-  const sleep = http.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+): Promise<CodexTokenSet> {
+  const sleep = http.sleep;
   const now = http.now ?? Date.now;
-  const deadline = now() + 5 * 60 * 1000;
+  const deadline = now() + DEVICE_LOGIN_TIMEOUT_MS;
   while (now() < deadline) {
     if (http.signal?.aborted === true) {
       throw new DeviceCodeError("cancelled", "device authorization was cancelled");
@@ -86,7 +92,7 @@ export async function pollCodexDeviceToken(
     if (response.status !== 403 && response.status !== 404) {
       throw new DeviceCodeError("failed", `ChatGPT device token poll failed (HTTP ${response.status})`);
     }
-    await sleep(challenge.intervalMs + POLL_SAFETY_MARGIN_MS);
+    await abortableSleep(Math.min(challenge.intervalMs, Math.max(0, deadline - now())), sleep, http.signal);
   }
   throw new DeviceCodeError("timeout", "ChatGPT device authorization timed out");
 }
@@ -95,7 +101,7 @@ async function exchangeCodexAuthorizationCode(
   code: string,
   codeVerifier: string,
   http: { fetch: OAuthFetch; signal?: AbortSignal },
-): Promise<DeviceTokenSet> {
+): Promise<CodexTokenSet> {
   const response = await http.fetch(
     `${OPENAI_CODEX_ISSUER}/oauth/token`,
     withSignal(
@@ -117,10 +123,30 @@ async function exchangeCodexAuthorizationCode(
   if (!response.ok || typeof json !== "object" || json === null || typeof (json as { access_token?: unknown }).access_token !== "string") {
     throw new DeviceCodeError("failed", `ChatGPT token exchange failed (HTTP ${response.status})`);
   }
-  const rec = json as { access_token: string; refresh_token?: unknown; expires_in?: unknown };
+  const rec = json as { access_token: string; refresh_token?: unknown; expires_in?: unknown; id_token?: unknown };
+  const access = codexTokenMetadata(rec.access_token);
+  const accountId = codexTokenMetadata(rec.id_token).accountId ?? access.accountId;
   return {
     accessToken: rec.access_token,
+    ...(accountId !== undefined ? { accountId } : {}),
+    ...(access.expiresAt !== undefined ? { expiresAt: access.expiresAt } : {}),
     ...(typeof rec.refresh_token === "string" ? { refreshToken: rec.refresh_token } : {}),
-    ...(typeof rec.expires_in === "number" ? { expiresInSeconds: rec.expires_in } : {}),
+    ...(typeof rec.expires_in === "number" && Number.isFinite(rec.expires_in) && rec.expires_in > 0 ? { expiresInSeconds: rec.expires_in } : {}),
   };
+}
+
+async function abortableSleep(ms: number, sleep?: (ms: number) => Promise<void>, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted === true) throw new DeviceCodeError("cancelled", "device authorization was cancelled");
+  await new Promise<void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => { cleanup(); reject(new DeviceCodeError("cancelled", "device authorization was cancelled")); };
+    const done = () => { cleanup(); resolve(); };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (sleep === undefined) timer = setTimeout(done, ms);
+    else void sleep(ms).then(done, () => { cleanup(); reject(new DeviceCodeError("failed", "device authorization wait failed")); });
+  });
 }

@@ -18,7 +18,8 @@ import {
   saveOAuthGrant,
   type OAuthGrant,
 } from "./grants";
-import { pollCodexDeviceToken, requestCodexDeviceCode } from "./openai-codex";
+import { pollCodexDeviceToken, requestCodexDeviceCode, type CodexTokenSet } from "./openai-codex";
+import { refreshOpenAiCodexGrant } from "./openai-subscription";
 
 export interface LoginChallenge {
   userCode: string;
@@ -55,7 +56,8 @@ function present(challenge: Pick<DeviceCodeChallenge, "userCode" | "verification
     ...(challenge.verificationUriComplete !== undefined
       ? { verificationUriComplete: challenge.verificationUriComplete }
       : {}),
-    instructions: `Open ${challenge.verificationUri} and enter code: ${challenge.userCode} (${deviceCodeMethodLabel(provider)})`,
+    instructions: `Open ${challenge.verificationUri} and enter code: ${challenge.userCode} (${deviceCodeMethodLabel(provider)}).` +
+      (provider === "openai-codex" ? " Enable device code login in ChatGPT Settings > Security if required. Cancel with Ctrl+C." : ""),
   };
 }
 
@@ -110,14 +112,20 @@ export async function loginDeviceCode(input: DeviceLoginInput): Promise<DeviceLo
   }
   try {
     const tokens =
-      input.provider === "openai"
+      input.provider === "openai-codex"
         ? await loginCodex(input)
         : await loginRfc8628(input);
     saveOAuthGrant(input.provider, grantFromTokens("device-code", tokens, input.now), input.dir);
+    if (input.provider === "openai-codex" && loadOAuthGrant(input.provider, input.dir)?.access !== tokens.accessToken) {
+      throw new DeviceCodeError("failed", "Could not save ChatGPT login securely. Check the Keryx config directory permissions.");
+    }
     return { ok: true, provider: input.provider };
   } catch (err) {
     const message =
-      err instanceof DeviceCodeError
+      input.signal?.aborted === true ? "Device authorization was cancelled." :
+      input.provider === "openai-codex" && !(err instanceof DeviceCodeError)
+        ? "ChatGPT device authorization failed. Run `keryx auth login openai-codex` to retry."
+        : err instanceof DeviceCodeError
         ? err.message
         : err instanceof Error
           ? err.message
@@ -126,8 +134,9 @@ export async function loginDeviceCode(input: DeviceLoginInput): Promise<DeviceLo
   }
 }
 
-async function loginCodex(input: DeviceLoginInput): Promise<DeviceTokenSet> {
-  const http = httpOf(input);
+async function loginCodex(input: DeviceLoginInput): Promise<CodexTokenSet> {
+  const timeout = AbortSignal.timeout(15 * 60 * 1000);
+  const http = { ...httpOf(input), signal: input.signal === undefined ? timeout : AbortSignal.any([input.signal, timeout]) };
   const challenge = await requestCodexDeviceCode(http);
   input.onChallenge(
     present(
@@ -135,10 +144,14 @@ async function loginCodex(input: DeviceLoginInput): Promise<DeviceTokenSet> {
         userCode: challenge.userCode,
         verificationUri: challenge.verificationUri,
       },
-      "openai",
+      "openai-codex",
     ),
   );
-  return pollCodexDeviceToken(challenge, http);
+  const tokens = await pollCodexDeviceToken(challenge, http);
+  if (tokens.accountId === undefined) {
+    throw new DeviceCodeError("failed", "ChatGPT login returned no account identity. Run `keryx auth login openai-codex` to retry.");
+  }
+  return tokens;
 }
 
 export async function refreshProviderGrant(
@@ -146,6 +159,10 @@ export async function refreshProviderGrant(
   http: { fetch: import("./device-code").OAuthFetch; signal?: AbortSignal; now?: () => number },
   dir?: string,
 ): Promise<OAuthGrant | undefined> {
+  if (provider === "openai-codex" || provider === "openai") {
+    if (loadOAuthGrant("openai-codex", dir) === undefined) return undefined;
+    return refreshOpenAiCodexGrant({ ...http, ...(dir !== undefined ? { configDir: dir } : {}) });
+  }
   const grant = loadOAuthGrant(provider, dir);
   if (grant === undefined || !grantNeedsRefresh(grant, http.now)) {
     return grant;
@@ -168,9 +185,6 @@ export async function refreshProviderGrant(
     saveOAuthGrant(provider, next, dir);
     return next;
   }
-  if (provider === "openai") {
-    return grant;
-  }
   const tokens = await refreshAccessToken(
     {
       tokenEndpoint: endpoints.tokenEndpoint,
@@ -187,7 +201,7 @@ export async function refreshProviderGrant(
 }
 
 /** Providers whose stored grant a session refreshes before building a provider from it. */
-const SESSION_REFRESHED_GRANTS = ["grok", "github-copilot"] as const;
+const SESSION_REFRESHED_GRANTS = ["grok", "github-copilot", "openai-codex"] as const;
 
 /**
  * Refresh every stored grant that has expired or is about to, before any surface
@@ -223,7 +237,7 @@ export async function refreshSavedGrants(
       }
       continue;
     }
-    if (!grantNeedsRefresh(grant, http.now)) continue;
+    if (!grantNeedsRefresh(grant, http.now) && !(provider === "openai-codex" && grant.expires === undefined)) continue;
     try {
       await refreshProviderGrant(provider, http, dir);
     } catch (cause) {
@@ -238,5 +252,5 @@ export async function refreshSavedGrants(
 }
 
 export function logoutProvider(provider: string, dir?: string): void {
-  deleteOAuthGrant(provider, dir);
+  deleteOAuthGrant(provider === "openai" ? "openai-codex" : provider, dir);
 }

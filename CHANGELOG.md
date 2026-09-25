@@ -3,6 +3,27 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.5] — 2026-09-25
+
+Fixes from a live review of a real PR with every Jev reviewer. (0.3.4 was
+not published: its tag landed on the wrong commit and the release job refused it.)
+
+### Fixed
+- **`review-jev-docs` no longer crashes on a large diff.** A batch that
+  exceeded Jev's input limit used to fail the whole run with HTTP 400. Batches
+  are now smaller. A batch that still overflows is split in half and retried
+  once, and if that fails too it keeps its deterministic facts and reports
+  the Jev error.
+- **`review-jev-risk` stops scoring keryx's own bookkeeping.** Flow records,
+  data and review packages under `.metaproject/` are reported as not code.
+  A test file no longer produces a finding or a routing hint by itself; the
+  hint goes to the production file.
+- **`review-jev-rules` applies API rules only to API code.** A rule whose
+  scope is HTTP/API endpoints is paired only with hunks that look like an
+  API surface: paths under api/, routes/, controllers/, handlers/ or
+  server/, or code that imports an HTTP framework. The rule about endpoint
+  fields no longer fires on a CLI command registry.
+
 ## [0.3.3] — 2026-09-25
 
 A sixth Jev reviewer, Jev inside the review orchestrator, Jev-routed requests

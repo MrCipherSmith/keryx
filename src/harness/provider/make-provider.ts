@@ -22,12 +22,14 @@
 // naming fix, not part of this pure-extraction task).
 import { providerByName, resolveCompatReasoningPreset, resolveProviderBaseUrl } from "../../commands/providers";
 import { extraRequestHeaders } from "../../lib/oauth/catalog";
+import { ensureOpenAiCodexGrant } from "../../lib/oauth/openai-subscription";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
 import { GeminiProvider } from "./gemini/gemini-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
 import { OpenAiProvider } from "./openai/openai-provider";
+import { OpenAiCodexProvider, type OpenAiCodexAuthorize } from "./openai-codex/openai-codex-provider";
 import type { ProviderPort } from "./types";
 
 /** Mirrors `OllamaProvider`'s internal identity (unchanged since the flow 183 extraction). */
@@ -42,6 +44,10 @@ const OLLAMA_COMPAT_IDENTITY = {
 /** Injected construction inputs (fetch is passed through to the network providers). */
 export interface MakeProviderOpts {
   fetch: typeof fetch;
+  /** User-global auth directory, resolved on every subscription stream. */
+  configDir?: string;
+  /** Explicit OAuth capability for a caller that owns its credential scope. */
+  openAiCodexGrant?: OpenAiCodexAuthorize;
   /** Credential/config source; defaults to `process.env`. */
   env?: Record<string, string | undefined>;
   /**
@@ -85,6 +91,18 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
   // A scoped credential map (child path) takes precedence over ambient env, so a
   // child construction never reads `process.env` for keys it was not granted.
   const env = opts.credentials ?? opts.env ?? process.env;
+  if (name === "openai-codex") {
+    // A child credential scope must never gain authority by reading ambient auth.
+    const authorize = opts.openAiCodexGrant ?? (opts.credentials === undefined
+      ? (signal?: AbortSignal, forceRefresh?: boolean) => ensureOpenAiCodexGrant({
+          fetch: (url, init) => opts.fetch(url, init),
+          ...(opts.configDir === undefined ? {} : { configDir: opts.configDir }),
+          ...(signal === undefined ? {} : { signal }),
+          ...(forceRefresh === undefined ? {} : { forceRefresh }),
+        })
+      : undefined);
+    return new OpenAiCodexProvider({ fetch: opts.fetch, ...(authorize === undefined ? {} : { authorize }) });
+  }
   if (name === "anthropic") {
     const apiKey = env.ANTHROPIC_API_KEY;
     if (apiKey === undefined || apiKey.length === 0) {

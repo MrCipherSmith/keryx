@@ -8,9 +8,9 @@
   "id": "337",
   "slug": "wave-4-batch-5-stack-packs-for-php-larav",
   "title": "Wave 4 batch 5: stack packs for php-laravel, ruby-rails, c-cpp, sql-db",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-25T15:14:49.978Z",
-  "updatedAt": "2026-09-25T18:24:50.796Z",
+  "updatedAt": "2026-09-25T21:38:21.302Z",
   "source": {
     "type": "description",
     "ref": null
@@ -51,7 +51,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/735"
   },
   "baseBranch": "main",
   "owner": {
@@ -425,6 +425,40 @@
       "at": "2026-09-25T18:24:50.796Z",
       "event": "ac-confirmed",
       "detail": "AC8: each pack committed separately (b4dba877/3080ce2a/0d91d19b/2a6c494a), shared wiring separate, no stash/-A, gdgraph reverted after each commit, branch pushed to origin/flow/337-w4b5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T21:26:18.977Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/735 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T21:26:24.986Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T21:26:29.547Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T21:26:29.548Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/337-2026-09-25-wave-4-batch-5-stack-packs-for-php-larav/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#735 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__735.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 735 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-25T21:38:16.099Z",
+      "event": "completing",
+      "detail": "merged commit: 5dccc2fdf6c73b3029c6d1c4f1643ab337afaebb"
+    },
+    {
+      "at": "2026-09-25T21:38:21.302Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-25T21:38:21.302Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "signatures": [
@@ -515,6 +549,128 @@
       },
       "criterion": "AC8",
       "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T21:38:21.302Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1",
+      "headCommit": "5dccc2fdf6c73b3029c6d1c4f1643ab337afaebb"
     }
-  ]
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T21:26:29.547Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "5dccc2fdf6c73b3029c6d1c4f1643ab337afaebb is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "5dccc2fdf6c73b3029c6d1c4f1643ab337afaebb is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "11 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/337-2026-09-25-wave-4-batch-5-stack-packs-for-php-larav/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#735 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__735.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 735 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T21:38:21.302Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "5dccc2fdf6c73b3029c6d1c4f1643ab337afaebb is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "5dccc2fdf6c73b3029c6d1c4f1643ab337afaebb is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "11 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    }
+  ],
+  "merged": {
+    "commit": "5dccc2fdf6c73b3029c6d1c4f1643ab337afaebb",
+    "ref": "origin/main",
+    "at": "2026-09-25T21:38:21.302Z"
+  }
 }

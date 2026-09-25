@@ -1,0 +1,37 @@
+{
+  "task": {
+    "task_id": "task-2",
+    "task_name": "Native subscription Responses transport",
+    "task_type": "mixed",
+    "description": "Implement native provider/factory slice only, shell.ts only realMakeProvider/oauthCredentialsFor; add RED transport fixtures then GREEN.",
+    "target_files": [
+      "src/harness/provider/openai/",
+      "src/harness/provider/openai-codex/",
+      "src/harness/provider/make-provider.ts",
+      "src/commands/shell.ts"
+    ],
+    "acceptance_criteria": [
+      "Separate openai-codex transport sends subscription endpoint and account header, storage off and correct payload",
+      "Stream text/tools/reasoning using shared parser; API openai behavior unchanged",
+      "No ambient OAuth access for scoped child credentials; missing/revoked credentials actionable, not FakeProvider"
+    ],
+    "context": "See flow342 context.md/plan.md/frozen AC and explicit worker message for ownership and confirmed OpenAI protocol. No live user login. No release.",
+    "existing_tests": [
+      "src/lib/oauth/openai-subscription.test.ts",
+      "src/commands/select.test.ts"
+    ]
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx-openai-subscription",
+    "branch": "codex/openai-subscription",
+    "context_path": ".metaproject/flows/342-2026-09-25-openai-api-and-chatgpt-subscription-as-s/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}
