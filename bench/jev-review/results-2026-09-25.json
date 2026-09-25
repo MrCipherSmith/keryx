@@ -1,0 +1,199 @@
+{
+  "meta": {
+    "generatedAt": "2026-09-25T14:03:08.547Z",
+    "mode": "live",
+    "datasetCounts": {
+      "packages": 254,
+      "findings": 1638,
+      "byLabel": {
+        "true-positive": 1351,
+        "false-positive": 3,
+        "unlabeled": 284
+      }
+    },
+    "totalUsage": {
+      "jevCalls": 34,
+      "cost": 0.001695136,
+      "wallClockMs": 238194
+    },
+    "notes": [
+      "Live run: ci-triage's with-jev arm called the real gh + Jev/OpenRouter endpoint; review-conform has no --live path (see its adapter's file header) and always replays committed fixtures."
+    ]
+  },
+  "components": [
+    {
+      "component": "ci-triage",
+      "arm": "without-jev",
+      "available": true,
+      "n": 8,
+      "anecdotal": true,
+      "accuracy": {
+        "successes": 4,
+        "n": 8,
+        "rate": 0.5,
+        "ci95": {
+          "lower": 0.21521606221387757,
+          "upper": 0.7847839377861224
+        },
+        "reliability": "exact"
+      },
+      "precision": {
+        "successes": 4,
+        "n": 8,
+        "rate": 0.5,
+        "ci95": {
+          "lower": 0.21521606221387757,
+          "upper": 0.7847839377861224
+        },
+        "reliability": "exact"
+      },
+      "noise": {
+        "successes": 4,
+        "n": 8,
+        "rate": 0.5,
+        "ci95": {
+          "lower": 0.21521606221387757,
+          "upper": 0.7847839377861224
+        },
+        "reliability": "exact"
+      },
+      "addedTruePositives": null,
+      "usage": {
+        "jevCalls": 0,
+        "inputTokens": 0,
+        "cost": 0,
+        "wallClockMs": 0
+      }
+    },
+    {
+      "component": "ci-triage",
+      "arm": "with-jev",
+      "available": true,
+      "n": 8,
+      "anecdotal": true,
+      "accuracy": {
+        "successes": 3,
+        "n": 8,
+        "rate": 0.375,
+        "ci95": {
+          "lower": 0.13684428582359737,
+          "upper": 0.6942576053973728
+        },
+        "reliability": "exact"
+      },
+      "precision": {
+        "successes": 3,
+        "n": 8,
+        "rate": 0.375,
+        "ci95": {
+          "lower": 0.13684428582359737,
+          "upper": 0.6942576053973728
+        },
+        "reliability": "exact"
+      },
+      "noise": {
+        "successes": 5,
+        "n": 8,
+        "rate": 0.625,
+        "ci95": {
+          "lower": 0.3057423946026273,
+          "upper": 0.8631557141764027
+        },
+        "reliability": "exact"
+      },
+      "addedTruePositives": null,
+      "usage": {
+        "jevCalls": 16,
+        "inputTokens": 19724,
+        "cost": 0.000828408,
+        "wallClockMs": 237503
+      }
+    },
+    {
+      "component": "review-conform",
+      "arm": "without-jev",
+      "available": true,
+      "n": 5,
+      "anecdotal": true,
+      "accuracy": null,
+      "precision": null,
+      "noise": null,
+      "addedTruePositives": null,
+      "usage": {
+        "jevCalls": 0,
+        "inputTokens": 0,
+        "cost": 0,
+        "wallClockMs": 339
+      }
+    },
+    {
+      "component": "review-conform",
+      "arm": "with-jev",
+      "available": true,
+      "n": 5,
+      "anecdotal": true,
+      "accuracy": null,
+      "precision": null,
+      "noise": null,
+      "addedTruePositives": null,
+      "usage": {
+        "jevCalls": 2,
+        "inputTokens": 1024,
+        "cost": 0.00004,
+        "wallClockMs": 352
+      }
+    },
+    {
+      "component": "flow-check-ac",
+      "arm": "without-jev",
+      "available": false,
+      "reason": "flow 328 (`keryx flow check-ac`) has not landed in this worktree yet."
+    },
+    {
+      "component": "flow-check-ac",
+      "arm": "with-jev",
+      "available": false,
+      "reason": "flow 328 (`keryx flow check-ac`) has not landed in this worktree yet."
+    },
+    {
+      "component": "review-jev-rules",
+      "arm": "without-jev",
+      "available": false,
+      "reason": "flow 330 (`keryx review jev-rules`) has not landed in this worktree yet."
+    },
+    {
+      "component": "review-jev-rules",
+      "arm": "with-jev",
+      "available": false,
+      "reason": "flow 330 (`keryx review jev-rules`) has not landed in this worktree yet."
+    },
+    {
+      "component": "severity-calibration",
+      "arm": "without-jev",
+      "available": false,
+      "reason": "severity calibration / duplicate merge has not landed in this worktree yet (no flow number assigned as of flow 331)."
+    },
+    {
+      "component": "severity-calibration",
+      "arm": "with-jev",
+      "available": false,
+      "reason": "severity calibration / duplicate merge has not landed in this worktree yet (no flow number assigned as of flow 331)."
+    }
+  ],
+  "variance": [
+    {
+      "component": "ci-triage",
+      "repeats": 2,
+      "values": [
+        0.375,
+        0.5
+      ],
+      "mean": 0.4375,
+      "stddev": 0.0625,
+      "bootstrapCi95": {
+        "lower": 0.375,
+        "upper": 0.5
+      }
+    }
+  ]
+}
