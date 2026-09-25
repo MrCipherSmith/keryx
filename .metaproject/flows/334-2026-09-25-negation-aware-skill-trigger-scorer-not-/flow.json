@@ -10,7 +10,7 @@
   "title": "Negation-aware skill trigger scorer: Not-for clauses stop counting as evidence",
   "status": "in-progress",
   "createdAt": "2026-09-25T14:52:23.218Z",
-  "updatedAt": "2026-09-25T16:16:08.438Z",
+  "updatedAt": "2026-09-25T17:22:04.451Z",
   "source": {
     "type": "description",
     "ref": null
@@ -200,12 +200,17 @@
       "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-25T15:09:00.668Z",
             "outcome": "started",
             "detail": "opening PR, targeting main"
+          },
+          {
+            "at": "2026-09-25T17:22:04.167Z",
+            "outcome": "started",
+            "detail": "post-#719-merge re-measurement and CI fixes"
           }
         ]
       },
@@ -213,7 +218,7 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "PR #725 opened against main, review rounds 1 and 2 clean (0 blocker/major after fixes), all CI checks green, PR marked ready for review; merge deliberately withheld pending PR #719 per owner's standing instruction (do not merge before #719 merges) - flow left in-progress, not completed, until the actual merge is confirmed"
+      "dispositionReason": "merged origin/main (PR #719 landed), re-measured ratchet/stable-gate/batch-2/misroute against the 110-skill catalog, fixed 3 CI-only issues (mirror sync, fragile test fixture, test timeout), all CI green on b53c713c; merge still withheld pending owner sequencing per standing instruction"
     }
   ],
   "history": [
@@ -332,6 +337,16 @@
     },
     {
       "at": "2026-09-25T16:16:08.438Z",
+      "event": "task-done",
+      "detail": "T10: PR, review/fix loop, CI, merge sequencing"
+    },
+    {
+      "at": "2026-09-25T17:22:04.167Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 2) — post-#719-merge re-measurement and CI fixes"
+    },
+    {
+      "at": "2026-09-25T17:22:04.451Z",
       "event": "task-done",
       "detail": "T10: PR, review/fix loop, CI, merge sequencing"
     }

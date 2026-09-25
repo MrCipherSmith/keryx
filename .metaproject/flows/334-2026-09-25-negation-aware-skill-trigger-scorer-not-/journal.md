@@ -556,3 +556,5 @@ finding for a future flow (either add "circular dependency" as recognized
 vocabulary to `go-build-fix`'s description, which would be an honest
 scope-accuracy fix same as this flow's four description edits, or address
 it at the routing/synonym layer).
+- 2026-09-25T17:22:04.167Z - task-attempt: T10: started (attempt 2) — post-#719-merge re-measurement and CI fixes
+- 2026-09-25T17:22:04.451Z - task-done: T10: PR, review/fix loop, CI, merge sequencing
