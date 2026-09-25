@@ -1,6 +1,6 @@
 ---
 name: php-laravel-code-review
-description: "Use when reviewing a PHP / Laravel change for framework-specific risks -- mass assignment from unvalidated input, N+1 queries, raw SQL interpolation, unescaped Blade output, missing CSRF protection, and non-idempotent queue jobs. Read-only, no edits."
+description: "Use when auditing a PHP/Laravel diff before merge for Eloquent and Blade pitfalls -- \$fillable/\$guarded mass-assignment gaps, missing eager-loaded relationships causing N+1 queries, string-interpolated DB::raw() SQL, unescaped {!! !!} Blade output, a route dropped from VerifyCsrfToken coverage, and a queued job with no idempotency guard. Read-only, no edits."
 triggers:
   - "review this Laravel diff for mass assignment issues"
   - "check this Eloquent change for N+1 queries"

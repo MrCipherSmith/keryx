@@ -2,11 +2,11 @@
   "triggers": {
     "positive": [
       "composer install is failing after I added a new package",
-      "This Laravel app throws a fatal error on boot after the last deploy",
+      "Staging 500s on every request since we swapped in the new Redis session driver",
       "phpstan is reporting a failure on this file, can you fix it",
-      "Fix this class not found autoload error in the new namespace",
-      "The service provider isn't registering correctly after this refactor",
-      "php artisan test is failing after this change and I'm not sure why",
+      "Composer dump-autoload runs clean but PHP still can't find App\\Services\\Billing\\InvoiceBuilder at runtime",
+      "I split AppServiceProvider into three smaller providers and now the queue connection singleton isn't bound anymore",
+      "The whole test suite went red with 'could not find driver' right after I bumped the sqlite package version",
       "Our build is broken because of a dependency version conflict",
       "Larastan is flagging an undefined property on this model"
     ],

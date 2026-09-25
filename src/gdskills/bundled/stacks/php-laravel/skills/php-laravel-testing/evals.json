@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Write a Pest test for this controller's store endpoint",
-      "Add feature tests covering this API endpoint's happy path and errors",
-      "Fix this failing PHPUnit test after the model change",
-      "Add a factory and test coverage for this new model",
-      "Write tests that assert this job gets queued when an order ships",
-      "Test this form's validation errors for missing required fields",
+      "How do I cover the happy path for OrderController@update with Pest?",
+      "The /api/subscriptions endpoint has zero coverage, can you add tests for both success and failure?",
+      "InvoiceTest started failing with a missing column error after I added tax_rate to the migration",
+      "The RefundRequest model I just created has no factory yet and no tests",
+      "How do I verify the ShipmentNotification job actually dispatches when an order flips to shipped?",
+      "Does the checkout form request properly reject submissions missing the shipping_address field?",
       "Add test coverage for the subscription renewal email job",
       "Write a test that checks an unauthenticated user gets redirected from this route"
     ],

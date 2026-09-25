@@ -16,19 +16,18 @@
     "justification": "Nearest match ruby-rails-testing (0.35) covers RSpec/Minitest for a different language/framework (Ruby/Rails), not Pest/PHPUnit or Laravel's Queue/Mail/Event/Http fakes. go-testing (0.24) and react-testing (0.24) are for unrelated stacks (Go's testing package, Jest/RTL). No existing skill covers Laravel's own test tooling (Pest, factories, RefreshDatabase, framework fakes), so this is a genuine create."
   },
   {
-    "query": "Use when reviewing a PHP / Laravel change for framework-specific risks -- mass assignment from unvalidated input, N+1 queries, raw SQL interpolation, unescaped Blade output, missing CSRF protection, and non-idempotent queue jobs. Read-only, no edits.",
-    "decision": "use",
-    "topMatch": "ruby-rails/ruby-rails-code-review",
-    "recordedAt": "2026-09-25T15:27:53.389Z",
-    "skillName": "php-laravel-code-review",
-    "justification": "Top match ruby-rails-code-review (0.58) scores high only because the risk-category vocabulary (mass assignment, N+1, raw SQL, idempotent jobs) is shared prose across both frameworks -- the actual review targets are Rails/ActiveRecord-specific (strong_parameters, ActiveRecord query interface, ERB) and give no guidance on Laravel's own APIs: Eloquent's $fillable/$guarded, Blade's {{ }}/{!! !!} escaping, VerifyCsrfToken's exempt list, or ShouldBeUnique/uniqueId() for queued jobs. A reviewer following the Rails skill would not know what file/line pattern or fix direction to name in a Laravel diff. This pack has no lang:php skill to extend and is the first PHP/Laravel reviewer in the catalog, so a Laravel-specific skill is a genuine create despite the lexical overlap."
-  },
-  {
     "query": "Use when composer install/update fails, PHP fatal errors block a Laravel app from booting, phpstan/larastan reports a failing analysis, or a previously-passing test suite is now failing -- resolves dependency conflicts, autoload issues, config/service-provider errors, and static-analysis findings with the smallest root-cause fix.",
     "decision": "fork",
     "topMatch": "ruby-rails/ruby-rails-build-fix",
     "recordedAt": "2026-09-25T15:28:05.422Z",
     "skillName": "php-laravel-build-fix",
     "justification": "Nearest match ruby-rails-build-fix (0.39) resolves Bundler/Gemfile conflicts and Rails boot errors -- not composer.json/composer.lock conflicts, PSR-4 autoload mismatches, or phpstan/Larastan findings, none of which apply to a Ruby/Bundler toolchain. python-build-fix (0.25) and nodejs-build-fix (0.21) resolve pip/npm/tsc failures for unrelated languages. No existing skill knows Composer's dependency resolution, PSR-4 autoloading, or PHP static-analysis tooling, so this is a genuine create."
+  },
+  {
+    "query": "Use when auditing a PHP/Laravel diff before merge for Eloquent and Blade pitfalls -- $fillable/$guarded mass-assignment gaps, missing eager-loaded relationships causing N+1 queries, string-interpolated DB::raw() SQL, unescaped {!! !!} Blade output, a route dropped from VerifyCsrfToken coverage, and a queued job with no idempotency guard. Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "ruby-rails/ruby-rails-code-review",
+    "recordedAt": "2026-09-25T17:49:43.838Z",
+    "skillName": "php-laravel-code-review"
   }
 ]

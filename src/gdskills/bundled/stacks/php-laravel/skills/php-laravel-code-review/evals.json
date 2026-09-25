@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Review this Laravel diff for mass assignment issues",
-      "Check this Eloquent change for N+1 queries",
-      "Review this Laravel pull request for security issues before merge",
-      "Any raw SQL string building in this PHP change I should worry about?",
-      "Check this Blade template for unescaped output",
-      "Review this queue job for idempotency before we ship it",
+      "Can you look at this UserController@update change for fields a client shouldn't be able to touch?",
+      "This orders index page got slow after we added the customer relationship, can you spot the query issue?",
+      "We're about to ship this PR touching checkout, anything jump out before I approve it?",
+      "This report generator concatenates the date range param straight into a DB::select() call, is that safe?",
+      "Does this admin view use raw unescaped output anywhere for the comment body field?",
+      "If the queue redelivers this SendInvoiceEmail job, will the customer get charged or emailed twice?",
       "Take a look at this controller diff and flag anything risky",
       "Does this migration and model change look safe to merge?"
     ],

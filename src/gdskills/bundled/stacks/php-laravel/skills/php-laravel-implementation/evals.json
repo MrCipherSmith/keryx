@@ -7,8 +7,8 @@
       "Add a job that emails users when their subscription renews",
       "Wire up route model binding for the invoice show page",
       "Add a relationship between Author and Book and expose it on the API",
-      "Implement a feature in our Laravel app that lets a user cancel their order",
-      "Add a new Eloquent model with a migration for storing support tickets"
+      "Users need a way to downgrade their subscription plan mid-cycle and get a prorated credit",
+      "We need to start tracking refund requests with their own database table and model"
     ],
     "negative": [
       "Write Pest tests for this Eloquent model's validation rules",
