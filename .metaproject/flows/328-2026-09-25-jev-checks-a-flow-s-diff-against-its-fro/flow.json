@@ -1,0 +1,451 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "328",
+  "slug": "jev-checks-a-flow-s-diff-against-its-fro",
+  "title": "Jev checks a flow's diff against its frozen acceptance criteria: CLI, before complete and review, shell sidebar",
+  "status": "done",
+  "createdAt": "2026-09-25T13:07:33.209Z",
+  "updatedAt": "2026-09-25T16:32:17.149Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T16:28:55.746Z",
+      "note": "src/commands/flow-check-ac.ts (adapter) + src/flow/check-ac.ts: keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] reads the frozen acceptance-criteria.md, refuses when not frozen (isFrozen), diffs against base/merge-base with origin/main by default, and reports likely-met/not-evident/not-checkable per criterion with an ADVISORY header; never mutates flow state. Registered in src/commands/flow.ts (+79 lines) and src/standard/help-groups.ts. Tested in src/commands/flow-check-ac.test.ts (355 lines) and src/flow/check-ac.test.ts (314 lines). PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC2": {
+      "at": "2026-09-25T16:29:05.681Z",
+      "note": "src/flow/check-ac.ts extractCriterionTokens (backticked tokens, bare file paths, keryx <cmd> names) and computeAcFacts (tokensPresent/tokensAbsent against diff text and changed-file list, testsChanged, factLines) run before any Jev call, per criterion, pure functions with no I/O. Unit-tested in src/flow/check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC3": {
+      "at": "2026-09-25T16:29:05.799Z",
+      "note": "src/flow/check-ac.ts NOT_CHECKABLE_MARKERS (live check, CI green, health passing, docs published, manual verification, operator confirmation — documented exhaustive list) and classifyClause/classifyNotCheckable assign not-checkable without any model call for a matching criterion; always listed in the report, never sent to Jev. Unit-tested in src/flow/check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC4": {
+      "at": "2026-09-25T16:29:05.924Z",
+      "note": "src/flow/check-ac.ts: one noul per checkable criterion built from redacted matching hunks (redactSensitiveText via src/security/service.ts), MAX_MATCHED_HUNKS_PER_ITEM=8 and BATCH_BUDGET_FRACTION packing to the 64k budget; a criterion with no matching hunk gets the file list and an explicit 'nothing matched' fact. Opt-in via review.jev.ac_check in .metaproject/tasks.config.json; without it configured the command still prints deterministic evidence and states Jev was not asked. Unit-tested in src/flow/check-ac.test.ts and src/commands/flow-check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC5": {
+      "at": "2026-09-25T16:29:18.355Z",
+      "note": "src/commands/flow.ts: flow implemented and flow complete print the check-ac summary (counts + criteria not evident) as a one-line advisory when review.jev.ac_check is on and Jev is reachable; never blocks or changes gate outcome, and a check failure prints as a one-line notice rather than failing the command. Unit-tested in src/commands/agent-commands.test.ts and src/flow/check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC6": {
+      "at": "2026-09-25T16:29:18.469Z",
+      "note": "src/commands/review.ts ~L792-832: keryx review ingest for a flow with the opt-in writes ac-check.md into the review package directory (acCheckPath = path.join(result.path, 'ac-check.md')), printing 'ac-check: attached (...)' or 'ac-check: stale (...)' when the cached check does not match the round's diff. Tested in src/commands/review-ac-check-cli.test.ts (210 lines, fixture package). PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC7": {
+      "at": "2026-09-25T16:29:18.587Z",
+      "note": "src/tui/flow-inspector.ts (+138/-2) and src/tui/inspector-sources.ts (+81 new): the flow inspector panel shows per-criterion markers (met/not-evident/not-checkable/not-run) with a key ('c') to run the check; isAcCommand accepts /ac and /ac <flow-id> as a direct entry point opening a detail view with evidence. English UI text throughout. Render-tested in src/tui/flow-inspector.test.ts (+140 lines) and src/tui/inspector-sources.test.ts (119 lines, new). PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC8": {
+      "at": "2026-09-25T16:29:18.707Z",
+      "note": "src/flow/check-ac.ts ~L414-458: cache key is (criteria checksum, diff hash) under .metaproject/data/ (gitignored per .gitignore +6 lines in this PR), written via writeFileAtomic with mode 0o600 and an explicit chmod(cachePath, 0o600) fallback; the shell reads the cache (src/tui/inspector-sources.ts) rather than re-asking Jev for an unchanged diff. --refresh bypasses the cache per the round-1 fix commit 71619891e54c2eaaeb53d36068a0ede7dc384cf4. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC9": {
+      "at": "2026-09-25T16:29:26.667Z",
+      "note": "Live check recorded in this flow's journal.md at 2026-09-25T14:16:00.000Z: keryx flow check-ac run with env -u OPENROUTER_API_KEY against flow 309 vs PR #712's diff (8 checkable/2 not-checkable criteria, 2 Jev calls, ~28k tokens, ~$0.0012) and flow 307 vs PR #710's diff (9 checkable/1 not-checkable, 2 Jev calls, ~30k tokens, ~$0.0012); total 4 Jev calls, ~$0.0025. Honest usefulness note recorded: flow 307's AC7 scored 0.46 (not-evident) despite being genuinely implemented -- a real borderline flag worth a reviewer's look; flow 309's AC1 (compound criterion) scored 0.48, correctly refusing false confidence; no clearly-met criterion was wrongly flagged. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    },
+    "AC10": {
+      "at": "2026-09-25T16:29:39.122Z",
+      "note": "Docs: docs/docs/cli-reference.md (+76 lines, check-ac reference), docs/docs/commands-by-task.md (+1). CI on PR #723 (https://github.com/MrCipherSmith/keryx/pull/723), merged as 510139e64a212f14fecd928d3789652aa83045ed: 19 status checks, 18 SUCCESS + 1 SKIPPED (deploy to GitHub Pages, not applicable to a PR build), 0 failing -- confirmed via gh pr view 723 --json statusCheckRollup. keryx health status in this worktree: gate=pass, project score 94 (last run 2026-09-25T14:32:16.328Z). Tests are hermetic: src/flow/check-ac.test.ts / src/commands/flow-check-ac.test.ts / src/commands/review-ac-check-cli.test.ts use fixture Jev/gh ports, no real network. Import zones: flow/check-ac.ts stays in the core zone (no client-zone jev-client import; the adapter src/commands/flow.ts glues it to the real client), per the module's own header comment. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/723"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T13:07:33.209Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T13:07:51.234Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T13:07:51.450Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T16:27:06.030Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T16:27:06.155Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T16:27:06.270Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T16:27:06.384Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T16:28:47.428Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/commands/flow-check-ac.ts (adapter) + src/flow/check-ac.ts: `keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json]` reads the frozen acceptance-criteria.md, refuses when not frozen (isFrozen), diffs against base/merge-base with origin/main by default, and reports likely-met/not-evident/not-checkable per criterion with an ADVISORY header; never mutates flow state. Registered in src/commands/flow.ts (+79 lines) and src/standard/help-groups.ts. Tested in src/commands/flow-check-ac.test.ts (355 lines) and src/flow/check-ac.test.ts (314 lines). Landed in PR #717... wait wrong PR (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:28:55.746Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/commands/flow-check-ac.ts (adapter) + src/flow/check-ac.ts: keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] reads the frozen acceptance-criteria.md, refuses when not frozen (isFrozen), diffs against base/merge-base with origin/main by default, and reports likely-met/not-evident/not-checkable per criterion with an ADVISORY header; never mutates flow state. Registered in src/commands/flow.ts (+79 lines) and src/standard/help-groups.ts. Tested in src/commands/flow-check-ac.test.ts (355 lines) and src/flow/check-ac.test.ts (314 lines). PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:05.681Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/flow/check-ac.ts extractCriterionTokens (backticked tokens, bare file paths, keryx <cmd> names) and computeAcFacts (tokensPresent/tokensAbsent against diff text and changed-file list, testsChanged, factLines) run before any Jev call, per criterion, pure functions with no I/O. Unit-tested in src/flow/check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:05.799Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/flow/check-ac.ts NOT_CHECKABLE_MARKERS (live check, CI green, health passing, docs published, manual verification, operator confirmation — documented exhaustive list) and classifyClause/classifyNotCheckable assign not-checkable without any model call for a matching criterion; always listed in the report, never sent to Jev. Unit-tested in src/flow/check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:05.924Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/flow/check-ac.ts: one noul per checkable criterion built from redacted matching hunks (redactSensitiveText via src/security/service.ts), MAX_MATCHED_HUNKS_PER_ITEM=8 and BATCH_BUDGET_FRACTION packing to the 64k budget; a criterion with no matching hunk gets the file list and an explicit 'nothing matched' fact. Opt-in via review.jev.ac_check in .metaproject/tasks.config.json; without it configured the command still prints deterministic evidence and states Jev was not asked. Unit-tested in src/flow/check-ac.test.ts and src/commands/flow-check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:18.355Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/commands/flow.ts: flow implemented and flow complete print the check-ac summary (counts + criteria not evident) as a one-line advisory when review.jev.ac_check is on and Jev is reachable; never blocks or changes gate outcome, and a check failure prints as a one-line notice rather than failing the command. Unit-tested in src/commands/agent-commands.test.ts and src/flow/check-ac.test.ts. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:18.469Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/commands/review.ts ~L792-832: keryx review ingest for a flow with the opt-in writes ac-check.md into the review package directory (acCheckPath = path.join(result.path, 'ac-check.md')), printing 'ac-check: attached (...)' or 'ac-check: stale (...)' when the cached check does not match the round's diff. Tested in src/commands/review-ac-check-cli.test.ts (210 lines, fixture package). PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:18.587Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/tui/flow-inspector.ts (+138/-2) and src/tui/inspector-sources.ts (+81 new): the flow inspector panel shows per-criterion markers (met/not-evident/not-checkable/not-run) with a key ('c') to run the check; isAcCommand accepts /ac and /ac <flow-id> as a direct entry point opening a detail view with evidence. English UI text throughout. Render-tested in src/tui/flow-inspector.test.ts (+140 lines) and src/tui/inspector-sources.test.ts (119 lines, new). PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:18.707Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/flow/check-ac.ts ~L414-458: cache key is (criteria checksum, diff hash) under .metaproject/data/ (gitignored per .gitignore +6 lines in this PR), written via writeFileAtomic with mode 0o600 and an explicit chmod(cachePath, 0o600) fallback; the shell reads the cache (src/tui/inspector-sources.ts) rather than re-asking Jev for an unchanged diff. --refresh bypasses the cache per the round-1 fix commit 71619891e54c2eaaeb53d36068a0ede7dc384cf4. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:26.667Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Live check recorded in this flow's journal.md at 2026-09-25T14:16:00.000Z: keryx flow check-ac run with env -u OPENROUTER_API_KEY against flow 309 vs PR #712's diff (8 checkable/2 not-checkable criteria, 2 Jev calls, ~28k tokens, ~$0.0012) and flow 307 vs PR #710's diff (9 checkable/1 not-checkable, 2 Jev calls, ~30k tokens, ~$0.0012); total 4 Jev calls, ~$0.0025. Honest usefulness note recorded: flow 307's AC7 scored 0.46 (not-evident) despite being genuinely implemented -- a real borderline flag worth a reviewer's look; flow 309's AC1 (compound criterion) scored 0.48, correctly refusing false confidence; no clearly-met criterion was wrongly flagged. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:39.122Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Docs: docs/docs/cli-reference.md (+76 lines, check-ac reference), docs/docs/commands-by-task.md (+1). CI on PR #723 (https://github.com/MrCipherSmith/keryx/pull/723), merged as 510139e64a212f14fecd928d3789652aa83045ed: 19 status checks, 18 SUCCESS + 1 SKIPPED (deploy to GitHub Pages, not applicable to a PR build), 0 failing -- confirmed via gh pr view 723 --json statusCheckRollup. keryx health status in this worktree: gate=pass, project score 94 (last run 2026-09-25T14:32:16.328Z). Tests are hermetic: src/flow/check-ac.test.ts / src/commands/flow-check-ac.test.ts / src/commands/review-ac-check-cli.test.ts use fixture Jev/gh ports, no real network. Import zones: flow/check-ac.ts stays in the core zone (no client-zone jev-client import; the adapter src/commands/flow.ts glues it to the real client), per the module's own header comment. PR #723, merge 510139e64a212f14fecd928d3789652aa83045ed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:42.739Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (operator)"
+    },
+    {
+      "at": "2026-09-25T16:29:44.933Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/723 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T16:30:56.227Z",
+      "event": "owner-changed",
+      "detail": "MrCipherSmith -> MrCipherSmith (operator)"
+    },
+    {
+      "at": "2026-09-25T16:32:12.695Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T16:32:17.146Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-25T16:32:17.149Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T16:28:47.428Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:28:55.746Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:05.681Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:05.799Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:05.924Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:18.355Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:18.469Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:18.587Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:18.707Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:26.667Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:29:39.122Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    },
+    {
+      "at": "2026-09-25T16:32:17.149Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d",
+      "headCommit": "510139e64a212f14fecd928d3789652aa83045ed"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T16:32:17.146Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "510139e64a212f14fecd928d3789652aa83045ed is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "510139e64a212f14fecd928d3789652aa83045ed is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:1d4f9a9e8869ff04edd64f8d7bd015e419c85718ac07e1afcf15a92abc0a2c1d"
+    }
+  ],
+  "merged": {
+    "commit": "510139e64a212f14fecd928d3789652aa83045ed",
+    "ref": "origin/main",
+    "at": "2026-09-25T16:32:17.148Z"
+  }
+}

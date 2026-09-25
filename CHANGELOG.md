@@ -3,6 +3,58 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.2] — 2026-09-25
+
+Four more review reviewers on Jev, and the flow records for the Jev work in
+0.3.1 and this release. Every new reviewer is additional: it replaces none of
+the existing ones. Each is opt-in and advisory, computes its facts first,
+writes its own findings, and is dispatched by the review orchestrator as a
+CLI-engine reviewer (`engine: jev`).
+
+### Added
+- **`keryx review jev-risk` — a risk map of the diff.**
+  - What keryx computes first, per code hunk: the kind of path it touches,
+    the exported symbols it touches, and whether a test in the same diff
+    actually exercises the change.
+  - Jev then scores each code hunk on five risks: security, data or
+    migration, public API, concurrency, and error handling.
+  - A high-risk hunk that no test exercises becomes an `info` or `minor`
+    finding. Security and concurrency hits are routed to the security and
+    highload reviewers as hints.
+  - Docs hunks are never scored. A test counts as nearby only when it
+    mentions a changed symbol or imports the module; a mention in a comment
+    does not count.
+  - Shell: `/risk`. Opt-in: `review.jev.risk`.
+- **`keryx review jev-scenarios` — which user scenarios a PR probably
+  changes.**
+  - Scenarios come from the wiki, the PRDs and the how-to docs, each linked
+    to the code it describes. Jev asks one question for each scenario whose
+    code the diff touches.
+  - The output is a list of what to check by hand. A scenario with no
+    covering test becomes a `minor` finding.
+  - A file that many scenarios link to (more than five) counts only when
+    the scenario names a changed symbol.
+  - Shell: `/scenarios`. Opt-in: `review.jev.scenarios`.
+- **`keryx review jev-docs` — docs the diff made wrong.**
+  - It looks at user-facing docs sections: `docs/`, the README and the
+    wiki; `--include` widens the set. A section qualifies when it is linked
+    to changed code by a path, symbol or CLI verb but is not itself edited
+    by the diff.
+  - Sections are ranked by how strong the link is, at most 8 per file,
+    before Jev is asked.
+  - A removed CLI flag that the docs still mention is flagged without Jev.
+  - Shell: `/staledocs`. Opt-in: `review.jev.docs`.
+- **`keryx review jev-comments` — PR review comments still open.**
+  - Jev sorts each open comment in the PR comment ledger into one of four
+    labels: resolved-by-fix, still-open, not-actionable or
+    needs-escalation. It judges from later commits at the commented place
+    and from the thread state, read-only.
+  - `keryx review comments reply` shows the label and never acts on it.
+    Nothing is written to GitHub.
+  - Shell: `/opencomments`. Opt-in: `review.jev.comments`.
+- **Flow records for flows 326–333.** Acceptance criteria, journals, review
+  packages and PR comment ledgers.
+
 ## [0.3.1] — 2026-09-25
 
 More of the Jev plan: Jev now helps in review, in `keryx flow`, and in the

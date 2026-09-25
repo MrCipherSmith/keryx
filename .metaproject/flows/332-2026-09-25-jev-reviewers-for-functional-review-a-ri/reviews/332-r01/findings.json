@@ -1,0 +1,130 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "Before the fix, `selectRiskHunks` scored every retained hunk — including `.md`/`.txt` prose — against all five risk dimensions, with no filter for hunk type, so a documentation hunk reached the same Jev risk questions as code.",
+    "impact": "Live-checked against PR #712, all four findings the pre-fix run raised were `cli-reference.md` prose hunks scored high on `public-api`: Jev correctly answered whether the TEXT describes a public API, not whether the HUNK is a code risk to one — pure duplicate noise on top of the code hunk elsewhere in the same diff that actually enacts the change — and it burned `--max-calls` budget a real risk hunk needed (the provider-catalog cache concurrency write was reached and scored 0.84 only after the fix).",
+    "suggested_fix": "Exclude non-code (`.md`/`.txt`) hunks from `selectRiskHunks` before applying the `--max-calls` budget, reporting them separately as \"not a code hunk\" rather than scoring them.",
+    "evidence": "The pre-fix `selectRiskHunks` sliced `regions` directly into `selected`/`skipped` with no filter for hunk type; the live run against PR #712 produced 4 findings, all against `cli-reference.md` prose hunks.",
+    "confidence": "high",
+    "file": "src/review/jev-risk.ts",
+    "class_scope": {
+      "sites": [
+        "src/review/jev-risk.ts selectRiskHunks — the sole site that turns retained ScopedRegion[] into hunks scored against the risk dimensions"
+      ],
+      "enumeration_method": "read every caller of selectRiskHunks and every site that scores a ScopedRegion against RISK_DIMENSIONS in jev-risk.ts/review-jev-risk.ts — selectRiskHunks is the only gate before scoring, so it is the class's only member"
+    },
+    "global_id": "332-r01#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At head 6d750f3403c216dc07ac27a28f4fdfa4f71f8cb9 (fixed in c134da4a8b9abf1367bf48b3be6e1a22e71375c0), src/review/jev-risk.ts's selectRiskHunks filters regions with `const notCode = regions.filter((region) => isNonCodeHunk(region.path)); const codeRegions = regions.filter((region) => !isNonCodeHunk(region.path));` and scores only codeRegions against RISK_DIMENSIONS, reporting notCode separately. isNonCodeHunk (NON_CODE_HUNK_RE = /\\.(md|txt)$/i) excludes every .md/.txt path from scoring and from --max-calls budget. review-jev-risk-cli.test.ts and jev-risk.test.ts at this commit assert docs hunks produce zero risk questions.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in c134da4a8b9abf1367bf48b3be6e1a22e71375c0"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "`computeHunkRiskFacts` set `hasNearbyTest: nearbyTestFiles.length > 0` — directory/stem proximity alone — with no check that the nearby test's own diff text actually exercised the hunk's touched symbols.",
+    "impact": "Live-checked against PR #712: `providers.ts:723-733`'s new `boundedJsonBody` (security dimension, p=0.89) went completely unflagged because an unrelated hunk in `providers.test.ts` happened to be proximate in the same diff — a real risk silently dropped, the exact failure mode the tool exists to prevent.",
+    "suggested_fix": "Require the nearby test's own changed text to mention one of the hunk's touched exported symbols, or import the hunk's module by path stem, before treating it as evidence (`testHunkEvidence`); keep proximity itself as a reported fact only (`nearbyTestFiles`), not as sufficient grounds to suppress a finding.",
+    "evidence": "computeHunkRiskFacts derived `hasNearbyTest` from `nearbyTestFiles.length > 0` with no inspection of the nearby test's own text.",
+    "confidence": "high",
+    "file": "src/review/jev-risk.ts",
+    "class_scope": {
+      "sites": [
+        "src/review/jev-risk.ts computeHunkRiskFacts — the only site that derives hasNearbyTest from nearbyTestFiles"
+      ],
+      "enumeration_method": "grepped every assignment to hasNearbyTest in jev-risk.ts; one site"
+    },
+    "global_id": "332-r01#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At head 6d750f3403c216dc07ac27a28f4fdfa4f71f8cb9 (fixed in c134da4a8b9abf1367bf48b3be6e1a22e71375c0), src/review/jev-risk.ts's computeHunkRiskFacts sets `hasNearbyTest: evidencedTestFiles.length > 0`, where evidencedTestFiles filters nearbyTestFiles through testHunkEvidence(text, exportedSymbols, moduleStem) — the nearby test's own text must mention a touched exported symbol or import the hunk's module by stem. Raw proximity (nearbyTestFiles) is retained only as a separate reported fact. jev-risk.test.ts at this commit asserts a proximate-but-unrelated test file no longer sets hasNearbyTest.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in c134da4a8b9abf1367bf48b3be6e1a22e71375c0"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "`computeScenarioFacts` counted a scenario's link to a diff-touched file as \"touched\" regardless of how many other discovered scenarios linked the same file, so a widely-referenced file (e.g. tui-shell.ts, linked from nearly every \"how to\" doc section) marked most of those unrelated scenarios as likely-affected.",
+    "impact": "The `/scenarios` manual-check list and reviewer findings would be dominated by scenarios whose only \"evidence\" is that they happen to mention a popular file, burying the scenarios genuinely affected by the diff under noise.",
+    "suggested_fix": "Down-weight a link once its fan-in across the whole discovered scenario set exceeds a threshold (`SCENARIO_LINK_FANOUT_THRESHOLD = 5`); above it, only count the link when the scenario's own text names one of the linked file's touched exported symbols (`isTouchedLinkSignificant`).",
+    "evidence": "computeScenarioFacts filtered touchedLinks on `changed.has(link)` alone, with no fan-in weighting.",
+    "confidence": "high",
+    "file": "src/review/jev-scenarios.ts",
+    "global_id": "332-r01#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At head 6d750f3403c216dc07ac27a28f4fdfa4f71f8cb9 (fixed in c134da4a8b9abf1367bf48b3be6e1a22e71375c0), src/review/jev-scenarios.ts's computeScenarioFacts filters touchedLinks with `changed.has(link) && isTouchedLinkSignificant(scenario, link, fanIn, symbolsByPath)`. isTouchedLinkSignificant returns true unconditionally only when computeLinkFanIn's count for the link is <= SCENARIO_LINK_FANOUT_THRESHOLD (5); above it, the scenario's own text must name one of the link's touched exported symbols. jev-scenarios.test.ts at this commit covers both the under- and over-threshold cases.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in c134da4a8b9abf1367bf48b3be6e1a22e71375c0"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The F-002 fix (`testHunkEvidence`) matched a hunk's touched exported symbols against the nearby test file's raw diff text, including comment text — a test hunk that only added a comment such as `// still need to cover boundedJsonBody` satisfied the identifier match and was accepted as evidence.",
+    "impact": "Review round 2 of PR #726 found this suppressed a real finding: a TODO-style comment naming a symbol reads as coverage even though no test code runs it, silently defeating the exact false-negative fix F-002 had just landed for.",
+    "suggested_fix": "Strip comment text (line `//` and block `/* */`/`*`-continued) from the test file's text before matching identifiers or import paths.",
+    "evidence": "testHunkEvidence ran mentionsIdentifier directly against the unmodified testFileText, with no comment stripping.",
+    "confidence": "high",
+    "file": "src/review/jev-risk.ts",
+    "class_scope": {
+      "sites": [
+        "src/review/jev-risk.ts testHunkEvidence — the sole function that decides whether a nearby test's text counts as coverage evidence for a risk hunk"
+      ],
+      "enumeration_method": "testHunkEvidence is the only consumer of the raw nearby-test diff text for identifier matching in jev-risk.ts; jev-scenarios.ts's isTouchedLinkSignificant matches scenario prose (wiki/PRD/README text), not a diff's own comment-bearing text, so it is a different shape and not a member of this class"
+    },
+    "global_id": "332-r01#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At head 6d750f3403c216dc07ac27a28f4fdfa4f71f8cb9 (fixed in 84e7ddad524c1f0976824450bafdbaf04d7fcef2), src/review/jev-risk.ts's testHunkEvidence strips comment text before matching: `testFileText = testFileText.replace(/\\/\\*[\\s\\S]*?\\*\\//g, \"\").split(\"\\n\").map((line) => line.replace(/\\/\\/.*$/, \"\").replace(/^([+\\- ]?)\\s*\\*.*$/, \"$1\")).join(\"\\n\");` before the symbol/import match runs. jev-risk.test.ts at this commit adds a case where a test hunk adding only a comment mentioning the symbol no longer counts as evidence.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 84e7ddad524c1f0976824450bafdbaf04d7fcef2"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The F-001 fix's `isNonCodeHunk` excluded every `.txt` path from risk scoring outright, which also excluded `.txt` fixture/snapshot/testdata files — test data whose change can carry real behavioural risk, not prose.",
+    "impact": "A `.txt` fixture under fixtures/testdata/snapshots changed in the same diff as an unrelated docs hunk would be silently dropped from the risk map instead of scored — another category of missed detection introduced by the F-001 fix itself.",
+    "suggested_fix": "Carve fixtures/testdata/snapshots directories back out of isNonCodeHunk's exclusion so `.txt` files under them stay scored.",
+    "evidence": "isNonCodeHunk returned NON_CODE_HUNK_RE.test(path) for any .md/.txt path with no directory carve-out.",
+    "confidence": "high",
+    "file": "src/review/jev-risk.ts",
+    "global_id": "332-r01#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At head 6d750f3403c216dc07ac27a28f4fdfa4f71f8cb9 (fixed in 84e7ddad524c1f0976824450bafdbaf04d7fcef2), src/review/jev-risk.ts's isNonCodeHunk now reads: `if (/(^|\\/)(__fixtures__|fixtures|testdata|__snapshots__|snapshots)\\//.test(path)) return false; return NON_CODE_HUNK_RE.test(path);` — a .txt path under a fixtures/testdata/snapshots directory is carved back out of the exclusion and stays scored. jev-risk.test.ts at this commit asserts a fixtures/testdata/*.txt path is not treated as non-code.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 84e7ddad524c1f0976824450bafdbaf04d7fcef2"
+    }
+  }
+]

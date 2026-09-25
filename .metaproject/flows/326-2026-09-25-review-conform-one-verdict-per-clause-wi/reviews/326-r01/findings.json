@@ -1,0 +1,103 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "boundHunkRegions computed a single run-wide `Math.max(0, Math.floor(maxHunkCalls / hunkClauseCount))` region budget and applied it to every hunk-kind clause. When `maxHunkCalls < hunkClauseCount` (e.g. `--max-hunk-calls 1` with 2 hunk-kind clauses in the reference document), every clause's share rounded down to 0 and the clause was left out of `clauses[]` altogether, not reported as `not-evaluated`.",
+    "impact": "A hunk-kind clause could disappear from the aggregated report or `--json` output with no trace it was ever checkable, whenever an operator's `--max-hunk-calls` budget was smaller than the clause count in their reference document -- silently understating how much of the document was covered, which is exactly what AC3 (\"never silently\") requires the tool not to do.",
+    "suggested_fix": "Give each hunk-kind clause a per-clause floor: while the budget allows, hand out one judged hunk per clause (in document order) before giving any clause a second, and report a clause left at 0 as `not-evaluated` with an explicit `\"skipped by --max-hunk-calls (0 of N hunks judged)\"` reason instead of omitting it.",
+    "evidence": "src/review/conform-jev.ts boundHunkRegions before the fix: `const maxRegions = Math.max(0, Math.floor(maxHunkCalls / hunkClauseCount)); const kept = regions.slice(0, maxRegions);` with no per-clause floor and no `judgedPerClause` map; after the fix (commit def2955d), the function returns a `judgedPerClause: ReadonlyMap<string, number>` and falls back to a 1-per-clause allocation when `base < 1`. New regression tests: `src/commands/review-conform-cli.test.ts` describe block \"Flow 326, AC3: a budget share that rounds to 0 never vanishes a clause from the report\" (`--max-hunk-calls 0` and `--max-hunk-calls 1` cases), both passing (141/141 pass, `bun test` run at this worktree's checkout of the PR tip commit).",
+    "confidence": "high",
+    "file": "src/review/conform-jev.ts",
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts:1998 runConform's call to boundHunkRegions (the CLI text/--json report path)",
+        "src/tui/conform-source.ts:246 scoreHunkRegions's call to boundHunkRegions (the /conform TUI modal, tracked separately as F-002)"
+      ],
+      "enumeration_method": "keryx ctx rg 'boundHunkRegions\\(' src/ -- exactly two production call sites and the function's own test file; both call sites were fixed in the same commit (def2955d)."
+    },
+    "global_id": "326-r01#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/review/conform-jev.ts boundHunkRegions now allocates a per-clause floor (base >= 1 keeps the run-wide floor(maxHunkCalls/clauseCount); base < 1 hands one judged hunk per clause, in order, until the budget runs out) and returns judgedPerClause so no clause's quota can silently disappear. Ran `bun test src/commands/review-conform-cli.test.ts` at this worktree's checkout of the PR's tip commit (def2955d589832c25694932421bb2dbc52115414, content-identical to the squash-merged main commit 3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6): the describe block \"Flow 326, AC3: a budget share that rounds to 0 never vanishes a clause from the report\" (tests \"--max-hunk-calls 0: both hunk-kind clauses are not-evaluated, with a reason -- never dropped\" and \"--max-hunk-calls 1 with 2 hunk-kind clauses: the per-clause floor gives ONE clause 1 judged hunk rather than rounding everyone to 0\") passes.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in def2955d589832c25694932421bb2dbc52115414 (boundHunkRegions per-clause floor)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The `/conform` TUI modal's scoreHunkRegions called `boundHunkRegions(regions, hunkClauses.length, DEFAULT_MAX_HUNK_CALLS)` -- the same buggy floor-division allocator as F-001 -- so the modal was subject to the identical vanishing-clause defect, and additionally `toRow()` (src/tui/conform-source.ts) built each `ConformClauseRow` with no budget-truncation marker at all: a clause judged on a subset of the diff's hunks looked the same as one judged on all of them.",
+    "impact": "An operator using the `/conform` TUI (not just the CLI) with a small `--max-hunk-calls` budget could see hunk-kind clauses silently missing from the modal's clause list, and even a clause that WAS shown gave no visual indication it had only been partially checked -- the same AC3/AC4 guarantee the CLI report makes was not honoured by the second, independent entry point into the same pipeline.",
+    "suggested_fix": "Route the TUI through the same fixed boundHunkRegions (by clause id, not count) and carry its judgedPerClause/hunkBudget result into ConformClauseRow so the modal's rows show the same 'judged on K of N hunks' marker as the text/--json report.",
+    "evidence": "src/tui/conform-source.ts before the fix (commit 16506480): `const bounded = boundHunkRegions(regions, hunkClauses.length, DEFAULT_MAX_HUNK_CALLS);`, and `toRow(agg: ConformClauseAggregate): ConformClauseRow` had no hunkBudget parameter. After the fix (commit def2955d): the call passes `hunkClauseIds` (not a count) and `toRow(agg, hunkBudget)` adds `hunksTotal` when `hunkBudget.truncatedClauses.includes(agg.clause_id)`. Tests: src/tui/conform-inspector.test.ts gained coverage for the budget line (96 lines added in the fix commit); full `bun scripts/opentui-tests-no-skips.ts src/tui` run recorded in the flow's own AC4 confirmation (1231 pass, 0 fail, 0 skip); this closure's own `bun test src/tui/conform-inspector.test.ts` run (part of the 141/141 pass above) is also green.",
+    "confidence": "high",
+    "file": "src/tui/conform-source.ts",
+    "class_scope": {
+      "sites": [
+        "src/tui/conform-source.ts scoreHunkRegions (the boundHunkRegions call) and toRow (the ConformClauseRow builder)"
+      ],
+      "enumeration_method": "read src/tui/conform-source.ts in full at both commits (16506480 and def2955d) and diffed them; toRow and scoreHunkRegions are the only two functions in the file that touch the hunk budget."
+    },
+    "global_id": "326-r01#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/tui/conform-source.ts's scoreHunkRegions now calls boundHunkRegions(regions, hunkClauseIds, DEFAULT_MAX_HUNK_CALLS) with the fixed clause-id-keyed allocator (same fix as F-001), and toRow(agg, hunkBudget) adds hunksTotal when hunkBudget.truncatedClauses includes the clause id, matching the CLI's marker. Ran `bun test src/tui/conform-inspector.test.ts` at this worktree's checkout of the PR's tip commit: all cases pass (part of the 141/141 combined run across the five touched test files). No dedicated destroyed-shell-style edge case was needed here since the underlying allocator fix is shared with F-001 and is unit-tested there.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in def2955d589832c25694932421bb2dbc52115414 (TUI /conform modal routed through the fixed boundHunkRegions with hunksTotal marker)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "AC1 requires `--explain` to send the model one prompt per violated clause (via `aggregateConformVerdicts(...).map(a => a.worstVerdict)` in `runConform`), never one prompt per judged hunk, but no test asserted this -- there was no case with a clause carrying many judged, likely-violated hunks that counted the actual number of explain prompts sent.",
+    "impact": "The worst-per-clause collapse that keeps --explain's Jev spend bounded had no regression coverage; a future change to the explain-candidate-building expression in runConform could silently regress to one prompt per hunk with nothing failing to catch it.",
+    "suggested_fix": "Add a test with a clause with many judged, likely-violated hunks (all scored the same, below threshold) and an injected runTurn that counts calls, asserting exactly one prompt is sent for that clause.",
+    "evidence": "src/commands/review-conform-cli.test.ts before the fix had no describe block referencing --explain call counting (checked via `keryx ctx rg explain` limited to the commit-1 blob). After the fix (commit def2955d), the diff adds `describe(\"Flow 326, AC1: --explain sends one prompt per violated clause, not one per judged hunk\", ...)` with test `\"explainConformVerdicts is called once for hunks-1 despite 12 judged (likely-violated) hunks\"`, which asserts `prompts` has length 1 against a fixture where hunks-1 has 12 likely-violated judged hunks. The underlying select-worst-per-clause logic in src/commands/review.ts's runConform is unchanged between the two commits (confirmed via `git diff 16506480 def2955d -- src/commands/review.ts`, which touches only the budget-reporting code, not the explain-candidate expression) -- this was a coverage gap, not a functional defect. Test passes: part of the 141/141 `bun test` run above.",
+    "confidence": "high",
+    "file": "src/commands/review-conform-cli.test.ts",
+    "global_id": "326-r01#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "src/commands/review-conform-cli.test.ts now has describe(\"Flow 326, AC1: --explain sends one prompt per violated clause, not one per judged hunk\", ...) with test \"explainConformVerdicts is called once for hunks-1 despite 12 judged (likely-violated) hunks\", asserting exactly one prompt is recorded for a clause with 12 likely-violated judged hunks. Ran `bun test src/commands/review-conform-cli.test.ts` at this worktree's checkout of the PR's tip commit: this test passes (part of the 141/141 combined run). Confirmed via `git diff 165064806 def2955d -- src/commands/review.ts` that the explain-candidate-building expression in runConform itself is unchanged between the two commits, so this closes a coverage gap rather than a behavioural regression.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in def2955d589832c25694932421bb2dbc52115414 (--explain prompt-count test added in review-conform-cli.test.ts)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The `--max-hunk-calls` row in the `review conform` flags table documented only the even-budget case (`floor(--max-hunk-calls / hunk-kind-clause-count)`); it said nothing about what happens when the budget is smaller than the clause count (the per-clause floor F-001 fixed), the `not-evaluated` + reason a zero-quota clause gets, or the `hunksTotal` field.",
+    "impact": "An operator reading the docs to understand a small `--max-hunk-calls` value would not learn that a clause could be left at not-evaluated rather than judged, or what the JSON output looks like in that case -- an AC7 documentation-completeness gap for exactly the behaviour F-001's fix introduced.",
+    "suggested_fix": "Expand the --max-hunk-calls row and the --json flag description to cover the small-budget per-clause-floor case, and add a worked JSON example.",
+    "evidence": "docs/docs/cli-reference.md diff between commit 16506480 and def2955d rewrites the --max-hunk-calls row to describe the per-clause floor, the not-evaluated + reason case, and the hunksTotal marker, expands the --json row to mention hunkBudget/hunksTotal, and adds a new worked JSON example ('--json with --max-hunk-calls 1 in effect') showing one clause judged on 1 of 12 hunks and the other not-evaluated. 59 lines added in this file in the fix commit.",
+    "confidence": "high",
+    "file": "docs/docs/cli-reference.md",
+    "global_id": "326-r01#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "docs/docs/cli-reference.md's --max-hunk-calls row and --json row, read at this worktree's checkout of the PR's tip commit (def2955d589832c25694932421bb2dbc52115414), now describe the per-clause-floor behaviour for a budget smaller than the clause count, the not-evaluated + \"skipped by --max-hunk-calls (0 of N hunks judged)\" reason, and the hunksTotal field, plus a full worked JSON example titled \"--json with --max-hunk-calls 1 in effect\" showing one clause judged 1 of 12 and the sibling clause not-evaluated. Confirmed via `git diff 165064806 def2955d -- docs/docs/cli-reference.md` (59 lines added in this file in the fix commit).",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in def2955d589832c25694932421bb2dbc52115414 (docs/docs/cli-reference.md --max-hunk-calls row and --json example expanded)"
+    }
+  }
+]

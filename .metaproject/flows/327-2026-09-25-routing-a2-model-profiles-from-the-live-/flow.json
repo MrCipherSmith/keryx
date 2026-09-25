@@ -1,0 +1,951 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "327",
+  "slug": "routing-a2-model-profiles-from-the-live-",
+  "title": "Routing A2: model profiles from the live catalog and a derived default routing table",
+  "status": "done",
+  "createdAt": "2026-09-25T12:23:05.849Z",
+  "updatedAt": "2026-09-25T16:41:00.549Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T14:17:08.777Z",
+      "note": "ModelProfile/ProfileSource/PrioritySource defined unchanged at model-profile.ts:49,51,58 with strengthTier/priceInputPerMillion/priceOutputPerMillion/contextLength {value,source}, priority {value,source:auto|operator}, available, lastSeenAt, refreshedAt (plus new chatCapable:boolean, item 3). Verified: typecheck clean, model-profile.test.ts 28+ tests pass."
+    },
+    "AC2": {
+      "at": "2026-09-25T14:17:17.954Z",
+      "note": "fetchOpenAiCompatModelsDetailed (providers.ts:725) and testProviderConnection (providers.ts:1054) unchanged in this fix: still parse pricing/context_length generically via parseModelProfileFieldsFromBody (extended with chatCapable metadata, model-profile.ts:340), still call refreshModelProfiles as a side effect after live fetch, ModelsResolveResult return shape untouched. providers.disconnect.test.ts/providers.status.test.ts/providers.model-profiles.test.ts all pass."
+    },
+    "AC4": {
+      "at": "2026-09-25T14:17:18.460Z",
+      "note": "CURATED_SEED unchanged (anthropic/openai/gemini only), assertCuratedCoverage guard intact, loadModelProfiles merges stored over curated. model-profile.test.ts 'curated seed shows up on FIRST read' and 'a stored entry always wins over curated seed' pass."
+    },
+    "AC5": {
+      "at": "2026-09-25T14:17:18.820Z",
+      "note": "guessStrengthTier (model-profile.ts:168) still calls rankModelId/MODEL_RANK_HINTS from gdskills/model-tier.ts UNMODIFIED (only doc comments added there, verified via diff — no logic change); model-tier.test.ts 50/50 pass including the new version-documentation test."
+    },
+    "AC6": {
+      "at": "2026-09-25T14:17:19.192Z",
+      "note": "buildField (model-profile.ts) still returns {value:'unknown',source:'unknown'} when nothing reported/curated; new item-6 tests added: 'parseModelProfileFieldsFromBody: OpenRouter -1 price sentinel is dropped' and 'refreshModelProfiles: OpenRouter -1 price sentinel stores unknown, never -1' both pass (usdPerTokenToPerMillion rejects num<0)."
+    },
+    "AC3": {
+      "at": "2026-09-25T14:17:28.925Z",
+      "note": "BLOCKER fixed: profiles now stored in own file model-profiles.json (model-profile.ts:432 modelProfilesFilePath), keryx user data dir, mode 0600 (writeOwnerOnlyFileAtomic), atomic. Every RMW (refreshModelProfiles:659, setModelProfileField:738) runs under withModelProfilesLock (model-profile.ts:520, using withFileLock from lib/fs.ts, same pattern as provider-catalog-cache.ts). One-time migration migrateFromAuthJsonUnlocked (model-profile.ts:493) moves legacy auth.json.modelProfiles into the new file and strips the field from auth.json byte-for-byte otherwise (stripModelProfilesFromAuthJsonUnlocked:467), runs under the lock. Tests: model-profile.test.ts 'model profiles persist to model-profiles.json mode 0600 NOT inside auth.json', 'migration: an existing auth.json.modelProfiles is moved...preserving every other key byte-for-byte', 'concurrency: two providers refreshing at the same time both persist', 'concurrency: a routing profile set racing a refresh'. LIVE VERIFIED: real ~/.local/share/keryx/auth.json had modelProfiles=true before; after running providers status --refresh it is false (jq check only), model-profiles.json exists mode 600 with 543 entries, routing list still resolves correctly post-migration."
+    },
+    "AC10": {
+      "at": "2026-09-25T14:17:39.734Z",
+      "note": "BLOCKER (NaN comparator) + new ranking implemented in derive-default-table.ts (full rewrite). compareStrengthById (never NaN: only finite rankModelId ordinals + parseModelVersion floats, no Infinity subtraction) replaces the old priceOrSentinel/rankCandidates. Family size class via rankModelId/MODEL_RANK_HINTS reused unmodified; within-family version via familyKey/parseModelVersion (conservative: 0 or >1 numeric tokens -> undefined, never guessed). Session-anchored: planning/review=pickPlanningReview (strongest not-weaker-than-session, session itself when nothing stronger), subagents/docs/unattended=pickStepDown (next non-negative size step down, never negative-weight 'smallest' class, session itself when no middle step), quick=pickQuick (smallest class present). Tie-break: session model first then priority.value then modelId. Non-chat/:free excluded from candidates (item 3). deriveDefaultTable signature now takes sessionModelId (4th param); call sites updated (routing.ts:134, routing-inspector.ts:243). Tests: derive-default-table.test.ts (30 tests) incl. exact worked example (opus-5.5 session + opus-4.7/sonnet-5/haiku-4.5 -> review=opus-5.5, subagents=sonnet-5, quick=haiku-4.5), single-model provider, no-middle-step provider, NaN-safety in both input orders, blocker regression test in both input orders. LIVE VERIFIED: env -u OPENROUTER_API_KEY bun src/cli.ts routing list on the real github-copilot session (model claude-opus-5.5) produced exactly review/planning=claude-opus-5.5, subagents/docs/unattended=claude-sonnet-5, quick=claude-haiku-4.5 — matches the spec's worked example on the real catalogue."
+    },
+    "AC7": {
+      "at": "2026-09-25T14:17:49.360Z",
+      "note": "computeAutoPriority unchanged; priority recomputed on creation/refresh unless source=operator (updateProfile model-profile.ts). Existing tests 'two profiles with known different prices auto-rank cheaper-first' and 'an operator-set priority survives a refresh' still pass."
+    },
+    "AC8": {
+      "at": "2026-09-25T14:17:49.520Z",
+      "note": "routing profile list/set unchanged in shape, setModelProfileField now async (runs under withModelProfilesLock, model-profile.ts:738) with CLI call sites updated to await (routing.ts runProfileSet/runProfile). New CLI tests added in routing.test.ts: 'profile list' curated seed on first read, 'profile list --json', 'profile set' operator correction persists+shows on next list, 'profile set --priority', rejects missing/malformed target. All pass (item 5)."
+    },
+    "AC9": {
+      "at": "2026-09-25T14:17:49.677Z",
+      "note": "Diff-not-replace refresh logic in refreshModelProfiles unchanged (now inside the lock). Existing tests 'a shrunk-then-grown live list' and 'a refresh for one provider never touches another provider's stored entries' pass; new concurrency test additionally covers two providers refreshing at once."
+    },
+    "AC11": {
+      "at": "2026-09-25T14:17:49.914Z",
+      "note": "table.ts describeCategoryResolution/describeUnavailableNotice unchanged (em-dash unavailable notice distinct from flow 305's hyphen not-connected notice). New CLI tests added in routing.test.ts: derived rendering ('auto (derived from anthropic's models) -> ...', source [derived], plain text + --json), unavailable fallback rendering (em-dash notice, --json rejected.reason='unavailable'). LIVE VERIFIED: real routing list output shows 'auto (derived from github-copilot's models) -> github-copilot/claude-opus-5.5  [derived]' etc."
+    },
+    "AC12": {
+      "at": "2026-09-25T14:18:02.260Z",
+      "note": "routing-inspector.ts describePickerRowProfile (:403) unchanged for tier/price/context/priority/source/available, extended (item 3) to append 'non-chat/free — never auto-derived' via isModelDerivable when applicable. routing-inspector.test.ts (part of opentui-tests-no-skips.ts run, 1229/1229 pass) covers the modal; the derived/explicit/session-default/unavailable-fallback markers in listLines are unchanged code paths."
+    },
+    "AC13": {
+      "at": "2026-09-25T14:18:02.438Z",
+      "note": "formatProfileSummarySuffix (providers.ts:1393) unchanged; new providers.model-profiles.test.ts (5 tests) directly covers the AC13 suffix: brand-new refresh plain text '(profiles: 2 added)', --json profiles:{added,changed,unavailable}, a no-op second refresh shows no suffix, a shrunk list shows '1 now unavailable', profiles persist to model-profiles.json never auth.json. All pass."
+    },
+    "AC14": {
+      "at": "2026-09-25T14:18:02.775Z",
+      "note": "CI green: bun run typecheck clean; bun run lint (eslint .) clean; keryx health run PASS (score 94); full bun run test:core: 11856 pass / 34 fail / 7 skip across 11897 tests — the 34 failures are pre-existing/unrelated to this flow (R2-01/R2-04 hostile-cwd dist/cli.js shipped-build trust tests and 'the shipped build contains no test scaffolding', all requiring a prior Bundled 860 modules in 102ms\n\n  cli.js  6.42 MB  (entry point)\n\nBundled 253 modules in 29ms\n\n  core.js  1.42 MB  (entry point)\n\nBundled 6 modules in 5ms\n\n  proxy-worker.js  20.80 KB  (entry point) producing dist/cli.js, which this session never ran) — zero failures anywhere in routing/model-profile/derive/provider-catalog/providers paths (grep-verified against the failure list). Flow A's own files (table.ts, table.test.ts, config.ts, config.test.ts, trust.ts, trust.test.ts, provider-default.ts/.test.ts, child-model-request.ts/.test.ts) were not touched by this fix — git status confirms only routing.ts, routing-inspector.ts, model-profile.ts, derive-default-table.ts, model-tier.ts, the two model-selection.mdc copies, cli-reference.md, and their tests changed."
+    },
+    "AC15": {
+      "at": "2026-09-25T14:18:02.927Z",
+      "note": "refreshModelProfiles' provider-agnostic diff logic is unchanged (any providerId works, not just curated ones); existing test 'connecting a non-seeded provider adds its profiles to the SAME catalogue...each field keeping its own source' passes unmodified. LIVE VERIFIED: the real model-profiles.json now holds 543 entries across many connected providers (deepseek/github-copilot/groq/MiniMax/ollama/openrouter/zai/zai-coding), not just the 9 curated seed ids."
+    },
+    "AC16": {
+      "at": "2026-09-25T14:18:10.931Z",
+      "note": "provider-catalog.ts (untouched by this fix) still calls refreshModelProfiles reusing the same fetched body (refreshProfiles opt-in, no second network request) for every provider whose model fetch succeeded. LIVE VERIFIED per the task: env -u OPENROUTER_API_KEY bun src/cli.ts providers status --refresh refreshed 9 providers (deepseek/github-copilot/grok/groq/MiniMax/ollama/openrouter/zai/zai-coding); the subsequent env -u OPENROUTER_API_KEY bun src/cli.ts routing list reported derived categories from the real session provider's (github-copilot) real models (review/planning=claude-opus-5.5, subagents/docs/unattended=claude-sonnet-5, quick=claude-haiku-4.5), and jq 'has(\"modelProfiles\")' on the real auth.json is now false (migration ran, no keys were printed at any point)."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/718"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context gathered: PRD §6, Flow A routing code, provider-catalog.ts, providers.ts, shell-config.ts, model-tier.ts, select.ts read; live OpenRouter /models shape verified."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented model-profile.ts, derive-default-table.ts, curated-model-lists.ts, extended table.ts/config.ts callers, providers.ts, provider-catalog.ts, routing.ts CLI, routing-inspector.ts TUI, tui-shell.ts wiring, docs (HELP_GROUPS, cli-reference.md, commands-by-task.md, README, command-registry.ts, cli.ts help text)."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added model-profile.test.ts (19 tests), derive-default-table.test.ts (7 tests); extended providers.disconnect/status/etc, routing.test.ts, provider-catalog.test.ts, cli.test.ts (AC5 allow-list), commands-by-task.test.ts all pass; hermetic (temp dirs, injected fetch), Flow A assertions unmodified."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review done via typecheck/lint/full test suites + live AC16 check; report prepared for handback (no PR opened per instructions — no commit/push)."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T12:23:05.849Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T12:23:20.077Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T12:23:20.314Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T13:23:15.560Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/routing/model-profile.ts defines ModelProfile/ProfileSource/PrioritySource exactly per PRD §6.1; model-profile.test.ts covers shape. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:15.746Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: fetchOpenAiCompatModelsDetailed and testProviderConnection (providers.ts) extended with opt-in refreshProfiles/profiles param; parseModelProfileFieldsFromBody reads pricing/context_length generically; return shape (ModelsResolveResult) unchanged; verified live against OpenRouter (460 models, reported pricing/context). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:15.946Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: ShellConfig.modelProfiles (shell-config.ts) + loadModelProfiles/saveStoredModelProfiles/loadStoredModelProfiles in model-profile.ts; one catalogue, curated seed and discovered entries share the same store (model-profile.test.ts). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:24.608Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: CURATED_SEED in model-profile.ts covers exactly anthropic/openai/gemini (curated-model-lists.ts, moved from select.ts); loadModelProfiles merges seed under stored entries so a stored/operator entry always wins. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:24.852Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: refreshModelProfiles is provider-agnostic; connecting any non-seeded provider (e.g. zai in test, github-copilot/openrouter/groq live) adds its profiles to the same store, each field keeping its own source; verified live (routing profile list shows curated + 500+ discovered entries side by side). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:25.099Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: guessStrengthTier reuses rankModelId/MODEL_RANK_HINTS unmodified (model-profile.ts); mapping tested in model-profile.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:25.354Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: buildField/freshProfile/updateProfile always fall to {value:\"unknown\",source:\"unknown\"} for price/context, never 0; asserted by model-profile.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:25.606Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: computeAutoPriority(-price or PRIORITY_UNKNOWN_PRICE) recomputed on create and refresh unless priority.source===\"operator\"; tested (cheaper-first ranking, operator priority survives refresh). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:34.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: keryx routing profile list [--json] and keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value> added to routing.ts; setModelProfileField stores source:operator and survives refresh; routing.test.ts covers CLI, model-profile.test.ts covers survival. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:35.090Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: refreshModelProfiles diffs per provider: new id -> added(available:true), still-listed id -> updates non-operator fields + lastSeenAt, vanished id -> available:false kept not deleted; model-profile.test.ts simulates shrink-then-grow across two refreshes. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:35.359Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: table.ts: RoutingLayers.derived + AvailablePredicate + resolveCategoryDetailed's 4th param; derive-default-table.ts's deriveDefaultTable is pure (one model -> all categories; several -> light/cheap for quick/subagents/docs/unattended, strong for planning/review, default/coding left to session, unknown-priced+unranked excluded); table.test.ts/derive-default-table.test.ts cover it; AC14 preserved (old 3-arg calls unaffected, toEqual assertions on rejected untouched). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:23:35.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: keryx routing list / describeCategoryResolution prints 'auto (derived from <provider>'s models) -> ...' and the unavailable fallback notice '<provider>/<model> — unavailable, falling back to <resolved>' (describeUnavailableNotice/describeRejectionNotice in table.ts); verified live (github-copilot session derives review/planning to claude-opus-4.7, quick/subagents/docs/unattended to claude-haiku-4.5). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:25:45.666Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: routing-inspector.ts: derived session param threaded from tui-shell.ts's currentSel; picker rows show tier/price/context/priority/sources via describePickerRowProfile, UNAVAILABLE marker for available:false; list marks derived/explicit/session-default/falling-back via describeCategoryResolution/describeRejectionNotice; routing-inspector.test.ts unaffected (existing) plus new coverage. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:25:45.802Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: formatProfileSummarySuffix in providers.ts appended to providers test's CLI text output and JSON (profiles:{added,changed,unavailable}); tui-shell.ts's /connect Test button (runTest) wired the same way; verified live (providers test deepseek --json shows profiles:{added:0,changed:0,unavailable:0}). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:25:53.522Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: typecheck/lint clean; test:core 11877 pass/0 fail attributable to this flow (4 fail+1 error are pre-existing environment flakes: schedule-security scratch tests, install-state, gdgraph module race, hostile-cwd e2e requiring live provider network — all pass in isolation, verified); Flow A's routing test files (table/config/trust/provider-default/child-model-request/routing.test.ts/routing-inspector.test.ts) run unmodified assertions, all pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:25:53.647Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: provider-catalog.ts's buildCatalogEntry passes refreshProfiles:{dir,now} into the same fetchOpenAiCompatModelsDetailed call (no second request); live-verified with env -u OPENROUTER_API_KEY: providers status --refresh populated 543 model profiles (curated seed + deepseek/github-copilot/groq/openrouter/zai/zai-coding), keryx routing list showed derived categories from the real github-copilot session (review/planning -> claude-opus-4.7, quick/subagents/docs/unattended -> claude-haiku-4.5); no key ever printed (read from auth.json inside a script). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:25:59.404Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T13:25:59.533Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T13:26:05.288Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T13:26:05.410Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T13:37:35.168Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"Profiles are stored per-user in `src/lib/shell-config.ts` (alongside `apiKeys`/`modelParams`), keyed by `<providerId>/<modelId>`, readable/ writable through `loadModelProfiles`/`saveModelProfiles`. The store is ONE catalogue, not split by provenance: a curated seed entry (AC4a) and a later-discovered entry from any other provider live side by side in the same keyed map.\" -> \"Profiles are stored per-user in their own file next to the shell config (`model-profiles.json` in the keryx user data dir, mode 0600, written atomically under a file lock), NOT inside `auth.json` which holds credentials; keyed by `<providerId>/<modelId>`, readable/writable through `loadModelProfiles`/`saveModelProfiles`; ONE catalogue, not split by provenance: a curated seed entry and a later-discovered entry from any other provider live side by side; concurrent refreshes (several providers at startup, providers test, routing profile set) never lose an update.\" (review of PR #718: 500+ profiles inside the credentials file and an unlocked read-modify-write race)"
+    },
+    {
+      "at": "2026-09-25T13:37:35.458Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"`resolveCategory` (Flow A AC1) gains a `derived` rung between per-user and `default` (PRD §6.3 precedence: explicit > per-project > per-user > derived > default), and treats any layer's resolved model as UNRESOLVED at that layer when its profile is `available: false`, falling through to the next layer (PRD §6.2). `deriveDefaultTable (providerId, models, profiles)` is a PURE function: one AVAILABLE model -> that model for every category; several available models -> lightest-priced (`quick`/`subagents`/`docs`), strongest (`planning`/ `review`), session model unchanged (`default`/`coding`), tie-broken by `priority.value` after tier/price; a category with no comparable (all-`unknown`) candidate falls through to the bare session model. Derivation reads only the SESSION's current provider's models in v1 (cross-provider derivation is out of scope — PLAN.md open question 8).\" -> \"`resolveCategory` gains a `derived` rung between per-user and `default` (explicit > per-project > per-user > derived > default) and treats a resolved model as UNRESOLVED at a layer when its profile is `available: false`. `deriveDefaultTable` is a PURE function anchored on the session model: models are ranked by family size (e.g. opus > sonnet > haiku, flagship > mini/flash) and, WITHIN the same family, by version (opus-5.5 > opus-4.7); `planning`/`review` get the strongest available model not weaker than the session model (the session model itself when nothing is stronger); `subagents`/`docs`/`unattended` get the next step down from the session family (e.g. Sonnet under an Opus session), never the smallest class; `quick` gets the smallest class (haiku/flash/mini); `default`/`coding` keep the session model; ties broken by the session model first, then `priority.value` — a comparator never returns NaN for unknown prices; non-chat models (embeddings, image, audio/TTS, moderation, rerank) and `:free` variants are never derived; one available chat model -> that model for every category. Derivation reads only the session provider's models in v1.\" (review of PR #718 (NaN tie-break chose opus-4.7 over the session's opus-5.5) and the operator's model-choice policy of 2026-09-25)"
+    },
+    {
+      "at": "2026-09-25T14:17:08.777Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: ModelProfile/ProfileSource/PrioritySource defined unchanged at model-profile.ts:49,51,58 with strengthTier/priceInputPerMillion/priceOutputPerMillion/contextLength {value,source}, priority {value,source:auto|operator}, available, lastSeenAt, refreshedAt (plus new chatCapable:boolean, item 3). Verified: typecheck clean, model-profile.test.ts 28+ tests pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:17.954Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: fetchOpenAiCompatModelsDetailed (providers.ts:725) and testProviderConnection (providers.ts:1054) unchanged in this fix: still parse pricing/context_length generically via parseModelProfileFieldsFromBody (extended with chatCapable metadata, model-profile.ts:340), still call refreshModelProfiles as a side effect after live fetch, ModelsResolveResult return shape untouched. providers.disconnect.test.ts/providers.status.test.ts/providers.model-profiles.test.ts all pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:18.460Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: CURATED_SEED unchanged (anthropic/openai/gemini only), assertCuratedCoverage guard intact, loadModelProfiles merges stored over curated. model-profile.test.ts 'curated seed shows up on FIRST read' and 'a stored entry always wins over curated seed' pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:18.820Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: guessStrengthTier (model-profile.ts:168) still calls rankModelId/MODEL_RANK_HINTS from gdskills/model-tier.ts UNMODIFIED (only doc comments added there, verified via diff — no logic change); model-tier.test.ts 50/50 pass including the new version-documentation test. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:19.192Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: buildField (model-profile.ts) still returns {value:'unknown',source:'unknown'} when nothing reported/curated; new item-6 tests added: 'parseModelProfileFieldsFromBody: OpenRouter -1 price sentinel is dropped' and 'refreshModelProfiles: OpenRouter -1 price sentinel stores unknown, never -1' both pass (usdPerTokenToPerMillion rejects num<0). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:28.925Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: BLOCKER fixed: profiles now stored in own file model-profiles.json (model-profile.ts:432 modelProfilesFilePath), keryx user data dir, mode 0600 (writeOwnerOnlyFileAtomic), atomic. Every RMW (refreshModelProfiles:659, setModelProfileField:738) runs under withModelProfilesLock (model-profile.ts:520, using withFileLock from lib/fs.ts, same pattern as provider-catalog-cache.ts). One-time migration migrateFromAuthJsonUnlocked (model-profile.ts:493) moves legacy auth.json.modelProfiles into the new file and strips the field from auth.json byte-for-byte otherwise (stripModelProfilesFromAuthJsonUnlocked:467), runs under the lock. Tests: model-profile.test.ts 'model profiles persist to model-profiles.json mode 0600 NOT inside auth.json', 'migration: an existing auth.json.modelProfiles is moved...preserving every other key byte-for-byte', 'concurrency: two providers refreshing at the same time both persist', 'concurrency: a routing profile set racing a refresh'. LIVE VERIFIED: real ~/.local/share/keryx/auth.json had modelProfiles=true before; after running providers status --refresh it is false (jq check only), model-profiles.json exists mode 600 with 543 entries, routing list still resolves correctly post-migration. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:39.735Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: BLOCKER (NaN comparator) + new ranking implemented in derive-default-table.ts (full rewrite). compareStrengthById (never NaN: only finite rankModelId ordinals + parseModelVersion floats, no Infinity subtraction) replaces the old priceOrSentinel/rankCandidates. Family size class via rankModelId/MODEL_RANK_HINTS reused unmodified; within-family version via familyKey/parseModelVersion (conservative: 0 or >1 numeric tokens -> undefined, never guessed). Session-anchored: planning/review=pickPlanningReview (strongest not-weaker-than-session, session itself when nothing stronger), subagents/docs/unattended=pickStepDown (next non-negative size step down, never negative-weight 'smallest' class, session itself when no middle step), quick=pickQuick (smallest class present). Tie-break: session model first then priority.value then modelId. Non-chat/:free excluded from candidates (item 3). deriveDefaultTable signature now takes sessionModelId (4th param); call sites updated (routing.ts:134, routing-inspector.ts:243). Tests: derive-default-table.test.ts (30 tests) incl. exact worked example (opus-5.5 session + opus-4.7/sonnet-5/haiku-4.5 -> review=opus-5.5, subagents=sonnet-5, quick=haiku-4.5), single-model provider, no-middle-step provider, NaN-safety in both input orders, blocker regression test in both input orders. LIVE VERIFIED: env -u OPENROUTER_API_KEY bun src/cli.ts routing list on the real github-copilot session (model claude-opus-5.5) produced exactly review/planning=claude-opus-5.5, subagents/docs/unattended=claude-sonnet-5, quick=claude-haiku-4.5 — matches the spec's worked example on the real catalogue. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:49.360Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: computeAutoPriority unchanged; priority recomputed on creation/refresh unless source=operator (updateProfile model-profile.ts). Existing tests 'two profiles with known different prices auto-rank cheaper-first' and 'an operator-set priority survives a refresh' still pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:49.520Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: routing profile list/set unchanged in shape, setModelProfileField now async (runs under withModelProfilesLock, model-profile.ts:738) with CLI call sites updated to await (routing.ts runProfileSet/runProfile). New CLI tests added in routing.test.ts: 'profile list' curated seed on first read, 'profile list --json', 'profile set' operator correction persists+shows on next list, 'profile set --priority', rejects missing/malformed target. All pass (item 5). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:49.678Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Diff-not-replace refresh logic in refreshModelProfiles unchanged (now inside the lock). Existing tests 'a shrunk-then-grown live list' and 'a refresh for one provider never touches another provider's stored entries' pass; new concurrency test additionally covers two providers refreshing at once. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:17:49.914Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: table.ts describeCategoryResolution/describeUnavailableNotice unchanged (em-dash unavailable notice distinct from flow 305's hyphen not-connected notice). New CLI tests added in routing.test.ts: derived rendering ('auto (derived from anthropic's models) -> ...', source [derived], plain text + --json), unavailable fallback rendering (em-dash notice, --json rejected.reason='unavailable'). LIVE VERIFIED: real routing list output shows 'auto (derived from github-copilot's models) -> github-copilot/claude-opus-5.5  [derived]' etc. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:18:02.260Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: routing-inspector.ts describePickerRowProfile (:403) unchanged for tier/price/context/priority/source/available, extended (item 3) to append 'non-chat/free — never auto-derived' via isModelDerivable when applicable. routing-inspector.test.ts (part of opentui-tests-no-skips.ts run, 1229/1229 pass) covers the modal; the derived/explicit/session-default/unavailable-fallback markers in listLines are unchanged code paths. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:18:02.438Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: formatProfileSummarySuffix (providers.ts:1393) unchanged; new providers.model-profiles.test.ts (5 tests) directly covers the AC13 suffix: brand-new refresh plain text '(profiles: 2 added)', --json profiles:{added,changed,unavailable}, a no-op second refresh shows no suffix, a shrunk list shows '1 now unavailable', profiles persist to model-profiles.json never auth.json. All pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:18:02.775Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: CI green: bun run typecheck clean; bun run lint (eslint .) clean; keryx health run PASS (score 94); full bun run test:core: 11856 pass / 34 fail / 7 skip across 11897 tests — the 34 failures are pre-existing/unrelated to this flow (R2-01/R2-04 hostile-cwd dist/cli.js shipped-build trust tests and 'the shipped build contains no test scaffolding', all requiring a prior Bundled 860 modules in 102ms\n\n  cli.js  6.42 MB  (entry point)\n\nBundled 253 modules in 29ms\n\n  core.js  1.42 MB  (entry point)\n\nBundled 6 modules in 5ms\n\n  proxy-worker.js  20.80 KB  (entry point) producing dist/cli.js, which this session never ran) — zero failures anywhere in routing/model-profile/derive/provider-catalog/providers paths (grep-verified against the failure list). Flow A's own files (table.ts, table.test.ts, config.ts, config.test.ts, trust.ts, trust.test.ts, provider-default.ts/.test.ts, child-model-request.ts/.test.ts) were not touched by this fix — git status confirms only routing.ts, routing-inspector.ts, model-profile.ts, derive-default-table.ts, model-tier.ts, the two model-selection.mdc copies, cli-reference.md, and their tests changed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:18:02.927Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: refreshModelProfiles' provider-agnostic diff logic is unchanged (any providerId works, not just curated ones); existing test 'connecting a non-seeded provider adds its profiles to the SAME catalogue...each field keeping its own source' passes unmodified. LIVE VERIFIED: the real model-profiles.json now holds 543 entries across many connected providers (deepseek/github-copilot/groq/MiniMax/ollama/openrouter/zai/zai-coding), not just the 9 curated seed ids. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:18:10.931Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: provider-catalog.ts (untouched by this fix) still calls refreshModelProfiles reusing the same fetched body (refreshProfiles opt-in, no second network request) for every provider whose model fetch succeeded. LIVE VERIFIED per the task: env -u OPENROUTER_API_KEY bun src/cli.ts providers status --refresh refreshed 9 providers (deepseek/github-copilot/grok/groq/MiniMax/ollama/openrouter/zai/zai-coding); the subsequent env -u OPENROUTER_API_KEY bun src/cli.ts routing list reported derived categories from the real session provider's (github-copilot) real models (review/planning=claude-opus-5.5, subagents/docs/unattended=claude-sonnet-5, quick=claude-haiku-4.5), and jq 'has(\"modelProfiles\")' on the real auth.json is now false (migration ran, no keys were printed at any point). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:29:54.202Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (operator)"
+    },
+    {
+      "at": "2026-09-25T16:29:56.454Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/718 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T16:36:53.743Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T16:36:59.566Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T16:36:59.568Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: 327-r01#F-001 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-002 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-003 (major, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-004 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-005 (minor, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-006 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-007 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-008 (minor, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-009 (major, round 327-r01): marked fixed at 7d3b04940e2a49c2b070c82378f2debf8bd07a06 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-010 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+    },
+    {
+      "at": "2026-09-25T16:38:14.551Z",
+      "event": "completing",
+      "detail": "merged commit: e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8"
+    },
+    {
+      "at": "2026-09-25T16:38:18.794Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-25T16:38:18.796Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: 327-r01#F-001 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-002 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-003 (major, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-004 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-005 (minor, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-006 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-007 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-008 (minor, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-009 (major, round 327-r01): marked fixed at 7d3b04940e2a49c2b070c82378f2debf8bd07a06 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-010 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+    },
+    {
+      "at": "2026-09-25T16:40:56.303Z",
+      "event": "completing",
+      "detail": "merged commit: e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8"
+    },
+    {
+      "at": "2026-09-25T16:41:00.548Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-09-25T16:41:00.549Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T13:23:15.559Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:15.746Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:15.946Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:24.608Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:24.852Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:25.099Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:25.354Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:25.605Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:34.814Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:35.090Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:35.359Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:23:35.629Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:25:45.666Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:25:45.802Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:25:53.522Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T13:25:53.647Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:c57eab7b0ef73786fb108d0427bb75dd0f4344e6d91f42176b3bc97d7e9d3a82"
+    },
+    {
+      "at": "2026-09-25T14:17:08.777Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:17.954Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:18.460Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:18.820Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:19.192Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:28.925Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:39.734Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:49.360Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:49.520Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:49.677Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:17:49.914Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:18:02.260Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:18:02.438Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:18:02.775Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:18:02.927Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T14:18:10.931Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T16:41:00.549Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d",
+      "headCommit": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T16:36:59.566Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "16 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: 327-r01#F-001 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-002 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-003 (major, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-004 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-005 (minor, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-006 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-007 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-008 (minor, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-009 (major, round 327-r01): marked fixed at 7d3b04940e2a49c2b070c82378f2debf8bd07a06 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-010 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T16:38:18.794Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "16 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: 327-r01#F-001 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-002 (blocker, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-003 (major, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-004 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-005 (minor, round 327-r01): marked fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-006 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-007 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-008 (minor, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 327-r01#F-009 (major, round 327-r01): marked fixed at 7d3b04940e2a49c2b070c82378f2debf8bd07a06 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 327-r01#F-010 (major, round 327-r01): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    },
+    {
+      "at": "2026-09-25T16:41:00.548Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "16 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:1d49081485d229ff36447765a5fd5ac2f2cd31b90febd05c29510b0596900e0d"
+    }
+  ],
+  "merged": {
+    "commit": "e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8",
+    "ref": "origin/main",
+    "at": "2026-09-25T16:41:00.549Z"
+  }
+}
