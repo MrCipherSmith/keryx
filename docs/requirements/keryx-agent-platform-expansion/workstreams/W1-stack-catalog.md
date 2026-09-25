@@ -1379,6 +1379,18 @@ recalled from training data.
   `<id>-code-auditor`/`<id>-build-fixer` pair ships for any of them. Each
   pack's `agent-refs.json` records the real per-skill numbers and the
   reasoning above.
+- **I11-rewording / trigger-failure interaction (review round 1).** The I11
+  diversification pass (11 prompts, `csharp-dotnet/dotnet-testing` +
+  3 `flutter-dart` skills) plausibly contributed to some of the honest
+  gate's trigger-positive misses above — diversifying a prompt away from
+  restating its own frontmatter trigger sometimes also dropped an explicit
+  stack-naming word the original had, making the reworded prompt honestly
+  harder to route. The I11 fixes themselves are still correct (I11 genuinely
+  fired on the pre-fix wording, and synonym-swapping is explicitly forbidden
+  by the lessons file); the prompts were not touched again after the gate
+  ran, since that would be tuning eval wording to the result. Left as an
+  understood, unresolved interaction for a future flow — see flow 336's
+  journal for the full account.
 
 ## Data contracts
 

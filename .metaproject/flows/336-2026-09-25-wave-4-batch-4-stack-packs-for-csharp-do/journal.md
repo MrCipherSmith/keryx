@@ -161,3 +161,75 @@
 - Pushed the rebased branch (`git push origin flow/336-w4b4
   --force-with-lease`, since Phase A's original push predates the rebase)
   and opened draft PR #738 into `main`.
+
+## ctx7 verification evidence (Phase A workers; recorded here per review round 1 minor -- W1's own claim had no evidence attached)
+
+Each worker ran its own ctx7 queries before writing version-specific content
+and reported the exact query/finding back to the runner. Kept verbatim from
+the four workers' completion reports:
+
+- **csharp-dotnet**: `docs /dotnet/core "current .NET LTS version..."` ->
+  .NET 10 is the current LTS (released 2025-11-11, EOL 2028-11); .NET 8 LTS
+  and .NET 9 STS both in maintenance ending 2026-11-10; .NET 11 STS live
+  2026-11. `docs /dotnet/docs "C# language version for .NET 10 / C# 14,
+  nullable reference types default..."` -> nullable reference types
+  (annotation + warning context) on by default for NEW PROJECT TEMPLATES
+  since C# 10/.NET 6, not the language itself (existing projects still
+  default to off) -- corrected in review round 1 after re-verification
+  found the pack's own wording read as claiming the language defaults it.
+  Primary constructors and collection expressions confirmed shipped in
+  C# 12/.NET 8.
+- **swift-ios**: `library "Swift" "current Swift concurrency model, actors,
+  Sendable, current Swift version in 2026"`, `library "SwiftUI" "current
+  recommended state management -- @Observable vs ObservableObject, current
+  Swift Testing framework vs XCTest"` -> Swift 6 language mode and its
+  data-race safety; `@Observable`/`@Bindable`/`@State` current on iOS 17+;
+  Swift Testing's `@Test`/`#expect` current, XCTest retained for
+  XCUITest/performance tests. Review round 1's own re-check (ctx7 docs
+  `/swiftlang/swift-migration-guide`) additionally confirmed the M4 fact
+  (View conformance @MainActor-isolated by default since the iOS 18 SDK)
+  from general knowledge where ctx7's indexed migration-guide corpus did
+  not carry the specific SDK-default fact directly.
+- **kotlin-android**: `library "Jetpack Compose" "current recomposition
+  guidance..."` -> resolved `/websites/developer_android_develop_ui_compose`;
+  confirmed state hoisting, `remember`/`rememberSaveable` (with `Saver`),
+  `DisposableEffect`+`rememberUpdatedState`, `snapshotFlow` guidance.
+  `library "Kotlin Coroutines"` -> resolved
+  `/websites/developer_android_develop_ui_compose` docs additionally
+  confirming `GlobalScope` is documented as an anti-pattern, `runTest`/
+  `TestScope` is the current coroutine-test API, private-`MutableStateFlow`/
+  public-`asStateFlow()` is the documented encapsulation idiom. Review round
+  1's own ctx7 pass (same library) additionally confirmed strong skipping
+  mode default since Kotlin 2.0.20 (M1) and the Compose Compiler Gradle
+  plugin versioned identically to Kotlin since Kotlin 2.0 (M2) -- both from
+  `developer.android.com/develop/ui/compose/performance/stability/
+  strongskipping` and `.../compose/compiler` respectively.
+- **flutter-dart**: `library "Flutter" "current Dart null-safety state...
+  BuildContext across async gaps..."` -> `/flutter/website` docs confirmed
+  `if (!context.mounted) return;` after an `await` is the current documented
+  pattern (cookbook `returning-data.md`). `library "Dart" "current Dart
+  language version and null safety guidance"` -> sound null safety
+  mandatory (non-optional) since Dart 3, per `/websites/dart_dev`.
+
+task: T3 (review round 1 fixes)
+
+## Review round 1: I11-rewording / trigger-failure interaction (recorded, not re-touched)
+
+The I11 diversification pass (Phase B, before the honest gate) reworded 11
+positive trigger prompts in `csharp-dotnet/dotnet-testing` and 3
+`flutter-dart` skills to stop restating their own frontmatter `triggers:`.
+Some of those rewordings, in avoiding a near-verbatim restatement, also
+dropped explicit stack-naming words the original prompt had (e.g. a prompt
+that said "flutter" or named the framework directly became a more generic
+description of the same scenario). This plausibly contributed to some of
+the honest gate's trigger-positive misses on those same skills (a prompt
+with fewer stack-identifying words is honestly harder for the router to
+route correctly). This is recorded as a real interaction, not re-litigated:
+the I11 rewordings themselves are still correct (I11 genuinely fired on the
+original wording, and synonym-swapping instead of genuine diversification
+is explicitly forbidden by the lessons file), and per the standing rule for
+this PR, prompts are not re-worded again after the gate ran -- that would be
+exactly the "tune eval wording until it passes" failure mode the process is
+built to prevent. Left as an honest, understood trade-off for a future flow
+to weigh (e.g. whether I11's threshold or the diversification approach
+should account for this interaction), not fixed here.
