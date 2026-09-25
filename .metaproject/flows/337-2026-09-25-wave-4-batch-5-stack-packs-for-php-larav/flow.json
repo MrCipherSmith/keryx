@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 5: stack packs for php-laravel, ruby-rails, c-cpp, sql-db",
   "status": "in-progress",
   "createdAt": "2026-09-25T15:14:49.978Z",
-  "updatedAt": "2026-09-25T15:36:42.323Z",
+  "updatedAt": "2026-09-25T15:37:12.806Z",
   "source": {
     "type": "description",
     "ref": null
@@ -212,7 +212,7 @@
       "id": "T11",
       "title": "Commit packs separately, push branch, return READY_FOR_GATE",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -220,7 +220,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -341,6 +342,11 @@
       "at": "2026-09-25T15:36:42.323Z",
       "event": "task-done",
       "detail": "T10: Offline verification: lint + integrity + manifest tests"
+    },
+    {
+      "at": "2026-09-25T15:37:12.806Z",
+      "event": "task-done",
+      "detail": "T11: Commit packs separately, push branch, return READY_FOR_GATE"
     }
   ]
 }
