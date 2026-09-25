@@ -2,7 +2,7 @@
   "id": "java-kotlin-spring",
   "family": "framework",
   "modules": ["java-kotlin-spring-rules", "java-kotlin-spring-skills"],
-  "detectionMarkers": ["spring-boot", "spring", "java", "kotlin"],
+  "detectionMarkers": ["spring-boot", "spring"],
   "provenance": {
     "origin": "authored",
     "sourceRef": "flow 335, Wave 4 batch 3"

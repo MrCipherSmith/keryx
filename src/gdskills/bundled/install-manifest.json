@@ -1469,9 +1469,7 @@
       ],
       "detectionMarkers": [
         "spring-boot",
-        "spring",
-        "java",
-        "kotlin"
+        "spring"
       ],
       "provenance": {
         "origin": "authored",
