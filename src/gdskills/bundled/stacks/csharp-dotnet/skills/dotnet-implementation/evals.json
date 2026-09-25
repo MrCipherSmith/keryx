@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Build a new order-placement endpoint in this ASP.NET Core API",
+      "I need a background email sender that doesn't block the caller in C#",
+      "How should I wire this new repository into the DI container?",
+      "Should this order confirmation type be a record or a class?",
+      "Add cancellation support to this async database call",
+      "What's the right way to inject a database context into a singleton cache service?",
+      "Write an EF Core query for fetching recent orders with their line items"
+    ],
+    "negative": [
+      "Implement this feature in Java using Spring Boot's @Service annotation",
+      "Add a Go worker pool under cmd/worker that bounds concurrency with errgroup",
+      "Implement this feature in a Python FastAPI service with Pydantic models",
+      "Implement this SwiftUI view with @State and a binding for the text field",
+      "Add this Jetpack Compose composable for the account settings screen",
+      "Implement this Flutter widget as a StatefulWidget with a form field",
+      "Review this C# diff for async void misuse and swallowed exceptions",
+      "dotnet build is failing with a NuGet version conflict, fix it"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "async-void-avoidance",
+      "prompt": "I need to send an order-shipped email notification from OrderService without making the caller of PlaceOrder wait for the email to go out. What's the right way to write this method in C#?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer keeps the notification method Task-returning (never async void, since this is not an event handler) so exceptions it throws remain observable, and achieves 'don't make the caller wait' some other way -- by not awaiting the call at the call site while still logging/observing any exception (e.g. via a continuation, a background queue, or an IHostedService), rather than declaring the method itself async void to get fire-and-forget behavior for free.",
+          "pass_criteria": [
+            "States that the notification method itself should remain Task-returning (async Task), not async void.",
+            "Gives a concrete way for the caller to avoid waiting on it without making the method async void -- e.g. not awaiting the call at the call site while still observing/logging a failure, queuing it to a background worker/IHostedService, or an equivalent named mechanism, not just 'handle it asynchronously'.",
+            "States the concrete risk async void carries here: an exception thrown inside it cannot be caught by the caller's try/catch and crashes the process instead of surfacing as a normal failure."
+          ],
+          "fail_criteria": [
+            "Recommends declaring the notification method `async void` to get fire-and-forget behavior, on the grounds that the caller shouldn't wait for it and it isn't returning a value. Mentioning async void only to explain why it must be avoided here is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Keep `SendOrderShippedEmailAsync` as `async Task`, not `async void` -- it isn't a UI event handler, so making it `async void` would mean any exception it throws (a failed SMTP call, a malformed address) bypasses normal exception handling entirely and crashes the process instead of being something the caller, or anything else, can catch. To avoid making `PlaceOrder` wait for the email, don't await the call inline in the hot path -- either hand it off to a background queue/`IHostedService` that processes notifications out-of-band, or if you do call it fire-and-forget style from `PlaceOrder`, capture the resulting `Task` and attach a continuation that logs any exception (`SendOrderShippedEmailAsync(order).ContinueWith(t => Log(t.Exception), TaskContinuationOptions.OnlyOnFaulted)`) rather than discarding it silently. Either way, the method signature itself stays `Task`-returning so its failures stay observable.",
+        "known_wrong": "Just make it `async void SendOrderShippedEmailAsync(Order order)` -- that's literally what `async void` is for: a method you call and don't wait on. Since `PlaceOrder` doesn't need the result and shouldn't block on the email going out, `async void` gives you fire-and-forget with zero extra plumbing; call it like `SendOrderShippedEmailAsync(order);` with no `await` and move on.",
+        "vague": "Handle the email sending asynchronously so it doesn't block the order placement, and make sure errors are dealt with properly.",
+        "subtle_wrong": "Declare it `async void SendOrderShippedEmailAsync(Order order)` since the caller genuinely doesn't need to await it or get a result back -- `async void` is designed exactly for this 'call it and move on' case, unlike UI event handlers being the only place people usually see it. Just make sure the method itself has a top-level `try/catch` inside it that logs any failure, so you're not completely blind to errors even without the caller being able to observe them."
+      },
+      "anti_patterns": ["async void"]
+    },
+    {
+      "id": "scoped-into-singleton",
+      "prompt": "I have a Singleton `OrderCacheService` in my ASP.NET Core app that occasionally needs to read from the database. Can I just inject my Scoped `OrderDbContext` into its constructor?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says no -- a Scoped OrderDbContext must not be captured directly into a Singleton's constructor/field -- and gives the concrete fix: inject IServiceScopeFactory (or IServiceProvider) into the Singleton and resolve a fresh Scoped OrderDbContext per use via CreateScope(), because a direct capture would pin the first-resolved DbContext instance for the entire application lifetime instead of getting a fresh one per request/operation.",
+          "pass_criteria": [
+            "States plainly that injecting/capturing the Scoped OrderDbContext directly into the Singleton's constructor is wrong.",
+            "Names the concrete fix: inject IServiceScopeFactory (or IServiceProvider) and call CreateScope() to resolve a fresh Scoped OrderDbContext each time it's needed, not once at construction.",
+            "States the concrete consequence of getting this wrong: the captured DbContext instance would be reused for the app's entire lifetime instead of being fresh per operation."
+          ],
+          "fail_criteria": [
+            "Approves injecting/capturing the Scoped OrderDbContext directly into the Singleton's constructor or field, with no per-use scope resolution."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- don't inject `OrderDbContext` directly into `OrderCacheService`'s constructor. `OrderDbContext` is Scoped, meaning the container hands out a fresh instance per request/scope, but a Singleton is constructed exactly once for the app's whole lifetime; if you capture the Scoped instance at construction time, every later use of that DbContext -- across every request from then on -- reuses whatever instance was live the moment the Singleton was built, which is both wrong (stale state, no per-request isolation) and eventually throws once that DbContext is disposed at the end of its original scope. The fix is to inject `IServiceScopeFactory` into `OrderCacheService` instead, and whenever it actually needs to hit the database, call `using var scope = scopeFactory.CreateScope();` and resolve `OrderDbContext` from `scope.ServiceProvider` right there -- that gives you a properly-scoped, disposed-when-done instance each time, with no lifetime mismatch.",
+        "known_wrong": "Sure, just add `OrderDbContext` as a constructor parameter on `OrderCacheService` like any other dependency -- the DI container will resolve it and inject it same as it would for a Scoped or Transient service. It's a bit of an edge case with the lifetimes technically being different, but in practice it usually works fine since the container doesn't stop you from doing it, and it saves you from having to bring in `IServiceScopeFactory` just for one occasional database read.",
+        "vague": "That's a lifetime mismatch you'll want to handle carefully -- make sure the database access in the Singleton is set up the right way.",
+        "subtle_wrong": "Technically you can register `OrderDbContext` as Scoped and still take it as a constructor parameter on the Singleton -- the container will just resolve it once at startup and hand `OrderCacheService` that instance, and since it's only used for occasional reads rather than every request, the staleness usually isn't a big deal in practice. If you want to be a bit safer you could add a comment noting the DbContext is effectively long-lived here, but a full `IServiceScopeFactory`/`CreateScope()` setup is probably more machinery than this occasional-read case needs."
+      }
+    }
+  ]
+}

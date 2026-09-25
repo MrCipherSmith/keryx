@@ -1,0 +1,86 @@
+---
+extends: common
+paths: ["**/*.cs"]
+metadata:
+  origin: authored
+---
+
+# C#/.NET security
+
+Narrows `core-common-rules`' stack-agnostic security rules to
+C#/.NET-specific, OWASP-relevant risks and the safe framework API to use
+instead. Applies only to `*.cs` files.
+
+## SQL and data access
+
+- Use parameterized queries for any SQL built from user-influenced
+  input: `SqlCommand.Parameters.Add(...)`/`AddWithValue(...)` with `@`
+  placeholders, or an ORM's parameterized query API (EF Core LINQ,
+  Dapper's parameter objects) — never `string.Format`/interpolation/
+  concatenation to build `CommandText` with a value that came from a
+  caller. `$"SELECT * FROM Users WHERE Name = '{name}'"` is a SQL
+  injection sink even when it "looks like" it is just formatting.
+- An ORM's raw-SQL escape hatch (EF Core's `FromSqlRaw`, Dapper's raw
+  string execution) carries the same rule: pass user-influenced values
+  as parameters, never interpolated directly into the raw SQL string.
+  Prefer `FromSqlInterpolated`, which parameterizes `$"..."`
+  interpolation holes automatically, over `FromSqlRaw` when the query
+  needs any caller-supplied value at all.
+
+## Deserialization of untrusted data
+
+- Never use `BinaryFormatter` to deserialize data from any source you do
+  not fully trust (or at all, on a current .NET version) — it is banned
+  by Microsoft for security reasons because a crafted payload can
+  execute arbitrary code during deserialization, and it is obsolete/
+  removed on modern .NET.
+- Deserialize untrusted JSON with `System.Text.Json` using an explicit,
+  known target type — avoid `TypeNameHandling`-style polymorphic
+  deserialization from an untrusted source (whether via
+  `Newtonsoft.Json`'s `TypeNameHandling.Auto`/`All` or a custom
+  `$type`-driven resolver), which lets the payload itself choose what
+  type gets constructed.
+- Validate/allowlist any type passed to `XmlSerializer`/`DataContractSerializer`
+  from untrusted input the same way; do not resolve a type name found
+  inside the untrusted payload without an allowlist.
+
+## Secrets and configuration
+
+- Never hard-code a connection string, API key, or signing secret in
+  source or commit it in `appsettings.json` — use User Secrets
+  (`dotnet user-secrets`) for local development and environment
+  variables, Azure Key Vault, or another secret store the project has
+  already standardized on for anything beyond local dev.
+- A connection string or secret read from `IConfiguration` should come
+  from an environment-specific provider (environment variables, a
+  secret manager), not a value checked into `appsettings.json` or
+  `appsettings.Development.json` that happens to work.
+
+## Path and file handling
+
+- Never build a filesystem path for an untrusted, caller-supplied
+  filename/segment with plain string concatenation and open it directly
+  — validate the resulting path stays under the intended root (e.g.
+  resolve with `Path.GetFullPath` and confirm it starts with the root's
+  full path, or use an allowlist of known filenames) before calling
+  `File.Open`/`File.ReadAllText`/etc.; `Path.Combine` alone does not stop
+  a `..`-containing segment from climbing outside the intended
+  directory.
+
+## Web and transport (ASP.NET Core)
+
+- Never render user-influenced content into an HTML response outside of
+  Razor's default auto-encoding (`Html.Raw`/`@Html.Raw` on
+  caller-supplied content is an XSS vector) — let the framework's
+  default encoding do its job unless the content is provably
+  pre-sanitized.
+- Never disable TLS certificate validation
+  (`ServerCertificateCustomValidationCallback` returning `true`
+  unconditionally, or `HttpClientHandler.ServerCertificateCustomValidationCallback`
+  bypassing validation) outside a short-lived local test, and never ship
+  it that way.
+- Use the framework's built-in antiforgery support
+  (`[ValidateAntiForgeryToken]`/`IAntiforgery`) for any state-changing
+  endpoint reachable from a browser session, and rely on ASP.NET Core
+  Identity/`PasswordHasher<TUser>` (or an equivalent vetted library) for
+  password hashing — never a custom hash/roll-your-own scheme.

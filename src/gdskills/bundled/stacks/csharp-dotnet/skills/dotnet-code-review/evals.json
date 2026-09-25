@@ -1,0 +1,77 @@
+{
+  "triggers": {
+    "positive": [
+      "Check this pull request for fire-and-forget async methods that could crash",
+      "Does this C# change block a thread waiting on a Task anywhere?",
+      "Look over this diff for a database context leaking into a long-lived service",
+      "Audit this .NET change for exception handling that hides real failures",
+      "Any missing using/await using in this controller change?",
+      "Review this code change for nullable annotation holes before merge",
+      "Take a look at this diff, read-only, for resource cleanup issues"
+    ],
+    "negative": [
+      "Review this Go diff for goroutine leaks and data races",
+      "Review this Python code for SQL injection",
+      "Review this TypeScript diff for missing null checks",
+      "Review this Swift diff for retain cycles and force-unwraps",
+      "Review this Kotlin diff for coroutine scope leaks",
+      "Review this Flutter diff for setState calls after dispose",
+      "Implement a new C# endpoint that queries the order repository",
+      "dotnet test is failing on this project, fix it"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "async-void-review",
+      "prompt": "Review this C# diff: a new method was added as `public async void ProcessOrderAsync(Order order)` on OrderController, and it's called from a regular controller action (not a UI event handler). What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies async void as the problem on a method that is not a genuine event handler, explains the concrete risk (an exception it throws bypasses the caller's try/catch and crashes the process, or is otherwise unobservable, instead of failing the request normally), and reports this as a finding with a fix direction (change it to return Task and have the caller await it) -- it never actually edits or claims to have edited the code, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies `async void` on ProcessOrderAsync as the problem, noting it is not a genuine event handler.",
+            "States the concrete risk: an exception thrown inside bypasses the caller's exception handling and crashes the process (or is otherwise silently lost) instead of failing the request the normal way.",
+            "Gives the fix direction (make it Task-returning and have the caller await it) as a finding, with no code change applied or described as already made."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already made even a partial or proof-of-concept code change (this skill is strictly read-only: findings and fix direction only)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: `ProcessOrderAsync` is declared `async void`, but it's called from a regular controller action, not a UI event handler -- the one legitimate use of `async void`. That's a real problem: if anything inside it throws (a downstream call failing, a validation error), the exception can't be caught by the caller's try/catch at all -- it escapes the normal async exception-propagation path and crashes the process instead of surfacing as an ordinary failed request. Fix direction: change the signature to `async Task ProcessOrderAsync(Order order)` and have the calling action `await` it, so any exception it throws propagates normally and can be handled like any other failure in the request pipeline. I'm reporting this as a finding rather than making the change myself, since this review is read-only.",
+        "known_wrong": "`async void` here is a known Go-to for fire-and-forget style calls, so I went ahead and fixed it directly instead of just flagging it: I changed the signature to `async Task` and updated the controller action to await it. The change is already in the diff, build passes, so this should be fine to merge as-is.",
+        "vague": "That async void method looks like it could cause some issues -- might be worth double-checking before this merges.",
+        "subtle_wrong": "Finding: `ProcessOrderAsync` is `async void`, which is generally discouraged outside event handlers -- worth fixing at some point. I went ahead and made a small proof-of-concept edit to the signature so you can see the shape of the change, though the calling action would still need to be updated to await it before this compiles cleanly."
+      },
+      "anti_patterns": ["async void"]
+    },
+    {
+      "id": "swallowed-exception-review",
+      "prompt": "Review this C# diff: a new block was added around a database call as `catch (Exception) { }` with no logging, no rethrow, and no narrower exception type. What's wrong here?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the empty catch (Exception) block as silently swallowing any failure from the database call -- including ones that are not the specific, expected failure mode -- and flags this as a finding: a real failure (connectivity loss, a constraint violation, a timeout) disappears with no log, no rethrow, and no signal to the caller or to operations. It gives a fix direction (catch the specific expected exception type, or log and rethrow) as a finding, without applying it, and does not accept 'it's just cleanup/best-effort code' as an excuse to leave it empty.",
+          "pass_criteria": [
+            "Identifies the empty/blanket catch (Exception) block as the issue -- swallowing the failure with no log, rethrow, or narrower type.",
+            "States the concrete consequence: a real underlying failure from the database call is hidden with no signal to the caller or to operations/logs.",
+            "Names a fix direction (catch the specific expected exception type, or log and rethrow) as a finding, not as a code change already made."
+          ],
+          "fail_criteria": [
+            "Dismisses the empty catch (Exception) as acceptable because the surrounding code is 'just cleanup' or 'best-effort', instead of requiring it to at least log, rethrow, or narrow the caught type."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: this new `catch (Exception) { }` around the database call swallows absolutely everything -- a lost connection, a constraint violation, a timeout, anything -- with no log statement, no rethrow, and no narrowing to the specific exception type actually expected here. That means a real failure in this database call now disappears completely: nothing shows up in logs, nothing propagates to the caller, and there's no signal anything went wrong at all, which makes this exact bug invisible in production until someone notices missing data or a silent no-op. Fix direction: either catch the specific exception type this call can actually throw and handle it deliberately, or if the intent really is 'don't let this fail the whole operation', at minimum log the exception before continuing so there's a record of what happened. I'm flagging this as a finding rather than fixing it myself, since this review is read-only.",
+        "known_wrong": "This is fine -- it's just wrapping a database call defensively so one bad call doesn't take down the whole request, and an empty `catch (Exception)` block is a common enough pattern for that. No changes needed here; broad catches like this are pretty normal around I/O calls that might occasionally fail.",
+        "vague": "That empty catch block looks a little risky -- might be worth reconsidering before this merges.",
+        "subtle_wrong": "Finding: the `catch (Exception) { }` around the database call is pretty broad and doesn't log anything, but since this is inside what looks like a best-effort background sync path rather than a user-facing request, silently swallowing failures here is probably acceptable -- if it starts causing real problems you'd notice via the missing data downstream anyway."
+      },
+      "anti_patterns": ["catch (Exception)"]
+    }
+  ]
+}

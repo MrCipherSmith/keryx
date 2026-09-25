@@ -1,0 +1,78 @@
+{
+  "triggers": {
+    "positive": [
+      "The compiler is complaining about a possible null reference here, fix it",
+      "This NuGet package version conflict is blocking my build, resolve it",
+      "An analyzer rule is failing on this awaited call in library code",
+      "dotnet test just started failing after I touched this class",
+      "My project won't restore anymore, something's wrong with the package graph",
+      "This CS error is blocking the build, what's the actual fix?",
+      "Sort out this StyleCop violation without just turning the rule off"
+    ],
+    "negative": [
+      "npm install is failing with a peer dependency conflict",
+      "cargo build is failing for this Rust crate",
+      "pip install is failing for this Python project",
+      "This Xcode build is failing with a Swift compiler error",
+      "Gradle sync is failing for this Kotlin Android project",
+      "flutter pub get is failing with a version solving conflict",
+      "Implement a new C# feature in the order service",
+      "Review this C# diff for async void misuse"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "nullable-warning-root-cause",
+      "prompt": "The compiler reports CS8602 (possible null reference) on the line right after `orders.TryGetValue(orderId, out var order);` where I then call `order.Total`. How do I fix it correctly?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the actual null path -- checking whether TryGetValue found a value (its bool return, or an explicit `order is not null` check) before dereferencing `order.Total` -- rather than silencing CS8602 with the null-forgiving operator (`order!`), a #pragma warning disable, or disabling nullable reference types for the file/project.",
+          "pass_criteria": [
+            "Fixes the root cause with a concrete null check before the dereference -- e.g. branching on TryGetValue's bool return value, or an explicit `if (order is not null)`/similar check -- shown as actual code, not just described.",
+            "Does not use the null-forgiving operator (`order!`) as the fix.",
+            "Does not recommend `#pragma warning disable`/`<Nullable>disable</Nullable>` as the fix instead of the null check."
+          ],
+          "fail_criteria": [
+            "Recommends using the null-forgiving operator (e.g. `order!.Total`) to silence CS8602 without an actual null check. Mentioning the null-forgiving operator only to warn against it is not a failure.",
+            "Recommends `#pragma warning disable CS8602` or `<Nullable>disable</Nullable>` instead of adding a real null check."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "`TryGetValue` returns a `bool` telling you whether it actually found something, and CS8602 is correctly pointing out that `order` can still be null on the not-found path even though the compiler can't yet see that you've handled it. Fix it by branching on that return value: `if (orders.TryGetValue(orderId, out var order)) { UseTotal(order.Total); } else { /* handle not-found */ }` -- the compiler's flow analysis then knows `order` is non-null inside the `if` branch, and the warning goes away because you actually handled the null case, not because you told the compiler to stop checking. Don't reach for `order!.Total` here -- that just asserts to the compiler that `order` is non-null without you having verified it, which is exactly the case TryGetValue's bool return exists to let you check safely. And don't add `#pragma warning disable CS8602`/`<Nullable>disable</Nullable>` either -- that turns off the warning everywhere it could apply, not just this one call site.",
+        "known_wrong": "Easiest fix: just change `order.Total` to `order!.Total` -- that null-forgiving operator tells the compiler you know what you're doing and it stops flagging CS8602 on that line. You don't need to restructure anything around the `TryGetValue` call or add extra branching just to satisfy the null checker.",
+        "vague": "Handle the case where the lookup doesn't find anything, and the null warning should go away.",
+        "subtle_wrong": "Check `orders.ContainsKey(orderId)` right before the `TryGetValue` call and only proceed if it returns true -- that clears CS8602 in most cases. If the compiler still complains after adding the ContainsKey check, just add `order!.Total` on that line to finish clearing the warning without restructuring further."
+      },
+      "anti_patterns": ["null-forgiving operator"]
+    },
+    {
+      "id": "no-suppressmessage-analyzer",
+      "prompt": "A Roslyn analyzer (CA2007, 'ConfigureAwait') is flagging an `await httpClient.GetAsync(url)` call inside a public method of a shared library project (not application/ASP.NET Core code). How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the actual root cause CA2007 is flagging -- adding `.ConfigureAwait(false)` to the awaited call, since this is library code with no captured SynchronizationContext to preserve -- rather than silencing the analyzer with `#pragma warning disable CA2007` or a `[SuppressMessage(...)]` attribute, and rather than disabling the rule globally in the ruleset/.editorconfig as a substitute for the local fix.",
+          "pass_criteria": [
+            "Fixes the root cause by adding `.ConfigureAwait(false)` to the awaited call, shown concretely (e.g. `await httpClient.GetAsync(url).ConfigureAwait(false)`).",
+            "States why this is the correct fix for library code specifically (no need to resume on a captured context, unlike UI/legacy ASP.NET code).",
+            "Does not rely on `#pragma warning disable`/`[SuppressMessage(...)]` or a global rule disable as the fix."
+          ],
+          "fail_criteria": [
+            "Recommends suppressing CA2007 with `#pragma warning disable CA2007`, a `[SuppressMessage(...)]` attribute, or disabling the rule in the ruleset/.editorconfig, instead of adding `.ConfigureAwait(false)`. Mentioning suppression only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "CA2007 is telling you exactly what's missing: in shared library code, an awaited call should use `.ConfigureAwait(false)` so it doesn't try to resume on whatever `SynchronizationContext` the caller happened to be running under -- that matters for a library because you don't control or know what kind of caller (UI app, legacy ASP.NET, console app) will end up calling into it. Fix it by adding the call: `await httpClient.GetAsync(url).ConfigureAwait(false);`. That's the actual fix the analyzer is asking for -- don't reach for `#pragma warning disable CA2007` or a `[SuppressMessage(\"Reliability\", \"CA2007\")]` attribute instead, and don't turn the rule off globally in the project's ruleset/.editorconfig either; both of those just stop the analyzer from telling you about every future missing `ConfigureAwait(false)` in this library, rather than fixing the one it already found.",
+        "known_wrong": "The fastest way to clear this is to add `[SuppressMessage(\"Reliability\", \"CA2007:DoNotDirectlyAwaitATask\")]` above the method -- that tells the analyzer to stop flagging this specific spot without you needing to touch the actual await call. If it keeps popping up elsewhere in the library, you can also just disable CA2007 in the project's `.editorconfig` so it stops being noisy across the board.",
+        "vague": "Handle the ConfigureAwait situation properly for library code so the analyzer stops complaining.",
+        "subtle_wrong": "Add `#pragma warning disable CA2007` right above this specific await call and `#pragma warning restore CA2007` right after it -- that scopes the suppression tightly to just this one line rather than disabling it project-wide, which feels like a reasonable middle ground without needing to add `.ConfigureAwait(false)` everywhere the analyzer might eventually flag."
+      },
+      "anti_patterns": ["SuppressMessage"]
+    }
+  ]
+}
