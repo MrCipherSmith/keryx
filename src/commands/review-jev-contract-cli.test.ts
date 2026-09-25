@@ -204,6 +204,89 @@ describe("a Jev batch failure (e.g. a real vendor max_tokens_exceeded) degrades 
   });
 });
 
+describe("Part B: a real vendor 400 max_tokens_exceeded batch is retried once, split in half", () => {
+  function maxTokensResponse(): Response {
+    return new Response(JSON.stringify({ detail: { error_type: "max_tokens_exceeded" } }), { status: 400 });
+  }
+  function noulResponse(answers: Record<string, number>): Response {
+    return new Response(
+      JSON.stringify({
+        answers: Object.fromEntries(Object.entries(answers).map(([id, noul]) => [id, { type: "noul", noul }])),
+        usage: { input_tokens: 10, output_tokens: 2, cost: 0.0001 },
+      }),
+      { status: 200 },
+    );
+  }
+
+  test("both halves succeed after the split: every claim scored, no jevError", async () => {
+    const description = "- Adds a widget.\n- Fixes a bug.\n- Removes dead code.";
+    let call = 0;
+    const fetchFn = (async () => {
+      call += 1;
+      if (call === 1) return maxTokensResponse();
+      if (call === 2) return noulResponse({ CLAIM1: 0.9, CLAIM2: 0.85 });
+      return noulResponse({ CLAIM3: 0.8 });
+    }) as unknown as typeof fetch;
+
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+
+    expect(call).toBe(3);
+    expect(result.jevError).toBeUndefined();
+    expect(result.tokens.jevCalls).toBe(2);
+    expect(result.claims.map((c) => c.probability)).toEqual([0.9, 0.85, 0.8]);
+  });
+
+  test("one half also fails: that half's claims degrade to facts-only, the other half is still scored", async () => {
+    const description = "- Adds a widget.\n- Fixes a bug.\n- Removes dead code.";
+    let call = 0;
+    const fetchFn = (async () => {
+      call += 1;
+      if (call === 1) return maxTokensResponse();
+      if (call === 2) return noulResponse({ CLAIM1: 0.9, CLAIM2: 0.85 });
+      return maxTokensResponse();
+    }) as unknown as typeof fetch;
+
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+
+    expect(call).toBe(3);
+    expect(result.jevError).toContain("max_tokens_exceeded");
+    expect(result.tokens.jevCalls).toBe(1);
+    expect(result.claims[0]!.probability).toBe(0.9);
+    expect(result.claims[1]!.probability).toBe(0.85);
+    expect(result.claims[2]!.probability).toBeUndefined();
+  });
+
+  test("a single-claim batch is never split — it degrades on the first max_tokens failure", async () => {
+    const description = "- Adds a widget.";
+    let call = 0;
+    const fetchFn = (async () => {
+      call += 1;
+      return maxTokensResponse();
+    }) as unknown as typeof fetch;
+
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+
+    expect(call).toBe(1);
+    expect(result.jevError).toContain("max_tokens_exceeded");
+    expect(result.claims[0]!.probability).toBeUndefined();
+  });
+
+  test("a non-max_tokens 400 is not retried/split — it degrades the whole batch on the first attempt", async () => {
+    const description = "- Adds a widget.\n- Fixes a bug.\n- Removes dead code.";
+    let call = 0;
+    const fetchFn = (async () => {
+      call += 1;
+      return new Response(JSON.stringify({ detail: { error_type: "some_other_error" } }), { status: 400 });
+    }) as unknown as typeof fetch;
+
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+
+    expect(call).toBe(1);
+    expect(result.jevError).not.toContain("max_tokens");
+    expect(result.claims.every((c) => c.probability === undefined)).toBe(true);
+  });
+});
+
 describe("AC7: opt-in and credential gating — both refuse before any read", () => {
   test("review.jev.contract absent/false: refused, the fixtures dir is never even opened", async () => {
     ROOT = await projectRoot(false);

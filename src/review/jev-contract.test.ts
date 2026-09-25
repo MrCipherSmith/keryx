@@ -76,6 +76,55 @@ describe("extractClaims — AC3", () => {
   });
 });
 
+describe("extractClaims — Part B: journal/retrospective prose is not extracted", () => {
+  test("a `## Live check` heading opens a skip zone that runs to the next heading", () => {
+    const description = [
+      "## Summary",
+      "",
+      "- Adds a brand-new retry mechanism.",
+      "",
+      "## Live check",
+      "",
+      "- **PR #726**: 5 claims extracted, 1 Jev call succeeded, adds nothing new.",
+      "- Total: 2 real Jev network calls succeeded, fixes the flaky batch.",
+      "",
+      "## Test plan",
+      "",
+      "- [x] `bun run typecheck` clean",
+      "- [x] adds a new test file",
+    ].join("\n");
+    const claims = extractClaims(description);
+    expect(claims.map((c) => c.text)).toEqual(["Adds a brand-new retry mechanism."]);
+  });
+
+  test("`Follow-ups:` as its own heading also opens a skip zone", () => {
+    const description = ["## Follow-ups", "", "- Fixes the remaining flaky test next time.", "", "## Summary", "", "- Adds the widget."].join("\n");
+    const claims = extractClaims(description);
+    expect(claims.map((c) => c.text)).toEqual(["Adds the widget."]);
+  });
+
+  test("a bullet starting with a retrospective label is dropped even with no heading", () => {
+    const claims = extractClaims(["- Adds a new endpoint.", "- Live: jev-docs on #710/#711/#713 found 0 issues.", "- **Notes**: nothing else to add here."].join("\n"));
+    expect(claims.map((c) => c.text)).toEqual(["Adds a new endpoint."]);
+  });
+
+  test("a prose sentence starting with a retrospective label is dropped even mid-paragraph", () => {
+    const claims = extractClaims("This PR adds a new endpoint. Follow-ups: fixes the flaky test next. Testing: covers the happy path only.");
+    expect(claims.map((c) => c.text)).toEqual(["This PR adds a new endpoint."]);
+  });
+
+  test("a heading NOT on the label list (e.g. `## Summary`) is not a skip zone", () => {
+    const claims = extractClaims("## Summary\n\n- Adds a widget.");
+    expect(claims.map((c) => c.text)).toEqual(["Adds a widget."]);
+  });
+
+  test("a nested sub-heading under a skip zone does not end it early; a same-or-shallower one does", () => {
+    const description = ["## Live check", "", "### PR #726", "", "- adds nothing checkable here", "", "## Summary", "", "- Adds the real claim."].join("\n");
+    const claims = extractClaims(description);
+    expect(claims.map((c) => c.text)).toEqual(["Adds the real claim."]);
+  });
+});
+
 describe("classifyClaimIntent", () => {
   test("no-change phrasing", () => {
     expect(classifyClaimIntent("This does not change the public API.")).toBe("no-change");

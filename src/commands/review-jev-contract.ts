@@ -25,6 +25,7 @@ import {
   DEFAULT_JEV_CONTRACT_THRESHOLD,
   DEFAULT_MAX_JEV_CONTRACT_CALLS,
   batchContractClaimItems,
+  buildContractClaimBatch,
   computeContractClaimItems,
   contractFindingStats,
   extractClaims,
@@ -32,11 +33,12 @@ import {
   selectContractClaims,
   synthesizeContractFindings,
   type Claim,
+  type ContractClaimBatch,
   type ContractClaimItem,
   type JevContractRunResult,
   type ScoredClaim,
 } from "../review/jev-contract";
-import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey, type JevQuestions } from "../harness/decision/jev-client";
+import { callJevSystemOne, DEFAULT_JEV_MODEL, JevRequestError, resolveJevApiKey, type JevQuestions } from "../harness/decision/jev-client";
 import { runCheckAc, type CheckAcResult } from "./flow-check-ac";
 import { renderAcCheckReport, summarizeVerdicts, type AcCheckVerdict } from "../flow/service";
 
@@ -68,6 +70,15 @@ function parseThreshold(raw: string | undefined): number {
     throw new Error(`--threshold must be a number between 0 and 1, got "${raw}".`);
   }
   return value;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** A real vendor `HTTP 400 max_tokens_exceeded` — the specific, retryable-by-splitting failure; any other status or body is not (a 401, a timeout, a malformed response degrade on the first attempt, same as before). */
+function isMaxTokensExceededError(error: unknown): boolean {
+  return error instanceof JevRequestError && error.status === 400 && /max_tokens/i.test(error.message);
 }
 
 async function fixturePrPort(dir: string): Promise<ConformPrPort> {
@@ -146,11 +157,10 @@ export async function computeJevContractResult(options: JevContractRunOptions): 
   if (items.length > 0) {
     const batches = batchContractClaimItems(items);
     const probabilityById = new Map<string, number>();
-    for (const batch of batches) {
-      // Each batch is caught on its own — a single oversized/failed batch
-      // (a real vendor `HTTP 400 max_tokens_exceeded`, flow 328's own live
-      // check hit this too) degrades only ITS claims to facts-only, not the
-      // whole run; every batch after it still gets its own attempt.
+
+    // One Jev call for `batch`; records usage/answers on success. Never
+    // throws — the caller decides what a failure means (degrade, or retry).
+    const attemptBatch = async (batch: ContractClaimBatch): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: unknown }> => {
       try {
         const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: process.env });
         jevCalls += 1;
@@ -170,10 +180,38 @@ export async function computeJevContractResult(options: JevContractRunOptions): 
           const answer = result.answers[item.id];
           if (answer !== undefined && answer.type === "noul") probabilityById.set(item.id, answer.noul);
         }
+        return { ok: true };
       } catch (error) {
-        if (jevError === undefined) {
-          jevError = error instanceof Error ? error.message : String(error);
+        return { ok: false, error };
+      }
+    };
+
+    for (const batch of batches) {
+      // Each batch is caught on its own — a single oversized/failed batch
+      // (a real vendor `HTTP 400 max_tokens_exceeded`, flow 328's own live
+      // check hit this too) degrades only ITS claims to facts-only, not the
+      // whole run; every batch after it still gets its own attempt.
+      const attempt = await attemptBatch(batch);
+      if (attempt.ok) continue;
+      if (isMaxTokensExceededError(attempt.error) && batch.items.length > 1) {
+        // Retried ONCE, split in half — the same conservative-batching
+        // discipline `CONTRACT_TOKEN_BUDGET`'s own header documents applies
+        // here too: a batch this size still overshot the vendor's real
+        // ceiling, so try half of it before giving up on any of its claims.
+        // A batch of exactly one claim has nothing left to split; it
+        // degrades on the first failure like any other unretryable error.
+        const mid = Math.ceil(batch.items.length / 2);
+        const halves = [buildContractClaimBatch(batch.items.slice(0, mid)), buildContractClaimBatch(batch.items.slice(mid))];
+        for (const half of halves) {
+          const halfAttempt = await attemptBatch(half);
+          if (!halfAttempt.ok && jevError === undefined) {
+            jevError = messageOf(halfAttempt.error);
+          }
         }
+        continue;
+      }
+      if (jevError === undefined) {
+        jevError = messageOf(attempt.error);
       }
     }
     for (const item of items) {
