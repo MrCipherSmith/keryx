@@ -336,3 +336,43 @@ Stack coverage: 1 -> 2 (python and go now stable and gated; ts-js-node
 demoted; react stays experimental). Net pack count with a generated pair:
 1 (ts-js-node) -> 2 (python, go) — ts-js-node's own pair removed the same
 round it would have been replaced by python/go's.
+
+## FU7 wrap-up: stability, agent pairs, docs
+
+- `pack.json` stability flipped for python/go (-> stable) and ts-js-node
+  (-> experimental); react unchanged (already experimental). Matching
+  `install-manifest.json` module entries (`python-rules`/`python-skills`,
+  `go-rules`/`go-skills` -> stable; `ts-js-node-rules`/`ts-js-node-skills`
+  -> experimental) updated together — the pack.json<->install-manifest
+  stability guard test (`stack-packs.test.ts`, flow 314 T13b) checks every
+  module in a pack's `modules` list individually.
+- `keryx agents generate --stack python|go` (real CLI, no stub): wrote
+  `python-code-auditor.md`/`python-build-fixer.md` and
+  `go-code-auditor.md`/`go-build-fixer.md`; `--check` confirms no drift.
+  `agents generate --stack ts-js-node` now correctly refuses
+  (`stack-pack-not-gate-cleared`). ts-js-node's two generated files removed
+  (`git rm`) and its `agent-refs.json` emptied with a note (matching the
+  existing pattern react's `agent-refs.json` already used).
+- Updated 4 pre-existing tests that hardcoded "only ts-js-node is
+  gate-cleared" (`src/agents/verify.test.ts` x2,
+  `src/commands/agents-catalog-commands.test.ts` x2,
+  `src/agents/generate.test.ts` x1) to the new gate-cleared set — each
+  still asserts against the REAL bundled tree, not a stub, so they prove
+  the shipped state matches what the honest run produced.
+- Docs: `W1-stack-catalog.md` (new "Implementation notes: flow 317" section
+  + FU3/FU4/FU6/FU7 status updates), `W2-agent-catalog.md` (batch-1 status
+  update), `docs/docs/guides/agent-catalog.md` (generated-pair section),
+  `docs/docs/guides/write-a-rubric-scenario.md` (PACK_MIN_TRIALS=10,
+  runnerPromptVersion, --reverify pointer — committed earlier alongside
+  FU2-FU4), `docs/docs/cli-reference.md` (`eval --reverify` row —
+  committed alongside FU3).
+
+Full verification: `bun run typecheck` exit 0; `bunx eslint` on every
+changed `.ts`/`.test.ts` file: 0 problems; `bun test src/gdskills src/agents
+src/commands/agents-catalog-commands.test.ts
+src/commands/skills-governance.test.ts src/commands/model-eval-runner.test.ts
+src/harness/provider/single-turn.test.ts`: 2467 pass, 1 fail — the 1 failure
+(`src/gdskills/install.test.ts`, a chmod/EACCES readonly-directory test) is
+in a file this flow never touched and reproduces in isolation from a stale
+temp-dir permission left by an unrelated earlier test run on this host, not
+from anything in this diff.
