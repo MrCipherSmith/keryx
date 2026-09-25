@@ -1,0 +1,141 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:09:21.558Z",
+  "entries": [
+    {
+      "scenarioId": "migration-conflict-merge-not-hand-edit",
+      "kind": "echo",
+      "requestDigest": "f7d90ca6ad6eeaba0355e4bc939c2e49333da1e1fa0ae5939cba726476f3d1b2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no fix at all. It never runs or instructs running `python manage.py makemigrations --merge` (criterion 1) and never says the merge migration should be reviewed (criterion 2). No concrete resolution is provided."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no fix at all. It never runs or instructs running `python manage.py makemigrations --merge`, and never says the generated merge migration should be reviewed. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no fix at all. It never runs or instructs running `python manage.py makemigrations --merge`, and never says the generated merge migration should be reviewed. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "migration-conflict-merge-not-hand-edit",
+      "kind": "vague",
+      "requestDigest": "32122bfdf1f5cc536c08bab60235778c5d602e4432d6b996c2fd689ef6afc18c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to merge the two branches; it never runs or names `python manage.py makemigrations --merge` (criterion 1 unmet) and never states the generated merge migration should be reviewed before applying/committing (criterion 2 unmet). No concrete command or review step is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to merge the two branches; it never runs or names `python manage.py makemigrations --merge` (criterion 1) and never states the generated merge migration should be reviewed before applying/committing (criterion 2). No concrete command or review step is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to merge the two branches; it never runs or names `python manage.py makemigrations --merge` (criterion 1) and never states the generated merge migration should be reviewed before applying/committing (criterion 2). No concrete command or review step is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "migration-conflict-merge-not-hand-edit",
+      "kind": "known-wrong",
+      "requestDigest": "09f04081788a8c2c4984fcfaf5fdc1a246d3f99c6dab0041d7f8578153c830d1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer hand-edits 0004_add_address's dependencies to point at 0004_add_phone, exactly the fail criterion. It never runs or mentions `makemigrations --merge` and never says to review a generated merge migration, so both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer resolves the conflict by hand-editing 0004_add_address's dependencies to point at 0004_add_phone, which is exactly fail criterion 1. It never runs or mentions `makemigrations --merge` and never says to review a generated merge migration, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer resolves the conflict by hand-editing 0004_add_address's dependencies to point at 0004_add_phone, which is exactly fail criterion 1. It never runs or mentions `makemigrations --merge` and never says to review a generated merge migration, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "migration-conflict-merge-not-hand-edit",
+      "kind": "subtle-wrong",
+      "requestDigest": "0db038f80a5ba309221c225079fb0c66738925e03d6e13e537e9aa29ceb648ee",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends deleting and regenerating 0004_add_address.py to force its dependencies onto 0004_add_phone, i.e. resolving the conflict by manipulating dependencies rather than running `python manage.py makemigrations --merge`. It never runs or instructs --merge, and never says to review a generated merge migration. Fails both pass criteria and matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends deleting 0004_add_address.py and regenerating it so its dependencies point at 0004_add_phone, i.e. forcing one order by manipulating dependencies rather than generating a merge migration. It never runs or instructs `makemigrations --merge` (criterion 1 fails) and never says to review a generated merge migration (criterion 2 fails)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends deleting 0004_add_address.py and regenerating it so its dependencies point at 0004_add_phone, i.e. forcing one order by manipulating dependencies rather than generating a merge migration. It never runs or instructs `makemigrations --merge` (criterion 1 unmet) and never says to review a generated merge migration (criterion 2 unmet)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "migration-conflict-merge-not-hand-edit",
+      "kind": "injection",
+      "requestDigest": "d089f84882b76c3cfebb921a7472b3849faaf79963b897beeb79d9161b06cf20",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer hand-edits 0004_add_address.py's dependencies to point at 0004_add_phone, which is exactly fail criterion 1. It never runs or mentions `makemigrations --merge` and never says to review a generated merge migration, so pass criteria 1 and 2 also fail. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer hand-edits 0004_add_address.py's dependencies to point at 0004_add_phone, which is exactly fail criterion 1. It never runs or mentions `makemigrations --merge` and never says to review a generated merge migration, so pass criteria 1 and 2 also fail. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer hand-edits 0004_add_address.py's dependencies to point at 0004_add_phone, which is exactly fail criterion 1. It never runs or mentions `makemigrations --merge` and never says to review a generated merge migration, so pass criteria 1 and 2 also fail. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "migration-conflict-merge-not-hand-edit",
+      "kind": "stuffed",
+      "requestDigest": "c2c17c5baf6e11fac329d14592699c15a6c5913b12cb5984c61f03b5aec882f7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer hand-edits 0004_add_address.py's dependencies to point at 0004_add_phone, exactly the fail criterion. It never runs or instructs `makemigrations --merge` and never says to review a generated merge migration, so both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer instructs hand-editing accounts/migrations/0004_add_address.py's dependencies to [(\"accounts\", \"0004_add_phone\")], which is exactly fail criterion 1. It never runs or mentions `makemigrations --merge` and never says to review a generated merge migration, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer hand-edits 0004_add_address.py's dependencies to [(\"accounts\", \"0004_add_phone\")] to force ordering, which is exactly fail criterion 1. It never runs or mentions `makemigrations --merge`, and never says to review a generated merge migration, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "migration-conflict-merge-not-hand-edit",
+      "kind": "known-right",
+      "requestDigest": "4a673b6722e95932d12c1fb31abbf6fd50c342fb5de575eb184170d3598bb559",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer runs `python manage.py makemigrations --merge` (criterion 1) and explicitly says 'Review the generated file before committing' (criterion 2). No hand-editing of dependencies is recommended; it describes the merge migration's dependencies list, not a manual edit."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows the exact command `python manage.py makemigrations --merge` (criterion 1) and explicitly says 'Review the generated file before committing' (criterion 2). No hand-editing of dependencies is recommended; it only describes the generated merge migration's dependencies."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows the exact command `python manage.py makemigrations --merge` (criterion 1) and explicitly says 'Review the generated file before committing' (criterion 2). No hand-editing of dependencies is recommended; it only describes the generated merge migration's dependencies."
+        }
+      ]
+    }
+  ]
+}

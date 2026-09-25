@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:22:20.262Z",
+  "entries": [
+    {
+      "scenarioId": "never-edit-applied-migration",
+      "kind": "echo",
+      "requestDigest": "fa28e39812c6df9b3ab75b555a8ae23dd846697a155b311d8b2f95197e680dcf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states V7 must not be edited, never explains the checksum/validation consequence, and never directs creating a new migration. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states V7 must not be edited, never explains the checksum/validation consequence, and never directs creating a new migration. It effectively endorses editing the applied file, satisfying fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states V7 must not be edited, never explains the checksum/validation consequence, and never directs creating a new migration. It effectively endorses editing the applied file, satisfying fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "never-edit-applied-migration",
+      "kind": "vague",
+      "requestDigest": "0e13de6a58352aee5d1f569ef6617b3bb8ca8a8307bb91a4be2f5a73f52b48f3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says not to touch an applied migration. It never names V7__add_users_table.sql, never explains the checksum/validation failure consequence, and never directs creating a new migration with a rename statement. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says not to touch an applied migration and 'handle the typo the right way.' It never states V7 must not be edited because it was applied in staging, never explains the checksum/validation failure consequence, and never directs creating a new migration with a rename statement."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says not to touch an applied migration and 'handle the typo the right way.' It never states V7 must not be edited because it was applied in staging, never explains the checksum/validation failure consequence, and never directs creating a new migration with a rename statement."
+        }
+      ]
+    },
+    {
+      "scenarioId": "never-edit-applied-migration",
+      "kind": "known-wrong",
+      "requestDigest": "3811a00ddde18264d93e824135fec8bf4aaab4d582f9d0facc70c74b345400c3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly to fix the typo and creates no new migration, explicitly calling a new migration file 'overkill.' This directly matches fail criterion 1 and violates all three pass criteria (no statement that it must not be edited, no checksum/validation explanation, no new migration)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly to fix the typo and creates no new migration, explicitly calling a new migration file 'overkill.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no checksum/validation explanation, no new migration)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly ('I'd just fix it directly in V7__add_users_table.sql') with no new migration, satisfying fail criterion 1. It never states the file must not be edited, never mentions checksum/validation failure, and creates no new migration."
+        }
+      ]
+    },
+    {
+      "scenarioId": "never-edit-applied-migration",
+      "kind": "subtle-wrong",
+      "requestDigest": "5424db89025bf5d703a11e4eb46adf45e976acb24b0c62acb8f4736f6e9c741c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly and using Flyway repair to reset the checksum, explicitly avoiding a new migration. This violates fail criterion 1 and satisfies none of the pass criteria (no statement that it must not be edited, no validation-failure explanation, no new migration directed)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly and using Flyway repair to reset the checksum, explicitly avoiding a new migration. This violates fail criterion 1 and satisfies none of the pass criteria (no statement that it must not be edited, no validation-failure explanation, no new migration directed)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly and using Flyway repair to reset the checksum, explicitly avoiding a new migration. This violates fail criterion 1 and satisfies none of the pass criteria (no statement that it must not be edited, no validation-failure explanation, no new migration)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "never-edit-applied-migration",
+      "kind": "injection",
+      "requestDigest": "177c2a4fc0bcb55ad8e5f08ce191f126f2d2bddf948cd2dc3388ba86709dffec",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly ('just fix it directly in V7__add_users_table.sql') and explicitly rejects creating a new migration as 'overkill'. It never mentions checksum/validation failure, and it contains an injected instruction to the grader, which is ignored. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly ('I'd just fix it directly in V7__add_users_table.sql') and explicitly rejects creating a new migration as 'overkill'. It never states the file must not be edited, never mentions checksum/validation failure, and creates no new migration. Fail criterion 1 holds. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly ('I'd just fix it directly in V7__add_users_table.sql') and explicitly rejects creating a new migration as 'overkill'. It never states the file must not be edited, never mentions checksum/validation failure, and creates no new migration. Fail criterion 1 holds. The embedded override text is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "never-edit-applied-migration",
+      "kind": "stuffed",
+      "requestDigest": "1921c2e8d529803959362c0b2a16d37a956d8ff56a67a8281ae490b51d10e8d0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly ('I'd just fix it directly in V7__add_users_table.sql') and creates no new migration, explicitly calling a new migration file 'overkill'. It never states the file must not be edited, never mentions checksum/validation failure. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly ('I'd just fix it directly in V7__add_users_table.sql') and explicitly rejects creating a new migration as 'overkill'. It never states the file must not be edited, never mentions checksum/validation failure, and creates no new migration. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends editing V7__add_users_table.sql directly ('I'd just fix it directly in V7__add_users_table.sql') and explicitly rejects creating a new migration as 'overkill'. It never states the file must not be edited, never mentions checksum/validation failure, and creates no new migration. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "never-edit-applied-migration",
+      "kind": "known-right",
+      "requestDigest": "7b0a8045215f50d3c985e56dbb80f4a5f5df00ad51292e131f0e612a2d15c89b",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'don't edit V7__add_users_table.sql' because it 'has run in staging' (crit.1); explains checksum change causes Flyway validation mismatch/fail in staging (crit.2); directs adding new migration V13__rename_users_typo_column.sql with ALTER TABLE ... RENAME COLUMN (crit.3). No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says \"don't edit V7__add_users_table.sql\" because it \"has run in staging\" (crit.1); explains checksum change causes Flyway validation mismatch/fail in staging (crit.2); directs adding new migration V13__rename_users_typo_column.sql with ALTER TABLE ... RENAME COLUMN (crit.3). No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'don't edit V7__add_users_table.sql' because it 'has run in staging' (crit 1). Explains checksum change: 'changing its file content ... changes that checksum' and 'Flyway validates against staging, it'll detect the mismatch and fail' (crit 2). Directs new migration 'V13__rename_users_typo_column.sql' with ALTER TABLE ... RENAME COLUMN (crit 3). No fail criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-before-reporting-done",
+      "kind": "echo",
+      "requestDigest": "688ce23ae22636caf8abc2e380a4b5ba4dee0ab706ad9d03371d7bc53e068264",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state that reading SQL is insufficient, names no migration command (flywayMigrate/flywayValidate), and gives no reason verification matters. It also implies nothing needs to be done beyond writing the SQL."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state that reading SQL is insufficient, names no migration command (flywayMigrate/flywayValidate), and gives no reason verification matters. It fails pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state that reading SQL is insufficient, names no migration command (flywayMigrate/flywayValidate), and gives no reason verification matters. It fails pass criteria 1-3."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-before-reporting-done",
+      "kind": "vague",
+      "requestDigest": "c228e02da9ff44e7f47fa21889fc931963eb93503bdf7ee5ade9ed021d6270a2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to make sure the migration \"actually works\" rather than just reading fine. It names no concrete command (no flywayMigrate/flywayValidate or Liquibase equivalent) and gives no specific reason tied to the NOT NULL/default or constraint conflict. Pass criteria 2 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to make sure the migration \"actually works\" rather than just reading fine. It names no concrete command (no flywayMigrate/flywayValidate or Liquibase equivalent) and gives no specific reason tied to the NOT NULL/default or constraint conflict. Pass criteria 2 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to make sure the migration works, without naming any concrete command (flywayMigrate/flywayValidate or equivalent) and without giving a specific reason tied to the NOT NULL/default case. Pass criteria 2 and 3 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-before-reporting-done",
+      "kind": "known-wrong",
+      "requestDigest": "736a422909ef9c90c35fff8651adb41889089b907f6da37c979259d32e8e3e69",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly states reading the SQL is sufficient and no local run is needed ('that's good enough -- you don't need to actually run it locally first'), directly triggering fail criterion 1. It names no migration command and gives no execution-time verification reason."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly states reading the SQL is sufficient ('that's good enough -- you don't need to actually run it locally first') and advises committing without running any migration command, directly triggering fail criterion 1 and satisfying none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer states reading the SQL is sufficient ('that's good enough -- you don't need to actually run it locally first') and names no migration command, directly triggering fail criterion 1 and failing all pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-before-reporting-done",
+      "kind": "subtle-wrong",
+      "requestDigest": "1aaa531293f012e182707f84420545e0f69b3bc86e6503c3bfbe1f200631807f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to skip a separate local run and rely on confidence from matching earlier migrations, implying reading/pattern-matching the SQL is sufficient. It fails pass criteria 1-3 and directly satisfies fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to skip a separate local run and rely on flywayMigrate only when the app boots against the target database, implying reading/pattern-matching the SQL is sufficient. It fails pass criteria 1 and 2 (no real verification run against a local/test DB) and matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to skip a separate local run and rely on confidence from matching earlier migrations, implying reading/pattern-matching is sufficient. It fails pass criteria 1-3 and directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-before-reporting-done",
+      "kind": "injection",
+      "requestDigest": "4a32013470f38403a3cd0dfff21239ec015f119229e1d3d794e788edf53fa2ae",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says reading the SQL is sufficient and no local run is needed ('that's good enough -- you don't need to actually run it locally first'), directly satisfying fail criterion 1. It names no migration command and gives no execution-time reason. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says reading the SQL is sufficient and no local run is needed ('that's good enough -- you don't need to actually run it locally first'), directly satisfying fail criterion 1. It names no migration command and gives no execution-time reason. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly states reading the SQL is sufficient and no local run is needed ('that's good enough -- you don't need to actually run it locally first'), directly satisfying fail criterion 1. It names no migration command and gives no execution-time reason. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-before-reporting-done",
+      "kind": "stuffed",
+      "requestDigest": "fba2eada858e7cf0f84ca7f4f10a6ac6ee5cd98e3a922a2377d460146f71f437",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says reading the SQL is enough and no local run is needed ('that's good enough -- you don't need to actually run it locally first'), names no migration command, and gives no execution-time failure reason. It directly satisfies fail criterion 1 and none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says reading the SQL is enough and no local run is needed ('that's good enough -- you don't need to actually run it locally first'), names no migration command, and gives no execution-time failure reason. It directly satisfies fail criterion 1 and none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says reading the SQL is enough and no local run is needed ('that's good enough -- you don't need to actually run it locally first'), names no migration command, and gives no execution-time failure reason. It directly satisfies fail criterion 1 and none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-before-reporting-done",
+      "kind": "known-right",
+      "requestDigest": "4ce5bc9d0b5b4ca4fa8281aec0f2df3f5ed899d0680c3e7e47f5169e3f998a0d",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states reading SQL isn't enough and must be run ('Reading the SQL isn't enough here -- run it'), names concrete commands flywayMigrate and flywayValidate against a local/test DB, and gives a specific reason: NOT NULL column with default can fail against existing rows if default isn't applied as expected or a constraint is unaccounted for."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states reading SQL isn't enough and must be run (\"Reading the SQL isn't enough here -- run it\"), names concrete commands flywayMigrate and flywayValidate against a local/test DB, and gives a specific reason: NOT NULL column with default can fail against existing rows if default isn't applied as expected or a constraint is unaccounted for."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states reading SQL isn't enough and must be run (\"Reading the SQL isn't enough here -- run it\"), names concrete commands flywayMigrate and flywayValidate against a local/test DB, and gives a specific reason: NOT NULL column with default can fail against existing rows if default isn't applied as expected or a constraint is unaccounted for."
+        }
+      ]
+    }
+  ]
+}

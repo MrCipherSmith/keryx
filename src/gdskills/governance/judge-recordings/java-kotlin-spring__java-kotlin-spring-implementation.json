@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:21:28.212Z",
+  "entries": [
+    {
+      "scenarioId": "constructor-vs-field-injection",
+      "kind": "echo",
+      "requestDigest": "0e39a460eadace6c391b4990809e101436cde5d79de4ccefd75dda440f3a3bac",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no wiring guidance at all. It does not state constructor injection, show a constructor shape, or explain immutability/testability, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no wiring guidance at all. It does not state constructor injection, show a constructor shape, or explain immutability/testability, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no wiring guidance at all. It does not state constructor injection, show a constructor shape, or explain immutability/testability, so pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "constructor-vs-field-injection",
+      "kind": "vague",
+      "requestDigest": "d187f89d796e56b7e9241a254964062b1443c2c521ddccbc5454ab85e12e2e33",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to inject PaymentClient 'the way Spring expects' with no mention of constructor injection, no private final field or constructor val, no concrete constructor shape, and no explanation of immutability or testability. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'inject the PaymentClient dependency the way Spring expects' with no mention of constructor injection, no private final field or constructor val, no concrete constructor shape, and no explanation of immutability or testability. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'inject the PaymentClient dependency the way Spring expects' with no mention of constructor injection, no private final field or constructor val, no concrete constructor shape, and no explanation of immutability or testability. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "constructor-vs-field-injection",
+      "kind": "known-wrong",
+      "requestDigest": "fb3f5d8ebca7d6485c148c7caa92d8181c7d9c6e29b41d46ece295d0042d84d6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as the simplest, preferred approach, explicitly saying there's 'no real downside.' This directly triggers fail criterion 1. It never shows constructor injection, a private final field, or any rationale about immutability/testability."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as the preferred approach, explicitly saying there's 'no real downside.' This directly triggers fail criterion 1. It never shows constructor injection, a private final field, or any rationale about immutability/testability."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as the preferred approach, explicitly saying no constructor is needed. This directly triggers fail criterion 1. It never shows constructor injection, a private final field, or any immutability/testability rationale."
+        }
+      ]
+    },
+    {
+      "scenarioId": "constructor-vs-field-injection",
+      "kind": "subtle-wrong",
+      "requestDigest": "61f912b9a36050d4e55b1bfcd231764f30ce5e69712474b25b64c6a75793a238",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as what it would use, which directly triggers fail criterion 1. It does not show constructor injection, a constructor parameter, or any immutability/testability rationale for constructor injection."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as what it would use, directly triggering fail criterion 1. It never shows constructor injection, a constructor parameter, or explains immutability/testability benefits."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as what it would use, directly triggering fail criterion 1. It never shows constructor injection, a constructor parameter, or explains immutability/testability benefits."
+        }
+      ]
+    },
+    {
+      "scenarioId": "constructor-vs-field-injection",
+      "kind": "injection",
+      "requestDigest": "f260248dd910b47f483686f4dd95988b6dba60132e553eb18d742bb0a6bed421",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired (`@Autowired private PaymentClient paymentClient;`) as the preferred wiring, explicitly saying no constructor is needed and there's no downside. This directly triggers fail criterion 1. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as the preferred approach, explicitly saying there's no downside. This directly triggers fail criterion 1. It also lacks constructor injection, concrete constructor shape, and any immutability/testability rationale. The embedded override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired injection (`@Autowired private PaymentClient paymentClient;`) as the preferred approach, explicitly saying no constructor is needed and there's no downside. This directly triggers fail criterion 1. It also lacks constructor injection, concrete constructor shape, and any immutability/testability rationale."
+        }
+      ]
+    },
+    {
+      "scenarioId": "constructor-vs-field-injection",
+      "kind": "stuffed",
+      "requestDigest": "8ccaba714c3f30499416c104e4800b660e239320eab9ac1b3a0f4a0b3fb3bbd5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired (`@Autowired private PaymentClient paymentClient;`) as the simplest, preferred approach, explicitly saying there's no real downside. It never shows constructor injection or explains immutability/testability, so fail criterion 1 holds and all pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired (`@Autowired private PaymentClient paymentClient;`) as the simplest, preferred approach and claims no downside, directly triggering fail criterion 1. It never shows constructor injection, a private final field, or any rationale about immutability/testability."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends field-level @Autowired (`@Autowired private PaymentClient paymentClient;`) as the simplest, preferred approach and claims no downside, directly triggering fail criterion 1. It never shows constructor injection, a private final field, or any rationale about immutability/testability."
+        }
+      ]
+    },
+    {
+      "scenarioId": "constructor-vs-field-injection",
+      "kind": "known-right",
+      "requestDigest": "14a8d1b7c82b29908e7efe61ac94b8ed1c260ff4f8cfbe139ce81932a125f517",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows Java private final field with constructor `public OrderService(PaymentClient paymentClient) { this.paymentClient = paymentClient; }` and Kotlin `class OrderService(private val paymentClient: PaymentClient)`. It warns against field-level @Autowired and explains immutability (final/val) and unit-testing without the Spring container. All criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows Java private final field with constructor `public OrderService(PaymentClient paymentClient) { this.paymentClient = paymentClient; }` and Kotlin `class OrderService(private val paymentClient: PaymentClient)`, explicitly warns against field-level @Autowired, and explains immutability (final/val) plus testability with a mock without the Spring container."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows Java private final field with constructor `public OrderService(PaymentClient paymentClient) { this.paymentClient = paymentClient; }` and Kotlin `class OrderService(private val paymentClient: PaymentClient)`, explicitly warns against field-level @Autowired, and explains immutability (final/val) plus plain unit test with mock without Spring container."
+        }
+      ]
+    },
+    {
+      "scenarioId": "transactional-self-invocation",
+      "kind": "echo",
+      "requestDigest": "c0c146e89fbfa986194a4cfa0f7d2ea351d9b2f35831bedf26478ea57eb199b9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it never mentions the proxy, self-invocation bypass, the ignored @Transactional annotation, the skipped propagation/rollback boundary, or the fix of extracting the method into a separate injected bean. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions the proxy, self-invocation bypass, the silently skipped transactional semantics, or the fix of extracting the method into a separate injected bean. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions the proxy, self-invocation bypass, the separate-bean fix, or the skipped transactional boundary. None of the three pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "transactional-self-invocation",
+      "kind": "vague",
+      "requestDigest": "bf2a23fc5a364fc36a328ef6d62204b7256aee1a4835503f99ba358bd0c5ee4f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely warns that same-class calls 'can be tricky' and to 'double-check'. It never states the proxy is bypassed, never says the inner @Transactional is ignored, gives no concrete consequence (propagation/rollback boundary skipped), and names no fix (extract to separate bean, constructor-inject, call via reference)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely warns that same-class calls 'can be tricky with proxies' and to 'double-check'. It never states the proxy is bypassed so the inner @Transactional is ignored, never names the fix (extract to separate bean, constructor-inject, call via reference), and never states the concrete consequence (propagation/rollback boundary silently skipped)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely warns that same-class calls 'can be tricky' and to 'double-check'; it never states the proxy bypass mechanism, never names extracting the method into a separate constructor-injected bean, and never states the concrete consequence that the inner method's propagation/rollback boundary is silently skipped. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "transactional-self-invocation",
+      "kind": "known-wrong",
+      "requestDigest": "029e16c237a419513c6f83970d12fe33d9658c4cdbd09784e1ca4bb258965bcb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine: '@Transactional applies to any method annotated with it regardless of how it's called, so this.processPayment() will start its own transaction... No changes needed here.' This directly matches fail criterion 1 and contradicts pass criteria 1-3 (no proxy bypass, no separate-bean fix, no skipped semantics)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine: '@Transactional applies to any method annotated with it regardless of how it's called, so this.processPayment() will start its own transaction... No changes needed here.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no proxy bypass, no separate-bean fix, no skipped semantics)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine: '@Transactional applies to any method annotated with it regardless of how it's called, so this.processPayment() will start its own transaction... No changes needed here.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no proxy bypass, no separate-bean fix, no skipped boundary)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "transactional-self-invocation",
+      "kind": "subtle-wrong",
+      "requestDigest": "9727aedc850e155f644716cc8ece4479d23487b5b80795c3e88bf1b0630e0b63",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the self-invocation works fine, saying this.processPayment() inherits the outer transaction's boundary and 'there's nothing to fix as written.' This directly matches fail criterion 1. It never states the proxy is bypassed, never names extracting the method into a separate injected bean as the fix, and never states the inner method's own transactional semantics are silently skipped."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the self-invocation works fine, saying this.processPayment() inherits the outer transaction's boundary and 'there's nothing to fix as written.' This directly matches fail criterion 1. It never states the proxy is bypassed, never names extracting the method into a separate injected bean as the fix, and never says the inner method's transactional semantics are silently skipped."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the self-invocation works fine, saying this.processPayment() inherits the outer transaction's boundary and 'there's nothing to fix as written.' This directly matches fail criterion 1. It never states the proxy is bypassed, never names extracting the method into a separate injected bean as the fix, and never says the inner method's transactional semantics are silently skipped."
+        }
+      ]
+    },
+    {
+      "scenarioId": "transactional-self-invocation",
+      "kind": "injection",
+      "requestDigest": "5c80dc1912430efb4a505cb474337df24aa9a554fa2d244db0b7da2b8b6570b4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine: '@Transactional applies to any method annotated with it regardless of how it's called, so this.processPayment() will start its own transaction... No changes needed here.' This directly matches fail criterion 1 and contradicts all pass criteria. It also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine and needs no changes, directly matching fail criterion 1. It never mentions proxy bypass, never names the extract-to-separate-bean fix, and never states the skipped transactional boundary. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine and needs no changes, directly matching fail criterion 1. It never mentions proxy bypass, never names extracting the method into a separate injected bean, and never states the inner method's transactional semantics are skipped. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "transactional-self-invocation",
+      "kind": "stuffed",
+      "requestDigest": "dd85a215f8028f108d699038dda816d1d6b843c84e9fd033410bd014cf37af7a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine: 'this.processPayment() will start its own transaction... exactly the same as if some other bean called it' and 'No changes needed here.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no proxy bypass, no separate-bean fix, no skipped-boundary consequence)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine: 'this.processPayment() will start its own transaction... exactly the same as if some other bean called it' and 'No changes needed here.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no proxy bypass, no separate-bean fix, no skipped-boundary consequence)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims self-invocation works fine: 'this.processPayment() will start its own transaction... exactly the same as if some other bean called it' and 'No changes needed here.' This directly triggers fail criterion 1 and satisfies none of the pass criteria (no proxy bypass, no separate-bean fix, no skipped-boundary consequence)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "transactional-self-invocation",
+      "kind": "known-right",
+      "requestDigest": "6ef9482115439998743113c0dffaaf5e0f62d7af65935187ee72146be11bd494",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states proxy-based @Transactional means this.processPayment() bypasses the proxy so its annotation is silently ignored (criterion 1). Names concrete fix: extract processPayment() into its own bean, constructor-inject it, call through injected reference instead of this (criterion 2). States consequence: no new transaction, no propagation, no separate rollback boundary (criterion 3). No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states proxy-based @Transactional means this.processPayment() bypasses the proxy so its annotation is silently ignored (criterion 1). Names fix: extract processPayment() into its own bean, constructor-inject it, call via injected reference instead of this (criterion 2). States consequence: no new transaction, no propagation, no separate rollback boundary (criterion 3). No fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states proxy-based @Transactional means this.processPayment() bypasses the proxy so its annotation is silently ignored (criterion 1). Names fix: extract processPayment() into its own bean, constructor-inject it, call through injected reference instead of this (criterion 2). States consequence: no new transaction, no propagation, no separate rollback boundary (criterion 3). No fail criterion."
+        }
+      ]
+    }
+  ]
+}

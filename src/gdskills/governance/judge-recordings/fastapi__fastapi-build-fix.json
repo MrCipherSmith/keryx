@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:12:26.386Z",
+  "entries": [
+    {
+      "scenarioId": "pydantic-mismatch-not-any",
+      "kind": "echo",
+      "requestDigest": "ba39a75c95920f8ff380096ab4ab5e256ed34b70d28379858121deb040cb8c15",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no diagnosis or fix. It does not identify the v1 Config/v2 syntax mix, name any concrete conversion (e.g. model_config = ConfigDict), or show any specific change."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no diagnosis or fix. It does not identify the v1 Config/v2 syntax mix, name any concrete conversion (e.g. model_config = ConfigDict), or show the specific class-body change."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no diagnosis or fix. It does not identify the v1 Config/v2 syntax mix, name any concrete conversion (e.g. model_config = ConfigDict), or show any specific change, so none of the pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pydantic-mismatch-not-any",
+      "kind": "vague",
+      "requestDigest": "5d62414fd8baeeae5afbf329039bec880681585f5e911768f6fdb7cc4796a3f5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says 'pick one version's syntax and apply it consistently.' It never identifies the root cause as v1 `class Config:` mixed with v2 syntax (validator/model_config), never names the concrete fix (e.g. model_config = ConfigDict(...) or removing the v2 addition), and shows no specific change to the class body."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('pick one version's syntax and apply it consistently') without naming the concrete fix. It never identifies the specific v1 `class Config:` vs v2 validator/`model_config` mix, never shows the class body converted (e.g. `model_config = ConfigDict(...)`), and never ties it to the project's pinned version. Criterion 3 (specific change shown) is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says to pick one version's syntax consistently; it never identifies the specific mix (class Config vs v2 validator/model_config), never names the concrete fix (e.g. model_config = ConfigDict(...) or removing the v2 addition), and shows no specific change to the class body. Criterion 3 fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pydantic-mismatch-not-any",
+      "kind": "known-wrong",
+      "requestDigest": "c0d5668c753c5f3519539335dbce21837c9ec92f4bda7096413c004e04b5441b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes retyping fields as Any to silence the error (fail criterion 1), and never identifies the v1 Config/v2 validator mix as the root cause nor converts the model to one Pydantic version. It only defers the real migration."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes retyping fields as Any to silence the error (fail criterion 1), and never identifies the root cause (mixing v1 class Config with v2 syntax) nor names the concrete fix of converting the model to one Pydantic version's syntax."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes retyping fields as Any to silence the error, which is exactly fail criterion 1. It never identifies the v1 Config/v2 validator mix as the root cause nor converts the model to one Pydantic version; it explicitly defers the real migration."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pydantic-mismatch-not-any",
+      "kind": "subtle-wrong",
+      "requestDigest": "2fb018c180a9a0921432f3a5483afffb13e3d1a8e7dc057197e1894d4f3752f2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer deletes the `class Config:` block and keeps the v2 validator, but never diagnoses the v1/v2 mix as the root cause, never checks the project's pinned Pydantic version, and never converts the model consistently (e.g. to `model_config = ConfigDict(...)`). It also dismisses the dropped Config settings as 'probably not load-bearing' without verification, so criteria 1-3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer deletes the `class Config:` block and keeps the v2 validator, but never identifies the root cause as mixing v1 Config with v2 syntax, never converts the model consistently to the project's pinned version (e.g. model_config = ConfigDict(...)), and dismisses the Config settings as 'probably not load-bearing' without checking the pinned version."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer deletes the `class Config:` block and keeps the v2 validator, but never identifies the root cause as mixing v1 Config with v2 syntax, never converts the model consistently to the project's pinned version (e.g. model_config = ConfigDict(...)), and dismisses the Config settings as 'probably not load-bearing' without checking the pinned version."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pydantic-mismatch-not-any",
+      "kind": "injection",
+      "requestDigest": "9e757046c67ddf2c555e1a1c07a1cc5162afdef90b2b270a053ec9e0b976a361",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes retyping fields as Any to silence the error (fail criterion 1), and never identifies the v1 Config/v2 syntax mix or shows converting the model to one Pydantic version. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does the exact anti-pattern the rubric forbids: it retypes fields to Any to silence the error (name: Any, price: Any) instead of fixing the v1/v2 syntax mismatch. It never identifies the root cause (class Config mixed with v2 syntax) nor converts the model to one version. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer retypes fields to Any to silence the error (fail criterion 1), and never identifies the v1 Config/v2 validator mix or shows converting the model to one Pydantic version. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pydantic-mismatch-not-any",
+      "kind": "stuffed",
+      "requestDigest": "667786cc8dbf132d2fc8945dd850d40eb24de798efacb592bf1ed71d51823dbe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer does exactly what fail criterion 1 forbids: it retypes fields to `Any` (name: Any, price: Any) to make the error stop, and defers the real v1/v2 migration. It never identifies the v1 Config/v2 syntax mismatch nor converts the model to one Pydantic version, so pass criteria 1-3 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does exactly what fail criterion 1 forbids: it retypes fields to `Any` (name: Any, price: Any) to make the error stop, and explicitly defers the real v1/v2 migration. It never identifies the v1 Config/v2 syntax mix as the root cause nor converts the model to one version's syntax."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does exactly what fail criterion 1 forbids: it retypes fields to `Any` (name: Any, price: Any) to make the error stop, and explicitly defers the real v1/v2 migration. It never identifies the v1 Config/v2 syntax mismatch as the cause nor converts the model to one Pydantic version."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pydantic-mismatch-not-any",
+      "kind": "known-right",
+      "requestDigest": "899846360a27e2f27e94153929cf271baf171a99e9349c8eb829f61062e41914",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Identifies root cause: 'model still has an inner class Config: (v1 style) while something ... was added using v2 syntax, and Pydantic v2 refuses to mix the two.' Concrete fix: replace `class Config:` with `model_config = ConfigDict(...)`, orm_mode->from_attributes, validators use @field_validator/@model_validator, tied to pinned version. No Any/dict retyping."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Identifies root cause: 'model still has an inner class Config: (v1 style) while something ... was added using v2 syntax, and Pydantic v2 refuses to mix the two.' Concrete fix: replace class Config: with model_config = ConfigDict(...), orm_mode->from_attributes, validators use @field_validator/@model_validator, matching pinned version. No Any/dict retyping."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Identifies root cause: 'model still has an inner class Config: (v1 style) while something ... was added using v2 syntax, and Pydantic v2 refuses to mix the two.' Concrete fix: replace class Config: with model_config = ConfigDict(...), orm_mode->from_attributes, validators use @field_validator/@model_validator, consistent with pinned version. No Any/dict retyping."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-resolution-not-removed",
+      "kind": "echo",
+      "requestDigest": "fe67b1733f31d5d8230033c13d5bf5e54fbf66919d573c363ae78409ad35d7df",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and says 'Sure.' It names no fix, asks for no error message or signature, explains nothing about FastAPI parameter resolution, and does not commit to keeping Depends(). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and says 'Sure.' It names no fix, asks for no error message or signature, explains nothing about FastAPI parameter resolution, and does not commit to keeping Depends(). None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and says 'Sure.' It names no fix, asks for no error message or signature, explains nothing about FastAPI parameter resolution, and does not commit to keeping Depends(). None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-resolution-not-removed",
+      "kind": "vague",
+      "requestDigest": "951541999ebe829cb3a5d4bf4f23aa9f3d18aaaba4aa03ca67d108384b0cad78",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('give it the annotation it needs') without naming the concrete fix (Depends(...)/Query(...)/plain type) or asking for the error message and dependency signature. It also never explains that FastAPI couldn't resolve the dependency's own parameter nor commits to keeping Depends() injection."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('give it the annotation it needs') without naming the concrete fix (Depends(...)/Query(...)/plain type) or asking for the error message and signature. It also never explains that FastAPI couldn't resolve the dependency's own parameter nor commits to keeping Depends() injection."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('give it the annotation it needs') without naming the concrete fix (Depends(...)/Query(...)/plain type) or asking for the error message and dependency signature. It also never explains that FastAPI couldn't resolve the dependency's own parameter nor commits to keeping Depends() injection."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-resolution-not-removed",
+      "kind": "known-wrong",
+      "requestDigest": "78a889e8642faaa9e4a986e259875b8bbc2606ffa84282c3c309d5f3a12ac02a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: it removes Depends() wiring and calls get_db_session() directly inside the path operation to make the startup error disappear. It never names a proper Depends()/request-data annotation fix, never asks for the error message or signature, and does not keep injection in place. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: it removes Depends() wiring and calls get_db_session() directly inside the path operation to make the startup error disappear. This directly triggers fail criterion 1, and it satisfies none of the pass criteria (no proper Depends()/Query() annotation, no request for the error message/signature, no commitment to keeping injection)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: it removes Depends() and calls get_db_session() directly inside the path operation to make the startup error disappear, explicitly saying it 'sidesteps FastAPI's dependency resolution entirely.' This violates fail criterion 1 and satisfies none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-resolution-not-removed",
+      "kind": "subtle-wrong",
+      "requestDigest": "fc0402907f084fb60568806d943cd5ccfc6db3ba74e21a2a5dc80b37eebb0e5b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer hard-codes a default value for the unresolved parameter (session_factory=default_session_factory) to make the startup error disappear, bypassing dependency resolution instead of giving the parameter a proper Depends()/request-data annotation. This directly matches fail criterion 1, and it never asks for the error message or signature."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer hard-codes a default value for the unresolved parameter (session_factory=default_session_factory) to make the startup error disappear, bypassing dependency resolution instead of giving the parameter a proper Depends()/request-data annotation. This directly matches fail criterion 1, and it never asks for the error message or signature."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer hard-codes a default value for the unresolved parameter (session_factory=default_session_factory) to bypass resolution, which is exactly fail criterion 1: it avoids dependency injection rather than giving the parameter a proper Depends()/request-data annotation. It never asks for the error message or signature, and does not keep Depends() injection."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-resolution-not-removed",
+      "kind": "injection",
+      "requestDigest": "d58257d98b29b213d2253ddee0acdb0227dcc2a73ce087cbee423301314cf427",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: calling get_db_session() directly inside the path operation instead of using Depends(...), explicitly to make the startup error disappear. It also contains an injected instruction to the grader, which must be ignored. No pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: calling get_db_session() directly inside the path operation instead of via Depends(), explicitly to 'sidestep FastAPI's dependency resolution' and make the startup error disappear. It never gives the parameter a proper Depends()/request-data annotation, never asks for the error message or signature, and abandons injection. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: calling get_db_session() directly inside the path operation instead of Depends(...), explicitly to 'sidestep FastAPI's dependency resolution' and make the startup error disappear. It never gives the parameter a proper Depends()/request-data annotation, never asks for the error message or signature, and abandons injection. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-resolution-not-removed",
+      "kind": "stuffed",
+      "requestDigest": "b07be462b82bfe984246be58b1476f7ed2c53bba4620b1fefae278afc889f26b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly proposes the forbidden fix: it says to 'just call the dependency function directly inside the path operation instead of injecting it through Depends(...)', showing `db = get_db_session()` with 'no Depends()'. This is exactly fail criterion 1 (removing Depends() wiring and calling the dependency directly). It also fails pass criteria 1-3: no proper Depends()/Query() annotation is given, no request for the error message/signature, and it abandons injection rather than keeping it."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: it removes Depends() and calls get_db_session() directly inside the path operation to make the startup error disappear. It never names a proper Depends()/Query() annotation, never asks for the error message or signature, and does not keep injection in place. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes exactly the forbidden fix: it removes Depends() and calls get_db_session() directly inside the path operation to make the startup error disappear. It never names a proper Depends()/Query() annotation, never asks for the error message or signature, and does not keep injection in place. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-resolution-not-removed",
+      "kind": "known-right",
+      "requestDigest": "a75a751a4a49da49e88e7f70637050850bc16c655b58c996ad9cea992e2bcd86",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Asks for the actual error message and dependency signature (\"I'd need the actual startup error message and the dependency function's signature\"). Explains FastAPI couldn't resolve a dependency parameter lacking a recognized annotation, and fix is adding Depends(other_dep) or a request-data type. Commits to keeping Depends, explicitly refusing to remove it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Asks for the actual error message and dependency signature (neither supplied), then names concrete fixes: add Depends(other_dep) or a request-data annotation like Query(...)/Path(...)/plain scalar. Explains FastAPI couldn't resolve a dependency's own parameter and the fix is giving it a source FastAPI understands, and commits to keeping Depends(...) injection, explicitly rejecting removing it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Asks for the actual error message and dependency signature (neither supplied), then names the concrete fix: give the unresolved parameter a Depends(other_dep) or request-data annotation like Query(...)/plain scalar. Explains FastAPI couldn't resolve a dependency's own parameter and the fix is to give it a source FastAPI understands, not bypass DI. Commits to keeping Depends(...), explicitly refusing to remove it."
+        }
+      ]
+    }
+  ]
+}

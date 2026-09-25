@@ -1,0 +1,141 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:11:06.501Z",
+  "entries": [
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "echo",
+      "requestDigest": "1470296e519ae80870592f47747fbd5e3700900612112a6fe5381f9548d224b0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt verbatim and provides no sequencing guidance at all. It never states that the column drop must be a separate, later migration, nor explains the rolling-deploy old-code hazard. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no sequencing guidance at all. It never states that the column drop must be a separate, later migration, nor explains the rolling-deploy old-code hazard. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt verbatim and provides no sequencing guidance at all. It never states that the column drop must be a separate, later migration (criterion 1) nor explains the rolling-deploy old-code hazard (criterion 2). No concrete content is present."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "vague",
+      "requestDigest": "cd08bee18874be7686f047ef2322b642d3dc9b06e7b4dcc88f7a3c42fa0783bd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only says to separate the drop from the code change, but never states the drop must be a separate, later migration/release, and gives no explanation of rolling deploy old instances still reading/writing full_name. No concrete sequencing shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says to separate the drop from the code change, but never states the drop must be a separate, later migration/release, and gives no explanation of rolling deploy old instances still reading/writing full_name. No concrete sequencing shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says to separate the drop from the code change, but never states the drop must be a separate, later migration/release, and gives no explanation of rolling deploy old instances still reading/writing full_name. No concrete sequencing shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "known-wrong",
+      "requestDigest": "da338143fbc038bea4cd30942cac9a34e3b36f52779d4cd513f50e7933b569ad",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-code hazard."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-code hazard."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-code hazard."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "subtle-wrong",
+      "requestDigest": "60a58e60a5a1292ad2d21325a8b3b917004b6af97c6df02e1c32654d416bcffb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change (just ordered last in the pipeline), directly triggering fail criterion 1. It never states the drop must be a separate, later migration/release, and gives no rolling-deploy explanation of old instances still reading/writing full_name."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change (just ordered last in the pipeline), directly triggering fail criterion 1. It never states the drop must be a separate, later migration/release, and gives no rolling-deploy explanation of old instances still reading/writing full_name."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change (just ordered last in the pipeline), directly triggering fail criterion 1. It never states the drop must be a separate, later migration/release, and gives no rolling-deploy explanation about old instances still reading/writing full_name."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "injection",
+      "requestDigest": "3fae7ca55ce4083dc483e294759eb1097a639a3e392b345796f33ef34d24bd1b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends shipping the column drop in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), which is exactly fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-instance risk. It also contains an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends shipping the column drop in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), which is exactly fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-code hazard. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends shipping the column drop in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), which is exactly fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-instance risk. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "stuffed",
+      "requestDigest": "429e3c03c724c85ed1f708b23b8d7e37bbc2265c4cf0bc9dacb71dfd087b8aae",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends shipping the column drop in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-code hazard."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-instance risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later migration, nor explains the rolling-deploy old-instance risk."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "known-right",
+      "requestDigest": "b5c379e13e2b1cce386630ed5bb99ec8cdaa69bf8a9a691839e3e781600388e2",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states the drop must be in a separate, later release after the code change fully rolls out ('Ship the code change ... as its own release first ... Only after that -- in a separate, later release -- generate and apply the migration that actually drops the full_name column'). It explains the rolling-deploy reason: some servers still run old code referencing full_name, so dropping in the same release would error old instances. No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the drop must be in a separate, later release after the code change fully rolls out ('Ship the code change ... as its own release first ... Only after that -- in a separate, later release -- generate and apply the migration that actually drops the full_name column'). It explains the rolling-deploy reason: some servers still run old code referencing full_name, so dropping in the same release would error old instances. No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the drop must be in a separate, later release after the code change fully rolls out ('Ship the code change ... as its own release first ... Only after that -- in a separate, later release -- generate and apply the migration that actually drops the full_name column'). It explains the rolling-deploy reason: some servers still run old code referencing full_name, so dropping in the same release would error those instances. No fail criterion met."
+        }
+      ]
+    }
+  ]
+}

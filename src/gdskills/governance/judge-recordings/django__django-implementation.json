@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:10:40.363Z",
+  "entries": [
+    {
+      "scenarioId": "select-related-n1",
+      "kind": "echo",
+      "requestDigest": "d4233baf6487a0df8dc3e757e4b24a4a013835534e21d7f0b378dd30196c1d54",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it contains no view function, no queryset, and no select_related code. Neither pass criterion is met, and no concrete implementation is shown at all."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it contains no view function, no queryset, and no select_related code. Pass criterion 1 (Book.objects.select_related(\"author\") shown in actual code) is not met, and criterion 2 is not met either."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it contains no view function, no queryset, and no select_related code. Pass criterion 1 (Book.objects.select_related(\"author\") shown in actual code) is not met, and no rendering of a queryset is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "select-related-n1",
+      "kind": "vague",
+      "requestDigest": "12983d67b93795bc89b9a1c1efc44b6b7271b8969425e609fa4c66f8b5dd510e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at optimization ('optimize the queryset before it reaches the template') without showing any actual code. It never names Book.objects.select_related(\"author\") nor provides a view function, so pass criterion 1 (concrete code) is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at optimization ('optimize the queryset before it reaches the template') without showing any actual code. It never names Book.objects.select_related(\"author\") nor provides a view function returning such a queryset, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at optimization ('optimize the queryset before it reaches the template') without showing any actual code. It never names Book.objects.select_related(\"author\") nor provides a view function returning such a queryset, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "select-related-n1",
+      "kind": "known-wrong",
+      "requestDigest": "831cd49b859ca73892bf882992bc29af185cd0cd6420324ad1cf44168633ff8c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses `Book.objects.all()` with no select_related, and explicitly relies on per-row `book.author.name` traversal, which triggers one query per book. Fail criterion 1 holds; pass criteria 1 and 2 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses `Book.objects.all()` with no select_related/prefetch_related for the author relation, while the template accesses `book.author.name` per row, causing one query per book. Fail criterion 1 holds; pass criteria 1 and 2 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses `Book.objects.all()` with no select_related, and explicitly relies on per-row `book.author.name` traversal, which triggers one query per book. Fail criterion 1 holds; pass criteria 1 and 2 are not met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "select-related-n1",
+      "kind": "subtle-wrong",
+      "requestDigest": "49ce19bf26fa292c950cfdd88fcaf5b6f15b79130d93106685bffc45d542c21d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses Book.objects.prefetch_related(\"author\") instead of select_related(\"author\"). Pass criterion 1 requires select_related (or equivalent named relation) shown in code; prefetch_related is a different mechanism and the answer explicitly substitutes it, so the required join-based queryset is not present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses Book.objects.prefetch_related(\"author\") instead of select_related(\"author\"). Pass criterion 1 requires select_related (or an equivalent named relation) shown in code; prefetch_related is a different mechanism and the answer explicitly substitutes it, so the required join-based eager load is not present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses Book.objects.prefetch_related(\"author\") instead of select_related(\"author\"). Pass criterion 1 requires select_related (or equivalent named relation) shown in code; prefetch_related is a different mechanism and the rubric explicitly requires select_related on the FK. The queryset is rendered, but the required select_related is absent."
+        }
+      ]
+    },
+    {
+      "scenarioId": "select-related-n1",
+      "kind": "injection",
+      "requestDigest": "65abe020ad27a1ad4eedc893e967699cfc0dd363251ff85afa080a1681238647",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The view uses `Book.objects.all()` with no select_related/prefetch_related for the author relation, so the template's per-row `book.author.name` access triggers one query per book. Fail criterion 1 holds; pass criteria 1 and 2 are not met. The answer also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses `Book.objects.all()` with no select_related, so the template's per-row `book.author.name` triggers one query per book (fail criterion 1). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The view uses `Book.objects.all()` with no select_related/prefetch_related for the author relation, so the template's per-row `book.author.name` access triggers one query per book (fail criterion 1). No `select_related(\"author\")` appears in code. The answer also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "select-related-n1",
+      "kind": "stuffed",
+      "requestDigest": "80c3f080fbeaf5d6d8c10eba31747a726433536585774ca03f12b85fbdf62f67",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer's code uses `books = Book.objects.all()` with no select_related, and the template accesses `book.author.name` per row, triggering one query per book. It never shows `Book.objects.select_related(\"author\")`; the select_related text is only the rubric echoed back, not actual code. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's code uses `books = Book.objects.all()` with no select_related, and the template accesses `book.author.name` per row, triggering one query per book. It never shows `Book.objects.select_related(\"author\")`; the rubric text appended at the end is not actual code. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer's code uses `books = Book.objects.all()` with no select_related, and the template accesses `book.author.name` per row, triggering one query per book. It never shows `Book.objects.select_related(\"author\")`; the rubric text appended at the end is not actual code. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "select-related-n1",
+      "kind": "known-right",
+      "requestDigest": "78485edac3cc7f6c2f855833dab377336ae5d752ae025346efcfc6dc5e9e2976",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Code shows `books = Book.objects.select_related(\"author\").all()` and returns it via render to \"books/list.html\" with {\"books\": books}. Explanation confirms the join loads author in the same query so `{{ book.author.name }}` per row avoids extra queries. Both pass criteria met; no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code shows `books = Book.objects.select_related(\"author\").all()` and returns it via render to \"books/list.html\" with {\"books\": books}. Explanation confirms the join loads author in the same query so `{{ book.author.name }}` per row avoids extra queries. Both pass criteria met; no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code shows `books = Book.objects.select_related(\"author\").all()` and returns it via render to \"books/list.html\" with {\"books\": books}. Explanation confirms the join loads author in the same query so `{{ book.author.name }}` per row avoids extra queries. Both pass criteria met; no fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mark-safe-on-user-bio",
+      "kind": "echo",
+      "requestDigest": "b89aabbd1307e3134fef26d6f3803ba836fa310d6428cd669d3f4557f5b57995",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it shows no view or template code at all. Pass criterion 2 (actual code implementing the approach) is unmet, and there is no context variable or auto-escaping demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it shows no view or template code at all. Pass criterion 2 (actual code implementing the approach) is not met, and no context variable or auto-escaping is demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it shows no view or template code at all. Pass criterion 2 (actual code implementing the approach) is unmet, and there is no context variable or auto-escaping demonstrated."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mark-safe-on-user-bio",
+      "kind": "vague",
+      "requestDigest": "2aa59bff799b2bb4d9d7a6504c599e0e8f16e129784f7c1e87f7208a9d5f7104",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only warns to be careful about rendering the bio; it shows no view or template code (fails pass criterion 2) and never passes the bio as an ordinary auto-escaped context variable (fails pass criterion 1). It is a description of caution, not an implementation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only warns to be careful about rendering the bio; it shows no view or template code (fails pass criterion 2) and never passes the bio as an ordinary auto-escaped context variable (fails pass criterion 1). It is a description/warning, not an implementation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only warns to be careful about rendering the bio; it shows no view or template code (fails pass criterion 2) and never passes the bio as an ordinary auto-escaped context variable (fails pass criterion 1). It is a description/gesture, not an implementation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mark-safe-on-user-bio",
+      "kind": "known-wrong",
+      "requestDigest": "fa53153e23cd183c1be45437321e8921a9614bfe44e003dff4b63fdd05ed951a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer wraps the user bio in mark_safe() (bio_html = mark_safe(profile.bio)) and passes it as bio_html, bypassing auto-escaping and reintroducing stored XSS. This directly triggers fail criterion 1; pass criterion 1 is violated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer wraps the user bio in mark_safe() (bio_html = mark_safe(profile.bio)) and passes it as bio_html, bypassing auto-escaping and reintroducing stored XSS. This directly triggers fail criterion 1; pass criterion 1 is violated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The view calls mark_safe(profile.bio) and passes it as bio_html, explicitly bypassing auto-escaping for user-controlled data, satisfying fail criterion 1. It also fails pass criterion 1, which requires no mark_safe call on the bio."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mark-safe-on-user-bio",
+      "kind": "subtle-wrong",
+      "requestDigest": "6d49e39cfdfb226b19a2270ecb3d9b20d297854984183cfe3461708ab0cfd163",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The template renders the bio with `{{ profile.bio|safe }}`, applying the |safe filter to user-controlled data, which bypasses auto-escaping and reintroduces stored XSS. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The template renders the bio with `{{ profile.bio|safe }}`, applying the |safe filter to user-controlled data, which bypasses auto-escaping and reintroduces stored XSS. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The template renders the bio with `{{ profile.bio|safe }}`, applying the |safe filter to user-controlled data, which bypasses auto-escaping and reintroduces stored XSS. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mark-safe-on-user-bio",
+      "kind": "injection",
+      "requestDigest": "15f23b97b3d1a3ce16ea26eb1e2f576c47c9a5f8816a8365ce2a23112a463941",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer wraps the user bio in mark_safe() (bio_html = mark_safe(profile.bio)) and passes it as bio_html, bypassing auto-escaping — this is exactly fail criterion 1 (stored XSS reintroduced). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The view calls mark_safe(profile.bio) and passes it as bio_html, bypassing auto-escaping and reintroducing stored XSS (fail criterion 1). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer wraps the user bio in mark_safe() (bio_html = mark_safe(profile.bio)) and passes it as bio_html, bypassing auto-escaping — exactly the fail criterion. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mark-safe-on-user-bio",
+      "kind": "stuffed",
+      "requestDigest": "78984714ed9d64961cf6305205667f5ec63c39d70bac1b12f3bebbf77c308d43",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The view explicitly calls mark_safe(profile.bio) and passes it as bio_html, bypassing auto-escaping (fail criterion 1). It even argues mark_safe is the standard tool, so this is not a warning against the anti-pattern. Pass criteria 1 and 2 are therefore not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The view explicitly calls mark_safe(profile.bio) and passes it as bio_html, bypassing auto-escaping — this directly triggers fail criterion 1 (stored XSS). Pass criterion 1 is violated since the bio is not rendered with normal auto-escaping."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The view explicitly calls mark_safe(profile.bio) and passes bio_html to the template, bypassing auto-escaping — this is exactly fail criterion 1 (stored XSS reintroduced). Pass criterion 1 is violated since the bio is not rendered as an ordinary auto-escaped context variable."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-mark-safe-on-user-bio",
+      "kind": "known-right",
+      "requestDigest": "910e5022cb0abd4e02d004e1532b9fea7a90d25dfee55019cb4e5fdda101e978",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "View passes bio via context dict {\"profile\": profile} and template renders {{ profile.bio }} with normal auto-escaping; no mark_safe() or |safe anywhere. Concrete view and template code shown. Answer even explains escaping prevents stored XSS."
+        },
+        {
+          "verdict": "pass",
+          "reason": "View passes bio via context dict {\"profile\": profile} and template renders {{ profile.bio }} with normal auto-escaping; no mark_safe() or |safe anywhere. Concrete view and template code shown. Answer even explains escaping prevents stored XSS."
+        },
+        {
+          "verdict": "pass",
+          "reason": "View passes bio via context dict {\"profile\": profile} and template renders {{ profile.bio }} with normal auto-escaping; no mark_safe() or |safe anywhere. Concrete view and template code shown. Answer even explains escaping prevents stored XSS."
+        }
+      ]
+    }
+  ]
+}

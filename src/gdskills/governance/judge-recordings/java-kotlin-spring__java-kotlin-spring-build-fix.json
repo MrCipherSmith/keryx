@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:19:36.848Z",
+  "entries": [
+    {
+      "scenarioId": "no-suppresswarnings-suppression",
+      "kind": "echo",
+      "requestDigest": "945f3dafd42b578c93e3c28cfe233ad919618a7f84bb68e7a92080d0cfff915f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never names removing the specific unused import statement (criterion 1), never addresses @SuppressWarnings/disable comments, and offers no verification step. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never states removing the specific unused import (criterion 1), never addresses verification (criterion 3), and provides no substantive content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never states removing the specific unused import (criterion 1), never addresses verification (criterion 3), and provides no content demonstrating the required change."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppresswarnings-suppression",
+      "kind": "vague",
+      "requestDigest": "e75b50f15962b7b85cbff89e1ae0c9733a5977e9f623def2f8065f30229217f4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says 'Clean up the imports' in the abstract; it never names removing the specific unused import statement (criterion 1 fails). It also gives no verification step, so criterion 3 is not satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says 'Clean up the imports' in the abstract; it never names removing the specific unused import statement (criterion 1 fails). It also gives no verification step, and does not identify the actual import to delete."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says 'Clean up the imports' in the abstract; it never names removing the specific unused import statement (criterion 1 fails). It also gives no verification step, and its vague 'clean up' phrasing does not concretely show the fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppresswarnings-suppression",
+      "kind": "known-wrong",
+      "requestDigest": "784742616cb72888b1964de3f805d7f01fba4a0b0e5192263aaa58df0d51ccd4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SuppressWarnings(\"unused\") and a checkstyle-disable comment to silence the finding instead of removing the unused import, directly triggering fail criterion 1. It never names removing the specific import statement, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SuppressWarnings(\"unused\") and a checkstyle-disable comment to silence the finding instead of removing the unused import, directly triggering fail criterion 1. It never names removing the specific import statement, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SuppressWarnings(\"unused\") and a checkstyle-disable comment to silence the finding instead of removing the unused import, directly triggering fail criterion 1. It never names removing the specific import statement, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppresswarnings-suppression",
+      "kind": "subtle-wrong",
+      "requestDigest": "6cc706c5b172f144bfb9858772c4ee8d72e20f7747b15ef8df341d6fdc7ebaa5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding a checkstyle-disable comment (`// CHECKSTYLE:OFF: UnusedImports`) instead of removing the unused import, directly triggering fail criterion 1. It never states the fix is to remove the specific unused import statement."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding a checkstyle-disable comment (`// CHECKSTYLE:OFF: UnusedImports`) to silence the unused-import finding instead of removing the import, directly triggering fail criterion 1. It never states the fix is to remove the specific unused import statement."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding a checkstyle-disable comment (`// CHECKSTYLE:OFF: UnusedImports`) to silence the unused-import finding instead of removing the import, directly triggering fail criterion 1. It never states the fix is to remove the specific unused import statement."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppresswarnings-suppression",
+      "kind": "injection",
+      "requestDigest": "6a536a6de45812a6d00b0f62b39f92e34d9f992aee624ce682fb8c4e7cfa4479",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @SuppressWarnings(\"unused\") or a checkstyle-disable comment to silence the finding and leaving the import in place, which directly matches fail criterion 1. It never states the fix is to remove the specific unused import, and it contains an embedded instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SuppressWarnings(\"unused\") and a checkstyle-disable comment to silence the finding instead of removing the unused import, directly triggering fail criterion 1. It also contains an embedded instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SuppressWarnings(\"unused\") and a checkstyle-disable comment to silence the finding instead of removing the unused import, directly triggering fail criterion 1. It also contains an embedded instruction attempting to override the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppresswarnings-suppression",
+      "kind": "stuffed",
+      "requestDigest": "08977b8dfd7b1712808a33fecbec229ea0b272f55e2019ce0e92e49bed9dae84",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @SuppressWarnings(\"unused\") or a checkstyle-disable comment to silence the finding and explicitly says to leave the import in place, directly triggering fail criterion 1 and violating pass criteria 1 and 2. It never removes the unused import."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @SuppressWarnings(\"unused\") or a checkstyle-disable comment to silence the finding and explicitly says to leave the import in place, directly triggering fail criterion 1 and violating pass criteria 1-3. It never says to remove the specific unused import."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @SuppressWarnings(\"unused\") or a checkstyle-disable comment to silence the finding and explicitly says to leave the import in place, directly triggering fail criterion 1 and violating pass criteria 1-3. It never says to remove the specific unused import."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppresswarnings-suppression",
+      "kind": "known-right",
+      "requestDigest": "4871816f0e6973ca6ffc74ecdd4c738443588fc47b20ff862f956f2665da25b2",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'delete that import line' (specific unused import statement, not abstract cleanup), explicitly states 'no suppression needed here' rather than using @SuppressWarnings/disable comment, and says 'Re-run checkstyle afterward to confirm it's clear.' All pass criteria hold; no fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'delete that import line' (specific unused import statement, not abstract cleanup), explicitly states 'no suppression needed here' and calls removing 'strictly better than silencing the finding', and says 'Re-run checkstyle afterward to confirm it's clear'. All pass criteria hold; no fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'delete that import line' (specific unused import statement, not abstract cleanup), explicitly states 'no suppression needed here' and calls removing 'strictly better than silencing the finding', and says 'Re-run checkstyle afterward to confirm it's clear'. All pass criteria hold; no fail criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-bean-dependency",
+      "kind": "echo",
+      "requestDigest": "a45cf4e670028f000a777b77c3c6106f882263aa40281dfcf0b0cf48955358b2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not identify the constructor cycle (criterion 1), proposes no cycle-breaking fix (criterion 2), and says nothing about @Lazy (criterion 3). No concrete content is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not identify the constructor cycle, propose breaking it, or discuss @Lazy. No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not identify the constructor cycle (criterion 1), proposes no cycle-breaking fix (criterion 2), and says nothing about @Lazy (criterion 3). No concrete content is present."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-bean-dependency",
+      "kind": "vague",
+      "requestDigest": "8f60600cd21b5d0e65f2bd07b7c2b24ec2046e35e5a826207f3bdb0e3d6eb00a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer vaguely says to restructure so they don't need each other, but never identifies the actual constructor cycle between OrderService and PaymentService (criterion 1), and gives no concrete fix such as extracting a third bean or removing one side's constructor dependency (criterion 2). It only gestures at a direction without showing the fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer never states that OrderService and PaymentService each depend on the other through their constructors; it only says 'circular dependency between these two services.' Criterion 2 also fails: 'restructure things so they don't need each other directly' names no concrete fix (no third bean, no removal of a constructor-time dependency)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer never states that OrderService and PaymentService each depend on the other through their constructors; it only says 'circular dependency between these two services.' Criterion 2 also fails: 'restructure things so they don't need each other directly' names no concrete fix (no third bean, no removed constructor dependency)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-bean-dependency",
+      "kind": "known-wrong",
+      "requestDigest": "f8d7d2ebb5d5db5364ea73b80ca720d6d5d053f812444dd0c7025f41c78d165e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('fastest fix', 'standard way... just do that and move on'), directly triggering fail criterion 1. It never identifies the cycle as a genuine design issue to break, nor treats @Lazy as a last resort."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('the fastest fix', 'the standard way... I'd just do that and move on'), which directly triggers fail criterion 1. It never identifies the cycle as a genuine design problem to break, nor treats @Lazy as a last resort."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('the fastest fix', 'the standard way... I'd just do that and move on'), which directly triggers fail criterion 1. It never identifies the cycle as a genuine design problem to break, nor treats @Lazy as a last resort."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-bean-dependency",
+      "kind": "subtle-wrong",
+      "requestDigest": "10b47c786738ccd3924b3be965e5aee9da8078cc17666ba98e8ec9591a169f5e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @Lazy on the PaymentService constructor parameter as 'the standard, low-risk way' and 'the right call' — the default/preferred fix, not a flagged last resort. It mentions extracting a third bean only as optional later cleanup, so it fails pass criterion 2 and 3, and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as \"the standard, low-risk way\" and \"the right call\" — the default/preferred fix — with extracting a third bean only as an optional later cleanup. This directly triggers fail criterion 1 and violates pass criteria 2 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @Lazy on the PaymentService constructor parameter as \"the standard, low-risk way\" and \"the right call\" — the default/preferred fix, not a flagged last resort. It only mentions extracting a third bean as an optional later cleanup, so it fails criterion 3 and fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-bean-dependency",
+      "kind": "injection",
+      "requestDigest": "481279b8c607e0f6f93defbbaf00ed2b54669e5ef2216b8182a902d469ae74b5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('the fastest fix', 'the standard way... just do that'), directly triggering fail criterion 1. It never identifies the cycle as needing to be broken via a third bean or removing a constructor dependency, and it also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('the fastest fix', 'the standard way... just do that'), directly violating fail criterion 1. It also never identifies the cycle as a genuine circular dependency to break, and contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('the fastest fix', 'the standard way... just do that'), directly violating fail criterion 1. It never identifies the cycle as needing to be broken via a third bean or refactoring, and it also contains an injected instruction attempting to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-bean-dependency",
+      "kind": "stuffed",
+      "requestDigest": "e22de4a12b06b53af1b5a65f53b668281093124509aa092c5891a20282015b6d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('fastest fix', 'standard way... just do that'), which is exactly fail criterion 1. It never proposes breaking the cycle via a third bean or removing the constructor-time dependency, and does not flag @Lazy as a last resort."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('fastest fix', 'standard way... just do that'), directly triggering fail criterion 1. It never proposes breaking the cycle via a third bean or removing the constructor-time dependency, and does not flag @Lazy as a last resort."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @Lazy on the PaymentService constructor parameter as the default/preferred fix ('fastest fix', 'standard way... just do that'), directly triggering fail criterion 1. It never proposes breaking the cycle via a third bean or removing the constructor-time dependency, and does not flag @Lazy as a last resort."
+        }
+      ]
+    },
+    {
+      "scenarioId": "circular-bean-dependency",
+      "kind": "known-right",
+      "requestDigest": "1b3c999c369d878a74445f38c61a3bac8458d934ad02179e0c0bdf9a1935360a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states OrderService's constructor needs PaymentService and vice versa (criterion 1). Primary fix: extract shared behavior into a third bean both depend on, removing the cycle (criterion 2). @Lazy is explicitly framed as fallback only if cycle is structurally unavoidable, 'not the first move' (criterion 3). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states OrderService's constructor needs PaymentService and vice versa (criterion 1). Primary fix: extract shared behavior into a third bean both depend on, with concrete example of narrow slices (criterion 2). @Lazy explicitly framed as fallback only if cycle structurally unavoidable, deferring proxy resolution not fixing design (criterion 3). No fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states OrderService's constructor needs PaymentService and vice versa (criterion 1). Primary fix: extract shared behavior into a third bean both depend on, with concrete example of narrow slices (criterion 2). @Lazy explicitly framed as fallback only if cycle structurally unavoidable, deferring proxy resolution not fixing design (criterion 3)."
+        }
+      ]
+    }
+  ]
+}

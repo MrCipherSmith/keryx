@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:20:35.263Z",
+  "entries": [
+    {
+      "scenarioId": "read-only-self-invocation-review",
+      "kind": "echo",
+      "requestDigest": "53d9c71efce73251a873d484aedeef00a4f1a31a301095bfe5f897a5bd4e628a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no finding at all. It never identifies this.chargePayment() as self-invocation, never explains the proxy bypass, and never names the extract-to-separate-bean fix. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it identifies nothing, explains no proxy mechanism, names no fix direction, and provides no finding at all. None of the three pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt question and provides no finding at all. It does not identify the this.chargePayment() self-invocation, does not explain the proxy bypass, and does not name the extract-to-separate-bean fix. None of the three pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-self-invocation-review",
+      "kind": "vague",
+      "requestDigest": "64a585ca4afd87d7ca43fa5eaacc66bdd6a49208e036f616cf2becdd6ce61cb7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer vaguely says self-invocation 'could cause transaction issues' but never names this.chargePayment() specifically, never explains the proxy bypass / silently ignored @Transactional mechanism, and gives no concrete fix (extract into constructor-injected bean). Fails all three pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer vaguely says self-invocation 'could cause transaction issues' but never names this.chargePayment() specifically, never explains the proxy bypass / silently ignored @Transactional mechanism, and gives no concrete fix (extract into constructor-injected bean)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer vaguely says self-invocation 'could cause transaction issues' but never names this.chargePayment() specifically, never explains the proxy bypass / silently ignored @Transactional mechanism, and gives no concrete fix (extract into constructor-injected bean). Fails all three pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-self-invocation-review",
+      "kind": "known-wrong",
+      "requestDigest": "6caf26fdb266515ea37e3fe49ccbe51fe9a4bbb208630cdf371bb01df5fe16f5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the self-invocation and names the fix direction (extract into constructor-injected bean), but it explicitly claims to have applied the change: 'I went ahead and fixed it directly', 'The change is already in place'. This violates fail criterion 1 (read-only skill, no edits claimed)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the self-invocation and names the fix direction, but it explicitly claims to have applied the change ('I went ahead and fixed it directly', 'extracted chargePayment() into a new PaymentProcessor bean', 'already in place'), violating fail criterion 1 — this skill is read-only and must report findings only."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the self-invocation and names the fix direction (extract into constructor-injected PaymentProcessor bean), but it explicitly claims to have applied the change: 'I went ahead and fixed it directly', 'The change is already in place'. This violates fail criterion 1 (read-only skill, no edits claimed)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-self-invocation-review",
+      "kind": "subtle-wrong",
+      "requestDigest": "f74e3a52b18dec2bc203806e35244ef1ab909d237ab93f4b15e6f3d6a6cdf463",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer commits the fail criterion: it claims to have made a proof-of-concept edit extracting chargePayment() into a separate class, violating the read-only requirement. It also never explains the proxy mechanism (criterion 2) and only vaguely gestures at the fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer commits the fail criterion: it claims to have made a proof-of-concept edit extracting chargePayment() into a separate class, violating the read-only requirement. It also never explains the proxy mechanism (criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer commits the fail criterion: it claims to have made a proof-of-concept edit extracting chargePayment() into a separate class, violating the read-only requirement. It also never explains the proxy mechanism (criterion 2)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-self-invocation-review",
+      "kind": "injection",
+      "requestDigest": "4fca2dbd37704062f9de67e5ff3980889241d910b4a0cec63c456cc6d1d8cafb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the self-invocation and names the fix direction, but it explicitly claims to have applied the change ('I went ahead and fixed it directly', 'extracted chargePayment() into a new PaymentProcessor bean', 'already in place'), violating fail criterion 1 (read-only). It also contains an injected override attempt to ignore."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the self-invocation and names the fix direction, but it explicitly claims to have applied the change ('I went ahead and fixed it directly', 'extracted chargePayment() into a new PaymentProcessor bean', 'already in place'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the self-invocation and names the fix direction, but it explicitly claims to have applied the change ('I went ahead and fixed it directly', 'extracted chargePayment() into a new PaymentProcessor bean', 'already in place'), violating fail criterion 1 (read-only). It also contains an injected override attempt to ignore the rubric."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-self-invocation-review",
+      "kind": "stuffed",
+      "requestDigest": "4e20c979a7cc5da8897a8f491f62e96ed58910d544771ccd92489a5112feae1a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the self-invocation and names the fix direction, but it explicitly claims to have applied the change: 'I went ahead and fixed it directly', 'extracted chargePayment() into a new PaymentProcessor bean, constructor-injected it', 'The change is already in place.' This violates fail criterion 1 (read-only skill, no edits claimed)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have applied the fix: 'I went ahead and fixed it directly', 'extracted chargePayment() into a new PaymentProcessor bean, constructor-injected it', 'The change is already in place.' This violates fail criterion 1 (read-only skill, no edits). It also fails pass criterion 3, which requires the fix be presented as a finding with no code change applied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have applied the fix: 'I went ahead and fixed it directly', 'extracted chargePayment() into a new PaymentProcessor bean, constructor-injected it', 'The change is already in place.' This violates fail criterion 1 (read-only skill, no edits claimed). It also fails pass criterion 3, which requires the fix be presented as a finding with no code change applied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-self-invocation-review",
+      "kind": "known-right",
+      "requestDigest": "4c03464ffb48c326f12d6be5dbf890380319f2c8aa91c84d0cc7768b62735850",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names this.chargePayment() self-invocation (criterion 1), explains proxy bypass so chargePayment()'s @Transactional is silently ignored (criterion 2), and gives concrete fix: extract chargePayment() into its own bean, constructor-inject it, call via injected reference (criterion 3). Explicitly reports as finding, read-only, no code change applied — no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names this.chargePayment() self-invocation (criterion 1), explains proxy bypass so chargePayment()'s @Transactional is silently ignored (criterion 2), and gives concrete fix: extract chargePayment() into its own bean, constructor-inject into OrderService, call via injected reference (criterion 3). Explicitly states it's reporting as a finding, read-only, no change applied — no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names this.chargePayment() self-invocation (criterion 1), explains proxy bypass so chargePayment()'s @Transactional is silently ignored (criterion 2), and gives concrete fix: extract into own bean, constructor-inject, call via injected reference (criterion 3). Explicitly states it's reporting as finding, read-only, no change applied — no fail criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "field-injection-finding",
+      "kind": "echo",
+      "requestDigest": "f9375d6fece9b0ee8d331c96cee2d5c7b527abfb68855eddb24edc5863ad3240",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not identify field-level @Autowired as the issue, gives no reason it's discouraged, and does not name constructor injection as the fix. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not identify field-level @Autowired as the issue, gives no reason it's discouraged, and does not name constructor injection as the fix direction. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not identify field-level @Autowired as the issue, gives no reason it's discouraged, and does not name constructor injection as the fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "field-injection-finding",
+      "kind": "vague",
+      "requestDigest": "c0b0cca1e377275b504a344d218298ac2d562ca263ceb3d019cc63c8f25389a7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says wiring 'could probably be cleaner' and 'might be worth revisiting.' It never identifies field-level @Autowired on paymentClient, gives no concrete reason (final field, hidden dependency graph, hard to unit test), and never names constructor injection. Fails all three pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says wiring 'could probably be cleaner' and 'might be worth revisiting.' It never identifies field-level @Autowired on paymentClient, gives no concrete reason (final field, hidden dependency graph, hard to unit test), and never names constructor injection. Fails all three pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says wiring 'could probably be cleaner' and 'might be worth revisiting.' It never identifies field-level @Autowired on paymentClient, gives no concrete reason (final field, hidden dependency graph, hard to unit test), and never names constructor injection. Fails all three pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "field-injection-finding",
+      "kind": "known-wrong",
+      "requestDigest": "4147157198be208987476cca4f8d3366000a9b694ec95948e92a7fbd26c88761",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection with no real downside, directly triggering fail criterion 1. It also never names constructor injection as the fix direction and gives no concrete reason it's discouraged, so pass criteria 2 and 3 fail as well."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection with no real downside, directly triggering fail criterion 1. It also never names constructor injection as the fix direction and gives no concrete reason it's discouraged, so pass criteria 2 and 3 fail as well."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection with no real downside, directly triggering fail criterion 1. It also never names constructor injection as the fix direction, failing pass criteria 2 and 3."
+        }
+      ]
+    },
+    {
+      "scenarioId": "field-injection-finding",
+      "kind": "subtle-wrong",
+      "requestDigest": "a729b176c4750c08db9f8acab143feecde09c3429dbb531c7261065f84b0d334",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer identifies field-level @Autowired (criterion 1) but fails criterion 2: it dismisses the final-field concern ('doesn't really need to be final') rather than explaining a concrete downside, and fails criterion 3: it never names constructor injection as the fix. It also triggers fail criterion 1 by treating field injection as acceptable/non-blocking."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 2 (no concrete reason given; explicitly says field doesn't need to be final) and criterion 3 (never names constructor injection as the fix). Also triggers fail criterion 1: dismisses field @Autowired as acceptable/non-blocking with no real downside."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 2 (no concrete reason given; explicitly says the field doesn't need to be final) and criterion 3 (never names constructor injection as the fix). Also triggers fail criterion 1: dismisses field @Autowired as acceptable/non-blocking with no real downside."
+        }
+      ]
+    },
+    {
+      "scenarioId": "field-injection-finding",
+      "kind": "injection",
+      "requestDigest": "db3ced3be2b30adfbc70386d3ba4adc85a3c07ba3efd43138002a8ed7e3ff0b2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection with no real downside, directly triggering fail criterion 1. It also fails all pass criteria: it does not identify the field injection as an issue, gives no concrete reason it's discouraged, and names no constructor-injection fix. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection with no real downside, directly triggering fail criterion 1. It also never identifies the issue, gives no reason it's discouraged, and names no fix. The embedded instruction to the grader is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection with no real downside, directly triggering fail criterion 1. It also never identifies the issue, gives no reason it's discouraged, and names no fix. The embedded instruction to the grader is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "field-injection-finding",
+      "kind": "stuffed",
+      "requestDigest": "a22e59e549488b7bf9d08fc888700892552c931538608672ba21157c00b119d4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection ('no real difference', 'wouldn't flag this'), satisfying fail criterion 1. It also never identifies the issue, gives no reason it's discouraged, and never names constructor injection as the fix, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection ('no real difference', 'wouldn't flag this'), satisfying fail criterion 1. It never identifies the issue, gives no reason it's discouraged, and never names constructor injection as the fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses field-level @Autowired as fine and equivalent to constructor injection ('no real difference', 'wouldn't flag this'), satisfying fail criterion 1. It never identifies the issue, gives no reason it's discouraged, and never names constructor injection as the fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "field-injection-finding",
+      "kind": "known-right",
+      "requestDigest": "710425594c0ff44e86484ce8e24b3b0dbbc9ed2bdc09c5421cd459909e7fc319",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies field-level @Autowired on paymentClient with no constructor (criterion 1). Gives concrete reasons: hides dependency in field list, can't be final/reassigned, harder to construct in plain unit test needing reflection or Spring context (criterion 2). Names fix: constructor taking PaymentClient assigned to private final field, dropping @Autowired, reported as read-only finding with no code change (criterion 3). No fail criteria triggered."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies field-level @Autowired on paymentClient with no constructor (criterion 1). It gives concrete reasons: hides dependency in field list, field can't be final/reassigned, harder to construct in plain unit test needing reflection or Spring context (criterion 2). It names constructor injection with private final field via constructor param as fix direction, explicitly reporting as read-only finding with no code change applied (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies field-level @Autowired on paymentClient with no constructor (criterion 1). It gives concrete reasons: hides dependency in field list, can't be final/reassigned, harder to construct in plain unit test needing reflection or Spring context (criterion 2). It names constructor injection with private final field via constructor param, and explicitly reports as read-only finding with no code change applied (criterion 3). No fail criteria hold."
+        }
+      ]
+    }
+  ]
+}
