@@ -12,13 +12,17 @@ test("the bundled install-manifest.json validates against install-manifest.schem
   expect(Object.keys(manifest.profiles).sort()).toEqual([
     "angular",
     "core",
+    "django",
+    "fastapi",
     "full",
     "go",
+    "java-kotlin-spring",
     "minimal",
     "nestjs",
     "nextjs-nuxt",
     "python",
     "react",
+    "rust",
     "ts-js-node",
     "vue",
   ]);
