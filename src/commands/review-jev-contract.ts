@@ -111,6 +111,8 @@ export interface JevContractRunOptions {
   readonly threshold?: number;
   readonly model?: string;
   readonly fetchFn?: typeof fetch;
+  /** Environment the Jev credential resolves from; defaults to `process.env`. Tests inject a fixture key. */
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 export interface JevContractComputedResult extends JevContractRunResult {
@@ -162,7 +164,7 @@ export async function computeJevContractResult(options: JevContractRunOptions): 
     // throws — the caller decides what a failure means (degrade, or retry).
     const attemptBatch = async (batch: ContractClaimBatch): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: unknown }> => {
       try {
-        const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: process.env });
+        const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env });
         jevCalls += 1;
         if (result.usage.input_tokens !== undefined) {
           inputTokens += result.usage.input_tokens;

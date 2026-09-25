@@ -192,7 +192,7 @@ describe("a Jev batch failure (e.g. a real vendor max_tokens_exceeded) degrades 
     const throwingFetch = (async () => {
       throw new Error('HTTP 400 — {"detail":{"error_type":"max_tokens_exceeded"}}');
     }) as unknown as typeof fetch;
-    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn: throwingFetch });
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", env: { OPENROUTER_API_KEY: "sk-or-test-fixture" }, fetchFn: throwingFetch });
     expect(result.jevError).toContain("max_tokens_exceeded");
     expect(result.claims).toHaveLength(2);
     expect(result.claims.every((c) => c.probability === undefined)).toBe(true);
@@ -228,7 +228,7 @@ describe("Part B: a real vendor 400 max_tokens_exceeded batch is retried once, s
       return noulResponse({ CLAIM3: 0.8 });
     }) as unknown as typeof fetch;
 
-    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", env: { OPENROUTER_API_KEY: "sk-or-test-fixture" }, fetchFn });
 
     expect(call).toBe(3);
     expect(result.jevError).toBeUndefined();
@@ -246,7 +246,7 @@ describe("Part B: a real vendor 400 max_tokens_exceeded batch is retried once, s
       return maxTokensResponse();
     }) as unknown as typeof fetch;
 
-    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", env: { OPENROUTER_API_KEY: "sk-or-test-fixture" }, fetchFn });
 
     expect(call).toBe(3);
     expect(result.jevError).toContain("max_tokens_exceeded");
@@ -264,7 +264,7 @@ describe("Part B: a real vendor 400 max_tokens_exceeded batch is retried once, s
       return maxTokensResponse();
     }) as unknown as typeof fetch;
 
-    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", env: { OPENROUTER_API_KEY: "sk-or-test-fixture" }, fetchFn });
 
     expect(call).toBe(1);
     expect(result.jevError).toContain("max_tokens_exceeded");
@@ -279,7 +279,7 @@ describe("Part B: a real vendor 400 max_tokens_exceeded batch is retried once, s
       return new Response(JSON.stringify({ detail: { error_type: "some_other_error" } }), { status: 400 });
     }) as unknown as typeof fetch;
 
-    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", fetchFn });
+    const result = await computeJevContractResult({ cwd: "/tmp", description, diffText: DIFF, targetLabel: "PR #1", env: { OPENROUTER_API_KEY: "sk-or-test-fixture" }, fetchFn });
 
     expect(call).toBe(1);
     expect(result.jevError).not.toContain("max_tokens");
