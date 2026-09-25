@@ -81,3 +81,47 @@ typecheck`: exit 0. Five REAL bundled-tree tests (ts-js-node's committed
 `governance/eval.json` predates `runnerPromptVersion`) now correctly fail
 the gate as stale evidence — expected, and resolved by FU7's honest re-run,
 not worked around here.
+- 2026-09-25T04:48:41.955Z - task-done: T6: FU2: runner answer-in-text system note + no-sleep-sync check
+- 2026-09-25T04:48:45.703Z - task-attempt: T7: started (attempt 1) — live re-judge sampler: skills eval --reverify
+
+## FU3 (T7): live re-judge sampler
+
+Added `keryx skills eval --reverify <pack-dir> [--sample N] --judge <provider>[:<model>]`
+(dispatched from `evalCommand` before the normal `<skill-id>` usage check,
+since `--reverify` takes a pack dir, not a skill id). Core logic is
+`reverifyPackSample` (`eval.ts`): reads the pack's `governance/eval.json`,
+collects every RAN behavior scenario's `trialRecords` that carry a judge
+verdict, samples up to `--sample` (default 10) of them WITHOUT replacement
+(Fisher-Yates, injectable RNG for deterministic tests), re-judges each
+sampled `output` live via `gradeScenarioAnswer` against the skill's CURRENT
+evals.json scenario (never the report's own stale copy), and reports every
+disagreement plus the disagreement rate. Exits non-zero when the rate
+exceeds `REVERIFY_DISAGREEMENT_THRESHOLD` (20%, documented in `eval.ts`'s
+doc comment: a live judge is not perfectly deterministic on identical input
+— flow 316 review round 1 — so one flaky sample among a few must not fail
+the check; a genuinely elevated rate should).
+
+This is a diagnostic, not a gate: it closes a gap the stable-pack gate
+structurally cannot (`regradeRecordedReport` proves a report is internally
+consistent — the SAME output really does produce the SAME deterministic/
+judge conclusion — but it cannot prove a recorded judge verdict was ever a
+genuine live grading, or that the judge provider's weights haven't drifted
+under a pinned model name). Documented in
+`docs/docs/cli-reference.md`'s eval/judge-check table with an explicit
+threat-model paragraph, next to `judge-check`'s own (which covers a
+different gap: hard-to-game rubrics, not judge-verdict provenance).
+
+Unit tests (`eval.test.ts`, nested inside "the hardened stable-pack gate" so
+they can reuse `writeGateFixture`): agreeing stub judge -> zero
+disagreements; disagreeing stub judge -> every trial flagged, rate 1.0,
+threshold exceeded; `--sample` caps the judge-call count at the sample size,
+never at totalEligible; a pack with no judge-graded scenarios never calls
+the judge and reports zero eligible/sampled. CLI-level tests
+(`skills-governance.test.ts`): usage/`--judge`/`--sample` validation errors,
+and one end-to-end success path against a real on-disk fixture pack via the
+`buildJudge` injection seam (no network).
+
+`bun test src/gdskills/governance/eval.test.ts src/commands/skills-governance.test.ts`:
+97 + 52 pass, 0 fail. `bun run typecheck`: exit 0. `bunx eslint` on all
+changed files: 0 problems (docs/*.md gets an expected "no matching config"
+warning, not an error).

@@ -15,6 +15,7 @@ import {
   PACK_BEHAVIOR_PASS_FLOOR,
   PACK_MIN_TRIALS,
   regradeRecordedReport,
+  reverifyPackSample,
   scoreTriggerScenarios,
   type EvalReport,
   type EvalScenarioResult,
@@ -2216,7 +2217,111 @@ describe("flow 316: the judge grader", () => {
         rmSync(root, { recursive: true, force: true });
       }
     });
+
+    describe("reverifyPackSample (flow 317, FU3: the live re-judge sampler)", () => {
+    /** Deterministic RNG for tests: always returns 0, so `sampleWithoutReplacement`'s Fisher-Yates never swaps — the sample is always the first N eligible trials in insertion order. */
+    const noShuffle = (): number => 0;
+
+    test("re-judges every eligible trial when sampleSize >= totalEligible, and reports zero disagreements when the stub judge agrees with every recorded verdict", async () => {
+      const evalSpec = judgeEvalSpec();
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack", skillName: "sample-skill", skillDir, evalSpec, trials: 3 });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        // The fixture's own trialRecords are all `known_right` -> recorded
+        // verdict "pass" (see `fixtureAnswerFor` in `__fixtures__/gate-ready-report.ts`).
+        const agreeingJudge: Judge = async () => ({ verdict: "pass", reason: "stub: agrees" });
+        const result = await reverifyPackSample(packDir, agreeingJudge, { sampleSize: 10, random: noShuffle });
+
+        expect(result.packId).toBe("reverify-pack");
+        expect(result.totalEligible).toBe(3); // trials: 3, one judge-graded scenario
+        expect(result.sampleSize).toBe(3); // capped at totalEligible
+        expect(result.disagreements).toEqual([]);
+        expect(result.disagreementRate).toBe(0);
+        expect(result.thresholdExceeded).toBe(false);
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("reports a disagreement, and its rate, when the stub judge flips a recorded verdict", async () => {
+      const evalSpec = judgeEvalSpec();
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack-2", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack-2", skillName: "sample-skill", skillDir, evalSpec, trials: 4 });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        // Recorded verdict is "pass" for every trial (known_right fixture);
+        // a stub judge that always says "fail" disagrees with all 4 — rate 1.0,
+        // above the documented threshold.
+        const disagreeingJudge: Judge = async () => ({ verdict: "fail", reason: "stub: disagrees" });
+        const result = await reverifyPackSample(packDir, disagreeingJudge, { sampleSize: 10, random: noShuffle });
+
+        expect(result.totalEligible).toBe(4);
+        expect(result.sampleSize).toBe(4);
+        expect(result.disagreements).toHaveLength(4);
+        expect(result.disagreements[0]).toMatchObject({
+          skillId: "reverify-pack-2/sample-skill",
+          scenarioId: "s1",
+          trialIndex: 0,
+          recordedVerdict: "pass",
+          liveVerdict: "fail",
+        });
+        expect(result.disagreementRate).toBe(1);
+        expect(result.thresholdExceeded).toBe(true);
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("samples at most `sampleSize` of the eligible trials, never more", async () => {
+      const evalSpec = judgeEvalSpec();
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack-3", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack-3", skillName: "sample-skill", skillDir, evalSpec, trials: 8 });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        let calls = 0;
+        const countingJudge: Judge = async () => {
+          calls += 1;
+          return { verdict: "pass", reason: "stub" };
+        };
+        const result = await reverifyPackSample(packDir, countingJudge, { sampleSize: 3, random: noShuffle });
+
+        expect(result.totalEligible).toBe(8);
+        expect(result.sampleSize).toBe(3);
+        expect(calls).toBe(3); // the judge is called once per SAMPLED trial, never once per eligible trial
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("a pack with no judge-graded scenarios reports zero eligible/sampled and no disagreements, never throws", async () => {
+      const evalSpec: EvalSpecFile = {
+        triggers: { positive: ["run the gate fixture task"], negative: ["something entirely unrelated"] },
+        scenarios: [{ id: "s1", prompt: "do it", strictness: "high", expected_behavior: [{ grader: "contains", value: "ok" }] }],
+      };
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack-4", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack-4", skillName: "sample-skill", skillDir, evalSpec });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        const neverCalled: Judge = async () => {
+          throw new Error("must not be called — nothing is judge-graded");
+        };
+        const result = await reverifyPackSample(packDir, neverCalled, { sampleSize: 10, random: noShuffle });
+        expect(result.totalEligible).toBe(0);
+        expect(result.sampleSize).toBe(0);
+        expect(result.disagreements).toEqual([]);
+        expect(result.disagreementRate).toBe(0);
+        expect(result.thresholdExceeded).toBe(false);
+      } finally {
+        cleanup();
+      }
+    });
   });
+});
 });
 
 function tamperFirstTrialRecord(report: EvalReport, mutate: (record: TrialRecord) => TrialRecord): EvalReport {

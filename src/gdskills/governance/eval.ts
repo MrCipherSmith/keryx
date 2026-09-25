@@ -1593,3 +1593,182 @@ export function checkStablePackGate(packDir: string, stability: string, options:
     return { status: "fail", reason: `governance/eval.json could not be validated: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Live re-judge sampler (flow 317, FU3)
+// ---------------------------------------------------------------------------
+//
+// THREAT MODEL: `checkStablePackGate`/`regradeRecordedReport` prove a
+// recorded report is INTERNALLY CONSISTENT — the same `output` really does
+// recompute to the same `deterministic` results and the same `passed`
+// conclusion. They cannot prove the recorded JUDGE VERDICT itself was ever a
+// genuine live grading and not, say, a hand-edited `judge-recordings.json`
+// (`judge-recordings.ts`'s own doc comment already discloses this: "a
+// recording is a hand-writable file"), and even a genuinely live-graded
+// verdict can drift over time if the judge PROVIDER's own model weights
+// change under a pinned name (flow 316 review round 1 observed the live
+// judge disagreeing with itself across otherwise-identical calls on
+// borderline answers). Neither gap is closeable offline. `reverifyPackSample`
+// is the closest available check: it re-runs a RANDOM SAMPLE of a pack's own
+// recorded trial outputs through the CURRENT live judge and reports where the
+// live verdict disagrees with what was recorded — evidence a human (or a
+// scheduled job) can act on, not a gate `checkStablePackGate` itself enforces
+// (a single flaky disagreement must not fail CI; see the threshold note
+// below).
+
+/** One sampled trial whose live re-judge verdict disagrees with what the pack's `governance/eval.json` recorded. */
+export interface ReverifyDisagreement {
+  readonly skillId: string;
+  readonly scenarioId: string;
+  /** 0-based index into that scenario's `trialRecords`. */
+  readonly trialIndex: number;
+  readonly recordedVerdict: JudgeVerdict["verdict"];
+  readonly liveVerdict: JudgeVerdict["verdict"];
+  readonly liveReason: string;
+}
+
+/**
+ * A judge is non-deterministic on identical input (flow 316 review round 1;
+ * `judge-check`'s own `--samples` default exists for the same reason) — one
+ * sampled disagreement out of a handful is expected noise, not evidence the
+ * judge has drifted. `--reverify` exits non-zero only when the disagreement
+ * RATE clears this floor, documented here rather than left as a bare
+ * literal at the call site. 20% is deliberately generous: `judge-check`'s
+ * own anti-gaming proof requires the canned known-right/known-wrong/vague/
+ * subtle-wrong answers to agree on EVERY sample, because those are
+ * calibration fixtures chosen to be unambiguous; a `--reverify` sample is
+ * real recorded trial output, which legitimately includes borderline
+ * answers a careful judge may reasonably split on run to run (R2-1, flow
+ * 316 review round 2, is exactly such a case). A rate above this floor is
+ * no longer "a couple of borderline calls" — it says the judge is not
+ * reproducing its own past verdicts often enough to trust unattended.
+ */
+export const REVERIFY_DISAGREEMENT_THRESHOLD = 0.2;
+
+export interface ReverifyPackResult {
+  readonly packId: string;
+  /** How many trial records the pack's `governance/eval.json` actually carries a judge verdict for — the population `sampleSize` is drawn from. */
+  readonly totalEligible: number;
+  /** `min(options.sampleSize ?? default, totalEligible)` — the sample actually re-judged. */
+  readonly sampleSize: number;
+  readonly disagreements: readonly ReverifyDisagreement[];
+  /** `disagreements.length / sampleSize`, `0` when `sampleSize` is `0` (nothing to disagree about). */
+  readonly disagreementRate: number;
+  /** `disagreementRate > REVERIFY_DISAGREEMENT_THRESHOLD` — what the CLI maps to a non-zero exit code. */
+  readonly thresholdExceeded: boolean;
+}
+
+export interface ReverifyPackOptions {
+  /** How many eligible trials to re-judge. Defaults to 10 — enough to make a single flaky call a small fraction of the sample, without the live-judge spend of re-checking everything. */
+  readonly sampleSize?: number;
+  /** Injectable RNG for deterministic sampling in tests — defaults to `Math.random`. Uniform in `[0, 1)`, same contract `Math.random` itself has. */
+  readonly random?: () => number;
+}
+
+interface EligibleTrial {
+  readonly skillId: string;
+  readonly scenarioId: string;
+  readonly trialIndex: number;
+  readonly output: string;
+  readonly recordedVerdict: JudgeVerdict["verdict"];
+  readonly specScenario: EvalScenarioSpec;
+}
+
+/** Fisher-Yates partial shuffle: returns the first `count` elements of `items` in random order, using `random()` for each swap — `count >= items.length` returns every element, shuffled. */
+function sampleWithoutReplacement<T>(items: readonly T[], count: number, random: () => number): T[] {
+  const pool = [...items];
+  const n = Math.min(count, pool.length);
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(random() * (pool.length - i));
+    const temp = pool[i] as T;
+    pool[i] = pool[j] as T;
+    pool[j] = temp;
+  }
+  return pool.slice(0, n);
+}
+
+/**
+ * Re-judges a random sample of `packDir`'s recorded trial outputs (from
+ * `governance/eval.json`, the pack-level document) live against `judge`, and
+ * reports where the live verdict disagrees with what was recorded. Read-only
+ * — never writes `governance/eval.json` or any other file; a caller that
+ * wants to ACT on a disagreement (re-record, investigate, escalate) does so
+ * separately.
+ *
+ * Every RAN behavior scenario with a judge-graded expectation is eligible,
+ * matched against the skill's CURRENT `evals.json` (never the report's own
+ * copy of the scenario, which a stale report could have drifted from) by
+ * scenario id — a trial whose scenario id no longer exists in the current
+ * spec is skipped (named as such would require touching every skill's
+ * report shape for a case `checkStablePackGate` already refuses outright;
+ * `--reverify` is a diagnostic, not the gate itself, so it degrades instead
+ * of throwing).
+ */
+export async function reverifyPackSample(packDir: string, judge: Judge, options: ReverifyPackOptions = {}): Promise<ReverifyPackResult> {
+  const packId = path.basename(packDir);
+  const evalPath = path.join(packDir, "governance", "eval.json");
+  const parsed = JSON.parse(readFileSync(evalPath, "utf8")) as unknown;
+  if (!isPackEvalDocument(parsed)) {
+    throw new Error(`${evalPath}: not a pack-level eval document (missing "reports" array)`);
+  }
+
+  const specCache = new Map<string, EvalSpecFile | undefined>();
+  const eligible: EligibleTrial[] = [];
+  for (const report of parsed.reports) {
+    const slash = report.skillId.indexOf("/");
+    const skillName = slash >= 0 ? report.skillId.slice(slash + 1) : report.skillId;
+    const skillMdPath = path.join(packDir, "skills", skillName, "SKILL.md");
+    if (!specCache.has(report.skillId)) {
+      specCache.set(report.skillId, existsSync(skillMdPath) ? readEvalSpec(skillMdPath) : undefined);
+    }
+    const spec = specCache.get(report.skillId);
+    const specScenarios = new Map((spec?.scenarios ?? []).map((scenario) => [scenario.id, scenario] as const));
+
+    for (const scenario of report.scenarios) {
+      if (scenario.kind !== "behavior" || scenario.status !== "ran" || scenario.trialRecords === undefined) continue;
+      const specScenario = specScenarios.get(scenario.id);
+      if (specScenario === undefined) continue; // no longer in the current evals.json — nothing to re-judge against.
+      scenario.trialRecords.forEach((record, trialIndex) => {
+        if (record.judge === undefined) return; // no judge expectation on this scenario — nothing to re-judge.
+        eligible.push({
+          skillId: report.skillId,
+          scenarioId: scenario.id,
+          trialIndex,
+          output: record.output,
+          recordedVerdict: record.judge.verdict,
+          specScenario,
+        });
+      });
+    }
+  }
+
+  const random = options.random ?? Math.random;
+  const sampled = sampleWithoutReplacement(eligible, options.sampleSize ?? 10, random);
+
+  const disagreements: ReverifyDisagreement[] = [];
+  for (const trial of sampled) {
+    const grade = await gradeScenarioAnswer(trial.output, trial.specScenario, judge);
+    const liveVerdict = grade.judge?.verdict ?? "fail";
+    if (liveVerdict !== trial.recordedVerdict) {
+      disagreements.push({
+        skillId: trial.skillId,
+        scenarioId: trial.scenarioId,
+        trialIndex: trial.trialIndex,
+        recordedVerdict: trial.recordedVerdict,
+        liveVerdict,
+        liveReason: grade.judge?.reason ?? "",
+      });
+    }
+  }
+
+  const sampleSize = sampled.length;
+  const disagreementRate = sampleSize > 0 ? disagreements.length / sampleSize : 0;
+  return {
+    packId,
+    totalEligible: eligible.length,
+    sampleSize,
+    disagreements,
+    disagreementRate,
+    thresholdExceeded: disagreementRate > REVERIFY_DISAGREEMENT_THRESHOLD,
+  };
+}
