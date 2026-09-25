@@ -1,0 +1,78 @@
+---
+extends: common
+paths: ["**/*.swift"]
+metadata:
+  origin: authored
+---
+
+# Swift/iOS security
+
+Narrows `core-common-rules`' stack-agnostic security rules to
+iOS/Apple-platform-specific risks and the safe framework API to use
+instead. Applies only to `*.swift` files.
+
+## Secrets and credential storage
+
+- Store credentials, tokens, and refresh tokens in the Keychain
+  (`Security` framework, or a thin wrapper around it) — never in
+  `UserDefaults`, which is unencrypted plist storage readable by
+  anything with filesystem access to the app's container, and never in a
+  plain file the app writes itself.
+- Never hardcode an API key, client secret, or signing credential as a
+  string literal in source. Load it from a build-time configuration
+  (an `.xcconfig` value injected into `Info.plist`, a secrets manager
+  fetched at runtime) that is excluded from source control, and treat a
+  literal key found in a diff as a finding, not a style nit.
+- Set an appropriate Keychain accessibility level
+  (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly` or stricter) for
+  anything sensitive — the default accessibility can survive a device
+  backup/restore onto different hardware, which is usually not the
+  intended threat model for a session token.
+
+## Network security (ATS and transport)
+
+- Leave App Transport Security (ATS) at its default (HTTPS-only,
+  TLS 1.2+); do not add `NSAllowsArbitraryLoads` or a blanket
+  `NSExceptionDomains` bypass to `Info.plist` to work around a backend
+  that is not yet on HTTPS — fix the backend, or scope an ATS exception
+  to the exact domain and the exact minimum relaxation needed, with a
+  comment saying why.
+- Validate TLS the platform's normal way (`URLSession`'s default trust
+  evaluation); do not implement a `URLSessionDelegate` that accepts any
+  server certificate (`.performDefaultHandling` bypassed with
+  unconditional trust) outside of a short-lived local/test
+  configuration, and never ship that in production.
+
+## Biometric authentication
+
+- Treat a `LAContext` biometric (Face ID/Touch ID) result as a *local
+  presence* gate, not proof of identity to a remote server on its own —
+  a successful `evaluatePolicy` unlocks a locally-held secret (a
+  Keychain item, a locally cached credential); it does not substitute
+  for a real authentication token when talking to a backend.
+- Check the specific `LAError` case on failure (`.userCancel`,
+  `.biometryNotAvailable`, `.biometryLockout`, ...) and present a
+  fallback (passcode, credential re-entry) rather than treating every
+  failure identically or silently retrying.
+- Do not cache "biometric succeeded" as a long-lived boolean flag read
+  later by unrelated code paths — re-evaluate at the point access is
+  actually needed, scoped to what that specific action requires.
+
+## Input handling and injection-adjacent risks
+
+- Parameterize any `NSPredicate`/Core Data query built from
+  user-influenced input rather than interpolating the value directly
+  into the predicate format string — the same injection-shaped risk as
+  building SQL by string concatenation.
+- Validate/sanitize any URL or deep link the app opens
+  (`UIApplication.open`, a Universal Link handler) before acting on it —
+  a deep link is untrusted input from outside the process, not a value
+  to trust and route on directly.
+
+## Logging
+
+- Never log a token, password, or full PII payload at a level that
+  reaches persistent device logs (`print`, unredacted `os_log`/`Logger`
+  interpolation) — use `Logger`'s privacy-redaction (`\(value,
+  privacy: .private)`) for anything sensitive, or omit it from the log
+  entirely.

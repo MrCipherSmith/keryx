@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "The compiler is complaining that this class can't cross a concurrency boundary safely",
+      "xcodebuild fails saying this type doesn't conform to a required protocol for the checker",
+      "SwiftLint is blocking my build over a rule I don't understand",
+      "This type isn't allowed to be passed into a Task the way I've written it",
+      "My scheme's build fails but the same code compiled fine before enabling strict concurrency",
+      "The build is red because of a warning about an optional that's never actually nil"
+    ],
+    "negative": [
+      "gradle build is failing for this Android module",
+      "npm run build is failing with a webpack error",
+      "cargo build is failing for this Rust crate",
+      "Implement a new feature in this SwiftUI screen",
+      "Review this Swift diff for retain cycles",
+      "Write Swift Testing coverage for this view model",
+      "pip install is failing for this Python project"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "sendable-conformance-error",
+      "prompt": "The compiler is flagging a class I pass into a Task as not conforming to Sendable, and the build won't succeed under the project's strict concurrency checking. How do I fix this properly?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer investigates why the class isn't Sendable (mutable stored state accessed from multiple isolation contexts) and fixes the actual root cause -- isolating the class with an actor or @MainActor, or making it genuinely immutable so it can conform to Sendable safely -- rather than defaulting to slapping @unchecked Sendable on it just to clear the compiler error without auditing whether its state is actually safe to share.",
+          "pass_criteria": [
+            "Investigates or names the actual root cause: the class has mutable stored state that isn't isolated, which is why the compiler won't accept a Sendable conformance for it.",
+            "Proposes a real fix -- converting the type to an actor, isolating it to @MainActor, or making its stored properties immutable (let) so a genuine Sendable conformance holds -- as the primary fix direction, not a suppression.",
+            "If @unchecked Sendable is mentioned at all, it is framed as requiring an explicit, stated justification of why the access pattern is actually safe -- not offered as the default or easiest fix."
+          ],
+          "fail_criteria": [
+            "Recommends adding `@unchecked Sendable` as the fix, without first establishing (or asking for) why the type's mutable state is actually safe to share across the isolation boundary."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "First figure out why the compiler won't let this conform to `Sendable`: it almost always means the class has mutable (`var`) stored state that isn't isolated to any particular actor, so the compiler can't prove that two tasks accessing it concurrently won't race. Look at what that class actually does -- if its state is only ever meant to be touched from the main thread/SwiftUI, convert it to `@MainActor final class ...`, which both documents that and gets you a `Sendable`-safe way to cross into a `Task` (since `@MainActor` types can be safely referenced from a `Task` that also hops to the main actor). If the state genuinely needs to be shared and mutated from multiple concurrent contexts, convert the class to an `actor` instead, which gives you compiler-enforced serialized access to its state. If the class's stored properties are all actually immutable after initialization, you can conform it to `Sendable` directly without needing `@unchecked` at all. Only reach for `@unchecked Sendable` if you've actually audited the access pattern and can state concretely why it's safe despite the compiler's inability to prove it -- and write that justification down as a comment, since `@unchecked` is an unchecked promise, not a fix.",
+        "known_wrong": "The quickest way to get the build green again is to just add `@unchecked Sendable` to the class's conformance list -- that tells the compiler to trust you instead of proving it itself, and it'll stop flagging the error immediately. You don't need to go digging into why the class isn't naturally Sendable; `@unchecked Sendable` is exactly what it's for, and plenty of existing code in most projects already uses it the same way to get past this kind of check.",
+        "vague": "Make the class properly safe to share across the concurrency boundary instead of just working around the compiler's complaint.",
+        "subtle_wrong": "Add `@unchecked Sendable` to the class for now to unblock the build, and leave a `// TODO: audit thread-safety` comment above it so it's easy to find later. That gets the strict-concurrency checker off your back today without you having to restructure the type's isolation right now, and the TODO means it's still tracked for whenever there's time to look into it properly."
+      },
+      "anti_patterns": ["@unchecked Sendable"]
+    },
+    {
+      "id": "optional-binding-warning-no-force-unwrap",
+      "prompt": "The compiler flags a guard-let in my code with a warning that the value can never actually be nil at that point, and the build treats warnings as errors. How should I fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer investigates why the compiler believes the value can never be nil at that point (the type or an earlier control-flow guarantee makes the guard-let redundant) and fixes the actual declaration or control flow -- removing the now-unnecessary optionality or restructuring the check -- rather than force-unwrapping the value or otherwise silencing the warning without understanding why the compiler is making that claim.",
+          "pass_criteria": [
+            "Investigates or names the root cause: something about the type's declaration or the surrounding control flow makes the compiler certain the value is never nil at this point, which is why the guard-let is flagged as redundant.",
+            "Proposes fixing the actual declaration/control flow -- e.g. changing the value's type to non-optional if it truly never needs to be optional, or restructuring the logic so the check reflects reality -- rather than suppressing the warning.",
+            "Does not recommend force-unwrapping (`!`) the value as the fix for the flagged warning."
+          ],
+          "fail_criteria": [
+            "Recommends replacing the guard-let with a force-unwrap (`!`) to make the warning go away, without addressing why the compiler considers the optional redundant in the first place."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Start by figuring out why the compiler thinks this value can never be nil at that point -- that's usually because something upstream already narrows it: the property's declared type isn't actually optional despite being wrapped in `guard let` out of habit, or an earlier `guard`/`if` in the same function already established non-nil-ness and this second check is now redundant. Trace the value back to its declaration and every place it's assigned. If the underlying type genuinely never needs to be optional, change its declaration to non-optional and remove the now-unnecessary `guard let` entirely -- that's the real fix, since the optionality was never doing anything. If it's redundant because of an earlier check in this specific function, remove the duplicate guard rather than keeping two checks for the same thing. Don't reach for a force-unwrap here -- that doesn't address why the compiler flagged this, it just trades a warning for a crash risk if the compiler's assumption ever stops holding (e.g. after a future refactor reintroduces real optionality).",
+        "known_wrong": "Since the compiler is saying the value can't be nil anyway, just replace the `guard let value = value else { return }` with a force-unwrap: `let value = value!`. That clears the warning immediately since you're no longer doing a redundant nil check the compiler doesn't like, and since it genuinely can't be nil right now, the force-unwrap is safe in practice.",
+        "vague": "Clean up the optional so the code reflects that this value is actually never nil here.",
+        "subtle_wrong": "Change the `guard let value = value else { return }` to `let value = value!` since the compiler has already confirmed it can't be nil at this point -- that removes the redundant branch and the warning along with it. It's a bit more concise than tracing back through the declaration to see whether the type itself should be made non-optional, and functionally it's the same thing since the guard was never actually going to fail."
+      },
+      "anti_patterns": []
+    }
+  ]
+}

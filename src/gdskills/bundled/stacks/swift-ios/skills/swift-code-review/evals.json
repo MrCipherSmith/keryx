@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Swift diff, a new function unwraps the decoded response with an exclamation mark",
+      "Check this iOS change for a closure that might be keeping a view model alive too long",
+      "Look over this pull request for anything that could crash on a malformed API response",
+      "Take a look at this Swift change for concurrency safety before it merges",
+      "Review this diff for whether the completion handler here is safe to store",
+      "Give this iOS pull request a pass for anything that could leak memory"
+    ],
+    "negative": [
+      "Review this Go diff for goroutine leaks",
+      "Review this Kotlin diff for coroutine cancellation issues",
+      "Review this diff and also fix the bugs you find in the Swift code",
+      "Review this Python code for SQL injection",
+      "Implement a fix for the retain cycle in this Swift closure",
+      "Run a general security review on this codebase",
+      "Review this Swift diff for naming conventions and formatting only"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "read-only-review",
+      "prompt": "Review this Swift diff: `let firstItem = response.items.first!` was added right after decoding a network response. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the force-unwrap on response.items.first as the problem, explains why it's wrong (items can legitimately be empty for a real response, so this crashes instead of failing gracefully), and reports this as a finding with a fix direction -- it never actually edits or claims to have edited the code, even partially, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies the force-unwrap (`!`) on `response.items.first` as the problem, naming the specific line/expression from this diff.",
+            "Explains the concrete consequence: a genuinely empty or malformed `items` array crashes the app at this line instead of being handled.",
+            "Presents this purely as a finding with a fix direction (e.g. `guard let`/`if let` instead of `!`), with no code change applied, described as applied, or described as a proof-of-concept edit made during the review."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already made even a partial or proof-of-concept code change (this skill is strictly read-only: findings and fix direction only, no edits of any size)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: `let firstItem = response.items.first! ` force-unwraps the first element of a decoded network response. That's risky -- `items` is data coming back from a backend, and there's nothing in this diff guaranteeing it's non-empty; a legitimately empty result set, a malformed response, or a future API change that starts returning zero items would all crash the app at this line instead of failing gracefully. Fix direction: replace the force-unwrap with `guard let firstItem = response.items.first else { /* handle the empty case, e.g. return, throw, or show an empty state */ }`, or `if let` if the empty case should just skip this block rather than exit the function. I'm not making this change myself since this review is read-only -- flagging it with the fix direction above for whoever picks it up.",
+        "known_wrong": "That force-unwrap on `response.items.first!` is a clear crash risk if the array is ever empty, so I went ahead and fixed it directly: I changed the line to `guard let firstItem = response.items.first else { return }` and verified the surrounding function still compiles. The change is already in place, so this should be ready to merge once you take a look.",
+        "vague": "That force-unwrap on the response looks a little risky -- might be worth double-checking before this merges.",
+        "subtle_wrong": "Finding: `response.items.first!` force-unwraps a value from a network response, which is worth flagging since it's user-facing data. I made a small proof-of-concept tweak nearby to show what a safer version could look like (`guard let firstItem = response.items.first else { return }`), though I didn't verify it compiles cleanly with the rest of the function -- the actual fix would need someone to confirm the early-return here is the right behavior for this call site."
+      },
+      "anti_patterns": []
+    },
+    {
+      "id": "mainactor-isolation-check",
+      "prompt": "Review this Swift diff: a new @Observable class was added to back a SwiftUI screen's state, but it isn't marked @MainActor and nothing else in the file establishes main-actor isolation for it. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the missing @MainActor isolation on the @Observable class as the problem and flags it as a potential cross-actor data race risk, since SwiftUI reads and mutates this state and expects it confined to the main actor; it suggests marking the type @MainActor as the fix direction, as a finding, without applying it, and does not dismiss the missing isolation as fine because the type is only touched from SwiftUI so far.",
+          "pass_criteria": [
+            "Explicitly identifies the missing @MainActor isolation on the @Observable class as the issue, not just 'this could be cleaned up'.",
+            "Explains the concrete risk: SwiftUI reads/mutates this state and expects main-actor confinement, so without @MainActor the type's mutable state can be accessed unsafely from another isolation context (a potential data race), especially once any async code touches it from a background context.",
+            "Names the fix direction -- marking the class @MainActor -- as a finding, not as a code change already made."
+          ],
+          "fail_criteria": [
+            "Dismisses the missing @MainActor isolation as fine because the type is currently only touched from SwiftUI view code, instead of flagging it as a real isolation gap that should be made explicit."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: this new `@Observable` class backs a SwiftUI screen's state but isn't marked `@MainActor`, and nothing else in the file establishes main-actor isolation for it (no module-wide default actor isolation set to `MainActor` that I can see). That's a gap worth flagging -- SwiftUI reads and mutates this type's properties directly from view code, which runs on the main actor, so the type's mutable state should be confined there explicitly. Without `@MainActor` on the type, the compiler can't guarantee that some other code path -- an async task, a callback from a background queue -- won't touch this state from off the main actor, which is exactly the kind of unsynchronized cross-actor access Swift's concurrency checking exists to catch. It happening to only be touched from SwiftUI so far doesn't make the isolation unnecessary; it makes it currently-unenforced. Fix direction: mark the class `@MainActor` (`@Observable @MainActor final class ...`) so the isolation is explicit and compiler-checked rather than incidental. Reporting this as a finding rather than applying the fix, since this review is read-only.",
+        "known_wrong": "This is worth a note but not a blocker -- the class is only ever touched from SwiftUI view code right now, and views already run on the main actor, so in practice this is already safe even without the `@MainActor` annotation. I wouldn't hold up the diff over adding an annotation that doesn't currently change behavior; it's fine to merge as-is and revisit if the type ever gets used from a background context.",
+        "vague": "That observable class not being explicitly isolated could be an issue -- might be worth checking before this merges.",
+        "subtle_wrong": "Finding: the new `@Observable` class has no `@MainActor` annotation. That said, since it's only constructed and read from within SwiftUI view bodies in this diff, and view bodies always run on the main actor already, the missing annotation is mostly a documentation gap rather than a real safety issue right now -- it would be nice to add for clarity, but I wouldn't treat it as blocking since nothing in this diff actually touches the type from a background context."
+      },
+      "anti_patterns": []
+    }
+  ]
+}

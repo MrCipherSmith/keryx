@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Add a detail screen that fetches and displays an order from a backend",
+      "This screen's counter should live in the view since only it touches it",
+      "The child needs to toggle a setting that lives on its parent screen",
+      "Hook up a settings toggle whose state a parent view actually owns",
+      "Build a profile screen for an app targeting iOS 17 and later",
+      "Kick off a fetch when this screen appears and cancel it if the user navigates away",
+      "This screen makes a network call and I need it to not block the main thread"
+    ],
+    "negative": [
+      "Implement this feature in Kotlin for Android with Jetpack Compose",
+      "Add this Flutter widget with a StatefulWidget",
+      "Implement this C#/.NET service feature with dependency injection",
+      "Implement this React component with the new form fields",
+      "Write the equivalent screen in Android using LiveData",
+      "Implement a new endpoint in a Go cmd/api binary",
+      "Add unit tests for this Swift view model"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "state-ownership-binding",
+      "prompt": "I have a screen with a toggle whose value the parent view actually owns and reacts to elsewhere on screen. How should the child view that shows the toggle be wired up?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer wires the child view's toggle through a @Binding parameter, with the parent passing $value from its own owned @State (or an @Observable model property), rather than giving the child its own local @State that only mirrors the parent's value and cannot propagate a change back.",
+          "pass_criteria": [
+            "Names @Binding as the property wrapper for the child's toggle parameter, not a local copy.",
+            "Shows the parent passing the binding with the $ prefix (e.g. `ToggleRow(isOn: $isEnabled)`) from state the parent itself owns.",
+            "Explains why a local @State in the child is wrong here: it would not propagate the change back to the parent that actually owns and reacts to the value."
+          ],
+          "fail_criteria": [
+            "Recommends giving the child view its own @State for the toggle when the parent is stated to own and react to the value elsewhere on screen, with no mechanism to propagate the change back up."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Give the child view a `@Binding var isOn: Bool` parameter instead of its own `@State` -- the parent already owns this value and reacts to it elsewhere, so the child needs to both display and mutate the parent's copy, not keep an independent one. In the parent, declare the value with `@State private var isEnabled = false` (or as a property on an `@Observable` model the parent owns), and pass it down as `ToggleRow(isOn: $isEnabled)` -- the `$` gives the child a two-way binding into the parent's storage. When the child's `Toggle(\"Enabled\", isOn: $isOn)` flips, it writes straight through to the parent's `isEnabled`, so anything else on the parent's screen that reads `isEnabled` sees the update immediately. Giving the child its own `@State` here would be wrong: it would start as a copy of whatever initial value was passed in, but toggling it inside the child would never reach the parent's `isEnabled` at all -- the two would immediately diverge.",
+        "known_wrong": "Just give the child view `@State private var isOn: Bool = false` for the toggle -- it's simpler than threading a binding through, and the child can just call an `onToggle` closure the parent passes in whenever it changes, so the parent finds out that way instead. You don't really need `@Binding` for something this small; closures work fine and keep the child's state self-contained.",
+        "vague": "Wire the toggle up so the parent and child both see the current value and stay in sync when it changes.",
+        "subtle_wrong": "Give the child view `@State private var isOn: Bool`, initialized from a value the parent passes into its initializer (`ToggleRow(initialValue: isEnabled)`). When the toggle changes inside the child, call an `onChange(of: isOn) { _, newValue in onToggleChanged(newValue) }` closure that was also passed in, so the parent's `isEnabled` gets updated a moment later through the callback. That way the child still manages its own local UI state directly, and the parent just gets notified after the fact."
+      },
+      "anti_patterns": []
+    },
+    {
+      "id": "mainactor-async-fetch",
+      "prompt": "A SwiftUI screen needs to fetch some data from the network when it appears and show a loading state while it waits. How should I structure the concurrency for this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer uses SwiftUI's .task modifier (or an equivalent view-lifetime-scoped async entry point) to kick off the async fetch with async/await, isolates the view-facing state (the @Observable model or loading flag) to @MainActor, and relies on .task's automatic cancellation when the view disappears rather than a manually created, unjoined Task with no cancellation handling.",
+          "pass_criteria": [
+            "Uses `.task { }` (or explicitly discusses tying the async work to the view's lifetime) as the entry point for the fetch, not a bare `Task {}` fired from `onAppear` with no lifetime tie.",
+            "States that the model/state driving the UI (the loading flag, the fetched result) is isolated to @MainActor.",
+            "Mentions that `.task`'s work is automatically cancelled when the view disappears, or otherwise addresses cancellation, rather than leaving the fetch to run unconditionally to completion regardless of navigation."
+          ],
+          "fail_criteria": [
+            "Starts the fetch with a bare `Task { ... }` inside `.onAppear` (or similar) with no mention of cancellation or view-lifetime scoping, presented as the complete/preferred approach."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Kick the fetch off from a `.task { }` modifier on the view rather than a bare `Task {}` inside `.onAppear` -- `.task` ties the async work to the view's lifetime automatically: if the view disappears before the fetch finishes, SwiftUI cancels the task for you, so you don't leak a fetch for a screen the user already navigated away from. Inside the `.task`, `await` the network call directly through whatever client protocol the feature already depends on, set a `isLoading` flag to true before the call and false after (in a `defer` or in both success/failure paths), and store the result. All of that state -- `isLoading`, the fetched value -- should live on an `@Observable` model marked `@MainActor` (or a `@State` boolean directly on the view if it's simple enough not to need a model), since it's read directly by the view's `body`. If the fetch can be cancelled mid-flight, check `Task.isCancelled` or let a `CancellationError` from the awaited call propagate naturally rather than swallowing it.",
+        "known_wrong": "In `onAppear`, just fire off `Task { let result = try await client.fetchOrder(id: id); self.order = result; self.isLoading = false }` -- that's enough to get the data loading and update the UI once it comes back. You don't really need to worry about `.task` versus a plain `Task {}` here, and cancellation isn't a big deal for a quick fetch like this since it'll almost always finish before the user navigates anywhere else.",
+        "vague": "Fetch the data asynchronously when the screen appears and make sure the loading state updates correctly on the main thread.",
+        "subtle_wrong": "Use `.task { isLoading = true; let result = try? await client.fetchOrder(id: id); self.order = result; isLoading = false }` on the view, which is good since `.task` handles the async lifecycle for you. Put `isLoading` and `order` as plain `@State` properties directly on the view struct rather than on a separate model, since it's just view-local UI state and doesn't need to be `@Observable` or actor-isolated -- SwiftUI views already run their body on the main thread, so there's nothing extra to isolate here."
+      },
+      "anti_patterns": []
+    }
+  ]
+}

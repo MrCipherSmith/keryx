@@ -1,0 +1,92 @@
+---
+extends: common
+paths: ["**/*.swift"]
+metadata:
+  origin: authored
+---
+
+# Swift/iOS coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern Swift
+(6.x) and SwiftUI idiom. Applies only to `*.swift` files — everything not
+Swift-specific still comes from the common rules this file `extends`.
+
+## Naming and structure
+
+- Types (`struct`, `class`, `enum`, `protocol`) are `UpperCamelCase`;
+  properties, methods, and cases are `lowerCamelCase` — never
+  `snake_case` for either.
+- Protocol names read as a capability (`Fetchable`, `Cacheable`) or a
+  role noun (`DataSource`, `Delegate`); do not suffix a protocol with
+  `Protocol`.
+- An identifier's name shrinks with its scope: a tight closure parameter
+  can be `$0`/a one-letter name, a public API member gets a full
+  descriptive name.
+- File name matches the primary type it declares (`OrderService.swift`
+  declares `OrderService`); one primary type per file for anything
+  public.
+
+## Value types vs reference types
+
+- Default to `struct` (and `enum` for closed sets of cases) for model and
+  state types — value semantics mean a copy cannot be mutated out from
+  under another owner, which is what SwiftUI's data flow assumes.
+- Reach for `class` only when you need reference semantics on purpose:
+  shared mutable state across owners, identity that must be preserved
+  (`===`), or Objective-C interop. Justify a `class` model type in review
+  rather than defaulting to it out of habit from other languages.
+- A `class` used as SwiftUI-observed state is marked `@Observable` (see
+  `patterns.mdc`) and, when its mutable state is touched from view code,
+  isolated to `@MainActor`.
+
+## Guard for early exit
+
+- Use `guard let`/`guard` with an early `return`/`continue`/`throw` to
+  unwrap a precondition and keep the "happy path" unindented, rather than
+  nesting the whole function body inside an `if let`.
+- Prefer a single `guard` with multiple comma-separated conditions over a
+  pyramid of nested `if let`s when several optionals must all be present
+  before the function can proceed.
+
+## Optionals
+
+- Treat `!` (force-unwrap) and `try!` (force-try) as a last resort, not a
+  convenience — reserve them for a value whose absence is a genuine
+  programmer error that should crash in development (an `IBOutlet` wired
+  in a storyboard, a compile-time-guaranteed non-nil literal), never for
+  network responses, decoded JSON, user input, or anything else that can
+  legitimately be nil or throw in production.
+- Prefer `guard let`/`if let`, nil-coalescing (`??`) with a real default,
+  or `try`/`try?` with explicit handling. Use `#require(...)` (Swift
+  Testing) or `XCTUnwrap` in tests instead of `!` when a test needs to
+  unwrap and fail with a clear message if the value is missing.
+- Chain optional access with `?.`/optional chaining rather than
+  force-unwrapping an intermediate step in a chain.
+
+## @Observable vs legacy ObservableObject
+
+- For code targeting iOS 17+, model types that drive SwiftUI view
+  updates use the `@Observable` macro, not the legacy
+  `ObservableObject`/`@Published` combination — `@Observable` tracks
+  property-level access automatically, so a view only re-renders for the
+  properties it actually reads, where `@Published` re-renders on any
+  change to the whole object.
+- Mark an `@Observable` class `@MainActor` unless the project has set a
+  module-wide default actor isolation to `MainActor` — this keeps its
+  mutable state confined to the main actor by construction (see
+  `patterns.mdc` for the concurrency implications).
+- Only reach for `ObservableObject`/`@Published`/`@StateObject`/
+  `@ObservedObject` when the project's minimum deployment target
+  predates iOS 17, or an existing codebase has not yet migrated; do not
+  introduce the legacy pattern in new code on a project that already
+  targets iOS 17+.
+
+## Formatting and linting
+
+- Format with the project's configured formatter (`swift-format` or
+  `swiftformat`) before finishing a change; do not hand-format around a
+  formatter that is already configured in the project.
+- Fix a SwiftLint finding at its root cause; do not silence it with a
+  blanket `// swiftlint:disable` covering more than the one line it
+  actually applies to, and never disable a rule repository-wide to clear
+  one finding.

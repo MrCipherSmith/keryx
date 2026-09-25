@@ -1,0 +1,38 @@
+{
+  "id": "swift-ios",
+  "family": "framework",
+  "modules": ["swift-ios-rules", "swift-ios-skills"],
+  "detectionMarkers": ["swift", "ios", "xcode"],
+  "provenance": { "origin": "authored", "sourceRef": "flow 336, Wave 4 batch 4" },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["swiftui-implementation"],
+    "test": ["swift-testing"],
+    "review": ["swift-code-review"],
+    "build-fix": ["swift-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Swift/iOS",
+    "auditFocus": [
+      "force-unwrapping (`!`) or force-try (`try!`) on a value that can genuinely be nil or throw, especially on network/decoded data",
+      "an `@Observable` model or any UI-touching type not isolated to `@MainActor`, risking a cross-actor data race",
+      "a closure captured strongly by `self` in a long-lived callback (completion handler, Combine sink, stored closure) causing a retain cycle",
+      "a secret, API key, or auth token stored in `UserDefaults` or hardcoded in source instead of the Keychain",
+      "state ownership mismatches: `@State` for a value that is actually shared/mutated by a parent, or a legacy `@StateObject` recreated inline instead of owned once",
+      "`@unchecked Sendable` or a blanket concurrency-checking suppression applied to silence the compiler instead of fixing the actual data-race shape"
+    ],
+    "buildCommands": [
+      "xcodebuild build -scheme <Scheme> -destination 'platform=iOS Simulator,name=<Simulator>' (or swift build for a SwiftPM package)",
+      "xcodebuild test -scheme <Scheme> -destination 'platform=iOS Simulator,name=<Simulator>' (or swift test)",
+      "swiftlint",
+      "swift-format lint --recursive . (or swiftformat --lint . depending on the project's configured formatter)"
+    ],
+    "fixGuardrails": [
+      "never mark a type `@unchecked Sendable` to silence a strict-concurrency error without actually proving and documenting why its mutable state is safe",
+      "never force-unwrap (`!`) or force-try (`try!`) just to clear a compiler warning about an optional or a throwing call",
+      "never disable a SwiftLint/swift-format rule repo-wide (or with a blanket `// swiftlint:disable`) to make one finding disappear",
+      "never delete or skip a failing test, or loosen its assertion, to reach a green build"
+    ]
+  }
+}
