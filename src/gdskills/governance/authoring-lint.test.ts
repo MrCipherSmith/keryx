@@ -240,6 +240,20 @@ Rule body.
       expect(findings.map((f) => f.rule)).toContain("stack-rule-paths-scope");
     });
 
+    // Review round 2 (flow 338): a short reversed-wildcard name could
+    // accidentally collide with an unrelated stack's ordinary dotted
+    // extension (e.g. "py" from STACK_EXTENSIONS.python) even though the
+    // glob doesn't mean *.py at all. The reversed branch now requires at
+    // least 4 characters, mirroring I7b's own anti-collision floor.
+    test("rejects a short Name.* glob even when the name coincides with another stack's ordinary extension", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/py.*"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/coding-style.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings.map((f) => f.rule)).toContain("stack-rule-paths-scope");
+    });
+
     test("scoped workflow/compose/k8s YAML globs pass for their own stacks", () => {
       const ciContent = good.replace('paths: ["**/*.py"]', 'paths: [".github/workflows/*.yml", ".gitlab-ci.yml"]');
       expect(

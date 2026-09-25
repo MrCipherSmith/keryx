@@ -69,10 +69,15 @@ summary.
 2. Pin every third-party `uses:` action to a full commit SHA, not a tag
    (`uses: actions/checkout@<sha>`, optionally commented with the tag it
    corresponds to for readability).
-3. Pass any `${{ github.event.* }}` (or GitLab CI/CD variable carrying
-   untrusted merge-request input) through an intermediate `env:`/
-   `variables:` entry before it reaches a `run:`/`script:` shell string —
-   never interpolate it directly into the script text.
+3. GitHub Actions: pass any `${{ github.event.* }}` through an
+   intermediate `env:` entry before it reaches a `run:` shell string —
+   never interpolate it directly into the script text. GitLab CI: quote
+   every variable used in `script:` and never concatenate an untrusted one
+   into an `eval`/`sh -c` string — routing it through another `variables:`
+   entry does not fix this, since it is already a shell environment
+   variable by the time `script:` runs; also validate/escape any untrusted
+   pipeline/trigger input reaching a `$[[ inputs.* ]]` interpolation,
+   which IS substituted before the job is created.
 4. Add `timeout-minutes`/`timeout` to every job, and a `concurrency:`
    group (or `resource_group`, GitLab CI) to anything that deploys or
    mutates shared state — not `interruptible: true`, which means the

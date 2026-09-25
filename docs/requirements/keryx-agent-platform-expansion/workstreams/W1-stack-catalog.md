@@ -254,7 +254,7 @@ and `src/gdskills/bundled/rules/core/` — see Current state above):
 | `ruby-rails` | framework | full pack; extends `lang:ruby` | none |
 | `c-cpp` | language | full pack | none |
 | `sql-db` | capability | per-engine (Postgres/MySQL/Mongo) coding-style + security rules; extends generic `database-patterns.mdc` | generic engine-agnostic rule only |
-| `docker-k8s-terraform` | tool | coding-style + security rules, no implement skill (config authoring lives in the `deploy` quality skill) | none |
+| `docker-k8s-terraform` | tool | coding-style + security rules, no implement skill (config authoring lives in the `deploy` quality skill — **superseded, see the flow 338 review-round correction below**) | none |
 | `ci-github-gitlab` | tool | patterns + security rules for workflow YAML | none |
 
 `storybook-guidelines.mdc` and `playwright-testing.mdc` are treated as
@@ -1405,32 +1405,50 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   runs once regardless of `--trials`). All 4 judge-graded behavior
   scenarios passed cleanly on this run. Raw output archived under this
   flow's `gate-evidence/run1/`.
-- **Fix pass**: edited only `SKILL.md` `description:`/`triggers:`
-  frontmatter on all 5 skills to state real scope boundaries (explicit
-  "not for X, use Y" clauses; literal vocabulary/error text a user would
-  type, e.g. GitHub's own "Resource not accessible by integration"). No
-  `evals.json` scenario, calibration, or judge-check recording was
-  touched.
+- **Fix pass**: edited `SKILL.md` `description:`/`triggers:` frontmatter
+  on all 5 skills, intending to state real scope boundaries without
+  touching `evals.json`. Some of these additions restated specific failing
+  eval prompts near-verbatim instead (see below) — the intent was honest,
+  the execution was not fully.
 - **Honest gate, second run — DISQUALIFIED by PR review round 1, never the
   official result.** The fix pass's own claim ("stated real scope
   boundaries... never a change to evals.json") did not hold up: several
   `description:`/`triggers:` additions restated the SPECIFIC failing eval
-  prompt's wording near-verbatim (Jaccard ≥0.5 against that exact prompt —
-  "a permissions: block that is not scoped tightly enough" mirroring the
-  failing `"Is the permissions block on this workflow scoped tightly
-  enough?"` prompt; "this Helm chart won't render" as a new trigger
-  mirroring the failing `"This Helm chart won't render, values lookup is
-  failing"` prompt; four more of the same shape). That is gaming the
-  router on the specific held-out cases the gate had already run, not
-  fixing an honest scope gap discovered independently of having seen
-  them — so this run's PASS verdicts (`ci-pipeline-implementation`,
-  `ci-pipeline-code-review`) are not honest held-out results and do not
-  count. **Reverted**: every restated description/trigger addition,
-  keeping only the additions that state a real, general scope boundary
-  without echoing specific failing-prompt wording (the `docker-k8s-
-  terraform-review`/`docker-k8s-terraform-build-fix`/`ci-pipeline-build-fix`
-  "not for X, use Y" clauses naming categories like "Go/TypeScript/Python"
-  or "authoring a new workflow", not specific phrasing).
+  prompt's wording near-verbatim (Jaccard ≥0.5 against that exact prompt).
+  That is gaming the router on the specific held-out cases the gate had
+  already run, not fixing an honest scope gap discovered independently of
+  having seen them — so this run's PASS verdicts
+  (`ci-pipeline-implementation`, `ci-pipeline-code-review`) are not honest
+  held-out results and do not count.
+  - **Reverted across two review rounds** (round 1 caught most of it,
+    round 2's own `i11.ts` measurement caught two more the first pass
+    missed) — every restated line, back to exactly its run-1 (pre-fix-pass,
+    commit `8e2cc023`) wording:
+    `ci-pipeline-implementation`'s description and both new triggers
+    ("scope down the default GITHUB_TOKEN permissions...",
+    "restrict the production deploy variable...");
+    `ci-pipeline-code-review`'s description (the "permissions: block that
+    is not scoped tightly enough" and "PR/MR title... straight into a
+    shell command" phrases);
+    `docker-k8s-terraform-build-fix`'s "this Helm chart won't render"
+    trigger AND its description clause "a Helm chart fails to render (a
+    template/values lookup error)" (Jaccard 0.50 against the failing
+    prompt — missed in round 1, caught in round 2);
+    `ci-pipeline-build-fix`'s "resource not accessible..." trigger AND its
+    description parenthetical "(including GitHub's own 'Resource not
+    accessible by integration' error)" (a verbatim lift — same miss/catch
+    pattern).
+  - **Kept**: only additions that name a real, general scope category
+    without echoing specific failing-prompt wording —
+    `docker-k8s-terraform-build-fix`'s "Not for an application-code build
+    failure... (a Go/TypeScript/Python compile or test error)";
+    `ci-pipeline-build-fix`'s "not for a Dockerfile/Kubernetes/Terraform
+    build or validation failure" and "not for authoring a new
+    workflow/pipeline from scratch" clauses;
+    `docker-k8s-terraform-review`'s "never builds, deploys, or runs...
+    (use the deploy quality skill for that)" clause. `i11.ts` (the
+    reviewer's own near-copy measurement script) shows 0 FAILs against the
+    final state.
 - **The first run is therefore the official result, unchanged.** Per
   skill:
   - `docker-k8s-terraform-review`: **FAIL** — `trigger-negative-3`

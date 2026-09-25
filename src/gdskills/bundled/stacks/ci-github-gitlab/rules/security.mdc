@@ -9,7 +9,9 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic security rules to the risks
 specific to workflow-YAML configuration. Applies only to GitHub Actions
-workflow files under `.github/workflows/` and to `.gitlab-ci.yml`.
+workflow files under `.github/workflows/`, GitHub composite `action.yml`/
+`action.yaml` files under `.github/actions/`, `.gitlab-ci.yml`, and GitLab
+CI included config under `.gitlab/`.
 
 ## `pull_request_target` and untrusted fork code
 
@@ -104,9 +106,11 @@ workflow files under `.github/workflows/` and to `.gitlab-ci.yml`.
     used in a component/included config's `rules:`/`script:`): this IS
     substituted into the YAML/expression text before the job is even
     created, the same class of risk `${{ }}` is in GitHub Actions — do not
-    feed an untrusted value (an MR title, a branch name) into an
-    `inputs:`-driven `$[[ ]]` interpolation that reaches a `script:` line
-    or a `rules:if:` expression without validating/escaping it first.
+    feed an untrusted pipeline or trigger input value (a `spec:inputs`
+    value the pipeline/component was invoked with, not a predefined
+    variable like an MR title) into an `inputs:`-driven `$[[ ]]`
+    interpolation that reaches a `script:` line or a `rules:if:`
+    expression without validating/escaping it first.
 
 ## GitLab CI protected variables and branches
 

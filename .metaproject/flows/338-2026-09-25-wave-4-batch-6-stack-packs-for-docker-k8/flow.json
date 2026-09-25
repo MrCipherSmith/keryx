@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 6: stack packs for docker-k8s-terraform, ci-github-gitlab",
   "status": "in-progress",
   "createdAt": "2026-09-25T15:14:53.313Z",
-  "updatedAt": "2026-09-25T18:45:14.235Z",
+  "updatedAt": "2026-09-25T18:46:11.105Z",
   "source": {
     "type": "description",
     "ref": null
@@ -339,12 +339,17 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-25T18:14:42.488Z",
             "outcome": "started",
             "detail": "runner: dispatching opus adversarial review against stack-pack lessons checklist on PR #733"
+          },
+          {
+            "at": "2026-09-25T18:46:11.105Z",
+            "outcome": "started",
+            "detail": "narrow opus verification of review round 1 fixes"
           }
         ]
       },
@@ -650,6 +655,11 @@
       "at": "2026-09-25T18:45:14.235Z",
       "event": "ac-confirmed",
       "detail": "AC8: CORRECTED: honest gate ran once (run 1); a second run was disqualified on PR review round 1 for restating failing eval prompts in SKILL.md text (router-gaming). Run 1 is official: all 5 skills fail on trigger accuracy, both packs stay stability: experimental, no generated pair for either. governance/eval.json rebuilt verbatim from run 1's raw output, confirmed byte-identical to gate-evidence/run1/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:11.105Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 2) — narrow opus verification of review round 1 fixes"
     }
   ],
   "signatures": [

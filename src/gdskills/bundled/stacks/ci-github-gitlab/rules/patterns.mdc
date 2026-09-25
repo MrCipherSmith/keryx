@@ -9,7 +9,9 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic design guidance to workflow-YAML
 structure and reuse. Applies only to GitHub Actions workflow files under
-`.github/workflows/` and to `.gitlab-ci.yml` — not to Kubernetes manifests,
+`.github/workflows/`, GitHub composite `action.yml`/`action.yaml` files
+under `.github/actions/`, `.gitlab-ci.yml`, and GitLab CI included config
+under `.gitlab/` — not to Kubernetes manifests,
 Docker Compose files, or any other YAML the `docker-k8s-terraform` pack
 already scopes to.
 

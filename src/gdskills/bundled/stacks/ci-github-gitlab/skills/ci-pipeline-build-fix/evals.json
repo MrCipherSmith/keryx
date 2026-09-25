@@ -25,7 +25,7 @@
       "expected_behavior": [
         {
           "grader": "judge",
-          "rubric": "A correct answer identifies the missing pull-requests: write scope as the root cause of the 'Resource not accessible by integration' failure, fixes it by adding that specific scope at the job level, and confirms the fix does not widen access beyond what the failing comment step needs (no workflow-level write-all).",
+          "rubric": "A correct answer identifies the missing pull-requests: write scope as the root cause of the 'Resource not accessible by integration' failure, fixes it by adding that specific scope (plus contents: read if the job checks out code) scoped no wider than the failing job needs -- at the job level when the workflow has other jobs that should not get it, or at the workflow level only if this is the workflow's only job -- and confirms the fix does not widen access beyond what the failing comment step needs (no workflow-level write-all, no unscoped grant reaching jobs that do not need it).",
           "pass_criteria": [
             "Identifies the missing permissions: pull-requests: write scope as the root cause of the 'Resource not accessible by integration' failure.",
             "Scopes the grant to only what this job needs (pull-requests: write, plus contents: read if the job also checks out code) rather than a broad or unscoped grant -- placing it at the job level is the clearly correct choice when the workflow has other jobs that do not need it, and is an acceptable choice (not a requirement to fail on) when this is the workflow's only job.",
@@ -40,7 +40,7 @@
         "known_right": "The root cause is that the workflow has no permissions: block at all, so the default GITHUB_TOKEN scope doesn't include write access to pull requests, and the comment step fails with 'Resource not accessible by integration'. Fix: add `permissions: { contents: read, pull-requests: write }` directly on this job (not at the workflow level, so the rest of the file stays at its current, narrower scope) -- contents: read is included because setting any explicit permissions: block resets every unlisted scope to none, and this job still needs to check out the repo. That grants exactly the access the comment step needs and nothing more. Re-run the job after adding it to confirm the comment now posts successfully.",
         "known_wrong": "Simplest fix here is to add `permissions: write-all` at the top of the workflow -- that guarantees this job (and anything else added later) has whatever access it needs without having to track down the exact scope each time.",
         "vague": "You'll need to add the right permissions so the comment step can post.",
-        "subtle_wrong": "Add `permissions: { contents: write, pull-requests: write, issues: write }` at the WORKFLOW level -- broader than this job needs (contents: write instead of read, issues: write it never uses) and applies to every other job in the file too, not just the one that's actually failing, but it 'covers this comment step and leaves room for other jobs that might need similar write access later without having to keep revisiting the permissions block.'"
+        "subtle_wrong": "Add `permissions: { contents: write, pull-requests: write, issues: write }` at the workflow level -- that covers the comment step and leaves room for other jobs that might need similar write access later, so nobody has to keep revisiting the permissions block every time a new job needs something."
       },
       "anti_patterns": ["write-all"]
     },

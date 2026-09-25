@@ -1,6 +1,6 @@
 ---
 name: docker-k8s-terraform-build-fix
-description: "Use when a Docker build fails, a Helm chart fails to render (a template/values lookup error), a Kubernetes manifest is rejected by validation or the API server, or a Terraform validate/plan fails -- resolves the actual root cause (a bad COPY path, an ownership/permission mismatch after switching to a non-root USER, a broken Helm values reference, a schema-invalid manifest, a Terraform state/address mismatch) with the smallest fix, never a suppression. Not for an application-code build failure unrelated to these config files (a Go/TypeScript/Python compile or test error) -- that is the language's own build-fix skill's territory, even when this pack's Dockerfile happens to build that language's code."
+description: "Use when a Docker build fails, a Kubernetes/Helm manifest is rejected by validation or the API server, or a Terraform validate/plan fails -- resolves the actual root cause (a bad COPY path, an ownership/permission mismatch after switching to a non-root USER, a schema-invalid manifest, a Terraform state/address mismatch) with the smallest fix, never a suppression. Not for an application-code build failure unrelated to these config files (a Go/TypeScript/Python compile or test error) -- that is the language's own build-fix skill's territory, even when this pack's Dockerfile happens to build that language's code."
 triggers:
   - "docker build is failing"
   - "fix this Kubernetes manifest validation error"
@@ -132,7 +132,7 @@ State the root cause in one sentence, not just "fixed the error."
 | Rationalization | Why it is wrong |
 |---|---|
 | "I'll just `chmod 777` the directory, it's only a build image" | Undoes the non-root hardening this pack's security rule requires and grants write access to everyone, not just the user that actually needs it; fix ownership at the COPY/RUN step instead |
-| "The rename makes Terraform want to destroy and recreate it, but the resource is basically the same, so `-auto-approve` should be fine" | Terraform's plan is not wrong about what it will do — accepting an unreviewed destroy+recreate on a stateful resource can genuinely lose data; `terraform state mv` fixes the address without touching real infrastructure |
+| "The rename makes Terraform want to destroy and recreate it, but the resource is basically the same, so `-auto-approve` should be fine" | Terraform's plan is not wrong about what it will do — accepting an unreviewed destroy+recreate on a stateful resource can genuinely lose data; a `moved` block or `terraform state mv` fixes the address without touching real infrastructure |
 | "This field keeps failing validation, I'll just remove it" | If the field is actually required for the workload (a probe, a resource limit), removing it trades a caught validation error for a runtime failure later; fix the field's value instead |
 | "I'll switch back to `USER root` just to unblock this build, we can fix permissions properly later" | Reintroduces a root container to solve an ownership problem that a scoped `--chown`/`chown` step solves without giving up the non-root hardening |
 

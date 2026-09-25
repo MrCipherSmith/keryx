@@ -15,12 +15,16 @@ scan is `security-audit`'s job, not this rule's.
 
 ## Non-root by default
 
-- Every Dockerfile ends with a `USER` instruction naming a non-root user
-  (a base image's own built-in unprivileged user, e.g. `nginx` on
-  `nginxinc/nginx-unprivileged`, or one created with `RUN useradd`) —
-  running as root inside the container is the default only until this
-  line changes it, and a missing `USER` instruction means the container
-  runs as root.
+- Every Dockerfile either ends with a `USER` instruction naming a non-root
+  user (one created with `RUN useradd`, or the base image's own built-in
+  unprivileged user re-selected explicitly, e.g. `USER nginx`), or keeps a
+  base image's own non-root default un-overridden. A missing `USER`
+  instruction is not by itself proof of root — some base images (e.g.
+  `nginxinc/nginx-unprivileged`) already default to a non-root user with
+  no `USER` line needed — but it is not proof of non-root either; confirm
+  what the base image's own default actually is (its Dockerfile/docs, or
+  `docker run --rm <image> whoami`) rather than assuming either way from
+  the absence of a `USER` line alone.
 - The matching Kubernetes `securityContext` sets `runAsNonRoot: true`,
   `allowPrivilegeEscalation: false`, and drops all capabilities
   (`capabilities.drop: ["ALL"]`), adding back only the specific ones the

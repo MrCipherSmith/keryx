@@ -366,7 +366,17 @@ function globMatchToken(glob: string): string | undefined {
   if (segment !== undefined && segment.length > 0 && !segment.includes("*") && !segment.includes("?")) {
     return segment.toLowerCase();
   }
-  const reversedMatch = segment !== undefined ? /^([A-Za-z0-9]+)\.\*$/.exec(segment) : null;
+  // Review round 2 (flow 338): without a length floor, a glob like
+  // `**/py.*` (an unlikely but legal pattern — literal files named "py"
+  // with any extension) would let the REVERSED branch's captured name
+  // ("py") accidentally match `STACK_EXTENSIONS.python`'s ordinary `"py"`
+  // extension entry — a ordinary dotted-extension token being validated
+  // through the wrong branch, for a glob that doesn't actually mean
+  // `*.py`. Mirrors `authoring-lint-guard.test.ts`'s own I7b floor (>= 4
+  // chars) for the same reason: a short name is far more likely to
+  // collide with an unrelated ordinary extension than to be a genuine
+  // "Name.*" filename-prefix convention like `Dockerfile.*`.
+  const reversedMatch = segment !== undefined ? /^([A-Za-z0-9]{4,})\.\*$/.exec(segment) : null;
   if (reversedMatch?.[1] !== undefined) {
     return reversedMatch[1].toLowerCase();
   }

@@ -43,10 +43,13 @@ checked against. It does not scan a built image for known CVEs (that is
 ### Step 2: Check each changed file against the focus list
 
 **Dockerfile and Compose**
-- A missing (or removed) `USER` instruction, or a diff that adds
-  `USER root` back onto a previously non-root image — flag it; the image
-  runs (or is being changed to run) as root, per `rules/security.mdc`'s
-  non-root-by-default rule.
+- A diff that adds `USER root` back onto a previously non-root image, or a
+  missing `USER` instruction where the base image's own default is NOT
+  known to be non-root — flag it (confirm the base image's actual default
+  before flagging a bare missing-`USER` case; some images, e.g.
+  `nginxinc/nginx-unprivileged`, already default to non-root with no
+  `USER` line needed — see `rules/security.mdc`'s non-root-by-default
+  rule for the full distinction).
 - A `FROM` line pinned only by a mutable tag, or a diff that drops an
   existing digest pin (e.g. changing `FROM node:20-slim@sha256:<digest>`
   to `FROM node:latest`) — flag the loss of reproducibility; every

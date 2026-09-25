@@ -105,9 +105,12 @@ No other findings.
   SHA.
 - Flag a workflow-level `permissions: write-all` (or no `permissions:` at
   all) alongside jobs that do not all need write access.
-- Flag `${{ github.event.* }}`/an untrusted CI variable interpolated
-  directly into a `run:`/`script:` string instead of passed through
-  `env:`/`variables:` first.
+- Flag `${{ github.event.* }}` interpolated directly into a `run:` string
+  instead of passed through `env:` first (GitHub Actions). Flag a GitLab
+  CI `script:` line that uses an untrusted variable unquoted or
+  concatenates it into `eval`/`sh -c` (routing it through another
+  `variables:` entry does not fix this), or an untrusted pipeline/trigger
+  input reaching a `$[[ inputs.* ]]` interpolation unvalidated.
 
 ## Red Flags
 
@@ -127,8 +130,10 @@ Do not report the review done until all of the following hold:
   commit-SHA pinning.
 - The `permissions:` block (workflow- and job-level) was checked for
   least privilege.
-- Every `run:`/`script:` step touching `${{ github.event.* }}` or an
-  untrusted CI variable was checked for direct interpolation vs.
-  intermediate `env:`/`variables:`.
+- Every `run:` step touching `${{ github.event.* }}` was checked for
+  direct interpolation vs. intermediate `env:` (GitHub Actions), and every
+  GitLab CI `script:` step touching an untrusted variable was checked for
+  unquoted use, `eval`/`sh -c` concatenation, or an unvalidated
+  `$[[ inputs.* ]]` interpolation.
 - No finding was silently skipped because the surrounding change looked
   unrelated to security.

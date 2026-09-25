@@ -453,3 +453,95 @@ ratchet/AC2, manifest/authoring-lint); `tsc --noEmit` and `eslint` clean;
 `checkStablePackGate` for `go`/`python` still pass; reviewer's own
 `i11.ts` re-run shows 0 FAILs.
 - 2026-09-25T18:45:14.235Z - ac-confirmed: AC8: CORRECTED: honest gate ran once (run 1); a second run was disqualified on PR review round 1 for restating failing eval prompts in SKILL.md text (router-gaming). Run 1 is official: all 5 skills fail on trigger accuracy, both packs stay stability: experimental, no generated pair for either. governance/eval.json rebuilt verbatim from run 1's raw output, confirmed byte-identical to gate-evidence/run1/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T18:46:11.105Z - task-attempt: T15: started (attempt 2) — narrow opus verification of review round 1 fixes
+
+## PR review round 2 (fix attempt 2 of 3) — findings and fixes
+
+Narrow opus verification of round 1's fixes found B1 and M2 only partly
+fixed. Addressed both, plus every minor named in the same pass.
+
+**B1, still open after round 1**: two description lines still restated
+failing eval prompts, missed by round 1's own review (round 1 focused on
+`triggers:` frontmatter near-copies; these two were in `description:`
+text, caught only by round 2's own `i11.ts` re-run):
+- `docker-k8s-terraform-build-fix/SKILL.md:3`: "a Helm chart fails to
+  render (a template/values lookup error)" — Jaccard 0.50 against the
+  failing prompt "This Helm chart won't render, values lookup is
+  failing". Reverted to exact run-1 (commit `8e2cc023`) wording.
+- `ci-pipeline-build-fix/SKILL.md:3`: "(including GitHub's own 'Resource
+  not accessible by integration' error)" — a verbatim lift from the
+  failing prompt. Reverted to exact run-1 wording.
+- Both skills' "Not for X, use Y" clauses (the genuinely general scope
+  statements) were kept unchanged — only the two restated phrases were
+  removed. Re-ran the reviewer's own `i11.ts`: 0 FAILs, confirming no
+  remaining near-copy anywhere in either pack's `description:`/`triggers:`
+  against either pack's own `evals.json` positive prompts.
+- W1-stack-catalog.md's "Fix pass"/"Reverted"/"Kept" bullets rewritten to
+  state exactly what survived both review rounds vs. what was reverted in
+  each, rather than describing only round 1's (incomplete) state.
+
+**M2, three remaining places still taught the false GitLab `variables:`
+fix** (round 1 fixed `rules/security.mdc`, `pack.json`'s `auditFocus`, and
+one paragraph each in two SKILL.md files, but missed three more spots
+repeating the same wrong claim): `ci-pipeline-implementation/SKILL.md`'s
+step 3, and `ci-pipeline-code-review/SKILL.md`'s flag list and
+verification checklist. All three rewritten to match `security.mdc`'s
+corrected text (unquoted expansion / `eval`/`sh -c` concatenation / `$[[
+inputs.* ]]` config-time interpolation as the real risks, not routing
+through another `variables:` entry). Also narrowed the `$[[ inputs.* ]]`
+wording everywhere it appears: the untrusted source is a pipeline/trigger
+input value (`spec:inputs`), not a predefined variable like an MR title —
+those are two different GitLab mechanisms and the original wording
+conflated them.
+
+**Minors (all fixed in this pass):**
+- W1-stack-catalog.md's target-stack table row for `docker-k8s-terraform`
+  now carries an inline "superseded, see the flow 338 review-round
+  correction below" marker, not just the correction section itself.
+- The missing-`USER` claim in `rules/security.mdc` (lines ~17-23) and the
+  review `SKILL.md` (~line 46) rewritten to match `patterns.mdc`'s more
+  accurate framing: a missing `USER` instruction is not by itself proof
+  of root (a base image can default to non-root), and is not proof of
+  non-root either — confirm the base image's actual default rather than
+  assuming either way.
+- `permission-scope-fix` eval scenario: the rubric's "at the job level"
+  wording was unconditional while `pass_criteria` already accepted
+  workflow-level scoping for a single-job workflow — rubric reworded to
+  match. `subtle_wrong` was rewritten: round 1's version narrated its own
+  flaws in-line ("broader than this job needs... but it 'covers...'"),
+  which is a self-critiquing answer no real model would produce, not a
+  genuine subtle-wrong one — rewritten as a plausible-sounding answer with
+  no self-analysis. **This is a calibration content change** (not
+  description/triggers), so it is logged explicitly here: it does not
+  touch the official run-1 gate result (no gate re-run performed; run 1
+  stays official), but it DOES change the judge-check AG calibration's
+  request digest, so `ci-pipeline-build-fix`'s AG recording was
+  re-recorded (`keryx skills judge-check ci-github-gitlab/ci-pipeline-build-fix
+  --judge deepseek:deepseek-chat --scope bundled --samples 3 --record`) —
+  all 14 verdicts still grade as expected.
+- `rules/security.mdc:11-12` and `patterns.mdc:10-12` (CI pack) scope text
+  updated to name `action.yml`/`action.yaml` under `.github/actions/` and
+  `.gitlab/` included config explicitly (the `paths:` globs already
+  covered them from round 1; only the prose describing the scope was
+  stale).
+- `docker-k8s-terraform-build-fix/SKILL.md`'s Red Flags/rationalization
+  table row for the Terraform rename case now mentions `moved` alongside
+  `terraform state mv`.
+- The contradictory phrasing in both packs' `agent-refs.json` ("the
+  honest gate ran once... a later re-run was disqualified" — self-
+  contradictory: "ran once" and "a later re-run" cannot both be true)
+  reworded to "ran twice, but only the FIRST run counts as the official
+  result."
+- `authoring-lint.ts`'s `globMatchToken` reversed-wildcard branch (`Name.*`)
+  tightened with a 4-character floor (mirroring I7b's own anti-collision
+  floor), so a short name like "py" cannot accidentally pass as a
+  filename-convention match via a stack whose `STACK_EXTENSIONS` happens
+  to list an unrelated ordinary extension of the same short string (e.g.
+  `**/py.*` no longer accidentally validates against `STACK_EXTENSIONS.python`'s
+  `"py"` entry through the wrong branch). Regression-tested; `Dockerfile.*`/
+  `Containerfile` (well over 4 chars) still validate correctly.
+
+**Verification after round 2 fixes**: full offline sweep green (3211
+pass, 0 fail); `tsc --noEmit` and `eslint` clean; `checkStablePackGate`
+for `go`/`python` still pass; reviewer's own `i11.ts` re-run shows 0
+FAILs (the one metric round 1 could not fully clear).
