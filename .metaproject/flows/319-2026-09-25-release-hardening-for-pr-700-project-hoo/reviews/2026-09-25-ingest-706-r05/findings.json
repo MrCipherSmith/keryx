@@ -1,0 +1,55 @@
+[
+  {
+    "id": "R5-01",
+    "reviewer": "adversarial-opus-r5",
+    "severity": "info",
+    "problem": "isBunExecPath misses a Bun binary with a non-standard basename when it is not this process's own execPath",
+    "impact": "A schedule for a Bun binary named, for example, `bun-1.4.2` or Nix's `.bun-wrapped` gets `[interp, script]` with no safe flags, but only when execPath is passed explicitly and differs from process.execPath. The default path (`resolveKeryxInvocation` uses process.execPath under Bun) is covered by the process.execPath fallback. The runtime guard still strips .env keys on re-exec. Only a project-root bunfig preload would load, in the user's own scheduled project root. That is not untrusted content in the shipped default flow.",
+    "suggested_fix": "none required (info)",
+    "evidence": "see report",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/trigger/schedule.ts:isBunExecPath",
+        "src/trigger/schedule.ts:invocationArgv"
+      ],
+      "enumeration_method": "narrow probe of the R4 diff"
+    },
+    "global_id": "2026-09-25-ingest-706-r05#R5-01"
+  },
+  {
+    "id": "R5-02",
+    "reviewer": "adversarial-opus-r5",
+    "severity": "info",
+    "problem": "A Node binary named `bun` gets the Bun flags and the schedule fails to start",
+    "impact": "Confirmed: a `spoof/bun -> node` symlink run with `--no-env-file --config=/dev/null s.js` fails with 'invalid negation because it is not a boolean option'. The schedule is broken but fails closed: nothing runs and no .env or bunfig is loaded. This is not a security issue.",
+    "suggested_fix": "none required (info)",
+    "evidence": "see report",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/trigger/schedule.ts:isBunExecPath"
+      ],
+      "enumeration_method": "narrow probe of the R4 diff"
+    },
+    "global_id": "2026-09-25-ingest-706-r05#R5-02"
+  },
+  {
+    "id": "R5-03",
+    "reviewer": "adversarial-opus-r5",
+    "severity": "info",
+    "problem": "The refusal wording says 'Move or shrink it' for an unreadable file, and an EACCES .env that Bun also skips still causes a refusal",
+    "impact": "Cosmetic and fail-closed. An EACCES `.env` that Bun itself cannot load makes the dev form refuse with exit 78 even though nothing would be bound. The message names the file and the errno, so the user can fix it. There is no security impact.",
+    "suggested_fix": "none required (info)",
+    "evidence": "see report",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/lib/safe-exec.ts:refuseToStart",
+        "src/lib/safe-exec.ts:collectCwdDotenvKeyNames"
+      ],
+      "enumeration_method": "narrow probe of the R4 diff"
+    },
+    "global_id": "2026-09-25-ingest-706-r05#R5-03"
+  }
+]

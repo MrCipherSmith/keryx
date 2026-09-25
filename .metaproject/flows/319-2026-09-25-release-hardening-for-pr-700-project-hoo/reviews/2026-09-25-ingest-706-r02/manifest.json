@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-25-ingest-700",
+  "reviewId": "2026-09-25-ingest-706-r02",
   "mode": "ingest",
   "status": "closed",
   "target": {
     "kind": "pr",
-    "ref": "700",
-    "head": "aae031c1a"
+    "ref": "706",
+    "head": "18ab7fb2"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-700/scope.md",
-    "coverage": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-700/coverage.md",
-    "report": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-700/report.md",
-    "findings": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-700/findings.json",
-    "learning": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-700/learning.md",
-    "decisions": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-700/decisions.md"
+    "scope": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-706-r02/scope.md",
+    "coverage": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-706-r02/coverage.md",
+    "report": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-706-r02/report.md",
+    "findings": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-706-r02/findings.json",
+    "learning": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-706-r02/learning.md",
+    "decisions": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-706-r02/decisions.md"
   },
   "coverage": [
     {
@@ -25,17 +25,15 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 18,
+    "total": 7,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": null,
-    "dropped_findings_cap": 7,
-    "retained": 11,
+    "dropped_findings_cap": 0,
+    "retained": 7,
     "dismissed_by_round": null,
-    "by_reason": {
-      "findings_cap:integration-review-r700": 7
-    },
+    "by_reason": {},
     "not_measured": [
       {
         "stage": "low_confidence",
@@ -55,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-25T11:34:13.332Z",
-  "updatedAt": "2026-09-25T11:34:15.972Z",
+  "createdAt": "2026-09-25T11:34:17.426Z",
+  "updatedAt": "2026-09-25T11:34:18.868Z",
   "flow": {
     "id": "319",
     "path": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo"
