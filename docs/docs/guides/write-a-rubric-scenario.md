@@ -279,6 +279,15 @@ runs by default in CI or locally. Every other integrity check, including the
 AG rule above, runs against the **recorded** verdicts and needs no network
 access or `KERYX_LIVE_JUDGE`.
 
+Flow 317 added a related but distinct live check: `keryx skills eval
+--reverify <pack-dir> [--sample N] --judge <provider>[:<model>]` re-judges a
+random sample of already-recorded TRIAL outputs (not the canned anti-gaming
+answers `judge-check` uses) against the current live judge, and reports
+where the live verdict disagrees with what was recorded. It closes a
+different gap than `judge-check`: hard-to-game rubrics (`judge-check`) vs.
+judge-verdict provenance and drift (`--reverify`) — see the CLI reference's
+threat-model paragraph for `eval --reverify`.
+
 ## The full integrity rule list
 
 `src/gdskills/stack-pack-eval-integrity.test.ts` enforces these permanently
@@ -328,11 +337,18 @@ report clears `checkSkillReportForPackGate`
 (`src/gdskills/governance/eval.ts`), which requires, on top of the integrity
 checks above:
 
-- `strictness: "high"`, `trials >= PACK_MIN_TRIALS` (`5`), `scope: "bundled"`;
+- `strictness: "high"`, `trials >= PACK_MIN_TRIALS` (`10` as of flow 317 —
+  raised from `5`: several scenarios in the first honest runs sat exactly on
+  the `PACK_BEHAVIOR_PASS_FLOOR`, one flipped trial away from failing either
+  direction; doubling the trial count halves that single-flip swing), `scope: "bundled"`;
 - `(runner, model)` and, when the report has any judge scenario,
   `(judge, judgeModel)` both in `STACK_PACK_GATE_POLICY`
   (`src/gdskills/governance/gate-policy.ts`) — pinned to DeepSeek
   `deepseek-chat` for both roles;
+- `runnerPromptVersion` equal to the current `RUNNER_PROMPT_VERSION` (flow
+  317: every `--runner` call now appends a uniform "answer in text, no
+  tools" system note, since the single-turn runner has no tool wiring at all
+  and a model that tries one anyway produces a non-answer);
 - `judgePromptVersion` equal to the current `JUDGE_PROMPT_VERSION`;
 - every ran behavior scenario's `passRate` at or above
   `PACK_BEHAVIOR_PASS_FLOOR` (`0.8`);
