@@ -1,0 +1,40 @@
+[
+  {
+    "query": "Use when writing or extending a MobX store: adding observable state, actions, computed getters, or reactions (autorun/reaction/when), wiring a store into React via observer and a context hook, or fixing a component that stops re-rendering after a store change. Applies the makeObservable/action/runInAction/observer shape and the store's dispose lifecycle. Not for reviewing an already-written store's structure (use code-mobx-store-review) and not for plain React state/props work with no MobX involved (use react-implementation).",
+    "decision": "fork",
+    "topMatch": "mobx/mobx-observable-testing",
+    "recordedAt": "2026-09-25T06:24:14.791Z",
+    "skillName": "mobx-store-implementation"
+  },
+  {
+    "query": "Use when writing or extending a MobX store: adding observable state, actions, computed getters, or reactions (autorun/reaction/when), wiring a store into React via observer and a context hook, or fixing a component that stops re-rendering after a store change. Applies the makeObservable/action/runInAction/observer shape and the store's dispose lifecycle. Not for reviewing an already-written store's structure (use code-mobx-store-review) and not for plain React state/props work with no MobX involved (use react-implementation).",
+    "decision": "fork",
+    "topMatch": "mobx/mobx-observable-testing",
+    "recordedAt": "2026-09-25T06:24:23.050Z",
+    "skillName": "mobx-store-implementation",
+    "justification": "Top match (0.51) is this pack's own sibling mobx-observable-testing -- same domain vocabulary (store/action/computed/observable), different category (implement vs test), not a substitute: that skill only covers writing/fixing tests, never authoring store code. Next matches (review-frontend 0.29, nestjs-implementation 0.23, code-mobx-store-review 0.22, angular-implementation 0.22) are all below the fork threshold's neighbourhood or cover a different stack/activity entirely -- code-mobx-store-review in particular is review-only (structure/accessibility-modifier audit of an already-written store), explicitly excluded in this skill's own description, not implement-focused authoring."
+  },
+  {
+    "query": "Use when writing or fixing a test for a MobX store: asserting on an async action's post-await state, waiting for a reaction/autorun to fire, testing that dispose() actually stops a store's reactions, or deciding how enforceActions should behave in the test setup. Distinct from rendering-focused React component testing and generic Node/TypeScript test-runner setup. Not for writing the store or action code itself (use mobx-store-implementation) and not for React Testing Library render/interaction patterns with no MobX involved (use react-testing).",
+    "decision": "fork",
+    "topMatch": "mobx/mobx-store-implementation",
+    "recordedAt": "2026-09-25T06:24:28.251Z",
+    "skillName": "mobx-observable-testing"
+  },
+  {
+    "query": "Use when writing or fixing a test for a MobX store: asserting on an async action's post-await state, waiting for a reaction/autorun to fire, testing that dispose() actually stops a store's reactions, or deciding how enforceActions should behave in the test setup. Distinct from rendering-focused React component testing and generic Node/TypeScript test-runner setup. Not for writing the store or action code itself (use mobx-store-implementation) and not for React Testing Library render/interaction patterns with no MobX involved (use react-testing).",
+    "decision": "fork",
+    "topMatch": "mobx/mobx-store-implementation",
+    "recordedAt": "2026-09-25T06:24:35.475Z",
+    "skillName": "mobx-observable-testing",
+    "justification": "Top match (0.38) is this pack's own sibling mobx-store-implementation -- same domain vocabulary (store/action/reaction/dispose), different category (test vs implement), not a substitute: that skill authors store/action code, this one asserts on the resulting async/reaction behavior in tests. Next matches (vue-testing 0.25, nodejs-implementation 0.22, angular-code-review 0.21, review-frontend 0.21) are all a different stack or activity entirely -- generic test-runner/component-render skills with no MobX-specific reactivity (runInAction seeding, when()-based waits, dispose/reaction cleanup assertions) this skill covers."
+  },
+  {
+    "query": "Use when writing or extending a MobX store: adding observable state, actions, computed getters, or reactions (autorun/reaction/when), wiring a store into React via observer and a context hook, or fixing a component that stops re-rendering after a store change. Also covers plain-language asks for the same work: keeping a piece of MobX store state automatically in sync wherever it's read, or making a store run something automatically when a value changes and stop when the store is no longer needed. Applies the makeObservable/action/runInAction/observer shape and the store's dispose lifecycle. Not for reviewing an already-written store's structure (use code-mobx-store-review) and not for plain React state/props work with no MobX involved (use react-implementation).",
+    "decision": "fork",
+    "topMatch": "mobx/mobx-observable-testing",
+    "recordedAt": "2026-09-25T06:28:15.470Z",
+    "skillName": "mobx-store-implementation",
+    "justification": "Top match remains this pack's own sibling mobx-observable-testing -- same domain vocabulary (store/action/computed/observable), different category (implement vs test), not a substitute: that skill only covers writing/fixing tests, never authoring store code. Description was widened (flow 318 follow-up) to also cover plain-language symptom/goal phrasings of the same implement work, not to broaden scope -- no new candidate skill/pack became a closer match after the update; review-frontend, nestjs-implementation, code-mobx-store-review, and angular-implementation remain the next nearest and are all a different stack/activity or review-only."
+  }
+]

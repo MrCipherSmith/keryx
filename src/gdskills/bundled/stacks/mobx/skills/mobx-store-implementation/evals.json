@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "I need this MobX store to keep track of which item is currently selected, and have it update automatically wherever it is shown",
+      "I have an async method on this MobX store that hits an API and then updates a few fields -- what's the right way to write that so the state updates correctly?",
+      "I've got a new MobX store -- what's the right way to make it available to my React components so they can read from it and re-render when it changes?",
+      "This component isn't re-rendering when the store's items array changes, help me fix the wiring",
+      "Add a computed getter to this store that derives the order total from line items",
+      "I want this MobX store to automatically do something whenever a value changes, and make sure that stops once the store isn't needed anymore",
+      "Create a new MobX store for the settings panel with loading/error state",
+      "Convert this async store method so the post-await mutations are wrapped correctly"
+    ],
+    "negative": [
+      "Review this MobX store for accessibility-modifier and method-ordering issues",
+      "Write a test that waits for this store's async fetchItems action to resolve before asserting",
+      "Add client-side form validation and inline error messages to this plain React form, no state library involved",
+      "Fix this tsc error: Property 'total' does not exist on type 'OrderDraft'",
+      "Add a new Pinia store action for saving user preferences",
+      "Run the project's lint and type-check scripts and report every failure"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "wrap-post-await-mutation",
+      "prompt": "I have this MobX action:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  this.items = items;\n  this.loading = false;\n}\n```\n\nWhat needs to change so it works correctly under MobX's enforceActions?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that code after an await runs outside the original action's transaction, and fixes it by wrapping every state mutation that happens after the await (this.items = items and this.loading = false) inside runInAction, showing the corrected code rather than only describing the change.",
+          "pass_criteria": [
+            "Shows the corrected code wrapping the post-await assignments (this.items = items and this.loading = false) inside runInAction(() => { ... }), or restructures the method as a flow generator that achieves the same effect",
+            "States that code after an await runs outside the original action's own transaction, which is why the bare assignments need to re-enter via runInAction (or flow)"
+          ],
+          "fail_criteria": [
+            "Recommends disabling or loosening enforceActions (e.g. configuring it to 'never' or 'never' equivalent) instead of wrapping the post-await mutations in runInAction -- mentioning that only to warn against it is not a failure",
+            "Leaves this.items = items or this.loading = false as bare, unwrapped assignments after the await with no runInAction or flow restructuring"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The problem is that everything after the `await` runs outside the action's original transaction, so MobX no longer treats those assignments as happening inside an action -- under enforceActions that throws, and even without it the reaction system can miss the update. Wrap the post-await mutations in runInAction:\n\n```ts\nasync fetchItems() {\n  runInAction(() => {\n    this.loading = true;\n  });\n  const items = await this.service.getAll();\n  runInAction(() => {\n    this.items = items;\n    this.loading = false;\n  });\n}\n```\n\nAlternatively, rewrite it as a `flow` generator, which keeps the whole body inside one action and needs no runInAction at all:\n\n```ts\nfetchItems = flow(function* (this: ItemStore) {\n  this.loading = true;\n  this.items = yield this.service.getAll();\n  this.loading = false;\n});\n```\n\nEither way, re-run the type-check and confirm no enforceActions warning/throw fires when this action runs.",
+        "known_wrong": "Easiest fix: just set `configure({ enforceActions: 'never' })` in your app setup so MobX stops complaining about mutations outside actions. Then you can leave fetchItems exactly as it is -- the assignments after the await will still update the observable fields and trigger reactions, MobX just won't enforce the action-boundary rule anymore, which saves you from having to wrap anything in runInAction.",
+        "vague": "You should make sure the state updates after the await happen inside an action so MobX can properly track them, otherwise you might run into issues with enforceActions.",
+        "subtle_wrong": "The important part is that `this.items` gets set correctly, so I wrapped just that one in runInAction: `runInAction(() => { this.items = items; })`. I left `this.loading = false` as a plain assignment right after since it's just a boolean flag and not the actual data -- that keeps the change minimal and the loading indicator still clears in practice even without wrapping it."
+      }
+    },
+    {
+      "id": "component-not-rerendering",
+      "prompt": "This component reads `store.items.length` in its JSX but never updates when items change:\n\n```tsx\nfunction ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n}\n```\n\nWhat's wrong and how do I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that ItemList itself is not wrapped in observer from mobx-react-lite, which is why it renders once and never reacts to store.items changing, and fixes it by wrapping this specific component in observer.",
+          "pass_criteria": [
+            "States that ItemList is missing the observer wrapper (mobx-react-lite) around the component that actually reads store.items, and that this is why it stops updating after the first render",
+            "Shows the corrected code with ItemList itself wrapped in observer (e.g. `const ItemList = observer(({ store }: { store: ItemStore }) => <div>{store.items.length} items</div>);`)"
+          ],
+          "fail_criteria": [
+            "Recommends forcing a re-render through a changing key prop, forceUpdate, or mirroring store.items.length into a useState/useEffect pair instead of wrapping ItemList in observer -- mentioning that only to warn against it is not a failure",
+            "Wraps only a parent/ancestor component in observer while leaving ItemList itself unwrapped, and claims that is sufficient for ItemList's own re-render"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "ItemList reads `store.items.length` directly, but it's a plain function component -- nothing tells MobX to track its render and re-run it when items changes. Wrap ItemList itself in observer from mobx-react-lite:\n\n```tsx\nimport { observer } from \"mobx-react-lite\";\n\nconst ItemList = observer(({ store }: { store: ItemStore }) => (\n  <div>{store.items.length} items</div>\n));\n```\n\nobserver makes MobX track every observable read during that component's render and re-render it specifically when one of those observables changes. Since ItemList is the component doing the read, it has to be the one wrapped -- wrapping some ancestor further up the tree would not make ItemList itself re-render on its own.",
+        "known_wrong": "Simplest fix: pass a changing key prop from the parent, like `<ItemList key={store.items.length} store={store} />`, so React remounts ItemList whenever the length changes. That forces a fresh render with the current value without having to touch MobX wiring at all.",
+        "vague": "Something about how the component is hooked up to the store isn't quite right -- you probably need to set up the MobX integration for this component so it responds to changes.",
+        "subtle_wrong": "The fix is to wrap the parent component that renders ItemList in observer, since that's where store gets passed down from -- once the parent is observed, MobX should propagate the re-render down to ItemList whenever store.items changes, so I left ItemList itself as a plain function component."
+      }
+    }
+  ]
+}
