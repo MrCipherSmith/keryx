@@ -1,0 +1,50 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The AC1 dataset's two scored disposition labels are heavily imbalanced: 1351 `true-positive` (acted-on) against only 3 `dismissed-incorrect`, per the dataset's own committed counts.",
+    "impact": "A precision figure computed against these labels mostly reflects how rarely a human reviewer marks a finding `dismissed-incorrect` at all, not a clean false-positive rate for whatever is being scored; with only 3 negatives in the whole dataset, one mislabelled or borderline disposition can swing the ratio by roughly a third.",
+    "suggested_fix": "Not fixable by this PR alone (the imbalance reflects this repository's own review history); a dedicated hand-labelled precision/recall sample (AC3's `addedTruePositives`, or a fresh labelling pass) is the documented path before quoting a precision number from this dataset as a finding.",
+    "evidence": "bench/jev-review/README.md, \"Caveat — class imbalance\" block: \"the dataset's two scored labels are wildly imbalanced — 1351 true-positive (acted-on) against 3 dismissed-incorrect... Hand-labelled samples... are required before quoting a precision number from this dataset as a finding rather than a description of reviewer behaviour.\" Same figures (1351 TP / 3 FP / 284 unlabeled) appear in PR #721's description.",
+    "confidence": "high",
+    "file": "bench/jev-review/dataset.json",
+    "global_id": "331-r01#F-001",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "agent: accepted as known limitation at round-1 approve; PR #721 merged as 335f730c395560cf316be1dea0d48e148f5d40cc with this caveat noted, not resolved (class imbalance — 1351 true-positive vs 3 dismissed-incorrect in the AC1 dataset; see bench/jev-review/README.md's 'Caveat — class imbalance' block)."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "`scrubIdentity` replaces personal handles/names and email addresses in free-text evidence with the token `operator`, but it is allowlist- and single-regex-based (\"a small documented list of known handles/names plus one email regex\"), not a general PII detector.",
+    "impact": "A handle, name or identifier not on the known list, or in a shape the regex does not match, would pass through into the committed `dataset.json` unscrubbed.",
+    "suggested_fix": "Documented as a known-limitation caveat rather than closed; a follow-up could widen the scrub to a broader pattern set or a dedicated PII-detection pass if the dataset is ever built from a repository with a wider contributor list.",
+    "evidence": "bench/jev-review/README.md, \"Caveat — identity scrubbing\" block; bench/jev-review/build-dataset.ts ~line 90 (\"a small, documented list of known [handles]\") and IDENTITY_TOKEN/scrubIdentity implementation; bench/jev-review/build-dataset.test.ts's scrubIdentity describe block covers only the documented handles/email pattern, not arbitrary PII.",
+    "confidence": "high",
+    "file": "bench/jev-review/build-dataset.ts",
+    "global_id": "331-r01#F-002",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "agent: accepted as known limitation at round-1 approve; PR #721 merged as 335f730c395560cf316be1dea0d48e148f5d40cc with this caveat noted, not resolved (identity-scrub gap — scrubIdentity in bench/jev-review/build-dataset.ts is allowlist/regex-based, not a general PII detector; disclosed as a caveat in bench/jev-review/README.md, not closed)."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "sonnet-reviewer",
+    "severity": "info",
+    "problem": "The committed live run's rates (ci-triage accuracy/precision at n=8 both arms; review-conform's noise/precision at n=0-5) all fall below the benchmark's own ANECDOTAL_THRESHOLD_N of 10, and the `--repeat 2` variance figure is a 2-point range, not a statistically meaningful interval.",
+    "impact": "Every headline number in the first live run (results-2026-09-25.md/json) is anecdotal by the benchmark's own definition; conclusions drawn from it about whether Jev helps ci-triage are not yet statistically solid.",
+    "suggested_fix": "Not a code defect — the per-rate **anecdotal** labelling and honest \"range over N repeats\" wording (rather than a fake bootstrap CI) already surface this at the point of reading; narrowing it further means running more live samples (n>=10, repeat>=5), a cost/scope decision for a later run, not a fix to this PR.",
+    "evidence": "bench/jev-review/results-2026-09-25.md: `ci-triage | without-jev (n=8) **anecdotal**` / `with-jev (n=8) **anecdotal**`; bench/jev-review/report.ts's formatRate marks a rate anecdotal per its own n < ANECDOTAL_THRESHOLD_N (metrics.ts, ANECDOTAL_THRESHOLD_N=10); README.md's AC3/AC4 section: \"a bootstrap over so few points is descriptive, not a real interval... the report labels it honestly as 'range over N repeats' instead of 'bootstrap 95% CI'.\"",
+    "confidence": "high",
+    "file": "bench/jev-review/report.ts",
+    "global_id": "331-r01#F-003",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "agent: accepted as known limitation at round-1 approve; PR #721 merged as 335f730c395560cf316be1dea0d48e148f5d40cc with this caveat noted, not resolved (anecdotal per-rate — the committed live run's rates are all n<10 per bench/jev-review/results-2026-09-25.md; report.ts labels each rate anecdotal honestly but narrowing it needs more live samples, not a code change)."
+    }
+  }
+]

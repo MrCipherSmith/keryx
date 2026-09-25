@@ -1,0 +1,46 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "info",
+    "problem": "Round 1's live check (AC9) measured only ~1/10 (10%) precision on 10 hand-labelled findings from a run against this repo's own 41-doc .metaproject/rules/** corpus on PR #712/#717 -- most false positives came from process/agent-behaviour rules (commit-message formatting, TDD workflow, an agent's own prompting standard) with no declared per-file applicability being paired against a code hunk they were never meant to describe.",
+    "impact": "Without a precision lever, review-jev-rules would surface mostly noise on this repo's own rule corpus, diluting the orchestrator's merged findings with low-value minor findings from category-mismatched clauses.",
+    "suggested_fix": "Reuse review conform's own clause-tagging machinery (applyClauseTags/buildClauseTagQuestions/clauseTagFromChoice) so only a clause tagged state_kind: \"hunk\" and checkable is ever paired against a hunk, plus a cheap rule-source category filter (code/process/docs) applied before clause extraction.",
+    "evidence": "Journal entry .metaproject/flows/330-2026-09-25-review-jev-rules-an-additional-orchestra/journal.md (2026-09-25T14:10:00.000Z): 136 real Jev calls, 126 findings all minor, 10 hand-labelled (1 true positive, 1 borderline, 8 false positives), several explicitly identified as process-rule/code-hunk category mismatches.",
+    "confidence": "high",
+    "file": "src/review/jev-rules.ts",
+    "global_id": "330-r01#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Round 1's precision-lever suggestion was acted on: commit 63da2f78293ad61492ac058511665bd55ec3ac4d reuses review conform's clause tagging (applyClauseTags/buildClauseTagQuestions/clauseTagFromChoice, cached at .metaproject/data/review-jev-rules/clause-tags.json via src/review/conform-tag-cache.ts) so only a clause tagged state_kind: \"hunk\" and checkable is paired against a hunk, plus a rule-source category filter (classifyRuleSourceCategory/PROCESS_RULE_HEURISTIC_TERMS in src/review/jev-rules.ts) that excludes process/docs rule sources before scoring. Commit 7ca33bb4730beed60ccb91dacbf43c4c22eeb617 fixed a related live-measured budget-spread bug. Live re-measurement after both fixes, recorded in that commit's message: 'Live: 38 of 38 applicable hunks reached, 38 Jev calls, $0.0034, 2 findings' on PR #712, down from the pre-fix run's 126 calls / 121 all-minor findings at ~10% measured precision. src/review/jev-rules.test.ts (54/54 pass locally via bun test) covers the new tag-based and category filters.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 63da2f78293ad61492ac058511665bd55ec3ac4d and 7ca33bb4730beed60ccb91dacbf43c4c22eeb617"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "isPlaceholderClauseText (the round-1 rework's own template-clause filter) treated any bare `<...>` token as an unfilled authoring placeholder, including one written inside backticks as literal code (`Avoid \\`<script>\\`.`, `Ban \\`<iframe>\\`.`), so a real, checkable rule clause naming an HTML tag or a generic type was wrongly dropped before it ever reached tagging or scoring.",
+    "impact": "A legitimate security/coding rule clause that happens to name a tag or generic inside backticks (e.g. a rule banning a specific HTML element) would silently never be checked by review-jev-rules, with no error and no entry under droppedPlaceholderClauses distinguishing it from an actual unfilled template.",
+    "suggested_fix": "Strip backtick-fenced spans from the clause text before running the placeholder-token regex, so a `<...>` inside backticks is treated as code the rule names rather than an unfilled `<criterion 1>`-style placeholder.",
+    "evidence": "Fixed in commit 8f60bf30219a0e9de68bafa597d581fc10ef657c (PR #722, review round 2): src/review/jev-rules.ts replaces the placeholder-token match with a version that strips backtick-fenced spans first. Regression test in src/review/jev-rules.test.ts (\"a tag or generic inside backticks is code, not a placeholder (review round 2 of PR #722)\") passes locally: 1/1, and the full suite passes 54/54 (bun test src/review/jev-rules.test.ts).",
+    "confidence": "high",
+    "file": "src/review/jev-rules.ts",
+    "global_id": "330-r01#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in commit 8f60bf30219a0e9de68bafa597d581fc10ef657c on origin/main (PR #722 head, review round 2): src/review/jev-rules.ts's isPlaceholderClauseText now strips backtick-fenced spans (trimmed.replace(/`[^`]*`/g, \"code\")) before matching PLACEHOLDER_TOKEN_RE, so a `<...>` inside backticks is treated as code rather than an unfilled placeholder. Regression test added in src/review/jev-rules.test.ts: \"a tag or generic inside backticks is code, not a placeholder (review round 2 of PR #722)\" -- ran locally with `bun test src/review/jev-rules.test.ts -t \"tag or generic inside backticks\"`: 1 pass, 0 fail, 3 expect() calls. Full suite also verified: `bun test src/review/jev-rules.test.ts` -> 54 pass, 0 fail, 142 expect() calls.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 8f60bf30219a0e9de68bafa597d581fc10ef657c"
+    }
+  }
+]

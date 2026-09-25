@@ -1,0 +1,272 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "With two candidate models carrying unknown (undefined) prices, the ranking comparator's price subtraction produced NaN, and NaN comparisons in a sort fall back to (effectively) list order rather than a defined ranking.",
+    "impact": "The derived default routing table could pick a weaker model than the session's own connected model for planning/review categories -- observed concretely as `opus-4.7` outranking the session's `opus-5.5` -- silently degrading routing quality with no error or warning.",
+    "suggested_fix": "Rank primarily by family size class (opus > sonnet > haiku, flagship > mini/flash/lite) via the existing tier ladder, and only within the same family/vendor use a parsed version number to break ties, never a raw price subtraction that can produce NaN.",
+    "evidence": "derive-default-table.ts's module header (`src/harness/routing/derive-default-table.ts` lines 1-3): 'rewritten 2025-09-25 -- review of PR #718's NaN tie-break, which let opus-4.7 beat the session's own opus-5.5'. Fix commit 6f1b6f93da9a: 'with two unknown prices the comparator returned NaN and the pick fell back to list order (opus-4.7 over the session's opus-5.5)'.",
+    "confidence": "high",
+    "file": "src/harness/routing/derive-default-table.ts",
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/derive-default-table.ts -- the single ranking comparator `deriveDefaultTable` uses to order candidates"
+      ],
+      "enumeration_method": "grepped `NaN` and the ranking comparator's definition in derive-default-table.ts; the module header explicitly names this as the one root cause rewritten for AC10, and the file is the only place candidate models are ranked for the derived table."
+    },
+    "global_id": "327-r01#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): compareStrengthById (src/harness/routing/derive-default-table.ts:271) at the PR head (124f7f55d3d1dab53d08bd2f2ccb3d77d6907f44, = origin/main content) never returns NaN. Ran `bun test src/harness/routing/derive-default-table.test.ts` in this worktree: 37 pass / 0 fail, including 'deriveDefaultTable: within the same family, the newer version outranks the older one for review (BLOCKER regression -- opus-4.7 must never beat the session's opus-5.5)' (line 242) and 'deriveDefaultTable: two unranked, same-tier candidates with nothing to distinguish them never throws/NaNs, in either input order' (line 381), both passing.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "Nothing excluded a non-chat model (embedding, image, TTS, moderation, rerank) from being derived as a chat routing target -- any model reported by a provider's /models endpoint was eligible, regardless of its actual capability.",
+    "impact": "A connected provider offering embedding or moderation endpoints alongside chat models could have `/routing`'s derived categories silently pick a non-chat model, producing broken or nonsensical completions for quick/subagents/planning/review categories.",
+    "suggested_fix": "Detect non-chat model ids from a pattern covering the common non-chat endpoint families (embed, image, tts, moderation, rerank, etc.) and exclude them from derivation entirely.",
+    "evidence": "model-profile.ts's module header: 'operator decision 2026-09-25: never auto-derive a non-chat model'. `isNonChatModelId` (model-profile.ts) matches against a pattern covering embed(ding)/image/dall-e/tts/whisper/audio/moderation/rerank.",
+    "confidence": "high",
+    "file": "src/harness/routing/model-profile.ts",
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/model-profile.ts isNonChatModelId -- the single filter every derivation path calls before considering a model"
+      ],
+      "enumeration_method": "grepped `isNonChatModelId` usage across src/harness/routing; it is called once, at the single point derive-default-table.ts filters candidates, so there is exactly one enforcement site."
+    },
+    "global_id": "327-r01#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): isModelDerivable (src/harness/routing/model-profile.ts:159-161) filters on NON_CHAT_ID_PATTERN (:129-130) and isFreeVariantModelId before any category derivation at the PR head/origin/main, confirming embed/image/tts/whisper/moderation/rerank ids are excluded from the derivable candidate set.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "sonnet-reviewer",
+    "severity": "blocker",
+    "problem": "Model profiles (500+ entries once a live catalog refresh ran) were stored inside `auth.json`, the same file holding provider credentials, rather than in their own file.",
+    "impact": "The credentials file grew unboundedly with non-secret profile data, mixing a security-sensitive file (API keys) with routine catalog data, and making every `auth.json` read/write slower and riskier than necessary -- a security-boundary violation, not just an organizational nit.",
+    "suggested_fix": "Move profiles into their own file (`model-profiles.json`, mode 0600) alongside the existing `provider-catalog.json` sibling, with a one-time migration that strips the legacy `modelProfiles` field from `auth.json`.",
+    "evidence": "model-profile.ts's module header: 'AC3, rewritten 2026-09-25 -- review of PR #718: 500+ profiles inside the credentials file and an unlocked read-modify-write race'; profiles now live in their own `model-profiles.json` (`modelProfilesFilePath`, model-profile.ts).",
+    "confidence": "high",
+    "file": "src/harness/routing/model-profile.ts",
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/model-profile.ts modelProfilesFilePath / loadStoredModelProfiles / saveStoredModelProfiles -- the single storage boundary every profile read/write goes through"
+      ],
+      "enumeration_method": "grepped every reader/writer of `auth.json`'s `modelProfiles` field and of the new `model-profiles.json`; profile storage has exactly one boundary in this module, now separated from `shellConfigPath`."
+    },
+    "global_id": "327-r01#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): modelProfilesFilePath (src/harness/routing/model-profile.ts:455) writes to its own model-profiles.json, separate from auth.json/shellConfigPath, at the PR head/origin/main. Ran `bun test src/harness/routing/model-profile.test.ts`: 0 fail, including 'model profiles persist to model-profiles.json, mode 0600, NOT inside auth.json' (line 393) and the byte-for-byte migration test (line 411).",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The profile read-modify-write against its storage (originally embedded in `auth.json`) took no lock, an unlocked race whenever two writers (e.g. a live catalog refresh and `providers test`) touched profiles concurrently.",
+    "impact": "A concurrent profile write from two sources (a startup catalog refresh racing an operator's `providers test`) could silently clobber one writer's update -- a lost-update race with no error and nothing on the record showing it happened.",
+    "suggested_fix": "Write profiles under the same `withFileLock` pattern `provider-catalog-cache.ts` already uses for its own on-disk cache.",
+    "evidence": "model-profile.ts's module header names 'an unlocked read-modify-write race' as part of the same AC3 rewrite as F-003; profiles are now written 'atomically under withFileLock (../../lib/fs.ts), the SAME pattern provider-catalog-cache.ts uses'.",
+    "confidence": "high",
+    "file": "src/harness/routing/model-profile.ts",
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/model-profile.ts -- every writer of model-profiles.json (the live catalog refresh path and the `providers test` single-entry path)"
+      ],
+      "enumeration_method": "grepped `withFileLock`/`model-profiles.json` writers in model-profile.ts; both writers share the one lock the module header describes, mirroring the same audit already done for provider-catalog-cache.ts in flow 309's review."
+    },
+    "global_id": "327-r01#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): withModelProfilesLock (src/harness/routing/model-profile.ts:614) wraps refreshModelProfiles (:659) and setModelProfileField (:738) at the PR head/origin/main. Ran `bun test src/harness/routing/model-profile.test.ts`: 0 fail, including the two concurrency tests ('two providers refreshing at the same time both persist', 'a routing profile set racing a refresh').",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "`keryx routing profile` (list/set) and the profile-updating side of `providers test` had no CLI-level test coverage -- only the underlying pure functions were unit-tested.",
+    "impact": "A regression in the CLI wiring (flag parsing, output formatting, exit codes) for `routing profile` or `providers test`'s profile update could ship without any test catching it.",
+    "suggested_fix": "Add CLI-level tests exercising `keryx routing profile list`/`set` and `providers test`'s profile-updating behaviour end to end.",
+    "evidence": "Fix commit 6f1b6f93da9a: 'CLI tests for routing profile and providers test.' src/commands/providers.model-profiles.test.ts and src/commands/routing.test.ts now exist and are part of the AC14-confirmed green test:core run.",
+    "confidence": "high",
+    "file": "src/commands/routing.test.ts",
+    "global_id": "327-r01#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): src/commands/routing.test.ts and src/commands/providers.model-profiles.test.ts exist with CLI-level coverage of 'routing profile list/set' and the providers-test refresh suffix at the PR head. Ran `bun test src/commands/routing.test.ts src/commands/providers.model-profiles.test.ts`: 0 fail.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 6f1b6f93da9a143c4423d09337fccd0a0ae615a3 (PR #718 round-1 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The version parser only recognised dotted version forms, but real Anthropic ids are hyphenated (`claude-opus-4-8`), and OpenAI's `gpt-4o` needed to read as version 4 of the gpt family -- neither parsed, so a newer same-family model could lose to an older one purely on list/alphabetical order.",
+    "impact": "The derived routing table could stay pinned to an older model within the same family even after a newer one appeared, since the ranking had no version signal to prefer it.",
+    "suggested_fix": "Make the version parser conservative but hyphen-aware: merge a run of 2-3 adjacent short (1-2 digit) hyphen-separated tokens into one dotted version (`4-8` -> `4.8`), while still refusing a lone date/snapshot stamp or multiple version-looking runs in the same id.",
+    "evidence": "derive-default-table.ts's module header: 'parseModelVersion is conservative (rewritten round 2 -- real Anthropic ids are hyphenated, not dotted, and the original parser refused every one of them)'. Fix commit 3e2c6f99e65e: 'claude-opus-4-8 reads as version 4.8 and gpt-4o as version 4 of the gpt family, so a newer same-family model never loses on alphabetical order'.",
+    "confidence": "high",
+    "file": "src/harness/routing/derive-default-table.ts",
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/derive-default-table.ts parseModelVersion/findVersionGroups/parseVersionGroup -- the single version-parsing path every family/version comparison uses"
+      ],
+      "enumeration_method": "grepped `parseVersion`/`findVersionGroups`/`parseVersionGroup` in derive-default-table.ts; version parsing happens in exactly one place, reused by every ranking comparison."
+    },
+    "global_id": "327-r01#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed at 3e2c6f99e65ec5bc28476d40860b9b88ec05dceb (PR #718 round-2 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): tokenize() (src/harness/routing/derive-default-table.ts:137-144) splits on any run of non-[a-z0-9.] characters, so 'claude-opus-4-8' yields adjacent tokens '4','8' recognised as version pieces of the 'claude-opus' family -- confirmed by reading the function and its doc comment at the PR head/origin/main.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 3e2c6f99e65ec5bc28476d40860b9b88ec05dceb (PR #718 round-2 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "`saveShellConfig` and the one-time profile migration (which strips the legacy `modelProfiles` field from `auth.json`) both wrote `auth.json` with no lock between them.",
+    "impact": "A profile migration write racing an unrelated `saveShellConfig` call (e.g. a `/reasoning` or `/think` TUI action) could interleave and corrupt or lose part of either write to the credentials file.",
+    "suggested_fix": "Guard the race between the two writers.",
+    "evidence": "Fix commit 3e2c6f99e65e: 'saveShellConfig and the one-time profile migration both take a sync lock on auth.json (profiles lock first)'. NOTE: this specific mechanism (a shared sync lock) was itself replaced in round 3 once it was found to freeze hot TUI paths (see F-010); the underlying race it closed is now guarded differently (see verifications.json).",
+    "confidence": "high",
+    "file": "src/lib/shell-config.ts",
+    "class_scope": {
+      "sites": [
+        "src/lib/shell-config.ts saveShellConfig -- one writer of auth.json",
+        "src/harness/routing/model-profile.ts stripModelProfilesFromAuthJsonUnlocked -- the migration strip, the other writer of auth.json"
+      ],
+      "enumeration_method": "grepped every writer of auth.json across src/lib and src/harness/routing; exactly these two write it, so the race is fully enumerated between them."
+    },
+    "global_id": "327-r01#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed at 3e2c6f99e65ec5bc28476d40860b9b88ec05dceb (PR #718 round-2 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): this fix's mechanism (withAuthFileLockSync) was itself removed in round 3, commit 7d3b04940e2a49c2b070c82378f2debf8bd07a06, once it was found to freeze hot TUI paths (see F-010) -- but the underlying race F-007 identified is closed differently at the PR head/origin/main, not reopened: stripModelProfilesFromAuthJsonUnlocked (src/harness/routing/model-profile.ts:570) re-reads auth.json immediately before writing and retries once on a concurrent change, while saveShellConfig (src/lib/shell-config.ts) is back to its original unconditional read-merge-write. Confirmed by reading both functions and the round-3 commit message (7d3b04940e2a49c2b070c82378f2debf8bd07a06) directly; not re-run as an isolated race test (none targets this exact interleaving).",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 3e2c6f99e65ec5bc28476d40860b9b88ec05dceb (PR #718 round-2 fix), mechanism later superseded by round 3 (7d3b04940e2a49c2b070c82378f2debf8bd07a06) while keeping this race guarded; verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The round-1 non-chat filter's pattern did not cover image-generation model families (`imagen`, `flux`, `stable-diffusion`, `sdxl`, `midjourney`), so they could still be derived as chat routing targets.",
+    "impact": "A connected provider offering an image-generation endpoint under one of these family names could still be picked as a routing default for a chat category.",
+    "suggested_fix": "Extend the non-chat detection pattern to cover the named image-generation families.",
+    "evidence": "Fix commit 3e2c6f99e65e: 'imagen, flux, stable-diffusion, sdxl and midjourney are never derived'. model-profile.ts's `isNonChatModelId` pattern (line ~130) now includes `imagen|flux|stable-diffusion|sdxl|midjourney` in its regex, with the module header crediting 'round 2 item 1'.",
+    "confidence": "high",
+    "file": "src/harness/routing/model-profile.ts",
+    "global_id": "327-r01#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed at 3e2c6f99e65ec5bc28476d40860b9b88ec05dceb (PR #718 round-2 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): NON_CHAT_ID_PATTERN (src/harness/routing/model-profile.ts:129-130) includes imagen, dall-?e, flux, stable-diffusion, sdxl and midjourney at the PR head/origin/main; confirmed by reading the pattern directly.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 3e2c6f99e65ec5bc28476d40860b9b88ec05dceb (PR #718 round-2 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "Parameter-size markers (`7b`, `70b`, `1.5b`, `8x7b`) were misread as version numbers, so `qwen2.5-coder-7b` and `qwen2.5-coder-32b` compared as two versions of the same family instead of being recognised as different families entirely; separately, only OpenAI's `4o` letter form should parse as a version, but any letter suffix was accepted.",
+    "impact": "Family-grouping and version comparison for size-suffixed model ids (common in open-weight model catalogs) produced wrong results, potentially ranking a smaller/larger parameter-count variant as a 'newer version' of an unrelated model.",
+    "suggested_fix": "Keep parameter-size markers as part of the family key (so differently-sized models never merge into one family), and restrict letter-suffix version parsing to the specific `4o`-style case rather than any letter.",
+    "evidence": "derive-default-table.ts's own comment (lines 108-120): 'original [a-z] shape also matched a parameter-size marker -- 7b in qwen2.5-coder-7b, 32b, 70b, 34b -- and misread the size as a version, which both (a) let familyKey merge qwen2.5-coder-7b and [a larger variant] ... A parameter-size marker (7b, 70b, 1.5b, 8x7b -- a total or MoE [count]) [is now kept in the family key]'. Fix commit 7d3b04940e2a: 'only OpenAI's 4o letter form parses as a version'.",
+    "confidence": "high",
+    "file": "src/harness/routing/derive-default-table.ts",
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/derive-default-table.ts familyKey/parseModelVersion -- the single family-key and version-parsing pair every size-suffixed model id passes through"
+      ],
+      "enumeration_method": "grepped `7b|70b|8x7b|1.5b` and `familyKey` in derive-default-table.ts; the size-marker handling and the version parser it interacts with are both defined once in this file."
+    },
+    "global_id": "327-r01#F-009",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed at 7d3b04940e2a49c2b070c82378f2debf8bd07a06 (PR #718 round-3 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): SIZE_TOKEN (src/harness/routing/derive-default-table.ts:129) is checked first in looksLikeVersionPiece (:132-135) and is never stripped from familyKey, so qwen2.5-coder-7b/-32b and llama-3.3-70b/-8b key to different families at the PR head/origin/main. Ran `bun test src/harness/routing/derive-default-table.test.ts`: 0 fail (37/37), covering the family/version pipeline this fix touches.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 7d3b04940e2a49c2b070c82378f2debf8bd07a06 (PR #718 round-3 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "Round 2's own fix (F-007) introduced a shared `auth.json` sync lock (`withAuthFileLockSync`) guarding every `saveShellConfig` call, including hot, latency-sensitive TUI paths like `/reasoning` and `/think`. The lock used an `Atomics.wait`-based mutex that could block the whole process for up to 2s under contention -- to guard a race that only the migration strip actually needed protection against.",
+    "impact": "Any `saveShellConfig` call made while another writer held the sync lock -- including everyday TUI interactions unrelated to profile migration -- could freeze the entire process for up to 2 seconds, a severe UX regression introduced by the prior round's own fix.",
+    "suggested_fix": "Remove the shared sync lock from `saveShellConfig`'s hot path entirely, and give the migration strip its own narrow, lock-free read/verify/write instead -- re-read `auth.json` right before writing, retry once on a concurrent change, then leave the field for the next run rather than blocking anything.",
+    "evidence": "model-profile.ts's module header (lines 28-37): 'Round 2 item 2 introduced, then round 3 REMOVED, a shared auth.json sync lock (withAuthFileLockSync): it made every saveShellConfig call ... take an Atomics.wait-based mutex that could block the whole process for up to 2s on contention ... saveShellConfig is back to its pre-lock, unconditional read-merge-write ... the migration strip now protects itself with a narrow, LOCK-FREE read/verify/write instead'. Fix commit 7d3b04940e2a: 'The sync auth.json lock is gone, restoring config writes as they were; the one-time profile migration re-reads auth.json right before writing, retries once on a concurrent change'. Confirmed no `Atomics` usage remains in src/harness or src/commands (one comment-only reference, at model-profile.ts line 31, documenting the removed approach).",
+    "confidence": "high",
+    "file": "src/harness/routing/model-profile.ts",
+    "class_scope": {
+      "sites": [
+        "src/lib/shell-config.ts saveShellConfig -- the one hot-path writer the sync lock wrapped",
+        "src/harness/routing/model-profile.ts stripModelProfilesFromAuthJsonUnlocked (the migration strip) -- the one caller that actually needed the guard, now lock-free"
+      ],
+      "enumeration_method": "grepped `Atomics` across src/harness and src/commands (one match, a comment describing the removed lock) and `withAuthFileLockSync`/`saveShellConfig` callers; the sync lock had exactly one wrapper and the module header names both call sites it affected."
+    },
+    "global_id": "327-r01#F-010",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed at 7d3b04940e2a49c2b070c82378f2debf8bd07a06 (PR #718 round-3 fix, contained in the squash-merge e59eeb35fdb9cfaae3313c7ae102b7ece88aedf8): withAuthFileLockSync and isEexistError are fully deleted from src/lib/shell-config.ts at the PR head/origin/main (confirmed via `git show 7d3b04940e2a49c2b070c82378f2debf8bd07a06 -- src/lib/shell-config.ts`, which shows the whole block removed and saveShellConfig restored to its original unconditional body); grepped src/lib/shell-config.ts and src/harness/routing/model-profile.ts for 'Atomics.wait' and 'withAuthFileLockSync' at the PR head -- the only remaining mention is a doc-comment in model-profile.ts explaining why it was removed, not executable code.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in 7d3b04940e2a49c2b070c82378f2debf8bd07a06 (PR #718 round-3 fix); verified refuted by operator-agent (see verifications.json)"
+    }
+  }
+]
