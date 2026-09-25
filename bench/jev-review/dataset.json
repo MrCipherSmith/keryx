@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-25T13:41:19.126Z",
+  "generatedAt": "2026-09-25T14:24:48.868Z",
   "sourceRepo": "keryx (this repository, public)",
   "labelMapping": {
     "true-positive": "disposition.state === \"acted-on\"",
@@ -3190,7 +3190,7 @@
       "disposition": {
         "state": "dismissed-out-of-scope",
         "source": "record",
-        "evidence": "human: altsay — the operator asked to close everything closable; this pair is not closable by a test without fabricating a distinction that does not exist. Named in PR #428 and carried openly rather than silently."
+        "evidence": "human: operator — the operator asked to close everything closable; this pair is not closable by a test without fabricating a distinction that does not exist. Named in PR #428 and carried openly rather than silently."
       },
       "label": "unlabeled"
     },
@@ -4684,7 +4684,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: no coverage of |-,|+,>+ spellings). Live parser handles all six AC1 spellings (11-case probe green). Parametrized unit test logged as follow-up; not a defect of this PR."
+        "evidence": "decided-by: operator (interactive, 2026-09-03). Verifier: confirmed (site-check: no coverage of |-,|+,>+ spellings). Live parser handles all six AC1 spellings (11-case probe green). Parametrized unit test logged as follow-up; not a defect of this PR."
       },
       "label": "unlabeled"
     },
@@ -4702,7 +4702,7 @@
       "disposition": {
         "state": "dismissed-wont-fix",
         "source": "record",
-        "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: CONTROL_SKILL is a plain scalar, comment says block scalar). Cosmetic comment mismatch; optional wording polish deferred."
+        "evidence": "decided-by: operator (interactive, 2026-09-03). Verifier: confirmed (site-check: CONTROL_SKILL is a plain scalar, comment says block scalar). Cosmetic comment mismatch; optional wording polish deferred."
       },
       "label": "unlabeled"
     },
@@ -4720,7 +4720,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: no skill-frontmatter.test.ts). Edges covered via adapter regression test + real-tree bundled-eval gate + manual probe; dedicated unit file logged as follow-up."
+        "evidence": "decided-by: operator (interactive, 2026-09-03). Verifier: confirmed (site-check: no skill-frontmatter.test.ts). Edges covered via adapter regression test + real-tree bundled-eval gate + manual probe; dedicated unit file logged as follow-up."
       },
       "label": "unlabeled"
     },
@@ -4882,7 +4882,7 @@
       "disposition": {
         "state": "acted-on",
         "source": "record",
-        "evidence": "decided-by: altsay (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): install-binary.sh verifies the sha256 digest GitHub records for the asset and fails closed on every branch that cannot establish one. Verifier: refuted by execution over five cases on merged main."
+        "evidence": "decided-by: operator (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): install-binary.sh verifies the sha256 digest GitHub records for the asset and fails closed on every branch that cannot establish one. Verifier: refuted by execution over five cases on merged main."
       },
       "label": "true-positive"
     },
@@ -4900,7 +4900,7 @@
       "disposition": {
         "state": "acted-on",
         "source": "record",
-        "evidence": "decided-by: altsay (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): orient, metrics and workspace added to the usage banner, and a new guard requiring the banner to name every reference-documented verb found health, providers and sync as well. Verifier: refuted by execution on merged main."
+        "evidence": "decided-by: operator (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): orient, metrics and workspace added to the usage banner, and a new guard requiring the banner to name every reference-documented verb found health, providers and sync as well. Verifier: refuted by execution on merged main."
       },
       "label": "true-positive"
     },
@@ -12316,7 +12316,7 @@
       "disposition": {
         "state": "dismissed-out-of-scope",
         "source": "record",
-        "evidence": "Deferred to P2. decided-by: altsay (operator), 2026-09-10, in the helyx channel — shown all three options (defer both / fix F-033 now / fix both) with the deferral as the stated recommendation, and answered agreeing to it. The defect is in tui-shell.ts's approval rendering rather than this package, is verified not to be an execution bypass, and wants the per-tool renderer P2's consumer-modal work needs anyway."
+        "evidence": "Deferred to P2. decided-by: operator (operator), 2026-09-10, in the helyx channel — shown all three options (defer both / fix F-033 now / fix both) with the deferral as the stated recommendation, and answered agreeing to it. The defect is in tui-shell.ts's approval rendering rather than this package, is verified not to be an execution bypass, and wants the per-tool renderer P2's consumer-modal work needs anyway."
       },
       "label": "unlabeled"
     },
@@ -12334,7 +12334,7 @@
       "disposition": {
         "state": "dismissed-out-of-scope",
         "source": "record",
-        "evidence": "Deferred to P2 with F-032. decided-by: altsay (operator), 2026-09-10, in the helyx channel — same question, same answer. Both are approval-rendering defects in the shell surfaces and want one fix together rather than two partial ones."
+        "evidence": "Deferred to P2 with F-032. decided-by: operator (operator), 2026-09-10, in the helyx channel — same question, same answer. Both are approval-rendering defects in the shell surfaces and want one fix together rather than two partial ones."
       },
       "label": "unlabeled"
     },
@@ -16078,7 +16078,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (repository owner), 2026-09-16, asked and answered explicitly during this flow: the documentation rewrite is deliberately deferred to phase P3 rather than done here. Partially addressed meanwhile — commit c0940dece8cf787b7a0b3c6717a3b4266db3e10d marks .metaproject/wiki/architecture/background-jobs.md superseded in part with a summary of what changed — while the full rewrite and the stale rows TOOL-11 and BGJOB-01..03 in docs/verification/keryx-shell-tui-test-catalog.md remain open, scheduled as phase P3 in docs/requirements/keryx-background-task-execution/. Recorded as deprioritised rather than fixed because the class this finding names is not closed."
+        "evidence": "decided-by: operator (repository owner), 2026-09-16, asked and answered explicitly during this flow: the documentation rewrite is deliberately deferred to phase P3 rather than done here. Partially addressed meanwhile — commit c0940dece8cf787b7a0b3c6717a3b4266db3e10d marks .metaproject/wiki/architecture/background-jobs.md superseded in part with a summary of what changed — while the full rewrite and the stale rows TOOL-11 and BGJOB-01..03 in docs/verification/keryx-shell-tui-test-catalog.md remain open, scheduled as phase P3 in docs/requirements/keryx-background-task-execution/. Recorded as deprioritised rather than fixed because the class this finding names is not closed."
       },
       "label": "unlabeled"
     },
@@ -20776,7 +20776,7 @@
       "disposition": {
         "state": "acted-on",
         "source": "record",
-        "evidence": "Operator decision (altsay, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
+        "evidence": "Operator decision (operator, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
       },
       "label": "true-positive"
     },
@@ -20794,7 +20794,7 @@
       "disposition": {
         "state": "acted-on",
         "source": "record",
-        "evidence": "Operator decision (altsay, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
+        "evidence": "Operator decision (operator, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
       },
       "label": "true-positive"
     },
@@ -21190,7 +21190,7 @@
       "disposition": {
         "state": "acted-on",
         "source": "record",
-        "evidence": "Operator decision (altsay, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
+        "evidence": "Operator decision (operator, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
       },
       "label": "true-positive"
     },
@@ -21208,7 +21208,7 @@
       "disposition": {
         "state": "acted-on",
         "source": "record",
-        "evidence": "Operator decision (altsay, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
+        "evidence": "Operator decision (operator, 2026-09-23 07:13 UTC) to fix rather than accept; fixed in PR #663, merged to main as e92b2b8d666b807e6f63cbee92692dc8665b8f71."
       },
       "label": "true-positive"
     },
@@ -23404,7 +23404,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -23944,7 +23944,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -24106,7 +24106,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -24322,7 +24322,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -24574,7 +24574,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -24610,7 +24610,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -24664,7 +24664,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -24808,7 +24808,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F13 (not fixed), classification: info. The link (.gemini/settings.json -> ../.claude/settings.json) and its target are both inside the project. A hostile repo gains nothing it could not get by committing .claude/settings.json directly. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F13 (not fixed), classification: info. The link (.gemini/settings.json -> ../.claude/settings.json) and its target are both inside the project. A hostile repo gains nothing it could not get by committing .claude/settings.json directly. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25114,7 +25114,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F7: partial. Still absent: the Cyrillic homoglyph (documented as a known gap at store.ts:430), a no-colon line and =. Fails open only for the entry's own author. Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F7: partial. Still absent: the Cyrillic homoglyph (documented as a known gap at store.ts:430), a no-colon line and =. Fails open only for the entry's own author. Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25258,7 +25258,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R1-F13: partial. python3 -c \"exec(urlopen(...).read())\", node -e \"fetch(..).then(eval)\", curl -so /tmp/p …; chmod +x; /tmp/p still produce NONE. These shapes would only ever be medium, which never blocks, and hooks import only with --allow-hooks, so no gate outcome changes. Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25294,7 +25294,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F10: unresolved. pc2 tag-chars still gives 0/0. Genuine ASCII smuggling in tag characters IS caught. Same class as R3-I5 (ZWJ). Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25330,7 +25330,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R2-F21: partial. Still missing: R1-F12 bundle content-validation test. No test asserts content-invalid; the behaviour itself works (f12.ts). Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25402,7 +25402,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F13 (not fixed), classification: info. The link (.gemini/settings.json -> ../.claude/settings.json) and its target are both inside the project. A hostile repo gains nothing it could not get by committing .claude/settings.json directly. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F13 (not fixed), classification: info. The link (.gemini/settings.json -> ../.claude/settings.json) and its target are both inside the project. A hostile repo gains nothing it could not get by committing .claude/settings.json directly. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25456,7 +25456,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F7: partial. Still absent: the Cyrillic homoglyph (documented as a known gap at store.ts:430), a no-colon line and =. Fails open only for the entry's own author. Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R3-F7: partial. Still absent: the Cyrillic homoglyph (documented as a known gap at store.ts:430), a no-colon line and =. Fails open only for the entry's own author. Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25528,7 +25528,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R4-F1: a ratchet test-adequacy gap, with no runtime defect of its own. The runtime sites are R5-F1 and R5-F3. Downgraded to info this round, per the calibration rule that a minor must be a reproduced correctness or safety defect. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R4-F1: a ratchet test-adequacy gap, with no runtime defect of its own. The runtime sites are R5-F1 and R5-F3. Downgraded to info this round, per the calibration rule that a minor must be a reproduced correctness or safety defect. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -25618,7 +25618,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R4-F5: partial. Unrelated quote pairs inside one sentence still downgrade a bare directive to medium. This gives an attacker nothing beyond the accepted design, where a fully quoted directive is also medium. Re-listed, info. (review-313-r5.md)"
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R4-F5: partial. Unrelated quote pairs inside one sentence still downgrade a bare directive to medium. This gives an attacker nothing beyond the accepted design, where a fully quoted directive is also medium. Re-listed, info. (review-313-r5.md)"
       },
       "label": "unlabeled"
     },
@@ -26014,7 +26014,7 @@
       "disposition": {
         "state": "dismissed-out-of-scope",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; So R5-F1 and R5-F3 are pre-existing on main, not regressions (review-313-r5.md, verified against main f4c72712). init.ts is untouched by this PR and was not in the final-pass lane ownership."
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; So R5-F1 and R5-F3 are pre-existing on main, not regressions (review-313-r5.md, verified against main f4c72712). init.ts is untouched by this PR and was not in the final-pass lane ownership."
       },
       "label": "unlabeled"
     },
@@ -26050,7 +26050,7 @@
       "disposition": {
         "state": "dismissed-out-of-scope",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; So R5-F1 and R5-F3 are pre-existing on main, not regressions (review-313-r5.md, verified against main f4c72712). The appended text is fixed by Keryx, not attacker-controlled, and existing content is kept."
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; So R5-F1 and R5-F3 are pre-existing on main, not regressions (review-313-r5.md, verified against main f4c72712). The appended text is fixed by Keryx, not attacker-controlled, and existing content is kept."
       },
       "label": "unlabeled"
     },
@@ -26266,7 +26266,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R8-F1 (minor, test quality): the agent-kind R7-F1 test (audit-harness.test.ts:2001) passes on pre-fix code. Its assertion (bundle-agent-unrestricted-tools) is satisfied by the NUL-interleaved noise view, and tools: '*' is not an unrestricted-tools trigger even in UTF-8. Reverting the agent branch to a UTF-8-only read would not fail any test."
+        "evidence": "decided-by: operator (owner, in chat); standing rule: 0 blocker/major => merge, minors deferred to the W4 follow-up flow; R8-F1 (minor, test quality): the agent-kind R7-F1 test (audit-harness.test.ts:2001) passes on pre-fix code. Its assertion (bundle-agent-unrestricted-tools) is satisfied by the NUL-interleaved noise view, and tools: '*' is not an unrestricted-tools trigger even in UTF-8. Reverting the agent branch to a UTF-8-only read would not fail any test."
       },
       "label": "unlabeled"
     },
@@ -26806,7 +26806,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, deferred to a follow-up flow (stale graduation proposals after a login config change + printed next-step command)"
+        "evidence": "decided-by: operator (owner, in chat, 2026-09-24): owner-approved exception, deferred to a follow-up flow (stale graduation proposals after a login config change + printed next-step command)"
       },
       "label": "unlabeled"
     },
@@ -26824,7 +26824,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, deferred to a follow-up flow (model-backed draft extractor label and sourceRef login gate)"
+        "evidence": "decided-by: operator (owner, in chat, 2026-09-24): owner-approved exception, deferred to a follow-up flow (model-backed draft extractor label and sourceRef login gate)"
       },
       "label": "unlabeled"
     },
@@ -26878,7 +26878,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, merged with this deferred to a follow-up flow (stale graduation proposals after a login config change + printed next-step command)"
+        "evidence": "decided-by: operator (owner, in chat, 2026-09-24): owner-approved exception, merged with this deferred to a follow-up flow (stale graduation proposals after a login config change + printed next-step command)"
       },
       "label": "unlabeled"
     },
@@ -26896,7 +26896,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat, 2026-09-24): owner-approved exception, merged with this deferred to a follow-up flow (model-backed draft extractor label and sourceRef login gate)"
+        "evidence": "decided-by: operator (owner, in chat, 2026-09-24): owner-approved exception, merged with this deferred to a follow-up flow (model-backed draft extractor label and sourceRef login gate)"
       },
       "label": "unlabeled"
     },
@@ -27076,7 +27076,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "info; deferred to the follow-up flow; decided-by: MrCipherSmith"
+        "evidence": "info; deferred to the follow-up flow; decided-by: operator"
       },
       "label": "unlabeled"
     },
@@ -27094,7 +27094,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "info; deferred to the follow-up flow; decided-by: MrCipherSmith"
+        "evidence": "info; deferred to the follow-up flow; decided-by: operator"
       },
       "label": "unlabeled"
     },
@@ -27112,7 +27112,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "info; the journal is append-only; decided-by: MrCipherSmith"
+        "evidence": "info; the journal is append-only; decided-by: operator"
       },
       "label": "unlabeled"
     },
@@ -27490,7 +27490,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "deferred to the grader-reliability follow-up flow; decided-by: MrCipherSmith"
+        "evidence": "deferred to the grader-reliability follow-up flow; decided-by: operator"
       },
       "label": "unlabeled"
     },
@@ -27778,7 +27778,7 @@
       "disposition": {
         "state": "dismissed-wont-fix",
         "source": "record",
-        "evidence": "info, reviewer recommended no action; decided-by: MrCipherSmith (owner, in chat), standing rule"
+        "evidence": "info, reviewer recommended no action; decided-by: operator (owner, in chat), standing rule"
       },
       "label": "unlabeled"
     },
@@ -27796,7 +27796,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+        "evidence": "decided-by: operator (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
       },
       "label": "unlabeled"
     },
@@ -27814,7 +27814,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+        "evidence": "decided-by: operator (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
       },
       "label": "unlabeled"
     },
@@ -27832,7 +27832,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+        "evidence": "decided-by: operator (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
       },
       "label": "unlabeled"
     },
@@ -27850,7 +27850,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+        "evidence": "decided-by: operator (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
       },
       "label": "unlabeled"
     },
@@ -27868,7 +27868,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "decided-by: MrCipherSmith (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
+        "evidence": "decided-by: operator (owner, in chat), standing rule: info finding deferred to follow-up scope in flow 315 journal"
       },
       "label": "unlabeled"
     },
@@ -27886,7 +27886,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "info: getter-accessor fix judged legitimate; optional extra calibration deferred. decided-by: MrCipherSmith (owner, in chat), standing rule"
+        "evidence": "info: getter-accessor fix judged legitimate; optional extra calibration deferred. decided-by: operator (owner, in chat), standing rule"
       },
       "label": "unlabeled"
     },
@@ -28012,7 +28012,7 @@
       "disposition": {
         "state": "dismissed-deprioritised",
         "source": "record",
-        "evidence": "info: floor fragility noted in W1; the v2 re-run demoted react honestly. decided-by: MrCipherSmith (owner, in chat), standing rule"
+        "evidence": "info: floor fragility noted in W1; the v2 re-run demoted react honestly. decided-by: operator (owner, in chat), standing rule"
       },
       "label": "unlabeled"
     },

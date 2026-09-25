@@ -92,6 +92,28 @@ positive would reward rejecting scope rather than being accurate.
 `unlabeled` findings are still counted (`dataset.counts.byLabel`) and
 reported; they are excluded from precision/recall denominators.
 
+**Caveat — class imbalance (read before quoting a precision number from this
+dataset):** as of this writing the dataset's two scored labels are wildly
+imbalanced — 1351 `true-positive` (acted-on) against 3
+`dismissed-incorrect`. A precision figure computed against these labels
+(true-positive / (true-positive + false-positive)) mostly reflects how
+rarely a human reviewer marks a finding `dismissed-incorrect` at all, not a
+clean false-positive rate for whatever is being scored — with only 3
+negatives in the whole dataset, one mislabelled or borderline disposition
+can swing the ratio by a third. Hand-labelled samples (AC3's
+`addedTruePositives`, or a dedicated precision/recall pass against a fresh
+sample) are required before quoting a precision number from this dataset as
+a finding rather than a description of reviewer behaviour.
+
+**Caveat — identity scrubbing:** `evidence` text (and other free text)
+copied from `findings.json`'s `disposition.evidence` or the disposition
+ledger into `dataset.json` has personal handles, names and any email
+address replaced with the neutral token `operator` before it is written —
+see `build-dataset.ts`'s `scrubIdentity` (a small documented list of known
+handles/names plus one email regex). Structural fields (`prRef`,
+`reviewId`, …) are left untouched: those are GitHub provenance, not free
+text.
+
 Disposition resolution order (also mirrored from that script, reimplemented
 here rather than imported because its functions aren't exported and its
 `main()` runs on import): the finding's own `disposition` field, then a
@@ -194,13 +216,25 @@ convention:
    Wilson CI (`src/metrics/benchmark.ts`'s `deriveRate`/`wilsonInterval`,
    already this repository's honesty primitive for exactly this problem —
    `metrics-and-validation.md` §M07/§M08).
-2. A component/arm with `n < 10` is labelled **anecdotal** inline in the
-   table row, not in a footnote a reader can miss.
+2. Anecdotal labelling is **per rate, not per component**: `accuracy`,
+   `precision` and `noise` each carry their own `n` — the denominator that
+   rate was actually computed over (e.g. precision's flagged-with-known-
+   correctness subset, which can be far smaller than the component's
+   overall case count) — and `formatRate` marks THAT rate **anecdotal**
+   inline the moment its own `n < 10`. A component with a large overall `n`
+   can still report an anecdotal precision; the component-level `(n=…)` tag
+   next to the arm name is context, not a substitute for each rate's own
+   check.
 3. `--repeat N` (live only — offline replay is deterministic, so repeating
    it would report a fake zero variance) reruns each available with-jev
-   arm's accuracy-bearing component N times and reports mean/stddev/a
-   percentile bootstrap 95% CI across the repeats in its own report
-   section, present only when the run actually measured any.
+   arm's accuracy-bearing component N times and reports mean/stddev across
+   the repeats in its own report section, present only when the run
+   actually measured any. The interval next to it is a percentile bootstrap
+   95% CI only when `N >= 5`; below that (e.g. the committed `--repeat 2`
+   runs) a bootstrap over so few points is descriptive, not a real
+   interval — it collapses to the plain min/max of the values measured — so
+   the report labels it honestly as "range over N repeats" instead of
+   "bootstrap 95% CI".
 
 ## AC5: offline vs. live
 

@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildDataset } from "./build-dataset";
+import { buildDataset, scrubIdentity } from "./build-dataset";
 
 let ROOT = "";
 
@@ -192,6 +192,66 @@ describe("buildDataset: determinism (AC1)", () => {
     expect(strip(first)).toEqual(strip(second));
     // Sorted by globalId, not insertion order.
     expect(first.findings.map((f) => f.globalId)).toEqual(["pkg-a#F-001", "pkg-b#F-001"]);
+  });
+});
+
+describe("scrubIdentity: known personal handles/names and any email -> 'operator'", () => {
+  test("replaces each documented handle/name, case-insensitively", () => {
+    expect(scrubIdentity("decided-by: altsay (operator, 2026-09-03)")).toBe("decided-by: operator (operator, 2026-09-03)");
+    expect(scrubIdentity("decided-by: ALTSAY")).toBe("decided-by: operator");
+    expect(scrubIdentity("decided-by: aleksandr-tsaitler (interactive)")).toBe("decided-by: operator (interactive)");
+    expect(scrubIdentity("decided-by: Aleksandr Tsaitler")).toBe("decided-by: operator");
+    expect(scrubIdentity("decided-by: MrCipherSmith (owner, in chat)")).toBe("decided-by: operator (owner, in chat)");
+  });
+
+  test("replaces any email address, not just the operator's own", () => {
+    expect(scrubIdentity("contact aleks.zeitler@gmail.com for details")).toBe("contact operator for details");
+    expect(scrubIdentity("cc: someone.else+tag@example.co.uk")).toBe("cc: operator");
+  });
+
+  test("leaves unrelated text untouched", () => {
+    expect(scrubIdentity("closed by `47d1cab1` (#442): install-binary.sh verifies the digest")).toBe(
+      "closed by `47d1cab1` (#442): install-binary.sh verifies the digest",
+    );
+  });
+});
+
+describe("buildDataset: evidence text is scrubbed of personal identity before it reaches the dataset", () => {
+  test("a recorded disposition's evidence has handles/names/emails replaced with 'operator'", async () => {
+    await writePackage(
+      ROOT,
+      ".metaproject/reviews/pkg-scrub",
+      { reviewId: "pkg-scrub", target: { kind: "pr", ref: "1" } },
+      [
+        {
+          id: "F-001",
+          reviewer: "r",
+          severity: "major",
+          disposition: { state: "acted-on", evidence: "decided-by: altsay (operator, 2026-09-03, via helyx-channel), reach at altsay@example.com" },
+        },
+      ],
+    );
+    const dataset = buildDataset(ROOT);
+    const evidence = dataset.findings.find((f) => f.findingId === "F-001")?.disposition.evidence ?? "";
+    expect(evidence).not.toContain("altsay");
+    expect(evidence).not.toContain("@");
+    expect(evidence).toContain("operator");
+  });
+
+  test("a ledger row's evidence is scrubbed the same way", async () => {
+    await writePackage(ROOT, ".metaproject/reviews/pkg-scrub-2", { reviewId: "pkg-scrub-2", target: { kind: "pr", ref: "2" } }, [
+      { id: "F-001", reviewer: "r", severity: "major" },
+    ]);
+    await writeFile(
+      path.join(ROOT, ".metaproject", "reviews", "dispositions.json"),
+      JSON.stringify({
+        rows: [{ reviewId: "pkg-scrub-2", findingId: "F-001", category: "acted-on", evidence: "decided-by: MrCipherSmith (owner, in chat)" }],
+      }),
+    );
+    const dataset = buildDataset(ROOT);
+    const evidence = dataset.findings.find((f) => f.findingId === "F-001")?.disposition.evidence ?? "";
+    expect(evidence).not.toContain("MrCipherSmith");
+    expect(evidence).toContain("decided-by: operator");
   });
 });
 

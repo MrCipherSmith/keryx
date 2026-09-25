@@ -145,6 +145,33 @@ describe("AC4: anecdotal labelling", () => {
   });
 });
 
+describe("AC4: anecdotal is rate-level (flow 331, small fixes) — a rate's own n governs it, not the component's", () => {
+  test("a large-n component (n=20) with a small flagged subset (n=3): component-level anecdotal is false, precision's own n is still below the threshold", () => {
+    const predictions = [
+      { id: "clause-1", flagged: true, correct: true },
+      { id: "clause-2", flagged: true, correct: true },
+      { id: "clause-3", flagged: true, correct: false },
+      ...Array.from({ length: 17 }, (_, i) => ({ id: `u${i}`, flagged: false, correct: null })),
+    ];
+    const result: ComponentArmResult = {
+      component: "review-conform",
+      arm: "with-jev",
+      available: true,
+      n: 20,
+      predictions,
+      usage,
+      addedTruePositives: null,
+      notes: [],
+    };
+    const metrics = computeMetrics(result);
+    if (!metrics.available) throw new Error("unreachable");
+    expect(metrics.n).toBe(20);
+    expect(metrics.anecdotal).toBe(false); // the component's own n=20 is not anecdotal
+    expect(metrics.precision?.n).toBe(3); // but precision's actual denominator is the flagged subset, not the component n
+    expect(metrics.precision && metrics.precision.n < ANECDOTAL_THRESHOLD_N).toBe(true);
+  });
+});
+
 describe("AC4: repeat-run variance", () => {
   test("identical repeats -> zero stddev, a degenerate (point) bootstrap interval", () => {
     const report = varianceReport("ci-triage", [0.625, 0.625, 0.625]);

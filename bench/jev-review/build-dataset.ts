@@ -82,6 +82,36 @@ function findingKey(reviewId: string, finding: OnDiskFinding): string {
   return typeof finding.global_id === "string" && finding.global_id !== "" ? finding.global_id : `${reviewId}#${finding.id}`;
 }
 
+// IDENTITY SCRUB — `dataset.json` is committed to a public repository.
+// `evidence` text is human-written free text (decided-by/human-attribution
+// phrases in `findings.json`'s `disposition.evidence` and in the
+// disposition ledger), so it is the one place this builder copies operator
+// identity into a public file. Replace it with the neutral token
+// "operator" before it's written out: a small, documented list of known
+// personal handles/names, plus one general email regex (any address, not
+// just the operator's own — a reviewer quoting someone else's email in
+// evidence text is exactly as much of a leak).
+//
+// Keep this list in sync with the identities that actually show up in this
+// repository's review history — see `build-dataset.test.ts` for the strings
+// it covers. Deliberately NOT applied to `prRef`/structural fields: those
+// are GitHub URLs this dataset needs for provenance, not free text.
+const IDENTITY_PATTERNS: readonly RegExp[] = [
+  /altsay/gi,
+  /aleksandr-tsaitler/gi,
+  /Aleksandr Tsaitler/gi,
+  /MrCipherSmith/gi,
+];
+const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const IDENTITY_TOKEN = "operator";
+
+export function scrubIdentity(text: string): string {
+  let out = text;
+  for (const pattern of IDENTITY_PATTERNS) out = out.replace(pattern, IDENTITY_TOKEN);
+  out = out.replace(EMAIL_PATTERN, IDENTITY_TOKEN);
+  return out;
+}
+
 /** Every directory holding a `manifest.json`, under both roots review packages are written to — mirrors `review-precision-baseline.ts`'s `packageDirs`. */
 function packageDirs(root: string): string[] {
   const out: string[] = [];
@@ -160,7 +190,7 @@ function resolveDisposition(
       return {
         state: recordedState,
         source: "record",
-        evidence: finding.disposition?.evidence ?? `${reviewId}/findings.json: disposition recorded without evidence`,
+        evidence: scrubIdentity(finding.disposition?.evidence ?? `${reviewId}/findings.json: disposition recorded without evidence`),
       };
     }
   }
@@ -178,7 +208,7 @@ function resolveDisposition(
     if (!isDispositionState(row.category)) {
       problems.push(`ledger: ${key} has unknown category "${row.category}"`);
     } else {
-      return { state: row.category, source: "ledger", evidence: row.evidence };
+      return { state: row.category, source: "ledger", evidence: scrubIdentity(row.evidence) };
     }
   }
 

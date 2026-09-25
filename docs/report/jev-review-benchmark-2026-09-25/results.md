@@ -17,6 +17,15 @@ findings, of which 1351 are labelled `true-positive` (acted on),
 `unlabeled` (dismissed for a reason that says nothing about accuracy, or
 never dispositioned) — see the README for the exact label mapping.
 
+**Caveat — class imbalance:** 1351 acted-on against 3 dismissed-incorrect is
+a heavily imbalanced pair of labels. A precision number computed against
+them (true-positive / (true-positive + false-positive)) mostly reflects how
+rarely a human reviewer marks a finding `dismissed-incorrect` at all — with
+only 3 negatives across the whole dataset, one borderline disposition moves
+the ratio by a third — not a clean false-positive rate for whatever is
+being scored. Hand-labelled samples are required before quoting a precision
+number computed from these labels as a finding.
+
 ## What Jev improved
 
 Nothing, on this run. `review-conform` has no non-Jev baseline to compare
@@ -45,6 +54,14 @@ identical 8 cases. A live model call over the same inputs did not return
 the same verdict both times. Any single-run accuracy figure for this
 component, including the 37.5% above, should be read against that spread,
 not as a fixed number.
+
+**Caveat — this is a range, not a confidence interval:** the underlying
+`results-2026-09-25.md` reports this spread as a "range over 2 repeats:
+[37.5%, 50.0%]", not a "bootstrap 95% CI". With only 2 repeats a percentile
+bootstrap has too little data to behave like a real interval — it collapses
+to the plain min/max of the two values measured — so this benchmark labels
+that interval as a range, not a statistical CI, whenever a run has fewer
+than 5 repeats.
 
 ## At what cost
 

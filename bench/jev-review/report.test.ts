@@ -81,6 +81,52 @@ describe("renderMarkdown: AC4 anecdotal labelling", () => {
   });
 });
 
+describe("renderMarkdown: AC4 anecdotal labelling is rate-level (flow 331, small fixes)", () => {
+  test("a large-n component with a small flagged subset marks precision anecdotal even though the component's own n is not", () => {
+    const predictions = [
+      { id: "clause-1", flagged: true, correct: true },
+      { id: "clause-2", flagged: true, correct: true },
+      { id: "clause-3", flagged: true, correct: false },
+      // 17 more predictions, unflagged and unscored — pushes the component's
+      // overall n to 20 (well above the anecdotal threshold) while leaving
+      // precision's actual denominator (the flagged-with-known-correctness
+      // subset) at 3.
+      ...Array.from({ length: 17 }, (_, i) => ({ id: `u${i}`, flagged: false, correct: null })),
+    ];
+    const result: ComponentArmResult = {
+      component: "review-conform",
+      arm: "with-jev",
+      available: true,
+      n: 20,
+      predictions,
+      usage,
+      addedTruePositives: null,
+      notes: [],
+    };
+    const metrics = computeMetrics(result);
+    if (!metrics.available) throw new Error("unreachable");
+    expect(metrics.n).toBe(20);
+    expect(metrics.precision?.n).toBe(3);
+
+    const markdown = renderMarkdown(
+      buildReport([metrics], [], {
+        generatedAt: "2026-09-25T00:00:00.000Z",
+        mode: "offline",
+        datasetCounts: { packages: 1, findings: 1, byLabel: { "true-positive": 1, "false-positive": 0, unlabeled: 0 } },
+        totalUsage: { jevCalls: 0, cost: 0, wallClockMs: 0 },
+        notes: [],
+      }),
+    );
+    const row = markdown.split("\n").find((line) => line.startsWith("| review-conform |"));
+    expect(row).toBeDefined();
+    // The component-level tag (n=20) is not anecdotal...
+    expect(row).toContain("(n=20)");
+    // ...but precision's own n=3 is, and the row says so right next to that number.
+    expect(row).toContain("precision: 66.7% (n=3");
+    expect(row).toMatch(/precision: 66\.7% \(n=3, 95% CI \[[^\]]*\]\) \*\*anecdotal\*\*/);
+  });
+});
+
 describe("renderMarkdown: not-available components", () => {
   test("prints the reason, not a metric", () => {
     const na: ComponentNotAvailable = { component: "flow-check-ac", arm: "with-jev", available: false, reason: "flow 328 not yet landed" };

@@ -24,7 +24,13 @@ describe("run.ts: offline (AC5 hermetic, AC2 wiring, AC4 honesty)", () => {
       });
       expect(result.status).toBe(0);
 
-      const date = new Date().toISOString().slice(0, 10);
+      // Derive the date from the script's own "wrote results-<date>.json"
+      // stdout line, not by recomputing `new Date()` here — the two can
+      // legitimately disagree by a day if this test happens to run across a
+      // UTC midnight boundary between the subprocess's write and this check.
+      const written = result.stdout.match(/results-(\d{4}-\d{2}-\d{2})\.json/);
+      if (!written) throw new Error(`run.ts did not report the date it wrote in stdout: ${result.stdout}`);
+      const date = written[1];
       const jsonRaw = await readFile(path.join(outDir, `results-${date}.json`), "utf8");
       const mdRaw = await readFile(path.join(outDir, `results-${date}.md`), "utf8");
 
