@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no honest gate run yet -- Phase A of flow 336; agents generate only after the trials=10 DeepSeek gate in Phase B"
+  "note": "no pair -- honest DeepSeek deepseek-chat runner+judge gate (trials=10, strictness=high, flow 336) fails all 4 skills on trigger accuracy, never on behavior (every behavior scenario 1.0/1.0): swiftui-implementation TP 1/7 FP 0/7, swift-testing TP 3/7 FP 0/7, swift-code-review TP 2/6 FP 2/7 (a Swift diff wrongly routed to review when the prompt asked to implement a fix, despite the skill's own 'Read-only, no edits' description clause), swift-build-fix TP 1/6 FP 0/7. Genuine routing weakness against a crowded catalog, not an authoring defect -- stays experimental per flow 336's stack-pack-lessons.md rule against tuning descriptions to restate failing eval prompts."
 }
