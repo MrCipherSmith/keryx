@@ -2,7 +2,7 @@
   "id": "kotlin-android",
   "family": "framework",
   "modules": ["kotlin-android-rules", "kotlin-android-skills"],
-  "detectionMarkers": ["kotlin", "android", "gradle"],
+  "detectionMarkers": ["android"],
   "provenance": { "origin": "authored", "sourceRef": "flow 336, Wave 4 batch 4" },
   "stability": "experimental",
   "skills": {

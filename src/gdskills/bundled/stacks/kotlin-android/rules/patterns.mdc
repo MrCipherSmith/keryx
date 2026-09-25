@@ -39,13 +39,15 @@ Kotlin coroutines and Jetpack Compose design. Applies only to
 
 ## Compose: recomposition correctness
 
-- A composable's parameters should be stable (a primitive, a `data class`
-  of stable members, an immutable collection, or a type the Compose
-  compiler can otherwise infer as stable) — an unstable parameter type
-  (a plain `List`/`MutableList`, a mutable var-holding class with no
-  `@Stable`/`@Immutable` annotation) defeats the compiler's skip check and
-  forces recomposition on every parent recomposition even when the value
-  did not change.
+- Strong skipping mode is the Compose compiler default since Kotlin 2.0.20:
+  every restartable composable is skippable even with an unstable
+  parameter (a plain `List`/`MutableList`, a mutable var-holding class with
+  no `@Stable`/`@Immutable` annotation) — the compiler compares unstable
+  parameters by instance identity instead of refusing to skip. Prefer
+  stable parameters anyway (a primitive, a `data class` of stable members,
+  an immutable collection) since identity comparison still recomposes on
+  every NEW instance (e.g. a `List` rebuilt each call), where a genuinely
+  stable/immutable type can compare equal and skip.
 - Hoist state to the nearest common ancestor that needs it (a caller, or
   the owning `ViewModel`) instead of trapping it inside a leaf composable
   when a sibling or the caller also needs to read or drive it; a leaf
@@ -61,11 +63,15 @@ Kotlin coroutines and Jetpack Compose design. Applies only to
   body — route it through `LaunchedEffect(key1, ...) { }` (re-runs when a
   key changes) or `DisposableEffect(key) { onDispose { ... } }` (needs
   cleanup), never as a bare statement that runs on every recomposition.
-- Pass a lambda's identity stably (hoist it, or wrap it with
-  `rememberUpdatedState`/`remember` when it closes over a value that
-  changes) instead of allocating a fresh lambda inline in a hot list item
-  — an unstable lambda parameter defeats `LazyColumn` item-level skipping
-  the same way an unstable data parameter does.
+- Under strong skipping mode (default since Kotlin 2.0.20), the compiler
+  auto-memoizes a lambda declared inside a composable by wrapping it in an
+  implicit `remember`, keyed on its captures — a lambda passed inline to a
+  hot list item no longer needs manual hoisting for identity stability in
+  the common case. Reach for `@DontMemoize` only to opt a specific lambda
+  out (e.g. one that must run fresh every recomposition), and still hoist
+  a lambda explicitly when it closes over a value from an outer scope that
+  changes on a schedule the auto-memoization's capture-based keying
+  wouldn't track correctly.
 
 ## State exposure from a ViewModel
 

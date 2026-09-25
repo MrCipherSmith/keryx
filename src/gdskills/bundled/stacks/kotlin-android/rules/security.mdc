@@ -14,10 +14,16 @@ files.
 ## Secrets and credential storage
 
 - Never store a credential, auth token, or API secret in plain
-  `SharedPreferences` — use `EncryptedSharedPreferences` (Jetpack
-  Security) or the Android Keystore directly for anything sensitive;
-  plain `SharedPreferences` is an unencrypted XML file readable on a
-  rooted device or via backup extraction.
+  `SharedPreferences` — plain `SharedPreferences` is an unencrypted XML
+  file readable on a rooted device or via backup extraction. Prefer the
+  Android Keystore directly (generate/store the key in the Keystore, use
+  it to encrypt the value yourself) over `EncryptedSharedPreferences`
+  (Jetpack `androidx.security:security-crypto`) for new code — that
+  library has known, unresolved reliability issues (a corrupted-keyset
+  failure mode with no clean recovery path) and Google's own guidance has
+  moved toward not recommending it for new applications; verify the
+  library's current status in the Android docs before reaching for it in
+  an existing codebase that already depends on it.
 - Never hard-code an API key, client secret, or signing credential as a
   Kotlin string literal or a `BuildConfig` field populated from a
   committed value — load it from a local, untracked properties file

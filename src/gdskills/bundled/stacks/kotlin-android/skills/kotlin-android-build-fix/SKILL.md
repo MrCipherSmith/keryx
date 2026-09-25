@@ -52,12 +52,17 @@ text and classify it:
 
 ### Step 2: Fix by category
 
-**Version/toolchain mismatch:** check the Compose Compiler-to-Kotlin
-compatibility (each Compose Compiler version targets a specific Kotlin
-version; a mismatch is a common, specific failure mode) and align the
-declared versions in the version catalog/`build.gradle(.kts)` rather than
-forcing one side with an override. Only bump `compileSdk`/`minSdk` when
-the failure actually requires the newer API, and say so in the report.
+**Version/toolchain mismatch:** since Kotlin 2.0, the Compose Compiler ships
+via the `org.jetbrains.kotlin.plugin.compose` Gradle plugin versioned
+IDENTICALLY to the Kotlin version itself (`version.ref = "kotlin"` in the
+version catalog) — there is no separate compiler-to-Kotlin compatibility
+matrix to consult on a current project; a mismatch here usually means the
+plugin's declared version drifted from the Kotlin version, or (pre-2.0
+project) an old `composeOptions { kotlinCompilerExtensionVersion }`
+declaration left over from before the plugin migration. Align the plugin
+version to match Kotlin exactly, or migrate off `kotlinCompilerExtensionVersion`
+to the plugin. Only bump `compileSdk`/`minSdk` when the failure actually
+requires the newer API, and say so in the report.
 
 **Dependency resolution failure:** run `./gradlew :module:dependencies
 --configuration <config>` to see the actual resolved tree before pinning
@@ -68,12 +73,13 @@ one.
 
 **Lint finding:** fix the underlying issue the finding names (a real
 resource/API-level issue, a missing content description, an exported
-component with no permission). Never add a blanket `lintOptions {
-abortOnError false }`/`disable` entry or a file-level `@Suppress` whose
-only purpose is to make the check stop complaining without addressing
-what it found; a narrowly-scoped, justified suppression at the single
-call site (with a comment explaining why) is the last resort, not the
-first move.
+component with no permission). Never add a blanket `lint {
+abortOnError = false }`/`disable` entry (the current Android Gradle Plugin
+DSL block is `lint { }`; the older `lintOptions { }` block is deprecated)
+or a file-level `@Suppress` whose only purpose is to make the check stop
+complaining without addressing what it found; a narrowly-scoped, justified
+suppression at the single call site (with a comment explaining why) is the
+last resort, not the first move.
 
 **ktlint/detekt finding:** fix the actual style/complexity issue the rule
 names. Never disable the rule project-wide in `.editorconfig`/
@@ -99,9 +105,11 @@ original failure. All must exit 0 before reporting done.
 ### Step 4: Report
 
 ```
-Fixed: Compose Compiler/Kotlin version mismatch in gradle/libs.versions.toml
-  - Root cause: Compose Compiler 1.5.x pinned against a Kotlin bump to 2.0
-  - Aligned both to the compatible pair from the compiler's release notes
+Fixed: Compose Compiler plugin version mismatch in gradle/libs.versions.toml
+  - Root cause: org.jetbrains.kotlin.plugin.compose left pinned to the old
+    Kotlin version after a Kotlin bump (the plugin must track Kotlin exactly
+    since Kotlin 2.0, not a separate compatibility pairing)
+  - Set the plugin's version.ref to the same catalog entry as kotlin
   - ./gradlew assembleDebug/testDebugUnitTest/lint all pass
 ```
 
@@ -111,7 +119,7 @@ State the root cause in one sentence, not just "build now passes."
 
 - Find and fix the smallest change that addresses the actual root cause —
   never widen a fix beyond what the failure requires.
-- NEVER add a blanket `@Suppress`, `lintOptions { abortOnError false }`,
+- NEVER add a blanket `@Suppress`, `lint { abortOnError = false }`,
   or a project-wide `detekt`/`ktlint` rule disable to silence a finding
   instead of fixing what it found.
 - NEVER bump `compileSdk`, `minSdk`, or a major Gradle/Kotlin/AGP version

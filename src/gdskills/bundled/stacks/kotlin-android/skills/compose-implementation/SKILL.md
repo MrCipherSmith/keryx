@@ -73,8 +73,11 @@ summary.
    MutableStateFlow(...)` / `val state = _state.asStateFlow()`; collect
    it in Compose with `collectAsStateWithLifecycle()`.
 2. Keep composable parameters stable (primitives, `data class`es of
-   stable members, immutable collections) so the Compose compiler can
-   skip recomposition when nothing actually changed.
+   stable members, immutable collections) — strong skipping mode (default
+   since Kotlin 2.0.20) lets the compiler skip even an unstable parameter
+   via instance-identity comparison, but only a genuinely stable/immutable
+   type can compare EQUAL across calls and actually skip when nothing
+   changed; an unstable type rebuilt fresh each call still recomposes.
 3. Hoist state per `rules/patterns.mdc`; use `remember`/`rememberSaveable`
    for composable-local state, never a `var` mutated directly inside the
    composable body outside of a `remember` holder.

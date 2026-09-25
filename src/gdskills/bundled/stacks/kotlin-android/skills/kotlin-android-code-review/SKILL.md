@@ -58,7 +58,12 @@ are the rule set findings are checked against.
 - A composable parameter of an unstable type (a plain mutable `List`, a
   class with public `var`s and no `@Stable`/`@Immutable`) in a
   performance-sensitive position (a `LazyColumn` item, a frequently
-  recomposing parent) — flag as a likely recomposition-skip defeat.
+  recomposing parent) — under the strong skipping mode default since
+  Kotlin 2.0.20 this no longer defeats skipping outright (the compiler
+  falls back to instance-identity comparison), but a NEW instance built on
+  every call (a `List` rebuilt each recomposition) still can't compare
+  equal and skip; flag it as a likely unnecessary-recomposition risk, not
+  a hard skip defeat.
 - State read/written with a bare `var` inside a composable body with no
   `remember`/`rememberSaveable` wrapper — flag it; the value will not
   survive recomposition as intended.
@@ -79,8 +84,10 @@ are the rule set findings are checked against.
   entry with `android:exported="true"` and no permission attribute — flag
   it, and check whether the component actually needs to be reachable
   from other apps.
-- A new credential/token written to plain `SharedPreferences` instead of
-  `EncryptedSharedPreferences`/Keystore — flag it.
+- A new credential/token written to plain `SharedPreferences` — flag it;
+  the fix direction is the Android Keystore directly, not
+  `EncryptedSharedPreferences` (known reliability issues, no longer
+  recommended for new code per `rules/security.mdc`).
 
 ### Step 3: Report
 
@@ -116,7 +123,7 @@ feature/profile/ProfileViewModel.kt:28 — GlobalScope.launch used to save
 | "This GlobalScope call is for a quick analytics ping, it's harmless" | Harmless intent doesn't change that nothing cancels it; flag it regardless of what the call does |
 | "The `!!` here is fine, this field is always populated by the backend" | "Always" is an external contract, not a compiler-verified guarantee; report it as a finding, the API can still return the field as null once |
 | "I'll just fix the exported manifest attribute myself, it's a one-line change" | This skill is read-only; report the finding and its fix direction, do not edit the file |
-| "The composable parameter type is a List, that's fine for now" | A raw `List` is not stable to the Compose compiler; flag it, especially in a list item or frequently-recomposing position |
+| "The composable parameter type is a List, that's fine for now" | A raw `List` is unstable, and strong skipping's instance-identity fallback still won't skip a NEW list instance built every call; flag it, especially in a list item or frequently-recomposing position |
 
 ## Verification
 
