@@ -115,3 +115,34 @@
   the run, agent pairs only for packs that clear the gate) and the git-hygiene rules (no stash, no
   `add -A`, no trailers) are unchanged.
 - 2026-09-25T12:41:36.640Z - task-done: T9: Author angular pack (extends ts-js-node)
+- 2026-09-25T12:55:51.026Z - task-done: T11: Extend install-manifest.json for all 5 packs (modules/components/profiles)
+- 2026-09-25T13:10:25.089Z - task-done: T12: Judge calibration: judge-check --record for every new skill until AG green
+- 2026-09-25T13:51:19.258Z - task-done: T13: Honest gate run (deepseek runner+judge, trials=10) for every new skill
+- 2026-09-25T13:51:38.213Z - task-done: T14: Stability promotion + agents generate for packs that clear the gate
+- 2026-09-25T13:53:45.593Z - task-done: T15: Update W1/W2 docs with batch-2 implementation notes
+- **Base-branch record vs. owner's mid-flight retarget — a known, unresolved
+  gap, decided rather than routed around.** This flow was `keryx flow init
+  --base feat/agent-platform-expansion`-ed before PR #700 merged. The owner
+  (chat, relayed via the coordinator) then directed: once #700 merges into
+  main, rebase this flow's branch onto main and open its PR against main
+  instead — a legitimate program-level retarget, not an attempt to dodge a
+  check. `flow.json`'s `baseBranch` field, however, is deliberately
+  immutable after `init` (`src/flow/service.ts`'s `baseBranchCondition`,
+  read in full before deciding this): its own docstring states the THREE
+  states rule exists specifically so "a retargeted PR" cannot "turn... into
+  a passing one" by silently updating the recorded base to match wherever
+  the PR actually lands. There is no CLI repair path for this field (unlike
+  `flow renumber` for a duplicate id) and hand-editing `flow.json` is
+  explicitly forbidden. Consequence: `keryx flow complete`'s base-branch
+  gate will very likely report `fail` ("violated" or "unobserved") once this
+  PR merges into `main`, because the merge commit will not be contained in
+  `origin/feat/agent-platform-expansion` (a now-merged, no-longer-advancing
+  branch). Decision: proceed with the owner's instruction (PR against main)
+  since that is where the actual code needs to land and the owner explicitly
+  directed it; do NOT bypass or hand-edit the gate to force `flow complete`
+  green. If the gate fails as expected, report it honestly in the final
+  STATUS as a known, structural limitation — surfaced by this flow, not
+  created by it — for the owner/a follow-up flow to address (most likely
+  fix: a `keryx flow base repair <id> --to <branch> --reason` command,
+  analogous to `flow renumber`, gated the same way — requiring an explicit
+  reason and never inferred).
