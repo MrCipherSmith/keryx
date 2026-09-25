@@ -9,6 +9,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "./review";
+import { computeJevDocsResult } from "./review-jev-docs";
+import { hunkRegionsFromDiff } from "../review/conform-state";
 import { validateJson, type JsonSchema } from "../gdskills/contracts";
 
 const ORIGINAL_CWD = process.cwd();
@@ -295,6 +297,137 @@ describe("flow 333 T4 (live-check fix): default doc corpus is user-facing only; 
     expect(files).toContain(".metaproject/skills/gdskills/review/foo/SKILL.md");
     expect(files).toContain(".metaproject/rules/foo.mdc");
     expect(files.some((f) => f.includes("CHANGELOG"))).toBe(false); // --include never resurrects the CHANGELOG exclusion
+  });
+});
+
+describe("a Jev batch failure (e.g. a real vendor max_tokens_exceeded) degrades only that batch, never the whole run", () => {
+  function threeFileDiff(): string {
+    return [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "index 1111111..2222222 100644",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1,3 +1,3 @@",
+      " context line",
+      "-export function oldA() {}",
+      "+export function a() {}",
+      " context line",
+      "diff --git a/src/b.ts b/src/b.ts",
+      "index 1111111..2222222 100644",
+      "--- a/src/b.ts",
+      "+++ b/src/b.ts",
+      "@@ -1,3 +1,3 @@",
+      " context line",
+      "-export function oldB() {}",
+      "+export function b() {}",
+      " context line",
+      "diff --git a/src/c.ts b/src/c.ts",
+      "index 1111111..2222222 100644",
+      "--- a/src/c.ts",
+      "+++ b/src/c.ts",
+      "@@ -1,3 +1,3 @@",
+      " context line",
+      "-export function oldC() {}",
+      "+export function c() {}",
+      " context line",
+      "",
+    ].join("\n");
+  }
+
+  async function threeDocProject(): Promise<string> {
+    const dir = await mkdtemp(path.join(tmpdir(), "keryx-jev-docs-split-"));
+    await mkdir(path.join(dir, "docs"), { recursive: true });
+    await writeFile(path.join(dir, "docs", "a.md"), ["# A", "", "## A section", "", "See `src/a.ts` for details."].join("\n"), "utf8");
+    await writeFile(path.join(dir, "docs", "b.md"), ["# B", "", "## B section", "", "See `src/b.ts` for details."].join("\n"), "utf8");
+    await writeFile(path.join(dir, "docs", "c.md"), ["# C", "", "## C section", "", "See `src/c.ts` for details."].join("\n"), "utf8");
+    return dir;
+  }
+
+  function maxTokensResponse(): Response {
+    return new Response(JSON.stringify({ detail: { error_type: "max_tokens_exceeded" } }), { status: 400 });
+  }
+  function noulResponse(answers: Record<string, number>): Response {
+    return new Response(
+      JSON.stringify({
+        answers: Object.fromEntries(Object.entries(answers).map(([key, noul]) => [key, { type: "noul", noul }])),
+        usage: { input_tokens: 10, output_tokens: 2, cost: 0.0001 },
+      }),
+      { status: 200 },
+    );
+  }
+
+  test("both halves succeed after the split: every section scored, no jevError", async () => {
+    ROOT = await threeDocProject();
+    const regions = hunkRegionsFromDiff(threeFileDiff());
+    let call = 0;
+    const fetchFn = (async () => {
+      call += 1;
+      if (call === 1) return maxTokensResponse();
+      if (call === 2) return noulResponse({ "docs/a.md::3": 0.9, "docs/b.md::3": 0.85 });
+      return noulResponse({ "docs/c.md::3": 0.8 });
+    }) as unknown as typeof fetch;
+
+    const result = await computeJevDocsResult({
+      cwd: ROOT,
+      regions,
+      targetLabel: "PR #1",
+      env: { OPENROUTER_API_KEY: "sk-or-test-fixture" },
+      fetchFn,
+    });
+
+    expect(call).toBe(3);
+    expect(result.jevError).toBeUndefined();
+    expect(result.tokens.jevCalls).toBe(2);
+    expect(result.findings.map((f) => f.file).sort()).toEqual(["docs/a.md", "docs/b.md", "docs/c.md"]);
+  });
+
+  test("one half also fails: that half's sections degrade to facts-only, the other half is still scored — never crashes the run", async () => {
+    ROOT = await threeDocProject();
+    const regions = hunkRegionsFromDiff(threeFileDiff());
+    let call = 0;
+    const fetchFn = (async () => {
+      call += 1;
+      if (call === 1) return maxTokensResponse();
+      if (call === 2) return noulResponse({ "docs/a.md::3": 0.9, "docs/b.md::3": 0.85 });
+      return maxTokensResponse();
+    }) as unknown as typeof fetch;
+
+    const result = await computeJevDocsResult({
+      cwd: ROOT,
+      regions,
+      targetLabel: "PR #1",
+      env: { OPENROUTER_API_KEY: "sk-or-test-fixture" },
+      fetchFn,
+    });
+
+    expect(call).toBe(3);
+    expect(result.jevError).toContain("max_tokens_exceeded");
+    expect(result.tokens.jevCalls).toBe(1);
+    expect(result.findings.map((f) => f.file).sort()).toEqual(["docs/a.md", "docs/b.md"]);
+    expect(result.status).toBe("DONE_WITH_CONCERNS");
+  });
+
+  test("a non-max_tokens 400 is not retried/split — it degrades the whole batch on the first attempt, no crash", async () => {
+    ROOT = await threeDocProject();
+    const regions = hunkRegionsFromDiff(threeFileDiff());
+    let call = 0;
+    const fetchFn = (async () => {
+      call += 1;
+      return new Response(JSON.stringify({ detail: { error_type: "some_other_error" } }), { status: 400 });
+    }) as unknown as typeof fetch;
+
+    const result = await computeJevDocsResult({
+      cwd: ROOT,
+      regions,
+      targetLabel: "PR #1",
+      env: { OPENROUTER_API_KEY: "sk-or-test-fixture" },
+      fetchFn,
+    });
+
+    expect(call).toBe(1);
+    expect(result.jevError).not.toContain("max_tokens");
+    expect(result.findings).toEqual([]);
+    expect(result.status).toBe("DONE");
   });
 });
 

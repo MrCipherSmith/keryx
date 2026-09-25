@@ -4,8 +4,10 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  MAX_SECTIONS_PER_BATCH,
   batchDocsSections,
   boundLinkedSections,
+  buildDocsBatch,
   detectRemovedFlags,
   docsFindingStats,
   extractDocLinks,
@@ -203,6 +205,33 @@ describe("AC1: batchDocsSections — batches under the token budget", () => {
 
   test("no items makes no batches", () => {
     expect(batchDocsSections([])).toEqual([]);
+  });
+
+  function fakeLinked(file: string, line: number): LinkedSection {
+    return {
+      section: { file, heading: "H", headingPath: ["H"], line, text: "text" },
+      linkKind: "path",
+      linkedTo: file,
+      relevantRegions: [],
+      matchCount: 1,
+    };
+  }
+
+  test(`conservative batching: at most ${MAX_SECTIONS_PER_BATCH} sections per batch, even well under the token budget`, () => {
+    const items = [fakeLinked("a.md", 1), fakeLinked("b.md", 1), fakeLinked("c.md", 1), fakeLinked("d.md", 1)];
+    const batches = batchDocsSections(items);
+    expect(batches).toHaveLength(2);
+    expect(batches[0]!.items).toHaveLength(MAX_SECTIONS_PER_BATCH);
+    expect(batches[1]!.items).toHaveLength(1);
+  });
+
+  test("buildDocsBatch rebuilds the exact same state/questions batchDocsSections would produce for that item set", () => {
+    const items = [fakeLinked("a.md", 1), fakeLinked("b.md", 1)];
+    const rebuilt = buildDocsBatch(items);
+    expect(rebuilt.items).toEqual(items);
+    expect(Object.keys(rebuilt.questions)).toEqual(["a.md::1", "b.md::1"]);
+    expect(rebuilt.state).toContain("a.md:1");
+    expect(rebuilt.state).toContain("b.md:1");
   });
 });
 

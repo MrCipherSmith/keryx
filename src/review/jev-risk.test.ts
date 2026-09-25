@@ -12,6 +12,7 @@ import {
   computeHunkRiskFacts,
   computeRiskRoutingHints,
   isNonCodeHunk,
+  isTestFilePath,
   rankHunksByRisk,
   RISK_DIMENSIONS,
   scoreHunk,
@@ -164,6 +165,32 @@ describe("isNonCodeHunk", () => {
     expect(isNonCodeHunk("src/docs/render.ts")).toBe(false);
     expect(isNonCodeHunk("README.mdx")).toBe(false);
   });
+
+  test("flags .metaproject flow-bookkeeping and generated review metadata, unconditionally (live PR #743 fix)", () => {
+    expect(isNonCodeHunk(".metaproject/flows/335-widget/flow.json")).toBe(true);
+    expect(isNonCodeHunk(".metaproject/data/gdctx/artifacts/foo.json")).toBe(true);
+    expect(isNonCodeHunk(".metaproject/reviews/743/report.json")).toBe(true);
+    // No fixtures-directory exception for this class — unlike .md/.txt.
+    expect(isNonCodeHunk(".metaproject/flows/335-widget/__fixtures__/flow.json")).toBe(true);
+  });
+
+  test("does not flag other .metaproject content (skills, rules, wiki) — only flows/data/reviews bookkeeping", () => {
+    expect(isNonCodeHunk(".metaproject/skills/gdskills/review/foo/SKILL.md")).toBe(true); // still .md, caught by the existing rule
+    expect(isNonCodeHunk(".metaproject/rules/foo.mdc")).toBe(false);
+  });
+});
+
+describe("isTestFilePath", () => {
+  test("a .test./.spec. infix, or a tests/__tests__ directory, is a test file", () => {
+    expect(isTestFilePath("src/review/task-cost.test.ts")).toBe(true);
+    expect(isTestFilePath("src/review/task-cost.spec.ts")).toBe(true);
+    expect(isTestFilePath("src/__tests__/widget.ts")).toBe(true);
+    expect(isTestFilePath("tests/e2e/widget.ts")).toBe(true);
+  });
+
+  test("an ordinary source path is not a test file", () => {
+    expect(isTestFilePath("src/review/task-cost.ts")).toBe(false);
+  });
 });
 
 describe("batchRiskQuestionsForHunk", () => {
@@ -208,6 +235,23 @@ describe("selectRiskHunks", () => {
     expect(selection.selected.map((r) => r.path)).toEqual(["src/a.ts"]);
     expect(selection.skipped).toEqual([]);
     expect(selection.notCode.map((r) => r.path)).toEqual(["docs/README.md"]);
+  });
+
+  test(".metaproject flow-bookkeeping/generated-metadata hunks are excluded before the budget, reported as notCode (live PR #743 fix)", () => {
+    const regions = [
+      region({ path: "src/widget.ts" }),
+      region({ path: ".metaproject/flows/335-widget/flow.json" }),
+      region({ path: ".metaproject/data/gdctx/artifacts/foo.json" }),
+      region({ path: ".metaproject/reviews/743/report.json" }),
+    ];
+    const selection = selectRiskHunks(regions, 150);
+    expect(selection.notCode.map((r) => r.path)).toEqual([
+      ".metaproject/flows/335-widget/flow.json",
+      ".metaproject/data/gdctx/artifacts/foo.json",
+      ".metaproject/reviews/743/report.json",
+    ]);
+    expect(selection.selected.map((r) => r.path)).toEqual(["src/widget.ts"]);
+    expect(selection.skipped).toEqual([]);
   });
 });
 
@@ -263,6 +307,18 @@ describe("synthesizeRiskFindings", () => {
     expect(findings[0]!.reviewer).toBe("review-jev-risk");
     expect(findings[0]!.file).toBe("src/widget.ts");
   });
+
+  test("a test file's own hunk never produces a finding on its own, even above threshold (live PR #743 fix, task-cost.test.ts)", () => {
+    const hunk = scoredHunk({ security: 0.95 }, { path: "src/review/task-cost.test.ts" });
+    expect(synthesizeRiskFindings([hunk], DEFAULT_JEV_RISK_THRESHOLD)).toEqual([]);
+  });
+
+  test("a production file's own hunk in the same run still produces its finding, independent of any test hunk", () => {
+    const testHunk = scoredHunk({ security: 0.95 }, { path: "src/review/task-cost.test.ts" });
+    const prodHunk = scoredHunk({ security: 0.95 }, { path: "src/review/task-cost.ts" });
+    const findings = synthesizeRiskFindings([testHunk, prodHunk], DEFAULT_JEV_RISK_THRESHOLD);
+    expect(findings.map((f) => f.file)).toEqual(["src/review/task-cost.ts"]);
+  });
 });
 
 describe("computeRiskRoutingHints", () => {
@@ -277,6 +333,19 @@ describe("computeRiskRoutingHints", () => {
   test("no hint below threshold, and other dimensions never produce a hint", () => {
     const hunk = scoredHunk({ security: 0.5, "public-api": 0.95 });
     expect(computeRiskRoutingHints([hunk], 0.7)).toEqual([]);
+  });
+
+  test("a test file's own hunk never produces a routing hint on its own, even above threshold (live PR #743 fix, task-cost.test.ts)", () => {
+    const hunk = scoredHunk({ security: 0.9, concurrency: 0.8 }, { path: "src/review/task-cost.test.ts" });
+    expect(computeRiskRoutingHints([hunk], 0.7)).toEqual([]);
+  });
+
+  test("a production file's own hunk in the same run still produces its hint, independent of any test hunk", () => {
+    const testHunk = scoredHunk({ security: 0.9 }, { path: "src/review/task-cost.test.ts" });
+    const prodHunk = scoredHunk({ security: 0.9 }, { path: "src/review/task-cost.ts" });
+    const hints = computeRiskRoutingHints([testHunk, prodHunk], 0.7);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]!.file).toBe("src/review/task-cost.ts");
   });
 });
 

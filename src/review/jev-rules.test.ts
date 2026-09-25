@@ -6,8 +6,10 @@ import { describe, expect, test } from "bun:test";
 import {
   batchAllRulePairs,
   batchRulePairsForRegion,
+  API_SCOPE_TERMS,
   cappedSeverity,
   classifyRuleSourceCategory,
+  clauseApiScopeApplicability,
   clauseApplicability,
   clauseFileKindApplicability,
   DEFAULT_JEV_RULES_THRESHOLD,
@@ -19,10 +21,12 @@ import {
   globToRegExp,
   hunkFileKind,
   inferLanguage,
+  isApiScopedRuleSource,
   isCodingConventionSkill,
   isDocsApplicableClauseText,
   isHunkCheckableClause,
   isPlaceholderClauseText,
+  looksLikeApiSurfaceHunk,
   matchesAnyGlob,
   metadataScalar,
   PROCESS_RULE_HEURISTIC_TERMS,
@@ -183,6 +187,70 @@ describe("item 4: hunkFileKind / isDocsApplicableClauseText / clauseFileKindAppl
   });
 });
 
+describe("item 5: isApiScopedRuleSource / looksLikeApiSurfaceHunk / clauseApiScopeApplicability", () => {
+  test("isApiScopedRuleSource: a declared path glob naming api/** is API-scoped", () => {
+    const source: RuleSourceFile = { path: "rules/core/backend.mdc", kind: "project-rule", text: "# Backend\n- a clause\n", declaredPaths: ["src/api/**"] };
+    expect(isApiScopedRuleSource(source)).toBe(true);
+  });
+
+  test("isApiScopedRuleSource: a title/description naming REST/OpenAPI/HTTP/endpoint is API-scoped", () => {
+    const restTitle: RuleSourceFile = { path: "rules/x.mdc", kind: "project-rule", text: "# REST conventions\n- a clause\n" };
+    const openApiDescription: RuleSourceFile = { path: "rules/y.mdc", kind: "project-rule", text: '---\ndescription: "OpenAPI contract rules"\n---\n# y\n- a clause\n' };
+    const endpointTitle: RuleSourceFile = { path: "rules/z.mdc", kind: "project-rule", text: "# Every endpoint must validate input\n- a clause\n" };
+    expect(isApiScopedRuleSource(restTitle)).toBe(true);
+    expect(isApiScopedRuleSource(openApiDescription)).toBe(true);
+    expect(isApiScopedRuleSource(endpointTitle)).toBe(true);
+  });
+
+  test("isApiScopedRuleSource: a filename like api-contracts.mdc is API-scoped even with no declared paths or matching title", () => {
+    const source: RuleSourceFile = { path: "rules/core/api-contracts.mdc", kind: "project-rule", text: "# Contract rules\n- required fields for every endpoint\n" };
+    expect(isApiScopedRuleSource(source)).toBe(true);
+  });
+
+  test("isApiScopedRuleSource: an ordinary style/process rule is not API-scoped", () => {
+    const source: RuleSourceFile = { path: "rules/core/code-style-patterns.mdc", kind: "project-rule", text: "# Code style\n- naming conventions\n" };
+    expect(isApiScopedRuleSource(source)).toBe(false);
+    expect(API_SCOPE_TERMS).toContain("api");
+  });
+
+  test("looksLikeApiSurfaceHunk: a path under api/routes/controllers/handlers/server is an API surface", () => {
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/api/users.ts" }))).toBe(true);
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/routes/users.ts" }))).toBe(true);
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/controllers/users.ts" }))).toBe(true);
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/handlers/users.ts" }))).toBe(true);
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/server/router.ts" }))).toBe(true);
+  });
+
+  test("looksLikeApiSurfaceHunk: a hunk importing a known HTTP framework is an API surface, regardless of path", () => {
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/whatever.ts", text: '+import { Hono } from "hono";\n' }))).toBe(true);
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/whatever.ts", text: '+import express from "express";\n' }))).toBe(true);
+  });
+
+  test("looksLikeApiSurfaceHunk: an ordinary path with no HTTP-framework import is not an API surface — the CLI registry bug", () => {
+    expect(looksLikeApiSurfaceHunk(region({ path: "src/standard/command-registry.ts", text: "+export const COMMANDS = [];\n" }))).toBe(false);
+  });
+
+  test("clauseApiScopeApplicability: an API-scoped source is refused against a non-API-surface hunk (the live PR #743 bug)", () => {
+    const source: RuleSourceFile = { path: "rules/core/api-contracts.mdc", kind: "project-rule", text: "# API contracts\n- required fields for every endpoint\n" };
+    const decision = clauseApiScopeApplicability(source, region({ path: "src/standard/command-registry.ts", text: "+export const COMMANDS = [];\n" }));
+    expect(decision.applicable).toBe(false);
+    expect(decision.reason).toContain("does not look like an API surface");
+  });
+
+  test("clauseApiScopeApplicability: an API-scoped source applies to an API-surface hunk", () => {
+    const source: RuleSourceFile = { path: "rules/core/api-contracts.mdc", kind: "project-rule", text: "# API contracts\n- required fields for every endpoint\n" };
+    const decision = clauseApiScopeApplicability(source, region({ path: "src/api/users.ts" }));
+    expect(decision.applicable).toBe(true);
+  });
+
+  test("clauseApiScopeApplicability: a source that is not API-scoped is unaffected, whatever the hunk's path", () => {
+    const source: RuleSourceFile = { path: "rules/core/code-style-patterns.mdc", kind: "project-rule", text: "# Code style\n- naming conventions\n" };
+    const decision = clauseApiScopeApplicability(source, region({ path: "src/standard/command-registry.ts" }));
+    expect(decision.applicable).toBe(true);
+    expect(decision.reason).toContain("not API/endpoint-scoped");
+  });
+});
+
 describe("item 3: isPlaceholderClauseText", () => {
   test("a checklist item with an unfilled <...> placeholder is a template, not a real clause (the PR bug)", () => {
     expect(isPlaceholderClauseText("[x] <criterion 1> — verified by <test>")).toBe(true);
@@ -246,6 +314,29 @@ describe("selectRuleHunkPairs", () => {
     expect(result.selected).toEqual([]);
     expect(result.notApplicable).toHaveLength(1);
     expect(result.notApplicable[0]?.reason).toContain("no declared path glob");
+  });
+
+  test("item 5 (live PR #743 fix): api-contracts.mdc's endpoint clause does not pair against src/standard/command-registry.ts, a CLI registry", () => {
+    const apiContracts: TaggedRuleSource[] = [
+      taggedSource({ path: "rules/core/api-contracts.mdc", kind: "project-rule", text: "# API contracts\n- required fields for every endpoint\n" }, [
+        clause("required-fields", "required fields for every endpoint", ["API contracts"]),
+      ]),
+    ];
+    const result = selectRuleHunkPairs([region({ path: "src/standard/command-registry.ts", text: "+export const COMMANDS = [];\n" })], apiContracts, CERTAIN_STACK);
+    expect(result.selected).toEqual([]);
+    expect(result.notApplicable).toHaveLength(1);
+    expect(result.notApplicable[0]?.reason).toContain("does not look like an API surface");
+  });
+
+  test("item 5: the same rule DOES pair against a real API-surface hunk", () => {
+    const apiContracts: TaggedRuleSource[] = [
+      taggedSource({ path: "rules/core/api-contracts.mdc", kind: "project-rule", text: "# API contracts\n- required fields for every endpoint\n" }, [
+        clause("required-fields", "required fields for every endpoint", ["API contracts"]),
+      ]),
+    ];
+    const result = selectRuleHunkPairs([region({ path: "src/api/users.ts" })], apiContracts, CERTAIN_STACK);
+    expect(result.selected).toHaveLength(1);
+    expect(result.selected[0]?.clause.clause_id).toBe("required-fields");
   });
 
   test("a clause not tagged hunk/checkable is excluded from pairing and reported once in droppedClauses", () => {

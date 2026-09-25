@@ -169,6 +169,12 @@ export function touchedExportedSymbols(regionText: string): readonly string[] {
 // ---------------------------------------------------------------------------
 
 const TEST_INFIX_RE = /\.(test|spec)\./;
+const TEST_DIR_RE = /(^|\/)(__tests__|tests?)\//;
+
+/** A path that IS a test file — a `.test.`/`.spec.` infix, or living under a `__tests__`/`test(s)` directory. Shared by `testFilesTouchedNearby` (a test CANDIDATE for another hunk's evidence) and, below, the routing-hint/finding suppression that keeps a test file's OWN hunk from independently producing either (the noise item 2 fix, flow's live check on #743's `task-cost.test.ts`). */
+export function isTestFilePath(path: string): boolean {
+  return TEST_INFIX_RE.test(path) || TEST_DIR_RE.test(path);
+}
 
 function stemOf(filePath: string): string {
   const base = filePath.split("/").at(-1) ?? filePath;
@@ -186,7 +192,7 @@ export function testFilesTouchedNearby(regionPath: string, allChangedFiles: read
   const dir = dirOf(regionPath);
   return allChangedFiles.filter((file) => {
     if (file === regionPath) return false;
-    if (!TEST_INFIX_RE.test(file) && !/(^|\/)(__tests__|tests?)\//.test(file)) return false;
+    if (!isTestFilePath(file)) return false;
     return stemOf(file) === stem || dirOf(file) === dir;
   });
 }
@@ -396,9 +402,24 @@ export function batchRiskQuestionsForHunk(facts: RiskHunkFacts): RiskBatch[] {
 // ---------------------------------------------------------------------------
 
 const NON_CODE_HUNK_RE = /\.(md|txt)$/i;
+/**
+ * Flow-bookkeeping and generated review metadata — state the review/flow
+ * process itself writes and reads (a flow's `flow.json`, saved review
+ * output, cached data), never hand-authored source the risk dimensions were
+ * designed to judge. The live check against PR #743 (this reviewer's own
+ * default settings) flagged a flow's `flow.json` (under `.metaproject/flows/`)
+ * as a data-migration risk — a JSON bookkeeping record, not a schema or migration
+ * — because its own text can legitimately QUOTE words like "migration" or
+ * "schema" from a task description it is merely recording. Unconditionally
+ * excluded, with NO fixtures-directory exception (unlike the `.md`/`.txt`
+ * rule below): this bookkeeping is never itself the code under review,
+ * whatever directory it sits in.
+ */
+const GENERATED_METADATA_PATH_RE = /(^|\/)\.metaproject\/(flows|data|reviews)\//;
 
-/** A `.md`/`.txt` path — prose, never itself the code a risk dimension is asking about. */
+/** A `.md`/`.txt` path, or flow-bookkeeping/generated-metadata under `.metaproject/`  — prose or process state, never itself the code a risk dimension is asking about. */
 export function isNonCodeHunk(path: string): boolean {
+  if (GENERATED_METADATA_PATH_RE.test(path)) return true;
   // A `.txt` under a fixtures/testdata/snapshots directory is test data whose
   // change can carry real behavioural risk — it stays scored.
   if (/(^|\/)(__fixtures__|fixtures|testdata|__snapshots__|snapshots)\//.test(path)) return false;
@@ -537,6 +558,14 @@ export function synthesizeRiskFindings(scored: readonly ScoredRiskHunk[], thresh
   const findings: RiskFinding[] = [];
   for (const hunk of rankHunksByRisk(scored)) {
     if (hunk.combinedRisk < threshold || hunk.facts.hasNearbyTest) continue;
+    // A test file's OWN hunk never produces a finding on its own (noise item
+    // 2, flow's live check on #743's `task-cost.test.ts`): the risk this
+    // dimension is meant to surface belongs to the PRODUCTION file the test
+    // exercises — if that file's own hunk is in this same diff, it is scored
+    // and reported on its own facts; the test's hunk is still scored (it can
+    // still count as evidence via `testHunkEvidence`) but is not itself a
+    // second, duplicate source of a finding.
+    if (isTestFilePath(hunk.facts.region.path)) continue;
     const { region } = hunk.facts;
     const key = `jev-risk::${region.path}:${region.startLine}-${region.endLine}`;
     const severity: RiskFindingSeverity = hunk.combinedRisk >= 0.85 ? "minor" : "info";
@@ -591,6 +620,11 @@ export interface RiskRoutingHint {
 export function computeRiskRoutingHints(scored: readonly ScoredRiskHunk[], threshold: number = DEFAULT_JEV_RISK_THRESHOLD): readonly RiskRoutingHint[] {
   const hints: RiskRoutingHint[] = [];
   for (const hunk of rankHunksByRisk(scored)) {
+    // Same rule `synthesizeRiskFindings` applies, for the same reason: a
+    // test file's own hunk never produces a routing hint on its own — the
+    // hint belongs to the production file the test exercises, whose own
+    // hunk (if in this same diff) is scored and hinted independently.
+    if (isTestFilePath(hunk.facts.region.path)) continue;
     const { region } = hunk.facts;
     if (hunk.probabilities.security >= threshold) {
       hints.push({ file: region.path, startLine: region.startLine, endLine: region.endLine, dimension: "security", probability: hunk.probabilities.security, suggestedReviewer: "review-security-code" });
