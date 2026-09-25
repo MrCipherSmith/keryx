@@ -12,13 +12,17 @@ test("the bundled install-manifest.json validates against install-manifest.schem
   expect(Object.keys(manifest.profiles).sort()).toEqual([
     "angular",
     "core",
+    "csharp-dotnet",
+    "flutter-dart",
     "full",
     "go",
+    "kotlin-android",
     "minimal",
     "nestjs",
     "nextjs-nuxt",
     "python",
     "react",
+    "swift-ios",
     "ts-js-node",
     "vue",
   ]);

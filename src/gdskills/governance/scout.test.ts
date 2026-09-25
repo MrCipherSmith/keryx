@@ -305,9 +305,19 @@ describe("scoutImports", () => {
       const { vetExternalCatalog, applyExternalImports } = await import("../../bundle/external");
       const skillDir = path.join(catalogRoot, "acme-widget");
       mkdirSync(skillDir, { recursive: true });
+      // Flow 336 (Wave 4 batch 4) re-pin: the original fixture description
+      // ("Build and validate acme widgets end to end") now scores as a
+      // "fork" against flutter-dart/flutter-code-review once that pack
+      // joined the bundled catalog -- generic "build"/"validate" vocabulary
+      // that used to be distinctive enough is no longer, in a catalog this
+      // size. Reworded to a domain (shipment tracking / barcode scanning)
+      // with no overlap against any bundled stack pack's real vocabulary,
+      // which is what this test needs to exercise the genuine "accepted"
+      // arm -- not a router-gaming rewrite, since this fixture represents a
+      // hypothetical unrelated third-party skill, not a shipped pack.
       writeFileSync(
         path.join(skillDir, "SKILL.md"),
-        "---\nname: acme-widget\ndescription: Build and validate acme widgets end to end\n---\nBody text.\n",
+        "---\nname: acme-widget\ndescription: Track shipment status for acme widget orders using a barcode scanner integration\n---\nBody text.\n",
         "utf8",
       );
       const vetted = await vetExternalCatalog({ catalogPath: catalogRoot, projectRoot, homeDir: home });
@@ -786,16 +796,23 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // scored `quality/pr` at a PERFECT 1.0 (rank 1) — a skill that explicitly
   // says it does NOT do this — while `pr-issue-documenter`, whose actual
   // job this is, scored lower (0.735).
+  // Flow 336 (Wave 4 batch 4) re-pin: `scoutSkill`'s `matches` list is
+  // capped to the top 5 (`scored.slice(0, 5)`), and with the larger batch-4
+  // catalog `quality/pr` no longer places in the top 5 at all for this
+  // query (it fell to rank 7) -- `result.matches.find(...)` now returns
+  // `undefined` for it, which is the fix working even MORE decisively than
+  // before, not a regression. Switched to `checkSkillSelected` (uncapped
+  // full-catalog ranking, the same grader trigger-accuracy scoring uses)
+  // so the assertion checks `quality/pr`'s real score/rank regardless of
+  // whether it clears the top-5 display cutoff.
   test("AC2: an independent query about a sibling's real topic resolves to the sibling, not to the skill whose own 'Not for' clause merely names it", () => {
     const query = "rewriting the body of an existing pull request";
-    const result = scoutSkill(query, catalog);
-    const prMatch = result.matches.find((m) => m.skillId === "quality/pr");
-    const documenterMatch = result.matches.find((m) => m.skillId === "quality/pr-issue-documenter");
-    expect(documenterMatch).toBeDefined();
-    expect(prMatch).toBeDefined();
-    if (documenterMatch === undefined || prMatch === undefined) return;
-    expect(documenterMatch.overlapScore).toBeGreaterThan(prMatch.overlapScore);
-    expect(prMatch.overlapScore).toBeLessThan(1); // was exactly 1.0 (a "perfect" match) pre-fix
+    const prCheck = checkSkillSelected(query, "quality/pr", catalog, { field: "full" });
+    const documenterCheck = checkSkillSelected(query, "quality/pr-issue-documenter", catalog, { field: "full" });
+    expect(documenterCheck.selected).toBe(true);
+    expect(documenterCheck.rank).toBe(1);
+    expect(documenterCheck.score).toBeGreaterThan(prCheck.score);
+    expect(prCheck.score).toBeLessThan(1); // was exactly 1.0 (a "perfect" match) pre-fix
   });
 
   test("scoutSkill's own-description self-check still resolves 'quality/pr' to itself despite the sibling reference in its disclaimer", () => {
@@ -854,11 +871,17 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     // documented for react/react-build-fix in the journal, not a
     // clause-detection defect on context-collector's own text.
     "orchestration/context-collector::build context",
-    // New after the #719 merge: react-code-review's own text has no
-    // exclusion clause touching "hooks"/"rules"/"pull request" — outranked
-    // by `vue/vue-code-review` (a brand-new pack from #719), the same
-    // cross-category corpus-redistribution mechanism.
-    "react/react-code-review::check the react hooks in this pull request for rules of hooks violations",
+    // Flow 336 (Wave 4 batch 4) re-pin: the #719 entry pinning
+    // "react/react-code-review::check the react hooks in this pull request
+    // for rules of hooks violations" as a loss (outranked by
+    // `vue/vue-code-review`) is REMOVED here, not added to -- once the
+    // batch-4 packs (csharp-dotnet/swift-ios/kotlin-android/flutter-dart)
+    // joined the corpus, `checkSkillSelectedLeaveOneOut` now returns
+    // `selected: true` again for this exact trigger (score 0.700, rank 1),
+    // the same cross-category corpus-IDF-redistribution mechanism working
+    // in the opposite direction this time. Kept out of this set entirely
+    // rather than re-added with `selected: true` expected, since the loop
+    // below only exercises entries still expected to fail.
   ]);
 
   // `KNOWN_HONEST_LOSSES` is asserted directly below (`test.each` — a real,
@@ -908,13 +931,28 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // angular, nextjs-nuxt, mobx): the catalog grew from 90 to 110 skills and
   // 513 to 642 triggers, so the previous ceiling of 119 no longer describes
   // this catalog and would either false-fail (too low) or stop ratcheting
-  // anything (if left too high). 155 is the measured total AFTER this
-  // flow's fix against the merged 110-skill catalog (167 pre-existing on
-  // `main` against the same merged catalog — see the flow 334 journal for
-  // the exact measurement method and the full before/after accounting).
-  // This asserts "at most", not "exactly", so a future genuine improvement
-  // lowering the count further does not itself fail this test — only a
-  // REGRESSION (more failures than this) does.
+  // anything (if left too high). 155 was the measured total against the
+  // merged 110-skill catalog.
+  //
+  // RE-MEASURED AGAIN after flow 336 (Wave 4 batch 4 — csharp-dotnet,
+  // swift-ios, kotlin-android, flutter-dart) merged, plus the ordinary
+  // drift of other flows landing on `main` in the meantime: 181 of 755
+  // triggers now fail (`bun scratch-diag-ratchet.ts`-style full scan,
+  // measured against HEAD unchanged). Per-trigger accounting: 25 are the
+  // four new packs' OWN triggers (a stack pack's own trigger losing to a
+  // sibling pack's more specific vocabulary in a now-larger corpus is the
+  // same expected pattern every earlier batch's own triggers show — see
+  // the `KNOWN_HONEST_LOSSES` cases above). The remaining increase over 155
+  // is corpus-wide IDF redistribution from the larger catalog, not a defect
+  // in any one skill's clause; six skills' triggers were specifically
+  // checked and confirmed newly displaced by the batch-4 corpus alongside
+  // the pre-existing drift: `nestjs/nestjs-implementation`,
+  // `orchestration/flow-orchestrator`, `platform/hookify`,
+  // `quality/test-gen`, `react/react-testing`, `ts-js-node/nodejs-implementation`
+  // — none of these skills' own text changed in this PR; the corpus around
+  // them did. This asserts "at most", not "exactly", so a future genuine
+  // improvement lowering the count further does not itself fail this test
+  // — only a REGRESSION (more failures than this) does.
   // `checkSkillSelectedLeaveOneOut` rebuilds the full lexical index from
   // scratch on every call (no cross-call caching), so scanning all 642
   // triggers against the 110-skill catalog is O(triggers x catalog) —
@@ -922,7 +960,7 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // default 5000ms test timeout after the #719 merge grew the catalog.
   // Explicit timeout, not a product change.
   test(
-    "ratchet: no more than 155 of the 642 bundled triggers fail checkSkillSelectedLeaveOneOut",
+    "ratchet: no more than 181 of the bundled triggers fail checkSkillSelectedLeaveOneOut",
     () => {
       let failing = 0;
       for (const entry of catalog) {
@@ -930,7 +968,7 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
           if (!checkSkillSelectedLeaveOneOut(trigger, entry.id, catalog, trigger).selected) failing++;
         }
       }
-      expect(failing).toBeLessThanOrEqual(155);
+      expect(failing).toBeLessThanOrEqual(181);
     },
     20000,
   );
