@@ -376,3 +376,17 @@ src/harness/provider/single-turn.test.ts`: 2467 pass, 1 fail — the 1 failure
 in a file this flow never touched and reproduces in isolation from a stale
 temp-dir permission left by an unrelated earlier test run on this host, not
 from anything in this diff.
+- 2026-09-25T05:45:42.872Z - task-done: T11: FU7: re-record calibration + honest gate run at trials=10 + docs/agents
+- 2026-09-25T06:01:10.882Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/702 (warning: PR is not a draft)
+- 2026-09-25T06:01:24.005Z - ac-confirmed: AC1: python-implementation SKILL.md description/triggers fixed after offline trigger-only diagnosis (keryx skills scout); full bundled-catalog trigger regression 110/110 pos, 108/108 neg. Commit 6b878fe1. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.105Z - ac-confirmed: AC2: RUNNER_SYSTEM_NOTE + RUNNER_PROMPT_VERSION added, bound by pack gate; no-sleep-sync fail_criteria reviewed and fixed against recorded evidence (select+time.After deadline guard vs fixed delay). Commits 412b2dc2, 454175e7. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.205Z - ac-confirmed: AC3: keryx skills eval --reverify implemented (reverifyPackSample), unit-tested with stub judge, documented in CLI reference threat-model section. Commit 5cadbf3e. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.305Z - ac-confirmed: AC4: PACK_MIN_TRIALS 5->10 with documented reasoning; regression test proves an old 5-trial report still fails. Commit 46fe5a49. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.408Z - ac-confirmed: AC5: no-disable-hooks-lint reviewed against recorded evidence (2 genuine failures); no defect found; confirmed at trials=10 (3/10, lower rate, not floor noise). Commits eb77e377, df55b49a. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.509Z - ac-confirmed: AC6: getter-accessor known-right variant documented in pass_criteria/known_right (schema supports only one known_right string, so a rubric note not a schema change). Commit b39e81f6. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.611Z - ac-confirmed: AC7: Calibration re-recorded (judge-check --record) for every touched scenario, all green; honest gate run at trials=10 over all 18 skills; governance/eval.json rebuilt from raw outputs; pack.json/install-manifest stability updated (python/go stable, ts-js-node experimental); agent pairs regenerated; W1/W2 docs, CLI reference, guide updated. Commit df55b49a, 9013e29e, 6c31e5fb. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.712Z - ac-confirmed: AC8: No SKILL.md or grader edited to force a pass; every rubric/calibration change justified in journal.md with recorded evidence (no-sleep-sync, no-nolint-suppression, getter-accessor). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:24.812Z - ac-confirmed: AC9: PR #702 merged into feat/agent-platform-expansion as 009c13ba. Review round 1: 0 blocker/major/minor/info. Round 2 (narrow, CI-driven fix): 0 new findings. CI green on all checks. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-25T06:01:28.551Z - completing
+- 2026-09-25T06:01:36.530Z - completion-attempt-recorded: attempt 1: passed
+- 2026-09-25T06:01:36.531Z - done: all gates passed
