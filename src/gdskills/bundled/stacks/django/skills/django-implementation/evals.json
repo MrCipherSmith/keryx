@@ -4,7 +4,7 @@
       "Add a Django model for Invoice with a status field and generate the migration",
       "Write a Django REST Framework view that lists a customer's orders with their line items",
       "Implement a class-based view in Django that shows a book's detail page along with its author",
-      "Add a new Django app for handling subscription billing",
+      "We need a standalone app to own the subscription-billing logic -- can you scaffold a Django app with models, admin, and urls set up?",
       "Write a Django form that validates a signup submission with cross-field checks",
       "Implement a queryset method on this Django model that returns only pending orders",
       "Add a manager method to the Order model that avoids N+1 when listing items"

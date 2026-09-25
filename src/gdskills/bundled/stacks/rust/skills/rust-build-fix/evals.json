@@ -2,8 +2,8 @@
   "triggers": {
     "positive": [
       "cargo build is failing with a trait bound not satisfied error",
-      "Cargo.toml and Cargo.lock are out of sync, please fix",
-      "Resolve this Rust borrow checker error between two mutable borrows",
+      "I bumped a dependency version and now cargo build complains the lockfile doesn't match Cargo.toml anymore, what do I do?",
+      "The compiler won't let me borrow `orders` as mutable twice at the same time in this function, how do I restructure it so it compiles?",
       "cargo clippy is reporting a needless clone lint",
       "This Rust code has a lifetime error that won't compile",
       "cargo test is failing with a panic in the order crate, fix the build"

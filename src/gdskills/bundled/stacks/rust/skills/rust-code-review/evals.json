@@ -6,7 +6,7 @@
       "Does this Rust change block the tokio runtime inside an async fn?",
       "Review this Rust concurrency change for unjoined spawned tasks",
       "Check for unnecessary clones used as a borrow-checker workaround in this Rust diff",
-      "Review this Rust error type for a variant that drops the source error"
+      "This error enum has a variant that stores just a String instead of wrapping the original error -- is that going to bite us later, can you check the diff?"
     ],
     "negative": [
       "Review this Rust code and also fix the bugs you find",

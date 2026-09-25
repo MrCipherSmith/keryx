@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Fix this FastAPI app that fails to start with a dependency resolution error",
-      "Our FastAPI app fails to import after adding a new router",
-      "This Depends() dependency is failing to resolve, please fix it",
+      "Our API crashes on boot right after I wired up a new Depends() chain -- what's throwing it off?",
+      "I just wired a new router into main.py and now uvicorn won't even boot -- ImportError somewhere in the chain. Can you track it down?",
+      "One of my FastAPI dependency functions keeps blowing up with 'unable to resolve dependency' at app startup -- mind digging into why?",
       "mypy is failing on this FastAPI path operation's return type",
       "ruff check is failing on our FastAPI project, fix the violations",
-      "This Pydantic model is raising a validation error I don't understand",
-      "Fix this FastAPI router registration error causing a 404"
+      "Got a weird Pydantic error on model instantiation that I can't make sense of -- here's the traceback, can you figure out what's wrong?",
+      "Every request to my new FastAPI endpoints comes back 404 even though I swear I included the router -- what did I mess up?"
     ],
     "negative": [
       "Fix this generic ModuleNotFoundError unrelated to FastAPI's own wiring",

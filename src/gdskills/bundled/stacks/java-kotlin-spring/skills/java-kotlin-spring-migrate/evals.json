@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Add a Flyway migration for this new order_status column",
+      "We're adding an order_status column to the orders table -- what does a properly versioned Flyway script for that look like?",
       "Write a Liquibase changeset to add an index on the orders table",
-      "Review this Flyway migration before I apply it to the shared database",
-      "Add a versioned migration to rename this column safely in Spring Boot",
-      "Fix this failing flywayValidate check after a migration checksum mismatch",
-      "Add a new database migration for this Spring Boot project's schema change",
+      "Before this runs against the shared staging database, can you check whether my new V12 migration script is safe?",
+      "I need to rename the customer_email column without breaking rows that are mid-deploy -- what's the safe multi-step Flyway approach for that?",
+      "Flyway is refusing to start up because it says the checksum on V7 doesn't match what's recorded in the history table -- how do I resolve that safely?",
+      "We're dropping a legacy is_archived flag from the schema -- what should the migration script for that look like?",
       "Write a Flyway migration that backfills a new not-null column"
     ],
     "negative": [

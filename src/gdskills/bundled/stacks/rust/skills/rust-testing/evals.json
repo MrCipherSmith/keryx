@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Write unit tests for this Rust function in a #[cfg(test)] mod block",
+      "I just wrote parse_header and it has zero coverage -- can you set it up with tests the idiomatic way, inline in the same file?",
       "Add table-style test cases for this Rust validator with a Vec of cases",
-      "Fix this failing cargo test in the order crate",
+      "`cargo test -p order` is red on main after my last change -- test_reject_duplicate_line_item is failing, can you dig into why and fix it?",
       "Add a proptest for this Rust parser function",
-      "Write a criterion benchmark for this Rust function",
+      "I want hard numbers before I optimize parse_batch -- what's the right way to measure it so the compiler doesn't just optimize the whole thing away?",
       "Test this async fn with #[tokio::test] and join the spawned task properly",
-      "Add integration tests under tests/ for this crate's public API"
+      "Right now only the internals of this crate have coverage -- how do I set up tests that exercise it the same way an external consumer would, calling only what's exported?"
     ],
     "negative": [
       "Write pytest tests for this Python function",

@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Write JUnit 5 tests for this Spring @Service class",
-      "Add MockMvc tests for this Spring @RestController",
-      "Write a @DataJpaTest for this Spring Data repository",
-      "Fix this failing Spring Boot test in the order module",
-      "Add Mockito unit tests for this Java Spring class",
-      "Write MockK tests for this Kotlin Spring service",
-      "Add a Testcontainers integration test for this JPA repository"
+      "OrderCalculator has zero test coverage right now -- can you set up a JUnit 5 suite that exercises the discount logic?",
+      "I want to verify the /orders endpoint returns a 404 with the right error body when the order doesn't exist -- what's the MockMvc setup for that?",
+      "How do I verify my custom findOverdueInvoices query actually returns the right rows, using an in-memory database slice?",
+      "OrderServiceTest started failing after yesterday's refactor and I can't tell if it's a real regression or a stale mock -- can you dig in?",
+      "PricingEngine has a couple of external collaborators I'd rather not spin up for a unit test -- can you mock those out and cover the tax calculation paths?",
+      "InventoryService is written in Kotlin and calls two collaborators I want stubbed out -- what does a solid mocking-based unit test for it look like?",
+      "I don't trust the H2 in-memory results for this repository's native query -- can we spin up a real Postgres container for the test instead?"
     ],
     "negative": [
       "Write pytest tests for this Python function",

@@ -2,11 +2,11 @@
   "triggers": {
     "positive": [
       "Implement a new Spring Boot REST endpoint for placing an order",
-      "Add a Kotlin Spring service with constructor injection for this feature",
+      "I'm building out a new NotificationService in Kotlin that needs to call two repositories -- how should I wire the dependencies through the constructor here?",
       "Wire this OrderRequest DTO with jakarta.validation constraints in Spring",
-      "Implement a Spring Data JPA repository method with @EntityGraph to avoid N+1",
-      "Add a @Transactional method to this Java Spring service",
-      "Implement this feature in a Spring Boot Kotlin microservice",
+      "I need a repository method on OrderRepository that fetches orders with their line items in one query instead of N+1 -- what's the cleanest way to write that?",
+      "This OrderService method touches three repositories and I need all of it to roll back together if any one write fails -- what's the right way to set that up in Spring?",
+      "We're adding refund handling to our Kotlin-based Spring Boot service -- can you build out the controller-to-repository flow for it?",
       "Add a new @RestController endpoint that delegates to this Spring service"
     ],
     "negative": [

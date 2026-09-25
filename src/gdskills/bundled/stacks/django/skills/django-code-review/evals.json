@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "Review this Django diff for N+1 queries before I merge it",
+      "Can you look over the changes in this Django PR (#482) and flag any N+1 query risk before it ships?",
       "Check this Django PR for CSRF or XSS issues",
       "Audit this Django view for security problems around user input",
       "Review this Django migration to make sure it matches the model change",
-      "Check this Django model change for missing select_related usage",
+      "Does this queryset in our Django Order model hit the DB once per row, or is select_related missing somewhere?",
       "Review this Django REST Framework serializer for mass-assignment risk"
     ],
     "negative": [

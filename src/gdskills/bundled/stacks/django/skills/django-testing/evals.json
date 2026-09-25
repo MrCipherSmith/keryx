@@ -4,7 +4,7 @@
       "Write a Django test for the InvoiceDetailView that checks a logged-out user gets redirected",
       "Add pytest-django coverage for this ModelForm's clean method",
       "Fix this failing Django test that logs in with self.client.login",
-      "Write a factory_boy factory for the Order model",
+      "I need reliable test data for Order objects with realistic line items -- can you set up a factory_boy factory so I'm not hand-building fixtures?",
       "Test this Django REST Framework serializer's validation for a duplicate email",
       "Add a test for this permission-gated Django view covering both allowed and denied cases",
       "Test that this Django model's UniqueConstraint actually rejects a duplicate row"

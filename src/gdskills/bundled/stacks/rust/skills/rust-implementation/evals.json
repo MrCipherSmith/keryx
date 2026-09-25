@@ -2,11 +2,11 @@
   "triggers": {
     "positive": [
       "Implement a new Rust module under src/order that propagates errors with the ? operator",
-      "Add a thiserror error enum in Rust that wraps a downstream client's error with #[source]",
+      "My PaymentClient call can fail and I'm currently just unwrapping it -- what's the idiomatic way to wrap that failure into my own error type while keeping the original cause?",
       "Write this Rust function so it borrows instead of cloning to satisfy the borrow checker",
       "Implement an async fn in Rust that fetches from a downstream service without blocking the tokio runtime",
       "What's the right Rust trait size for this new client -- who should it be defined for?",
-      "Implement this Rust builder pattern for a struct with several optional fields",
+      "My RequestConfig struct has six optional fields and constructing it with Some/None everywhere is getting ugly -- what's a cleaner way to build it up incrementally?",
       "Add error handling to this Rust CLI using anyhow::Result and .context()"
     ],
     "negative": [

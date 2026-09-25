@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Review this Spring Boot diff for field injection issues",
-      "Check this Spring service for @Transactional self-invocation bugs",
-      "Review this Spring controller for entity leakage across the API boundary",
-      "Check this Spring Data JPA repository change for N+1 queries",
-      "Review this Kotlin Spring diff for missing Bean Validation",
-      "Review this Spring Security configuration for overly permissive rules"
+      "Our PR uses @Autowired directly on fields in three new classes -- is that actually a problem, or just a style nit?",
+      "I have a public method calling another @Transactional method on the same class instance -- will the proxy even pick that up, or is this a bug waiting to happen?",
+      "This controller method returns the JPA entity straight from findById -- is that going to bite us on the API contract, and how do I spot other cases like it?",
+      "Our order list endpoint is issuing one query per row instead of one for the whole list -- where in this repository is that coming from?",
+      "Does this incoming request DTO in Kotlin actually get validated before it reaches the service layer, or did we skip the annotations somewhere?",
+      "I inherited this SecurityFilterChain setup and I'm worried some endpoints are wide open that shouldn't be -- can you take a look?"
     ],
     "negative": [
       "Review this Spring Boot diff and also fix the bugs you find",

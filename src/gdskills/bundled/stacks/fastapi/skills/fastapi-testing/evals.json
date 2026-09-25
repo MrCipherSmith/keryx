@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "Write a pytest test for this FastAPI endpoint that creates an order",
+      "What should the pytest suite look like for the new FastAPI order-creation route -- I want to make sure a valid POST actually persists the order.",
       "Test this FastAPI route with TestClient to confirm it returns a 404",
-      "Add dependency_overrides for the current user in this endpoint's tests",
+      "How do I fake being logged in when testing this FastAPI route, without hitting the real auth flow?",
       "Test that this FastAPI endpoint returns a 422 on an invalid request body",
-      "Mock the external payment API call in this FastAPI test",
+      "This test keeps making a real network call to Stripe during CI -- how do I stub that out properly?",
       "Add test coverage for this FastAPI router's signup endpoint"
     ],
     "negative": [

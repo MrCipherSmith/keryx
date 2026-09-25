@@ -2,11 +2,11 @@
   "triggers": {
     "positive": [
       "manage.py check is failing with ImproperlyConfigured, can you fix it",
-      "Fix this Django migration conflict between two branches",
+      "After merging release/2.1 into main, `makemigrations` reports two leaf nodes in the payments app's migration history for our Django project -- what's the right way to reconcile that before I merge?",
       "Django app won't load, there's a circular import between two apps",
-      "mypy is failing on this Django model with django-stubs installed",
+      "Type-checking chokes on `Invoice.objects` with an incompatible-type error even though django-stubs is installed -- any idea why?",
       "makemigrations wants to create a migration that conflicts with an existing one",
-      "Our Django test suite won't even start, it's an import error in conftest",
+      "Pytest blows up before collecting a single test in our Django app -- traceback points to a bad import inside conftest.py. What's going on?",
       "ruff check is failing on this Django project"
     ],
     "negative": [

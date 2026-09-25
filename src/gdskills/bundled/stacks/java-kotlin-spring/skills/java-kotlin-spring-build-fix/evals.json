@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "./gradlew build is failing with a dependency version conflict",
-      "Spring context fails to start with NoUniqueBeanDefinitionException",
+      "Our CI just started failing on ./gradlew assemble -- the log points to two different versions of jackson-databind on the classpath. How do I track down which dependency is pulling in the wrong one?",
+      "After adding a second implementation of PaymentGateway, the app won't boot anymore and the stack trace mentions NoUniqueBeanDefinitionException. What's going on?",
       "mvn verify is failing with a circular bean dependency",
-      "ktlint is failing on this Kotlin file, please fix",
-      "This Spring Boot test run fails to build with a compile error",
+      "Our lint step is red because of a ktlint violation in OrderMapper.kt -- can you clean it up?",
+      "`./gradlew test` won't even compile -- there's a type mismatch somewhere in the OrderServiceTest sources. Can you track it down?",
       "NoSuchBeanDefinitionException on startup, fix this Spring build"
     ],
     "negative": [

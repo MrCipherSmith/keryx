@@ -2,12 +2,12 @@
   "triggers": {
     "positive": [
       "Generate a Django migration for this new required field on the Order model",
-      "Write a data migration to backfill the display_name field from first and last name",
-      "Make this Django migration reversible, it's missing a reverse function",
-      "How do I safely drop this column in Django without breaking the running deploy",
-      "Squash these old Django migrations in the accounts app",
+      "The display_name column needs to be populated from existing first_name/last_name values on all existing rows -- what's the right way to do that as a Django migration?",
+      "This Django migration only defines a forward RunPython operation -- how do I add the reverse function so it can be rolled back cleanly with `migrate`?",
+      "We're removing the `legacy_phone` column from a Django model via a rolling deploy -- what's the safe sequencing so instances running the old code don't break mid-rollout?",
+      "The accounts app in our Django project has accumulated 40+ migration files going back two years -- can you collapse them into a smaller set?",
       "Write a RunPython migration that normalizes existing phone numbers",
-      "Stage this Django schema change across two deploys since we can't drop the column yet"
+      "We want to rename a column but can't do it in one shot with our rolling deploy setup -- how should I split this Django schema change into multiple releases?"
     ],
     "negative": [
       "Fix this Django migration conflict that's currently blocking makemigrations from running",

@@ -3,8 +3,8 @@
     "positive": [
       "Review this FastAPI diff for blocking calls inside async path operations",
       "Check this FastAPI pull request for bugs before I merge it",
-      "Review this FastAPI endpoint for missing auth or CORS misconfiguration",
-      "Audit this FastAPI router for response_model gaps",
+      "Before this FastAPI route goes out, can you check whether anyone could hit it without being logged in, or whether our cross-origin setup is too loose?",
+      "I'm worried some of these FastAPI handlers might be leaking internal fields back to the client since we didn't always declare an output schema -- can you take a look?",
       "Review this async FastAPI code for blocking database calls",
       "Check this FastAPI code for a request body that skips Pydantic validation"
     ],

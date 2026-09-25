@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Add a FastAPI path operation for creating a new order",
+      "I need a FastAPI endpoint that lets a customer place a new order -- how would you wire that up in our router?",
       "Implement this endpoint in FastAPI that returns paginated items",
-      "Write a Pydantic model that validates a signup request body",
-      "Add a FastAPI dependency for the current authenticated user",
-      "Add background task support to this FastAPI endpoint for sending a welcome email",
-      "Create a new APIRouter for the payments resource",
-      "Implement OAuth2 password login in FastAPI"
+      "What's the right way to define a Pydantic schema for our signup form's incoming JSON so bad emails or usernames get rejected automatically?",
+      "Several of my FastAPI routes need to know who's logged in -- what's the standard way to inject that without repeating auth logic everywhere?",
+      "After a user signs up on our FastAPI backend I want to fire off a welcome email without making them wait for it -- how do I do that in this handler?",
+      "I'm splitting out the billing endpoints into their own FastAPI router module -- what's the right way to set that up in this project?",
+      "How do I set up a login endpoint here that issues a bearer token after checking a username and password, using FastAPI's built-in security tooling?"
     ],
     "negative": [
       "Implement this in Django instead of FastAPI",
