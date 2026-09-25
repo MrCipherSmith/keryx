@@ -235,6 +235,12 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   react: ["tsx", "jsx"],
   go: ["go"],
   rust: ["rs"],
+  // Wave 4 batch 2 (flow 318).
+  nestjs: ["ts"],
+  vue: ["vue"],
+  angular: ["ts", "html"],
+  "nextjs-nuxt": ["tsx", "jsx", "vue"],
+  mobx: ["ts", "tsx"],
 };
 
 export interface LintStackRuleOptions {

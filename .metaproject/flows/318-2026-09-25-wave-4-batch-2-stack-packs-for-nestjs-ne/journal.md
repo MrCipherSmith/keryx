@@ -1,3 +1,21 @@
 # Flow Journal
 
 - 2026-09-25T06:09:18.148Z - flow created
+- 2026-09-25T06:13:54.315Z - task-added: T5: Extend STACK_EXTENSIONS for nestjs/vue/angular/nextjs-nuxt/mobx
+- 2026-09-25T06:13:54.463Z - task-added: T6: Author nestjs pack (extends ts-js-node)
+- 2026-09-25T06:13:54.599Z - task-added: T7: Author nextjs-nuxt pack (extends react+vue)
+- 2026-09-25T06:13:54.731Z - task-added: T8: Author vue pack (extends ts-js-node)
+- 2026-09-25T06:13:54.864Z - task-added: T9: Author angular pack (extends ts-js-node)
+- 2026-09-25T06:13:54.996Z - task-added: T10: Author mobx pack (extends react)
+- 2026-09-25T06:14:00.582Z - task-added: T11: Extend install-manifest.json for all 5 packs (modules/components/profiles)
+- 2026-09-25T06:14:00.714Z - task-added: T12: Judge calibration: judge-check --record for every new skill until AG green
+- 2026-09-25T06:14:00.842Z - task-added: T13: Honest gate run (deepseek runner+judge, trials=10) for every new skill
+- 2026-09-25T06:14:00.973Z - task-added: T14: Stability promotion + agents generate for packs that clear the gate
+- 2026-09-25T06:14:01.102Z - task-added: T15: Update W1/W2 docs with batch-2 implementation notes
+- 2026-09-25T06:14:01.235Z - task-added: T16: Adversarial review loop, PR, CI, merge
+- 2026-09-25T06:14:06.253Z - task-done: T1: Collect remaining context
+- 2026-09-25T06:14:06.388Z - task-done: T2: Implement per plan
+- 2026-09-25T06:14:06.527Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-25T06:14:06.663Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-25T06:14:10.436Z - frozen: 8 criteria; checksum recorded
+- 2026-09-25T06:14:10.570Z - started
