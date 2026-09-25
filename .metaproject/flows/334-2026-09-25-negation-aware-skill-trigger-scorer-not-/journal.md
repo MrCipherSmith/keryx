@@ -404,3 +404,155 @@ resurfacing silently later).
 
 - 2026-09-25T16:16:08.177Z - task-done: T5: Survey exclusion-clause conventions in bundled SKILL.md files
 - 2026-09-25T16:16:08.438Z - task-done: T10: PR, review/fix loop, CI, merge sequencing
+
+## 2026-09-25 — Merged origin/main (PR #719 landed as 5cc2c5b3) and re-measured everything the new catalog could shift
+
+The owner merged PR #719 (flow 318's five new stack packs — nestjs, vue,
+angular, nextjs-nuxt, mobx) into `main`, plus three unrelated PRs
+(#722 review-jev-rules, #718 routing model profiles, #723 flow check-ac)
+and a release commit (0.3.1). Merged `origin/main` into
+`flow/334-scorer-negation` with a merge commit (`git merge origin/main
+--no-edit`, not a rebase, per instruction) — one conflict, in the
+append-only `.metaproject/data/wiki/freshness-queue.jsonl` log, resolved by
+keeping BOTH sides' lines (a pure concatenation of two independent JSONL
+append logs, order preserved within each side). Everything else merged
+clean. `bunx tsc --noEmit -p .` clean after the merge.
+
+The bundled catalog grew from **90 skills / 513 triggers to 110 skills /
+642 triggers**. The `checkStablePackGate`/`checkSkillSelectedLeaveOneOut`
+gates re-score triggers LIVE against whatever is in the catalog at test
+time, so every number in this flow's earlier journal entries that was
+measured against the 90-skill catalog needed re-measurement, not just a
+recheck — re-measured all of it, method unchanged (temporarily overwriting
+`scout.ts` with `main`'s pre-flow-334 content via `cp` from a scratch copy
+saved from THIS session's own working tree — never `git checkout`/`git
+stash` — measuring, then restoring via `cp` from a second saved copy; each
+restore was verified with `bun test scout.test.ts` before proceeding).
+
+### Ratchet ceiling re-measured (was 119/513, scout.test.ts)
+
+`main`'s (pre-flow-334) scorer against the merged 110-skill catalog: **167
+of 642** triggers fail `checkSkillSelectedLeaveOneOut`. This flow's fixed
+scorer against the SAME merged catalog: **155 of 642**. Net: a real
+improvement of 12. Diffed the two full fail-lists directly (not just the
+aggregate count):
+
+- **4 newly failing** (real, honest regressions from this flow, against
+  the merged catalog): `orchestration/job-orchestrator::"Run pipeline"` and
+  `platform/claude-md-management::"agent entrypoint"` (both unchanged from
+  before the merge — see the round-1 entry, still honest losses, still not
+  restored, same reasoning). Two NEW ones surfaced by combining catalogs:
+  `orchestration/context-collector::"build context"` (outranked by the
+  brand-new `angular/angular-build-fix`) and
+  `react/react-code-review::"check the react hooks in this pull request
+  for rules of hooks violations"` (outranked by the brand-new
+  `vue/vue-code-review`) — both verified to be the same corpus-wide IDF
+  redistribution mechanism documented for `react/react-build-fix` earlier
+  (neither `context-collector` nor `react-code-review` has an exclusion
+  clause touching the contested vocabulary at all; the outranking entry is
+  a brand-new pack, not a leak on either side). Not fixed — same category
+  of accepted, documented side effect as before, now with two more
+  instances from the larger corpus.
+- **16 newly fixed.** Two triggers that were pinned as this flow's honest
+  losses under the OLD 90-skill catalog no longer are:
+  `python/python-code-review::"check this python pr for bugs"` and
+  `ts-js-node/nodejs-implementation::"write a CLI command in Node"` both
+  fail (or pass) IDENTICALLY with or without this flow's fix once measured
+  against the merged catalog — removed from `KNOWN_HONEST_LOSSES` (keeping
+  them would have pinned a false attribution to this flow). The other 14
+  gains are genuine new fixes, several in the newly-merged packs
+  themselves (`nestjs/nestjs-testing`, `vue/vue-code-review` ×2,
+  `vue/vue-implementation`, `vue/vue2-to-vue3-migration`), confirming the
+  fix helps the new packs too, not just the pre-existing catalog.
+- `scout.test.ts`'s ratchet test updated: `<= 119` (90-skill catalog) ->
+  `<= 155` (110-skill catalog); `KNOWN_HONEST_LOSSES` updated to the 4
+  current items; the two restored-via-description-edit `test.each` lists
+  (deploy/interviewer/job-orchestrator's "orchestrate task"/brainstorm)
+  re-verified — all 4 still select correctly against the merged catalog,
+  unaffected by the new packs.
+
+### stack-packs.test.ts / stack-pack-eval-integrity.test.ts
+
+Both suites re-run after the merge: **2604 pass, 0 fail** (all stack-pack
+layout, integrity, and gate tests, over ALL packs now in the tree including
+the 5 new batch-2 ones).
+
+### checkStablePackGate — go and python (the only `stability: "stable"`
+packs on this branch; nestjs/angular/mobx remain `"experimental"` here)
+
+Called `checkStablePackGate` directly for both, against the merged
+catalog with the fixed scorer:
+
+- `go`: `{"status":"pass"}`
+- `python`: `{"status":"pass"}`
+
+Neither stable pack regresses on triggers after the merge + this flow's
+fix.
+
+### Batch-2 packs' recorded trigger results against the new scorer (report only — all `experimental`, nothing gated)
+
+Ran `evalSkill` (deterministic trigger-accuracy only, no model) for all 19
+batch-2 skills, BEFORE (`main`'s scorer) and AFTER (this flow's fix), both
+against the merged catalog:
+
+| skill | main TP/pos | main FP/neg | fixed TP/pos | fixed FP/neg |
+|---|---|---|---|---|
+| angular/angular-build-fix | 6/6 | 0/6 | 6/6 | 0/6 |
+| angular/angular-code-review | 6/6 | 0/6 | 6/6 | 0/6 |
+| angular/angular-implementation | 1/7 | 0/7 | 1/7 | 0/7 |
+| angular/angular-testing | 6/6 | 1/6 | 6/6 | 0/6 |
+| mobx/mobx-observable-testing | 7/7 | 0/6 | 7/7 | 0/6 |
+| mobx/mobx-store-implementation | 4/8 | 0/6 | 4/8 | 0/6 |
+| nestjs/nestjs-build-fix | 6/6 | 0/6 | 6/6 | 0/6 |
+| nestjs/nestjs-implementation | 6/7 | 0/6 | 6/7 | 0/6 |
+| nestjs/nestjs-testing | 6/6 | 0/6 | 6/6 | 1/6 |
+| nextjs-nuxt/nextjs-nuxt-build-fix | 7/7 | 1/6 | 7/7 | 0/6 |
+| nextjs-nuxt/nextjs-nuxt-code-review | 4/7 | 3/6 | 4/7 | 3/6 |
+| nextjs-nuxt/nextjs-nuxt-implementation | 8/8 | 3/6 | 8/8 | 2/6 |
+| nextjs-nuxt/nextjs-nuxt-testing | 7/7 | 4/6 | 7/7 | 3/6 |
+| nextjs-nuxt/nextjs-nuxt-upgrade-migration | 7/7 | 3/6 | 7/7 | 4/6 |
+| vue/vue-build-fix | 6/6 | 1/6 | 4/6 | 2/6 |
+| vue/vue-code-review | 6/6 | 0/6 | 6/6 | 1/6 |
+| vue/vue-implementation | 6/6 | 0/6 | 6/6 | 0/6 |
+| vue/vue-testing | 6/6 | 0/6 | 6/6 | 0/6 |
+| vue/vue2-to-vue3-migration | 6/6 | 0/6 | 6/6 | 2/6 |
+| **TOTAL** | **111/125** | **16/115** | **109/125** | **18/115** |
+
+Net for batch-2 specifically: TP -2, FP +2 — a small net regression
+concentrated in `vue/vue-build-fix` (TP 6->4, FP 1->2) and
+`vue/vue2-to-vue3-migration` (FP 0->2), partly offset by
+`angular/angular-testing` and `nextjs-nuxt/nextjs-nuxt-build-fix`/
+`nextjs-nuxt/nextjs-nuxt-implementation` improving. Not investigated
+further or fixed — all five packs are `experimental`, nothing here gates
+on these numbers, and the instruction was to report them. Worth noting for
+whoever eventually promotes these packs to `stable`: the numbers should be
+re-measured again at that point, against whatever the catalog and scorer
+look like then.
+
+### Known misroute re-checked: "Fix a circular dependency between two Go packages"
+
+Previously reported (flow 318 journal / PR #719 review) selecting
+`nestjs/nestjs-build-fix` at 0.642. Re-checked against the merged catalog:
+
+- `main` scorer (pre-flow-334): `nestjs/nestjs-build-fix` 0.6425 (rank 1,
+  selected), `go/go-build-fix` 0.1001 (rank 26, not even top-5).
+- This flow's fixed scorer: `nestjs/nestjs-build-fix` 0.6358 (rank 1,
+  selected), `go/go-build-fix` 0.1066 (rank 23, not top-5).
+
+**The misroute persists, essentially unchanged (a ~0.007 score delta, well
+within corpus-noise) — this flow's negation fix does not touch it, and was
+never going to.** Root cause is unrelated to negation handling: NEITHER
+skill has an exclusion clause involving the contested vocabulary.
+`nestjs-build-fix` has a real, positive trigger — "these two NestJS modules
+have a circular dependency on each other" — that happens to share "two",
+"circular", "dependency" verbatim with the query. `go-build-fix` describes
+the identical underlying concept with DIFFERENT words throughout ("import
+cycle(s)", never "circular dependency") — its own description says
+"resolves ... import cycles" and its trigger says "resolve this import
+cycle in Go". This is a pure vocabulary-choice mismatch between two
+skills describing the same failure mode differently, not something a
+negation-aware scorer can fix — flagged here as a genuine, out-of-scope
+finding for a future flow (either add "circular dependency" as recognized
+vocabulary to `go-build-fix`'s description, which would be an honest
+scope-accuracy fix same as this flow's four description edits, or address
+it at the routing/synonym layer).
