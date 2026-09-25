@@ -1,5 +1,16 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.11
+Version: 0.1.12
+
+**Changelog (0.1.12, flow 338, W4 batch 6, Phase A):** `docker-k8s-terraform`
+and `ci-github-gitlab` were authored (see `W1-stack-catalog.md`,
+"Implementation notes: Wave 4 batch 6 (flow 338)") with a real
+`agentProfile` block in each `pack.json` (the `auditFocus`/`buildCommands`/
+`fixGuardrails` shape `src/agents/generate.ts` reads), but neither pack has
+run through the honest behavioral gate yet — both ship `stability:
+experimental` and `agent-refs.json: {"agents": []}` with a note, same as
+every other pack's pre-gate state. No `<stack>-code-auditor`/
+`<stack>-build-fixer` pair is generated for either until Phase B's gate run
+decides it honestly.
 
 **Changelog (0.1.11, flow 318, review round 2 on PR #719):** corrects the
 0.1.10 line below, which recorded review round 1's outcome — superseded by

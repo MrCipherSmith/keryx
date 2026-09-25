@@ -1295,6 +1295,94 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   keeping it. `ts-js-node`/`react`/`nextjs-nuxt`/`vue` remain
   `experimental` for their own, unrelated reasons.
 
+## Implementation notes: Wave 4 batch 6 (flow 338, Phase A)
+
+- **Packs authored.** Two `tool`-family stack packs now exist under
+  `src/gdskills/bundled/stacks/<id>/`: `docker-k8s-terraform` and
+  `ci-github-gitlab`, both `stability: experimental` with
+  `agent-refs.json: {"agents": []}` (the honest behavioral gate has not run
+  — that is flow 338's Phase B, gated on PR #719 and flow 316's
+  `extends`-as-array/`extendsList` changes landing on `main` first).
+  - `docker-k8s-terraform`: rules (`coding-style`, `patterns`, `security`,
+    `testing`) scoped to Dockerfiles (`**/Dockerfile`, `**/*.dockerfile`),
+    Docker/Compose YAML (`**/docker-compose*.yml`, `**/compose.yaml`, …),
+    Kubernetes/Helm YAML (`k8s/**/*.yaml`, `helm/**/*.yaml`,
+    `**/templates/*.yaml`), and Terraform (`**/*.tf`, `**/*.tfvars`). No
+    `implement` skill, per this document's target-stack table ("config
+    authoring lives in the `deploy` quality skill"). Ships `review` and
+    `build-fix` skills; `test`/`migrate` omitted with reasons recorded in
+    `pack.json`'s `notes` field (validating a config file is a static
+    tool-driven check exercised from `build-fix`'s own
+    reproduce-and-classify step, not a separate authoring workflow with a
+    written test suite the way `go-testing`/`python-testing` have one).
+  - `ci-github-gitlab`: rules (`patterns`, `security`) scoped strictly to
+    `.github/workflows/*.yml` and `.gitlab-ci.yml` — never bare `*.yml`,
+    since plain YAML is shared with `docker-k8s-terraform` and much else.
+    Ships `implement`, `review`, and `build-fix` skills; `test`/`migrate`
+    omitted with reasons in `pack.json`'s `notes` field.
+- **`STACK_EXTENSIONS`/`authoring-lint.ts` gained extensionless-filename
+  matching.** The `paths:` glob scope check (W1-AC8) previously matched
+  only a dotted extension, so a literal filename convention like
+  `Dockerfile` could never validate. `lintStackRule`'s extension extraction
+  now falls back to the glob's final path segment (case-insensitively) when
+  it carries no dotted extension and no wildcard, checked against the same
+  `STACK_EXTENSIONS` table via a `"dockerfile"` pseudo-extension entry.
+  Regression-tested in `authoring-lint.test.ts`.
+- **`install-manifest.json` wiring.** Both packs' rule/skill modules and
+  `tool:docker-k8s-terraform`/`tool:ci-github-gitlab` components are
+  registered, plus two new stack-detection-aware profiles, at `stability:
+  experimental`. Component `detectionMarkers` use the real tags
+  `src/stack/detect.ts`'s `STACK_DETECT_TAGS` emits (`docker`,
+  `docker-compose`, `terraform`, `github-actions`, `gitlab-ci`) — there is
+  no separate Kubernetes-specific detection tag today (Kubernetes/Helm
+  manifests are recognized by this pack's rule scoping, not by
+  `keryx stack detect`), consistent with the "Cost of a general `keryx
+  stack detect`" risk already on record in this document.
+- **Security content verified via ctx7, recorded in the flow journal for
+  AC6**, covering (docker-k8s-terraform) non-root containers, base-image
+  digest pinning, secrets-out-of-images via build-time mounts, Kubernetes
+  `securityContext`/default-deny `NetworkPolicy`, and Terraform state
+  encryption/`sensitive` scope limits (`sensitive = true` only affects CLI
+  display, it does not encrypt state); and (ci-github-gitlab)
+  `pull_request_target`'s "pwn request" risk, third-party action SHA
+  pinning, least-privilege `permissions:` at job level, `${{ github.event.*
+  }}` script-injection mitigation via an intermediate `env:` variable, and
+  GitLab CI protected-variable/branch scoping.
+- **Two calibration `subtle_wrong` answers flagged for Phase B review**,
+  not yet confirmed either way: `docker-k8s-terraform-review`'s
+  `base-image-digest-pin` scenario's `subtle_wrong` argues a digest pin
+  matters less when a project rebuilds images nightly from a clean cache —
+  that addresses only the reproducibility angle the scenario's `pass_criteria`
+  tests, not the independent supply-chain-integrity angle a mutable tag
+  carries regardless of rebuild cadence, so whether it is genuinely wrong or
+  a defensible-but-incomplete answer needs a second look before the honest
+  gate runs. `docker-k8s-terraform-review`'s `dockerfile-root-user`
+  scenario's `subtle_wrong` (an internal CI-runner image "never faces
+  customer traffic" so root is fine) reads as the same class of
+  defense-in-depth argument and needs the same check. (The sibling
+  `terraform-rename-state-mv` build-fix scenario's `subtle_wrong` — S3
+  versioning "protects" a destroyed/recreated bucket — was checked here and
+  is genuinely wrong: bucket deletion removes all object versions;
+  versioning protects against in-bucket overwrite/delete, not bucket
+  destruction.)
+- **Offline checks only; the model-backed gate has not run.**
+  `stack-pack-eval-integrity.test.ts`'s structural checks (I1-I9) pass for
+  both new packs; its AG (anti-gaming judge-recording) checks fail for both,
+  as expected, until `keryx skills judge-check --record` calibration runs in
+  Phase B — this mirrors every other experimental pack's pre-calibration
+  state, not a new gap.
+- **Catalog-growth side effect on `scout.test.ts`.** Adding these two packs
+  changed two fixture queries' lexical-overlap scores enough to flip their
+  expected `scoutSkill`/`vetExternalCatalog` decisions: "kubernetes helm
+  chart linting" is now genuinely covered by `docker-k8s-terraform-review`
+  (it scored "unrelated" only because nothing in the catalog covered
+  Kubernetes before), and a synthetic "Build and validate acme widgets end
+  to end" import-vetting fixture started overlapping the new
+  `*-build-fix`-named skills' shared vocabulary. Both fixtures were swapped
+  to content with no plausible overlap with any catalog skill, present or
+  foreseeable — the D-7 catalog-scale-governance risk already on record in
+  this document's Risks section, observed in practice for the first time.
+
 ## Data contracts
 
 - `schemas/install-manifest.schema.json` (this workstream) — profiles,
