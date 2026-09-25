@@ -2,26 +2,42 @@
 // each connected model (strength, price, context length) and where each
 // field's value came from. PRD §6.1, docs/requirements/keryx-jev-router/PRD.md.
 //
-// Storage (AC3): per user, alongside `apiKeys`/`modelParams` in
-// `src/lib/shell-config.ts` (`ShellConfig.modelProfiles`, a raw unvalidated
-// field — same posture as `ShellConfig.routing`), keyed by
-// `<providerId>/<modelId>`. `loadModelProfiles` merges that stored map with
-// the curated seed (AC4) so the seed shows up from the FIRST read without a
-// forced write — an operator correction (`setModelProfileField`, AC8) or a
-// live refresh (`refreshModelProfiles`, AC2/AC9) is what actually persists a
-// row; a bare read never writes.
+// Storage (AC3, rewritten 2026-09-25 — review of PR #718: 500+ profiles
+// inside the credentials file and an unlocked read-modify-write race): its
+// OWN file, `model-profiles.json`, in the same keryx user data dir
+// `shell-config.ts`'s `auth.json` (credentials) and `shell-config.ts`'s
+// `modelParams` sibling `provider-catalog-cache.ts`'s `provider-catalog.json`
+// already live in — mode 0600, written atomically under `withFileLock`
+// (`../../lib/fs.ts`), the SAME pattern `provider-catalog-cache.ts` uses for
+// its own on-disk cache. Keyed by `<providerId>/<modelId>`.
+// `loadModelProfiles` merges the stored map with the curated seed (AC4) so
+// the seed shows up from the FIRST read without a forced write — an operator
+// correction (`setModelProfileField`, AC8) or a live refresh
+// (`refreshModelProfiles`, AC2/AC9) is what actually persists a row; a bare
+// read never writes.
+//
+// A one-time migration (`migrateFromAuthJsonUnlocked`, run under the SAME
+// lock at the start of every locked write) moves any `modelProfiles` still
+// present in `auth.json` — the shape this flow originally shipped, before
+// this rewrite — into `model-profiles.json` and then removes the field from
+// `auth.json`, leaving every other key/grant in that file untouched. A pure
+// read (`loadStoredModelProfiles`) never writes; it merges the legacy
+// `auth.json` field in-memory so a caller sees the complete picture even
+// before the next write physically migrates it.
 //
 // No TUI/CLI import here — pure data + pure functions, mirroring
-// `./table.ts`'s own "no rendering deps" posture. `refreshModelProfiles` is
-// the one function that touches disk (through `shell-config.ts`'s existing
-// `dir?: string` test seam, defaulting to production like every other writer
-// in this codebase).
+// `./table.ts`'s own "no rendering deps" posture. Every function that
+// touches disk takes the same `dir?: string` test seam every other writer in
+// this codebase uses, defaulting to production.
+import path from "node:path";
 import {
   ANTHROPIC_MODELS,
   GEMINI_MODELS,
   OPENAI_MODELS,
 } from "../../commands/curated-model-lists";
-import { loadShellConfig, saveShellConfig } from "../../lib/shell-config";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
+import { withFileLock } from "../../lib/fs";
+import { loadShellConfig, shellConfigPath } from "../../lib/shell-config";
 import { MODEL_RANK_HINTS, rankModelId } from "../../gdskills/model-tier";
 import type { AvailablePredicate } from "./table";
 
@@ -49,9 +65,76 @@ export interface ModelProfile {
   readonly priority: { readonly value: number; readonly source: PrioritySource };
   /** False once a live fetch no longer lists this model (§6.2) — the profile is kept, not deleted. */
   readonly available: boolean;
+  /**
+   * False for a model that is not a chat/completion model — an embedding,
+   * image, TTS/audio, moderation or rerank endpoint (review of PR #718,
+   * operator decision 2026-09-25: "never auto-derive a non-chat model").
+   * Detected from the id (`isNonChatModelId`) and, when a gateway's `/models`
+   * body carries it, from modality metadata (`resolveChatCapable`) — never
+   * from price/context, which a non-chat model can report just as validly as
+   * a chat one. Always recomputed on refresh (not an operator-correctable
+   * field — `ModelProfileFieldName` has no case for it); defaults `true` for
+   * a profile stored before this field existed (`sanitizeStoredProfile`),
+   * since every such profile predates this flow and none of them are
+   * non-chat entries. `deriveDefaultTable` (`./derive-default-table.ts`)
+   * excludes `chatCapable: false` from derivation; the `/routing` picker
+   * still lists it, marked (`describePickerRowProfile`,
+   * `../../tui/routing-inspector.ts`).
+   */
+  readonly chatCapable: boolean;
   /** Last time this model was present in a live fetch (advances only while `available`). */
   readonly lastSeenAt: string;
   readonly refreshedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Non-chat / non-derivable model detection (review of PR #718, item 3 —
+// operator decision 2026-09-25: exclude non-chat models and OpenRouter
+// `:free` variants from derivation; still list them in the picker, marked).
+// ---------------------------------------------------------------------------
+
+/**
+ * Id-pattern signal (word-boundary, case-insensitive): embedding, image,
+ * text-to-speech/speech-to-text, moderation and rerank endpoints are not
+ * chat/completion models and must never be auto-derived into a routing
+ * category. `audio` is included deliberately even though some real
+ * multimodal CHAT models carry it in their id (e.g. an audio-preview
+ * variant) — the operator's instruction names `audio` explicitly as one of
+ * the excluded patterns, and a false exclusion there only means the picker's
+ * "marked, still selectable" fallback applies (AC10's non-goal list), never
+ * a broken selection.
+ */
+const NON_CHAT_ID_PATTERN = /\b(embed(?:ding)?|image|dall-?e|tts|text-to-speech|speech-to-text|whisper|audio|moderation|rerank)\b/i;
+
+/** True when `modelId` names a non-chat model by its id alone (no metadata needed). */
+export function isNonChatModelId(modelId: string): boolean {
+  return NON_CHAT_ID_PATTERN.test(modelId);
+}
+
+/** OpenRouter's `:free` suffix convention (`vendor/model:free`) — excluded from derivation only, never marked non-chat (item 3). */
+export function isFreeVariantModelId(modelId: string): boolean {
+  return /:free$/i.test(modelId.trim());
+}
+
+/**
+ * `chatCapable`, combining the always-available id heuristic with an
+ * optional metadata signal (`parseModelProfileFieldsFromBody`'s
+ * `chatCapable`, from OpenRouter's `architecture.output_modalities`/
+ * `architecture.modality`). Metadata can only ever SHARPEN the id
+ * heuristic's "chat" default to `false` — never override an id-pattern
+ * `false` back to `true` — since the id patterns above are the operator's
+ * explicit instruction and metadata is confirmed live for OpenRouter only
+ * (PRD §6.1's own "confirmed live" posture for pricing/context_length).
+ */
+export function resolveChatCapable(modelId: string, metadataChatCapable?: boolean): boolean {
+  if (isNonChatModelId(modelId)) return false;
+  if (metadataChatCapable === false) return false;
+  return true;
+}
+
+/** Never auto-derived (item 3): not chat-capable, or an OpenRouter `:free` variant. Still shown in the picker, marked. */
+export function isModelDerivable(profile: ModelProfile): boolean {
+  return profile.chatCapable && !isFreeVariantModelId(profile.modelId);
 }
 
 /** Storage key: `<providerId>/<modelId>`. */
@@ -165,6 +248,10 @@ function curatedProfile(providerId: string, modelId: string, entry: CuratedEntry
     contextLength: { value: entry.contextLength, source: "curated" },
     priority: { value: computeAutoPriority(priceInputPerMillion), source: "auto" },
     available: true,
+    // The three curated providers (ANTHROPIC_MODELS/OPENAI_MODELS/GEMINI_MODELS,
+    // `../../commands/curated-model-lists.ts`) list chat models exclusively —
+    // no embedding/image/TTS entry has ever been curated here.
+    chatCapable: true,
     lastSeenAt: now,
     refreshedAt: now,
   };
@@ -193,11 +280,43 @@ export interface ParsedModelProfileFields {
   readonly priceInputPerMillion?: number;
   readonly priceOutputPerMillion?: number;
   readonly contextLength?: number;
+  /**
+   * Item 3 — a definitive modality signal from the gateway's own `/models`
+   * body, when it carries one. `false` means the entry's OWN metadata says
+   * its output is not text (an embedding/image/audio endpoint); `true` means
+   * text output is confirmed; omitted means the body carried no modality
+   * field at all, and `resolveChatCapable` falls back to the id heuristic.
+   */
+  readonly chatCapable?: boolean;
 }
 
 function modelEntryId(entry: { id?: unknown; name?: unknown }): string | undefined {
   if (typeof entry.id === "string" && entry.id.length > 0) return entry.id;
   if (typeof entry.name === "string" && entry.name.length > 0) return entry.name;
+  return undefined;
+}
+
+/**
+ * Item 3 — OpenRouter's `architecture.output_modalities` (an array, e.g.
+ * `["text"]`/`["text","image"]`) or `architecture.modality` (a string, e.g.
+ * `"text->text"`/`"text->embedding"`). `undefined` when the entry carries
+ * neither shape — the id heuristic (`resolveChatCapable`) decides alone.
+ * Never throws.
+ */
+function chatCapableFromArchitecture(entry: { architecture?: unknown }): boolean | undefined {
+  const architecture = entry.architecture;
+  if (typeof architecture !== "object" || architecture === null) return undefined;
+  const record = architecture as { output_modalities?: unknown; modality?: unknown };
+  if (Array.isArray(record.output_modalities)) {
+    const modalities = record.output_modalities.filter((m): m is string => typeof m === "string");
+    if (modalities.length === 0) return undefined;
+    return modalities.some((m) => m.toLowerCase() === "text");
+  }
+  if (typeof record.modality === "string" && record.modality.length > 0) {
+    const output = record.modality.split("->").at(-1)?.trim().toLowerCase() ?? "";
+    if (output.length === 0) return undefined;
+    return output.includes("text");
+  }
   return undefined;
 }
 
@@ -224,10 +343,10 @@ export function parseModelProfileFieldsFromBody(body: unknown): Record<string, P
   if (!Array.isArray(data)) return out;
   for (const raw of data) {
     if (typeof raw !== "object" || raw === null) continue;
-    const entry = raw as { id?: unknown; name?: unknown; pricing?: unknown; context_length?: unknown };
+    const entry = raw as { id?: unknown; name?: unknown; pricing?: unknown; context_length?: unknown; architecture?: unknown };
     const id = modelEntryId(entry);
     if (id === undefined) continue;
-    const fields: { priceInputPerMillion?: number; priceOutputPerMillion?: number; contextLength?: number } = {};
+    const fields: { priceInputPerMillion?: number; priceOutputPerMillion?: number; contextLength?: number; chatCapable?: boolean } = {};
     const pricing = entry.pricing;
     if (typeof pricing === "object" && pricing !== null) {
       const prompt = usdPerTokenToPerMillion((pricing as { prompt?: unknown }).prompt);
@@ -235,6 +354,8 @@ export function parseModelProfileFieldsFromBody(body: unknown): Record<string, P
       const completion = usdPerTokenToPerMillion((pricing as { completion?: unknown }).completion);
       if (completion !== undefined) fields.priceOutputPerMillion = completion;
     }
+    const chatCapable = chatCapableFromArchitecture(entry);
+    if (chatCapable !== undefined) fields.chatCapable = chatCapable;
     const contextLength = entry.context_length;
     if (typeof contextLength === "number" && Number.isFinite(contextLength) && contextLength > 0) {
       fields.contextLength = contextLength;
@@ -245,10 +366,9 @@ export function parseModelProfileFieldsFromBody(body: unknown): Record<string, P
 }
 
 // ---------------------------------------------------------------------------
-// Storage (AC3) — raw read/write through `shell-config.ts`'s `modelProfiles`
-// field, validated on the way in (a hand-edited or stale-shaped entry is
-// dropped rather than trusted, same posture as `provider-catalog-cache.ts`'s
-// `sanitizeEntry`).
+// Storage (AC3, rewritten) — `model-profiles.json`, its own file, validated
+// on the way in (a hand-edited or stale-shaped entry is dropped rather than
+// trusted, same posture as `provider-catalog-cache.ts`'s `sanitizeEntry`).
 // ---------------------------------------------------------------------------
 
 const PROFILE_SOURCES: ReadonlySet<string> = new Set(["reported", "curated", "guessed", "operator", "unknown"]);
@@ -284,6 +404,10 @@ function sanitizeStoredProfile(value: unknown): ModelProfile | undefined {
   }
   if (typeof record.available !== "boolean") return undefined;
   if (typeof record.lastSeenAt !== "string" || typeof record.refreshedAt !== "string") return undefined;
+  // `chatCapable` defaults to `true` for a profile stored before this field
+  // existed (every profile written by keryx prior to this rewrite) — see the
+  // field's own doc on `ModelProfile`.
+  const chatCapable = typeof record.chatCapable === "boolean" ? record.chatCapable : true;
   return {
     providerId: record.providerId,
     modelId: record.modelId,
@@ -293,26 +417,134 @@ function sanitizeStoredProfile(value: unknown): ModelProfile | undefined {
     contextLength,
     priority: { value: priority.value, source: priority.source as PrioritySource },
     available: record.available,
+    chatCapable,
     lastSeenAt: record.lastSeenAt,
     refreshedAt: record.refreshedAt,
   };
 }
 
-/** Raw stored profiles only (no curated merge) — `{}` when absent/empty/malformed. Never throws. */
-export function loadStoredModelProfiles(dir?: string): Record<string, ModelProfile> {
-  const raw = loadShellConfig(dir).modelProfiles;
-  if (typeof raw !== "object" || raw === null) return {};
-  const out: Record<string, ModelProfile> = {};
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const profile = sanitizeStoredProfile(value);
-    if (profile !== undefined) out[key] = profile;
-  }
-  return out;
+const MODEL_PROFILES_FILE = "model-profiles.json";
+const MODEL_PROFILES_LOCK_TIMEOUT_MS = 3_000;
+const MODEL_PROFILES_LOCK_RETRY_MS = 15;
+const MODEL_PROFILES_LOCK_STALE_MS = 10_000;
+
+/** Absolute path to `model-profiles.json` — the keryx user data dir, the same dir `shell-config.ts`'s `auth.json` and `provider-catalog-cache.ts`'s `provider-catalog.json` live in. */
+export function modelProfilesFilePath(dir?: string): string {
+  return path.join(keryxConfigDir(dir), MODEL_PROFILES_FILE);
 }
 
-/** Persist the FULL stored map (overwrites `modelProfiles` wholesale — callers merge first). Best-effort; never throws. */
-export function saveStoredModelProfiles(profiles: Record<string, ModelProfile>, dir?: string): void {
-  saveShellConfig({ modelProfiles: profiles }, dir);
+/** Read `model-profiles.json` alone (no `auth.json` legacy merge, no lock). `{}` when absent/oversized/unreadable/malformed. Never throws. */
+function readModelProfilesFileUnlocked(dir?: string): Record<string, ModelProfile> {
+  const read = readConfigFile(modelProfilesFilePath(dir));
+  if (!read.ok) return {};
+  try {
+    const parsed = JSON.parse(read.text) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    const out: Record<string, ModelProfile> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const profile = sanitizeStoredProfile(value);
+      if (profile !== undefined) out[key] = profile;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Overwrite `model-profiles.json` wholesale, atomically, mode 0600. Callers merge first and hold the lock. */
+function writeModelProfilesFileUnlocked(profiles: Record<string, ModelProfile>, dir?: string): void {
+  ensureKeryxConfigDir(dir);
+  writeOwnerOnlyFileAtomic(modelProfilesFilePath(dir), `${JSON.stringify(profiles, null, 2)}\n`);
+}
+
+/**
+ * Rewrite `auth.json` with its `modelProfiles` field removed, preserving
+ * every other key/grant byte-for-byte (same `JSON.stringify(_, null, 2)`
+ * formatting `saveShellConfig` uses, so an untouched field round-trips
+ * identically). A no-op when the field is already absent. Best-effort —
+ * caught by `migrateFromAuthJsonUnlocked`, never throws on its own.
+ */
+function stripModelProfilesFromAuthJsonUnlocked(dir?: string): void {
+  const file = shellConfigPath(dir);
+  const read = readConfigFile(file);
+  if (!read.ok) return;
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(read.text) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  if (!("modelProfiles" in raw)) return;
+  const { modelProfiles: _removed, ...rest } = raw;
+  writeOwnerOnlyFileAtomic(file, `${JSON.stringify(rest, null, 2)}\n`);
+}
+
+/**
+ * The one-time migration (AC3 rewrite): any `modelProfiles` still present in
+ * `auth.json` (this flow's original storage, before the rewrite) is merged
+ * into `model-profiles.json` and then removed from `auth.json`. Runs INSIDE
+ * `withModelProfilesLock`, at the start of every locked write, so it never
+ * races a concurrent writer. `model-profiles.json`'s own content wins on a
+ * key collision (it is the more-authoritative, already-migrated copy);
+ * `auth.json`'s legacy entries fill in anything not yet in the file.
+ * Best-effort; never throws. Returns the (possibly just-migrated) current
+ * file content.
+ */
+function migrateFromAuthJsonUnlocked(dir?: string): Record<string, ModelProfile> {
+  const fileProfiles = readModelProfilesFileUnlocked(dir);
+  const rawLegacy = loadShellConfig(dir).modelProfiles;
+  if (rawLegacy === undefined) return fileProfiles;
+  if (typeof rawLegacy !== "object" || rawLegacy === null || Object.keys(rawLegacy).length === 0) {
+    // Present but empty/malformed — still retire the field.
+    stripModelProfilesFromAuthJsonUnlocked(dir);
+    return fileProfiles;
+  }
+  const legacyProfiles: Record<string, ModelProfile> = {};
+  for (const [key, value] of Object.entries(rawLegacy as Record<string, unknown>)) {
+    const profile = sanitizeStoredProfile(value);
+    if (profile !== undefined) legacyProfiles[key] = profile;
+  }
+  const merged = { ...legacyProfiles, ...fileProfiles };
+  writeModelProfilesFileUnlocked(merged, dir);
+  stripModelProfilesFromAuthJsonUnlocked(dir);
+  return merged;
+}
+
+/**
+ * Every read-modify-write on the profile store (AC3 rewrite — the lock race
+ * finding) runs `fn` against the current, migrated content, under the SAME
+ * file lock `provider-catalog-cache.ts` uses for its own cache: two
+ * providers refreshing concurrently, `providers test`, and `routing profile
+ * set` all serialize here rather than clobbering each other's write.
+ */
+async function withModelProfilesLock<T>(dir: string | undefined, fn: (current: Record<string, ModelProfile>) => T | Promise<T>): Promise<T> {
+  return withFileLock(
+    `${modelProfilesFilePath(dir)}.lock`,
+    async () => fn(migrateFromAuthJsonUnlocked(dir)),
+    { timeoutMs: MODEL_PROFILES_LOCK_TIMEOUT_MS, retryMs: MODEL_PROFILES_LOCK_RETRY_MS, staleMs: MODEL_PROFILES_LOCK_STALE_MS },
+  );
+}
+
+/**
+ * Raw stored profiles only (no curated merge) — `{}` when absent/empty/
+ * malformed. Never throws, never writes: the legacy `auth.json.modelProfiles`
+ * field (when the one-time migration hasn't physically run yet) is merged in
+ * MEMORY ONLY, so a bare read always sees the complete picture without ever
+ * mutating `auth.json` itself — only a locked write
+ * (`withModelProfilesLock`) does that.
+ */
+export function loadStoredModelProfiles(dir?: string): Record<string, ModelProfile> {
+  const fileProfiles = readModelProfilesFileUnlocked(dir);
+  const rawLegacy = loadShellConfig(dir).modelProfiles;
+  if (typeof rawLegacy !== "object" || rawLegacy === null || Object.keys(rawLegacy).length === 0) {
+    return fileProfiles;
+  }
+  const legacyProfiles: Record<string, ModelProfile> = {};
+  for (const [key, value] of Object.entries(rawLegacy as Record<string, unknown>)) {
+    const profile = sanitizeStoredProfile(value);
+    if (profile !== undefined) legacyProfiles[key] = profile;
+  }
+  return { ...legacyProfiles, ...fileProfiles };
 }
 
 /**
@@ -371,12 +603,13 @@ function freshProfile(providerId: string, modelId: string, parsed: ParsedModelPr
     contextLength: buildField(parsed?.contextLength, undefined),
     priority: { value: computeAutoPriority(priceInputPerMillion), source: "auto" },
     available: true,
+    chatCapable: resolveChatCapable(modelId, parsed?.chatCapable),
     lastSeenAt: nowIso,
     refreshedAt: nowIso,
   };
 }
 
-/** Update an EXISTING profile's non-`operator` fields from a fresh live sighting (AC7, AC9, AC18). */
+/** Update an EXISTING profile's non-`operator` fields from a fresh live sighting (AC7, AC9, AC18). `chatCapable` is always recomputed — it is not an operator-correctable field (`ModelProfileFieldName`). */
 function updateProfile(existing: ModelProfile, parsed: ParsedModelProfileFields | undefined, nowIso: string): ModelProfile {
   const tier = existing.strengthTier.source === "operator" ? existing.strengthTier : guessStrengthTier(existing.modelId);
   const priceInputPerMillion =
@@ -393,6 +626,7 @@ function updateProfile(existing: ModelProfile, parsed: ParsedModelProfileFields 
     contextLength,
     priority,
     available: true,
+    chatCapable: resolveChatCapable(existing.modelId, parsed?.chatCapable),
     lastSeenAt: nowIso,
     refreshedAt: nowIso,
   };
@@ -414,6 +648,13 @@ function profilesEqualIgnoringTimestamps(a: ModelProfile, b: ModelProfile): bool
  * Best-effort: a storage failure is swallowed (matches every other writer in
  * this codebase, e.g. `saveShellConfig`) and the summary reflects what was
  * computed even if the save itself silently failed.
+ *
+ * The whole read-diff-write runs under `withModelProfilesLock` (AC3 rewrite
+ * — the lock race finding): several providers refreshing at once (shell
+ * startup, `providers status --refresh`), `providers test`, and a concurrent
+ * `routing profile set` all serialize on the SAME lock, so two providers
+ * refreshing concurrently both land their entries rather than one clobbering
+ * the other's read-before-write.
  */
 export async function refreshModelProfiles(
   providerId: string,
@@ -423,42 +664,50 @@ export async function refreshModelProfiles(
 ): Promise<ProfileRefreshSummary> {
   const now = deps.now ?? Date.now;
   const nowIso = new Date(now()).toISOString();
-  const store = loadStoredModelProfiles(deps.dir);
-  const liveSet = new Set(liveModelIds);
-  let added = 0;
-  let changed = 0;
-  let unavailable = 0;
-  const next: Record<string, ModelProfile> = { ...store };
+  try {
+    return await withModelProfilesLock(deps.dir, (store) => {
+      const liveSet = new Set(liveModelIds);
+      let added = 0;
+      let changed = 0;
+      let unavailable = 0;
+      const next: Record<string, ModelProfile> = { ...store };
 
-  for (const modelId of liveSet) {
-    const key = profileKey(providerId, modelId);
-    const existing = store[key];
-    if (existing === undefined) {
-      next[key] = freshProfile(providerId, modelId, parsedFields[modelId], nowIso);
-      added += 1;
-      continue;
-    }
-    const updated = updateProfile(existing, parsedFields[modelId], nowIso);
-    if (!profilesEqualIgnoringTimestamps(existing, updated) || existing.available !== true) {
-      changed += 1;
-    }
-    next[key] = updated;
+      for (const modelId of liveSet) {
+        const key = profileKey(providerId, modelId);
+        const existing = store[key];
+        if (existing === undefined) {
+          next[key] = freshProfile(providerId, modelId, parsedFields[modelId], nowIso);
+          added += 1;
+          continue;
+        }
+        const updated = updateProfile(existing, parsedFields[modelId], nowIso);
+        if (!profilesEqualIgnoringTimestamps(existing, updated) || existing.available !== true) {
+          changed += 1;
+        }
+        next[key] = updated;
+      }
+
+      // Every id previously stored for THIS provider but absent from this
+      // refresh's live list — mark unavailable, keep everything else (AC9).
+      // Other providers' entries are untouched (the `store[key]` spread above
+      // already carries them through unchanged).
+      for (const [key, profile] of Object.entries(store)) {
+        if (profile.providerId !== providerId) continue;
+        if (liveSet.has(profile.modelId)) continue;
+        if (profile.available === false) continue; // already marked; not a new "went unavailable"
+        next[key] = { ...profile, available: false, refreshedAt: nowIso };
+        unavailable += 1;
+      }
+
+      writeModelProfilesFileUnlocked(next, deps.dir);
+      return { added, changed, unavailable };
+    });
+  } catch {
+    // Best-effort, like every other writer in this module — a lock timeout
+    // or a write failure must never turn a successful `/models` fetch into a
+    // failed one (this is called from inside `fetchOpenAiCompatModelsDetailed`).
+    return { added: 0, changed: 0, unavailable: 0 };
   }
-
-  // Every id previously stored for THIS provider but absent from this
-  // refresh's live list — mark unavailable, keep everything else (AC9).
-  // Other providers' entries are untouched (the `store[key]` spread above
-  // already carries them through unchanged).
-  for (const [key, profile] of Object.entries(store)) {
-    if (profile.providerId !== providerId) continue;
-    if (liveSet.has(profile.modelId)) continue;
-    if (profile.available === false) continue; // already marked; not a new "went unavailable"
-    next[key] = { ...profile, available: false, refreshedAt: nowIso };
-    unavailable += 1;
-  }
-
-  saveStoredModelProfiles(next, deps.dir);
-  return { added, changed, unavailable };
 }
 
 // ---------------------------------------------------------------------------
@@ -476,50 +725,63 @@ export type ModelProfileFieldValue =
   | { readonly field: ModelProfileNumericFieldName; readonly value: number }
   | { readonly field: "priority"; readonly value: number };
 
-/** Set one field on one profile as an operator correction (AC8). Reads the CURRENT effective profile (curated-merged) as the base so an untouched field keeps its prior value/source. Best-effort; never throws. */
-export function setModelProfileField(providerId: string, modelId: string, update: ModelProfileFieldValue, dir?: string, now: () => number = Date.now): ModelProfile {
+/**
+ * Set one field on one profile as an operator correction (AC8). Reads the
+ * CURRENT effective profile (curated-merged, under the lock) as the base so
+ * an untouched field keeps its prior value/source. The whole read-modify-
+ * write runs under `withModelProfilesLock` (AC3 rewrite), the same lock
+ * `refreshModelProfiles` uses, so a `routing profile set` racing a live
+ * refresh never clobbers the other's write. Best-effort; never throws —
+ * a lock timeout returns the CORRECTION as computed (so a caller still sees
+ * what it asked for) even though it could not be persisted.
+ */
+export async function setModelProfileField(providerId: string, modelId: string, update: ModelProfileFieldValue, dir?: string, now: () => number = Date.now): Promise<ModelProfile> {
   const key = profileKey(providerId, modelId);
   const nowIso = new Date(now()).toISOString();
-  const effective = loadModelProfiles(dir, now);
-  const base: ModelProfile =
-    effective[key] ?? {
-      providerId,
-      modelId,
-      strengthTier: guessStrengthTier(modelId),
-      priceInputPerMillion: { value: "unknown", source: "unknown" },
-      priceOutputPerMillion: { value: "unknown", source: "unknown" },
-      contextLength: { value: "unknown", source: "unknown" },
-      priority: { value: PRIORITY_UNKNOWN_PRICE, source: "auto" },
-      available: true,
-      lastSeenAt: nowIso,
-      refreshedAt: nowIso,
-    };
-  let next: ModelProfile;
-  switch (update.field) {
-    case "tier":
-      next = { ...base, strengthTier: { value: update.value, source: "operator" } };
-      break;
-    case "priceInputPerMillion":
-      next = { ...base, priceInputPerMillion: { value: update.value, source: "operator" } };
-      break;
-    case "priceOutputPerMillion":
-      next = { ...base, priceOutputPerMillion: { value: update.value, source: "operator" } };
-      break;
-    case "contextLength":
-      next = { ...base, contextLength: { value: update.value, source: "operator" } };
-      break;
-    case "priority":
-      next = { ...base, priority: { value: update.value, source: "operator" } };
-      break;
-    default: {
-      const exhaustive: never = update;
-      next = exhaustive;
+  const computeNext = (base: ModelProfile): ModelProfile => {
+    switch (update.field) {
+      case "tier":
+        return { ...base, strengthTier: { value: update.value, source: "operator" } };
+      case "priceInputPerMillion":
+        return { ...base, priceInputPerMillion: { value: update.value, source: "operator" } };
+      case "priceOutputPerMillion":
+        return { ...base, priceOutputPerMillion: { value: update.value, source: "operator" } };
+      case "contextLength":
+        return { ...base, contextLength: { value: update.value, source: "operator" } };
+      case "priority":
+        return { ...base, priority: { value: update.value, source: "operator" } };
+      default: {
+        const exhaustive: never = update;
+        return exhaustive;
+      }
     }
+  };
+  const fallbackBase: ModelProfile = {
+    providerId,
+    modelId,
+    strengthTier: guessStrengthTier(modelId),
+    priceInputPerMillion: { value: "unknown", source: "unknown" },
+    priceOutputPerMillion: { value: "unknown", source: "unknown" },
+    contextLength: { value: "unknown", source: "unknown" },
+    priority: { value: PRIORITY_UNKNOWN_PRICE, source: "auto" },
+    available: true,
+    chatCapable: resolveChatCapable(modelId),
+    lastSeenAt: nowIso,
+    refreshedAt: nowIso,
+  };
+  try {
+    return await withModelProfilesLock(dir, (store) => {
+      const nowIsoSeed = new Date(now()).toISOString();
+      const effective = { ...curatedSeedProfiles(nowIsoSeed), ...store };
+      const base = effective[key] ?? fallbackBase;
+      const next = computeNext(base);
+      const nextStore = { ...store, [key]: next };
+      writeModelProfilesFileUnlocked(nextStore, dir);
+      return next;
+    });
+  } catch {
+    return computeNext(fallbackBase);
   }
-  const store = loadStoredModelProfiles(dir);
-  const nextStore = { ...store, [key]: next };
-  saveStoredModelProfiles(nextStore, dir);
-  return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -541,5 +803,6 @@ export function formatModelProfileLine(profile: ModelProfile): string {
     `context=${profile.contextLength.value === "unknown" ? "unknown" : `${profile.contextLength.value} (${profile.contextLength.source})`}`,
     `priority=${profile.priority.value} (${profile.priority.source})`,
     status,
+    ...(isModelDerivable(profile) ? [] : ["non-chat/free — never auto-derived"]),
   ].join("  ");
 }

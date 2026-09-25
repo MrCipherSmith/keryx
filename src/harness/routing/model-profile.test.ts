@@ -5,7 +5,7 @@
 // corrections surviving a refresh (AC8/AC18). Hermetic: every store-touching
 // test uses a fresh `mkdtemp` dir, never the real `~/.local/share/keryx`.
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -13,16 +13,22 @@ import {
   computeAutoPriority,
   curatedSeedProfiles,
   guessStrengthTier,
+  isFreeVariantModelId,
+  isModelDerivable,
+  isNonChatModelId,
   isProfileComparable,
   loadModelProfiles,
   loadStoredModelProfiles,
+  modelProfilesFilePath,
   parseModelProfileFieldsFromBody,
   PRIORITY_UNKNOWN_PRICE,
   profileKey,
   refreshModelProfiles,
+  resolveChatCapable,
   setModelProfileField,
   type ModelProfile,
 } from "./model-profile";
+import { shellConfigPath } from "../../lib/shell-config";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -60,7 +66,7 @@ test("loadModelProfiles: curated seed shows up on the FIRST read, no write requi
 
 test("loadModelProfiles: a stored entry (however it got there) always wins over the curated seed for the same id — never overwritten", async () => {
   const dir = await tempDir("keryx-model-profile-seed-override-");
-  setModelProfileField("anthropic", "claude-sonnet-5", { field: "priority", value: 999 }, dir);
+  await setModelProfileField("anthropic", "claude-sonnet-5", { field: "priority", value: 999 }, dir);
   const profiles = loadModelProfiles(dir);
   expect(profiles[profileKey("anthropic", "claude-sonnet-5")]!.priority).toEqual({ value: 999, source: "operator" });
 });
@@ -211,14 +217,14 @@ test("connecting a non-seeded provider adds its profiles to the SAME catalogue t
 test("setModelProfileField: an operator correction is stored with source 'operator' and other fields keep their prior value", async () => {
   const dir = await tempDir("keryx-model-profile-operator-");
   await refreshModelProfiles("prov", ["m"], { m: { priceInputPerMillion: 2, contextLength: 8000 } }, { dir, now: () => 1000 });
-  const updated = setModelProfileField("prov", "m", { field: "tier", value: "deep" }, dir, () => 2000);
+  const updated = await setModelProfileField("prov", "m", { field: "tier", value: "deep" }, dir, () => 2000);
   expect(updated.strengthTier).toEqual({ value: "deep", source: "operator" });
   expect(updated.contextLength).toEqual({ value: 8000, source: "reported" }); // untouched
 });
 
 test("setModelProfileField on an id with no prior profile materializes a full profile, not a sparse row", async () => {
   const dir = await tempDir("keryx-model-profile-operator-fresh-");
-  const profile: ModelProfile = setModelProfileField("brandnew", "model-x", { field: "priceInputPerMillion", value: 7 }, dir, () => 1000);
+  const profile: ModelProfile = await setModelProfileField("brandnew", "model-x", { field: "priceInputPerMillion", value: 7 }, dir, () => 1000);
   expect(profile.priceInputPerMillion).toEqual({ value: 7, source: "operator" });
   expect(profile.available).toBe(true);
   expect(profile.strengthTier.value).toBeDefined();
@@ -239,6 +245,7 @@ test("availablePredicateFromProfiles: true for an unavailable-marked profile is 
       contextLength: { value: "unknown", source: "unknown" },
       priority: { value: PRIORITY_UNKNOWN_PRICE, source: "auto" },
       available: false,
+      chatCapable: true,
       lastSeenAt: "x",
       refreshedAt: "x",
     },
@@ -258,6 +265,7 @@ test("isProfileComparable: excluded only when price is unknown AND the name is u
     contextLength: { value: "unknown", source: "unknown" },
     priority: { value: PRIORITY_UNKNOWN_PRICE, source: "auto" },
     available: true,
+    chatCapable: true,
     lastSeenAt: "x",
     refreshedAt: "x",
   };
@@ -265,4 +273,181 @@ test("isProfileComparable: excluded only when price is unknown AND the name is u
   const rankedUnknownPrice: ModelProfile = { ...unrankedUnknown, modelId: "some-mini-model" };
   expect(isProfileComparable("some-mini-model", rankedUnknownPrice)).toBe(true);
   expect(isProfileComparable("anything", undefined)).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// Item 3 — non-chat / `:free` detection, never auto-derived (review of PR
+// #718, operator decision 2026-09-25).
+// ---------------------------------------------------------------------------
+
+test("isNonChatModelId: id-pattern detection of embedding/image/tts/whisper/audio/moderation/rerank", () => {
+  expect(isNonChatModelId("text-embedding-3-small")).toBe(true);
+  expect(isNonChatModelId("dall-e-3")).toBe(true);
+  expect(isNonChatModelId("tts-1")).toBe(true);
+  expect(isNonChatModelId("whisper-1")).toBe(true);
+  expect(isNonChatModelId("gpt-4o-audio-preview")).toBe(true);
+  expect(isNonChatModelId("omni-moderation-latest")).toBe(true);
+  expect(isNonChatModelId("cohere-rerank-3")).toBe(true);
+  expect(isNonChatModelId("claude-sonnet-5")).toBe(false);
+  expect(isNonChatModelId("gpt-6")).toBe(false);
+});
+
+test("isFreeVariantModelId: OpenRouter's :free suffix only", () => {
+  expect(isFreeVariantModelId("meta-llama/llama-3-70b:free")).toBe(true);
+  expect(isFreeVariantModelId("meta-llama/llama-3-70b")).toBe(false);
+  expect(isFreeVariantModelId("some-model:freedom")).toBe(false);
+});
+
+test("resolveChatCapable: id pattern wins false, metadata can only sharpen true->false, never override an id false back to true", () => {
+  expect(resolveChatCapable("claude-sonnet-5")).toBe(true);
+  expect(resolveChatCapable("claude-sonnet-5", true)).toBe(true);
+  expect(resolveChatCapable("claude-sonnet-5", false)).toBe(false);
+  expect(resolveChatCapable("text-embedding-3-small", true)).toBe(false); // id pattern still wins
+  expect(resolveChatCapable("some-vendor-codename")).toBe(true); // no signal either way -> default true
+});
+
+test("parseModelProfileFieldsFromBody: OpenRouter architecture.output_modalities/modality classify chatCapable", () => {
+  const body = {
+    data: [
+      { id: "vendor/chat-model", architecture: { output_modalities: ["text"] } },
+      { id: "vendor/embed-model", architecture: { output_modalities: ["embedding"] } },
+      { id: "vendor/legacy-model", architecture: { modality: "text->text" } },
+      { id: "vendor/image-model", architecture: { modality: "text+image->image" } },
+      { id: "vendor/no-architecture" },
+    ],
+  };
+  const fields = parseModelProfileFieldsFromBody(body);
+  expect(fields["vendor/chat-model"]?.chatCapable).toBe(true);
+  expect(fields["vendor/embed-model"]?.chatCapable).toBe(false);
+  expect(fields["vendor/legacy-model"]?.chatCapable).toBe(true);
+  expect(fields["vendor/image-model"]?.chatCapable).toBe(false);
+  expect(fields["vendor/no-architecture"]).toBeUndefined();
+});
+
+test("refreshModelProfiles: a non-chat/free live id is stored chatCapable false / true(free) but excluded from derivation via isModelDerivable", async () => {
+  const dir = await tempDir("keryx-model-profile-nonchat-");
+  await refreshModelProfiles("openrouter", ["text-embedding-3-small", "vendor/model:free", "claude-sonnet-5"], {}, { dir, now: () => 1000 });
+  const stored = loadStoredModelProfiles(dir);
+  const embedding = stored[profileKey("openrouter", "text-embedding-3-small")]!;
+  const free = stored[profileKey("openrouter", "vendor/model:free")]!;
+  const chat = stored[profileKey("openrouter", "claude-sonnet-5")]!;
+  expect(embedding.chatCapable).toBe(false);
+  expect(isModelDerivable(embedding)).toBe(false);
+  expect(free.chatCapable).toBe(true); // :free is still a real chat model...
+  expect(isModelDerivable(free)).toBe(false); // ...just never auto-derived
+  expect(chat.chatCapable).toBe(true);
+  expect(isModelDerivable(chat)).toBe(true);
+});
+
+// ---------------------------------------------------------------------------
+// Item 6 — OpenRouter's "-1" price sentinel (not-available) is never
+// fabricated into a negative per-million price.
+// ---------------------------------------------------------------------------
+
+test("parseModelProfileFieldsFromBody: OpenRouter's -1 price sentinel is dropped, never stored as a negative price", () => {
+  const body = { data: [{ id: "vendor/priceless-model", pricing: { prompt: "-1", completion: "-1" }, context_length: 8000 }] };
+  const fields = parseModelProfileFieldsFromBody(body);
+  expect(fields["vendor/priceless-model"]).toEqual({ contextLength: 8000 });
+});
+
+test("refreshModelProfiles: OpenRouter's -1 price sentinel stores 'unknown', never -1", async () => {
+  const dir = await tempDir("keryx-model-profile-negative-price-");
+  await refreshModelProfiles("openrouter", ["priceless"], { priceless: {} }, { dir, now: () => 1000 });
+  const stored = loadStoredModelProfiles(dir)[profileKey("openrouter", "priceless")]!;
+  expect(stored.priceInputPerMillion).toEqual({ value: "unknown", source: "unknown" });
+});
+
+// ---------------------------------------------------------------------------
+// Item 4 — storage moved out of `auth.json` into its own file, locked,
+// migrated (review of PR #718: 500+ profiles inside the credentials file
+// and an unlocked read-modify-write race).
+// ---------------------------------------------------------------------------
+
+test("model profiles persist to model-profiles.json, mode 0600, NOT inside auth.json", async () => {
+  const dir = await tempDir("keryx-model-profile-own-file-");
+  await refreshModelProfiles("prov", ["m"], { m: { priceInputPerMillion: 2 } }, { dir, now: () => 1000 });
+  const filePath = modelProfilesFilePath(dir);
+  const raw = JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
+  expect(raw[profileKey("prov", "m")]).toBeDefined();
+  const mode = (await stat(filePath)).mode & 0o777;
+  expect(mode).toBe(0o600);
+  // auth.json either does not exist yet or, if it does (nothing else in this
+  // test wrote it), never carries `modelProfiles`.
+  const authPath = shellConfigPath(dir);
+  const authStat = await stat(authPath).catch(() => undefined);
+  if (authStat !== undefined) {
+    const authRaw = JSON.parse(await readFile(authPath, "utf8")) as Record<string, unknown>;
+    expect("modelProfiles" in authRaw).toBe(false);
+  }
+});
+
+test("migration: an existing auth.json.modelProfiles is moved into model-profiles.json and removed from auth.json, preserving every other key byte-for-byte apart from that field", async () => {
+  const dir = await tempDir("keryx-model-profile-migrate-");
+  await mkdir(dir, { recursive: true });
+  const legacyProfile: ModelProfile = {
+    providerId: "legacy",
+    modelId: "old-model",
+    strengthTier: { value: "standard", source: "guessed" },
+    priceInputPerMillion: { value: 2, source: "reported" },
+    priceOutputPerMillion: { value: 10, source: "reported" },
+    contextLength: { value: 32000, source: "reported" },
+    priority: { value: -2, source: "auto" },
+    available: true,
+    chatCapable: true,
+    lastSeenAt: "2026-01-01T00:00:00.000Z",
+    refreshedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const authJsonBefore = {
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    apiKeys: { DEEPSEEK_API_KEY: "shh" },
+    oauthGrants: { grok: { method: "device-code", access: "tok", obtainedAt: "2026-01-01T00:00:00.000Z" } },
+    modelProfiles: { [profileKey("legacy", "old-model")]: legacyProfile },
+  };
+  await writeFile(shellConfigPath(dir), `${JSON.stringify(authJsonBefore, null, 2)}\n`, { mode: 0o600 });
+
+  // A pure read sees the legacy entry even before anything writes.
+  const readBefore = loadModelProfiles(dir);
+  expect(readBefore[profileKey("legacy", "old-model")]).toEqual(legacyProfile);
+  // A bare read never mutates auth.json.
+  const authStillHasField = JSON.parse(await readFile(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
+  expect("modelProfiles" in authStillHasField).toBe(true);
+
+  // A locked write (`refreshModelProfiles`) performs the physical migration.
+  await refreshModelProfiles("newprov", ["new-model"], {}, { dir, now: () => 2000 });
+
+  const authAfter = JSON.parse(await readFile(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
+  expect("modelProfiles" in authAfter).toBe(false);
+  const { modelProfiles: _removed, ...expectedRest } = authJsonBefore;
+  expect(authAfter).toEqual(expectedRest);
+
+  const fileProfiles = JSON.parse(await readFile(modelProfilesFilePath(dir), "utf8")) as Record<string, unknown>;
+  expect(fileProfiles[profileKey("legacy", "old-model")]).toEqual(legacyProfile);
+  expect(fileProfiles[profileKey("newprov", "new-model")]).toBeDefined();
+});
+
+test("concurrency: two providers refreshing at the same time both persist their entries — neither clobbers the other", async () => {
+  const dir = await tempDir("keryx-model-profile-concurrent-");
+  await Promise.all([
+    refreshModelProfiles("provA", ["a1", "a2"], {}, { dir, now: () => 1000 }),
+    refreshModelProfiles("provB", ["b1", "b2"], {}, { dir, now: () => 1000 }),
+  ]);
+  const stored = loadStoredModelProfiles(dir);
+  expect(stored[profileKey("provA", "a1")]).toBeDefined();
+  expect(stored[profileKey("provA", "a2")]).toBeDefined();
+  expect(stored[profileKey("provB", "b1")]).toBeDefined();
+  expect(stored[profileKey("provB", "b2")]).toBeDefined();
+});
+
+test("concurrency: a routing profile set racing a refresh — both writes land", async () => {
+  const dir = await tempDir("keryx-model-profile-concurrent-set-");
+  await refreshModelProfiles("prov", ["m1"], {}, { dir, now: () => 1000 });
+  const [, corrected] = await Promise.all([
+    refreshModelProfiles("prov", ["m1", "m2"], {}, { dir, now: () => 2000 }),
+    setModelProfileField("prov", "m1", { field: "priority", value: 777 }, dir, () => 2000),
+  ]);
+  expect(corrected.priority).toEqual({ value: 777, source: "operator" });
+  const stored = loadStoredModelProfiles(dir);
+  expect(stored[profileKey("prov", "m2")]).toBeDefined();
+  expect(stored[profileKey("prov", "m1")]!.priority).toEqual({ value: 777, source: "operator" });
 });

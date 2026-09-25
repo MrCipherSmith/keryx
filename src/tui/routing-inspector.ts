@@ -49,6 +49,7 @@ import { deriveDefaultTable } from "../harness/routing/derive-default-table";
 import {
   availablePredicateFromProfiles,
   formatNumericField,
+  isModelDerivable,
   loadModelProfiles,
   profileKey,
   type ModelProfile,
@@ -240,7 +241,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     if (options.session !== undefined) {
       const sessionProvider = providers.find((p) => p.name === options.session!.providerId);
       const models = sessionProvider?.models ?? [options.session.modelId];
-      derived = deriveDefaultTable(options.session.providerId, models, profiles);
+      derived = deriveDefaultTable(options.session.providerId, models, profiles, options.session.modelId);
     }
     rows = routingCategoryRows(project, user, connected, derived, available);
     selected = Math.min(selected, Math.max(0, rows.length - 1));
@@ -412,6 +413,7 @@ export function describePickerRowProfile(opt: FlatModelOption, profiles: Readonl
     `priority ${profile.priority.value}`,
   ];
   if (!profile.available) parts.push("UNAVAILABLE");
+  if (!isModelDerivable(profile)) parts.push("non-chat/free — never auto-derived");
   return parts.join("  ·  ");
 }
 

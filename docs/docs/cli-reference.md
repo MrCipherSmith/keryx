@@ -1352,13 +1352,54 @@ treated as unresolved at that layer and falls through, shown as:
 <provider>/<model> — unavailable, falling back to <resolved>
 ```
 
-**Derived default routing.** When a category has nothing configured at any
-layer, keryx derives a sensible default from the SESSION's own connected
-provider's models and their profiles: one model becomes the default for
-every category; with several models, `quick`/`subagents`/`docs`/`unattended`
-get the lightest/cheapest, `planning`/`review` get the strongest, and
-`default`/`coding` stay the session's own model, unchanged. `keryx routing
-list` shows this as `auto (derived from <provider>'s models) -> …`.
+**Storage.** The profile catalogue lives in its own file,
+`model-profiles.json`, in keryx's per-user config directory (next to
+`auth.json` and `provider-catalog.json`) — mode `0600`, written atomically
+under a file lock, never inside `auth.json`: that file holds credentials,
+and a catalogue that grows to hundreds of entries has no business sharing it.
+Every read-modify-write (a live refresh, `providers test`, `routing profile
+set`) serializes on that lock, so two providers refreshing at once — the
+common case at `keryx shell` startup — never lose one's update to the
+other's. An existing `auth.json`'s legacy `modelProfiles` field (from an
+earlier release) is migrated into `model-profiles.json` once, automatically,
+on the next write, and then removed from `auth.json`.
+
+**Non-chat models are never auto-derived.** An embedding, image,
+text-to-speech/speech-to-text, moderation or rerank model — detected by id
+pattern, and by a gateway's own `/models` modality metadata when it carries
+one (confirmed for OpenRouter's `architecture.output_modalities`/
+`architecture.modality`) — and an OpenRouter `:free` variant are excluded
+from derivation entirely, even when one would otherwise be the strongest or
+only candidate. Both are still listed in `/routing`'s flat picker and can be
+picked manually — marked `non-chat/free — never auto-derived` there and in
+`keryx routing profile list`.
+
+**Derived default routing**, anchored on the SESSION's own model. When a
+category has nothing configured at any layer, keryx derives a sensible
+default from the session's own connected provider's models and their
+profiles:
+
+- One available chat model becomes the default for every category (except
+  `default`/`coding`).
+- With several models, ranked first by **family size class**
+  (`opus`/`sonnet`/`haiku`-style hints — flagship > mini/flash/lite — the
+  same size-word table `keryx review tier` uses) and, WITHIN the same family
+  and vendor, by the **version number** parsed from the id (`opus-5.5` >
+  `opus-4.7`, `gpt-6` > `gpt-5`, `gemini-3.8-flash` > `gemini-3.1-flash` —
+  parsed conservatively; an id with no single parseable version number is
+  never guessed at):
+  - `planning`/`review` get the strongest model not weaker than the session
+    model — the session model itself when nothing is stronger.
+  - `subagents`/`docs`/`unattended` get the next size step DOWN from the
+    session's own family (an Opus session gives Sonnet) — never the
+    smallest class, the session model itself when there is no middle step.
+  - `quick` gets the smallest class present (haiku/flash/mini-style).
+  - `default`/`coding` stay the session's own model, unchanged.
+  - Ties are broken toward the session model itself, then by
+    `priority.value`.
+
+`keryx routing list` shows a derived category as
+`auto (derived from <provider>'s models) -> …`.
 
 ---
 

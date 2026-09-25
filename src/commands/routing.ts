@@ -131,7 +131,7 @@ async function runList(args: string[], location: RoutingConfigLocation, deps: Ro
   if (session !== undefined) {
     const sessionProvider = providers.find((p) => p.name === session.providerId);
     const models = sessionProvider?.models ?? [session.modelId];
-    derived = deriveDefaultTable(session.providerId, models, profiles);
+    derived = deriveDefaultTable(session.providerId, models, profiles, session.modelId);
   }
   const rows = ROUTING_CATEGORIES.map((category) => {
     const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connected, available);
@@ -261,7 +261,7 @@ const NUMERIC_FIELD_FLAGS: Readonly<Record<string, "priceInputPerMillion" | "pri
 };
 
 /** `keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>` (AC8). */
-function runProfileSet(args: string[], userConfigDir: string | undefined): void {
+async function runProfileSet(args: string[], userConfigDir: string | undefined): Promise<void> {
   const target = args[0];
   if (target === undefined || target.startsWith("--") || !target.includes("/")) {
     console.error("Usage: keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>");
@@ -306,7 +306,7 @@ function runProfileSet(args: string[], userConfigDir: string | undefined): void 
     process.exitCode = 1;
     return;
   }
-  const profile: ModelProfile = setModelProfileField(providerId, modelId, update, userConfigDir);
+  const profile: ModelProfile = await setModelProfileField(providerId, modelId, update, userConfigDir);
   console.log(`${providerId}/${modelId}: ${formatModelProfileLine(profile)}`);
 }
 
@@ -317,7 +317,7 @@ async function runProfile(args: string[], userConfigDir: string | undefined): Pr
     return;
   }
   if (sub === "set") {
-    runProfileSet(args.slice(1), userConfigDir);
+    await runProfileSet(args.slice(1), userConfigDir);
     return;
   }
   console.error(`Unknown routing profile command: ${sub}`);

@@ -83,6 +83,28 @@ residue, and it is kept in the smallest shape that works:
 A model whose name is a codename carrying no size is unrankable by design. That
 is the honest outcome, not a gap to be patched with folklore.
 
+**Version is deliberately not ranked here.** `rankModelId` never parses a
+version number out of an id — two ids in the same size-word family but a
+different generation (an older vs. a newer numbered release of the same
+line) rank IDENTICALLY through this resolution, and a
+`standard`/`light`/`deep` dispatch never distinguishes between them. That
+stays true for `spawn_subagent` and `keryx review tier` after the decision
+below; it is a DIFFERENT consumer's rule, not this one's.
+
+The routing "derived default table" (`deriveDefaultTable`,
+`src/harness/routing/derive-default-table.ts`, flow 327/PRD §6.3) is that
+different consumer: it picks one model per routing category (`review`,
+`subagents`, `quick`, …) from a whole connected catalogue, not a tier
+relative to the session. The operator decided, 2026-09-25 (review of PR #718:
+a session's newer release lost a tie to an older release of the SAME family
+it should have beaten), that WITHIN the same family and vendor a newer
+version ranks higher there — the family word (a size marker from this same
+`MODEL_RANK_HINTS` list) already carries the size class, so version is free
+to order generations within it. That table reuses
+`rankModelId`/`MODEL_RANK_HINTS` UNMODIFIED for the size axis and adds its
+own separate, conservative version parse on top of it — nothing above
+changes for this module's own tier resolution.
+
 ## Falling back
 
 Ranking is **refused**, and every tier keeps the session's provider and model,
