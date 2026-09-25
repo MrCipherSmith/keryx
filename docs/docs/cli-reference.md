@@ -191,7 +191,13 @@ Deterministic contradictions are caught even without a Jev credential. Turn on
 for one session with `--guard`, or persist it with `/guard on` (`/guard off`
 turns it back off); the setting lives in `ShellConfig.turnGuard.enabled`
 (`~/.local/share/keryx/auth.json`). A turn with no tool calls and a short
-reply to a short question is skipped without asking Jev.
+reply to a short question is skipped without asking Jev. When the guard IS
+asked (i.e. no deterministic contradiction already decided the turn and it
+was not skipped as trivial), the turn's user request, the final assistant
+reply, and the deterministic facts (tools called and failures, files
+written/edited, commands run and their exit status, tests run and their
+pass/fail counts) are sent — redacted through the same security service every
+other Jev-backed review command uses — to Jev on OpenRouter.
 
 ---
 

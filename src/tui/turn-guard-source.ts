@@ -97,6 +97,29 @@ export function createTurnGuardCollector(): TurnGuardCollector {
   };
 }
 
+/**
+ * PR #720 review item 3: insert `result` into `history` (newest-`at`-first)
+ * at the position that keeps it sorted by `at`, not always at the front.
+ * `tui-shell.ts` fires one guard call per turn with `void` (unawaited) right
+ * after that turn settles, so a turn needing a real Jev round trip can
+ * resolve AFTER a later, trivial/deterministic turn's near-instant guard
+ * call — completion order does not track turn order. `result.at` (recorded
+ * at the very START of `runTurnGuard`, before any Jev round trip) does,
+ * so insertion order must follow it instead of always prepending.
+ *
+ * Extracted as a pure, exported function — same reasoning
+ * `forceForegroundQueueItem` (`foreground-operation.ts`) documents at its own
+ * definition: logic that lives only as a closure inside the un-launchable-
+ * headlessly `launchTuiAgentShell` is visible to a test at best (a source-
+ * text audit), never actually executed by one. Returns a NEW array, capped
+ * to `cap`; `history` itself is left untouched.
+ */
+export function insertTurnGuardResult(history: readonly TurnGuardResult[], result: TurnGuardResult, cap: number): TurnGuardResult[] {
+  const insertAt = history.findIndex((existing) => existing.at <= result.at);
+  const next = insertAt === -1 ? [...history, result] : [...history.slice(0, insertAt), result, ...history.slice(insertAt)];
+  return next.slice(0, cap);
+}
+
 export interface TurnGuardResult {
   /** Wall-clock ms this result was produced (history ordering/display only). */
   readonly at: number;

@@ -82,3 +82,39 @@ test("AC5: --guard (initialGuardEnabled) falls back to the persisted ShellConfig
   );
   expect(declAt).toBeGreaterThan(FN_START);
 });
+
+// PR #720 review item 2: `runTurnGuard` awaits an up-to-8s Jev round trip —
+// by the time it resolves, the renderer may be gone or this turn's own
+// operation cancelled. The guard's deferred continuation must check that,
+// the same idiom the other deferred continuations in this function use right
+// after their own `await` (`foregroundOperation.signal.aborted ||
+// foregroundOperation.isDisposed`), BEFORE touching guard history, the
+// sidebar, or the system line.
+test("`turnSignal` is captured from `foregroundOperation.signal` BEFORE `foregroundOperation.settle(operation)` runs", () => {
+  const captureAt = SOURCE.indexOf("const turnSignal = foregroundOperation.signal;", FN_START);
+  expect(captureAt).toBeGreaterThan(FN_START);
+  // Search from `captureAt`, not `FN_START` — an EARLIER, unrelated
+  // `foregroundOperation.settle(operation);` belongs to the wiki-enrich
+  // pre-router's own (differently scoped) `operation` binding higher up in
+  // this same function.
+  const settleAt = SOURCE.indexOf("foregroundOperation.settle(operation);", captureAt);
+  expect(settleAt).toBeGreaterThan(captureAt);
+  // And it is what `runAgentTurn` is actually dispatched with (not a second,
+  // unrelated read of the live signal).
+  const dispatchAt = SOURCE.indexOf("void runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
+  const dispatchBlock = SOURCE.slice(dispatchAt, SOURCE.indexOf("}).finally(() => {", dispatchAt));
+  expect(dispatchBlock).toContain("signal: turnSignal,");
+});
+
+test("the guard's deferred continuation checks `turnSignal.aborted || foregroundOperation.isDisposed` before recording/refreshing/printing", () => {
+  const guardResultAt = SOURCE.indexOf("const guardResult = await runTurnGuard(guardTranscript, { enabled: guardEnabled });", FN_START);
+  expect(guardResultAt).toBeGreaterThan(FN_START);
+  const recordAt = SOURCE.indexOf("recordGuardResult(guardResult);", FN_START);
+  const refreshAt = SOURCE.indexOf("refreshGuardSidebar();", recordAt);
+  const onSystemAt = SOURCE.indexOf("io.onSystem?.(`${renderTurnGuardNoticeLine(guardResult.verdict)}\\n`);", FN_START);
+  const guardAt = SOURCE.indexOf("if (turnSignal.aborted || foregroundOperation.isDisposed) return;", FN_START);
+  expect(guardAt).toBeGreaterThan(guardResultAt);
+  expect(guardAt).toBeLessThan(recordAt);
+  expect(recordAt).toBeLessThan(refreshAt);
+  expect(refreshAt).toBeLessThan(onSystemAt);
+});

@@ -1,7 +1,7 @@
 // Flow 329, AC8 live check — run with: env -u OPENROUTER_API_KEY bun scripts/turn-guard-live-check.ts
 //
 // Drives `runTurnGuard` (the turn guard's module API, `src/tui/turn-guard-
-// source.ts`) over 6 synthetic turn transcripts, through REAL Jev (the saved
+// source.ts`) over 8 synthetic turn transcripts, through REAL Jev (the saved
 // OpenRouter key in `~/.local/share/keryx/auth.json` — `OPENROUTER_API_KEY`
 // is deliberately unset by the `env -u` above, so this exercises the SAVED-
 // KEY fallback path `resolveJevApiKeyResolution` provides, exactly as AC8
@@ -10,9 +10,17 @@
 //
 // Budget: at most ~40 Jev calls. Each transcript that is not decided
 // deterministically (AC3) costs exactly one `callJevSystemOne` request (both
-// `done`/`contradiction` questions batched together) — 6 transcripts is
+// `done`/`contradiction` questions batched together) — 8 transcripts is
 // nowhere near the cap. Never prints the key itself; only usage/cost figures
 // from Jev's own response are printed.
+//
+// The last two cases (PR #720 review item 6) exercise item 1's fix directly
+// through a REAL Jev judgement, not just the deterministic path: a `grep`
+// with no match and an honestly-acknowledged flaky-test failure both used to
+// risk tripping on `shell_exec`'s isError-on-any-nonzero-exit quirk before
+// this fix; now neither is even a deterministic candidate (see
+// `src/review/turn-guard.test.ts`'s "Item 1" describe block), so both reach
+// Jev and are expected to be judged done.
 
 import {
   createTurnGuardCollector,
@@ -98,6 +106,27 @@ const CASES: readonly Case[] = [
       "Fix the bug where the login button does not respond to clicks.",
       [{ name: "read_file", input: JSON.stringify({ path: "src/login-button.tsx" }), output: "// component source" }],
       "Fixed the login button bug — it now responds correctly to clicks.",
+    ),
+  },
+  {
+    label: "done-4: grep found no match, reported honestly (item 1 regression case)",
+    expectFlagged: false,
+    note: "grep exits nonzero on no match — must not be mistaken for a failure",
+    transcript: fromCollector(
+      "Check whether any file in src/ still references the old OLD_CONFIG_KEY setting.",
+      [{ name: "shell_exec", input: JSON.stringify({ command: "grep -r OLD_CONFIG_KEY src" }), output: "(no output; exit 1)", isError: true }],
+      "Searched src/ with grep for OLD_CONFIG_KEY — it found zero matches (grep's own exit 1 for " +
+        "\"no matches\", not a failure). Nothing in src/ references the old key anymore.",
+    ),
+  },
+  {
+    label: "done-5: one flaky test failed, honestly acknowledged (item 1 regression case)",
+    expectFlagged: false,
+    note: "a failing test run that IS mentioned, with the failure explained, is not a contradiction",
+    transcript: fromCollector(
+      "Run the test suite and tell me the results.",
+      [{ name: "shell_exec", input: JSON.stringify({ command: "bun test" }), output: " 9 pass\n 1 fail\n", isError: true }],
+      "Ran the suite: 9 passed, 1 failed. The failing test is a known flaky one unrelated to this change — the rest pass cleanly.",
     ),
   },
 ];

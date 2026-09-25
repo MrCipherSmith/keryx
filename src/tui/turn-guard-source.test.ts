@@ -4,7 +4,8 @@
 // non-blocking timeout bound (AC2).
 
 import { describe, expect, test } from "bun:test";
-import { createTurnGuardCollector, runTurnGuard } from "./turn-guard-source";
+import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard } from "./turn-guard-source";
+import type { TurnGuardResult } from "./turn-guard-source";
 
 const ENV_WITH_KEY = { OPENROUTER_API_KEY: "sk-or-test" } as const;
 
@@ -188,5 +189,64 @@ describe("runTurnGuard — AC2: bounded by a short timeout, never hangs (non-blo
     expect(result.skipped).toBe(true);
     expect(result.verdict.flagged).toBe(false);
     expect(result.skipReason).toContain("did not complete");
+  });
+});
+
+function guardResult(at: number, userRequest: string): TurnGuardResult {
+  return {
+    at,
+    userRequest,
+    finalMessage: "",
+    facts: {
+      toolCallCount: 0,
+      toolsCalled: [],
+      failedTools: [],
+      anyToolFailed: false,
+      deterministicFailedTools: [],
+      filesWritten: [],
+      commandsRun: [],
+      testsRun: [],
+      lastTestRunFailed: false,
+      markers: [],
+      asksQuestion: false,
+      factLines: [],
+    },
+    verdict: { flagged: false, reason: "the turn looks done." },
+    skipped: true,
+    skipReason: "trivial",
+  };
+}
+
+describe("insertTurnGuardResult — PR #720 review item 3: turn order, not completion order", () => {
+  test("inserting in COMPLETION order out of TURN order still ends up sorted newest-`at`-first", () => {
+    // Turn A started first (at: 1000, a slow real Jev round trip) but its
+    // guard result arrives LAST; turn B started second (at: 2000, a fast
+    // trivial/deterministic turn) but its guard result arrives FIRST — the
+    // exact race `tui-shell.ts`'s `void (async () => { ... })()` per-turn
+    // guard call can produce.
+    const b = guardResult(2000, "turn B (fast)");
+    const a = guardResult(1000, "turn A (slow)");
+    let history: TurnGuardResult[] = [];
+    history = insertTurnGuardResult(history, b, 20); // B's guard resolves first
+    history = insertTurnGuardResult(history, a, 20); // A's guard resolves second, but started EARLIER
+    expect(history.map((r) => r.userRequest)).toEqual(["turn B (fast)", "turn A (slow)"]);
+  });
+
+  test("a turn with an earlier `at` than everything already recorded sorts to the back, not the front", () => {
+    const history = insertTurnGuardResult([guardResult(3000, "newest")], guardResult(1000, "oldest"), 20);
+    expect(history.map((r) => r.at)).toEqual([3000, 1000]);
+  });
+
+  test("caps at `cap`, dropping the OLDEST (smallest `at`) entries first", () => {
+    const history = [guardResult(30, "c"), guardResult(20, "b"), guardResult(10, "a")];
+    const next = insertTurnGuardResult(history, guardResult(25, "b.5"), 3);
+    expect(next.map((r) => r.userRequest)).toEqual(["c", "b.5", "b"]);
+  });
+
+  test("the input array is left untouched (pure)", () => {
+    const history = [guardResult(10, "only")];
+    const next = insertTurnGuardResult(history, guardResult(20, "new"), 20);
+    expect(history).toHaveLength(1);
+    expect(next).toHaveLength(2);
   });
 });

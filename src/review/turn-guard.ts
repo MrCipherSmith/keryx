@@ -88,6 +88,18 @@ export interface TurnGuardFacts {
   /** Names of calls that came back `isError: true`, in call order. */
   readonly failedTools: readonly string[];
   readonly anyToolFailed: boolean;
+  /**
+   * Item 1 (PR #720 review): the subset of `failedTools` eligible for
+   * `detectTurnGuardContradiction`'s deterministic "unmentioned-failure" —
+   * every non-shell tool failure (unchanged), plus a `shell_exec`-shaped
+   * failure only when it is a REAL failure: the tool itself failed/timed
+   * out/was denied, or the command is classified as build/test/install/
+   * typecheck (`isBuildTestInstallTypecheckCommand`). A plain nonzero exit
+   * from an ordinary command (`grep`, `test -f`, `diff`, …) is excluded here
+   * even though it still appears in `failedTools`/`commandsRun` — it is a
+   * FACT for Jev, not an automatic contradiction.
+   */
+  readonly deterministicFailedTools: readonly string[];
   /** Best-effort file paths written/edited this turn (from `apply_patch`-shaped calls). */
   readonly filesWritten: readonly string[];
   /** Best-effort shell-command facts (from `shell_exec`-shaped calls), in call order. */
@@ -116,6 +128,73 @@ const WRITE_TOOL_NAME_RE = /^apply_patch$|write|edit|patch/i;
 const SHELL_TOOL_NAME_RE = /^shell_exec$|shell|exec|run_command|bash/i;
 
 const TEST_RUNNER_RE = /\b(bun\s+test|npm\s+(?:run\s+)?test|yarn\s+test|pnpm\s+test|vitest|jest|pytest|go\s+test|cargo\s+test)\b/i;
+
+/**
+ * Item 1 (PR #720 review): `shell_exec` (`src/harness/tool/builtin/
+ * shell-exec-tool.ts`) marks ANY nonzero exit `isError: true` — `grep` with
+ * no match, `test -f` false, `diff` showing differences, `git diff
+ * --exit-code` and similar all trip this, with no failure at all. Text this
+ * function matches only appears on the tool's OWN failure modes — aborted
+ * (run time limit), timed out and killed, denied approval, or a spawn that
+ * never started — never on a plain nonzero exit, whose own output is either
+ * the command's real stdout/stderr or the literal `(no output; exit N)`
+ * fallback. These are always real failures regardless of what command ran.
+ */
+const SHELL_TOOL_INFRA_FAILURE_RE =
+  /\bnot approved by the user; not executed\b|\btimed out after\b|\baborted: run time limit\b|\bcommand failed to start:/i;
+
+/**
+ * Best-effort, conservative tokenisation of a shell command into its
+ * shell-chained segments (split on `&&`/`||`/`;`/`|`), then each segment's
+ * own whitespace-separated tokens — never a substring match against the
+ * whole command line, which would also fire on a build tool's name merely
+ * mentioned inside an unrelated command (`echo "run tsc later"`,
+ * `grep tsc file.ts`). Not a real shell parser (same heuristic-not-registry
+ * note as the tool-name regexes above); good enough to classify.
+ */
+function commandSegments(command: string): string[] {
+  return command
+    .split(/&&|\|\||[;|]/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+}
+
+function commandTokens(segment: string): string[] {
+  return segment.split(/\s+/).filter((t) => t.length > 0);
+}
+
+/** Programs whose own name alone (any subcommand/arguments) counts as build/test/install/typecheck. */
+const STANDALONE_BUILD_TEST_PROGRAMS = new Set(["tsc", "eslint", "pytest", "make", "cargo"]);
+
+/** Package-manager-style runners: only certain leading subcommands count. */
+const RUNNER_SUBCOMMAND_RE: Readonly<Record<string, RegExp>> = {
+  bun: /^(?:test|run)$/i,
+  npm: /^(?:test|run|ci|install)$/i,
+  yarn: /^(?:test|build|install|typecheck|lint)$/i,
+  pnpm: /^(?:test|run|install)$/i,
+  go: /^(?:test|build|vet)$/i,
+};
+
+/**
+ * Item 1 (PR #720 review): the narrowed AC3 rule — a nonzero exit from an
+ * ordinary command (`grep`, `test -f`, `diff`, `git diff --exit-code`, `ls`,
+ * …) is normal and expected, not a failure; only a build, test, install or
+ * typecheck invocation's nonzero exit counts deterministically. Every other
+ * nonzero exit is still recorded in `commandsRun`/`factLines` as a FACT for
+ * Jev to weigh, just not as an automatic contradiction.
+ */
+function isBuildTestInstallTypecheckCommand(command: string): boolean {
+  return commandSegments(command).some((segment) => {
+    const tokens = commandTokens(segment);
+    const program = tokens[0];
+    if (program === undefined) return false;
+    const base = (program.split("/").pop() ?? program).toLowerCase();
+    if (STANDALONE_BUILD_TEST_PROGRAMS.has(base)) return true;
+    const subRe = RUNNER_SUBCOMMAND_RE[base];
+    const sub = tokens[1];
+    return subRe !== undefined && sub !== undefined && subRe.test(sub);
+  });
+}
 
 const INCOMPLETE_MARKERS: ReadonlyArray<{ readonly re: RegExp; readonly label: string }> = [
   { re: /\bI\s+could\s+not\b/i, label: "I could not" },
@@ -211,13 +290,15 @@ export function extractTurnGuardFacts(transcript: TurnGuardTranscript): TurnGuar
   const filesWritten: string[] = [];
   const commandsRun: TurnGuardCommandFact[] = [];
   const testsRun: TurnGuardTestFact[] = [];
+  const deterministicFailedTools: string[] = [];
 
   for (const call of transcript.toolCalls) {
     if (WRITE_TOOL_NAME_RE.test(call.name)) {
       const path = filePathOf(call);
       if (path !== undefined && !filesWritten.includes(path)) filesWritten.push(path);
     }
-    if (SHELL_TOOL_NAME_RE.test(call.name)) {
+    const isShellTool = SHELL_TOOL_NAME_RE.test(call.name);
+    if (isShellTool) {
       const command = commandTextOf(call);
       const ok = !call.isError;
       const exitCode = exitCodeOf(call.output);
@@ -227,6 +308,11 @@ export function extractTurnGuardFacts(transcript: TurnGuardTranscript): TurnGuar
         const testOk = counts.failed !== undefined ? counts.failed === 0 : ok;
         testsRun.push({ command, ok: testOk, ...counts });
       }
+      if (call.isError && (SHELL_TOOL_INFRA_FAILURE_RE.test(call.output) || isBuildTestInstallTypecheckCommand(command))) {
+        deterministicFailedTools.push(call.name);
+      }
+    } else if (call.isError) {
+      deterministicFailedTools.push(call.name);
     }
   }
 
@@ -267,6 +353,7 @@ export function extractTurnGuardFacts(transcript: TurnGuardTranscript): TurnGuar
     toolsCalled,
     failedTools,
     anyToolFailed,
+    deterministicFailedTools,
     filesWritten,
     commandsRun,
     testsRun,
@@ -296,6 +383,14 @@ export interface TurnGuardContradiction {
 /** Claims like "tests pass"/"all tests passing"/"test suite is green"/"tests succeeded". */
 const TEST_PASS_CLAIM_RE = /\b(?:tests?|test suite|all tests)\b[^.?!\n]{0,60}\b(?:pass(?:es|ed|ing)?|green|succeed(?:ed|s)?)\b/i;
 
+/**
+ * Item 1 (PR #720 review): the final message HONESTLY acknowledges a failing
+ * test — a fail count, "pre-existing", "flaky", or "except" — rather than
+ * claiming a clean pass. Narrows `false-test-pass-claim` so e.g. "9 passed, 1
+ * failed — a known flaky test, the rest pass cleanly" is not flagged.
+ */
+const TEST_FAILURE_ACKNOWLEDGED_RE = /\b\d+\s+fail(?:ed|ing|ures?)?\b|\bpre-?existing\b|\bflaky\b|\bexcept\b/i;
+
 /** A failed tool's own name appears, or the message uses generic failure language at all. */
 function mentionsFailure(finalMessage: string, toolName: string): boolean {
   if (finalMessage.toLowerCase().includes(toolName.toLowerCase())) return true;
@@ -310,7 +405,12 @@ function mentionsFailure(finalMessage: string, toolName: string): boolean {
  * there is nothing to gain from collecting every possible one.
  */
 export function detectTurnGuardContradiction(facts: TurnGuardFacts, finalMessage: string): TurnGuardContradiction | undefined {
-  if (facts.testsRun.length > 0 && facts.lastTestRunFailed && TEST_PASS_CLAIM_RE.test(finalMessage)) {
+  if (
+    facts.testsRun.length > 0 &&
+    facts.lastTestRunFailed &&
+    TEST_PASS_CLAIM_RE.test(finalMessage) &&
+    !TEST_FAILURE_ACKNOWLEDGED_RE.test(finalMessage)
+  ) {
     const last = facts.testsRun[facts.testsRun.length - 1]!;
     return {
       kind: "false-test-pass-claim",
@@ -320,8 +420,8 @@ export function detectTurnGuardContradiction(facts: TurnGuardFacts, finalMessage
         ".",
     };
   }
-  if (facts.anyToolFailed) {
-    const unmentioned = facts.failedTools.find((name) => !mentionsFailure(finalMessage, name));
+  if (facts.deterministicFailedTools.length > 0) {
+    const unmentioned = facts.deterministicFailedTools.find((name) => !mentionsFailure(finalMessage, name));
     if (unmentioned !== undefined) {
       return {
         kind: "unmentioned-failure",

@@ -95,7 +95,7 @@ import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
-import { createTurnGuardCollector, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
+import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
 import { renderTurnGuardNoticeLine } from "../review/turn-guard";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
@@ -4475,9 +4475,20 @@ export async function launchTuiAgentShell(opts: {
     /** This session's guard history, newest first when read by the `/guard` modal — capped so a long session cannot grow it unbounded. */
     const GUARD_HISTORY_CAP = 20;
     const guardHistory: TurnGuardResult[] = [];
+    /**
+     * Item 3 (PR #720 review): TURN order, not completion order. The guard
+     * for a turn that needed a real Jev round trip can resolve AFTER the
+     * guard for a later, trivial/deterministic turn that resolved almost
+     * instantly (both are fired `void`, unawaited, from their own turn's
+     * settle) — a plain `unshift` would then put the earlier turn's result
+     * above the later one's. `result.at` (`runTurnGuard`'s own timestamp,
+     * recorded at the START of that call, before any Jev round trip) is
+     * monotonic with turn order even when completions race, so insert at the
+     * position that keeps `guardHistory` sorted newest-`at`-first instead.
+     */
     const recordGuardResult = (result: TurnGuardResult): void => {
-      guardHistory.unshift(result);
-      guardHistory.length = Math.min(guardHistory.length, GUARD_HISTORY_CAP);
+      const next = insertTurnGuardResult(guardHistory, result, GUARD_HISTORY_CAP);
+      guardHistory.splice(0, guardHistory.length, ...next);
     };
     // Collects tool calls/results + the final assistant text for the CURRENT
     // turn only. Wrapped ONCE here (permanent, same "wrap the base hook"
@@ -4520,6 +4531,15 @@ export async function launchTuiAgentShell(opts: {
     /** `/guard on|off` (AC5): live toggle + persistence. */
     const setGuardEnabled = (next: boolean): void => {
       guardEnabled = next;
+      // Item 5 (PR #720 review): `saveShellConfig` merges its `patch` at the
+      // TOP level only (`{ ...loadShellConfig(dir), ...patch }`) — a nested
+      // object under a key is REPLACED whole, not merged. `turnGuard` carries
+      // only `enabled` today, so this is safe as written; if `turnGuard`
+      // ever grows a second field (e.g. a persisted threshold override), this
+      // call must read the existing `turnGuard` first and spread it in, the
+      // same way `saveProviderBaseUrl`/`saveProviderModelParams`
+      // (`src/lib/shell-config.ts`) already merge their own nested objects —
+      // otherwise turning the guard on/off would silently drop that field.
       saveShellConfig({ turnGuard: { enabled: next } });
       refreshGuardSidebar();
       io.onSystem?.(`Guard: ${next ? "on" : "off"}\n`);
@@ -7878,8 +7898,14 @@ export async function launchTuiAgentShell(opts: {
       // must run before `runAgentTurn` so no early tool call is missed.
       guardCollector.reset(line);
       const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
+      // Captured now, while `operation` is still the active one — `.signal`
+      // throws once `foregroundOperation.settle(operation)` below clears it,
+      // and by the time the guard's own deferred continuation (further down)
+      // wakes up from its `await`, a NEW turn may already be active, whose
+      // signal would say nothing about whether THIS turn was cancelled.
+      const turnSignal = foregroundOperation.signal;
       void runAgentTurn(foregroundIo, deps, history, line, {
-        signal: foregroundOperation.signal,
+        signal: turnSignal,
         ...(origin === "operator" ? {} : { origin }),
         ...(slateSession !== undefined ? { slateSession } : {}),
       }).finally(() => {
@@ -7909,6 +7935,20 @@ export async function launchTuiAgentShell(opts: {
           void (async () => {
             try {
               const guardResult = await runTurnGuard(guardTranscript, { enabled: guardEnabled });
+              // Item 2 (PR #720 review): `runTurnGuard` awaits an up-to-8s Jev
+              // round trip — the renderer may have been destroyed, or this
+              // turn's own operation cancelled, while it was in flight. Same
+              // idiom the other deferred continuations near here use right
+              // after their own `await` (`foregroundOperation.signal.aborted
+              // || foregroundOperation.isDisposed`, e.g. the wiki-enrich
+              // plan/pick continuations above) — `turnSignal` (captured
+              // before `settle()` above, since `foregroundOperation.signal`
+              // throws once no operation is active, and a later turn's own
+              // signal would say nothing about THIS one) stands in for
+              // `foregroundOperation.signal` here. A late guard result must
+              // never touch history, the sidebar, or the system line of a
+              // shell/turn that is already gone.
+              if (turnSignal.aborted || foregroundOperation.isDisposed) return;
               recordGuardResult(guardResult);
               refreshGuardSidebar();
               if (guardResult.verdict.flagged) {

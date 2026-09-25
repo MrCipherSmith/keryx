@@ -195,6 +195,148 @@ describe("AC3: detectTurnGuardContradiction — decides without Jev", () => {
   });
 });
 
+describe("Item 1 (PR #720 review): shell_exec's nonzero-exit isError does not by itself become a deterministic contradiction", () => {
+  test("grep with no match (exit 1, no output) is NOT flagged, even left unmentioned", () => {
+    const finalMessage = "No files reference the old config key anymore.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "grep -r OLD_CONFIG_KEY src" }),
+            output: "(no output; exit 1)",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual([]);
+    expect(detectTurnGuardContradiction(facts, finalMessage)).toBeUndefined();
+  });
+
+  test("`test -f <missing file>` (exit 1) is NOT flagged", () => {
+    const finalMessage = "The lockfile does not exist yet, so I created it.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "test -f package-lock.json" }),
+            output: "(no output; exit 1)",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(detectTurnGuardContradiction(facts, finalMessage)).toBeUndefined();
+  });
+
+  test("`diff` showing real differences (exit 1, real output, never mentioned) is NOT flagged", () => {
+    const finalMessage = "Compared the two files as requested.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "diff a.txt b.txt" }),
+            output: "1c1\n< old line\n---\n> new line",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(detectTurnGuardContradiction(facts, finalMessage)).toBeUndefined();
+  });
+
+  test("`git diff --exit-code` (exit 1, working tree dirty, never mentioned) is NOT flagged", () => {
+    const finalMessage = "Checked the working tree.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "git diff --exit-code" }),
+            output: " src/foo.ts | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(detectTurnGuardContradiction(facts, finalMessage)).toBeUndefined();
+  });
+
+  test("an honest 'one flaky test failed, the rest pass' reply is NOT flagged as a false-test-pass-claim", () => {
+    const finalMessage = "Ran the suite: 9 passed, 1 failed. The failing one is a known flaky test unrelated to this change — the rest pass cleanly.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({ name: "shell_exec", input: JSON.stringify({ command: "bun test" }), output: " 9 pass\n 1 fail\n", isError: true }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(detectTurnGuardContradiction(facts, finalMessage)).toBeUndefined();
+  });
+
+  test("a REAL bun test failure left completely unmentioned is still flagged (build/test commands remain deterministic)", () => {
+    const finalMessage = "Implemented the export feature.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({ name: "shell_exec", input: JSON.stringify({ command: "bun test" }), output: " 8 pass\n 2 fail\n", isError: true }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+    const contradiction = detectTurnGuardContradiction(facts, finalMessage);
+    expect(contradiction?.kind).toBe("unmentioned-failure");
+  });
+
+  test("a REAL tool failure (timeout) is flagged even though `isError` alone would also fire on a plain nonzero exit", () => {
+    const finalMessage = "Cleaned up the temp directory.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "some-slow-script.sh" }),
+            output: "partial output\nshell_exec: timed out after 30000ms and was killed (raise or disable with KERYX_SHELL_TIMEOUT_MS)",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+    const contradiction = detectTurnGuardContradiction(facts, finalMessage);
+    expect(contradiction?.kind).toBe("unmentioned-failure");
+  });
+
+  test("a denied command (never executed) is flagged even though it is 'unclassified'", () => {
+    const finalMessage = "Done.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "rm -rf /tmp/scratch" }),
+            output: "command not approved by the user; not executed",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+    expect(detectTurnGuardContradiction(facts, finalMessage)?.kind).toBe("unmentioned-failure");
+  });
+});
+
 describe("AC6: shouldSkipTurnGuard — trivial turns are skipped without asking Jev", () => {
   test("no tools, short request, short reply: skipped", () => {
     const t = transcript({ userRequest: "what is 2+2?", finalMessage: "4." });

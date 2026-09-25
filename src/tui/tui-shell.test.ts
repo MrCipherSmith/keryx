@@ -3529,7 +3529,14 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
   test("normal turns and in-process wiki work use one identity-safe foreground owner", () => {
     expect(source.includes("foregroundOperation")).toBe(true);
     expect(source.includes("mainTurnAbortController")).toBe(false);
-    expect(source).toMatch(/runAgentTurn\([\s\S]{0,250}signal:\s*foregroundOperation\.signal/);
+    // PR #720 review item 2: the main turn's `runAgentTurn` call now passes
+    // `turnSignal` — `foregroundOperation.signal` CAPTURED just above the
+    // call (and reused after settle by the turn guard's deferred
+    // continuation, where `foregroundOperation.signal` itself would throw) —
+    // rather than reading `foregroundOperation.signal` inline at the call
+    // site. Assert both halves: the capture is `foregroundOperation.signal`,
+    // and the call site passes that same binding.
+    expect(source).toMatch(/const turnSignal = foregroundOperation\.signal;[\s\S]{0,250}runAgentTurn\([\s\S]{0,250}signal:\s*turnSignal/);
     expect(source).toMatch(/wikiEnrich\([\s\S]{0,500}signal:\s*foregroundOperation\.signal/);
   });
 
