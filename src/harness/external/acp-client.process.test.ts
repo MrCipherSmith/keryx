@@ -529,7 +529,9 @@ describe("AC6 — context through keryx's own MCP server", () => {
       expect(servers[0]?.["command"]).not.toBe("keryx");
       const args = servers[0]?.["args"] as string[];
       expect(args.slice(-4)).toEqual(["serve-mcp", "--read-only", "--cwd", project]);
-      expect(args[0]).toMatch(/src[/\\]cli\.ts$/);
+      // R1-01: the safe bun flags precede the cli.ts entry (see `src/lib/safe-exec.ts`).
+      expect(args.slice(0, 2)).toEqual(["--no-env-file", "--config=/dev/null"]);
+      expect(args[2]).toMatch(/src[/\\]cli\.ts$/);
       expect(outcome.acp?.context).toEqual(context);
     },
     TIMEOUT_MS,

@@ -61,6 +61,7 @@ import { ensureScratchParent } from "./unattended-scratch";
 import { providerByName } from "./providers";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { spendFromTokens } from "../review/caps";
 import type { FlowService, FlowTask } from "../flow/types";
@@ -323,7 +324,11 @@ export function keryxInvocation(): { readonly argv: readonly string[]; readonly 
   if (script !== undefined && /\.(?:[cm]?[jt]s)$/.test(script) && existsSync(script)) {
     const resolved = realOr(script);
     roots.add(packageRoot(resolved));
-    return { argv: [exec, resolved], roots: [...roots] };
+    // R1-01: this argv runs `keryx health run`/`gate` INSIDE the sandboxed
+    // WORKTREE — attacker-controlled if the worktree is a PR/branch checkout
+    // — so a `bun <cli.ts>` spawn here must not auto-load that worktree's
+    // own `.env`/`bunfig.toml`. See `src/lib/safe-exec.ts`.
+    return { argv: [exec, ...SAFE_BUN_SPAWN_ARGS, resolved], roots: [...roots] };
   }
   // A compiled keryx binary IS the executable.
   return { argv: [exec], roots: [...roots] };

@@ -15,6 +15,7 @@
 
 import { existsSync } from "node:fs";
 import { isCompiledBinaryEntry } from "../../../lib/self-invocation";
+import { SAFE_BUN_SPAWN_ARGS } from "../../../lib/safe-exec";
 import { resolve } from "node:path";
 import {
   METAPROJECT_OPERATIONS,
@@ -109,7 +110,9 @@ export function keryxSelfCommand(
   // application whose entry shares that common name as keryx, and hand it
   // model-influenced arguments (review F-004).
   if (entries.includes(resolve(main)) && exists(main)) {
-    return [execPath, main];
+    // R1-01: spawns `bun <cli.ts|cli.js>` directly, bypassing the shebang —
+    // see `src/lib/safe-exec.ts`.
+    return [execPath, ...SAFE_BUN_SPAWN_ARGS, main];
   }
   if (isCompiledBinaryEntry(main)) {
     return [execPath];

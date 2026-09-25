@@ -221,6 +221,79 @@ describe("loadHookConfig", () => {
     expect(result.registrations.some((r) => r.id === "user-gate")).toBe(true);
   });
 
+  // R1-01 (flow 319, review round 1, blocker): a `KERYX_HOME` (or `homeDir`
+  // override) that resolves inside the project must not be honoured for
+  // user-scope hooks — it is repo-controllable (e.g. via Bun's cwd `.env`
+  // autoload) and user scope skips the trust gate entirely.
+  describe("KERYX_HOME resolving inside the project root", () => {
+    const plantedDoc = {
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [
+          { id: "planted-gate", matcher: "Bash", class: "gate", command: { argv: ["echo", "hi"] } },
+        ],
+      },
+    };
+
+    test("a home dir INSIDE the project is refused: the planted hook does not load, and a warning is reported", () => {
+      const evilHome = path.join(PROJECT, ".evil-home");
+      const evilUserPath = path.join(evilHome, ".keryx", "hooks.json");
+      const result = loadHookConfig({
+        projectRoot: PROJECT,
+        homeDir: evilHome,
+        readFile: makeReadFile({ [evilUserPath]: JSON.stringify(plantedDoc) }),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.registrations.some((r) => r.id === "planted-gate")).toBe(false);
+      expect(
+        result.warnings.some((w) => w.code === "user-home-inside-project" && w.path === path.join(evilHome, ".keryx")),
+      ).toBe(true);
+    });
+
+    test("a home dir EQUAL to the project root is refused", () => {
+      const evilUserPath = path.join(PROJECT, ".keryx", "hooks.json");
+      const result = loadHookConfig({
+        projectRoot: PROJECT,
+        homeDir: PROJECT,
+        readFile: makeReadFile({ [evilUserPath]: JSON.stringify(plantedDoc) }),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.registrations.some((r) => r.id === "planted-gate")).toBe(false);
+      expect(result.warnings.some((w) => w.code === "user-home-inside-project")).toBe(true);
+    });
+
+    test("a home dir that is merely a SIBLING of the project (not inside it) is unaffected", () => {
+      // e.g. `/proj-backup` starts with the same characters as `/proj` but is
+      // not inside it — a naive string-prefix check without a path separator
+      // would wrongly treat this as "inside".
+      const siblingHome = "/proj-backup-home";
+      const siblingUserPath = path.join(siblingHome, ".keryx", "hooks.json");
+      const result = loadHookConfig({
+        projectRoot: PROJECT,
+        homeDir: siblingHome,
+        readFile: makeReadFile({ [siblingUserPath]: JSON.stringify(plantedDoc) }),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.registrations.some((r) => r.id === "planted-gate")).toBe(true);
+      expect(result.warnings.some((w) => w.code === "user-home-inside-project")).toBe(false);
+    });
+
+    test("a home dir outside the project (the normal/test case) is unaffected", () => {
+      const result = loadHookConfig({
+        projectRoot: PROJECT,
+        homeDir: HOME,
+        readFile: makeReadFile({ [USER_PATH]: JSON.stringify(plantedDoc) }),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.registrations.some((r) => r.id === "planted-gate")).toBe(true);
+      expect(result.warnings.some((w) => w.code === "user-home-inside-project")).toBe(false);
+    });
+  });
+
   for (const gateId of ["keryx.ctx-guard", "keryx.security-check-input", "keryx.security-check-output", "keryx.impact-evidence"]) {
     test(`a project disable of protected built-in ${gateId} is ignored with a warning and the load stays ok`, () => {
       const doc = { schemaVersion: "1.0.0", hooks: { PreToolUse: [{ id: gateId, enabled: false }], UserPromptSubmit: [{ id: gateId, enabled: false }] } };

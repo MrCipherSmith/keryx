@@ -8,6 +8,7 @@
 // injectable port so W3/W8 plug in without a process boundary. Never
 // user/project-configurable: a project file can only disable them by id.
 import path from "node:path";
+import { SAFE_BUN_SPAWN_ARGS } from "../../lib/safe-exec";
 import type { HookEventName, HookRegistration } from "./types";
 
 /** The seven events `keryx.learning-observer` is registered on, mapped to W3's observation kind. */
@@ -149,7 +150,11 @@ export function resolveKeryxArgv(argv: readonly string[], opts: ResolveKeryxArgv
   const scriptPath = opts.scriptPath ?? process.argv[1];
 
   if (scriptPath !== undefined && KERYX_ENTRY_BASENAMES.has(path.basename(scriptPath))) {
-    return [execPath, scriptPath, ...rest];
+    // R1-01: this spawns `bun <cli.ts|cli.js>` directly, bypassing
+    // `src/cli.ts`'s own shebang — without these, the CHILD would auto-load
+    // this same cwd's `.env`/`bunfig.toml` again, defeating whatever the
+    // parent already protected against. See `src/lib/safe-exec.ts`.
+    return [execPath, ...SAFE_BUN_SPAWN_ARGS, scriptPath, ...rest];
   }
   if (path.basename(execPath) === "keryx") {
     return [execPath, ...rest];

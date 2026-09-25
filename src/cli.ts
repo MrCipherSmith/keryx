@@ -1,8 +1,59 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file --config=/dev/null
+// R1-01 (flow 319, review round 1, blocker): Bun's default shebang
+// (`#!/usr/bin/env bun`) auto-loads `.env`/`.env.local`/`.env.<NODE_ENV>` AND
+// a `bunfig.toml` `preload` script from the CURRENT WORKING DIRECTORY into
+// this process — so a cloned, hostile repository controls this CLI's
+// environment (including `KERYX_HOME`, `KERYX_HOOKS`, provider base
+// URLs/keys, `XDG_*`) and can run arbitrary code via `preload` before a
+// single line of `keryx` itself executes. `--no-env-file` stops the dotenv
+// autoload; `--config=/dev/null` stops the cwd `bunfig.toml` autoload
+// (verified empirically on Bun 1.4.2 — `--no-env-file` ALONE does not stop
+// `preload`; `--config` does). `env -S` (POSIX-undefined but present on
+// macOS's `env` and GNU coreutils `env` >= 8.30 — both platforms this
+// package's standalone binaries and npm postinstall target, per `scripts/
+// install-binary.sh`) splits the interpreter line into `bun --no-env-file
+// --config=/dev/null`; `/dev/null` as `--config` reads as an empty TOML
+// document on both, so no `preload` runs there either. `dist/cli.js` (the
+// shipped `bin`, built by `bun run build`) carries this SAME shebang — see
+// `package.json`'s `build` script.
+//
+// Platform gaps, so they are documented rather than silently unhandled:
+// BusyBox `env` (Alpine, some minimal containers) does not implement `-S` —
+// on that platform the shebang line is passed to `bun` as one literal
+// argument and fails to start; the standalone binary (no shebang at all,
+// but not currently published for any Windows/musl target either — see
+// `scripts/install-binary.sh`'s platform list) is the working path there
+// once one exists. Windows has no shebang mechanism at all — an npm
+// install's generated `.cmd`/`.ps1` shim decides how `dist/cli.js` is
+// launched there, not this line; `src/lib/safe-exec.ts`'s runtime guard
+// below is what actually protects a Windows npm install, since it runs
+// regardless of how the process was started.
+//
+// This shebang is the real fix. It does not cover every invocation shape
+// (`bun dist/cli.js`, `bun src/cli.ts`, `bunx keryx` all bypass a shebang
+// entirely) — `./lib/safe-exec.ts`'s startup guard below is defence in depth
+// for those.
 // retired-spellings-ok: file — help text still lists the retired usage lines because those invocations still work; removing them would hide a working command
 
+import { ensureSafeBunExec } from "./lib/safe-exec";
 import { runModelTurn } from "./harness/provider/single-turn";
 import { setModelTurnPort } from "./sac/model-turn-port";
+
+// R1-01: run as early as this module can — before `main()`'s own body, and
+// before any command handler this file dispatches to. Note the real limit:
+// ES module imports above this line have ALREADY executed by the time this
+// runs (import evaluation order, not something this guard can change without
+// switching every import here to a deferred `await import(...)`), so a
+// top-level side effect in an imported module that reads `process.env`
+// before this point can still observe a cwd-`.env`-poisoned value. The
+// shebang (top of this file) is what actually prevents that; this re-execs
+// once under the safe flags for a `bunx`/`bun dist/cli.js`/`bun src/cli.ts`
+// invocation that bypassed it, so the REST of startup (`main()` onward) runs
+// clean. A normal shebang-launched process (already safe) returns here after
+// two cheap `existsSync` checks. See `./lib/safe-exec.ts`.
+if (import.meta.main) {
+  ensureSafeBunExec();
+}
 
 import { initCommand } from "./commands/init";
 import { ctxCommand } from "./commands/ctx";

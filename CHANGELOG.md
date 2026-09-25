@@ -3,6 +3,21 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Security
+- **`keryx` no longer auto-loads a cloned project's `.env`/`bunfig.toml`.**
+  Bun's default shebang auto-loads both from the current working directory —
+  a repository could commit a `.env` setting `KERYX_HOME` to a directory
+  inside itself, planting a fully trusted, un-gated user-scope
+  `hooks.json` that ran on a plain `keryx shell` with no prompt. `keryx`'s
+  shipped binary now starts with `--no-env-file --config=/dev/null`, every
+  place it spawns itself carries the same flags, and a `KERYX_HOME` that
+  still resolves inside the current project is refused for user-scope hooks
+  as defence in depth. If you relied on a project `.env` for provider keys or
+  other settings, see "Environment isolation" in the onboarding guide for how
+  to opt back in.
+
 ## [0.2.161] — 2026-09-23
 
 A provider can be tested and disconnected from where it was connected.

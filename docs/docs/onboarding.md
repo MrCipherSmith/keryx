@@ -33,6 +33,31 @@ Bun removes the cause. `keryx shell --debug` records the event as
 The standalone binary bundles its own Bun and is not affected by the Bun
 installed on the machine.
 
+## Environment isolation
+
+`keryx` does not read a project's `.env` file, and does not run a project's
+`bunfig.toml`. Left to Bun's own defaults, both are auto-loaded from the
+CURRENT WORKING DIRECTORY on every launch — which means a cloned repository
+could set environment variables (including `KERYX_HOME`, provider base
+URLs/keys, `KERYX_HOOKS=off`) or, through `bunfig.toml`'s `preload`, run
+arbitrary code, before `keryx` itself ever starts. Since cloning a repository
+is not consent to run its code, `keryx` starts with `--no-env-file
+--config=/dev/null` (baked into its shebang, and into every place it spawns
+itself) so neither happens by default.
+
+If you rely on a project `.env` for provider keys or other settings, you now
+have to opt in explicitly — either export the variables in your shell before
+running `keryx`, or run it with Bun's own flag:
+
+```bash
+bun --env-file=.env $(which keryx) shell
+```
+
+For provider API keys specifically, you likely do not need a project `.env`
+at all: `keryx auth` (and the shell's `/connect`, below) save a key to an
+owner-only file in your keryx config directory, which every session reads
+regardless of `cwd`.
+
 ## Install
 
 There are four ways in. They install the same CLI; they differ in what has to be

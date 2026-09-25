@@ -147,6 +147,11 @@ test("an invalid project hooks.json builds a runtime that denies every PreToolUs
 // target in a bare `{patch}` input), which is exactly the gap round 3 found.
 test("buildShellHookRuntime wires a real keryx.impact-evidence provider by default", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-impact-"));
+  // R1-01 (flow 319, review round 1): a directory OUTSIDE `projectRoot`, not
+  // `dir` itself — `loadHookConfig`'s new guard refuses a user-scope home
+  // that resolves inside the project root, which would make `.keryx/
+  // hooks.json` below invisible.
+  const home = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-impact-home-"));
   try {
     await writeFile(path.join(dir, "a.ts"), "export const a = 1;\n", "utf8");
     const patch = ["--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-export const a = 1;", "+export const a = 2;", ""].join(
@@ -156,10 +161,28 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
     // Disable built-in command hooks to ensure the test is hermetic; no keryx
     // binary on PATH in CI, so keryx.security-check-output crashes with gate
     // fail-closed deny. This test isolates the impact-evidence port only.
-    await mkdir(path.join(dir, ".metaproject"), { recursive: true });
+    //
+    // A PROJECT-scope `enabled: false` on a protected built-in gate is
+    // ALWAYS ignored (D12 — a project file can never disable a built-in
+    // gate, acknowledged or not), so the disables below must be USER-scope,
+    // with the acknowledgement `resolveHookRegistrations` requires for a
+    // gate disable to take effect. This was silently a no-op even before
+    // flow 319 — it only stayed invisible because a local run normally has a
+    // real `keryx` on PATH, so the "denied" gate never actually got a
+    // chance to deny anything. Reproduced red under a PATH with no `keryx`
+    // (`PATH="$(dirname $(which bun)):/usr/bin:/bin"`) before this fix.
+    await mkdir(path.join(home, ".keryx"), { recursive: true });
     await writeFile(
-      path.join(dir, ".metaproject", "hooks.json"),
-      '{"schemaVersion":"1.0.0","hooks":{"PreToolUse":[{"id":"keryx.security-check-output","enabled":false},{"id":"keryx.ctx-guard","enabled":false}]}}',
+      path.join(home, ".keryx", "hooks.json"),
+      JSON.stringify({
+        schemaVersion: "1.0.0",
+        hooks: {
+          PreToolUse: [
+            { id: "keryx.security-check-output", enabled: false, acknowledge: "disable-builtin-gate" },
+            { id: "keryx.ctx-guard", enabled: false, acknowledge: "disable-builtin-gate" },
+          ],
+        },
+      }),
       "utf8",
     );
 
@@ -169,7 +192,7 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
       runId: "r",
       interactive: true,
       profileId: "monitored-trusted-local",
-      homeDir: dir,
+      homeDir: home,
       env: { KERYX_DISABLE_IMPACT_GATE: "1" },
     });
     expect(result).toBeDefined();
@@ -197,6 +220,7 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
     expect(records.some((r) => r.sessionId === "impact-session" && r.event === "disabled-env")).toBe(true);
   } finally {
     await rm(dir, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
   }
 });
 
@@ -321,10 +345,18 @@ test("R700-01 fix (flow 319): takeNotices() returns the lines once, then [] on t
 
 test("R700-01: a user-disabled gate produces the OFF banner", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-gate-off-"));
+  // R1-01 (flow 319, review round 1): `homeDir` must be a directory OUTSIDE
+  // `projectRoot`, not `dir` itself — `loadHookConfig`'s new guard (`src/
+  // harness/hooks/config.ts`) refuses a user-scope home that resolves
+  // inside the project root (exactly the vector it closes: a project
+  // steering its own "trusted, no-prompt" user scope), so co-locating them
+  // here would make `.keryx/hooks.json` invisible and this test would
+  // wrongly assert the guard's absence rather than the OFF banner.
+  const home = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-gate-off-home-"));
   try {
-    await mkdir(path.join(dir, ".keryx"), { recursive: true });
+    await mkdir(path.join(home, ".keryx"), { recursive: true });
     await writeFile(
-      path.join(dir, ".keryx", "hooks.json"),
+      path.join(home, ".keryx", "hooks.json"),
       JSON.stringify({
         schemaVersion: "1.0.0",
         hooks: { PreToolUse: [{ id: "keryx.ctx-guard", enabled: false, acknowledge: "disable-builtin-gate" }] },
@@ -337,12 +369,13 @@ test("R700-01: a user-disabled gate produces the OFF banner", async () => {
       runId: "r",
       interactive: true,
       profileId: "monitored-trusted-local",
-      homeDir: dir,
+      homeDir: home,
       env: { KERYX_HOOKS: "on" },
     });
     expect(result?.notices?.some((n) => n.includes("keryx.ctx-guard") && n.includes("OFF"))).toBe(true);
   } finally {
     await rm(dir, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
   }
 });
 

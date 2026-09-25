@@ -12,7 +12,8 @@
 // `schemaVersion`, a full registration colliding with a built-in id, or a
 // duplicate full-registration id within one event — is an error diagnostic
 // and the whole load reports `ok: false`. Nothing is silently dropped.
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { resolveKeryxHomeDir } from "../../lib/keryx-home";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
@@ -37,7 +38,8 @@ export type HookConfigDiagnosticCode =
   | "hook-id-collides-with-builtin"
   | "hook-id-duplicate"
   | "project-gate-disable-ignored"
-  | "gate-disable-unacknowledged";
+  | "gate-disable-unacknowledged"
+  | "user-home-inside-project";
 
 export interface HookConfigDiagnostic {
   code: HookConfigDiagnosticCode;
@@ -122,6 +124,69 @@ export interface LoadHookConfigInput {
  */
 export function resolveHookHomeDir(env: NodeJS.ProcessEnv, homeDir?: string): string {
   return resolveKeryxHomeDir(env, homeDir);
+}
+
+/**
+ * Realpath when possible, falling back to a plain resolve — mirrors
+ * `realpathOrResolve` in `./trust.ts` (not exported from there, so this is a
+ * second small copy rather than a cross-module reach-in for one helper). A
+ * path that does not exist yet (e.g. `~/.keryx` before it has ever been
+ * created) must still produce a stable, comparable value.
+ */
+function realpathOrResolve(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * R1-01 (flow 319, review round 1, blocker): a USER-scope `hooks.json` is
+ * exempt from the trust gate entirely — the whole design's premise is "the
+ * operator put this here themselves, on this machine" (see this file's own
+ * header). `KERYX_HOME` (which `resolveKeryxHomeDir` resolves `homeDir`
+ * from) is an ordinary environment variable, and Bun's shipped `dist/cli.js`
+ * shebang used to auto-load a `.env` file from the process's CURRENT WORKING
+ * DIRECTORY into `process.env` — so a cloned, hostile repository could commit
+ * a `.env` setting `KERYX_HOME` to a directory INSIDE itself, plant a fully
+ * un-gated, un-prompted `<that dir>/.keryx/hooks.json` there, and have it
+ * treated as trusted user scope on a plain `keryx shell`. The real fix is
+ * that keryx no longer starts under a shell that auto-loads a cwd `.env` or
+ * `bunfig.toml` (see `src/cli.ts`'s shebang and `src/lib/safe-exec.ts`'s
+ * startup guard) — this is defence in depth for whatever reaches here
+ * anyway (a caller that resolves `homeDir` some other way, a future
+ * regression in the shebang/guard, `KERYX_HOME` set some other way that
+ * still lands inside the project).
+ *
+ * If the user-scope home's `.keryx` directory resolves (realpath) inside —
+ * or equal to — the current project root, refuse it: fall back to the REAL
+ * OS home directory (`os.homedir()`, never `env`/`homeDir` again — both are
+ * exactly what a repo can steer) and report a warning so the operator sees
+ * why their `KERYX_HOME` had no effect. An explicit test `homeDir` override
+ * that legitimately points elsewhere (the normal case: a sibling tmp
+ * directory, not inside the project fixture) is unaffected — this only ever
+ * triggers when the resolved directory is actually inside/equal to the
+ * project root, which is exactly the case a legitimate override does not hit.
+ */
+function guardUserHomeDir(
+  homeDir: string,
+  projectRoot: string,
+): { homeDir: string; warning?: HookConfigDiagnostic } {
+  const userKeryxDir = path.join(homeDir, ".keryx");
+  const projectReal = realpathOrResolve(projectRoot);
+  const userReal = realpathOrResolve(userKeryxDir);
+  const inside = userReal === projectReal || userReal.startsWith(projectReal + path.sep);
+  if (!inside) return { homeDir };
+  return {
+    homeDir: os.homedir(),
+    warning: {
+      code: "user-home-inside-project",
+      scope: "user",
+      path: userKeryxDir,
+      message: `keryx hooks: ignored user hooks at ${userKeryxDir}: KERYX_HOME points inside this project, so a repository could supply them. Set KERYX_HOME outside the project.`,
+    },
+  };
 }
 
 /** Default `readFile`: absent file (ENOENT) reads as `undefined`; anything else rethrows. */
@@ -441,7 +506,8 @@ export function projectHooksDigestOfDoc(doc: unknown): string | undefined {
  */
 export function loadHookConfig(input: LoadHookConfigInput): LoadHookConfigResult {
   const readFile = input.readFile ?? defaultReadFile;
-  const userPath = path.join(input.homeDir, ".keryx", "hooks.json");
+  const homeGuard = guardUserHomeDir(input.homeDir, input.projectRoot);
+  const userPath = path.join(homeGuard.homeDir, ".keryx", "hooks.json");
   const projectPath = path.join(input.projectRoot, ".metaproject", "hooks.json");
 
   const diagnostics: HookConfigDiagnostic[] = [];
@@ -524,7 +590,7 @@ export function loadHookConfig(input: LoadHookConfigInput): LoadHookConfigResult
     ok: true,
     registrations,
     diagnostics: [],
-    warnings: merged.warnings,
+    warnings: homeGuard.warning !== undefined ? [homeGuard.warning, ...merged.warnings] : merged.warnings,
     projectHooks: {
       state,
       filePath: projectPath,

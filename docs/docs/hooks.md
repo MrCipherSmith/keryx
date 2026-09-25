@@ -207,6 +207,20 @@ hooks file writes `.metaproject/hooks.json` but never trusts it — the
 imported hooks do not run until you review and run `keryx hooks trust`
 yourself, exactly as if you had written the file by hand.
 
+### Environment files are not read
+
+The trust gate above only covers `.metaproject/hooks.json` — but user-scope
+hooks (`~/.keryx/hooks.json`) skip that gate entirely by design (see "The
+session-start notice"), so where `~/.keryx` actually resolves to matters just
+as much. `keryx` never reads a project's `.env`/`bunfig.toml`, so a
+repository cannot steer `KERYX_HOME` (or any other environment variable) by
+committing one — see [Environment isolation](onboarding.md#environment-isolation)
+for what that closes and how to opt back in. As additional defence in depth,
+a `KERYX_HOME` that resolves inside the current project is refused outright
+for user-scope hooks: keryx falls back to your real home directory and warns,
+rather than ever treating a project-supplied directory as "the operator's own
+machine".
+
 ## Schema
 
 Both files validate against

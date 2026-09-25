@@ -1109,6 +1109,12 @@ test.skipIf(!detectSandboxLauncher().available)(
   "finding 17: the real buildShellHookRuntime denies a real shell_exec call via a real gate hook script",
   async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-real-"));
+    // R1-01 (flow 319, review round 1): OUTSIDE `dir` — `loadHookConfig`'s
+    // guard refuses a user-scope home that resolves inside the project root
+    // (see `src/harness/hooks/config.ts`), which would make `home/.keryx/
+    // hooks.json` below invisible and silently leave the three built-in
+    // gates enabled, defeating this test's own isolation comment below.
+    const home = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-real-home-"));
     try {
       await mkdir(path.join(dir, ".metaproject"), { recursive: true });
       const scriptPath = path.join(dir, "deny-bash.js");
@@ -1135,8 +1141,8 @@ test.skipIf(!detectSandboxLauncher().available)(
           UserPromptSubmit: [{ id: "keryx.security-check-input", enabled: false, acknowledge: "disable-builtin-gate" }],
         },
       };
-      await mkdir(path.join(dir, ".keryx"), { recursive: true });
-      await writeFile(path.join(dir, ".keryx", "hooks.json"), JSON.stringify(userDoc, null, 2), "utf8");
+      await mkdir(path.join(home, ".keryx"), { recursive: true });
+      await writeFile(path.join(home, ".keryx", "hooks.json"), JSON.stringify(userDoc, null, 2), "utf8");
 
       const doc = {
         schemaVersion: "1.0.0",
@@ -1172,7 +1178,7 @@ test.skipIf(!detectSandboxLauncher().available)(
         runId: "r1",
         interactive: true,
         profileId: "monitored-trusted-local",
-        homeDir: dir, // ~/.keryx/hooks.json is dir/.keryx/hooks.json (the user doc above)
+        homeDir: home, // ~/.keryx/hooks.json is home/.keryx/hooks.json (the user doc above)
         configDir,
         // Explicitly NOT "off" — this IS the opt-in.
         env: { KERYX_HOOKS: "on" },
@@ -1228,6 +1234,7 @@ test.skipIf(!detectSandboxLauncher().available)(
       expect(shellResult?.output).toContain("denied by real gate hook");
     } finally {
       await rm(dir, { recursive: true, force: true });
+      await rm(home, { recursive: true, force: true });
     }
   },
   20000,
