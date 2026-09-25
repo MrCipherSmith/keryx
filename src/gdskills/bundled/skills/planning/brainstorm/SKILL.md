@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: "Use when exploring architecture decisions, tech choices, feature ideas, or any open-ended problem that benefits from multiple perspectives. NOT for: writing the chosen option up as a formal requirements document (use prd-creator)."
+description: "Use when exploring architecture decisions, tech choices, feature ideas, or any open-ended problem with several options that benefits from multiple perspectives. NOT for: writing the chosen option up as a formal requirements document (use prd-creator)."
 triggers:
   - "brainstorm"
   - "explore options"
