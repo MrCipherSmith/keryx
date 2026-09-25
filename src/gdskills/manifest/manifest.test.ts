@@ -11,8 +11,10 @@ test("the bundled install-manifest.json validates against install-manifest.schem
   expect(manifest.schemaVersion).toBe("1.0.0");
   expect(Object.keys(manifest.profiles).sort()).toEqual([
     "angular",
+    "ci-github-gitlab",
     "core",
     "csharp-dotnet",
+    "docker-k8s-terraform",
     "flutter-dart",
     "full",
     "go",

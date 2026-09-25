@@ -41,6 +41,9 @@ import { runJevRisk } from "./review-jev-risk";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
 import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
+// flow 335: one more ADDITIONAL, CLI-driven reviewer — see
+// `review-jev-contract.ts` for everything past registration.
+import { runJevContract } from "./review-jev-contract";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -592,6 +595,12 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "jev-comments") {
       await runJevComments(args.slice(1));
+      return;
+    }
+    // flow 335: an ADDITIONAL, CLI-driven reviewer — see
+    // `src/commands/review-jev-contract.ts` for everything past registration.
+    if (command === "jev-contract") {
+      await runJevContract(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -3660,6 +3669,22 @@ Usage:
                          An ADDITIONAL reviewer, engine: jev. Checks every changed hunk
                          against every applicable project rule clause. Opt-in via
                          review.jev.rules in .metaproject/tasks.config.json.
+  keryx review jev-risk (--diff <ref> | --pr <n> | --scope <scope.json>)
+                        [--max-calls <n>] [--threshold <0..1>]
+                        [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                        [--fixtures <dir>] [--json]
+                        An ADDITIONAL reviewer, engine: jev. A deterministic risk map of
+                        every changed hunk (security/data-migration/public-api/
+                        concurrency/error-handling), ranked, with a routing hint. Opt-in
+                        via review.jev.risk in .metaproject/tasks.config.json.
+  keryx review jev-scenarios (--diff <ref> | --pr <n> | --scope <scope.json>)
+                             [--max-calls <n>] [--threshold <0..1>]
+                             [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                             [--fixtures <dir>] [--json]
+                             An ADDITIONAL reviewer, engine: jev. Which user scenarios a
+                             diff likely changes, from gdwiki/PRD/README sources plus one
+                             Jev noul per scenario. Opt-in via review.jev.scenarios in
+                             .metaproject/tasks.config.json.
   keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
                         [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
                         [--fixtures <dir>] [--include <glob>]... [--json]
@@ -3673,6 +3698,15 @@ Usage:
                             An ADDITIONAL reviewer, engine: jev. Checks whether open PR review
                             comments (from the existing ledger) were addressed. Opt-in via
                             review.jev.comments in .metaproject/tasks.config.json.
+  keryx review jev-contract (--diff <ref> | --pr <n>) [--flow <id>]
+                            [--max-calls <n>] [--threshold <0..1>]
+                            [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                            [--fixtures <dir>] [--json]
+                            An ADDITIONAL reviewer, engine: jev. Splits the PR description
+                            into claims, computes deterministic facts against the diff, then
+                            asks one Jev noul per claim; also checks the linked flow's frozen
+                            acceptance criteria when --flow is given. Opt-in via
+                            review.jev.contract in .metaproject/tasks.config.json.
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]

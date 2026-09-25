@@ -1,0 +1,26 @@
+[
+  {
+    "query": "Use when authoring or extending a GitHub Actions workflow (.github/workflows/*.yml) or a GitLab CI pipeline (.gitlab-ci.yml) -- trigger and job design, reusable workflows/templates, caching, least-privilege permissions, and safe handling of untrusted pull-request/merge-request input.",
+    "decision": "create",
+    "topMatch": "ci-github-gitlab/ci-pipeline-code-review (0.57, raw tool decision: use)",
+    "recordedAt": "2026-09-25T15:30:00.000Z",
+    "skillName": "ci-pipeline-implementation",
+    "justification": "keryx skills scout --candidate <own-dir> scored the raw top match as this pack's own ci-pipeline-code-review (overlap 0.57, above the 0.55 'use' threshold) purely on shared CI/permissions/pull-request vocabulary -- but ci-pipeline-code-review is a read-only review skill (no edits, findings + fix direction only) and cannot substitute for authoring/extending a workflow file, which requires actually writing YAML and applying a fix. No skill outside this new pack scored above the fork threshold (nothing in ts-js-node/go/python/docker-k8s-terraform authors GitHub Actions or GitLab CI YAML specifically), so this is a genuine create, not a substitute for an existing implement-category skill."
+  },
+  {
+    "query": "Use when reviewing a GitHub Actions workflow (.github/workflows/*.yml) or GitLab CI pipeline (.gitlab-ci.yml) change for security and structural risk -- pull_request_target combined with untrusted checkout, tag-pinned third-party actions, missing least-privilege permissions, script injection via unsanitized event/variable interpolation, and unprotected access to deploy secrets. Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "ci-github-gitlab/ci-pipeline-implementation (0.37, raw tool decision: fork)",
+    "recordedAt": "2026-09-25T15:30:05.000Z",
+    "skillName": "ci-pipeline-code-review",
+    "justification": "keryx skills scout --candidate <own-dir> scored the raw top match as this pack's own ci-pipeline-implementation (overlap 0.37, above the 0.3 fork threshold) on shared CI/permissions/action vocabulary -- but ci-pipeline-implementation authors and edits workflow files, while this skill is strictly read-only (findings + fix direction, never an edit). The next-nearest matches outside this pack, docker-k8s-terraform's own review skill (0.17) and ts-js-node/nodejs-code-review (0.16), review Dockerfiles/Kubernetes manifests and JS/TS source respectively -- neither carries GitHub Actions/GitLab CI-specific vocabulary (pull_request_target, actions/checkout pinning, GITHUB_TOKEN permissions, protected GitLab variables), so this is a genuine create, not an adaptation of an existing review skill's content."
+  },
+  {
+    "query": "Use when a GitHub Actions workflow run or GitLab CI pipeline is failing at the pipeline-configuration level -- YAML syntax errors, an invalid trigger/job key, a missing or misscoped permissions block breaking a step, a job failing because a protected variable is unavailable on its branch, or a broken needs:/rules:/dependency graph -- with the smallest root-cause fix to the config itself, not the application code it builds.",
+    "decision": "create",
+    "topMatch": "ci-github-gitlab/ci-pipeline-implementation (0.28)",
+    "recordedAt": "2026-09-25T15:30:10.000Z",
+    "skillName": "ci-pipeline-build-fix",
+    "justification": "keryx skills scout --candidate <own-dir> put every match below the 0.3 fork threshold (own-pack implementation/review skills at 0.28/0.24; docker-k8s-terraform-build-fix, python-build-fix, and nodejs-build-fix all around 0.18-0.19 on generic 'root cause'/'build'/'fail' vocabulary only, none of which cover GitHub Actions/GitLab CI syntax errors, needs:/rules: graph breaks, or GitLab protected-variable scoping) -- an unambiguous create, matching the tool's own raw decision."
+  }
+]

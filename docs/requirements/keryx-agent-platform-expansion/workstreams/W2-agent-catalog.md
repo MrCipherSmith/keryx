@@ -1,7 +1,10 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.12
+Version: 0.1.15
 
-**Changelog (0.1.12, flow 336, Wave 4 batch 4):** `csharp-dotnet`,
+**Changelog (0.1.15, flow 336, Wave 4 batch 4 — version renumbered from a
+0.1.12 collision with flow 338's own Phase A entry below, both branched from
+the same 0.1.11 base independently; this entry now sits above 0.1.14 as the
+latest on `main` after the two branches merged):** `csharp-dotnet`,
 `swift-ios`, `kotlin-android`, `flutter-dart` (4 new packs, 16 skills) each
 ran the honest DeepSeek `deepseek-chat` runner+judge gate
 (`--strictness high --trials 10 --scope bundled`), once per skill, after
@@ -17,8 +20,43 @@ that constraint was found for any of the 16 misses). All four packs stay
 `stability: experimental`; none ships a generated pair. Real, on-disk
 generated coverage as of this flow: unchanged at `go`, `python` (2 packs, 4
 files); `angular`, `mobx`, `nestjs`, `ts-js-node`, `react`, `nextjs-nuxt`,
-`vue`, `csharp-dotnet`, `swift-ios`, `kotlin-android`, `flutter-dart` are all
-`experimental` with none.
+`vue`, `docker-k8s-terraform`, `ci-github-gitlab`, `csharp-dotnet`,
+`swift-ios`, `kotlin-android`, `flutter-dart` are all `experimental` with
+none.
+
+**Changelog (0.1.14, flow 338, W4 batch 6, PR review round 1 correction):**
+the 0.1.13 line below recorded a SECOND gate run whose PASS verdicts for
+`ci-pipeline-implementation`/`ci-pipeline-code-review` were disqualified on
+PR review — the fix pass between the two runs restated several failing
+eval prompts near-verbatim inside `SKILL.md` description/triggers text
+(gaming the router, not fixing an honest scope gap). The disqualified
+run's `pass`/`fail` split is void. The FIRST run is the official result:
+all 5 skills fail on trigger accuracy (real routing ambiguity, mostly
+against sibling `*-build-fix`/review skills sharing generic vocabulary —
+see `W1-stack-catalog.md`'s Phase B review-round section for the
+per-scenario accounting). Both `docker-k8s-terraform` (0/2) and
+`ci-github-gitlab` (0/3) stay `stability: experimental`; no generated pair
+ships for either. No gate re-run was performed after the revert. Real,
+on-disk generated coverage unchanged by this batch: `go`, `python` only.
+
+**Changelog (0.1.13, flow 338, W4 batch 6, Phase B honest gate — SUPERSEDED
+by 0.1.14 above, kept for history):** the honest DeepSeek 10-trial gate ran
+for both packs. `ci-pipeline-implementation` and `ci-pipeline-code-review`
+(ci-github-gitlab) pass cleanly; `docker-k8s-terraform-review`,
+`docker-k8s-terraform-build-fix`, and `ci-pipeline-build-fix` each fail on
+trigger accuracy. **This was the second (gamed) run — see 0.1.14: those
+PASS verdicts do not stand.**
+
+**Changelog (0.1.12, flow 338, W4 batch 6, Phase A):** `docker-k8s-terraform`
+and `ci-github-gitlab` were authored (see `W1-stack-catalog.md`,
+"Implementation notes: Wave 4 batch 6 (flow 338)") with a real
+`agentProfile` block in each `pack.json` (the `auditFocus`/`buildCommands`/
+`fixGuardrails` shape `src/agents/generate.ts` reads), but neither pack has
+run through the honest behavioral gate yet — both ship `stability:
+experimental` and `agent-refs.json: {"agents": []}` with a note, same as
+every other pack's pre-gate state. No `<stack>-code-auditor`/
+`<stack>-build-fixer` pair is generated for either until Phase B's gate run
+decides it honestly.
 
 **Changelog (0.1.11, flow 318, review round 2 on PR #719):** corrects the
 0.1.10 line below, which recorded review round 1's outcome — superseded by

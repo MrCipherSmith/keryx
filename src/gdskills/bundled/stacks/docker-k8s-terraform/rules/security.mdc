@@ -1,0 +1,146 @@
+---
+extends: common
+paths: ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile", "**/*.dockerfile", "**/Containerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "manifests/**/*.yaml", "manifests/**/*.yml", "deploy/**/*.yaml", "deploy/**/*.yml", "overlays/**/*.yaml", "**/kustomization.yaml", "**/kustomization.yml", "helm/**/*.yaml", "helm/**/templates/*.yaml", "charts/**/*.yaml", "charts/**/templates/*.yaml", "charts/*/values.yaml", "**/*.tf", "**/*.tfvars"]
+metadata:
+  origin: authored
+---
+
+# Docker / Kubernetes / Terraform security
+
+Narrows `core-common-rules`' stack-agnostic security rules to the risks
+specific to building images, running them on Kubernetes, and provisioning
+infrastructure with Terraform. This skill's scope is the source files
+(Dockerfile, compose, manifests, `.tf`) — a built image's own vulnerability
+scan is `security-audit`'s job, not this rule's.
+
+## Non-root by default
+
+- Every Dockerfile either ends with a `USER` instruction naming a non-root
+  user (one created with `RUN useradd`, or the base image's own built-in
+  unprivileged user re-selected explicitly, e.g. `USER nginx`), or keeps a
+  base image's own non-root default un-overridden. A missing `USER`
+  instruction is not by itself proof of root — some base images (e.g.
+  `nginxinc/nginx-unprivileged`) already default to a non-root user with
+  no `USER` line needed — but it is not proof of non-root either; confirm
+  what the base image's own default actually is (its Dockerfile/docs, or
+  `docker run --rm <image> whoami`) rather than assuming either way from
+  the absence of a `USER` line alone.
+- The matching Kubernetes `securityContext` sets `runAsNonRoot: true`,
+  `allowPrivilegeEscalation: false`, and drops all capabilities
+  (`capabilities.drop: ["ALL"]`), adding back only the specific ones the
+  container actually needs (e.g. `NET_BIND_SERVICE` to bind a low port).
+  A `privileged: true` container is a last resort that needs its own
+  justification in the change, never a default reached for to make a
+  permission error disappear.
+- Set `readOnlyRootFilesystem: true` where the workload allows it, mounting
+  a scoped `emptyDir`/`tmpfs` for the specific paths that need to be
+  writable at runtime (`/tmp`, a cache directory) rather than leaving the
+  whole filesystem writable because one path needs to be.
+
+## Pin base images by digest, not tag alone
+
+A mutable tag (`FROM node:22`, `FROM node:22-slim`) can point at a
+different image tomorrow than it does today — the base image is not
+actually pinned until the digest is. For anything security-sensitive
+(a production image, a CI build step that must be reproducible), pin with
+the immutable digest:
+
+```dockerfile
+FROM node:22-slim@sha256:<digest>
+```
+
+A tag alone is acceptable for local/throwaway development; flag a
+digest-less `FROM` in a Dockerfile that is clearly meant to ship.
+
+## Never bake a secret into an image layer
+
+`ARG`/`ENV` values, and anything `COPY`'d into an image, persist in that
+layer even if a later layer deletes or overwrites the file — a secret
+baked in during an early `RUN`/`COPY` is still recoverable from the image's
+layer history. Use BuildKit's build-time secret mount instead, which never
+writes the secret into a layer:
+
+```dockerfile
+# syntax=docker/dockerfile:1
+RUN --mount=type=secret,id=npm_token \
+    NPM_TOKEN=$(cat /run/secrets/npm_token) npm ci
+```
+
+Runtime secrets (a database password, an API key a running container
+needs) belong in a Kubernetes `Secret` (or the platform's secret store),
+mounted as a file or environment variable at run time — never baked into
+the image `ENV` at build time.
+
+## Kubernetes network boundaries
+
+A namespace with no `NetworkPolicy` allows every pod to reach every other
+pod by default — that is Kubernetes' actual default, not a hardened one.
+Start from a default-deny policy and open only the specific paths a
+workload needs:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+```
+
+then a second, narrower `NetworkPolicy` per workload allowing only the
+`podSelector`/`namespaceSelector` traffic it actually needs. Flag a
+namespace shipping workload manifests with no accompanying `NetworkPolicy`
+at all, and flag a per-workload `NetworkPolicy` broad enough to defeat the
+point of having one -- a `spec.ingress` entry that is a single EMPTY rule
+object (`ingress: [{}]`, no `from`/`ports` inside it) matches every source
+on every port, i.e. allow-all, not the deny-all the pattern above depends
+on (NetworkPolicy is fail-closed: `policyTypes: ["Ingress"]` with `ingress`
+omitted or `ingress: []` means NO ingress rule matches, which is deny-all
+-- do not confuse an EMPTY `ingress:` array with an array containing one
+EMPTY rule object; they are opposite policies), or a `podSelector: {}` on a
+policy meant to be workload-scoped (matches every pod in the namespace,
+not just the intended workload).
+
+## Terraform state and secrets
+
+- Configure a remote backend with encryption at rest and state locking
+  (e.g. an S3 backend with `encrypt = true` and `use_lockfile = true` for
+  native S3-object-based locking — the current recommended approach,
+  superseding a separate DynamoDB lock table for new configurations,
+  though an existing DynamoDB-locked backend is not itself a problem to
+  flag on its own; or an HCP Terraform/Terraform Cloud workspace, which
+  encrypts state and locks automatically) — a local `terraform.tfstate` is
+  both unencrypted on disk and a single point of loss/corruption with no
+  locking against concurrent runs.
+- Renaming or moving a resource/module block in configuration changes its
+  address, which makes an unrelated `terraform plan` show a destroy-then-
+  recreate for a resource nothing actually changed about (state still has
+  it under the old address) — fix with a `moved` block (`moved { from =
+  <old_address> to = <new_address> }`, declarative, stays in the
+  configuration for the next person who reads it) or the equivalent
+  `terraform state mv <old_address> <new_address>` (imperative, a one-off
+  CLI operation) — never by applying the destroy/recreate plan as-is for a
+  resource holding real data.
+- A `force_destroy = true` on a resource that can hold data (an S3 bucket,
+  in particular) lets `terraform destroy`/a replacement delete a
+  non-empty bucket without the safety error Terraform would otherwise
+  raise — flag it on any resource whose data matters, especially paired
+  with a `moved`/`state mv` scenario where the goal is to KEEP the
+  existing data, not clear the way for a fresh create.
+- Never commit a `.tfstate`/`.tfstate.backup` file to version control —
+  state routinely contains resource attributes in plaintext (a generated
+  password, a connection string) even when the variable that produced them
+  was declared `sensitive`.
+- Mark any variable or output that carries a credential, connection
+  string, or key `sensitive = true` so Terraform redacts it from CLI plan
+  output and logs — but treat `sensitive = true` as a **display**
+  protection, not an encryption one: the value is still written to state
+  in plain form, and `terraform output <name>` still prints a sensitive
+  output's value by name. Encryption-at-rest for that value comes from the
+  backend configuration above, not from the `sensitive` flag.
+- Never hardcode a credential directly in a `.tf`/`.tfvars` file — source
+  it from a secrets manager data source (Vault, AWS Secrets Manager/SSM
+  Parameter Store) or an injected environment variable, the same rule
+  `core-common-rules` already states for application source code, applied
+  here to infrastructure code.

@@ -434,6 +434,8 @@ const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set([
   "vue",
   "angular",
   "mobx",
+  "docker-k8s-terraform",
+  "ci-github-gitlab",
   // Wave 4 batch 4 (flow 336) — authored after I11 existed, so enforced
   // from the start rather than deferred like batch 1.
   "csharp-dotnet",

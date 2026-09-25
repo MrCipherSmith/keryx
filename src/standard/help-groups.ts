@@ -338,9 +338,21 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/contract",
+    group: "Managed work",
+    summary: "Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev.",
+  },
+  {
+    kind: "slash",
     name: "/guard",
     group: "Managed work",
     summary: "Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on|off].",
+  },
+  {
+    kind: "slash",
+    name: "/route",
+    group: "Managed work",
+    summary: "Opt-in routing classifier: each request runs on its routing category's model — /route [on|off].",
   },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {

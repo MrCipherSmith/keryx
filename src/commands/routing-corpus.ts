@@ -215,11 +215,14 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * flow 333 added `review-jev-docs` and `review-jev-comments` with four
  * positives each, all ranking first.
  *
+ * Flow 335 added `review-jev-contract` with four positives, all ranking
+ * first: 328/330 + 4 = 332/334.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 328;
-export const RANK1_TOTAL = 330;
+export const RANK1_FIRST = 332;
+export const RANK1_TOTAL = 334;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -596,6 +599,19 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "walk me through what functional behavior this diff touches",
       "jev scenarios check on this PR",
       "functional review of what this change actually does for a user",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "give me a risk map of this diff before I look at it myself", owner: "review-jev-risk" },
+    ],
+  },
+  {
+    skill: "review-jev-contract",
+    positives: [
+      "verify the acceptance criteria are actually met by this diff",
+      "check whether the acceptance criteria are satisfied by this diff",
+      "check this change's claims against the diff with jev",
+      "make sure the claims in this change actually hold up against the diff",
     ],
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
