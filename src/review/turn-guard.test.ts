@@ -337,6 +337,146 @@ describe("Item 1 (PR #720 review): shell_exec's nonzero-exit isError does not by
   });
 });
 
+describe("Item 1 (PR #720 round-2 review): env assignments and package-runner/interpreter wrappers are unwrapped before classifying a build/test/install/typecheck command", () => {
+  test.each([
+    ["a cd before the real command", "cd x && bun test"],
+    ["piped through another command", "bun test 2>&1 | tail"],
+    ["npx-wrapped", "npx tsc"],
+    ["bunx-wrapped", "bunx eslint"],
+    ["a bare env-assignment prefix", "FOO=1 bun test"],
+    ["the env command with an assignment", "env CI=1 npm test"],
+    ["python -m module form", "python -m pytest"],
+    ["npx-wrapped prettier --check (a format check, decided to count as lint)", "npx prettier --check"],
+  ])("%s (%s) IS classified: a real failure is flagged", (_label, command) => {
+    const finalMessage = "Done.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({ name: "shell_exec", input: JSON.stringify({ command }), output: "(no output; exit 1)", isError: true }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+  });
+
+  test.each([
+    ["an unwrapped but unrecognized tool", "bunx some-random-tool"],
+    ["a plain grep", "grep"],
+  ])("%s (%s) is NOT classified: not a deterministic contradiction on its own", (_label, command) => {
+    const finalMessage = "Done.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({ name: "shell_exec", input: JSON.stringify({ command }), output: "(no output; exit 1)", isError: true }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual([]);
+  });
+});
+
+describe("Item 2 (PR #720 round-2 review): SHELL_TOOL_INFRA_FAILURE_RE also matches shell_exec's background/job-registry failure text", () => {
+  // Every command below is deliberately NOT build/test/install/typecheck-
+  // shaped (unlike `npm run dev`/`bun run build`, which `isBuildTestInstall
+  // TypecheckCommand` would already flag on its own) — otherwise the
+  // assertion could pass for the wrong reason and never actually exercise
+  // the new regex fragment, only the pre-existing command classification.
+
+  test("background jobs unavailable (no job registry wired into this session)", () => {
+    const finalMessage = "Started the dev server in the background.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "./start-dev-server.sh", background: true }),
+            output: "shell_exec: background jobs are not available in this session",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+  });
+
+  test("job start refused (background task cap reached)", () => {
+    const finalMessage = "Started another watcher in the background.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "./watch-logs.sh", background: true }),
+            output:
+              "background task limit reached (2 running: ./start-dev-server.sh, ./watch-logs2.sh); wait for one to finish or kill it with shell_job_kill first",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+  });
+
+  test("promote failed (job entry evicted before the promote)", () => {
+    const finalMessage = "The long-running script kept going in the background.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "./long-running-script.sh" }),
+            output: "unknown job_id: task-1-424242",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+  });
+
+  test("task no longer tracked (registry entry vanished between start and wait)", () => {
+    const finalMessage = "Waited for the long-running script to finish.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "./long-running-script.sh" }),
+            output: "shell_exec: task task-1-424242 is no longer tracked, so its exit status is unknown",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+  });
+
+  test("idle-timeout kill (\"no output for …ms, so the command was killed\")", () => {
+    const finalMessage = "Ran the long-lived poll.";
+    const facts = extractTurnGuardFacts(
+      transcript({
+        toolCalls: [
+          toolCall({
+            name: "shell_exec",
+            input: JSON.stringify({ command: "./poll.sh" }),
+            output:
+              "shell_exec: no output for 120000ms, so the command was killed (raise it for this command with idle_timeout_ms, or change the default with KERYX_SHELL_IDLE_MS)",
+            isError: true,
+          }),
+        ],
+        finalMessage,
+      }),
+    );
+    expect(facts.deterministicFailedTools).toEqual(["shell_exec"]);
+  });
+});
+
 describe("AC6: shouldSkipTurnGuard — trivial turns are skipped without asking Jev", () => {
   test("no tools, short request, short reply: skipped", () => {
     const t = transcript({ userRequest: "what is 2+2?", finalMessage: "4." });

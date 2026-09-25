@@ -139,9 +139,27 @@ const TEST_RUNNER_RE = /\b(bun\s+test|npm\s+(?:run\s+)?test|yarn\s+test|pnpm\s+t
  * never started — never on a plain nonzero exit, whose own output is either
  * the command's real stdout/stderr or the literal `(no output; exit N)`
  * fallback. These are always real failures regardless of what command ran.
+ *
+ * Item 2 (PR #720 round-2 review): the same is true of `shell_exec`'s
+ * background/job-registry failure modes (`src/harness/tool/builtin/
+ * shell-exec-tool.ts` calling into `background-job-registry.ts`) — none of
+ * these are literal exported constants (checked; every message is an inline
+ * template literal), so the fragments below are copied from the tool's own
+ * text at the point each is returned as `{ output, isError: true }`:
+ *   - "background jobs are not available in this session" — `background:
+ *     true` with no job registry wired into this session (shell-exec-tool.ts).
+ *   - "background task limit reached" — `jobRegistry.start()`'s cap refusal,
+ *     surfaced as `started.error` (background-job-registry.ts / shell-exec-tool.ts).
+ *   - "unknown job_id:" — `jobRegistry.promote()`'s only failure (the job
+ *     entry was evicted between start and promote), surfaced as
+ *     `promoted.error` (background-job-registry.ts / shell-exec-tool.ts).
+ *   - "is no longer tracked, so its exit status is unknown" — the task's
+ *     registry entry vanished between start and wait (shell-exec-tool.ts).
+ *   - "no output for <n>ms, so the command was killed" — the idle-timeout
+ *     kill (shell-exec-tool.ts).
  */
 const SHELL_TOOL_INFRA_FAILURE_RE =
-  /\bnot approved by the user; not executed\b|\btimed out after\b|\baborted: run time limit\b|\bcommand failed to start:/i;
+  /\bnot approved by the user; not executed\b|\btimed out after\b|\baborted: run time limit\b|\bcommand failed to start:|\bbackground jobs are not available in this session\b|\bbackground task limit reached\b|\bunknown job_id:|\bis no longer tracked, so its exit status is unknown\b|\bno output for \d+ms, so the command was killed\b/i;
 
 /**
  * Best-effort, conservative tokenisation of a shell command into its
@@ -163,8 +181,19 @@ function commandTokens(segment: string): string[] {
   return segment.split(/\s+/).filter((t) => t.length > 0);
 }
 
-/** Programs whose own name alone (any subcommand/arguments) counts as build/test/install/typecheck. */
-const STANDALONE_BUILD_TEST_PROGRAMS = new Set(["tsc", "eslint", "pytest", "make", "cargo"]);
+/**
+ * Programs whose own name alone (any subcommand/arguments) counts as
+ * build/test/install/typecheck. `prettier` is here as a deliberate round-2
+ * decision (PR #720 review, item 1): `prettier --check` is a format check,
+ * which this module treats as a lint-shaped command — a failed check is a
+ * real, reportable outcome the same way a failed `eslint` run is, not an
+ * ordinary nonzero exit like `grep`/`diff`. `prettier --write` (no check)
+ * counts too, on the same "the program's own name is decisive" rule already
+ * used for `tsc`/`eslint`/`make`/`cargo` — narrowing to `--check` specifically
+ * would need per-arg parsing this heuristic deliberately avoids (see the
+ * module note on `commandSegments`).
+ */
+const STANDALONE_BUILD_TEST_PROGRAMS = new Set(["tsc", "eslint", "prettier", "pytest", "make", "cargo"]);
 
 /** Package-manager-style runners: only certain leading subcommands count. */
 const RUNNER_SUBCOMMAND_RE: Readonly<Record<string, RegExp>> = {
@@ -175,6 +204,75 @@ const RUNNER_SUBCOMMAND_RE: Readonly<Record<string, RegExp>> = {
   go: /^(?:test|build|vet)$/i,
 };
 
+/** A `VAR=value`-shaped token (POSIX env-var name), used to strip leading env assignments. */
+const ENV_ASSIGNMENT_TOKEN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/**
+ * Item 1 (PR #720 round-2 review): `FOO=1 bun test` and `env CI=1 npm test`
+ * are exactly `bun test`/`npm test` once the environment noise is peeled off
+ * — strip a run of leading `VAR=value` tokens, or an explicit `env` command
+ * together with ITS leading flags (`-i`, `-u NAME`, …) and assignments, so
+ * classification sees the real program next.
+ */
+function stripEnvAssignments(tokens: readonly string[]): string[] {
+  let rest = [...tokens];
+  if (rest[0]?.toLowerCase() === "env") {
+    rest = rest.slice(1);
+    while (rest.length > 0 && (ENV_ASSIGNMENT_TOKEN_RE.test(rest[0]!) || rest[0]!.startsWith("-"))) {
+      rest = rest.slice(1);
+    }
+    return rest;
+  }
+  while (rest.length > 0 && ENV_ASSIGNMENT_TOKEN_RE.test(rest[0]!)) {
+    rest = rest.slice(1);
+  }
+  return rest;
+}
+
+/** Package-runner/interpreter wrappers that take no subcommand — the very next non-flag token is the real program. */
+const SINGLE_TOKEN_WRAPPERS = new Set(["npx", "bunx", "uvx"]);
+/** `npx`/`bunx`'s own non-interactive flag, skipped rather than mistaken for the wrapped program. */
+const WRAPPER_SKIP_FLAG_RE = /^--?y(?:es)?$/i;
+/** Package-runner/interpreter wrappers that take a fixed subcommand/flag before the real program. */
+const TWO_TOKEN_WRAPPERS: ReadonlyArray<{ readonly program: string; readonly sub: RegExp }> = [
+  { program: "pnpm", sub: /^(?:dlx|exec)$/i },
+  { program: "yarn", sub: /^dlx$/i },
+  { program: "npm", sub: /^exec$/i },
+  { program: "bun", sub: /^x$/i },
+  { program: "poetry", sub: /^run$/i },
+  { program: "uv", sub: /^run$/i },
+  { program: "python", sub: /^-m$/i },
+];
+
+/**
+ * Item 1 (PR #720 round-2 review): `npx tsc`, `bunx eslint`, `pnpm dlx
+ * prettier --check`, `python -m pytest`, … invoke a real build/test/lint
+ * program through a package-runner or interpreter wrapper — unwrap to that
+ * program before classifying, rather than classifying the wrapper's own name
+ * (which is never itself build/test/install/typecheck). Bounded to a few
+ * rounds, not unbounded recursion, so a wrapper invoking a wrapper
+ * (`npx pnpm dlx eslint`) still unwraps fully without a pathological input
+ * looping.
+ */
+function unwrapRunner(tokens: readonly string[]): string[] {
+  let rest = [...tokens];
+  for (let i = 0; i < 4 && rest.length > 0; i++) {
+    const first = rest[0]!.toLowerCase();
+    if (SINGLE_TOKEN_WRAPPERS.has(first)) {
+      rest = rest.slice(1);
+      while (rest.length > 0 && WRAPPER_SKIP_FLAG_RE.test(rest[0]!)) rest = rest.slice(1);
+      continue;
+    }
+    const two = TWO_TOKEN_WRAPPERS.find((w) => w.program === first && rest[1] !== undefined && w.sub.test(rest[1]!));
+    if (two !== undefined) {
+      rest = rest.slice(2);
+      continue;
+    }
+    break;
+  }
+  return rest;
+}
+
 /**
  * Item 1 (PR #720 review): the narrowed AC3 rule — a nonzero exit from an
  * ordinary command (`grep`, `test -f`, `diff`, `git diff --exit-code`, `ls`,
@@ -182,10 +280,15 @@ const RUNNER_SUBCOMMAND_RE: Readonly<Record<string, RegExp>> = {
  * typecheck invocation's nonzero exit counts deterministically. Every other
  * nonzero exit is still recorded in `commandsRun`/`factLines` as a FACT for
  * Jev to weigh, just not as an automatic contradiction.
+ *
+ * Item 1 (PR #720 round-2 review): classification runs on the command AFTER
+ * `stripEnvAssignments`/`unwrapRunner` — an env-assignment prefix or a
+ * package-runner/interpreter wrapper is invisible to the AC3 rule; only the
+ * real program/subcommand underneath decides.
  */
 function isBuildTestInstallTypecheckCommand(command: string): boolean {
   return commandSegments(command).some((segment) => {
-    const tokens = commandTokens(segment);
+    const tokens = unwrapRunner(stripEnvAssignments(commandTokens(segment)));
     const program = tokens[0];
     if (program === undefined) return false;
     const base = (program.split("/").pop() ?? program).toLowerCase();

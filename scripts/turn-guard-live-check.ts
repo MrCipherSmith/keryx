@@ -169,6 +169,14 @@ async function main(): Promise<void> {
   console.log(`cases: ${CASES.length}, correct: ${correct}/${CASES.length}`);
   console.log(`Jev calls made: ${jevCalls} (budget: ~40)`);
   console.log(`total reported cost: $${totalCost.toFixed(6)}`);
+  // Flow 329 AC8, recorded history (PR #720 round-2 review, item 3): the
+  // live check ran twice in the confirming session, not once — this line is
+  // printed every run so the number above is always read next to that
+  // history rather than mistaken for a first-and-only pass.
+  console.log(
+    "\nAC8 recorded history: 7/8 on first contact; 8/8 after rewording one case; the grep-no-match case " +
+      "moved from ~63% to ~42% contradiction probability (threshold 0.5).",
+  );
 }
 
 main().catch((error) => {
