@@ -90,6 +90,8 @@ import {
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
+import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
+import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -5648,6 +5650,21 @@ export async function launchTuiAgentShell(opts: {
         ...inspectorKeys,
       });
     };
+    /** `/ci` (flow 306, AC12): failed CI runs/jobs of the current branch's PR, each with its triage. */
+    const showCiTriage = (): void => {
+      const cwd = inspectorCwd();
+      openCiTriage(otui, chrome, {
+        cwd,
+        load: loadCiTriageList,
+        // `runCiTriageForItem`'s `spawn`/`fetchFn` params sit before `signal` and
+        // default when omitted — this wrapper keeps the modal's own
+        // `(cwd, item, signal?)` contract without exposing those two.
+        triage: (cwd, item, signal) => runCiTriageForItem(cwd, item, undefined, undefined, signal),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...inspectorKeys,
+      });
+    };
     /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
     const showBus = (): void => {
       if (liveBus === undefined) {
@@ -7036,6 +7053,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isMcpToolsCommand(command.name)) {
           showTools();
+          return;
+        }
+        if (isCiTriageCommand(command.name)) {
+          showCiTriage();
           return;
         }
         if (command.name === "/bus") {

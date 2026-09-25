@@ -1,0 +1,11 @@
+{
+  "id": "jev-fixture-001",
+  "model": "jev-1.13",
+  "provider": "typesafe",
+  "answers": {
+    "flaky": { "type": "noul", "noul": 0.74 },
+    "infra": { "type": "noul", "noul": 0.05 },
+    "real-regression": { "type": "noul", "noul": 0.21 }
+  },
+  "usage": { "input_tokens": 612, "output_tokens": 0, "cost": 0.0000257 }
+}

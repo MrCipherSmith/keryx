@@ -28,9 +28,27 @@ an automatic action (a rerun, a merge, a status-check write, a posted reply), or
 
 ## Status
 
-**Research and design — not yet implemented.** This package is a PRD and phased
-implementation plan only, committed on branch `docs/jev-prd` as PR #701 (draft) against
-keryx 0.2.161 (`e04715a2`). No source code changed.
+**Phase 0 and the CI-triage early win are implemented (flow 306).** Everything else in
+PLAN.md remains design only.
+
+- The Jev client (Phase 0) lives at `src/harness/decision/jev-client.ts`, not this
+  document's originally proposed `src/review/jev-client.ts` — flow 306's frozen
+  acceptance criteria placed it under `src/harness/decision/` instead, as the shared
+  decision-port location the parallel `keryx-jev-router` package's own design already
+  names (`docs/requirements/keryx-jev-router/PRD.md` §9.2: `src/harness/decision/
+  decision-port.ts`, planned). `src/review/ci-triage.ts` and `src/review/ci-port.ts`
+  stay core-zone and never import it directly (`src/lib/import-zones.ts`: a core owner
+  never imports a client module); `src/commands/review.ts` is the adapter that calls
+  both.
+- CI failure triage (PRD Requirement 20 / PLAN.md Phase 1) ships as `keryx review
+  ci-triage` and a TUI `/ci` modal. It asks one `noul` question per criterion
+  (`flaky`/`infra`/`real-regression`) rather than one `choice` question: OpenRouter's
+  own TypeSafe SDK guide documents no per-option-probability shape for a `choice`
+  answer, only the single chosen option, which the sibling `keryx-jev-router` PRD's own
+  research (§13) records independently. `src/harness/decision/jev-client.ts`'s file
+  header has the full finding.
+- Reviewer-dispatch scoring, finding/comment conformance, the reference-document mode,
+  and the full hunk-based rule-conformance mechanism (Phases 2-7) are unimplemented.
 
 ## Document index
 

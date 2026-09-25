@@ -129,6 +129,16 @@ import {
   type ReviewTargetKind,
   type VerificationSource,
 } from "../review/types";
+import {
+  buildCiTriageQuestions,
+  buildCiTriageState,
+  computeCiTriageVerdict,
+  extractFailingTestName,
+  readCiTriageEnabled,
+  renderCiTriageAdvisory,
+} from "../review/ci-triage";
+import { createFixtureCiPort, createGhCiPort, type CiPort, type CiRunHistoryEntry, type CiRunInfo } from "../review/ci-port";
+import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey } from "../harness/decision/jev-client";
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -222,6 +232,15 @@ const COMMENTS_REPLY_FLAGS = [
 ] as const;
 
 const LOOP_FLAGS = ["--flow", "--task"] as const;
+
+/**
+ * Flow 306: `keryx review ci-triage`. `--fixtures <dir>` answers BOTH the CI
+ * read port and the Jev call from files on disk (`ci-run-info.json`,
+ * `ci-failed-log.txt`, optional `ci-history.json`, `jev-response.json`) —
+ * the same "no real network in any test" discipline `--fixtures` already
+ * gives `review comments`.
+ */
+const CI_TRIAGE_FLAGS = ["--run", "--job", "--test", "--repo", "--model", "--fixtures", "--json"] as const;
 
 /**
  * No `--authors` and no `--skill`.
@@ -418,6 +437,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "comments") {
       await runComments(args.slice(1));
+      return;
+    }
+    if (command === "ci-triage") {
+      await runCiTriage(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -1235,6 +1258,92 @@ async function resolvePort(args: string[]): Promise<GitHubPort> {
     }
   }
   return createFixturePort(files);
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review ci-triage` — flow 306. Advisory-only flaky/infra/real-
+// regression triage for one failed CI run's job, over a redacted, bounded log
+// excerpt. See `src/review/ci-triage.ts` (the core logic) and
+// `src/review/ci-port.ts` (the CI read port) for why each piece lives where
+// it does; this function is the ADAPTER that glues the core-zone triage logic
+// to the client-zone Jev client — the one place both may legally meet.
+// ---------------------------------------------------------------------------
+
+/** `--fixtures <dir>`: the CI port answered from `ci-run-info.json`/`ci-failed-log.txt`/`ci-history.json`. */
+async function fixtureCiPort(dir: string): Promise<CiPort> {
+  const runInfo = JSON.parse(await readFile(join(dir, "ci-run-info.json"), "utf8")) as CiRunInfo;
+  const log = await readFile(join(dir, "ci-failed-log.txt"), "utf8").catch(() => "");
+  const history = await readFile(join(dir, "ci-history.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly CiRunHistoryEntry[]>)
+    .catch(() => ({}) as Record<string, readonly CiRunHistoryEntry[]>);
+  return createFixtureCiPort({ runs: { [runInfo.runId]: runInfo }, logs: { [runInfo.runId]: log }, history });
+}
+
+/** `--fixtures <dir>`: the Jev call answered from `jev-response.json`, verbatim, as a canned `Response`. No network call. */
+async function fixtureJevFetch(dir: string): Promise<typeof fetch> {
+  const body = await readFile(join(dir, "jev-response.json"), "utf8");
+  const fn = async (): Promise<Response> => new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+  return fn as unknown as typeof fetch;
+}
+
+async function runCiTriage(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CI_TRIAGE_FLAGS, "ci-triage");
+  const cwd = process.cwd();
+  const runId = requiredOption(args, "--run", "ci-triage");
+  const repo = optionValue(args, "--repo");
+  const fixturesDir = optionValue(args, "--fixtures");
+
+  // AC10: opt-in per project, and refused before any network call — the log
+  // excerpt leaves the machine only when the project asked for that.
+  if (!(await readCiTriageEnabled(cwd))) {
+    console.error(
+      "`review.jev.ci_triage` is not enabled for this project (.metaproject/tasks.config.json: " +
+        '`{"review":{"jev":{"ci_triage":true}}}`). CI triage sends a redacted log excerpt to OpenRouter/TypeSafe, ' +
+        "so it is opt-in — nothing was read and no network call was made.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const apiKey = resolveJevApiKey(process.env);
+  if (apiKey === undefined || apiKey.length === 0) {
+    console.error(
+      "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config: CI triage needs a " +
+        "Jev/OpenRouter credential and made no network call.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const ciPort: CiPort = fixturesDir === undefined ? createGhCiPort(undefined, repo) : await fixtureCiPort(fixturesDir);
+  const fetchFn: typeof fetch = fixturesDir === undefined ? globalThis.fetch : await fixtureJevFetch(fixturesDir);
+
+  const info = await ciPort.runInfo(runId);
+  const jobArg = optionValue(args, "--job");
+  const failedJob =
+    jobArg !== undefined ? info.jobs.find((j) => j.name === jobArg) : info.jobs.find((j) => j.conclusion === "failure");
+  if (failedJob === undefined) {
+    throw new Error(
+      `Run ${runId} has no ${jobArg !== undefined ? `job named "${jobArg}"` : "failed job"} to triage ` +
+        `(jobs: ${info.jobs.map((j) => `${j.name} [${j.conclusion ?? "unknown"}]`).join(", ") || "none"}).`,
+    );
+  }
+  const rawLog = await ciPort.failedLog(runId);
+  const testName = optionValue(args, "--test") ?? extractFailingTestName(rawLog, failedJob.name) ?? "(unknown test)";
+  const state = buildCiTriageState({ testName, jobName: failedJob.name, rawLog });
+  const questions = buildCiTriageQuestions();
+  const result = await callJevSystemOne(fetchFn, {
+    model: optionValue(args, "--model") ?? DEFAULT_JEV_MODEL,
+    state,
+    questions,
+  });
+  const verdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
+  const advisory = renderCiTriageAdvisory({ runId, jobName: failedJob.name, testName, verdict });
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ runId, job: failedJob.name, testName, verdict, usage: result.usage }, null, 2));
+    return;
+  }
+  console.log(advisory);
 }
 
 /**
@@ -2499,6 +2608,8 @@ Usage:
                               --sha <head-sha> --final [--round <n>] [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                               [--flow-link <url>] [--fixtures <dir>]
+  keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
+                         [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
@@ -2571,6 +2682,24 @@ cross-family-review:
   authoring family, or naming a reviewer that was never a candidate).
   Omitted, the round records NOTHING, and \`status\` says \`not recorded\`.
   That is not \`single-family\`: nobody decided.
+
+ci-triage:
+  Advisory-only flaky/infra/real-regression triage for one failed CI run's job
+  (flow 306). Scores a redacted, bounded excerpt of the job's own log against
+  Jev (TypeSafe System One): three probabilities, one per bucket, printed with
+  the top pick and labelled ADVISORY — it never reruns a job, writes a status
+  check, or merges anything; that path does not exist in this command.
+  Opt-in per project: \`.metaproject/tasks.config.json\`'s
+  \`review.jev.ci_triage: true\`, absent by default, because the log excerpt
+  leaves the machine to OpenRouter/TypeSafe. With it off, or with no
+  OPENROUTER_API_KEY (env, or a saved \`openrouterKey\`), the command refuses
+  and makes no network call. \`--fixtures <dir>\` answers BOTH the CI read and
+  the Jev call from files on disk (\`ci-run-info.json\`, \`ci-failed-log.txt\`,
+  optional \`ci-history.json\`, \`jev-response.json\`) — no real \`gh\` call, no
+  real network, the same discipline \`--fixtures\` already gives \`comments\`.
+  Vendor-reported accuracy only: this classifier ships with no measured
+  precision/recall on this repository's own history (PLAN.md's Phase 7
+  evaluation is where that gets measured).
 
 complete:
   --finding/--disposition/--evidence record what became of a named finding, and
