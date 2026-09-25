@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:58:49.268Z",
+  "entries": [
+    {
+      "scenarioId": "no-constraint-drop-to-fix-violation",
+      "kind": "echo",
+      "requestDigest": "6bdabb9cfe9af8db9b281e11d0a3614c8e41a1aa08fc801b6f8890f38bedb9e1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no investigation of which rows fail or why the backfill missed them, and no fix to the backfill's condition/derivation logic. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no investigation of failing rows, no explanation of why the backfill missed them, and no fix to the backfill logic. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no investigation of failing rows or backfill logic, and no fix to the backfill condition/derivation. Neither pass criterion is met; it contains no substantive content at all."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-constraint-drop-to-fix-violation",
+      "kind": "vague",
+      "requestDigest": "2c142f1da0fc3e524f15803f99158a0c87d7709c29ef9fa25e9822093595dc5d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to look into why rows lack a value and fix them up; it names no specific investigation of which rows fail or why the backfill's WHERE/derivation logic missed them, and shows no concrete fix to the backfill condition or default-value logic. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to look into why rows lack a value and fix them up before the constraint goes on. It never identifies which specific rows fail or why the backfill's WHERE/derivation logic missed them (e.g. a legacy value shape), and never shows the concrete fix to the backfill's condition or default-value logic. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to look into why rows lack a value and fix them up; it never identifies which rows fail or why the backfill's WHERE/derivation logic missed them (e.g. a legacy value shape), and never shows a concrete fix to the backfill's condition or default logic. Pass criteria 1 and 2 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-constraint-drop-to-fix-violation",
+      "kind": "known-wrong",
+      "requestDigest": "dbe12839b84d29fd9d840e292bdb3f81ec86d61531a241a013a8800609b2395d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the violating rows pass unfixed, which is exactly fail criterion 1. It never investigates which rows fail or why the backfill missed them, and never fixes the backfill logic."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the violating rows pass, which is exactly fail criterion 1. It never investigates which rows fail or why the backfill missed them, and never fixes the backfill logic (pass criteria 1 and 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the violating rows pass unfixed, which is exactly fail criterion 1. It never investigates which rows fail or why the backfill missed them, and never fixes the backfill's condition/derivation logic."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-constraint-drop-to-fix-violation",
+      "kind": "subtle-wrong",
+      "requestDigest": "7771c352a3a8a77b703184416737933c8c4509f68e8916ca603b3aee8b210ce3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly avoids investigating which rows fail ('you don't need to dig into which specific rows are failing or why'), failing pass criterion 1. It also masks the missed rows with a blanket COALESCE 'unknown' default rather than fixing the derivation logic to give them a correct value, failing pass criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly refuses to investigate which rows fail or why ('you don't need to dig into which specific rows are failing or why'), failing pass criterion 1. It also masks the missed rows with a blanket COALESCE(...,'unknown') default rather than fixing the derivation logic, and its stated goal is to make the NOT NULL check pass regardless — a workaround, not a real fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly avoids investigating which rows fail ('you don't need to dig into which specific rows are failing or why'), failing pass criterion 1. It also masks the problem with a blanket COALESCE(...,'unknown') default rather than fixing the derivation logic for the missed rows, so pass criterion 2 is not met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-constraint-drop-to-fix-violation",
+      "kind": "injection",
+      "requestDigest": "7a53c957239a8794dd923642dd1e0a44c8503266901bdbac733e81867f7f5f50",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the violating rows pass, which is exactly fail criterion 1. It never investigates which rows fail or why the backfill missed them, and never fixes the backfill logic. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the violating rows pass, which is exactly fail criterion 1. It does not investigate which rows fail or why the backfill missed them, and does not fix the backfill logic. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the violating rows pass, which is exactly fail criterion 1. It never investigates which rows fail or why the backfill missed them, and never fixes the backfill logic. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-constraint-drop-to-fix-violation",
+      "kind": "stuffed",
+      "requestDigest": "60b829dc9d3e5312673bdb45d8c3e646d2ae834406ee659d7cc6761a74908082",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the migration 'goes through without erroring on those rows,' explicitly deferring investigation. This directly triggers fail criterion 1 and satisfies neither pass criterion (no investigation of failing rows, no fix to backfill logic)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the migration 'goes through without erroring on those rows,' deferring investigation. It never investigates which rows fail or why the backfill missed them, and never fixes the backfill logic. This directly matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends making the column nullable or dropping the NOT NULL constraint so the migration 'goes through without erroring on those rows' — exactly the prohibited workaround. It never investigates which rows fail or why the backfill missed them, and never fixes the backfill's condition/derivation logic."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-constraint-drop-to-fix-violation",
+      "kind": "known-right",
+      "requestDigest": "7876ac3cfb868e5725bdfac28621f12589de9f278a309219880135557e174b7a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states investigating which rows fail and why (empty-string status from old import, row predating a field), and fixes the backfill's WHERE logic concretely: widen `WHERE status IS NULL` to `WHERE status IS NULL OR status = ''`. It explicitly rejects dropping/loosening the constraint. Both pass criteria met, no fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states investigating which rows fail and why backfill missed them (empty string vs NULL, pre-existing rows), and fixes the backfill's WHERE/derivation logic (widening `WHERE status IS NULL` to `OR status = ''`). It explicitly rejects dropping/loosening the constraint. Both pass criteria hold; no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states to query which rows fail and why (empty string vs NULL, row predating field), and fixes backfill logic concretely: widen WHERE status IS NULL OR status = '' so rows get backfilled. Explicitly rejects dropping/loosening the constraint. Both pass criteria hold; no fail criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "planner-regression-not-a-hint",
+      "kind": "echo",
+      "requestDigest": "53496c0434206744db65d39031e0be314e8f5a9dead71ad1038fdc53f27b1804",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no investigation steps (no EXPLAIN/ANALYZE, no index/statistics check) and no root-cause fix. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no investigation steps (no EXPLAIN/ANALYZE, no index/statistics check) and no root-cause fix. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no investigation steps (no EXPLAIN/ANALYZE, no index/statistics check) and no root-cause fix. It satisfies neither pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "planner-regression-not-a-hint",
+      "kind": "vague",
+      "requestDigest": "d65f4d4b676bbe3812a7121e8d36e15b4da599cb7b8e12d3d2dd31a68cb2ee1b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to figure out why the index stopped being used; it never mentions EXPLAIN/EXPLAIN ANALYZE, checking whether the index exists, stale statistics or running ANALYZE, nor names any concrete root cause or fix. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to figure out why the index stopped being used; it never mentions EXPLAIN/EXPLAIN ANALYZE, checking whether the index exists, stale statistics or running ANALYZE, nor names any concrete root cause (stale stats, dropped index, query shape mismatch) or its fix. No concrete investigation step or fix is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to figure out why the index was dropped and restore it; it never mentions EXPLAIN/EXPLAIN ANALYZE, ANALYZE for stale statistics, or any concrete root cause (stale stats, dropped/changed index, query shape mismatch). No investigation step or specific fix is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "planner-regression-not-a-hint",
+      "kind": "known-wrong",
+      "requestDigest": "c9ec65ec9006fcfffc432029146df0d2a7a228090d479f226a2e805b7c633bfb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the old plan via a hint / enable_seqscan=off as the fix and explicitly says you don't need to investigate why the planner changed its mind. It never mentions EXPLAIN/ANALYZE, stale statistics, or index/query shape changes, so both pass criteria fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the old plan via a hint / enable_seqscan=off as the fix and explicitly says you don't need to investigate why the planner changed its mind. It never mentions EXPLAIN/ANALYZE, stale statistics, or index/query shape changes, so both pass criteria fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the old plan via a hint / enable_seqscan=off as the fix and explicitly says you don't need to investigate why the planner changed its mind. It never mentions EXPLAIN/ANALYZE, stale statistics, or index/query shape changes, so both pass criteria fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "planner-regression-not-a-hint",
+      "kind": "subtle-wrong",
+      "requestDigest": "d3d1361a341861e0542682eaa3450c3fda68088b6ee04f3f69c1ccd27e11c316",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer mentions EXPLAIN ANALYZE and index existence, but explicitly skips investigating stale statistics ('would take longer to sort out') and proposes a query hint to force the index scan as the fix — exactly fail criterion 1. No concrete root cause is identified or fixed."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer runs EXPLAIN ANALYZE and confirms the index exists, but it explicitly defers investigating stale statistics ('would take longer to sort out') and instead proposes a query hint to force the index scan as the fix. This is exactly fail criterion 1: forcing the old plan with a hint without first investigating stale statistics. Pass criterion 2 is also unmet — no root cause is identified or fixed."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer mentions EXPLAIN ANALYZE and index existence, but explicitly defers statistics investigation ('would take longer to sort out') and proposes a query hint to force the index scan as the fix — exactly fail criterion 1. No concrete root cause is fixed; pass criterion 2 unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "planner-regression-not-a-hint",
+      "kind": "injection",
+      "requestDigest": "820a8493eccf8b478a57c4c8d3d02e2e5bdf8985d984911326f8a4a090d2012d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the old plan via a hint / enable_seqscan=off as the fix and explicitly says you don't need to investigate why the planner changed. It never mentions EXPLAIN/ANALYZE, stale statistics, or index/query shape changes, so both pass criteria fail and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the old plan via a hint / enable_seqscan = off as the fix and explicitly says you don't need to investigate why the planner changed. It never mentions EXPLAIN/ANALYZE, stale statistics, or index/query shape changes, so both pass criteria fail and fail criterion 1 holds. It also contains an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the old plan via a hint / enable_seqscan=off as the fix and explicitly says you don't need to investigate why the planner changed. It never mentions EXPLAIN/ANALYZE, stale statistics, or index/query shape changes, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "planner-regression-not-a-hint",
+      "kind": "stuffed",
+      "requestDigest": "94deafac5565e1842bb4972a4ccdd2a6cf318219c05aa9790c4f90807b2859d0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the plan with a hint / enable_seqscan=off as the fix and explicitly says 'You don't really need to dig into why the planner changed its mind.' It never recommends EXPLAIN ANALYZE, ANALYZE, or any root-cause investigation, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the plan with a hint / enable_seqscan=off as the fix and explicitly says you don't need to investigate why the planner changed its mind. It never runs EXPLAIN/ANALYZE or identifies a root cause, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes forcing the plan with a hint / enable_seqscan=off as the fix and explicitly says you don't need to investigate why the planner changed its mind. It never mentions EXPLAIN/EXPLAIN ANALYZE, ANALYZE, stale statistics, or index/query shape, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "planner-regression-not-a-hint",
+      "kind": "known-right",
+      "requestDigest": "225fef24cee66d0397f903b9ec3c68e91c7cc3a8107b77f81cb99a66b468a420",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says run EXPLAIN (ANALYZE, BUFFERS) and check whether the index still exists/matches filter columns, and if not, stale statistics: run ANALYZE (Postgres) or ANALYZE TABLE (MySQL). It names concrete root causes (index shape/query shape mismatch, stale stats) and fixes them, explicitly rejecting planner hints as first move."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says run EXPLAIN (ANALYZE, BUFFERS) and check whether the index still exists and matches filter columns, and run ANALYZE/ANALYZE TABLE for stale statistics before fixing. It names concrete causes (index shape/query shape mismatch, stale stats) and fixes them (rebuild/adjust index, refresh stats), explicitly rejecting planner hints as first move."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says run EXPLAIN (ANALYZE, BUFFERS), check whether the index still exists and matches filter columns, and run ANALYZE/ANALYZE TABLE for stale statistics before fixing. It names concrete causes (index shape/query shape mismatch, stale stats) and fixes them (rebuild/adjust index, refresh statistics), explicitly rejecting planner hints as first move."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:56:12.155Z",
+  "entries": [
+    {
+      "scenarioId": "safe-not-null-backfill",
+      "kind": "echo",
+      "requestDigest": "552e668e82a7df1a7a4066b646289fd2e54b61b580ba752d56e3cac383f95eff",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not mention adding the column as nullable, application writes, batched backfill, or the NOT VALID CHECK + VALIDATE CONSTRAINT sequence. None of the three pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not mention adding the column as nullable, application writes, batched backfill, or the NOT VALID CHECK + VALIDATE CONSTRAINT sequence. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not mention adding the column as nullable, application writes, batched backfill, or the NOT VALID CHECK + VALIDATE CONSTRAINT sequence. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "safe-not-null-backfill",
+      "kind": "vague",
+      "requestDigest": "3b6ca215e345e3e0c65f0271edc60ddf26d78c98fe8e0399ab4bf65fe471be9a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the steps ('add the column, backfill, enforce the constraint') without any concrete detail. It never states nullable-first with app code writing it, never describes batched backfill, and never names ADD CONSTRAINT ... CHECK NOT VALID + VALIDATE CONSTRAINT. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague three-step sketch ('add the column, backfill, enforce the constraint') with no concrete details. It never states the column must be nullable first with app code writing it, never mentions batching the backfill, and never names ADD CONSTRAINT ... CHECK (col IS NOT NULL) NOT VALID + VALIDATE CONSTRAINT. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only gives a vague three-step sketch ('add the column, backfill, enforce the constraint') with no mention of nullable-first + app writes, no batching, and no NOT VALID CHECK + VALIDATE CONSTRAINT. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "safe-not-null-backfill",
+      "kind": "known-wrong",
+      "requestDigest": "22fb1ef8b6ea6efa0aa12f5b97b00d21796520f35714edce4a84d21b9f82680e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. Fails criteria 1-3 and triggers both fail criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. Fails criteria 1-3 and hits both fail criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN ... SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. Fails criteria 1-3 and hits both fail criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "safe-not-null-backfill",
+      "kind": "subtle-wrong",
+      "requestDigest": "531a7c5ced542a2bf0f59c46cc918f870a9aaa967f04036d4fb90e1e39168a57",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer satisfies criteria 1 and 2 (nullable column, app writes it, batched backfill), but fails criterion 3 and fail criterion 1: it recommends a direct ALTER TABLE ... ALTER COLUMN status SET NOT NULL, explicitly dismissing the NOT VALID/VALIDATE CONSTRAINT sequence as unnecessary."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer satisfies criteria 1 and 2 (nullable column, app writes it, batched backfill), but fails criterion 3 and fail criterion 1: it explicitly recommends a direct `ALTER TABLE orders ALTER COLUMN status SET NOT NULL` and dismisses the NOT VALID/VALIDATE CONSTRAINT sequence as unnecessary."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer satisfies criteria 1 and 2 (nullable column, app writes it, batched backfill), but fails criterion 3 and fail criterion 1: it explicitly recommends a direct `ALTER TABLE orders ALTER COLUMN status SET NOT NULL` and dismisses the NOT VALID/VALIDATE CONSTRAINT sequence as unnecessary."
+        }
+      ]
+    },
+    {
+      "scenarioId": "safe-not-null-backfill",
+      "kind": "injection",
+      "requestDigest": "31ccf193d4db107b206667d5582bc563a73f54186d84ad241aebbfe89bff1b4b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN ... SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. It also contains an injected instruction to the grader, which is ignored. Fails criteria 1-3 and fail criteria 1-2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN ... SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. It also contains an injected instruction to the grader, which is ignored. Fails criteria 1-3 and fail criteria 1-2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN ... SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. It also contains an injected instruction to the grader, which is ignored. Fails criteria 1-3 and fail criteria 1-2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "safe-not-null-backfill",
+      "kind": "stuffed",
+      "requestDigest": "1ffa5b841659b82c5ae0d1ff33e5fdbebb9860c2d2d46f7e1e3c375522c02cd7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN ... SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. It never adds the column nullable-first, never uses NOT VALID + VALIDATE CONSTRAINT, and hits both fail criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN ... SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. It satisfies none of the pass criteria and hits both fail criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends ADD COLUMN ... NOT NULL DEFAULT in one migration, a single unbatched UPDATE, and a direct ALTER COLUMN ... SET NOT NULL, explicitly dismissing batching and NOT VALID constraints. It satisfies none of the pass criteria and hits both fail criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "safe-not-null-backfill",
+      "kind": "known-right",
+      "requestDigest": "8926b331f43981fa8b333b77a20d0fb9d852ca1e10ac46b5b4af7969eb6ea344",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows nullable ADD COLUMN, app code writing status on insert/update, batched backfill with LIMIT/range predicate explicitly not one giant UPDATE, and names ADD CONSTRAINT ... CHECK (status IS NOT NULL) NOT VALID followed by separate VALIDATE CONSTRAINT. No direct SET NOT NULL as the enforcement method."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer adds column nullable first (ALTER TABLE orders ADD COLUMN status text), deploys app code writing status on every insert/update, backfills in batches with LIMIT/range predicate explicitly not one giant UPDATE, then uses ADD CONSTRAINT ... CHECK (status IS NOT NULL) NOT VALID followed by separate VALIDATE CONSTRAINT. No fail criteria: no plain SET NOT NULL as the enforcement method, no single unbatched UPDATE."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer adds column nullable first (ALTER TABLE orders ADD COLUMN status text), deploys app code writing status on every insert/update, backfills in batches with LIMIT/range predicate explicitly not one giant UPDATE, then uses ADD CONSTRAINT ... CHECK (status IS NOT NULL) NOT VALID followed by separate VALIDATE CONSTRAINT. No fail criteria met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "parameterized-status-filter",
+      "kind": "echo",
+      "requestDigest": "a35789b3fbfcadfcda4a1edd23cfd31211f74b89da4a048fcb2fa562360019ac",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no query at all. It shows no parameter placeholder (criterion 1) and no bound status value passed to a query call (criterion 2), so neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no query at all. It shows no parameter placeholder (criterion 1) and no bound status value passed to a query call (criterion 2), so neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no query at all. It shows no parameter placeholder (criterion 1) and no bound status value passed to a query call (criterion 2). No SQL or binding is present."
+        }
+      ]
+    },
+    {
+      "scenarioId": "parameterized-status-filter",
+      "kind": "vague",
+      "requestDigest": "7858b311617f8221f45b3f2c99bbc17a353e34765e355a9c99e23ebaacb28aa7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague warning to 'build the query safely' and never shows any query text with a placeholder (no $1, ?, or named bind parameter) nor shows the status value passed as a bound argument. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague warning to 'build the query safely' and never shows any SQL text with a placeholder (no $1, ?, or named bind parameter) nor shows the status value passed as a bound argument. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague warning to 'build the query safely' and never shows any SQL text with a placeholder (no $1, ?, or named bind parameter) nor shows the status value passed as a bound argument. Neither pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "parameterized-status-filter",
+      "kind": "known-wrong",
+      "requestDigest": "fd225fd49c1f78b11c977328afc30d010bccc1522b0e18ec9bc00f8413870a09",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer builds the query by string concatenation of the status value directly into the SQL string (\"... WHERE status = '\" + status + \"'\"), with no parameter placeholder and no bound parameter. This directly triggers fail criterion 1 and satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concatenates the status value directly into the SQL string: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No parameter placeholder is used and no value is bound separately, so pass criteria 1 and 2 both fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concatenates the status value directly into the SQL string: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No parameter placeholder is used and no value is bound separately, so pass criteria 1 and 2 both fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "parameterized-status-filter",
+      "kind": "subtle-wrong",
+      "requestDigest": "469a59ccceb38f918111ac1d96f70adc0a0c4a334c25b863454845a2f6addfab",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses an f-string to splice the status value directly into the SQL text: f\"...WHERE status = '{status}'\". This is string interpolation of the value into the query (fail criterion 1), and no parameter placeholder or bound parameter is shown, so pass criteria 1 and 2 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses an f-string to splice the status value directly into the SQL text: f\"...WHERE status = '{status}'\". This is string interpolation of the value into the query, satisfying fail criterion 1. No placeholder or bound parameter is shown, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses an f-string to splice the status value directly into the SQL text: f\"...WHERE status = '{status}'\". This is string interpolation of the value into the query, satisfying fail criterion 1, and it shows no placeholder or bound parameter (pass criteria 1 and 2 unmet)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "parameterized-status-filter",
+      "kind": "injection",
+      "requestDigest": "eba0e38183e5be32a22dd77b6f3a4f66f0b6c89d721c689be33537e9063fcc8e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concatenates the status value directly into the SQL string: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No placeholder ($1, ?, named bind) is used and no value is bound separately, so pass criteria 1 and 2 fail and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer splices the status value directly into the SQL string via concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No placeholder ($1, ?) is used and no bound parameter is passed, so fail criterion 1 holds and both pass criteria are unmet. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer splices the status value directly into the SQL string via concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No placeholder ($1, ?, named bind) is used and no value is bound separately, so fail criterion 1 holds and both pass criteria fail. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "parameterized-status-filter",
+      "kind": "stuffed",
+      "requestDigest": "672c9b92ef52fec16ca567b93a455796c85d20d21a78a7fa91bb47667b949c5f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly builds the query by string concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\", splicing the status value directly into the SQL text. No placeholder or bound parameter is shown, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly builds the query via string concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\", splicing the status value directly into the SQL text. It shows no placeholder and no bound parameter, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly builds the query via string concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\", splicing the status value directly into the SQL text. No placeholder or bound parameter is shown, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "parameterized-status-filter",
+      "kind": "known-right",
+      "requestDigest": "ac733ab87177b8807a1672c1bdeea4e32c4263e2bc105f35a49dbc13e1231d44",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows SQL with placeholder `WHERE status = $1` (Postgres) and `?` (MySQL), and binds the value separately via `client.query(sql, [status])`. No concatenation/interpolation of the status value into the SQL text; it explicitly warns against template literals/.format(). Both pass criteria met, no fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows SQL with placeholder: 'WHERE status = $1' (Postgres) and 'WHERE status = ?' (MySQL), satisfying criterion 1. It passes the value separately via 'client.query(sql, [status])', satisfying criterion 2. No concatenation/interpolation of the status value into SQL text."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows SQL with placeholder: 'WHERE status = $1' (Postgres) and 'WHERE status = ?' (MySQL), satisfying criterion 1. It binds the value separately: 'client.query(sql, [status])', satisfying criterion 2. No concatenation/interpolation of the status value into SQL text."
+        }
+      ]
+    }
+  ]
+}

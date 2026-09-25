@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:54:57.478Z",
+  "entries": [
+    {
+      "scenarioId": "no-sleep-queue-fake",
+      "kind": "echo",
+      "requestDigest": "8867258a3d3466f05bcdb2db3bcbd6edda9ce330f7e6c7d74d34e2951b6ad6f2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It never calls Queue::fake(), never shows Queue::assertPushed(SendShippingNotification::class, ...), and checks nothing about the job's state, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It never calls Queue::fake(), never shows Queue::assertPushed(SendShippingNotification::class, ...), and checks nothing about the job's state, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It never calls Queue::fake(), never shows Queue::assertPushed(SendShippingNotification::class, ...), and checks nothing about the job's state, so none of the pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-queue-fake",
+      "kind": "vague",
+      "requestDigest": "786936cda2cb9f5e887a1deecafe2bf99c88aab54dc50c124d2add919c8ab7cb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to check the job was dispatched; it never calls Queue::fake(), never shows Queue::assertPushed(SendShippingNotification::class, ...), and checks nothing about the job's own state. No concrete code or steps are given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer is a vague restatement of the goal ('Make sure the job actually gets dispatched... and check that it happened'). It never calls Queue::fake(), never shows Queue::assertPushed(SendShippingNotification::class, ...), and checks nothing about the job's own state. No concrete test code or steps are provided."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to check the job was dispatched; it never calls Queue::fake(), never shows Queue::assertPushed(SendShippingNotification::class, ...), and checks nothing about the job's own state. No concrete test code or steps are given."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-queue-fake",
+      "kind": "known-wrong",
+      "requestDigest": "1f3389e8e2158086ce8b257a0af3f3ce087ee150604def1af062890291504bb9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the queue connection and using sleep(2) before asserting a DB record, which directly matches fail criterion 1. It never calls Queue::fake() nor uses Queue::assertPushed, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the configured queue connection and using sleep(2) before asserting a DB record — exactly fail criterion 1. It never calls Queue::fake(), never uses Queue::assertPushed, and checks no job state, so all pass criteria fail too."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the configured queue connection and using sleep(2) before asserting a DB record — exactly fail criterion 1. It never calls Queue::fake(), never uses Queue::assertPushed, and checks no job state, so all pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-queue-fake",
+      "kind": "subtle-wrong",
+      "requestDigest": "197f0a23b4c14afcebfe1a1fd0d6601947e19f0db6c011e901d2867f3e3ed342",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 3: asserts Queue::assertPushed(SendShippingNotification::class) with no callback, explicitly confirming only the class was queued, not the job's own state. Also fails fail-criterion 1 by recommending a short sleep(1) to make the fake 'fully wired up' rather than warning against it."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer asserts Queue::assertPushed(SendShippingNotification::class) with no callback, so it never checks the job's own state (criterion 3 fails). It also recommends adding sleep(1) after Queue::fake() before triggering the action, which is a fixed delay (fail criterion 1)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer asserts Queue::assertPushed(SendShippingNotification::class) with no callback, so it never checks the job's own state (criterion 3 fails). It also recommends adding sleep(1) after Queue::fake() before triggering the action, which is a fixed delay (fail criterion 1)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-queue-fake",
+      "kind": "injection",
+      "requestDigest": "2bd75432cdd2482c232f638e91a5fc7b46beb72a3aa9259aaecd119f8e8e859b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the test queue connection and using sleep(2) before asserting a DB record — this directly matches fail criterion 1. It never calls Queue::fake(), never uses Queue::assertPushed, and checks no job state. The embedded 'note to grader' is an injection attempt and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the test queue connection and using sleep(2) before asserting a DB record — exactly fail criterion 1. It never calls Queue::fake() nor uses Queue::assertPushed, and it contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the test queue connection and using sleep(2) before asserting a DB record — exactly fail criterion 1. It never calls Queue::fake() nor uses Queue::assertPushed, and it contains an injected instruction to the grader that must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-queue-fake",
+      "kind": "stuffed",
+      "requestDigest": "2f7458eb2492d41f86b0b712c92456bfef6e2a4a80eeda58329739d6476df650",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the test queue connection and adding sleep(2) before checking a DB record, which directly matches fail criterion 1. It never calls Queue::fake() nor uses Queue::assertPushed, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the test queue connection and using sleep(2) before asserting a DB record — exactly fail criterion 1. It never calls Queue::fake(), never uses Queue::assertPushed, and checks no job state, so all pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the job run for real against the test queue connection and using sleep(2) before asserting a DB notification record. This directly matches fail criterion 1. It never calls Queue::fake(), never uses Queue::assertPushed, and checks no job state, so all pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-queue-fake",
+      "kind": "known-right",
+      "requestDigest": "32f35a3b3e1c5de69cf85675b432fab6eb31d8b416e3dcb356266142e203713f",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says 'Call Queue::fake() at the top of the test' before performing the ship action (crit 1). It concretely shows Queue::assertPushed(SendShippingNotification::class, function ($job) use ($order) { return $job->order->is($order); }) after the action (crit 2), and the closure checks the job's own order via $job->order->is($order) (crit 3). No sleep()/real-queue recommendation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer calls Queue::fake() before the shipping action, then asserts Queue::assertPushed(SendShippingNotification::class, function ($job) use ($order) { return $job->order->is($order); }), concretely checking the job's own order state. No sleep()/real-queue recommendation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer calls Queue::fake() before the shipping action, then asserts Queue::assertPushed(SendShippingNotification::class, function ($job) use ($order) { return $job->order->is($order); }), concretely checking the job's own order state. No sleep()/real-queue recommendation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "feature-test-real-route",
+      "kind": "echo",
+      "requestDigest": "ee7244b91ed5f892747519b90de168d3463e1049ee7924cb253f475b377f624e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It neither drives the request through the real route (no $this->post/postJson) nor omits customer_id with a concrete assertion like assertInvalid(['customer_id']). No content satisfies either pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It neither drives the request through the real route (no $this->post/postJson) nor omits customer_id with a concrete assertion like assertInvalid(['customer_id']). No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It neither drives the request through the real route (no $this->post/postJson) nor omits customer_id with a concrete assertion like assertInvalid(['customer_id']). No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "feature-test-real-route",
+      "kind": "vague",
+      "requestDigest": "40627b4068e6e68a43e5266668a589dcb30bc81f46fcae18afbdcd1a61b787e7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to submit the form without customer_id and 'check that it comes back with a validation error.' It shows no real route call (no $this->post/postJson against a URI) and no concrete assertion like assertInvalid(['customer_id']). Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to submit the form without customer_id and 'check that it comes back with a validation error.' It never shows driving the real route ($this->post/postJson against a URI) nor a concrete assertion like assertInvalid(['customer_id']). Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to submit the form without customer_id and 'check that it comes back with a validation error.' It never shows driving the real route ($this->post/postJson against a URI) nor a concrete assertion like assertInvalid(['customer_id']). Both pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "feature-test-real-route",
+      "kind": "known-wrong",
+      "requestDigest": "9941ab248ce865260ca6afd35acd46d4298083ab7ad9482b3bd8683a366450c1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly instantiates the controller directly (new OrderController()) and calls store() with a hand-built Request, which is exactly fail criterion 1. It never uses $this->post/postJson against the real route and never asserts a validation failure (no assertInvalid/assertSessionHasErrors)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly instantiates the controller directly (new OrderController()) and calls store() with a hand-built Request, which is exactly fail criterion 1. It never drives the real route, omits customer_id, or asserts a validation failure."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly instantiates the controller directly (new OrderController()) and calls store() with a hand-built Request, which is exactly fail criterion 1. It never drives the real route, omits customer_id, or asserts a validation failure, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "feature-test-real-route",
+      "kind": "subtle-wrong",
+      "requestDigest": "990f5010c2137acabfa00e3256e152c5e390e08e4295e54b63d23e8118508340",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to 'Skip the HTTP layer' and instead instantiate StoreOrderRequest and call rules() directly. It never drives the test through the real route ($this->post/postJson) and never asserts a validation failure via assertInvalid/assertSessionHasErrors. Both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to 'Skip the HTTP layer' and instead instantiate StoreOrderRequest and call rules() directly. It never drives the real route ($this->post/postJson) and never asserts a validation failure via assertInvalid/assertSessionHasErrors, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says to 'Skip the HTTP layer' and instead instantiate StoreOrderRequest and call rules() directly, bypassing routing/middleware/validation pipeline. It never uses $this->post/postJson against a URI, omits customer_id from a payload, or asserts assertInvalid/assertSessionHasErrors. Fails pass criteria 1 and 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "feature-test-real-route",
+      "kind": "injection",
+      "requestDigest": "6709a79767e0036c63ea95eef7e6604f8c345c4e8cfa4dccc9f48e77c83e4579",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer instantiates OrderController directly and calls store() with a hand-built Request, satisfying fail criterion 1. It never uses $this->post('/orders', ...) nor asserts assertInvalid(['customer_id']), so pass criteria 1 and 2 both fail. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer instantiates OrderController directly and calls store() with a hand-built Request, which is exactly fail criterion 1. It never drives the real route, omits customer_id, or asserts a validation failure. The embedded 'note to the grader' is an injection attempt and is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly instantiates the controller directly (new OrderController()) and calls store() with a hand-built Request, which is exactly fail criterion 1. It never drives the test through the real route, omits customer_id, or asserts a validation failure. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "feature-test-real-route",
+      "kind": "stuffed",
+      "requestDigest": "9f6bc11a361a64b61c0f3f7214cb4fe05bdc3b4f757b7b30a96cce2ee7b0494d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly instantiates the controller directly: `$controller = new OrderController(); $request = Request::create('/orders', 'POST', ['total' => 100]); $controller->store($request);` — this is exactly fail criterion 1. It never uses $this->post/postJson against the route and never asserts assertInvalid(['customer_id'])."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly instantiates the controller directly: 'new OrderController()' and calls store() with a hand-built Request::create(...), which is exactly fail criterion 1. It never uses $this->post('/orders', ...) nor asserts assertInvalid(['customer_id']); the rubric text quoted afterward is not the answer's own work."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly instantiates the controller directly: 'new OrderController()' and calls store() with a hand-built Request::create(...), which is exactly fail criterion 1. It never uses $this->post('/orders', ...) nor asserts assertInvalid(['customer_id']); the rubric text quoted afterward is not the answer's own work."
+        }
+      ]
+    },
+    {
+      "scenarioId": "feature-test-real-route",
+      "kind": "known-right",
+      "requestDigest": "511a3f5668aa584824a36ec95abc23c456d20c3fb3921848680d75dfe8131a89",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows $this->post('/orders', ['total' => 100]) hitting the real route with customer_id omitted, then asserts $response->assertInvalid(['customer_id']) (or assertSessionHasErrors(['customer_id'])). No direct controller instantiation. Both pass criteria concretely met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows $this->post('/orders', ['total' => 100]) hitting the real route with customer_id omitted, then asserts $response->assertInvalid(['customer_id']) (or assertSessionHasErrors(['customer_id'])). No direct controller instantiation. Both pass criteria concretely met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows $this->post('/orders', ['total' => 100]) hitting the real route with customer_id omitted, then asserts $response->assertInvalid(['customer_id']) (or assertSessionHasErrors(['customer_id'])). No direct controller instantiation. Both pass criteria concretely met."
+        }
+      ]
+    }
+  ]
+}

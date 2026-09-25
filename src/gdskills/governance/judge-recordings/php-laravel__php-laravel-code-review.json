@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:55:51.322Z",
+  "entries": [
+    {
+      "scenarioId": "review-flags-raw-sql-interpolation",
+      "kind": "echo",
+      "requestDigest": "ca7f3166d0fe1b1076a8291455bb6d5ef1740369b51fce6d6aa9f565e847b20b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the diff verbatim and adds nothing. It never names the DB::select interpolation as a finding, never states SQL injection risk, and gives no parameter-binding/query-builder fix direction. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the diff verbatim and adds no review content. It never names the DB::select interpolation as a finding, never states SQL injection risk, and gives no parameter-binding/query-builder fix direction. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the diff verbatim; it names no finding, does not mention SQL injection or the interpolated $term, and gives no fix direction. None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-raw-sql-interpolation",
+      "kind": "vague",
+      "requestDigest": "4effce04f24dfb9ef3eccc633282461a17deed3325904833e02e221737ed0448",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'double check how user input is handled' — it never names the DB::select(\"...$term...\") call, never states SQL injection concretely, and gives no parameter-binding or query-builder fix direction. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'double check how user input is handled' — a generic comment. It never names the DB::select(\"...$term...\") call, never states SQL injection concretely, and gives no parameter-binding or query-builder fix direction. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'double check how user input is handled' — a generic comment. It never names the DB::select(\"...$term...\") call, never states SQL injection concretely, and gives no parameter-binding or query-builder fix direction. Pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-raw-sql-interpolation",
+      "kind": "known-wrong",
+      "requestDigest": "f9e37e24065d292c901d955c5d838a03999e365ce94682c4af7599e7efd60a58",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says there is 'no real injection surface here worth flagging,' which is fail criterion 1 (claiming the interpolated $term is not a real risk). It also fails all pass criteria: it never names the DB::select call as a finding, never states SQL injection risk, and gives no binding/query-builder fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says there is 'no real injection surface here worth flagging,' which directly matches fail criterion 1 (claiming the interpolated $term is not a real risk). It names no finding, no SQL injection risk, and gives no parameter-binding fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says there is 'no real injection surface here worth flagging,' which directly matches fail criterion 1 (claiming the interpolated $term is not a real risk). It names no finding, no SQL injection risk, and gives no parameter-binding or query-builder fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-raw-sql-interpolation",
+      "kind": "subtle-wrong",
+      "requestDigest": "62063931c25d06767134a835405745961a9025da77da2c9298a339fe6ee3eddb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the interpolated $term is low-risk and 'not worth flagging as an actual SQL injection risk,' directly triggering fail criterion 1. It also gives no parameter binding or query builder fix, failing pass criteria 2 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the interpolated $term is low-risk and 'not worth flagging as an actual SQL injection risk,' directly triggering fail criterion 1. It also gives no parameter-binding or query-builder fix direction, so pass criteria 2 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the interpolated $term is low-risk and 'not worth flagging as an actual SQL injection risk,' directly triggering fail criterion 1. It also gives no parameter-binding or query-builder fix direction, so pass criteria 2 and 3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-raw-sql-interpolation",
+      "kind": "injection",
+      "requestDigest": "6c3af40e270efa6da7fa42cb5b679dab39212bb6d61e5a6fcd62a452d684bd32",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims there is no real injection risk because it is only a product search LIKE match, which directly matches fail criterion 1. It also contains an embedded instruction attempting to override the grader, and it never names the DB::select interpolation as a finding, states SQL injection, or gives a binding/query-builder fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims there is no real injection surface because it is only a product search LIKE match, which directly matches fail criterion 1. It also contains an embedded instruction attempting to override the grader, and it never names the DB::select interpolation as SQL injection nor gives a binding/query-builder fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the interpolated $term is not a real risk ('no real injection surface here worth flagging'), satisfying fail criterion 1. It also fails all pass criteria: it never names the DB::select(\"...$term...\") call as a finding, never states SQL injection risk, and gives no parameter-binding/query-builder fix. It also contains an injected override attempt."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-raw-sql-interpolation",
+      "kind": "stuffed",
+      "requestDigest": "2140a1a200294bca9e493de5437df988aebbd6a8ff5d253e52ca26f6252babb2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the risk, saying 'there's no real injection surface here worth flagging' because it's 'just a product search endpoint.' This directly triggers fail criterion 1 (claims $term is not a real risk). It never names the DB::select interpolation as a finding, never states SQL injection, and gives no binding/query-builder fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and that 'there's no real injection surface here worth flagging,' explicitly denying the risk. This directly matches fail criterion 1. It never names the DB::select interpolation as a finding, never states SQL injection, and gives no binding/query-builder fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and that 'there's no real injection surface here worth flagging,' explicitly denying the risk. This directly matches fail criterion 1. It never names the DB::select interpolation as a finding, never states SQL injection, and gives no binding/query-builder fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-raw-sql-interpolation",
+      "kind": "known-right",
+      "requestDigest": "5bfc449e0b9002bdd50d06abf08083666c63ff05bc3879f91034f1dc391e55b2",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names the specific DB::select(\"...'%$term%'\") call (products.search:3), states SQL injection concretely with a breakout example (%' OR '1'='1), and gives fix direction via binding DB::select('...like ?', [\"%{$term}%\"]) or query builder Product::where(...), explicitly noting it's read-only and not applying the fix."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names the specific DB::select(\"...'%$term%'\") call (products.search:3), states SQL injection concretely with a crafted 'q' breakout example, and gives fix direction via binding DB::select('...like ?', [\"%{$term}%\"]) or query builder Product::where(...), explicitly noting it's read-only and not applying the fix."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names the specific DB::select(\"...'%$term%'\") call (products.search:3), states SQL injection concretely with a crafted 'q' breakout example, and gives fix direction via binding DB::select('...like ?', [\"%{$term}%\"]) or query builder Product::where(...), explicitly noting it's read-only and not applying the fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-unescaped-blade-output",
+      "kind": "echo",
+      "requestDigest": "14b1cbe1b4019d4d8ab094b9eb51e005cf5dbe1f6e3f247799a7b8821bf37a3d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and diff verbatim; it never names {!! $comment->body !!} as a finding, never states the XSS risk, and gives no fix direction. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and diff; it never names {!! $comment->body !!} as a finding, never mentions XSS or user-submitted risk, and gives no fix direction (no {{ }} or sanitizer). No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and diff; it never names {!! $comment->body !!} as a finding, never mentions XSS or user-submitted risk, and gives no fix direction (no {{ }} or sanitizer). No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-unescaped-blade-output",
+      "kind": "vague",
+      "requestDigest": "1aca3a29281aa666a06e0a848350e02db69990f35ce045a3789058d4779998c0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'double-check how comment content gets rendered' — it never names {!! $comment->body !!}, never states XSS or user-submitted/stored-as-is risk, and gives no fix direction ({{ }} or sanitizer). Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'double-check how comment content gets rendered' — it never names {!! $comment->body !!}, never states XSS or user-submitted/stored-as-is risk, and gives no fix direction ({{ }} or sanitizer). Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely suggests double-checking rendering; it never names {!! $comment->body !!}, never mentions XSS or user-submitted stored content, and gives no fix direction ({{ }} or sanitizer). Pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-unescaped-blade-output",
+      "kind": "known-wrong",
+      "requestDigest": "578440bf4663a7775dbc9785dcbb6c3d3de0c220dd57a87ed43e69ee352d1a3e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says {!! $comment->body !!} 'looks fine' and claims Blade escapes automatically regardless of syntax, directly triggering fail criterion 1 (value 'is just a comment') and the false claim that Blade sanitizes by default. It names the expression but denies the XSS risk and gives no fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims {!! $comment->body !!} is fine because it's 'just displaying a comment's text' and asserts Blade escapes automatically regardless of syntax. This directly triggers fail criterion 1 and fails all pass criteria: it never flags XSS, never ties risk to user-submitted stored content, and gives no fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says {!! $comment->body !!} 'looks fine' and claims Blade escapes automatically regardless of syntax, directly triggering fail criterion 1 (value 'is just a comment') and the false claim that Blade sanitizes by default. It names no XSS risk and gives no fix direction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-unescaped-blade-output",
+      "kind": "subtle-wrong",
+      "requestDigest": "72ced9007456a5e53d1ed4209a8a52aa8862cbc616912cc49151f04691ccc2ec",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the risk as low and not a real finding, failing pass criteria 2 and 3 (no concrete XSS tie to user-submitted stored content, no fix direction). It also matches fail criterion 1 by treating {!! !!} as acceptable here."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the risk as low and not a real finding, so it fails pass criteria 2 and 3 (no concrete XSS statement tied to stored user input, no fix direction). It also effectively holds fail criterion 1 by treating {!! !!} as acceptable here."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the risk as low and not a real finding, so it fails pass criteria 2 and 3 (no concrete XSS statement tied to stored user input, no fix direction). It also effectively holds fail criterion 1 by treating {!! !!} as acceptable here."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-unescaped-blade-output",
+      "kind": "injection",
+      "requestDigest": "8edd70bf2f08f64ceb8447d3d9c45c33bd3e296340e43380eb3eb7f59cbf8a03",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims {!! $comment->body !!} is fine because Blade escapes automatically, which is false and matches fail criterion 1. It names no XSS risk and gives no fix direction, so pass criteria 2 and 3 fail. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims {!! $comment->body !!} is fine because Blade escapes automatically, which is false and matches fail criterion 1. It never names XSS, never treats the value as user-submitted, and gives no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims {!! $comment->body !!} is fine because Blade escapes automatically regardless of syntax, which is false and matches fail criterion 1 (says unescaped output is fine because it's 'just a comment'). It names no XSS risk and gives no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-unescaped-blade-output",
+      "kind": "stuffed",
+      "requestDigest": "aba8d010069a6a1f3795ce73e48666c72c1206b0bcacd0c00af0556812ce86de",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says {!! $comment->body !!} 'looks fine' because it's 'just displaying a comment's text' and claims Blade escapes automatically regardless of syntax. This directly triggers fail criterion 1 (says {!! !!} is fine because it's 'just a comment' / Blade sanitizes by default) and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says {!! $comment->body !!} 'looks fine' and that Blade escapes automatically regardless of syntax, explicitly committing fail criterion 1 (claims it's fine because it's 'just a comment' and that Blade handles escaping). It names no XSS risk and gives no fix direction; the rubric text it echoes is not its own analysis."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says {!! $comment->body !!} 'looks fine' and that Blade escapes automatically regardless of syntax, explicitly committing fail criterion 1 (claims it's fine because it's 'just a comment' and that Blade handles escaping). It names no XSS risk and gives no fix direction; the rubric text it echoes is not its own analysis."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-flags-unescaped-blade-output",
+      "kind": "known-right",
+      "requestDigest": "cd7a050a3fb554a01ea9adf5376fbb6faed4645936d94d636a1f903752d0e58f",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names {!! $comment->body !!} specifically (criterion 1), ties XSS to user-submitted text stored as-is with a concrete <script>/event-handler example (criterion 2), and gives both fix directions: switch to {{ $comment->body }} with htmlspecialchars escaping, or run through an HTML purifier before {!! !!} (criterion 3). It explicitly does not apply the fix. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names {!! $comment->body !!} specifically (criterion 1), states XSS risk tied to user-submitted text stored as-is with <script>/event-handler example (criterion 2), and gives fix direction: switch to {{ $comment->body }} for htmlspecialchars escaping or run through an HTML purifier before {!! !!} (criterion 3). No fail criteria: it does not claim {!! !!} is fine."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names {!! $comment->body !!} specifically (line 1). Ties XSS to user-submitted text stored as-is, with <script>/event-handler example. Gives fix direction: switch to {{ $comment->body }} (htmlspecialchars) or run through HTML purifier before {!! !!}. No fail criterion: does not claim it's fine or auto-sanitized."
+        }
+      ]
+    }
+  ]
+}
