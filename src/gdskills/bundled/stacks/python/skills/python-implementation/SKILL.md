@@ -1,6 +1,6 @@
 ---
 name: python-implementation
-description: "Use when implementing or extending a feature in a modern Python (3.12/3.13) codebase -- covers project tooling discovery (pyproject.toml, uv/poetry/pip, ruff, mypy/pyright), typing (generics, Protocol, TypedDict, dataclasses), context managers, exception chaining, asyncio TaskGroup, logging, and src/-layout packaging."
+description: "Use when implementing or extending a feature in a modern Python (3.12/3.13) codebase or service -- covers project tooling discovery (pyproject.toml, uv/poetry/pip, ruff, mypy/pyright), typing (generics, Protocol, TypedDict, dataclasses), context managers, exception chaining, asyncio TaskGroup, request/event logging with the standard logging module, and src/-layout packaging."
 triggers:
   - "implement this in python"
   - "add a python feature"
@@ -10,6 +10,7 @@ triggers:
   - "add type hints to this module"
   - "package this as a python module"
   - "add a protocol class"
+  - "log requests in this python service"
 metadata:
   origin: authored
   category: implement
