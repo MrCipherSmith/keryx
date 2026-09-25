@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no honest gate run yet -- Phase A of flow 336; agents generate only after the trials=10 DeepSeek gate in Phase B"
+  "note": "no pair -- honest DeepSeek deepseek-chat runner+judge gate (trials=10, strictness=high, flow 336) fails all 4 skills, never on behavior (every behavior scenario 1.0/1.0): flutter-implementation TP 6/7 FP 2/7 (a SwiftUI prompt wrongly routed here instead of swiftui-implementation), flutter-testing TP 3/7 FP 2/7, flutter-code-review TP 6/7 FP 4/7 (worst false-positive rate of any batch-4 skill -- a prompt explicitly asking to also fix bugs still routed to the read-only review skill, and cross-pack/sibling-skill confusion accounts for the rest), flutter-build-fix TP 3/7 FP 2/7. This pack has the strongest positive-trigger recall of the four but the weakest negative discipline. Genuine routing weakness against a crowded catalog, not an authoring defect -- stays experimental per flow 336's stack-pack-lessons.md rule against tuning descriptions to restate failing eval prompts."
 }
