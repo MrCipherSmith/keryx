@@ -25,7 +25,7 @@
 // USER-scope hooks (`~/.keryx/hooks.json`) need none of this: the operator
 // wrote that file themselves, on this machine.
 import { createHash } from "node:crypto";
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import path from "node:path";
 import {
   ensureKeryxConfigDir,
@@ -34,6 +34,7 @@ import {
   readConfigFile,
   writeOwnerOnlyFileAtomic,
 } from "../../lib/config-dir";
+import { realpathOrResolve, trustBoundaryRoot } from "../../lib/git-toplevel";
 import { TerminalSafeTracker } from "../../lib/terminal-safe";
 import type { HookRegistration } from "./types";
 
@@ -60,69 +61,29 @@ export function hooksTrustFile(configDir?: string): string {
 }
 
 /**
- * Realpath when possible, falling back to a plain resolve.
- *
- * A symlinked project root (or one that no longer exists, e.g. a deleted
- * test fixture) must still produce a stable, usable key — both the lookup
- * and the record side call this SAME function so they never disagree.
- */
-/**
- * Realpath when possible, falling back to a plain resolve — trying the
- * nearest EXISTING ancestor before giving up, so a not-yet-created
- * directory under a symlinked tmp/home root (macOS: `/var` ->
- * `/private/var`) still compares correctly against an already-realpath'd
- * sibling. A second copy of the identical logic in `./config.ts` — see that
- * copy's doc comment for why (same reason `gitToplevelRoot` is duplicated:
- * `config.ts` imports FROM this module).
- */
-function realpathOrResolve(p: string): string {
-  const abs = path.resolve(p);
-  try {
-    return realpathSync(abs);
-  } catch {
-    const parent = path.dirname(abs);
-    if (parent === abs) return abs;
-    return path.join(realpathOrResolve(parent), path.basename(abs));
-  }
-}
-
-/**
- * Nearest ancestor of `startDir` containing `.git`, or `startDir` itself
- * when none is found. A second small copy of `gitToplevelRoot` in
- * `./config.ts` — see that copy's doc comment for why it is duplicated
- * rather than shared (same reasoning as `realpathOrResolve` above, and for
- * the same reason: `config.ts` imports FROM this module, so the reverse
- * import would cycle).
- */
-function gitToplevelRoot(startDir: string): string {
-  const abs = path.resolve(startDir);
-  let dir = abs;
-  for (;;) {
-    if (existsSync(path.join(dir, ".git"))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return abs;
-}
-
-/**
  * R2-04 (flow 319 review round 2, minor): true when the trust store's
- * resolved directory sits inside — or equals — the project's real root.
- * `XDG_DATA_HOME` (`keryxConfigDir` honours it on macOS too) is an ordinary
- * environment variable a cloned repository can set via a cwd dotenv (one of
- * R2-01's dev-form holes), the exact same shape `guardUserHomeDir` in
- * `./config.ts` closes for `KERYX_HOME` — without this, a repo-local trust
- * store can pre-trust the repository's own hooks for a predictable checkout
- * path (CI and devcontainer checkouts land at well-known paths). Uses the
- * git toplevel as the boundary, not merely `trustRoot` itself, so a nested
- * `.metaproject` cannot narrow the check (R2-05's fix, applied here too).
- * Both sides go through the same `realpathOrResolve`, so a case-insensitive
- * volume and a symlinked tmp dir compare equal on either side.
+ * resolved directory sits inside — or equals — the project's real
+ * boundary. `XDG_DATA_HOME` (`keryxConfigDir` honours it on macOS too) is
+ * an ordinary environment variable a cloned repository can set via a cwd
+ * dotenv (one of R2-01's dev-form holes), the exact same shape
+ * `guardUserHomeDir` in `./config.ts` closes for `KERYX_HOME` — without
+ * this, a repo-local trust store can pre-trust the repository's own hooks
+ * for a predictable checkout path (CI and devcontainer checkouts land at
+ * well-known paths).
+ *
+ * The boundary is `trustBoundaryRoot` (`src/lib/git-toplevel.ts`), not
+ * merely `trustRoot` itself — normally the git toplevel, so a nested
+ * `.metaproject` cannot narrow the check (R2-05's fix, applied here too),
+ * but narrowed back to the nearest `.metaproject` when the git toplevel
+ * turns out to be $HOME (or an ancestor of it) — a dotfiles-tracked home
+ * repository — so a real trust store under the operator's actual home
+ * directory is not mistaken for "inside the project" (R3-05). Both sides
+ * go through the same `realpathOrResolve`, so a case-insensitive volume
+ * and a symlinked tmp dir compare equal on either side.
  */
 export function trustStoreInsideProject(trustRoot: string, configDir?: string): boolean {
   const resolvedConfigDir = keryxConfigDir(configDir);
-  const projectReal = realpathOrResolve(gitToplevelRoot(trustRoot));
+  const projectReal = realpathOrResolve(trustBoundaryRoot(trustRoot));
   const configReal = realpathOrResolve(resolvedConfigDir);
   return configReal === projectReal || configReal.startsWith(projectReal + path.sep);
 }

@@ -101,6 +101,44 @@ describe("terminalSafe", () => {
     expect(result.escaped).toBe(true);
     expect(result.text).toContain("\\ufe0f");
   });
+
+  // R3-04 (flow 319 review round 3): the hand-picked list escaped VS1-16 but
+  // missed VS17-256 (U+E0100-E01EF), the larger and more commonly abused
+  // variation-selector block, plus several other invisible/format code
+  // points. Switching to Unicode property escapes closes the whole class
+  // rather than one probed code point at a time.
+  test("escapes the VS17-256 variation-selector supplement (U+E0100-E01EF), not just VS1-16", () => {
+    const result = terminalSafe(`a${String.fromCodePoint(0xe0100)}b`);
+    expect(result.escaped).toBe(true);
+    expect(result.text).toContain("\\ue0100");
+  });
+
+  test("escapes other default-ignorable/format code points not covered by the round-2 list", () => {
+    // U+206A-206F (deprecated format chars), U+180B/180C (Mongolian free
+    // variation selectors), U+17B4/17B5 (invisible Khmer vowel inherents),
+    // U+1D173-1D17A (musical format controls).
+    for (const code of [0x206a, 0x206f, 0x180b, 0x180c, 0x17b4, 0x17b5, 0x1d173, 0x1d17a]) {
+      const char = String.fromCodePoint(code);
+      const result = terminalSafe(`a${char}b`);
+      expect(result.escaped).toBe(true);
+      expect(result.text).not.toContain(char);
+    }
+  });
+
+  test("escapes interlinear annotation characters (U+FFF9-FFFB) and the Braille blank (U+2800)", () => {
+    for (const code of [0xfff9, 0xfffa, 0xfffb, 0x2800]) {
+      const char = String.fromCodePoint(code);
+      const result = terminalSafe(`a${char}b`);
+      expect(result.escaped).toBe(true);
+      expect(result.text).not.toContain(char);
+    }
+  });
+
+  test("still leaves ordinary emoji and CJK text untouched", () => {
+    const cjk = terminalSafe("中文测试 🎉👍");
+    expect(cjk.escaped).toBe(false);
+    expect(cjk.text).toBe("中文测试 🎉👍");
+  });
 });
 
 describe("TerminalSafeTracker", () => {

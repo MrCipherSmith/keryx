@@ -408,6 +408,45 @@ describe("keryx hooks enable/disable", () => {
     expect(errors.some((e) => e.includes("must contain a JSON object"))).toBe(true);
     expect(errors.some((e) => e.includes("is not valid JSON"))).toBe(false);
   });
+
+  // R3-03 (flow 319 review round 3): `JSON.parse`'s own error message embeds
+  // the literal offending character verbatim — a raw ESC byte in a hostile
+  // project hooks.json used to reach the terminal unescaped through
+  // readDoc's "is not valid JSON" fail().
+  test("R3-03: readDoc's JSON-parse error is escaped when the offending byte is a raw ESC", async () => {
+    await mkdir(path.join(project, ".metaproject"), { recursive: true });
+    await writeFile(projectHooksPath(), '{"a":\u001bfoo}', "utf8");
+    await hooksCommand(["disable", "keryx.ctx-guard"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    const combined = errors.join("\n");
+    expect(combined).not.toContain("\u001b");
+    expect(combined).toContain("is not valid JSON");
+  });
+
+  // R3-03: validateBeforeWrite (hit by every enable/disable, since it
+  // revalidates the WHOLE doc after the mutation) built its "result would be
+  // invalid" message straight from the schema diagnostics without going
+  // through terminalSafe — reachable through an operator's natural reaction
+  // to a failing project hook (`keryx hooks disable/enable <id>`), unlike
+  // R2-03's read-only surfaces.
+  test("R3-03: validateBeforeWrite's diagnostic message is escaped on hooks disable/enable", async () => {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: {
+        "Bad\u001b[1Aevent": [],
+        Stop: [{ id: "my-observe-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }],
+      },
+    });
+    await hooksCommand(["disable", "my-observe-hook"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    const combined = errors.join("\n");
+    expect(combined).not.toContain("\u001b");
+    expect(combined).toContain("\\x1b[1A");
+    expect(combined).toContain("Refusing to write");
+    // Nothing was written — the mutation was rejected before writeDocAtomic.
+    const stillThere = JSON.parse(await readFile(projectHooksPath(), "utf8"));
+    expect(stillThere.hooks.Stop).toContainEqual({ id: "my-observe-hook", matcher: "*", class: "observe", command: { argv: ["true"] } });
+  });
 });
 
 describe("keryx hooks test", () => {

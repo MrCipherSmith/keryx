@@ -12,9 +12,10 @@
 // `schemaVersion`, a full registration colliding with a built-in id, or a
 // duplicate full-registration id within one event — is an error diagnostic
 // and the whole load reports `ok: false`. Nothing is silently dropped.
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { realpathOrResolve, trustBoundaryRoot } from "../../lib/git-toplevel";
 import { resolveKeryxHomeDir } from "../../lib/keryx-home";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import { BUILTIN_HOOK_REGISTRATIONS } from "./builtins";
@@ -129,76 +130,6 @@ export function resolveHookHomeDir(env: NodeJS.ProcessEnv, homeDir?: string): st
 }
 
 /**
- * Realpath when possible, falling back to a plain resolve — mirrors
- * `realpathOrResolve` in `./trust.ts` (not exported from there, so this is a
- * second small copy rather than a cross-module reach-in for one helper). A
- * path that does not exist yet (e.g. `~/.keryx` before it has ever been
- * created) must still produce a stable, comparable value.
- */
-/**
- * Realpath when possible, falling back to a plain resolve — but tries harder
- * than a single `realpathSync` attempt first: when `p` itself does not exist
- * yet (a `KERYX_HOME`/trust-store directory nobody has created), realpath
- * the nearest EXISTING ancestor and re-append what does not, rather than
- * giving up and returning `path.resolve(p)` for the whole thing unresolved.
- *
- * This matters because the two sides of a containment check
- * (`guardUserHomeDir` below, `trustStoreInsideProject` in `./trust.ts`) are
- * not symmetric: the project root passed in almost always exists, so it
- * realpaths cleanly, while a candidate `.keryx`/trust-store directory often
- * does not. On a host where the tmp/home root is itself a symlink (macOS:
- * `/var` -> `/private/var`), realpathing only the side that exists and
- * plain-resolving the side that does not compares a canonical path against
- * a non-canonical one and silently fails to detect real containment (or, on
- * a case-insensitive volume, silently fails to detect a case-variant
- * escape) — this was caught by a real-tmp-dir test where the fake, never-
- * existing fixture paths this file's own tests otherwise use had
- * accidentally hidden the asymmetry.
- */
-function realpathOrResolve(p: string): string {
-  const abs = path.resolve(p);
-  try {
-    return realpathSync(abs);
-  } catch {
-    const parent = path.dirname(abs);
-    if (parent === abs) return abs; // filesystem root, still unresolved
-    return path.join(realpathOrResolve(parent), path.basename(abs));
-  }
-}
-
-/**
- * R2-05 (flow 319 review round 2, minor): nearest ancestor of `startDir`
- * containing `.git` (dir or gitfile — worktrees use a gitfile), or
- * `startDir` itself when none is found. Mirrors `resolveProjectRoot` in
- * `src/session/paths.ts` (duplicated rather than cross-imported: that module
- * lives in `src/session`, and neither this file nor `trust.ts`, which needs
- * the same walk for R2-04, should reach into a different layer for one
- * eight-line loop — the same call this file already makes for
- * `realpathOrResolve`, which is duplicated in `trust.ts` for the identical
- * reason).
- *
- * This is the boundary `guardUserHomeDir` (below) and `trustStoreInsideProject`
- * (`./trust.ts`) refuse KERYX_HOME / a trust-store directory INSIDE of — not
- * `projectRoot` itself. `projectRoot` is wherever `keryx` was invoked from,
- * which can be a SUBDIRECTORY that happens to have its own nested
- * `.metaproject` (a workspace inside a monorepo, say). Comparing against
- * that subdirectory only would let `KERYX_HOME=<repo>/.kx` pass as "outside
- * the project" merely because the session started one level down — the
- * whole clone is still the same attacker-controlled checkout either way.
- */
-function gitToplevelRoot(startDir: string): string {
-  const abs = path.resolve(startDir);
-  let dir = abs;
-  for (;;) {
-    if (existsSync(path.join(dir, ".git"))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return abs;
-}
-
-/**
  * R1-01 (flow 319, review round 1, blocker): a USER-scope `hooks.json` is
  * exempt from the trust gate entirely — the whole design's premise is "the
  * operator put this here themselves, on this machine" (see this file's own
@@ -217,27 +148,32 @@ function gitToplevelRoot(startDir: string): string {
  * still lands inside the project).
  *
  * If the user-scope home's `.keryx` directory resolves (realpath) inside —
- * or equal to — the current project root, refuse it: fall back to the REAL
- * OS home directory (`os.homedir()`, never `env`/`homeDir` again — both are
- * exactly what a repo can steer) and report a warning so the operator sees
- * why their `KERYX_HOME` had no effect. An explicit test `homeDir` override
- * that legitimately points elsewhere (the normal case: a sibling tmp
- * directory, not inside the project fixture) is unaffected — this only ever
- * triggers when the resolved directory is actually inside/equal to the
- * project root, which is exactly the case a legitimate override does not hit.
+ * or equal to — `trustBoundaryRoot(projectRoot, configDir)`
+ * (`src/lib/git-toplevel.ts`; normally the git toplevel, R2-05 — narrowed
+ * to the nearest `.metaproject` when the toplevel is $HOME/an ancestor of
+ * it or of the config dir, a dotfiles-tracked home, R3-05), refuse it: fall
+ * back to the REAL OS home directory (`os.homedir()`, never `env`/`homeDir`
+ * again — both are exactly what a repo can steer) and report a warning so
+ * the operator sees why their `KERYX_HOME` had no effect. An explicit test
+ * `homeDir` override that legitimately points elsewhere (the normal case: a
+ * sibling tmp directory, not inside the project fixture) is unaffected —
+ * this only ever triggers when the resolved directory is actually
+ * inside/equal to the boundary, which is exactly the case a legitimate
+ * override does not hit.
  */
 function guardUserHomeDir(
   homeDir: string,
   projectRoot: string,
 ): { homeDir: string; warning?: HookConfigDiagnostic } {
   const userKeryxDir = path.join(homeDir, ".keryx");
-  // R2-05: the git toplevel, not the (possibly nested) `.metaproject` root —
-  // see gitToplevelRoot's doc comment. Both sides are realpath'd the SAME
-  // way (`realpathOrResolve`) before comparison, so a case-insensitive
-  // volume (macOS APFS canonicalises case on realpath) and a `/var` vs
+  // R2-05/R3-05: `trustBoundaryRoot`, not the (possibly nested)
+  // `.metaproject` root and not the raw git toplevel either — see its own
+  // doc comment. Both sides are realpath'd the SAME way
+  // (`realpathOrResolve`) before comparison, so a case-insensitive volume
+  // (macOS APFS canonicalises case on realpath) and a `/var` vs
   // `/private/var`-style symlink resolve to the identical string on either
   // side regardless of which form the caller passed in.
-  const projectReal = realpathOrResolve(gitToplevelRoot(projectRoot));
+  const projectReal = realpathOrResolve(trustBoundaryRoot(projectRoot));
   const userReal = realpathOrResolve(userKeryxDir);
   const inside = userReal === projectReal || userReal.startsWith(projectReal + path.sep);
   if (!inside) return { homeDir };

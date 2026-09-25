@@ -827,13 +827,25 @@ async function runTrust(args: readonly string[], deps: HooksCommandDeps): Promis
     lines.push(...described.lines, "");
     if (described.escaped) anyEscaped = true;
   }
+  // R3-03: this summary line builds its own text straight from `h.id`
+  // instead of going through describeProjectHookForApproval, so it needs
+  // its own terminalSafe call for consistency with every other rendering of
+  // an attacker-controlled hooks.json field in this command. In practice
+  // `id` cannot carry a control/bidi character through this path today (the
+  // schema's id pattern `^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$` already
+  // excludes them — same reasoning as the "bidi override in an argv token"
+  // test in hooks.test.ts), so this is defense-in-depth against that
+  // pattern ever loosening, not a live bypass.
+  const unsandboxedSafe = new TerminalSafeTracker();
+  const unsandboxedIds = unsandboxed.map((h) => unsandboxedSafe.render(h.id));
+  if (unsandboxedSafe.escaped) anyEscaped = true;
   if (anyEscaped) {
     lines.push(
       "WARNING: this file contains control or invisible characters (shown escaped above). Do not trust it unless you understand why.",
     );
   }
   if (unsandboxed.length > 0) {
-    lines.push(`WARNING: ${unsandboxed.length} hook(s) run UNSANDBOXED, with your full user permissions: ${unsandboxed.map((h) => h.id).join(", ")}.`);
+    lines.push(`WARNING: ${unsandboxed.length} hook(s) run UNSANDBOXED, with your full user permissions: ${unsandboxedIds.join(", ")}.`);
   }
   if (projectHooks.state === "changed") {
     lines.push("This file changed since you last trusted it.");
@@ -931,7 +943,11 @@ function readDoc(filePath: string): HooksDoc {
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    fail(`"${filePath}" is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
+    // R3-03: `JSON.parse`'s own error message can embed the literal
+    // offending character from the attacker-controlled file (e.g. a raw
+    // ESC byte renders as `Unrecognized token '<ESC>'` verbatim), so it
+    // needs the same escaping as every other file-derived diagnostic here.
+    fail(`"${filePath}" is not valid JSON: ${terminalSafe(err instanceof Error ? err.message : String(err)).text}`);
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     fail(`"${filePath}" must contain a JSON object.`);
@@ -995,8 +1011,15 @@ function builtinEventsFor(id: string): HookEventName[] {
 function validateBeforeWrite(doc: HooksDoc, scope: HookScope, label: string): void {
   const validated = validateHookConfigDocument(doc, scope, label);
   if (!validated.valid) {
+    // R3-03 (flow 319 review round 3): `d.message` embeds attacker-chosen
+    // property names/paths from the hooks.json being validated (see
+    // validateHookConfigDocument in config.ts), and this fires on `keryx
+    // hooks enable`/`disable` — an operator's natural reaction to a hostile
+    // project hook failing to validate. Escape the same way every other
+    // file-derived diagnostic in this file already does (see the R2-03
+    // comment on printDiagnostics/formatHookLoadNotices).
     const messages = validated.diagnostics.map((d) => `${d.code}: ${d.message}`).join("; ");
-    fail(`Refusing to write "${label}" — result would be invalid: ${messages}`);
+    fail(`Refusing to write "${label}" — result would be invalid: ${terminalSafe(messages).text}`);
   }
 }
 

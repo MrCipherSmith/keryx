@@ -24,51 +24,62 @@
 // finding R1-02).
 
 /**
- * True for a code point that must never reach the terminal unescaped.
+ * Matches a code point that must never reach the terminal unescaped.
  *
- * R2-06 (flow 319 review round 2): the round-1 list covered C0/C1 controls,
- * ESC-based sequences, bidi overrides, and the common zero-width characters
- * — a probe swept the wider "invisible or format" categories and found
- * several still passing through raw: soft hyphen, a second Mongolian/format
- * space character and a combining joiner, the Unicode invisible math
- * operators, four Hangul filler code points (render as a blank glyph, so one
- * visible token can actually be two "characters" wide, the same trick a
- * zero-width joiner plays), the W3C/Unicode tag block (invisible-by-design,
- * also the vehicle for the 2023 "ASCII smuggling" prompt-injection
- * technique), and U+2028/U+2029 (line/paragraph separators — invisible in a
- * terminal but a real line break to anything that parses the output).
+ * R3-04 (flow 319 review round 3): R2-06 extended a hand-picked list of code
+ * points one probe result at a time, which only ever covers what was
+ * probed — VS1-16 (U+FE00-FE0F) were escaped but VS17-256
+ * (U+E0100-E01EF, the larger and more commonly abused variation-selector
+ * block) were not, along with several other invisible/format code points
+ * nobody had swept for yet. This uses Unicode property escapes instead, so
+ * the set is defined by what the code points ARE, not by which ones were
+ * tested:
  *
- * Variation selectors (U+FE00-FE0F) are ALSO escaped here, a deliberate
- * decision rather than an oversight: they are legitimately used to select an
- * emoji presentation (U+2764 U+FE0F is a red heart emoji, not just the plain
- * heart glyph), so escaping them means such a pair prints as its base
- * character plus a visible `️` instead of rendering as the emoji — a
- * cosmetic-only change. It is accepted because these code points are also a
- * documented steganographic channel (hiding arbitrary text inside what looks
- * like ordinary content) and this module's whole job is "nothing invisible
- * or format-only reaches the terminal", not "nothing invisible except the
- * popular case".
+ * - `\p{Cc}` — C0/C1 controls, including ESC (0x1b) and DEL (0x7f). Also
+ *   \n \r \t: rendered visibly rather than passed through raw, unchanged
+ *   from R1-02/R2-06.
+ * - `\p{Cf}` — format characters: soft hyphen, the Arabic Letter Mark, the
+ *   Mongolian vowel separator, ZW space/ZWNJ/ZWJ, word joiner, the
+ *   invisible math operators, LRE/RLE/PDF/LRO/RLO, LRI/RLI/FSI/PDI, BOM,
+ *   and the W3C/Unicode tag block (the 2023 "ASCII smuggling" vehicle).
+ * - `\p{Zl}` / `\p{Zp}` — line separator / paragraph separator
+ *   (U+2028/U+2029): invisible in a terminal but a real line break to
+ *   anything that parses the output.
+ * - `\p{Default_Ignorable_Code_Point}` — the Unicode property for "has no
+ *   visible glyph of its own by design". Covers the combining grapheme
+ *   joiner and the four Hangul filler code points from R2-06 (none of which
+ *   are Cf: they are Lo, "letter, other"), plus code points nobody had
+ *   probed yet (U+180B/U+180C, U+206A-206F, U+17B4/17B5,
+ *   U+1D173-U+1D17A). Bun/V8 supports this property (probed:
+ *   `bun -e 'console.log(/\p{Default_Ignorable_Code_Point}/u.test("ᅟ"))'`
+ *   → true).
+ * - `\p{Variation_Selector}` — the whole variation-selector block, VS1-16
+ *   AND VS17-256 (U+E0100-E01EF). Escaping these is a deliberate decision
+ *   carried over from R2-06, not an oversight: they are legitimately used
+ *   to select an emoji presentation (U+2764 U+FE0F is a red heart emoji,
+ *   not just the plain heart glyph), so escaping them means such a pair
+ *   prints as its base character plus a visible `️` instead of rendering as
+ *   the emoji — a cosmetic-only change. It is accepted because these code
+ *   points are also a documented steganographic channel (hiding arbitrary
+ *   text inside what looks like ordinary content) and this module's whole
+ *   job is "nothing invisible or format-only reaches the terminal", not
+ *   "nothing invisible except the popular case".
+ * - Two explicit extras the properties above do not cover, because they are
+ *   visible-by-design code points that are nonetheless format/invisible in
+ *   practice: U+FFF9-FFFB (interlinear annotation anchor/separator/
+ *   terminator — invisible bracketing around real text) and U+2800 (Braille
+ *   pattern blank — a real, printable Braille cell that renders as
+ *   whitespace in every non-Braille font).
+ *
+ * Ordinary text — accented letters, emoji (without a hidden variation
+ * selector), CJK — is untouched: none of it is Cc/Cf/Zl/Zp/default-ignorable
+ * or a variation selector.
  */
+const UNSAFE_CODE_POINT_RE =
+  /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\p{Variation_Selector}￹-￻⠀]/u;
+
 function isUnsafeCodePoint(code: number): boolean {
-  if (code <= 0x1f) return true; // C0 controls, incl. ESC (0x1b), \n \r \t
-  if (code === 0x7f) return true; // DEL
-  if (code >= 0x80 && code <= 0x9f) return true; // C1 controls
-  if (code === 0x00ad) return true; // soft hyphen — invisible outside a line-break decision
-  if (code === 0x034f) return true; // combining grapheme joiner — invisibly glues two glyphs into one
-  if (code === 0x061c) return true; // Arabic Letter Mark
-  if (code === 0x180e) return true; // Mongolian vowel separator — renders as a blank
-  if (code === 0x200e || code === 0x200f) return true; // LRM / RLM
-  if (code >= 0x200b && code <= 0x200d) return true; // ZW space / ZWNJ / ZWJ
-  if (code === 0x2060) return true; // word joiner
-  if (code >= 0x2061 && code <= 0x2064) return true; // invisible math operators (function application, times, separator, plus)
-  if (code >= 0x202a && code <= 0x202e) return true; // LRE/RLE/PDF/LRO/RLO
-  if (code >= 0x2066 && code <= 0x2069) return true; // LRI/RLI/FSI/PDI
-  if (code === 0x2028 || code === 0x2029) return true; // line separator / paragraph separator
-  if (code === 0xfeff) return true; // BOM / zero-width no-break space
-  if (code === 0x115f || code === 0x1160 || code === 0x3164 || code === 0xffa0) return true; // Hangul fillers
-  if (code >= 0xfe00 && code <= 0xfe0f) return true; // variation selectors (see doc comment)
-  if (code >= 0xe0000 && code <= 0xe007f) return true; // tag characters
-  return false;
+  return UNSAFE_CODE_POINT_RE.test(String.fromCodePoint(code));
 }
 
 function escapeCodePoint(code: number): string {

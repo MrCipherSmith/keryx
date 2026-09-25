@@ -226,6 +226,11 @@ write there) rather than ever reading or writing trust state a project could
 plant for itself. Both checks compare against the real project root — the
 git toplevel, not merely the directory keryx happened to be started from —
 so a nested `.metaproject` inside the same clone cannot narrow either check.
+If that git toplevel turns out to be your home directory itself (a dotfiles
+repository tracking `~`) or an ancestor of it, keryx falls back to the
+nearest `.metaproject` above the project instead of the git toplevel, so a
+dotfiles-tracked home does not make every project underneath it look
+"inside" your own home directory and refuse trust unconditionally.
 
 ## Schema
 

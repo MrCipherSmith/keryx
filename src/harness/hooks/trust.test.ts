@@ -219,6 +219,105 @@ describe("R2-04 (flow 319 review round 2): trust store resolving inside the proj
   });
 });
 
+// R3-05 (flow 319 review round 3): `gitToplevelRoot` walks to ANY ancestor
+// `.git`, so a project living under a git-tracked $HOME (a common dotfiles
+// setup: `~/.git` tracking dotfiles) had its boundary widen all the way to
+// $HOME — the real default trust store under `$HOME/.local/share/keryx`
+// then read as "inside the project", and every `hooks trust` refused
+// unconditionally, fail-closed but unusable. `trustBoundaryRoot`
+// (`src/lib/git-toplevel.ts`) narrows the boundary back to the nearest
+// `.metaproject` whenever the git toplevel swallows $HOME (or the real
+// default config dir) this way.
+describe("R3-05: the boundary must not widen to the operator's real $HOME", () => {
+  // `os.homedir()` is resolved once at process start (from libuv's own
+  // lookup) and is NOT re-read from `process.env.HOME` on every call — a
+  // real difference from `process.env.XDG_DATA_HOME`, which IS read live.
+  // Mutating `process.env.HOME` mid-test therefore cannot fake $HOME for
+  // `trustBoundaryRoot`; a genuine fake $HOME needs a real subprocess
+  // started with `HOME` set in its env, the same way an operator's shell
+  // would set it. `runWithFakeHome` spawns one, running a tiny inline
+  // script against this module's own exports, and reports what it printed.
+  function runWithFakeHome(fakeHome: string, script: string): { ok: boolean; output: string } {
+    const trustModule = path.join(__dirname, "trust.ts");
+    const proc = Bun.spawnSync({
+      cmd: [process.execPath, "-e", script.replace("__TRUST_MODULE__", trustModule)],
+      env: { ...process.env, HOME: fakeHome, XDG_DATA_HOME: "", APPDATA: "" },
+      cwd: fakeHome,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = `${proc.stdout.toString()}${proc.stderr.toString()}`;
+    return { ok: proc.exitCode === 0, output };
+  }
+
+  test("(a) a dotfiles repo at $HOME: the trust store under $HOME/.local/share is not refused, and trusting works", () => {
+    const fakeHome = tmpDir("keryx-r305-home-");
+    mkdirSync(path.join(fakeHome, ".git"), { recursive: true }); // $HOME itself is a git work tree
+    const project = path.join(fakeHome, "proj");
+    mkdirSync(path.join(project, ".metaproject"), { recursive: true });
+    const configDir = path.join(fakeHome, ".local", "share", "keryx"); // the real default location under this $HOME
+
+    const { ok, output } = runWithFakeHome(
+      fakeHome,
+      `
+      const { trustStoreInsideProject, recordProjectHooksTrust, loadHooksTrustStore, projectHooksTrustKey } = await import(${JSON.stringify(
+        "file://__TRUST_MODULE__",
+      )});
+      const project = ${JSON.stringify(project)};
+      const configDir = ${JSON.stringify(configDir)};
+      if (trustStoreInsideProject(project, configDir) !== false) throw new Error("trustStoreInsideProject: expected false, the real $HOME/.local/share store must not read as inside the project");
+      const result = recordProjectHooksTrust({ trustRoot: project, digest: "sha256:x", hookIds: ["h"], configDir });
+      if (!result.ok) throw new Error("recordProjectHooksTrust refused: " + result.error);
+      const store = loadHooksTrustStore(configDir, project);
+      if (store[projectHooksTrustKey(project)]?.digest !== "sha256:x") throw new Error("trust did not round-trip");
+      console.log("OK");
+      `,
+    );
+    expect(ok, output).toBe(true);
+    expect(output).toContain("OK");
+  });
+
+  test("(b) the normal case is unaffected: a nested .metaproject inside an ordinary (non-$HOME) git repo still cannot move the trust store inside it (R2-05 still holds)", () => {
+    const repoRoot = tmpDir("keryx-r305-normal-");
+    mkdirSync(path.join(repoRoot, ".git"), { recursive: true });
+    const nested = path.join(repoRoot, "nest");
+    mkdirSync(path.join(nested, ".metaproject"), { recursive: true });
+    const configDir = path.join(repoRoot, "config"); // outside `nested`, inside `repoRoot`
+    // Not under any $HOME/config-dir involved in this test, so the normal,
+    // unnarrowed git-toplevel boundary applies — same assertion R2-05's own
+    // test makes. Runs in-process: nothing here touches `os.homedir()`.
+    expect(trustStoreInsideProject(nested, configDir)).toBe(true);
+  });
+
+  test("(c) reviewer's repro: `keryx hooks trust` succeeds in a dotfiles-tracked $HOME instead of refusing every time", () => {
+    const fakeHome = tmpDir("keryx-r305-repro-");
+    mkdirSync(path.join(fakeHome, ".git"), { recursive: true });
+    const project = path.join(fakeHome, "work", "proj");
+    mkdirSync(path.join(project, ".metaproject"), { recursive: true });
+    const configDir = path.join(fakeHome, ".local", "share", "keryx");
+
+    const { ok, output } = runWithFakeHome(
+      fakeHome,
+      `
+      const { recordProjectHooksTrust, loadHooksTrustStore, projectHooksTrustKey, revokeProjectHooksTrust } = await import(${JSON.stringify(
+        "file://__TRUST_MODULE__",
+      )});
+      const project = ${JSON.stringify(project)};
+      const configDir = ${JSON.stringify(configDir)};
+      const result = recordProjectHooksTrust({ trustRoot: project, digest: "sha256:abc", hookIds: ["h1"], configDir });
+      if (!result.ok) throw new Error("recordProjectHooksTrust refused: " + result.error);
+      const store = loadHooksTrustStore(configDir, project);
+      if (store[projectHooksTrustKey(project)]?.digest !== "sha256:abc") throw new Error("trust did not round-trip");
+      const revoked = revokeProjectHooksTrust({ trustRoot: project, configDir });
+      if (!revoked.ok || !revoked.removed) throw new Error("revoke did not remove the entry it just wrote");
+      console.log("OK");
+      `,
+    );
+    expect(ok, output).toBe(true);
+    expect(output).toContain("OK");
+  });
+});
+
 describe("revokeProjectHooksTrust", () => {
   test("removes only that project's entry", () => {
     const base = tmpDir("keryx-hooks-trust-revoke-");
