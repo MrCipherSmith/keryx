@@ -98,6 +98,13 @@ need it to reach a bypassing invocation, use the `bun --env-file=…` form
 above, or export it as part of the safe re-exec's OWN environment rather than
 relying on it surviving the strip.
 
+The re-exec preserves every OTHER `bun` flag the bypassing invocation was
+launched with — `--inspect`, `--smol`, `--preload`, and so on — adding
+`--no-env-file --config=/dev/null` to that list rather than replacing it. So
+`bun --inspect src/cli.ts shell` still opens the inspector in the re-exec'd
+child; it does not silently lose `--inspect` the way an earlier version of
+this guard did.
+
 Two platform gaps, so they are documented rather than silently unhandled:
 BusyBox `env` (Alpine, some minimal containers) does not implement the `-S`
 shebang-splitting flag the shipped `bin` relies on — on that platform the

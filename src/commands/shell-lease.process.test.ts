@@ -17,6 +17,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Subprocess } from "bun";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { shortSessionId } from "../session/store";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
@@ -90,7 +91,14 @@ function collect(stream: ReadableStream<Uint8Array>, sink: { text: string }): vo
 
 /** A shell whose stdin stays open until the test ends it. */
 function startShell(sb: Sandbox, args: string[]): Shell {
-  const proc = Bun.spawn(["bun", CLI, ...SHELL_ARGS, ...args], {
+  // R3 (flow 319 CI regression): SAFE_BUN_SPAWN_ARGS between "bun" and CLI
+  // makes execArgv already carry the safe flags on THIS FIRST process, so
+  // src/lib/safe-exec.ts's ensureSafeBunExec returns immediately instead of
+  // spawning a re-exec'd wrapper — `proc.pid` below is the actual `keryx`
+  // process, the same shape the shipped shebang launches. Without this, the
+  // pid this test signals (SIGKILL/SIGSTOP) is a WRAPPER's pid, not the
+  // process actually holding the session lease the test asserts about.
+  const proc = Bun.spawn(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, ...SHELL_ARGS, ...args], {
     cwd: sb.cwd,
     env: sb.env,
     stdin: "pipe",
@@ -112,7 +120,7 @@ function runToExit(
   argv: string[],
   env: Record<string, string> = sb.env,
 ): { code: number | null; stdout: string; stderr: string } {
-  const proc = Bun.spawnSync(["bun", CLI, ...argv], {
+  const proc = Bun.spawnSync(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, ...argv], {
     cwd: sb.cwd,
     env,
     stdin: "ignore",

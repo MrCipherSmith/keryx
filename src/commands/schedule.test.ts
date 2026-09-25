@@ -132,7 +132,11 @@ describe("keryx schedule add", () => {
     expect(text).toContain(`  - gh.pr.list: ${path.join(keyHome, "bin", "gh")}`);
     expect(text).toContain("  account: gh: MrCipherSmith");
     expect(text).toContain(`install: systemd — ${path.join(unitDir, `keryx-${projectScheduleHash(root)}-check-github.service`)} + .timer`);
-    expect(text).toContain("runs: /bin/true /bin/true trigger run --schedule check-github");
+    // R3 (by-design output change, R2-02): `invocationArgv` inserts the two
+    // safe re-exec flags between the interpreter and the script path for
+    // every script-based invocation — this card is meant to show the timer's
+    // ACTUAL command, so it must show them too, not the pre-R2-02 shape.
+    expect(text).toContain("runs: /bin/true --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github");
     expect(text).toContain("linger: off");
     expect(text).toContain("not confirmed — nothing was written or installed");
     expect(existsSync(scheduleStorePath(root))).toBe(false);

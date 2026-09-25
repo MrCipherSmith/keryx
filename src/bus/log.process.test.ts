@@ -18,6 +18,7 @@ import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promise
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { type BusCursor, cursorAtEnd, cursorAtStart, readEvents, readHead } from "./log";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { eventsPath, resolveBusRoot } from "./paths";
 import { writePresence } from "./presence";
 import type { BusEvent, PresenceRecord } from "./schema";
@@ -223,7 +224,7 @@ describe.skipIf(!posix)("keryx bus list across two worktrees (real CLI processes
 
     const listed = await Promise.all(
       [repo, worktree].map(async (cwd) => {
-        const proc = Bun.spawn(["bun", CLI, "bus", "list", "--json"], { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env } });
+        const proc = Bun.spawn(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, "bus", "list", "--json"], { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env } });
         const out = await new Response(proc.stdout).text();
         expect(await proc.exited).toBe(0);
         return (JSON.parse(out) as { peers: { name: string }[] }).peers.map((p) => p.name).sort();

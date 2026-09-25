@@ -78,3 +78,55 @@ test("src/cli.ts's own source shebang is the same safe line (what bun build carr
   const firstLine = source.split("\n", 1)[0];
   expect(firstLine).toBe(SAFE_SHEBANG);
 });
+
+// R3 (review round 3, contamination note): during this round a WORKER'S OWN
+// uncommitted edit briefly replaced the guard call with `// TEMP-DISABLED-
+// FOR-REGRESSION-CHECK-FLOW-319: await ensureSafeBunExec();` to do a manual
+// red/green check, directly in the shipped source file — the reviewer had to
+// re-run every form-b probe against a separately archived pristine copy to
+// get a trustworthy result, and flagged that a temporary disable must never
+// be left in (or even pass through) a shipped source file: for a red/green
+// check, copy the file or inject a fake dependency, never comment out the
+// real guard call in place. This test is the backstop for that class of
+// mistake landing in a commit — it reads src/cli.ts and every file under
+// src/ from disk each run (not a cached import), so it also catches the
+// marker if it turns up somewhere other than cli.ts.
+test("R3: src/cli.ts calls ensureSafeBunExec() unconditionally under import.meta.main — never commented out, never behind a marker", () => {
+  const source = readFileSync(path.join(ROOT, "src", "cli.ts"), "utf8");
+  const guardMarkerIndex = source.indexOf("ensureSafeBunExec()");
+  expect(guardMarkerIndex).toBeGreaterThan(-1);
+
+  // The call must sit on a line that is a REAL, uncommented `await
+  // ensureSafeBunExec();` — not disabled, not merely mentioned in a comment.
+  const lineStart = source.lastIndexOf("\n", guardMarkerIndex) + 1;
+  const lineEndIdx = source.indexOf("\n", guardMarkerIndex);
+  const line = source.slice(lineStart, lineEndIdx === -1 ? source.length : lineEndIdx).trim();
+  expect(line.startsWith("//")).toBe(false);
+  expect(line.startsWith("await ensureSafeBunExec()")).toBe(true);
+
+  // And it must be reached unconditionally under `import.meta.main`, not
+  // nested behind some other new condition that could quietly gate it off.
+  const mainGuardIndex = source.indexOf("if (import.meta.main)");
+  expect(mainGuardIndex).toBeGreaterThan(-1);
+  expect(mainGuardIndex).toBeLessThan(guardMarkerIndex);
+});
+
+test("R3: no TEMP-DISABLED marker (a manual red/green check left in place) appears anywhere under src/", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const self = path.join(ROOT, "src", "cli-shebang.test.ts"); // this file legitimately DOCUMENTS the marker string; excluded from its own scan
+  const offenders: string[] = [];
+  async function walk(dir: string): Promise<void> {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.isFile() && full !== self) {
+        const text = await readFile(full, "utf8").catch(() => "");
+        if (text.includes("TEMP-DISABLED")) offenders.push(full);
+      }
+    }
+  }
+  await walk(path.join(ROOT, "src"));
+  expect(offenders).toEqual([]);
+});
