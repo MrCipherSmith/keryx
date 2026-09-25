@@ -1,6 +1,7 @@
 import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { renderProjectMetaprojectReferenceBlock } from "../lib/agent-entrypoint-blocks";
+import { buildModelChoiceBlockInput } from "../lib/model-choice";
 import { pathExists } from "../lib/fs";
 import { refuseEscapingSymlink, SymlinkRefusedError } from "../lib/symlink-safety";
 import { mkdirContained, writeContained } from "../lib/contained-write";
@@ -178,7 +179,16 @@ export async function ensureMetaprojectReference(
   const content = await readFile(filePath, "utf8");
   const marker = METAPROJECT_REFERENCE_MARKER;
   const endMarker = METAPROJECT_REFERENCE_END_MARKER;
-  const block = renderProjectMetaprojectReferenceBlock({ enableTasks: options.enableTasks !== false });
+  // Flow 336: resolved only when a project root is known — the same gate the
+  // symlink check just above already applies. A caller with no notion of a
+  // project boundary (a direct unit test on a bare temp file) gets the
+  // tier-words-only default rather than a guess at a root to read
+  // `routing.config.json`/`tasks.config.json` from.
+  const modelChoice = options.root !== undefined ? await buildModelChoiceBlockInput(options.root) : undefined;
+  const block = renderProjectMetaprojectReferenceBlock({
+    enableTasks: options.enableTasks !== false,
+    ...(modelChoice === undefined ? {} : { modelChoice }),
+  });
   if (hasMarkerLine(content, marker)) {
     const next = replaceManagedBlock(content, filePath, marker, endMarker, block);
     if (next !== content) {

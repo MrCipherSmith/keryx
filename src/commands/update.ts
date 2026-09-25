@@ -48,6 +48,7 @@ import {
 } from "../gdskills/catalog";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
+import { describeModelChoiceStatus } from "../lib/model-choice";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { reconcileCapabilitiesOnUpdate } from "../capability/registry";
 import { renderHealthConfig } from "../health/config";
@@ -478,6 +479,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       },
     },
   );
+  console.log(`  ${await describeModelChoiceStatus(projectRoot)}`);
   await writeTextIfChanged(
     path.join(metaprojectRoot, "keryx-dashboard.html"),
     renderMetaprojectDashboardHtml({
