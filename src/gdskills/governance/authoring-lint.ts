@@ -249,6 +249,15 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   // for the files it is actually about.
   "nextjs-nuxt": ["tsx", "jsx", "vue", "ts"],
   mobx: ["ts", "tsx"],
+  // Flow 338, W4 batch 6 — infra tool packs. `dockerfile` is a pseudo-extension:
+  // it matches the extensionless literal filename `Dockerfile` (any case), not
+  // a dotted extension — see the "extensionless filename glob" branch below.
+  // `yml`/`yaml` cover compose, Kubernetes manifests/Helm values, and workflow
+  // files; the pack's own `paths:` globs (not this table) are what scope them
+  // to the right directories (compose/k8s/Helm vs. `.github/workflows/`),
+  // per W1-stack-catalog.md's "plain YAML is shared" guidance.
+  "docker-k8s-terraform": ["dockerfile", "yml", "yaml", "tf", "tfvars"],
+  "ci-github-gitlab": ["yml", "yaml"],
 };
 
 export interface LintStackRuleOptions {
@@ -318,6 +327,41 @@ function parseExtendsValue(block: string): string | undefined {
 }
 
 /**
+ * The token a `paths:` glob is checked against `STACK_EXTENSIONS` with.
+ *
+ * Extension-based matching alone (the original check) cannot express a
+ * filename convention with no dot at all — `Dockerfile`, or a glob like
+ * `**\/Dockerfile` — because `/\.([A-Za-z0-9]+)$/` never matches a
+ * extensionless basename, so the glob was always flagged as "outside this
+ * stack's allowed extensions" even when the pack author listed the
+ * lowercase filename as an allowed pseudo-extension (flow 338, W4 batch 6:
+ * `docker-k8s-terraform` needs `Dockerfile` scoping, not just `*.dockerfile`).
+ *
+ * Two branches, in order:
+ *  - a dotted extension at the end of the glob (`*.tf`, `**\/*.yml`) — same
+ *    as before, lowercased;
+ *  - otherwise, when the glob's final path segment contains no `*`/`?`
+ *    wildcard (so it names one exact file, not a pattern), the lowercased
+ *    segment itself is the token — allowing `STACK_EXTENSIONS` to list
+ *    `"dockerfile"` as a pseudo-extension that matches the literal filename
+ *    `Dockerfile` (any case) exactly, never a substring or arbitrary glob.
+ *
+ * Returns `undefined` when neither branch applies (e.g. a bare wildcard
+ * segment like `**\/*`), which the caller treats as "outside scope".
+ */
+function globMatchToken(glob: string): string | undefined {
+  const extensionMatch = /\.([A-Za-z0-9]+)$/.exec(glob);
+  if (extensionMatch?.[1] !== undefined) {
+    return extensionMatch[1].toLowerCase();
+  }
+  const segment = glob.split("/").pop();
+  if (segment !== undefined && segment.length > 0 && !segment.includes("*") && !segment.includes("?")) {
+    return segment.toLowerCase();
+  }
+  return undefined;
+}
+
+/**
  * Lint one stack pack rule file: `extends: common` present, `paths:` a
  * non-empty glob list, and every glob's extension inside
  * `options.allowedExtensions` — narrowing a pack's own `security.mdc` past
@@ -351,9 +395,8 @@ export function lintStackRule(content: string, options: LintStackRuleOptions): L
 
   const allowed = new Set(options.allowedExtensions.map((extension) => extension.toLowerCase()));
   for (const glob of globs) {
-    const extensionMatch = /\.([A-Za-z0-9]+)$/.exec(glob);
-    const extension = extensionMatch?.[1]?.toLowerCase();
-    if (extension === undefined || !allowed.has(extension)) {
+    const token = globMatchToken(glob);
+    if (token === undefined || !allowed.has(token)) {
       findings.push({
         rule: "stack-rule-paths-scope",
         severity: "error",

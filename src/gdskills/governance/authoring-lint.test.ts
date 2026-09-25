@@ -158,12 +158,69 @@ Rule body.
     expect(findings).toEqual([]);
   });
 
-  test("STACK_EXTENSIONS covers the five named stacks", () => {
+  test("STACK_EXTENSIONS covers the five language/framework stacks plus the two W4 batch 6 tool stacks", () => {
     expect(STACK_EXTENSIONS.python).toEqual(["py", "pyi"]);
     expect(STACK_EXTENSIONS["ts-js-node"]).toEqual(["ts", "tsx", "js", "jsx", "mjs", "cjs"]);
     expect(STACK_EXTENSIONS.react).toEqual(["tsx", "jsx"]);
     expect(STACK_EXTENSIONS.go).toEqual(["go"]);
     expect(STACK_EXTENSIONS.rust).toEqual(["rs"]);
+    expect(STACK_EXTENSIONS["docker-k8s-terraform"]).toEqual(["dockerfile", "yml", "yaml", "tf", "tfvars"]);
+    expect(STACK_EXTENSIONS["ci-github-gitlab"]).toEqual(["yml", "yaml"]);
+  });
+
+  // Flow 338, W4 batch 6: extension-based matching alone can't express an
+  // extensionless filename convention like `Dockerfile`.
+  describe("extensionless filename globs (flow 338)", () => {
+    test("accepts a literal Dockerfile glob against the docker-k8s-terraform allowlist", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/Dockerfile"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/security.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings).toEqual([]);
+    });
+
+    test("matches the literal filename case-insensitively", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/dockerfile"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/security.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings).toEqual([]);
+    });
+
+    test("still flags an extensionless filename that isn't on the stack's allowlist", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/Jenkinsfile"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/security.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings.map((f) => f.rule)).toContain("stack-rule-paths-scope");
+    });
+
+    test("still flags a bare wildcard segment with no dot and no literal filename", () => {
+      const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/*"]');
+      const findings = lintStackRule(content, {
+        path: "/tmp/pack/rules/security.mdc",
+        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+      });
+      expect(findings.map((f) => f.rule)).toContain("stack-rule-paths-scope");
+    });
+
+    test("scoped workflow/compose/k8s YAML globs pass for their own stacks", () => {
+      const ciContent = good.replace('paths: ["**/*.py"]', 'paths: [".github/workflows/*.yml", ".gitlab-ci.yml"]');
+      expect(
+        lintStackRule(ciContent, { path: "/tmp/pack/rules/security.mdc", allowedExtensions: STACK_EXTENSIONS["ci-github-gitlab"]! }),
+      ).toEqual([]);
+
+      const dockerContent = good.replace('paths: ["**/*.py"]', 'paths: ["**/docker-compose.yml", "k8s/**/*.yaml", "**/*.tf", "**/*.tfvars"]');
+      expect(
+        lintStackRule(dockerContent, {
+          path: "/tmp/pack/rules/coding-style.mdc",
+          allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+        }),
+      ).toEqual([]);
+    });
   });
 
   // F8 (flow 309 review round 1): lintStackRule never checked
