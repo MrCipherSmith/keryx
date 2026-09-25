@@ -1561,27 +1561,38 @@ to main, flow 337 rebased and ran calibration and the honest gate.
 - **Honest 10-trial DeepSeek gate — outcome: all four packs stay
   `experimental`.** `keryx skills eval <pack>/<skill> --scope bundled
   --runner deepseek:deepseek-chat --judge deepseek:deepseek-chat --strictness
-  high --trials 10` for all 16 skills. Every skill's `verdict` is `fail`, and
-  in every case the failure is `triggerAccuracy`, not behavior content —
-  every ran behavior scenario scored 0.8 or higher except one (`ruby-rails-
-  build-fix`'s weakest scenario at 0.4 on the official re-run; live-runner
-  variance between runs, still not the deciding factor for that skill's
-  verdict). `sql-db-code-review` was the worst (0/7 true-positive, 3/7 false-
+  high --trials 10` for all 16 skills. Every skill's `verdict` is `fail`,
+  driven by `triggerAccuracy` in every case, not behavior content overall —
+  but three of `ruby-rails`' eight behavior scenarios scored below 1.0 on
+  this run: `ruby-rails-build-fix#no-rubocop-disable-suppression` scored 0.4
+  (below the 0.8 pack floor on its own, so this skill would also fail on
+  behavior alone this run), `ruby-rails-testing#no-sleep-for-jobs` scored
+  0.8, and `ruby-rails-testing#stub-external-boundary` scored 0.9.
+  `sql-db-implementation`'s weakest scenario scored 0.8, `c-cpp-
+  implementation`'s scored 0.9. Every other ran behavior scenario across all
+  16 skills scored 1.0. `sql-db-code-review` was the worst on trigger
+  accuracy (0/7 true-positive, 3/7 false-
   positive — essentially no correct routing). A first attempt found 13
   trigger-negative false positives; all were genuine collisions (a query
   naming a stack this pack doesn't cover, or a same-pack implementation/
   testing boundary) and got one true, general "Not for X (use Y instead)"
   description sentence each, per the standing rule that a post-gate content
   change may only state a skill's real scope, never react to which prompt
-  failed and never touch `evals.json`. The cross-category fixes (Rust,
-  Django, Prisma) measurably worked on re-run; the same-pack fixes
-  (`*-implementation` vs `*-testing`) did not move the metric, because
-  `checkSkillSelected`'s own selection rule explicitly tolerates a
-  same-category near-miss as "not a trigger defect" — verified directly by
-  comparing before/after on the specific colliding prompts. No trigger-
-  positive under-triggering was "fixed": it is recorded as genuine routing
-  weakness, the sanctioned outcome per the standing rule, matching batch-1's
-  original all-four-failed first honest run. `governance/eval.json` (pack-
+  failed and never touch `evals.json`. **Correction (round 1 review, M1):**
+  none of these ten clauses moved `triggerAccuracy` at all, cross-category or
+  same-pack alike — a direct diff of every skill's `(truePositive,
+  falsePositive)` pair between the two raw gate runs is identical for all 16
+  skills, with no exception. `stripExclusionClauses` (flow 334) removes an
+  entry's own "Not for X" sentence from its scored coverage tokens before
+  either run's trigger-accuracy check, and none of the added words (Rust,
+  Django, Prisma, "tests") appeared anywhere else in these descriptions, so
+  each clause contributes exactly zero coverage with or without it — the fix
+  is inert on this metric by the scorer's own design. The clauses are kept
+  as true, freestanding scope statements, not as something that changed the
+  gate outcome. No trigger-positive under-triggering was "fixed" at all: it
+  is recorded as genuine routing weakness, the sanctioned outcome per the
+  standing rule, matching batch-1's original all-four-failed first honest
+  run. `governance/eval.json` (pack-
   level `{schemaVersion, reports}`) is written verbatim from the raw runs for
   all four packs; each `agent-refs.json`'s note now states the real outcome
   (gate ran, failed on trigger accuracy) instead of "gate not yet run"; no
