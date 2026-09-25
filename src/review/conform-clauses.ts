@@ -65,6 +65,13 @@ export interface RawReferenceClause {
   readonly text: string;
   readonly heading_path: readonly string[];
   readonly explicit?: ClauseExplicitTag;
+  /**
+   * True when `explicit` was produced by {@link preClassifyProcessClause}
+   * (flow 337's deterministic pre-classifier) rather than the document's own
+   * `[state:...]`/`[not-checkable:...]` marker — read by {@link applyClauseTags}
+   * to stamp `tag_source: "pre-classified"` instead of `"explicit"`.
+   */
+  readonly preClassified?: boolean;
 }
 
 export type ClauseExplicitTag =
@@ -79,8 +86,16 @@ export interface ReferenceClause {
   readonly state_kind: ReferenceClauseStateKind;
   readonly checkable: boolean;
   readonly reason?: string;
-  /** How this clause got its tag — never trusted silently by a caller that wants to know. */
-  readonly tag_source: "explicit" | "jev" | "cache";
+  /**
+   * How this clause got its tag — never trusted silently by a caller that
+   * wants to know. `"pre-classified"` (flow 337, clause-tag precision) is
+   * distinct from `"explicit"`: both never reach Jev, but `"explicit"` is a
+   * DOCUMENT AUTHOR's own `[state:...]`/`[not-checkable:...]` marker, while
+   * `"pre-classified"` is this module's own deterministic guess
+   * ({@link preClassifyProcessClause}) — a caller that wants to trust only
+   * what the document itself asserted must not conflate the two.
+   */
+  readonly tag_source: "explicit" | "pre-classified" | "jev" | "cache";
 }
 
 // ---------------------------------------------------------------------------
@@ -166,9 +181,36 @@ const PROCESS_DESIGN_IN_RE = /^design\b.*\bin\b/i;
 /**
  * A property-of-code clause: `must`/`never`/`always` PLUS one of these code
  * nouns anywhere in the same clause — always stays a Jev candidate, checked
- * BEFORE the process heuristics below so it wins any collision.
+ * BEFORE the process heuristics below so it wins any collision. Widened
+ * (flow 337, item 3) with the property-ish nouns the reviewer's sweep found
+ * uncovered — `field`, `method`, `constructor`, `property`, `file`, `files`,
+ * `path`, `directory`, `module`, `component`, `store`, `schema`, `endpoint`
+ * — so a clause like "Plan files MUST be Markdown (`.md`)." is rescued here
+ * instead of ever reaching the verb-lead check below.
  */
-export const CODE_PROPERTY_NOUNS = ["function", "class", "import", "export", "type", "handler", "query", "test"] as const;
+export const CODE_PROPERTY_NOUNS = [
+  "function",
+  "class",
+  "import",
+  "export",
+  "type",
+  "handler",
+  "query",
+  "test",
+  "field",
+  "method",
+  "constructor",
+  "property",
+  "file",
+  "files",
+  "path",
+  "directory",
+  "module",
+  "component",
+  "store",
+  "schema",
+  "endpoint",
+] as const;
 
 // Verb and noun matched independently, in EITHER order ("a handler must
 // never ..." and "must never leak from a handler" both count) — a single
@@ -178,6 +220,64 @@ const CODE_PROPERTY_NOUN_RE = new RegExp(`\\b(${CODE_PROPERTY_NOUNS.join("|")})\
 
 function isCodePropertyClause(text: string): boolean {
   return CODE_PROPERTY_VERB_RE.test(text) && CODE_PROPERTY_NOUN_RE.test(text);
+}
+
+/**
+ * Flow 337, item 4: the noun/verb ambiguity a lead term like "plan" or
+ * "document" carries — cheap, not grammar. When the next word is one of
+ * these, it reads as the OBJECT of a genuine imperative ("Review THE
+ * contract", "Ask WHETHER to apply changes", "Get approval FROM a domain
+ * owner") — the lead word stays a verb. Absent that, the lead word is very
+ * likely a bare NOUN SUBJECT instead ("Plan files MUST be Markdown", "Document
+ * index" — a document's index, not an instruction to document one), so the
+ * clause is left un-pre-classified rather than guessed.
+ */
+const IMPERATIVE_OBJECT_LEAD_WORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "any",
+  "each",
+  "every",
+  "this",
+  "that",
+  "these",
+  "those",
+  "your",
+  "its",
+  "their",
+  "our",
+  "his",
+  "her",
+  "whether",
+  "for",
+  "with",
+  "about",
+  "to",
+  "from",
+  "on",
+  "in",
+  "of",
+  "before",
+  "after",
+]);
+
+/** A lead word directly followed by one of these reads as the SUBJECT of a property statement ("Plan must...", "Document is...") rather than a command — never an imperative, checked before {@link IMPERATIVE_OBJECT_LEAD_WORDS}. */
+const PROPERTY_ASSERTION_NEXT_WORDS = new Set(["must", "should", "is", "are"]);
+
+/**
+ * True when the word immediately after `leadTerm` (already matched at the
+ * start of `trimmed` by {@link PROCESS_VERB_LEAD_RE}) does NOT read as an
+ * imperative's object — i.e. the lead word is ambiguous enough that it
+ * should NOT be pre-classified as a process step.
+ */
+function leadVerbReadsAsNoun(trimmed: string, leadTerm: string): boolean {
+  const rest = trimmed.slice(leadTerm.length).trimStart();
+  const nextWordMatch = /^([A-Za-z][A-Za-z'-]*)/.exec(rest);
+  if (nextWordMatch === null) return false;
+  const nextWord = nextWordMatch[1]!.toLowerCase();
+  if (PROPERTY_ASSERTION_NEXT_WORDS.has(nextWord)) return true;
+  return !IMPERATIVE_OBJECT_LEAD_WORDS.has(nextWord);
 }
 
 /** Where a clause sits, for {@link isWorkflowListStep}/{@link preClassifyProcessClause} — captured by `extractReferenceClauses` at the moment its enclosing list item started. */
@@ -192,18 +292,28 @@ export interface ClauseWorkflowContext {
 const WORKFLOW_HEADING_RE = /workflow/i;
 
 /**
- * True for a clause that is a numbered step inside a fenced code block (this
- * repo's own `.metaproject/rules/core/api-contracts.mdc` writes its
- * design -> review -> generate -> implement -> test sequence exactly this
- * way, under a heading — "Core Principle: Contract Before Code" — that never
- * says "workflow" itself) OR an ordered list nested under a heading whose own
- * text names "workflow". Either shape is a SEQUENTIAL PROCESS instruction,
- * never a single hunk-checkable property.
+ * True for an ordered list item whose NEAREST heading (the last entry of
+ * `headingPath` — never the whole ancestor chain) itself names "workflow".
+ * Flow 337, item 1: checking the full chain swept every ordered list in a
+ * file merely because some ANCESTOR heading (often the file's own H1) said
+ * "Workflow" — e.g. `rule-management-workflow.mdc`'s H1 "Rule Management
+ * Workflow" wrongly caught "2. Keep all rule files in English." nested three
+ * headings below it under "## Mandatory Behavior", which says nothing about
+ * a workflow at all. Only the clause's own immediate heading counts now.
+ *
+ * Flow 337, item 2: being fenced no longer qualifies a step on its own
+ * either (dropped the old unconditional `if (fenced) return true`) — this
+ * repo's own `mobx-store-template.mdc` fences its "1. private fields … 5.
+ * private methods" member-ordering list under "## Member Ordering" (no
+ * "workflow" anywhere), and that list is a checkable convention, not a
+ * process. A fenced OR ordered step is process only via its own text
+ * (the verb-lead/design-in checks above, run before this one) or via this
+ * heading check — never merely for being fenced.
  */
 export function isWorkflowListStep(context: ClauseWorkflowContext): boolean {
   if (!context.ordered) return false;
-  if (context.fenced) return true;
-  return context.headingPath.some((heading) => WORKFLOW_HEADING_RE.test(heading));
+  const nearestHeading = context.headingPath[context.headingPath.length - 1];
+  return nearestHeading !== undefined && WORKFLOW_HEADING_RE.test(nearestHeading);
 }
 
 /**
@@ -216,14 +326,14 @@ export function preClassifyProcessClause(text: string, context: ClauseWorkflowCo
   const trimmed = text.trim();
   if (isCodePropertyClause(trimmed)) return undefined;
   const verbMatch = PROCESS_VERB_LEAD_RE.exec(trimmed);
-  if (verbMatch !== null) {
+  if (verbMatch !== null && !leadVerbReadsAsNoun(trimmed, verbMatch[1]!)) {
     return `Pre-classified process: clause opens with the imperative verb "${verbMatch[1]!.toLowerCase()}", addressed to a person or agent — not a property checkable in a code hunk.`;
   }
   if (PROCESS_DESIGN_IN_RE.test(trimmed)) {
     return `Pre-classified process: clause opens with "design ... in" — an instruction to a person or agent, not a property checkable in a code hunk.`;
   }
   if (isWorkflowListStep(context)) {
-    return `Pre-classified process: a numbered step inside a fenced/ordered workflow list — a sequential process instruction, not a single hunk-checkable property.`;
+    return `Pre-classified process: a numbered step under a heading naming "workflow" — a sequential process instruction, not a single hunk-checkable property.`;
   }
   return undefined;
 }
@@ -255,17 +365,25 @@ export function extractReferenceClauses(docText: string): RawReferenceClause[] {
       indexInHeading += 1;
       // Pre-classifier (flow 337): only when the document itself supplied no
       // explicit marker — an author's own `[state:...]`/`[not-checkable:...]`
-      // always wins outright, exactly as before.
+      // always wins outright, exactly as before. A pre-classifier hit is
+      // marked distinctly (`preClassified: true`) so `applyClauseTags` can
+      // stamp `tag_source: "pre-classified"`, never conflated with a real
+      // document-authored `"explicit"` marker.
       let explicit = current.explicit;
+      let preClassified = false;
       if (explicit === undefined) {
         const reason = preClassifyProcessClause(joined, { ordered: current.ordered, fenced: current.fenced, headingPath });
-        if (reason !== undefined) explicit = { not_checkable_reason: reason };
+        if (reason !== undefined) {
+          explicit = { not_checkable_reason: reason };
+          preClassified = true;
+        }
       }
       clauses.push({
         clause_id: `${headingSlug}-${indexInHeading}`,
         text: joined,
         heading_path: [...headingPath],
         ...(explicit !== undefined ? { explicit } : {}),
+        ...(preClassified ? { preClassified: true } : {}),
       });
     }
     current = undefined;
@@ -388,6 +506,11 @@ export function applyClauseTags(
 ): ReferenceClause[] {
   return clauses.map((clause) => {
     if (clause.explicit !== undefined) {
+      // Flow 337, item 5: a document-authored marker is `"explicit"`; a hit
+      // produced by the pre-classifier at extraction time (never itself a
+      // document marker) is `"pre-classified"` instead — kept distinguishable
+      // by a caller that trusts only the document's own word.
+      const tagSource: ReferenceClause["tag_source"] = clause.preClassified === true ? "pre-classified" : "explicit";
       if ("state_kind" in clause.explicit) {
         return {
           clause_id: clause.clause_id,
@@ -395,7 +518,7 @@ export function applyClauseTags(
           heading_path: clause.heading_path,
           state_kind: clause.explicit.state_kind,
           checkable: true,
-          tag_source: "explicit",
+          tag_source: tagSource,
         };
       }
       return {
@@ -405,7 +528,7 @@ export function applyClauseTags(
         state_kind: "pr",
         checkable: false,
         reason: clause.explicit.not_checkable_reason,
-        tag_source: "explicit",
+        tag_source: tagSource,
       };
     }
     const hit = resolved.get(clause.clause_id);

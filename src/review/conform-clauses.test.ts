@@ -12,6 +12,7 @@ import {
   extractReferenceClauses,
   isWorkflowListStep,
   preClassifyProcessClause,
+  type RawReferenceClause,
 } from "./conform-clauses";
 
 const FIXTURE = path.join(import.meta.dir, "fixtures", "conform", "invented-doctrine.md");
@@ -142,7 +143,7 @@ describe("AC2: tagging — explicit markers win outright, Jev choice is the fall
 describe("Precision fix (flow 337): deterministic process/not-checkable pre-classifier", () => {
   const codeContext = { ordered: false, fenced: false, headingPath: [] as string[] };
 
-  test("PR #712's own false positive — 'Review the contract for breaking changes' — is pre-classified process, no Jev question built", () => {
+  test("PR #712's own false positive — 'Review the contract for breaking changes' — is pre-classified process, tagged via its own verb (not swept for being fenced)", () => {
     const doc = [
       "# API Contracts",
       "",
@@ -159,13 +160,21 @@ describe("Precision fix (flow 337): deterministic process/not-checkable pre-clas
     const clauses = extractReferenceClauses(doc);
     const reviewClause = clauses.find((c) => c.text === "Review the contract for breaking changes");
     expect(reviewClause?.explicit).toMatchObject({ not_checkable_reason: expect.stringContaining("Pre-classified process") });
+    const designClause = clauses.find((c) => c.text === "Design the endpoint in OpenAPI/schema first");
+    expect(designClause?.explicit).toMatchObject({ not_checkable_reason: expect.stringContaining("Pre-classified process") });
 
+    // Flow 337, item 2: steps 3-5 have no process-verb lead of their own, and
+    // the nearest heading ("Core Principle: Contract Before Code") never says
+    // "workflow" — being fenced no longer sweeps them along with steps 1/2,
+    // so they stay Jev candidates instead of being silently pre-classified.
     const questions = buildClauseTagQuestions(clauses);
-    expect(Object.keys(questions)).toEqual([]); // every step of this fenced numbered workflow is pre-classified — no Jev call at all
+    const stillCandidates = clauses.filter((c) => c.explicit === undefined).map((c) => c.clause_id).sort();
+    expect(stillCandidates).toHaveLength(3);
+    expect(Object.keys(questions).sort()).toEqual(stillCandidates);
 
     const tagged = applyClauseTags(clauses, new Map());
     const tag = tagged.find((c) => c.text === "Review the contract for breaking changes");
-    expect(tag).toMatchObject({ checkable: false, tag_source: "explicit" });
+    expect(tag).toMatchObject({ checkable: false, tag_source: "pre-classified" });
   });
 
   test.each([
@@ -193,8 +202,8 @@ describe("Precision fix (flow 337): deterministic process/not-checkable pre-clas
     expect(preClassifyProcessClause(text, codeContext)).toBeUndefined();
   });
 
-  test("a numbered step inside a fenced block is a workflow step regardless of heading wording", () => {
-    expect(isWorkflowListStep({ ordered: true, fenced: true, headingPath: ["Core Principle: Contract Before Code"] })).toBe(true);
+  test("flow 337, item 2: a numbered step inside a fenced block is NOT a workflow step on its own — being fenced no longer qualifies it", () => {
+    expect(isWorkflowListStep({ ordered: true, fenced: true, headingPath: ["Core Principle: Contract Before Code"] })).toBe(false);
   });
 
   test("an ordered list under a heading literally naming 'workflow' is a workflow step even unfenced", () => {
@@ -209,6 +218,14 @@ describe("Precision fix (flow 337): deterministic process/not-checkable pre-clas
     expect(isWorkflowListStep({ ordered: true, fenced: false, headingPath: ["Rules"] })).toBe(false);
   });
 
+  test("flow 337, item 1: an ordered list under a NON-workflow nearest heading is not a workflow step, even when an ANCESTOR heading says 'workflow'", () => {
+    expect(isWorkflowListStep({ ordered: true, fenced: false, headingPath: ["Rule Management Workflow", "Mandatory Behavior"] })).toBe(false);
+  });
+
+  test("flow 337, item 1: the nearest heading itself naming 'workflow' still counts, regardless of what its ancestors say", () => {
+    expect(isWorkflowListStep({ ordered: true, fenced: false, headingPath: ["Rules", "Release Workflow"] })).toBe(true);
+  });
+
   test("a code-property clause wins over the pre-classifier even inside a fenced numbered workflow list", () => {
     const reason = preClassifyProcessClause("Every handler must never block the event loop.", { ordered: true, fenced: true, headingPath: [] });
     expect(reason).toBeUndefined();
@@ -217,5 +234,99 @@ describe("Precision fix (flow 337): deterministic process/not-checkable pre-clas
   test("a document-authored explicit marker still wins outright over the pre-classifier", () => {
     const clauses = extractReferenceClauses("# H\n\n- Review the contract for breaking changes. [state:hunk]");
     expect(clauses[0]?.explicit).toEqual({ state_kind: "hunk" });
+  });
+});
+
+describe("Flow 337 regression: the reviewer's exact counter-examples (12/62 false drops over .metaproject/rules)", () => {
+  function notPreClassified(clauses: readonly RawReferenceClause[], text: string): void {
+    const clause = clauses.find((c) => c.text === text);
+    expect(clause).toBeDefined();
+    expect(clause?.explicit).toBeUndefined();
+  }
+
+  test("'Keep all rule files in English.' — under a 'Workflow'-titled H1, but nested under a non-workflow nearest heading — is not swept", () => {
+    // Mirrors this repo's own rule-management-workflow.mdc: H1 "Rule
+    // Management Workflow" (says "workflow"), item 2 sits three headings
+    // below under "## Mandatory Behavior" (does not).
+    const doc = [
+      "# Rule Management Workflow",
+      "",
+      "## Mandatory Behavior",
+      "1. Update or create rule files only under the rules directory.",
+      "2. Keep all rule files in English.",
+      "3. Keep frontmatter valid YAML.",
+    ].join("\n");
+    notPreClassified(extractReferenceClauses(doc), "Keep all rule files in English.");
+  });
+
+  test("'Ensure `agents/openai.yaml` exists where required…' — same ancestor-vs-nearest-heading shape — is not swept", () => {
+    // Mirrors skills-storage-workflow.mdc: H1 "Skills Storage Workflow",
+    // item 6 sits under "## Mandatory Behavior".
+    const doc = [
+      "# Skills Storage Workflow",
+      "",
+      "## Mandatory Behavior",
+      "1. Always create/update SKILL.md as the canonical source.",
+      "6. Ensure `agents/openai.yaml` exists where required by the target agent UI.",
+    ].join("\n");
+    notPreClassified(extractReferenceClauses(doc), "Ensure `agents/openai.yaml` exists where required by the target agent UI.");
+  });
+
+  test("the mobx member-ordering fenced list (1. private fields … 5. private methods) is not swept just for being fenced", () => {
+    // Mirrors mobx-store-template.mdc: fenced, ordered, under "## Member
+    // Ordering" — no "workflow" anywhere, and no step opens with a
+    // process-verb lead.
+    const doc = [
+      "# Store Conventions",
+      "",
+      "## Member Ordering",
+      "```",
+      "1. private fields",
+      "2. public fields",
+      "3. constructor",
+      "4. public methods",
+      "5. private methods",
+      "```",
+    ].join("\n");
+    const clauses = extractReferenceClauses(doc);
+    for (const text of ["private fields", "public fields", "constructor", "public methods", "private methods"]) {
+      notPreClassified(clauses, text);
+    }
+  });
+
+  test("'Plan files MUST be Markdown (`.md`).' — the must/never/always + widened code-noun rescue covers it", () => {
+    const doc = ["# Implementation Plans", "", "## Output Contract", "- Plan files MUST be Markdown (`.md`).", "- Code or command examples MUST be fenced code blocks."].join(
+      "\n",
+    );
+    notPreClassified(extractReferenceClauses(doc), "Plan files MUST be Markdown (`.md`).");
+  });
+
+  test("'document index;' — a lead term directly followed by a bare noun, not an imperative object — is not swept", () => {
+    // Mirrors requirements-package-standard.mdc's README Contract list —
+    // the clause loses its "README.md must state:" prefix at extraction
+    // (that line is prose, not a list item), leaving the bare noun phrase.
+    const doc = ["# Requirements Package Standard", "", "## README Contract", "- package purpose;", "- document index;", "- scope and non-goals;"].join("\n");
+    notPreClassified(extractReferenceClauses(doc), "document index;");
+  });
+
+  test("the three true-process clauses the reviewer confirmed stay pre-classified (dropped), unaffected by the precision fix", () => {
+    const doc = [
+      "# API Contracts",
+      "",
+      "## Core Principle: Contract Before Code",
+      "- Review the contract for breaking changes.",
+      "- Ask whether to apply changes.",
+      "- Design the endpoint in OpenAPI/schema first.",
+    ].join("\n");
+    const clauses = extractReferenceClauses(doc);
+    for (const text of ["Review the contract for breaking changes.", "Ask whether to apply changes.", "Design the endpoint in OpenAPI/schema first."]) {
+      const clause = clauses.find((c) => c.text === text);
+      expect(clause?.explicit).toMatchObject({ not_checkable_reason: expect.stringContaining("Pre-classified process") });
+    }
+    const tagged = applyClauseTags(clauses, new Map());
+    for (const text of ["Review the contract for breaking changes.", "Ask whether to apply changes.", "Design the endpoint in OpenAPI/schema first."]) {
+      const tag = tagged.find((c) => c.text === text);
+      expect(tag).toMatchObject({ checkable: false, tag_source: "pre-classified" });
+    }
   });
 });

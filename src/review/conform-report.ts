@@ -130,6 +130,7 @@ function renderAggregateLines(
   if (agg.reason !== undefined) {
     lines.push(`    reason: ${agg.reason}`);
   }
+  lines.push(`    tag source: ${agg.tag_source}`);
   for (const fact of agg.factLines) {
     lines.push(`    evidence: ${fact}`);
   }
@@ -209,6 +210,7 @@ export function conformResultToJson(result: ConformRunResult, options: ConformRe
       clause_id: a.clause_id,
       state_kind: a.state_kind,
       status: a.status,
+      tag_source: a.tag_source,
       ...(a.probability !== undefined ? { probability: a.probability } : {}),
       ...(a.reason !== undefined ? { reason: a.reason } : {}),
       evidence: a.factLines,

@@ -34,7 +34,15 @@ interface CacheFile {
 // cache file's shape) so a v1 entry simply misses under v2 — the SAME
 // "wrong hash reads as nothing cached" fail-closed behaviour a genuine
 // content edit already gets, no separate migration path needed.
-const CLAUSE_TAG_SCHEMA_VERSION = 2;
+//
+// v3 (clause-tag precision fix, flow 337 follow-up): `isWorkflowListStep`
+// now reads only the NEAREST heading (not the whole ancestor chain) and no
+// longer treats "fenced" as process on its own; `CODE_PROPERTY_NOUNS` grew
+// several property nouns (`file`, `files`, `path`, ...); and a verb-lead
+// match now checks what follows it before pre-classifying. All three change
+// which clauses `preClassifyProcessClause` drops for the SAME document
+// bytes, so a v2-cached tag can no longer be trusted either.
+const CLAUSE_TAG_SCHEMA_VERSION = 3;
 
 /**
  * The hash `readClauseTagCache`/`writeClauseTagCache`/`cachedTagsFor` key a
