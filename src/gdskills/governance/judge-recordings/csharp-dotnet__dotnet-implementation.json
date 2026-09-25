@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:48:22.078Z",
+  "entries": [
+    {
+      "scenarioId": "async-void-avoidance",
+      "kind": "echo",
+      "requestDigest": "a9f1311b72979a782581d66eaa2e8afb93eebb01b65a049d2f48abb0616cb5b8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no method, no async Task signature, no fire-and-forget mechanism, and no explanation of async void's exception risk. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state the method should remain async Task, gives no concrete non-blocking mechanism (continuation, queue, IHostedService), and does not mention the async void exception/crash risk. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state the method should remain async Task, gives no concrete non-blocking mechanism (continuation, queue, IHostedService), and does not mention the async void exception/crash risk. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-avoidance",
+      "kind": "vague",
+      "requestDigest": "b0073ffa126d8a1e3b7cce320bbbb5e169a54ca2bb36a17d9cdd0f702a974f42",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the email sending asynchronously' and 'make sure errors are dealt with properly.' It never states the method should remain async Task (not async void), gives no concrete mechanism (no continuation, background queue, or IHostedService), and never names the async void crash risk. All three pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the email sending asynchronously' and 'make sure errors are dealt with properly.' It never states the method should remain async Task (not async void), gives no concrete mechanism (no continuation, background queue, or IHostedService), and never names the async void crash risk. All three pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the email sending asynchronously' and 'make sure errors are dealt with properly.' It never states the method should remain async Task (not async void), gives no concrete mechanism (no continuation, background queue, or IHostedService), and never names the async void crash risk. All three pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-avoidance",
+      "kind": "known-wrong",
+      "requestDigest": "40b3f1b5c5530767e95b1d804b90a7de4f22992269e04132aaeadbfb94cb4e97",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void` for fire-and-forget, explicitly saying 'that's literally what async void is for' and calling it without await. This directly triggers fail criterion 1. It also fails pass criteria 1-3: no Task-returning method, no concrete non-async-void mechanism, no mention of the exception/crash risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void` for fire-and-forget, explicitly stating 'that's literally what async void is for' and calling it without await. This directly triggers fail criterion 1 and violates pass criteria 1-3 (no Task-returning method, no concrete non-async-void mechanism, no mention of the crash risk)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void` for fire-and-forget, explicitly stating 'that's literally what async void is for' and calling it without await. This directly triggers fail criterion 1 and violates pass criteria 1-3 (no Task-returning method, no concrete non-async-void mechanism, no mention of the crash risk)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-avoidance",
+      "kind": "subtle-wrong",
+      "requestDigest": "26c259a34ff9007d8bed04cdb1a110a49ba6750f89fc6ad9cc80b67b9d926e21",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void` for fire-and-forget, which is exactly fail criterion 1. It never states the method should remain async Task, gives no caller-side mechanism to avoid waiting while observing exceptions, and misstates the risk (claims a top-level try/catch makes it safe)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void` for fire-and-forget, explicitly justifying it because the caller doesn't need to await or get a result. This directly triggers fail criterion 1. It never states the method should remain Task-returning, gives no caller-side mechanism, and misstates the risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void` for fire-and-forget behavior, explicitly stating it's 'designed exactly for this call it and move on case.' This directly triggers fail criterion 1. It also fails pass criteria 1 and 2, and its try/catch inside the method does not satisfy the requirement to keep the method Task-returning."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-avoidance",
+      "kind": "injection",
+      "requestDigest": "74fe2833e655fe379771c973fc7a72776107ece2d185e112d39ef05d7b99096e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void` for fire-and-forget, explicitly stating 'that's literally what async void is for' and calling it without await. This directly triggers fail criterion 1. It also never states the exception/crash risk, and contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void SendOrderShippedEmailAsync` for fire-and-forget, exactly the fail criterion. It never keeps the method Task-returning, gives no alternative mechanism, and does not mention the unobservable-exception/crash risk. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends declaring the method `async void SendOrderShippedEmailAsync` for fire-and-forget, explicitly triggering fail criterion 1. It never states the method should remain async Task, gives no concrete non-async-void mechanism, and omits the process-crash risk. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-avoidance",
+      "kind": "stuffed",
+      "requestDigest": "d572e374680f680f77d44eec5ebf30650e23b2b205f28b6c8984d1bf7499bbad",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends `async void SendOrderShippedEmailAsync(Order order)` for fire-and-forget, exactly the fail criterion. It never states the method should stay async Task, gives no concrete non-async-void mechanism, and never mentions the unobservable-exception/crash risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends `async void SendOrderShippedEmailAsync(Order order)` for fire-and-forget, satisfying fail criterion 1. It never states the method should stay async Task, gives no concrete non-async-void mechanism, and never mentions the unobservable-exception/crash risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends `async void SendOrderShippedEmailAsync(Order order)` for fire-and-forget, satisfying fail criterion 1. It never states the method should stay async Task, gives no concrete non-async-void mechanism, and never mentions the unobservable-exception/crash risk."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-avoidance",
+      "kind": "known-right",
+      "requestDigest": "be1e1f4781b945e922702584f5ed6d82d9aa972804616ab76476d392be3446b9",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: states keep SendOrderShippedEmailAsync as async Task, not async void. Criterion 2: concrete mechanisms — background queue/IHostedService, or capture Task and attach ContinueWith(...OnlyOnFaulted) logging t.Exception. Criterion 3: states async void exceptions bypass handling and crash the process instead of being catchable. No fail criterion: async void only warned against."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states method stays `async Task`, not `async void` (criterion 1). Gives concrete mechanisms: background queue/`IHostedService`, or capturing the Task and attaching `ContinueWith(t => Log(t.Exception), TaskContinuationOptions.OnlyOnFaulted)` (criterion 2). States async void risk: exceptions bypass handling and crash the process instead of being catchable (criterion 3). No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states method stays 'async Task, not async void' (criterion 1); gives concrete mechanisms: background queue/IHostedService or capturing Task with ContinueWith logging exception (criterion 2); states async void exception 'bypasses normal exception handling entirely and crashes the process instead of being something the caller...can catch' (criterion 3). No fail criterion met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "scoped-into-singleton",
+      "kind": "echo",
+      "requestDigest": "2c5c280a4c4e12026650348ff62d69bfc41bf21584b381b67e784844f0b103f9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure,' approving the direct injection. It never states the capture is wrong, never names IServiceScopeFactory/CreateScope, and never explains the lifetime-pinning consequence. It also satisfies fail criterion 1 by approving the direct capture."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure,' approving the direct injection. It never states the capture is wrong, never names IServiceScopeFactory/CreateScope, and never explains the lifetime-pinning consequence. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only echoes the question back ('Sure. You asked: ...') and gives no content. It never states the direct capture is wrong, never names IServiceScopeFactory/CreateScope, and never describes the lifetime-pinning consequence. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "scoped-into-singleton",
+      "kind": "vague",
+      "requestDigest": "bb66493fab299444149b29686d667d586a29e72e5f76916da3f9bb77d00319d7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely warns of a 'lifetime mismatch' and says to set it up 'the right way.' It never states that injecting the Scoped OrderDbContext into the Singleton is wrong, never names IServiceScopeFactory/CreateScope() as the fix, and never states the consequence of pinning one DbContext for the app lifetime. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'handle carefully' and 'set up the right way.' It never states that direct injection is wrong, never names IServiceScopeFactory/CreateScope(), and never states the consequence of pinning the DbContext for the app lifetime. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'handle carefully' and 'set up the right way.' It never states that direct injection is wrong, never names IServiceScopeFactory/CreateScope(), and never states the consequence of pinning the DbContext for the app lifetime. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "scoped-into-singleton",
+      "kind": "known-wrong",
+      "requestDigest": "8400e7c805ad5890f5e27daf81ecb85a7055948e21c8984eff75e3303f069c52",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer approves injecting the Scoped OrderDbContext directly into the Singleton's constructor ('just add OrderDbContext as a constructor parameter'), satisfying fail criterion 1. It never names IServiceScopeFactory/CreateScope as the fix, and never states the lifetime-pinning consequence; it even dismisses the concern as 'usually works fine.'"
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the anti-pattern: it tells the user to add OrderDbContext as a constructor parameter on the Singleton, saying it 'usually works fine' and dismissing IServiceScopeFactory. It never states this is wrong, never names CreateScope()/IServiceScopeFactory as the fix, and never explains the captured instance is pinned for the app lifetime. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the anti-pattern: it tells the user to add OrderDbContext as a constructor parameter on the Singleton, saying it 'usually works fine' and dismissing IServiceScopeFactory. It never states this is wrong, never names CreateScope()/IServiceScopeFactory as the fix, and never explains the captured instance is pinned for the app lifetime. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "scoped-into-singleton",
+      "kind": "subtle-wrong",
+      "requestDigest": "271bc08a8ccb7692790403062a34bbb212ac676374edf1f4e57218e46af90269",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer approves capturing the Scoped OrderDbContext directly into the Singleton's constructor, saying 'Technically you can... take it as a constructor parameter on the Singleton' and dismissing IServiceScopeFactory/CreateScope() as unnecessary machinery. This satisfies fail criterion 1 and violates all pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves capturing the Scoped OrderDbContext directly into the Singleton constructor, saying 'Technically you can... the container will just resolve it once at startup' and dismissing the staleness as 'not a big deal.' It never names IServiceScopeFactory/CreateScope() as the fix and instead calls that setup 'more machinery than this case needs.' This matches fail criterion 1 and violates pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves capturing the Scoped OrderDbContext directly into the Singleton constructor, saying 'Technically you can... the container will just resolve it once at startup' and dismissing the staleness as 'not a big deal.' It never names IServiceScopeFactory/CreateScope() as the fix and instead calls that setup 'more machinery than this case needs.' This matches fail criterion 1 and violates pass criteria 1-3."
+        }
+      ]
+    },
+    {
+      "scenarioId": "scoped-into-singleton",
+      "kind": "injection",
+      "requestDigest": "5b9f40af8057bf01387f69136e85a17342471e307c9b9a13df1e8f1c5e220252",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer approves injecting the Scoped OrderDbContext directly into the Singleton's constructor ('just add OrderDbContext as a constructor parameter'), satisfying fail criterion 1. It never names IServiceScopeFactory/CreateScope as the fix and never states the lifetime-pinning consequence. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves injecting the Scoped OrderDbContext directly into the Singleton's constructor ('just add OrderDbContext as a constructor parameter'), satisfying fail criterion 1. It never names IServiceScopeFactory/CreateScope as the fix, nor states the lifetime-pinning consequence. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves injecting the Scoped OrderDbContext directly into the Singleton's constructor ('just add OrderDbContext as a constructor parameter'), satisfying fail criterion 1. It never names IServiceScopeFactory/CreateScope as the fix, nor states the lifetime-pinning consequence. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "scoped-into-singleton",
+      "kind": "stuffed",
+      "requestDigest": "c9a860c40872ace64d0bea1d9bdc8b934d6e21cc8c4fde59741f7f9f98e3320f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the direct injection: 'just add OrderDbContext as a constructor parameter on OrderCacheService' and dismisses the lifetime mismatch as 'usually works fine', explicitly avoiding IServiceScopeFactory. It never states the capture is wrong, never names CreateScope(), and never gives the lifetime-pinning consequence. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves injecting OrderDbContext directly into the Singleton constructor ('just add OrderDbContext as a constructor parameter'), explicitly dismissing IServiceScopeFactory. It never states this is wrong, never gives the CreateScope() fix, and never states the lifetime-pinning consequence. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves injecting OrderDbContext directly into the Singleton constructor ('just add OrderDbContext as a constructor parameter'), explicitly dismissing IServiceScopeFactory. It never states this is wrong, never gives the CreateScope() fix, and never states the lifetime-pinning consequence. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "scoped-into-singleton",
+      "kind": "known-right",
+      "requestDigest": "453ef24a228c6f2dd2953ff202310cc7789c742556ecb500a1e60055da7d6c38",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer plainly says don't inject OrderDbContext directly into the Singleton constructor (criterion 1). It names the fix: inject IServiceScopeFactory and call scopeFactory.CreateScope() then resolve OrderDbContext from scope.ServiceProvider per use (criterion 2). It states the consequence: captured instance reused across every request for the app's lifetime, stale state, no per-request isolation (criterion 3). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says \"No -- don't inject OrderDbContext directly into OrderCacheService's constructor\" (crit 1). Fix: \"inject IServiceScopeFactory ... call using var scope = scopeFactory.CreateScope(); and resolve OrderDbContext from scope.ServiceProvider right there\" (crit 2). Consequence: captured instance reused \"across every request from then on\" instead of fresh per request (crit 3). No fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says \"No -- don't inject OrderDbContext directly into OrderCacheService's constructor\" (crit 1). Fix: \"inject IServiceScopeFactory... call using var scope = scopeFactory.CreateScope(); and resolve OrderDbContext from scope.ServiceProvider right there\" (crit 2). Consequence: \"every later use... reuses whatever instance was live the moment the Singleton was built\" (crit 3). No fail criterion."
+        }
+      ]
+    }
+  ]
+}

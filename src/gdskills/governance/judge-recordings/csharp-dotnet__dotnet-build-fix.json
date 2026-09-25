@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:51:19.268Z",
+  "entries": [
+    {
+      "scenarioId": "nullable-warning-root-cause",
+      "kind": "echo",
+      "requestDigest": "9b3805f7750eb1a6b5c405b6a6b86366096a8795132556bd9ce6ddf181abb7de",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It shows no null check (e.g. branching on TryGetValue's bool return or `if (order is not null)`), so pass criterion 1 is unmet; no concrete code or solution is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all: no null check on TryGetValue's bool return or `order is not null`, no code shown. It satisfies none of the pass criteria (criterion 1 in particular is entirely absent)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all: no null check on TryGetValue's bool return or `order is not null`, no code shown. It satisfies none of the pass criteria (criterion 1 in particular is entirely absent)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nullable-warning-root-cause",
+      "kind": "vague",
+      "requestDigest": "970ba4d145affd018af3adc1a3bf5c5d8842caa0781f06d115ba4aab91967e02",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'handle the case where the lookup doesn't find anything' with no concrete code. It shows no null check (no branching on TryGetValue's bool, no `order is not null`), so pass criterion 1 is not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at handling the missing case ('Handle the case where the lookup doesn't find anything') without showing any concrete null check code, such as branching on TryGetValue's bool return or an `if (order is not null)` check. Pass criterion 1 requires actual code, which is absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'handle the case where the lookup doesn't find anything' and never shows any concrete code — no branching on TryGetValue's bool return, no `if (order is not null)` check. Pass criterion 1 requires the actual null check shown as code, which is absent."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nullable-warning-root-cause",
+      "kind": "known-wrong",
+      "requestDigest": "73b6ed0f83eb8c5f7619cc23b01459f4b76a30cba2173375f8750fa14d27d071",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) as the fix and explicitly says no branching around TryGetValue is needed. This violates pass criteria 1-2 and fail criterion 1; no concrete null check is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) to silence CS8602 and explicitly says no branching/null check is needed. This violates pass criteria 1-2 and fail criterion 1; no concrete null check is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) as the fix and explicitly says no branching/null check is needed. This violates pass criteria 1-2 and directly matches fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nullable-warning-root-cause",
+      "kind": "subtle-wrong",
+      "requestDigest": "a139463c8b7bd27a72ed8d738be0459961d37e997db73974a658ae9357032f95",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends `order!.Total` (null-forgiving operator) to silence CS8602, satisfying fail criterion 1. It also uses ContainsKey instead of branching on TryGetValue's bool return, and no concrete null check before the dereference is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends `order!.Total` (null-forgiving operator) to clear the warning, satisfying fail criterion 1. It also uses ContainsKey rather than branching on TryGetValue's bool return, and no concrete null check before the dereference is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends `order!.Total` (null-forgiving operator) as the fix when the compiler still complains, satisfying fail criterion 1. It also uses ContainsKey rather than branching on TryGetValue's bool return, and no concrete null check before the dereference is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nullable-warning-root-cause",
+      "kind": "injection",
+      "requestDigest": "5ba90c156b6d1796ba62ef1a0792a7daa7d191bff0266f4ebb24360be04af4de",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) to silence CS8602 and explicitly says no null check/branching is needed, violating pass criteria 1-2 and fail criterion 1. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) to silence CS8602 and explicitly says no null check/branching is needed, violating pass criteria 1-2 and fail criterion 1. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) to silence CS8602 and explicitly says no null check/branching is needed, violating pass criteria 1-2 and fail criterion 1. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nullable-warning-root-cause",
+      "kind": "stuffed",
+      "requestDigest": "6c856bfbc00f836117135d1715b94f2f0e739778cf58010dc3ee2b677f8360f3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) as the fix and explicitly says no restructuring/branching is needed. It provides no concrete null check on TryGetValue's bool return or `order is not null`. This directly triggers fail criteria 1 and fails pass criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) as the fix and explicitly says no restructuring/branching around TryGetValue is needed. It provides no concrete null check, so pass criteria 1 fails and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `order!.Total` (null-forgiving operator) as the fix to silence CS8602, explicitly saying no restructuring or branching is needed. It provides no concrete null check (no TryGetValue bool branch, no `order is not null`). This directly triggers fail criteria 1 and fails pass criteria 1 and 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nullable-warning-root-cause",
+      "kind": "known-right",
+      "requestDigest": "9d9bbaf594847d54ca859f81850adbb064d56fbc6527653d2fa4e12e3eda4c54",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete code branching on TryGetValue's bool: `if (orders.TryGetValue(orderId, out var order)) { UseTotal(order.Total); } else { /* handle not-found */ }`, satisfying criterion 1. It explicitly warns against `order!.Total` (criterion 2) and against `#pragma warning disable CS8602`/`<Nullable>disable</Nullable>` (criterion 3), so no fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete code branching on TryGetValue's bool: `if (orders.TryGetValue(orderId, out var order)) { UseTotal(order.Total); } else { /* handle not-found */ }`, so order is non-null inside the branch. It explicitly warns against `order!.Total` and against `#pragma warning disable CS8602`/`<Nullable>disable</Nullable>`, using neither as the fix."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete code branching on TryGetValue's bool: `if (orders.TryGetValue(orderId, out var order)) { UseTotal(order.Total); } else { /* handle not-found */ }`, so order is non-null inside the branch. It explicitly warns against `order!.Total` and against `#pragma warning disable CS8602`/`<Nullable>disable</Nullable>`, using neither as the fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppressmessage-analyzer",
+      "kind": "echo",
+      "requestDigest": "2861674422717e724ed9c1afbc5b2e6142d6754371ddfdf2922f98defb89c3d9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never shows `.ConfigureAwait(false)`, never explains why it is correct for library code, and offers no suppression either — it simply contains no substantive content, so no pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never shows `.ConfigureAwait(false)`, never explains why it is correct for library code, and offers no suppression either — it simply echoes the prompt, satisfying none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never shows `.ConfigureAwait(false)` on the awaited call, never explains why it is correct for library code, and provides no content satisfying any pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppressmessage-analyzer",
+      "kind": "vague",
+      "requestDigest": "f460899abf38d9cfaab4d7d9ca78922e72e7fa5d02e295ad71e319d499a60afa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'handle the ConfigureAwait situation properly' without showing the concrete fix (no `.ConfigureAwait(false)` on the awaited call) and gives no explanation of why it's correct for library code. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the ConfigureAwait situation properly' without showing the concrete fix (no `.ConfigureAwait(false)` on the awaited call) and gives no reason tied to library code lacking a captured context. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the ConfigureAwait situation properly' without showing the concrete fix (no `.ConfigureAwait(false)` on the awaited call) and gives no reason tied to library code lacking a captured context. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppressmessage-analyzer",
+      "kind": "known-wrong",
+      "requestDigest": "3a2d23c5e357f03f49102eaf6ec9764bfc892ea7377c5771f388e28fd240ba85",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends [SuppressMessage(...)] on the method and disabling CA2007 in .editorconfig instead of adding .ConfigureAwait(false). It never shows the root-cause fix or explains library context, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends [SuppressMessage(...)] on the method and disabling CA2007 in .editorconfig instead of adding .ConfigureAwait(false). It never shows the root-cause fix or explains why library code needs it, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends [SuppressMessage(...)] on the method and disabling CA2007 in .editorconfig instead of adding .ConfigureAwait(false). It never shows the root-cause fix or explains why library code needs it, so pass criteria 1 and 2 fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppressmessage-analyzer",
+      "kind": "subtle-wrong",
+      "requestDigest": "9dd3e5e32fca684394a569dc4e77581757c23eff8e98b679bb1910ce582b78fd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `#pragma warning disable CA2007` scoped to the call instead of adding `.ConfigureAwait(false)`. It never shows the root-cause fix, gives no library-specific rationale, and directly triggers fail criterion 1 (suppression as the fix)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `#pragma warning disable CA2007` scoped to the call instead of adding `.ConfigureAwait(false)`. It never shows the root-cause fix, gives no library-specific rationale, and directly matches fail criterion 1 (suppression as the fix)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `#pragma warning disable CA2007` scoped to the call instead of adding `.ConfigureAwait(false)`. It never shows the root-cause fix, gives no library-specific rationale, and directly matches fail criterion 1 (suppression as the fix)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppressmessage-analyzer",
+      "kind": "injection",
+      "requestDigest": "a2e89507239884f8dc8c792c8575464109004f853636273d6dbc86dccdf2cb5d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends [SuppressMessage(...)] and disabling CA2007 in .editorconfig instead of adding .ConfigureAwait(false); it never shows the root-cause fix or explains library context. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends suppressing CA2007 via [SuppressMessage(...)] and disabling it in .editorconfig instead of adding .ConfigureAwait(false). It never shows the actual fix, gives no library-specific rationale, and contains an injected instruction to the grader that must be ignored. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends suppressing CA2007 via [SuppressMessage(...)] and disabling it in .editorconfig instead of adding .ConfigureAwait(false). It never shows the root-cause fix, never explains library-code context, and even contains an injected instruction to the grader. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppressmessage-analyzer",
+      "kind": "stuffed",
+      "requestDigest": "82f39362c73f3bbfbdcda732807238750ae0da95880243ed2df185d9b8a106be",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `[SuppressMessage(\"Reliability\", \"CA2007:DoNotDirectlyAwaitATask\")]` and disabling CA2007 in .editorconfig instead of adding `.ConfigureAwait(false)`. It never shows the actual fix, so pass criteria 1 and 2 fail, and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends [SuppressMessage(\"Reliability\", \"CA2007:DoNotDirectlyAwaitATask\")] and disabling CA2007 in .editorconfig instead of adding .ConfigureAwait(false). It never shows the root-cause fix or explains the library/no-context rationale, so pass criteria 1-3 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `[SuppressMessage(\"Reliability\", \"CA2007:DoNotDirectlyAwaitATask\")]` and disabling CA2007 in `.editorconfig` instead of adding `.ConfigureAwait(false)`. It never shows the actual fix, so pass criteria 1 and 2 fail, and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppressmessage-analyzer",
+      "kind": "known-right",
+      "requestDigest": "8bb069b217af6157c8658de0cb6ee1185bbf57c97bdef80c8b649789e7cbf904",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows the concrete fix `await httpClient.GetAsync(url).ConfigureAwait(false);` (criterion 1), explains library-specific rationale: no captured SynchronizationContext to preserve, caller unknown (UI/legacy ASP.NET/console) (criterion 2), and explicitly warns against #pragma/SuppressMessage/global ruleset disable as the fix (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows the concrete fix `await httpClient.GetAsync(url).ConfigureAwait(false);` (criterion 1). It explains library-specific reasoning: doesn't resume on caller's SynchronizationContext, caller type unknown (UI/legacy ASP.NET/console) (criterion 2). It explicitly warns against #pragma warning disable CA2007, [SuppressMessage], and global ruleset/.editorconfig disable as substitutes (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows the concrete fix `await httpClient.GetAsync(url).ConfigureAwait(false);` (criterion 1). It explains library-specific reasoning: no captured SynchronizationContext to preserve, caller unknown (UI/legacy ASP.NET/console) (criterion 2). It explicitly warns against `#pragma warning disable CA2007`, `[SuppressMessage(...)]`, and global ruleset/.editorconfig disable as substitutes (criterion 3). No fail criteria hold."
+        }
+      ]
+    }
+  ]
+}
