@@ -10,7 +10,7 @@ Rules:
 
 ## Criteria
 
-- AC1: Four pack directories exist under `src/gdskills/bundled/stacks/{php-laravel,ruby-rails,c-cpp,sql-db}/`, each with `pack.json`, `rules/*.mdc` (coding-style, patterns, security, testing), `skills/*/SKILL.md` + `evals.json` for every skill the pack.json declares, `governance/scout.json`, and `agent-refs.json` with `"agents": []` and a note (gate not yet run in this flow).
+- AC1: Four pack directories exist under `src/gdskills/bundled/stacks/{php-laravel,ruby-rails,c-cpp,sql-db}/`, each with `pack.json`, `rules/*.mdc` (coding-style, patterns, security, testing), `skills/*/SKILL.md` + `evals.json` for every skill the pack.json declares, `governance/scout.json`, and `agent-refs.json` with `"agents": []` and a note recording the real gate outcome.
 - AC2: `bun test src/gdskills/stack-packs.test.ts` passes with all four new pack ids included in its real-tree checks.
 - AC3: `bun test src/gdskills/governance/authoring-lint.test.ts src/gdskills/governance/authoring-lint-guard.test.ts` pass.
 - AC4: `bun test src/gdskills/stack-pack-eval-integrity.test.ts` passes for every behavior scenario in the four new packs (I1-I10, including I6/I7/I7c anti_patterns agreement and I10 no negation-only fail criteria).
