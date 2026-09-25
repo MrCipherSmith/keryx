@@ -109,13 +109,17 @@ remains.
 ### Step 5: Report
 
 ```
-Fixed: FastAPI app failed to start with "Invalid args for response field"
-  Root cause: routers/users.py declared response_model=UserRead, but
-    UserRead (Pydantic v1 style `class Config:`) was mixed with a v2-style
-    `field_validator` in the same model, which FastAPI's schema generation
-    rejected at import time.
-  Fix: converted UserRead fully to Pydantic v2 (`model_config =
-    ConfigDict(...)`), matching the rest of the project's schemas.
+Fixed: FastAPI app failed to start with `PydanticUserError` because a
+  model defined both `Config` and `model_config`
+  Root cause: schemas/notifications.py's `NotificationSettings` model still
+    had its original v1-style `class Config:` block, and someone added a
+    v2-style `model_config = ConfigDict(...)` alongside it -- Pydantic v2
+    rejects a model that carries both configuration mechanisms at once,
+    which surfaced as an import-time failure, not just a warning.
+  Fix: removed the old `class Config:` block and migrated its one setting
+    (`orm_mode` -> `from_attributes`) into `model_config =
+    ConfigDict(from_attributes=True)`, leaving the model with exactly one
+    config mechanism.
   Verified: ruff check, mypy, pytest -x -q, and app import all green
 ```
 
