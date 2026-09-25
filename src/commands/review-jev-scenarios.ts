@@ -11,6 +11,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { optionValue } from "../lib/args";
 import { buildReviewScope } from "../review/scope";
+import type { ScopedRegion } from "../review/scope";
+import { touchedExportedSymbols } from "../review/jev-risk";
 import { createFixtureConformPrPort, createGhConformPrPort, type ConformPrInfo, type ConformPrPort } from "../review/conform-pr-port";
 import { readJevScenariosEnabled } from "../review/jev-scenarios-config";
 import {
@@ -18,6 +20,7 @@ import {
   DEFAULT_MAX_JEV_SCENARIO_CALLS,
   batchScenarioQuestions,
   buildScenarioChecklist,
+  computeLinkFanIn,
   computeScenarioFacts,
   renderScenariosMarkdown,
   scenarioFindingStats,
@@ -32,6 +35,18 @@ import {
   type ScoredScenario,
 } from "../review/jev-scenarios";
 import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey, type JevQuestions } from "../harness/decision/jev-client";
+
+/** `path -> touched exported symbols` across every retained region, for the scenario link fan-in down-weight (`isTouchedLinkSignificant`). */
+function symbolsByPathFromRegions(regions: readonly ScopedRegion[]): ReadonlyMap<string, readonly string[]> {
+  const byPath = new Map<string, string[]>();
+  for (const region of regions) {
+    const symbols = touchedExportedSymbols(region.text);
+    if (symbols.length === 0) continue;
+    const existing = byPath.get(region.path);
+    byPath.set(region.path, existing === undefined ? [...symbols] : [...new Set([...existing, ...symbols])]);
+  }
+  return byPath;
+}
 
 export const JEV_SCENARIOS_FLAGS = ["--diff", "--pr", "--scope", "--max-calls", "--threshold", "--model", "--repo", "--fixtures", "--json"];
 
@@ -157,6 +172,8 @@ export interface JevScenariosRunOptions {
   readonly fetchFn?: typeof fetch;
   /** Injectable for tests; defaults to the real filesystem discovery above. */
   readonly discoverScenarios?: (cwd: string) => Promise<ScenarioSource[]>;
+  /** Every retained region of the diff, for the scenario link fan-in down-weight (`symbolsByPathFromRegions`/`isTouchedLinkSignificant`). Omitted means no symbol evidence is available, which leaves every link unconditionally significant — the pre-tightening behaviour. */
+  readonly regions?: readonly ScopedRegion[];
 }
 
 export interface JevScenariosComputedResult extends JevScenariosRunResult {
@@ -177,9 +194,11 @@ export async function computeJevScenariosResult(options: JevScenariosRunOptions)
   const model = options.model ?? DEFAULT_JEV_MODEL;
   const fetchFn = options.fetchFn ?? globalThis.fetch;
   const discover = options.discoverScenarios ?? discoverScenarioSources;
+  const symbolsByPath = symbolsByPathFromRegions(options.regions ?? []);
 
   const scenarioSources = await discover(cwd);
-  const allFacts = scenarioSources.map((scenario) => computeScenarioFacts(scenario, allChangedFiles));
+  const fanIn = computeLinkFanIn(scenarioSources);
+  const allFacts = scenarioSources.map((scenario) => computeScenarioFacts(scenario, allChangedFiles, fanIn, symbolsByPath));
   const selection = selectScenarios(allFacts, maxCalls);
   const batches = batchScenarioQuestions(selection.selected);
 
@@ -283,14 +302,16 @@ export async function runJevScenarios(args: string[]): Promise<void> {
   const threshold = parseThreshold(optionValue(args, "--threshold"));
 
   let allChangedFiles: readonly string[];
+  let regions: readonly ScopedRegion[] = [];
   let targetLabel: string;
   if (scopeFile !== undefined) {
     const raw = scopeFile === "-" ? await Bun.stdin.text() : await Bun.file(scopeFile).text();
-    const parsed = JSON.parse(raw) as { files?: unknown };
+    const parsed = JSON.parse(raw) as { files?: unknown; regions?: unknown };
     if (!Array.isArray(parsed.files)) {
       throw new Error(`--scope ${scopeFile} carries no \`files\` array. Pass the output of \`keryx review scope --json\`.`);
     }
     allChangedFiles = parsed.files as string[];
+    if (Array.isArray(parsed.regions)) regions = parsed.regions as ScopedRegion[];
     targetLabel = `scope ${scopeFile}`;
   } else if (prArg !== undefined) {
     const number = Number(prArg);
@@ -299,16 +320,20 @@ export async function runJevScenarios(args: string[]): Promise<void> {
     }
     const port: ConformPrPort = fixturesDir === undefined ? createGhConformPrPort(undefined, optionValue(args, "--repo")) : await fixturePrPort(fixturesDir);
     const info = await port.pr(number);
-    allChangedFiles = buildReviewScope(info.diff).files;
+    const scope = buildReviewScope(info.diff);
+    allChangedFiles = scope.files;
+    regions = scope.regions;
     targetLabel = `PR #${info.number} — ${info.title}`;
   } else {
     const diff = await gitDiffForJevScenarios(diffRef);
-    allChangedFiles = buildReviewScope(diff).files;
+    const scope = buildReviewScope(diff);
+    allChangedFiles = scope.files;
+    regions = scope.regions;
     targetLabel = diffRef ?? "working diff";
   }
 
   const fetchFn: typeof fetch = fixturesDir === undefined ? globalThis.fetch : await fixtureJevFetch(fixturesDir);
-  const result = await computeJevScenariosResult({ cwd, allChangedFiles, targetLabel, maxCalls, threshold, model, fetchFn });
+  const result = await computeJevScenariosResult({ cwd, allChangedFiles, targetLabel, maxCalls, threshold, model, fetchFn, regions });
 
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));

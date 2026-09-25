@@ -157,8 +157,8 @@ threshold rather than a general warning.
 | Rationalization | Why it is wrong |
 |---|---|
 | "Jev said 0.9, so this hunk is definitely dangerous" | A `noul` score is a probability across one dimension, not a verdict — severity stays capped at `info`/`minor` precisely because Jev alone is not authoritative |
-| "No nearby test means nobody tested this at all" | `hasNearbyTest` only checks whether a changed test file shares this hunk's stem or directory — it is a coarse proximity heuristic, not proof a specific function is covered (see the live-check journal for a case where it over-triggered) |
-| "This hunk touches a .md file, so 'no nearby test' is a meaningful finding" | Documentation hunks never have a test counterpart by construction; a finding here is technically true and practically uninteresting — read `file` before trusting the finding's severity |
+| "No nearby test means nobody tested this at all" | `hasNearbyTest` requires the nearby test's OWN diff text to mention a touched symbol or import the hunk's module (`testHunkEvidence`), tightened after a live-check false negative — still a regex heuristic, not proof of coverage through an indirection it cannot see |
+| "This hunk touches a .md file, so 'no nearby test' is a meaningful finding" | Docs (`.md`/`.txt`) hunks are excluded before scoring (`isNonCodeHunk`) after a live check where prose scored `public-api` — this cannot happen; `selection.hunksNotCode` reports the count |
 | "No findings means the diff is low risk" | `--max-calls` bounds how many hunks are scored; a capped run reports `selection.hunksSkipped` for exactly this reason — read the selection stats before treating silence as clean |
 
 ---
@@ -171,9 +171,9 @@ Before trusting a run's findings:
    covered fewer than "every retained hunk" and the report should say so.
 2. Spot-check a handful of `ranked` entries against the actual hunk: does the
    file/line range and the top dimension make sense for what actually
-   changed there? A `public-api`/`security` label on a documentation-only
-   hunk is a signal the underlying dimension question needs a closer read,
-   not that the code is risky.
+   changed there? Docs (`.md`/`.txt`) hunks never reach `ranked` at all —
+   `selection.hunksNotCode` should account for every one of them in the
+   diff.
 3. Confirm every finding carries `reviewer: "review-jev-risk"` and a
    `dedupe_key` — both are required for the orchestrator's Quality Gate and
    Wave C verification to route it correctly.

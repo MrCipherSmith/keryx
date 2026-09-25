@@ -7,9 +7,12 @@ import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_JEV_SCENARIOS_THRESHOLD,
   DEFAULT_MAX_JEV_SCENARIO_CALLS,
+  SCENARIO_LINK_FANOUT_THRESHOLD,
   batchScenarioQuestions,
   buildScenarioChecklist,
+  computeLinkFanIn,
   computeScenarioFacts,
+  isTouchedLinkSignificant,
   scenarioFromWikiPage,
   scenariosFromPrd,
   scenariosFromReadmeLike,
@@ -117,6 +120,69 @@ describe("computeScenarioFacts", () => {
   test("hasNearbyTest false when no test covers any touched link", () => {
     const facts = computeScenarioFacts(scenario(), ["src/commands/providers.ts"]);
     expect(facts.hasNearbyTest).toBe(false);
+  });
+});
+
+describe("computeLinkFanIn", () => {
+  test("counts distinct scenarios per link, once per scenario even with a repeated link", () => {
+    const scenarios = [
+      scenario({ id: "a", links: ["src/tui/tui-shell.ts", "src/tui/tui-shell.ts"] }),
+      scenario({ id: "b", links: ["src/tui/tui-shell.ts"] }),
+      scenario({ id: "c", links: ["src/commands/providers.ts"] }),
+    ];
+    const fanIn = computeLinkFanIn(scenarios);
+    expect(fanIn.get("src/tui/tui-shell.ts")).toBe(2);
+    expect(fanIn.get("src/commands/providers.ts")).toBe(1);
+    expect(fanIn.get("src/unlinked.ts")).toBeUndefined();
+  });
+});
+
+describe("isTouchedLinkSignificant", () => {
+  test("a link at or below the fan-out threshold is always significant", () => {
+    const s = scenario({ links: ["src/commands/providers.ts"] });
+    const fanIn = new Map([["src/commands/providers.ts", SCENARIO_LINK_FANOUT_THRESHOLD]]);
+    expect(isTouchedLinkSignificant(s, "src/commands/providers.ts", fanIn, new Map())).toBe(true);
+  });
+
+  test("a link above the threshold is significant only when the scenario text names a touched symbol", () => {
+    const s = scenario({ text: "Uses the shell's runLoop to render.", links: ["src/tui/tui-shell.ts"] });
+    const fanIn = new Map([["src/tui/tui-shell.ts", SCENARIO_LINK_FANOUT_THRESHOLD + 1]]);
+    const symbolsByPath = new Map([["src/tui/tui-shell.ts", ["runLoop"]]]);
+    expect(isTouchedLinkSignificant(s, "src/tui/tui-shell.ts", fanIn, symbolsByPath)).toBe(true);
+  });
+
+  test("a link above the threshold with no symbol evidence in the scenario text is not significant", () => {
+    const s = scenario({ text: "Uses the shell to render the prompt.", links: ["src/tui/tui-shell.ts"] });
+    const fanIn = new Map([["src/tui/tui-shell.ts", SCENARIO_LINK_FANOUT_THRESHOLD + 1]]);
+    const symbolsByPath = new Map([["src/tui/tui-shell.ts", ["runLoop"]]]);
+    expect(isTouchedLinkSignificant(s, "src/tui/tui-shell.ts", fanIn, symbolsByPath)).toBe(false);
+  });
+});
+
+describe("computeScenarioFacts (fan-in down-weight)", () => {
+  test("without fanIn/symbolsByPath data (defaults), a high-fan-in link still counts as touched — pre-tightening behaviour preserved", () => {
+    const s = scenario({ links: ["src/tui/tui-shell.ts"] });
+    const facts = computeScenarioFacts(s, ["src/tui/tui-shell.ts"]);
+    expect(facts.touchedLinks).toEqual(["src/tui/tui-shell.ts"]);
+  });
+
+  test("regression (flow 332 live-check false positive shape): a large, high-fan-in file linked by many unrelated scenarios does not count as touched without symbol evidence", () => {
+    const many = Array.from({ length: SCENARIO_LINK_FANOUT_THRESHOLD + 2 }, (_, i) => scenario({ id: `s${i}`, links: ["src/tui/tui-shell.ts"] }));
+    const fanIn = computeLinkFanIn(many);
+    const target = scenario({ id: "target", text: "How to connect a provider from the shell.", links: ["src/tui/tui-shell.ts"] });
+    const symbolsByPath = new Map([["src/tui/tui-shell.ts", ["launchTuiAgentShell"]]]);
+    const facts = computeScenarioFacts(target, ["src/tui/tui-shell.ts"], fanIn, symbolsByPath);
+    expect(facts.touchedLinks).toEqual([]);
+    expect(facts.hasTouchedLink).toBe(false);
+  });
+
+  test("a high-fan-in link still counts as touched when the scenario text names a touched exported symbol", () => {
+    const many = Array.from({ length: SCENARIO_LINK_FANOUT_THRESHOLD + 2 }, (_, i) => scenario({ id: `s${i}`, links: ["src/tui/tui-shell.ts"] }));
+    const fanIn = computeLinkFanIn(many);
+    const target = scenario({ id: "target", text: "Calls launchTuiAgentShell to start the session.", links: ["src/tui/tui-shell.ts"] });
+    const symbolsByPath = new Map([["src/tui/tui-shell.ts", ["launchTuiAgentShell"]]]);
+    const facts = computeScenarioFacts(target, ["src/tui/tui-shell.ts"], fanIn, symbolsByPath);
+    expect(facts.touchedLinks).toEqual(["src/tui/tui-shell.ts"]);
   });
 });
 

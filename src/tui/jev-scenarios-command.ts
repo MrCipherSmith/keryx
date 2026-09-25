@@ -51,7 +51,7 @@ export async function runJevScenariosForShell(cwd: string, gitDiff: GitDiffFn = 
     return refusal;
   }
   const diff = await gitDiff(cwd);
-  const allChangedFiles = buildReviewScope(diff).files;
-  const result = await computeJevScenariosResult({ cwd, allChangedFiles, targetLabel: "working diff" });
+  const scope = buildReviewScope(diff);
+  const result = await computeJevScenariosResult({ cwd, allChangedFiles: scope.files, targetLabel: "working diff", regions: scope.regions });
   return renderJevScenariosForShell(result);
 }

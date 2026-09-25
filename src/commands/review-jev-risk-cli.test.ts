@@ -147,6 +147,56 @@ describe("AC8: keryx review jev-risk --scope <scope.json> --json", () => {
     expect(parsed.tokens.jevCalls).toBe(1);
   });
 
+  test("a docs (.md) hunk is never scored and never consumes --max-calls budget, reported as notCode", async () => {
+    ROOT = await projectRoot(true);
+    const scopePath = path.join(ROOT, "scope.json");
+    await writeFile(
+      scopePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: "diff",
+        contextLines: 20,
+        files: ["src/auth/session.ts", "docs/docs/cli-reference.md"],
+        regions: [
+          { path: "src/auth/session.ts", startLine: 1, endLine: 3, changedLines: 1, contextTruncated: false, text: "+export function login() {}" },
+          { path: "docs/docs/cli-reference.md", startLine: 1, endLine: 3, changedLines: 1, contextTruncated: false, text: "+### `--login`\n+Documents the new public API flag." },
+        ],
+        drops: [],
+        counts: {
+          filesSeen: 2,
+          filesRetained: 2,
+          filesDropped: 0,
+          blocksSeen: 2,
+          blocksRetained: 2,
+          blocksDropped: 0,
+          changedLinesRetained: 2,
+          changedLinesDropped: 0,
+          droppedByReason: { lockfile: 0, generated: 0, vendored: 0, snapshot: 0, minified: 0, binary: 0, "whitespace-only": 0, "comment-only": 0 },
+        },
+      }),
+      "utf8",
+    );
+    // Only one fixture response — if the docs hunk were scored too, this would
+    // throw "a call beyond that was made" (see `fixtureJevFetch`'s own guard).
+    const fixturesDir = await writeFixtures(ROOT, { security: 0.95 });
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["jev-risk", "--scope", scopePath, "--fixtures", fixturesDir, "--json"]);
+
+    const parsed = JSON.parse(output()) as {
+      findings: Array<{ file: string }>;
+      selection: { hunksScored: number; hunksNotCode: number };
+      tokens: { jevCalls: number };
+      ranked: Array<{ file: string }>;
+    };
+    expect(parsed.selection.hunksNotCode).toBe(1);
+    expect(parsed.selection.hunksScored).toBe(1);
+    expect(parsed.tokens.jevCalls).toBe(1);
+    expect(parsed.ranked.map((r) => r.file)).toEqual(["src/auth/session.ts"]);
+    expect(parsed.findings.every((f) => f.file !== "docs/docs/cli-reference.md")).toBe(true);
+  });
+
   test("--max-calls caps the hunks scored, reported rather than silently truncated", async () => {
     ROOT = await projectRoot(true);
     const scopePath = await writeScope(ROOT);
@@ -159,6 +209,60 @@ describe("AC8: keryx review jev-risk --scope <scope.json> --json", () => {
     expect(parsed.selection.maxCalls).toBe(0);
     expect(parsed.selection.hunksScored).toBe(0);
     expect(parsed.selection.hunksSkipped).toBe(1);
+  });
+});
+
+describe("AC1/AC2 (tightened): hasNearbyTest requires evidence, not just directory/stem proximity", () => {
+  test("regression (live-check false negative, providers.ts:723-733): a proximate test changed for an unrelated reason does not suppress the finding", async () => {
+    ROOT = await projectRoot(true);
+    const scopePath = path.join(ROOT, "scope.json");
+    await writeFile(
+      scopePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: "diff",
+        contextLines: 20,
+        files: ["src/commands/providers.ts", "src/commands/providers.test.ts"],
+        regions: [
+          { path: "src/commands/providers.ts", startLine: 723, endLine: 733, changedLines: 5, contextTruncated: false, text: "+export function boundedJsonBody() {}" },
+          { path: "src/commands/providers.test.ts", startLine: 10, endLine: 12, changedLines: 2, contextTruncated: false, text: '+test("something unrelated", () => {\n+  expect(1).toBe(1);\n+});' },
+        ],
+        drops: [],
+        counts: {
+          filesSeen: 2,
+          filesRetained: 2,
+          filesDropped: 0,
+          blocksSeen: 2,
+          blocksRetained: 2,
+          blocksDropped: 0,
+          changedLinesRetained: 7,
+          changedLinesDropped: 0,
+          droppedByReason: { lockfile: 0, generated: 0, vendored: 0, snapshot: 0, minified: 0, binary: 0, "whitespace-only": 0, "comment-only": 0 },
+        },
+      }),
+      "utf8",
+    );
+    // Two hunks are retained (providers.ts AND its own test file), so both get
+    // scored — one fixture response per hunk, in region order.
+    const fixturesDir = await mkdtemp(path.join(tmpdir(), "keryx-jev-risk-fixtures-"));
+    const highAnswers = Object.fromEntries(RISK_DIMENSIONS.map((d) => [d, { type: "noul", noul: d === "public-api" ? 0.89 : 0.1 }]));
+    const lowAnswers = Object.fromEntries(RISK_DIMENSIONS.map((d) => [d, { type: "noul", noul: 0.1 }]));
+    await writeFile(
+      path.join(fixturesDir, "jev-responses.json"),
+      JSON.stringify([
+        { answers: highAnswers, usage: { input_tokens: 100, output_tokens: 5, cost: 0.001 } },
+        { answers: lowAnswers, usage: { input_tokens: 100, output_tokens: 5, cost: 0.001 } },
+      ]),
+      "utf8",
+    );
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["jev-risk", "--scope", scopePath, "--fixtures", fixturesDir, "--threshold", "0.7", "--json"]);
+
+    const parsed = JSON.parse(output()) as { findings: Array<{ file: string }> };
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]!.file).toBe("src/commands/providers.ts");
   });
 });
 

@@ -24,6 +24,21 @@
 //
 // Through the security facade, not `security/redact` directly — same
 // discipline as `jev-risk.ts`/`jev-rules.ts`.
+//
+// Decision recorded from the live check on #712/#717 (flow 332 journal): a
+// large, widely-referenced file such as `tui-shell.ts` gets LINKED from many
+// unrelated scenarios (every "how to" section mentions the shell somewhere),
+// so "this scenario links a file the diff touches" stops being evidence of
+// anything once enough scenarios link the same file — it becomes a fact
+// about the file's popularity, not about this scenario's behaviour. A link
+// to a file with fan-in above `SCENARIO_LINK_FANOUT_THRESHOLD`
+// (`computeLinkFanIn`) is down-weighted: it only still counts as "touched"
+// when the scenario's own text names one of the diff's touched exported
+// symbols for that file (`isTouchedLinkSignificant`, reusing
+// `touchedExportedSymbols` from `jev-risk.ts` — the adapter supplies the
+// per-path symbol map, the same way it supplies `nearbyTestText` there). A
+// low-fan-in link is unaffected: most scenarios link one or two specific
+// files, and for those the link IS the evidence.
 
 import { extractCodePaths, extractLinks, resolveLink } from "../wiki/backlinks";
 import { estimateTokens } from "./cost";
@@ -143,6 +158,48 @@ export function scenariosFromReadmeLike(repoPath: string, content: string): read
 }
 
 // ---------------------------------------------------------------------------
+// AC3 (tightened, see the file header's decision): fan-in over a scenario
+// link — how many DISTINCT discovered scenarios link the same file.
+// ---------------------------------------------------------------------------
+
+/** A link with fan-in above this many scenarios is down-weighted — significant only with symbol evidence. */
+export const SCENARIO_LINK_FANOUT_THRESHOLD = 5;
+
+/** `linked file -> number of distinct scenarios that link it`, over the WHOLE discovered scenario set. */
+export function computeLinkFanIn(scenarios: readonly ScenarioSource[]): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const scenario of scenarios) {
+    for (const link of new Set(scenario.links)) {
+      counts.set(link, (counts.get(link) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function mentionsIdentifier(text: string, identifier: string): boolean {
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![A-Za-z0-9_$])${escaped}(?![A-Za-z0-9_$])`).test(text);
+}
+
+/**
+ * Whether a scenario's link to `link` is significant evidence the diff
+ * touches THIS scenario — always true under the fan-in threshold; above it,
+ * true only when the scenario's own text names one of `link`'s touched
+ * exported symbols.
+ */
+export function isTouchedLinkSignificant(
+  scenario: ScenarioSource,
+  link: string,
+  fanIn: ReadonlyMap<string, number>,
+  symbolsByPath: ReadonlyMap<string, readonly string[]>,
+): boolean {
+  const count = fanIn.get(link) ?? 0;
+  if (count <= SCENARIO_LINK_FANOUT_THRESHOLD) return true;
+  const symbols = symbolsByPath.get(link) ?? [];
+  return symbols.some((symbol) => mentionsIdentifier(scenario.text, symbol));
+}
+
+// ---------------------------------------------------------------------------
 // AC3: facts — which of a scenario's linked files the diff touches.
 // ---------------------------------------------------------------------------
 
@@ -155,9 +212,21 @@ export interface ScenarioFacts {
   readonly factLines: readonly string[];
 }
 
-export function computeScenarioFacts(scenario: ScenarioSource, allChangedFiles: readonly string[]): ScenarioFacts {
+/**
+ * `fanIn`/`symbolsByPath` default to empty maps, under which every link's
+ * fan-in reads as 0 (<= threshold) and every link stays unconditionally
+ * significant — the original, pre-tightening behaviour. The adapter passes
+ * real maps built from the whole discovered scenario set and the diff's
+ * touched exported symbols per path.
+ */
+export function computeScenarioFacts(
+  scenario: ScenarioSource,
+  allChangedFiles: readonly string[],
+  fanIn: ReadonlyMap<string, number> = new Map(),
+  symbolsByPath: ReadonlyMap<string, readonly string[]> = new Map(),
+): ScenarioFacts {
   const changed = new Set(allChangedFiles);
-  const touchedLinks = scenario.links.filter((link) => changed.has(link));
+  const touchedLinks = scenario.links.filter((link) => changed.has(link) && isTouchedLinkSignificant(scenario, link, fanIn, symbolsByPath));
   const hasNearbyTest = touchedLinks.some((link) => testFilesTouchedNearby(link, allChangedFiles).length > 0);
   const factLines = [
     `scenario: ${scenario.title} (${scenario.kind}: ${scenario.id})`,

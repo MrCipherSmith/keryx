@@ -46,13 +46,14 @@ function baseResult(overrides: Partial<JevRiskComputedResult> = {}): JevRiskComp
   return {
     status: "DONE",
     reviewer: "review-jev-risk",
-    summary: "Scored 0 hunk(s) against working diff; 0 finding(s) at/above threshold 0.7. 0 hunk(s) skipped by --max-calls 150 (0 pair(s)).",
+    summary:
+      "Scored 0 hunk(s) against working diff; 0 finding(s) at/above threshold 0.7. 0 hunk(s) skipped by --max-calls 150 (0 pair(s)); 0 hunk(s) skipped as not a code hunk (docs/.md/.txt).",
     findings: [],
     stats: { blocker: 0, major: 0, minor: 0, info: 0 },
     ranked: [],
     routingHints: [],
     tokens: { jevCalls: 0 },
-    selection: { maxCalls: 150, hunksScored: 0, hunksSkipped: 0 },
+    selection: { maxCalls: 150, hunksScored: 0, hunksSkipped: 0, hunksNotCode: 0 },
     ...overrides,
   };
 }

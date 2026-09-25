@@ -173,6 +173,69 @@ describe("AC8: keryx review jev-scenarios --scope <scope.json> --json", () => {
   });
 });
 
+describe("AC3 (tightened): a high-fan-in link is down-weighted without symbol evidence", () => {
+  /** `SCENARIO_LINK_FANOUT_THRESHOLD + 2` wiki pages all linking the same large, widely-referenced file. */
+  async function writeManyScenariosLinkingSameFile(root: string): Promise<void> {
+    const dir = path.join(root, ".metaproject", "wiki", "user-scenarios");
+    await mkdir(dir, { recursive: true });
+    for (let i = 0; i < 7; i += 1) {
+      await writeFile(
+        path.join(dir, `unrelated-${i}.md`),
+        ["---", `title: Unrelated scenario ${i}`, "---", "", `# Unrelated scenario ${i}`, "", "Uses the shell, see `src/tui/tui-shell.ts`."].join("\n"),
+        "utf8",
+      );
+    }
+  }
+
+  async function writeScopeWithShellHunk(root: string): Promise<string> {
+    const scopePath = path.join(root, "scope.json");
+    await writeFile(
+      scopePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: "diff",
+        contextLines: 20,
+        files: ["src/tui/tui-shell.ts"],
+        regions: [{ path: "src/tui/tui-shell.ts", startLine: 1, endLine: 2, changedLines: 1, contextTruncated: false, text: "+export function launchTuiAgentShell() {}" }],
+        drops: [],
+        counts: {
+          filesSeen: 1,
+          filesRetained: 1,
+          filesDropped: 0,
+          blocksSeen: 1,
+          blocksRetained: 1,
+          blocksDropped: 0,
+          changedLinesRetained: 1,
+          changedLinesDropped: 0,
+          droppedByReason: { lockfile: 0, generated: 0, vendored: 0, snapshot: 0, minified: 0, binary: 0, "whitespace-only": 0, "comment-only": 0 },
+        },
+      }),
+      "utf8",
+    );
+    return scopePath;
+  }
+
+  test("regression (flow 332 live-check shape, tui-shell.ts fan-in from many unrelated PRDs): none of the unrelated scenarios is treated as touched, zero Jev calls", async () => {
+    ROOT = await projectRoot(true);
+    await writeManyScenariosLinkingSameFile(ROOT);
+    const scopePath = await writeScopeWithShellHunk(ROOT);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    // No fixtures dir: any Jev call this run made would throw for lack of a
+    // fetch fixture — a direct check that fan-in down-weighting suppressed
+    // every candidate before any call was attempted.
+    await reviewCommand(["jev-scenarios", "--scope", scopePath, "--json"]);
+
+    const parsed = JSON.parse(output()) as { findings: unknown[]; checklist: unknown[]; tokens: { jevCalls: number }; scenarioSources: unknown[] };
+    expect(parsed.scenarioSources).toHaveLength(7);
+    expect(parsed.tokens.jevCalls).toBe(0);
+    expect(parsed.findings).toEqual([]);
+    expect(parsed.checklist).toEqual([]);
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+});
+
 describe("AC5: opt-in and credential gating — both refuse before any read", () => {
   test("review.jev.scenarios absent/false: refused, the scope file is never even opened", async () => {
     ROOT = await projectRoot(false);

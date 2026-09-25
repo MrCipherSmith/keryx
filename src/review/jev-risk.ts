@@ -22,6 +22,32 @@
 // import-policy ratchet (`src/lib/import-policy.live.test.ts`) is at its
 // cap, and every caller outside `src/security/` reaches redaction through
 // `src/security/service.ts` (see `conform-jev.ts`'s own note on this).
+//
+// Two decisions recorded from the live check on #712/#717 (149 calls,
+// $0.007; flow 332 journal):
+//
+// 1. **Docs hunks never reach any risk dimension, not even `public-api`.**
+//    All four findings from that run were `cli-reference.md` prose hunks
+//    describing a new CLI flag, scored high on `public-api` — Jev correctly
+//    answered "does this text describe a public API" when the question
+//    meant "is this HUNK a code risk to a public API". Those are different
+//    claims, and a `.md`/`.txt` hunk can only ever supply evidence for the
+//    first. The code that actually enacts the documented change is its own
+//    hunk elsewhere in the same diff and gets scored there — scoring the
+//    prose too is pure duplicate noise, never additional signal, so it is
+//    excluded from selection entirely (`isNonCodeHunk`/`selectRiskHunks`)
+//    rather than merely down-ranked.
+// 2. **`hasNearbyTest` requires evidence, not just proximity.** A directory-
+//    or stem-adjacent test file changed in the same diff used to be enough
+//    to suppress a finding outright — which is how `providers.ts:723-733`
+//    (new `boundedJsonBody`, p=0.89) went unflagged: some OTHER test in
+//    `providers.test.ts` changed for an unrelated reason, and proximity
+//    alone read that as coverage. A nearby test now only counts when its
+//    OWN diff text mentions one of the hunk's touched exported symbols
+//    (`touchedExportedSymbols`) or imports the hunk's module by path stem
+//    (`testHunkEvidence`). Proximity is still reported as a fact
+//    (`nearbyTestFiles`) — it is just no longer sufficient on its own to
+//    suppress a finding.
 
 import { hunkClauseFacts, hunkRedactedStateText } from "./conform-state";
 import { estimateTokens } from "./cost";
@@ -165,6 +191,35 @@ export function testFilesTouchedNearby(regionPath: string, allChangedFiles: read
   });
 }
 
+function escapeForIdentifierRegex(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Whole-identifier match — `\b` alone under-anchors when `symbol` starts or
+ * ends with `$` (a valid identifier character `\b` does not treat as a word
+ * character), so the boundary is asserted explicitly on both sides instead.
+ */
+function mentionsIdentifier(text: string, identifier: string): boolean {
+  const re = new RegExp(`(?<![A-Za-z0-9_$])${escapeForIdentifierRegex(identifier)}(?![A-Za-z0-9_$])`);
+  return re.test(text);
+}
+
+/**
+ * AC1/AC2 (tightened, see the file header's decision 2): whether a
+ * PROXIMATE test file's own changed text gives actual evidence it reaches
+ * this hunk — it mentions one of the hunk's touched exported symbols as a
+ * whole identifier, or it imports a module whose path ends in the hunk's
+ * own file stem (`from "../providers"`-shaped). Proximity
+ * (`testFilesTouchedNearby`) only produces CANDIDATES; this decides which
+ * candidates actually count.
+ */
+export function testHunkEvidence(testFileText: string, symbols: readonly string[], moduleStem: string): boolean {
+  if (symbols.some((symbol) => mentionsIdentifier(testFileText, symbol))) return true;
+  const importRe = new RegExp(`from\\s*["'][^"']*/${escapeForIdentifierRegex(moduleStem)}(\\.[jt]sx?)?["']`);
+  return importRe.test(testFileText);
+}
+
 // ---------------------------------------------------------------------------
 // AC1: deterministic facts per hunk, assembled before any Jev question.
 // ---------------------------------------------------------------------------
@@ -175,21 +230,45 @@ export interface RiskHunkFacts {
   readonly exportedSymbols: readonly string[];
   readonly changedLines: number;
   readonly nearbyTestFiles: readonly string[];
+  /** Subset of `nearbyTestFiles` whose OWN diff text gives evidence it reaches this hunk (`testHunkEvidence`). */
+  readonly evidencedTestFiles: readonly string[];
   readonly hasNearbyTest: boolean;
   /** Ready to place in `state`, above the redacted hunk text — the lesson `conform-state.ts`'s own header records. */
   readonly factLines: readonly string[];
 }
 
-export function computeHunkRiskFacts(region: ScopedRegion, allChangedFiles: readonly string[]): RiskHunkFacts {
+/**
+ * `path -> that path's own changed (added/removed) diff text`, used only to
+ * look up a nearby test candidate's text for `testHunkEvidence`. Built by
+ * the adapter from every retained region (not just the ones selected for
+ * scoring) — a test file's own hunk may sort past `--max-calls` and still
+ * be available as evidence. Absent or an empty map means no evidence was
+ * supplied for any candidate, which fails toward NOT suppressing a finding
+ * (the same "false retain over false drop" discipline `scope.ts` documents
+ * for itself), not toward the old proximity-only behaviour.
+ */
+export type NearbyTestTextByPath = ReadonlyMap<string, string>;
+
+export function computeHunkRiskFacts(
+  region: ScopedRegion,
+  allChangedFiles: readonly string[],
+  nearbyTestText: NearbyTestTextByPath = new Map(),
+): RiskHunkFacts {
   const exportedSymbols = touchedExportedSymbols(region.text);
   const pathClassification = classifyHunkRiskPath(region, exportedSymbols.length);
   const nearbyTestFiles = testFilesTouchedNearby(region.path, allChangedFiles);
+  const moduleStem = stemOf(region.path);
+  const evidencedTestFiles = nearbyTestFiles.filter((testPath) => {
+    const text = nearbyTestText.get(testPath);
+    return text !== undefined && testHunkEvidence(text, exportedSymbols, moduleStem);
+  });
   const factLines = [
     ...hunkClauseFacts(region).factLines,
     `path class(es): ${pathClassification.classes.length > 0 ? pathClassification.classes.join(", ") : "(none matched)"}`,
     ...pathClassification.detail,
     `exported symbols touched: ${exportedSymbols.length > 0 ? exportedSymbols.join(", ") : "(none matched)"}`,
     `test file(s) touched nearby in this diff: ${nearbyTestFiles.length > 0 ? nearbyTestFiles.join(", ") : "(none)"}`,
+    `nearby test(s) with evidence covering this hunk: ${evidencedTestFiles.length > 0 ? evidencedTestFiles.join(", ") : "(none)"}`,
   ];
   return {
     region,
@@ -197,7 +276,8 @@ export function computeHunkRiskFacts(region: ScopedRegion, allChangedFiles: read
     exportedSymbols,
     changedLines: region.changedLines,
     nearbyTestFiles,
-    hasNearbyTest: nearbyTestFiles.length > 0,
+    evidencedTestFiles,
+    hasNearbyTest: evidencedTestFiles.length > 0,
     factLines,
   };
 }
@@ -302,6 +382,19 @@ export function batchRiskQuestionsForHunk(facts: RiskHunkFacts): RiskBatch[] {
 }
 
 // ---------------------------------------------------------------------------
+// AC1 (tightened, see the file header's decision 1): docs hunks never reach
+// any risk dimension — not scored, not counted against `--max-calls`,
+// reported separately as "not a code hunk".
+// ---------------------------------------------------------------------------
+
+const NON_CODE_HUNK_RE = /\.(md|txt)$/i;
+
+/** A `.md`/`.txt` path — prose, never itself the code a risk dimension is asking about. */
+export function isNonCodeHunk(path: string): boolean {
+  return NON_CODE_HUNK_RE.test(path);
+}
+
+// ---------------------------------------------------------------------------
 // AC1: budget — `--max-calls` bounds (hunk, dimension) PAIRS, the same unit
 // flow 330's `jev-rules.ts` `--max-calls` already counts. A prefix of the
 // diff-ordered hunks is kept (deterministic), the rest are reported as
@@ -314,20 +407,25 @@ export const DEFAULT_MAX_JEV_RISK_CALLS = 150;
 export interface RiskHunkSelection {
   readonly selected: readonly ScopedRegion[];
   readonly skipped: readonly ScopedRegion[];
+  /** Docs (`.md`/`.txt`) hunks — excluded before the budget is even applied; see `isNonCodeHunk`. */
+  readonly notCode: readonly ScopedRegion[];
   readonly maxCalls: number;
   readonly pairsSelected: number;
   readonly pairsSkipped: number;
 }
 
-/** AC1: cap the number of (hunk, dimension) questions a run sends — every hunk gets all five dimensions or none. */
+/** AC1: cap the number of (hunk, dimension) questions a run sends — every hunk gets all five dimensions or none. Docs hunks are removed first and never consume budget. */
 export function selectRiskHunks(regions: readonly ScopedRegion[], maxCalls: number = DEFAULT_MAX_JEV_RISK_CALLS): RiskHunkSelection {
   const cap = Number.isFinite(maxCalls) && maxCalls >= 0 ? Math.trunc(maxCalls) : DEFAULT_MAX_JEV_RISK_CALLS;
+  const notCode = regions.filter((region) => isNonCodeHunk(region.path));
+  const codeRegions = regions.filter((region) => !isNonCodeHunk(region.path));
   const maxHunks = Math.floor(cap / RISK_DIMENSIONS.length);
-  const selected = regions.slice(0, maxHunks);
-  const skipped = regions.slice(maxHunks);
+  const selected = codeRegions.slice(0, maxHunks);
+  const skipped = codeRegions.slice(maxHunks);
   return {
     selected,
     skipped,
+    notCode,
     maxCalls: cap,
     pairsSelected: selected.length * RISK_DIMENSIONS.length,
     pairsSkipped: skipped.length * RISK_DIMENSIONS.length,

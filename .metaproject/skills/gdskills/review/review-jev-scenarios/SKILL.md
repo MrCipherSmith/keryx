@@ -153,7 +153,7 @@ own `dedupe_key`, so there is nothing to collapse across sites.
 | Rationalization | Why it is wrong |
 |---|---|
 | "Jev said 0.9, so this scenario is definitely broken" | A `noul` score is a probability that behaviour changed, not a verdict — it only ever produces a `minor` finding, and only when paired with the separate "no covering test" fact |
-| "This PRD scenario links to a huge, frequently-touched file, so the match is meaningless" | A real risk of the "touched link" heuristic — a big shared file (a CLI dispatcher, a TUI shell) can be linked from many unrelated scenario documents, producing a spurious-looking match; read the scenario's own text before trusting the checklist entry, not just the probability |
+| "This PRD scenario links to a huge, frequently-touched file, so the match is meaningless" | Down-weighted after a live check (`SCENARIO_LINK_FANOUT_THRESHOLD`): a link to a file referenced by more scenarios than that only still counts as touched when the scenario's own text names one of the diff's touched exported symbols — read the scenario's own text before assuming a surviving entry is still spurious |
 | "No entries in checklist means nothing changed functionally" | Discovery only covers three sources (gdwiki `user-scenario` pages, `docs/requirements/**`, README/docs "how to" sections); a scenario that exists only in someone's head, or in a doc outside those three locations, is invisible to this reviewer |
 | "checklist is empty so scenarioSources must be empty too" | `scenarioSources` lists every discovered scenario; `checklist` lists only those with a touched link at/above threshold — a project can have hundreds of scenarios discovered and zero touched by a given diff |
 

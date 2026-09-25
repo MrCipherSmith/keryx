@@ -29,6 +29,7 @@ import {
   selectRiskHunks,
   synthesizeRiskFindings,
   type JevRiskRunResult,
+  type NearbyTestTextByPath,
   type ScoredRiskHunk,
 } from "../review/jev-risk";
 import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey, type JevQuestions } from "../harness/decision/jev-client";
@@ -97,7 +98,16 @@ export interface JevRiskRunOptions {
 
 export interface JevRiskComputedResult extends JevRiskRunResult {
   readonly tokens: { readonly jevCalls: number; readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number };
-  readonly selection: { readonly maxCalls: number; readonly hunksScored: number; readonly hunksSkipped: number };
+  readonly selection: { readonly maxCalls: number; readonly hunksScored: number; readonly hunksSkipped: number; readonly hunksNotCode: number };
+}
+
+/** `path -> that path's own changed diff text` across EVERY retained region (not just the ones selected for scoring), for `computeHunkRiskFacts`'s nearby-test evidence lookup — a candidate test's own hunk can sort past `--max-calls` and still be available as evidence. */
+function nearbyTestTextByPath(regions: readonly ScopedRegion[]): NearbyTestTextByPath {
+  const byPath = new Map<string, string>();
+  for (const region of regions) {
+    byPath.set(region.path, `${byPath.get(region.path) ?? ""}\n${region.text}`);
+  }
+  return byPath;
 }
 
 /**
@@ -117,7 +127,8 @@ export async function computeJevRiskResult(options: JevRiskRunOptions): Promise<
   const fetchFn = options.fetchFn ?? globalThis.fetch;
 
   const selection = selectRiskHunks(regions, maxCalls);
-  const facts = selection.selected.map((region) => computeHunkRiskFacts(region, allChangedFiles));
+  const testText = nearbyTestTextByPath(regions);
+  const facts = selection.selected.map((region) => computeHunkRiskFacts(region, allChangedFiles, testText));
 
   const scored: ScoredRiskHunk[] = [];
   let jevCalls = 0;
@@ -166,7 +177,8 @@ export async function computeJevRiskResult(options: JevRiskRunOptions): Promise<
   const summary =
     `Scored ${scored.length} hunk(s) (of ${selection.selected.length + selection.skipped.length} retained) across 5 risk dimensions against ${targetLabel}; ` +
     `${findings.length} finding(s) at/above threshold ${threshold} with no nearby test. ` +
-    `${selection.skipped.length} hunk(s) skipped by --max-calls ${selection.maxCalls} (${selection.pairsSkipped} pair(s)).`;
+    `${selection.skipped.length} hunk(s) skipped by --max-calls ${selection.maxCalls} (${selection.pairsSkipped} pair(s)); ` +
+    `${selection.notCode.length} hunk(s) skipped as not a code hunk (docs/.md/.txt).`;
 
   return {
     status,
@@ -177,7 +189,12 @@ export async function computeJevRiskResult(options: JevRiskRunOptions): Promise<
     ranked,
     routingHints,
     tokens: sawUsage ? { jevCalls, inputTokens, outputTokens, costUsd } : { jevCalls },
-    selection: { maxCalls: selection.maxCalls, hunksScored: selection.selected.length, hunksSkipped: selection.skipped.length },
+    selection: {
+      maxCalls: selection.maxCalls,
+      hunksScored: selection.selected.length,
+      hunksSkipped: selection.skipped.length,
+      hunksNotCode: selection.notCode.length,
+    },
   };
 }
 

@@ -11,12 +11,14 @@ import {
   classifyHunkRiskPath,
   computeHunkRiskFacts,
   computeRiskRoutingHints,
+  isNonCodeHunk,
   rankHunksByRisk,
   RISK_DIMENSIONS,
   scoreHunk,
   selectRiskHunks,
   synthesizeRiskFindings,
   testFilesTouchedNearby,
+  testHunkEvidence,
   touchedExportedSymbols,
   type ScoredRiskHunk,
 } from "./jev-risk";
@@ -100,10 +102,67 @@ describe("computeHunkRiskFacts", () => {
     expect(facts.factLines.some((line) => line.includes("auth/permissions"))).toBe(true);
   });
 
-  test("hasNearbyTest true when a sibling test file is also changed", () => {
+  test("hasNearbyTest true when a sibling test file is changed AND its own diff text mentions the touched symbol", () => {
+    const r = region({ path: "src/auth/session.ts", text: "+export function login() {}\n" });
+    const testText = new Map([["src/auth/session.test.ts", '+import { login } from "./session";\n+test("login", () => login());\n']]);
+    const facts = computeHunkRiskFacts(r, ["src/auth/session.ts", "src/auth/session.test.ts"], testText);
+    expect(facts.hasNearbyTest).toBe(true);
+    expect(facts.evidencedTestFiles).toEqual(["src/auth/session.test.ts"]);
+  });
+
+  test("hasNearbyTest true when the nearby test's diff text imports the hunk's module by stem, even with no symbol mention", () => {
+    const r = region({ path: "src/auth/session.ts", text: "+export function login() {}\n" });
+    const testText = new Map([["src/auth/session.test.ts", '+import { helper } from "../auth/session";\n']]);
+    const facts = computeHunkRiskFacts(r, ["src/auth/session.ts", "src/auth/session.test.ts"], testText);
+    expect(facts.hasNearbyTest).toBe(true);
+  });
+
+  test("regression (flow 332 live-check false negative, providers.ts:723-733): a proximate test changed for an unrelated reason, with no evidence for THIS symbol, does not count as nearby", () => {
+    const r = region({ path: "src/commands/providers.ts", text: "+export function boundedJsonBody() {}\n" });
+    // providers.test.ts changed in the same diff, but its own diff text never mentions
+    // `boundedJsonBody` and never imports `providers` — proximity alone used to suppress
+    // the finding; it must not any more.
+    const testText = new Map([["src/commands/providers.test.ts", '+test("something unrelated", () => {\n+  expect(1).toBe(1);\n+});\n']]);
+    const facts = computeHunkRiskFacts(r, ["src/commands/providers.ts", "src/commands/providers.test.ts"], testText);
+    expect(facts.hasNearbyTest).toBe(false);
+    expect(facts.nearbyTestFiles).toEqual(["src/commands/providers.test.ts"]);
+    expect(facts.evidencedTestFiles).toEqual([]);
+  });
+
+  test("no evidence map supplied at all: hasNearbyTest is false even with a proximate test (fails toward NOT suppressing)", () => {
     const r = region({ path: "src/auth/session.ts" });
     const facts = computeHunkRiskFacts(r, ["src/auth/session.ts", "src/auth/session.test.ts"]);
-    expect(facts.hasNearbyTest).toBe(true);
+    expect(facts.hasNearbyTest).toBe(false);
+  });
+});
+
+describe("testHunkEvidence", () => {
+  test("matches a whole-identifier symbol mention", () => {
+    expect(testHunkEvidence("+call(boundedJsonBody());\n", ["boundedJsonBody"], "providers")).toBe(true);
+  });
+
+  test("does not match a symbol as a substring of a longer identifier", () => {
+    expect(testHunkEvidence("+call(boundedJsonBodyExtra());\n", ["boundedJsonBody"], "providers")).toBe(false);
+  });
+
+  test("matches an import of the module by stem even with no symbol mention", () => {
+    expect(testHunkEvidence('+import { x } from "../commands/providers";\n', [], "providers")).toBe(true);
+  });
+
+  test("no symbol mention and no matching import: false", () => {
+    expect(testHunkEvidence('+import { x } from "../other/thing";\n', ["boundedJsonBody"], "providers")).toBe(false);
+  });
+});
+
+describe("isNonCodeHunk", () => {
+  test("flags .md and .txt paths", () => {
+    expect(isNonCodeHunk("docs/docs/cli-reference.md")).toBe(true);
+    expect(isNonCodeHunk("NOTES.txt")).toBe(true);
+  });
+
+  test("does not flag code paths, including ones that mention docs in the name", () => {
+    expect(isNonCodeHunk("src/docs/render.ts")).toBe(false);
+    expect(isNonCodeHunk("README.mdx")).toBe(false);
   });
 });
 
@@ -128,6 +187,27 @@ describe("selectRiskHunks", () => {
 
   test("default budget", () => {
     expect(selectRiskHunks([]).maxCalls).toBe(DEFAULT_MAX_JEV_RISK_CALLS);
+  });
+
+  test("docs (.md/.txt) hunks are excluded before the budget, reported separately as notCode, never scored", () => {
+    const regions = [
+      region({ path: "src/widget.ts" }),
+      region({ path: "docs/docs/cli-reference.md" }),
+      region({ path: "NOTES.txt" }),
+      region({ path: "src/other.ts" }),
+    ];
+    const selection = selectRiskHunks(regions, 150);
+    expect(selection.notCode.map((r) => r.path)).toEqual(["docs/docs/cli-reference.md", "NOTES.txt"]);
+    expect(selection.selected.map((r) => r.path)).toEqual(["src/widget.ts", "src/other.ts"]);
+    expect(selection.skipped).toEqual([]);
+  });
+
+  test("docs hunks never consume --max-calls budget", () => {
+    const regions = [region({ path: "docs/README.md" }), region({ path: "src/a.ts" })];
+    const selection = selectRiskHunks(regions, 5); // floor(5/5) = 1 code hunk
+    expect(selection.selected.map((r) => r.path)).toEqual(["src/a.ts"]);
+    expect(selection.skipped).toEqual([]);
+    expect(selection.notCode.map((r) => r.path)).toEqual(["docs/README.md"]);
   });
 });
 
@@ -159,11 +239,20 @@ describe("synthesizeRiskFindings", () => {
     expect(synthesizeRiskFindings([hunk], 0.7)).toEqual([]);
   });
 
-  test("no finding when a nearby test exists, even above threshold", () => {
-    const facts = computeHunkRiskFacts(region(), ["src/widget.ts", "src/widget.test.ts"]);
+  test("no finding when a nearby test exists AND its diff text evidences the touched symbol, even above threshold", () => {
+    const testText = new Map([["src/widget.test.ts", '+import { widget } from "./widget";\n+test("widget", () => widget());\n']]);
+    const facts = computeHunkRiskFacts(region(), ["src/widget.ts", "src/widget.test.ts"], testText);
     const answers = Object.fromEntries(RISK_DIMENSIONS.map((d) => [d, { noul: 0.9 }]));
     const hunk = scoreHunk(facts, answers);
     expect(synthesizeRiskFindings([hunk], 0.7)).toEqual([]);
+  });
+
+  test("a proximate-but-unrelated nearby test does NOT suppress the finding (flow 332 tightened hasNearbyTest)", () => {
+    const testText = new Map([["src/widget.test.ts", '+test("unrelated", () => {\n+  expect(1).toBe(1);\n+});\n']]);
+    const facts = computeHunkRiskFacts(region(), ["src/widget.ts", "src/widget.test.ts"], testText);
+    const answers = Object.fromEntries(RISK_DIMENSIONS.map((d) => [d, { noul: 0.9 }]));
+    const hunk = scoreHunk(facts, answers);
+    expect(synthesizeRiskFindings([hunk], 0.7)).toHaveLength(1);
   });
 
   test("above threshold with no nearby test: exactly one finding, severity capped at minor", () => {
