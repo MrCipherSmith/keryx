@@ -708,7 +708,12 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
         `Hook "${String(id)}" comes from ${loaded.projectHooks.filePath}, which is not trusted, so it does not run. Review and trust the file with: keryx hooks trust`,
       );
     }
-    fail(`Unknown hook id "${String(id)}". Run \`keryx hooks list\` to see registered ids.`);
+    // R4-02: `id` is an operator-supplied CLI argument, not file content, but
+    // it is echoed back verbatim in this refusal — same reasoning as every
+    // other terminalSafe call in this file (R1-02/R2-03/R3-03): it matters
+    // only when something else (an agent, a script) passes attacker-chosen
+    // text as the id, but escaping it here costs nothing and closes that off.
+    fail(`Unknown hook id "${terminalSafe(String(id)).text}". Run \`keryx hooks list\` to see registered ids.`);
   }
 
   let reg: HookRegistration;
@@ -1140,7 +1145,11 @@ async function setProjectOrUserHookEnabled(
 ): Promise<void> {
   const found = findFullRegistrations(doc, id);
   if (found.length === 0) {
-    fail(`Unknown hook id "${id}": not a built-in and not defined in ${filePath}.`);
+    // R4-02: `hooks disable/enable <id>` echoed an operator-supplied id it
+    // could not find straight into this message — every other file-derived
+    // surface in this command already goes through terminalSafe (R1-02/
+    // R2-03/R3-03); this argv-derived one did not.
+    fail(`Unknown hook id "${terminalSafe(id).text}": not a built-in and not defined in ${filePath}.`);
   }
 
   // D13: was the file trusted (under its digest BEFORE this edit) right

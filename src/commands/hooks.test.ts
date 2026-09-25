@@ -237,6 +237,30 @@ describe("keryx hooks validate", () => {
 });
 
 describe("keryx hooks enable/disable", () => {
+  // R4-02 (review round 4, info): `hooks disable/enable <id>` echoed an
+  // operator-supplied id it could not find straight into the "Unknown hook
+  // id" refusal, unescaped — every other file-derived diagnostic in this
+  // command already goes through terminalSafe (see the R2-06/R2-03 tests
+  // above); this argv-derived one did not.
+  test("R4-02: `hooks disable` with an unknown id containing an ESC sequence prints it escaped, not raw", async () => {
+    errors = [];
+    await hooksCommand(["disable", "zz\u001b]52;c;evil\u0007"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    const combined = errors.join("\n");
+    expect(combined).not.toContain("\u001b");
+    expect(combined).toContain("\\x1b");
+    expect(combined).toContain("Unknown hook id");
+  });
+
+  test("R4-02: `hooks enable` with an unknown id containing an ESC sequence prints it escaped, not raw", async () => {
+    errors = [];
+    await hooksCommand(["enable", "zz\u001b]52;c;evil\u0007"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    const combined = errors.join("\n");
+    expect(combined).not.toContain("\u001b");
+    expect(combined).toContain("\\x1b");
+  });
+
   test("AC12: disable/enable round-trip for a built-in maintains _keryxManaged.managedHookIds", async () => {
     // R700-02: keryx.ctx-guard is a protected built-in GATE — a project-scope
     // disable of it is now refused outright (D12), so this round-trip test
@@ -450,6 +474,18 @@ describe("keryx hooks enable/disable", () => {
 });
 
 describe("keryx hooks test", () => {
+  // R4-02: same class as the enable/disable fix — `hooks test <id>` echoes
+  // an unknown operator-supplied id back in its own "Unknown hook id"
+  // refusal.
+  test("R4-02: `hooks test` with an unknown id containing an ESC sequence prints it escaped, not raw", async () => {
+    errors = [];
+    await hooksCommand(["test", "zz\u001b]52;c;evil\u0007"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    const combined = errors.join("\n");
+    expect(combined).not.toContain("\u001b");
+    expect(combined).toContain("\\x1b");
+  });
+
   test("AC12: runs a real tiny hook script through the real runner and reports decision deny for exit 2", async () => {
     const scriptPath = path.join(project, "fixture-deny-hook.js");
     await writeFile(

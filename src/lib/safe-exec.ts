@@ -38,8 +38,7 @@
 //     in ANY `.env*` file in `cwd`, regardless of what value it or
 //     `process.env` currently holds), never by re-deriving and comparing a
 //     value. There is nothing left for a parser mismatch to hide behind.
-import { readFileSync } from "node:fs";
-import { readdirSync, statSync } from "node:fs";
+import { closeSync, constants as fsConstants, fstatSync, openSync, readSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { constants as osConstants } from "node:os";
@@ -247,33 +246,105 @@ export function collectDotenvKeyNames(content: string): Set<string> {
   return keys;
 }
 
-function defaultReadFile(p: string): string | undefined {
-  try {
-    return readFileSync(p, "utf8");
-  } catch {
-    return undefined;
-  }
-}
+/**
+ * The outcome of trying to read one `.env*` candidate for the key scan.
+ *
+ * R4-01 (review round 4, major): `"too-large"` and `"unreadable"` used to be
+ * folded into a silent `continue` inside `collectCwdDotenvKeyNames` — the
+ * file contributed no key names, but Bun's own loader has no such cap and
+ * loads it anyway, so every key it names survived the strip. For a
+ * fail-*closed* guard that is exactly the unsafe direction (the same
+ * principle R3-01 already applied to a `lstat`-skipped symlink): this type
+ * lets the caller distinguish "genuinely nothing to scan" (`"absent"`,
+ * `"not-regular"` — see `defaultReadDotenvFile`'s doc comment on why a
+ * non-regular file is safe to skip) from "Bun would read this and this guard
+ * could not," which must refuse to start rather than re-exec incompletely
+ * stripped.
+ */
+export type DotenvReadOutcome =
+  | { kind: "absent" }
+  | { kind: "not-regular" }
+  | { kind: "ok"; content: string }
+  | { kind: "too-large" }
+  | { kind: "unreadable"; reason: string };
 
 /**
- * `{ isFile, size }` for `p`, FOLLOWING a symlink to whatever it resolves to
- * — `undefined` when `p` does not exist, is a broken symlink, or is not
- * statable. R3-01 (review round 3, major): the previous version used
- * `lstatSync` (never follows) specifically so a `.env*` that is a symlink
- * would read as "not a regular file" and be skipped — exactly backwards for
- * a guard whose job is to strip everything BUN would load: Bun's own loader
- * follows a symlinked `.env*` (a git clone preserves symlinks, so `ln -s
- * cfg.txt .env.local` needs no unusual syntax at all), so a guard that skips
- * it instead lets every key that symlink names straight through. `statSync`
- * (follows) is the correct call here; the name kept `lstat` in earlier
- * rounds only because "do not follow" seemed the safe default — it was not.
+ * Reads one `.env*` candidate at `p` through a SINGLE file descriptor —
+ * `open`, then `fstat` on that fd, then read at most `MAX_DOTENV_READ_BYTES
+ * + 1` bytes from it — rather than the previous two-syscall `statSync`-then-
+ * `readFileSync(path)` pair.
+ *
+ * R4-01 (review round 4, major): the previous version decided "too large,
+ * skip" from a `statSync` on the PATH, then separately re-opened the path by
+ * name to read it. Between those two calls, the file named `p` (or, for a
+ * symlink, what it resolves to) can grow — a TOCTOU window a stripping guard
+ * cannot recover from once it has already decided "safe to skip." Reading
+ * through one fd closes that window: the size this function acts on is
+ * whatever it ACTUALLY reads off that fd, via `fstatSync(fd)` (never a
+ * separate `statSync(path)`) and by counting bytes read, not `st_size` (a
+ * sparse file's `st_size` is what Bun's own reader sees too, so that part is
+ * intentionally kept — see `MAX_DOTENV_READ_BYTES`'s doc comment). A file
+ * that grows past the cap between this function's own `fstat` and the end of
+ * its read is still caught, because "too large" is decided from bytes
+ * actually read (`total > MAX_DOTENV_READ_BYTES`), not from the fstat size
+ * alone.
+ *
+ * `fstat(fd).isFile()` (not `statSync`, and not `lstatSync`) is the ONLY
+ * "is this a regular file" check — it reads through a symlink to whatever it
+ * resolves to (same reasoning as R3-01's `defaultStat`, which this replaces)
+ * and reflects the fd's actual target, not a possibly-stale separate stat.
+ * Verified against Bun directly (scratchpad/f319, FIFO probe): a `.env` that
+ * is a FIFO, even with a writer already queued, is NOT read by Bun's own
+ * loader (`process.env` never sees the key) and Bun does not hang on it —
+ * skipping a non-regular file here matches Bun's own behaviour exactly, so
+ * `"not-regular"` is safe to treat as "nothing to scan," never a refusal.
  */
-function defaultStat(p: string): { isFile(): boolean; size: number } | undefined {
+export function defaultReadDotenvFile(p: string): DotenvReadOutcome {
+  let fd: number;
   try {
-    const stat = statSync(p);
-    return { isFile: () => stat.isFile(), size: stat.size };
-  } catch {
-    return undefined;
+    // O_NONBLOCK (in addition to O_RDONLY): a blocking `open()` on a FIFO
+    // with no writer waits FOREVER for one to show up — this guard must
+    // never hang on a `.env` that happens to be a pipe. POSIX guarantees a
+    // non-blocking open-for-read on a FIFO returns immediately regardless of
+    // whether a writer is attached; this function never gets far enough to
+    // actually READ from it anyway, because `fstat(fd).isFile()` below is
+    // false for a FIFO and returns `"not-regular"` before any `read()` call.
+    // A regular file's open/read behaviour is unaffected by O_NONBLOCK.
+    fd = openSync(p, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK);
+  } catch (err) {
+    const code = err instanceof Error && "code" in err ? (err as NodeJS.ErrnoException).code : undefined;
+    if (code === "ENOENT" || code === "ENOTDIR") return { kind: "absent" };
+    return { kind: "unreadable", reason: err instanceof Error ? err.message : String(err) };
+  }
+  try {
+    let stat: { isFile(): boolean };
+    try {
+      stat = fstatSync(fd);
+    } catch (err) {
+      return { kind: "unreadable", reason: err instanceof Error ? err.message : String(err) };
+    }
+    if (!stat.isFile()) return { kind: "not-regular" };
+
+    const buf = Buffer.alloc(MAX_DOTENV_READ_BYTES + 1);
+    let total = 0;
+    while (total < buf.length) {
+      let n: number;
+      try {
+        n = readSync(fd, buf, total, buf.length - total, null);
+      } catch (err) {
+        return { kind: "unreadable", reason: err instanceof Error ? err.message : String(err) };
+      }
+      if (n === 0) break; // EOF
+      total += n;
+    }
+    if (total > MAX_DOTENV_READ_BYTES) return { kind: "too-large" };
+    return { kind: "ok", content: buf.toString("utf8", 0, total) };
+  } finally {
+    try {
+      closeSync(fd);
+    } catch {
+      // already closed / nothing to do
+    }
   }
 }
 
@@ -291,14 +362,40 @@ function defaultReaddir(p: string): string[] {
  * an unbounded or enormous read (`/dev/zero`, a multi-gigabyte file) hanging
  * or exhausting memory. Chosen well above the largest legitimate case this
  * guard is tested against (a 200,000-line probe file, ~9 MiB) with headroom.
- * A file over this size is SKIPPED entirely (not partially scanned — a
- * partial read could cut a key name in half and miss it, which is the unsafe
- * direction): this only narrows what gets stripped from an ALREADY-decided-
- * unsafe re-exec, never the decision to re-exec at all (`execArgv`-only, see
- * `ensureSafeBunExec`), so it cannot be used to widen what "no dotenv here"
- * means.
+ *
+ * R4-01 (review round 4, major): a file over this size — or one this guard
+ * cannot read at all (EACCES, EIO, …) — used to be SKIPPED entirely, which
+ * contributed no key names while Bun's own loader (no such cap) still loaded
+ * it and bound every key it names. That reopened exactly the bypass R3-01
+ * closed for a `lstat`-skipped symlink, just one step removed: a single
+ * 16 MiB+ line (a comment, so no value is stripped from the env by size)
+ * followed by the real payload defeats the scan without needing an unusual
+ * `.env` at all. This guard now REFUSES TO START instead (see
+ * `refuseToStart` / `DotenvRefusal`, and `collectCwdDotenvKeyNames`'s return
+ * value): never partially scanned (a partial read could cut a key name in
+ * half and miss it — still the unsafe direction), and never silently
+ * skipped either, because skipping is exactly what re-exec-with-an-
+ * incomplete-strip-list means for a fail-*safe* guard. A file too large or
+ * unreadable narrows nothing about the decision to re-exec at all
+ * (`execArgv`-only, see `ensureSafeBunExec`) — it turns that decision into a
+ * refusal instead.
  */
 const MAX_DOTENV_READ_BYTES = 16 * 1024 * 1024;
+
+/** Exit code used when the guard refuses to start rather than re-exec with an incomplete key-strip list (R4-01). `EX_CONFIG` (`/usr/include/sysexits.h`): "something was found in an incorrect state." Distinct from `1` (a normal command failure) so a caller can tell the two apart. */
+export const DOTENV_REFUSAL_EXIT_CODE = 78;
+
+/** Why `collectCwdDotenvKeyNames` refused to start scanning cwd's `.env*` files (R4-01) — always fatal, see `refuseToStart`. */
+export interface DotenvRefusal {
+  file: string;
+  reason: string;
+}
+
+/** `collectCwdDotenvKeyNames`'s result: the key names collected so far, plus a refusal the FIRST time a `.env*` file this guard cannot fully account for is found (scan stops there — see the function's own doc comment on why continuing to scan after a refusal buys nothing). */
+export interface DotenvScanResult {
+  keys: Set<string>;
+  refusal?: DotenvRefusal;
+}
 
 /**
  * Every key name that ANY `.env*` file directly inside `cwd` might bind —
@@ -310,31 +407,45 @@ const MAX_DOTENV_READ_BYTES = 16 * 1024 * 1024;
  * Bun's precedence rules a second time just to decide what is safe to leave
  * in the child's env).
  *
- * A `.env*` entry is `stat`ed (FOLLOWING a symlink, R3-01 — see `defaultStat`'s
- * doc comment) and skipped only when it does not resolve to a regular file
- * at all, or is larger than `MAX_DOTENV_READ_BYTES`: its content is then not
- * read, so it contributes no key names, but its mere presence never widens
- * what is considered "no dotenv here" — this function only ever adds keys,
- * it is not a gate for whether to re-exec at all (that decision is
- * `execArgv`-only, see `ensureSafeBunExec`).
+ * Each `.env*` entry is read through `readDotenvFile` (a single fd, TOCTOU-
+ * safe — see `defaultReadDotenvFile`'s doc comment). `"absent"` (the readdir
+ * listing raced a delete) and `"not-regular"` (a FIFO, device or directory —
+ * confirmed Bun itself never reads one, see `defaultReadDotenvFile`) both
+ * contribute no keys and are NOT a refusal: there is genuinely nothing for
+ * Bun to load there either. `"too-large"` and `"unreadable"` (R4-01) ARE a
+ * refusal — Bun has no size cap and no permission problem reading its OWN
+ * process's env files with the invoking user's own privileges, so either one
+ * means this guard cannot tell what Bun would bind, which is not a safe
+ * condition to re-exec through silently. The scan stops at the first
+ * refusal (returned immediately) rather than continuing to accumulate keys
+ * from other files: once one file cannot be accounted for, the resulting key
+ * set can never be trusted as complete, so scanning further wastes work
+ * without changing the outcome.
  */
 export function collectCwdDotenvKeyNames(
   cwd: string,
   readdir: (p: string) => string[],
-  stat: (p: string) => { isFile(): boolean; size: number } | undefined,
-  readFile: (p: string) => string | undefined,
-): Set<string> {
+  readDotenvFile: (p: string) => DotenvReadOutcome,
+): DotenvScanResult {
   const keys = new Set<string>();
   for (const name of readdir(cwd)) {
     if (!isDotenvFileName(name)) continue;
     const full = path.join(cwd, name);
-    const info = stat(full);
-    if (info === undefined || !info.isFile() || info.size > MAX_DOTENV_READ_BYTES) continue;
-    const content = readFile(full);
-    if (content === undefined) continue;
-    for (const key of collectDotenvKeyNames(content)) keys.add(key);
+    const outcome = readDotenvFile(full);
+    switch (outcome.kind) {
+      case "absent":
+      case "not-regular":
+        continue;
+      case "too-large":
+        return { keys, refusal: { file: full, reason: `is larger than ${MAX_DOTENV_READ_BYTES / (1024 * 1024)} MiB` } };
+      case "unreadable":
+        return { keys, refusal: { file: full, reason: `could not be read: ${outcome.reason}` } };
+      case "ok":
+        for (const key of collectDotenvKeyNames(outcome.content)) keys.add(key);
+        continue;
+    }
   }
-  return keys;
+  return { keys };
 }
 
 /** The minimal child-process surface this module needs — satisfied by `node:child_process`'s `ChildProcess`. */
@@ -354,9 +465,11 @@ export interface SafeExecDeps {
   args: readonly string[];
   pid: number;
   readdir: (p: string) => string[];
-  stat: (p: string) => { isFile(): boolean; size: number } | undefined;
-  readFile: (p: string) => string | undefined;
+  /** Reads one `.env*` candidate through a single fd — see `defaultReadDotenvFile`'s doc comment (R4-01: TOCTOU-safe size/regular-file check). */
+  readDotenvFile: (p: string) => DotenvReadOutcome;
   spawn: (command: string, args: readonly string[], options: { stdio: "inherit"; env: NodeJS.ProcessEnv }) => SafeExecChild;
+  /** R4-01: where a refusal-to-start message is printed. Defaults to `console.error`. Injectable so a test does not need to capture real stderr. */
+  logError: (message: string) => void;
   /** Register a handler for a signal THIS process receives. Defaults to `process.on`. */
   onSignal: (signal: NodeJS.Signals, handler: () => void) => void;
   /** Undo `onSignal`. Defaults to `process.off`. */
@@ -381,9 +494,9 @@ function realDeps(): SafeExecDeps {
     args: process.argv.slice(2),
     pid: process.pid,
     readdir: defaultReaddir,
-    stat: defaultStat,
-    readFile: defaultReadFile,
+    readDotenvFile: defaultReadDotenvFile,
     spawn: (command, args, options) => nodeSpawn(command, [...args], { stdio: "inherit", env: options.env }) as ChildProcess as SafeExecChild,
+    logError: (message) => console.error(message),
     onSignal: (signal, handler) => process.on(signal, handler),
     offSignal: (signal, handler) => {
       process.off(signal, handler);
@@ -407,20 +520,37 @@ function realDeps(): SafeExecDeps {
   };
 }
 
+/** `buildSafeChildEnv`'s result (R4-01): either the stripped env to re-exec with, or a refusal — see `collectCwdDotenvKeyNames`'s doc comment on why a `.env*` this guard could not fully scan is never re-exec'd through anyway. */
+export type SafeChildEnvResult = { kind: "ok"; env: NodeJS.ProcessEnv } | { kind: "refused"; refusal: DotenvRefusal };
+
 /**
  * The child's environment: `deps.env` minus every key name any `.env*` file
  * in `deps.cwd` might bind, minus the small always-stripped Bun-footgun set
  * (see `ALWAYS_STRIPPED_ENV_KEYS`/`_PREFIXES`). Exported so a test (and
  * R2-07's docs) can exercise it directly without a real child process.
+ *
+ * R4-01: when `collectCwdDotenvKeyNames` could not fully scan a `.env*` file
+ * (too large or unreadable), this returns `{kind: "refused"}` instead of an
+ * env built from an incomplete key set — `ensureSafeBunExec` must NEVER
+ * re-exec with keys it did not actually scan.
  */
-export function buildSafeChildEnv(deps: Pick<SafeExecDeps, "env" | "cwd" | "readdir" | "stat" | "readFile">): NodeJS.ProcessEnv {
-  const dotenvKeys = collectCwdDotenvKeyNames(deps.cwd, deps.readdir, deps.stat, deps.readFile);
+export function buildSafeChildEnv(deps: Pick<SafeExecDeps, "env" | "cwd" | "readdir" | "readDotenvFile">): SafeChildEnvResult {
+  const scan = collectCwdDotenvKeyNames(deps.cwd, deps.readdir, deps.readDotenvFile);
+  if (scan.refusal !== undefined) return { kind: "refused", refusal: scan.refusal };
   const childEnv: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(deps.env)) {
-    if (dotenvKeys.has(key) || isAlwaysStrippedKey(key)) continue;
+    if (scan.keys.has(key) || isAlwaysStrippedKey(key)) continue;
     childEnv[key] = value;
   }
-  return childEnv;
+  return { kind: "ok", env: childEnv };
+}
+
+/** Prints the R4-01 refusal message and exits with `DOTENV_REFUSAL_EXIT_CODE` — never re-execs, never returns. */
+function refuseToStart(deps: Pick<SafeExecDeps, "logError" | "exit">, refusal: DotenvRefusal): void {
+  deps.logError(
+    `keryx: refusing to start: ${refusal.file} ${refusal.reason}, so keryx cannot check which variables it would set. Move or shrink it, or run keryx through its installed launcher, which never reads .env files.`,
+  );
+  deps.exit(DOTENV_REFUSAL_EXIT_CODE);
 }
 
 /** Signals a real terminal or `kill` can send this process that the re-exec'd child must also see — R2-01 orchestrator follow-up. */
@@ -573,7 +703,13 @@ export async function ensureSafeBunExec(overrides: Partial<SafeExecDeps> = {}): 
   // re-exec with a script-path argument.
   if (deps.scriptPath.length === 0) return;
 
-  const childEnv = buildSafeChildEnv(deps);
+  const envResult = buildSafeChildEnv(deps);
+  if (envResult.kind === "refused") {
+    // R4-01: never re-exec with a key set this guard did not actually scan.
+    refuseToStart(deps, envResult.refusal);
+    return;
+  }
+  const childEnv = envResult.env;
   childEnv[REEXEC_PARENT_PID_ENV] = String(deps.pid);
 
   const child = deps.spawn(deps.execPath, [...buildChildExecArgv(deps.execArgv), deps.scriptPath, ...deps.args], {

@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { constants, tmpdir } from "node:os";
 import path from "node:path";
 import {
   buildSafeChildEnv,
   collectCwdDotenvKeyNames,
   collectDotenvKeyNames,
+  defaultReadDotenvFile,
+  DOTENV_REFUSAL_EXIT_CODE,
+  type DotenvReadOutcome,
   ensureSafeBunExec,
   SAFE_BUN_SPAWN_ARGS,
   type SafeExecChild,
@@ -58,19 +62,16 @@ describe("collectDotenvKeyNames", () => {
 });
 
 describe("collectCwdDotenvKeyNames", () => {
-  function deps(files: Record<string, { content?: string; dir?: boolean; size?: number }>) {
+  function deps(files: Record<string, { content?: string; dir?: boolean }>) {
     const readdir = (p: string): string[] => (p === "/proj" ? Object.keys(files).map((f) => f.split("/").pop()!) : []);
-    const stat = (p: string) => {
+    const readDotenvFile = (p: string): DotenvReadOutcome => {
       const name = Object.keys(files).find((f) => `/proj/${f}` === p);
-      if (name === undefined) return undefined;
+      if (name === undefined) return { kind: "absent" };
       const entry = files[name]!;
-      return { isFile: () => entry.dir !== true, size: entry.size ?? (entry.content?.length ?? 0) };
+      if (entry.dir === true) return { kind: "not-regular" };
+      return { kind: "ok", content: entry.content ?? "" };
     };
-    const readFile = (p: string): string | undefined => {
-      const name = Object.keys(files).find((f) => `/proj/${f}` === p);
-      return name === undefined ? undefined : files[name]!.content;
-    };
-    return { readdir, stat, readFile };
+    return { readdir, readDotenvFile };
   }
 
   test("R2-01: every `.env*` filename is scanned, not only `.env`/`bunfig.toml` gated ones", () => {
@@ -82,28 +83,32 @@ describe("collectCwdDotenvKeyNames", () => {
       ".env": { content: "E=5" },
       "notes.txt": { content: "F=6" }, // not a dotenv name — never scanned
     });
-    const keys = collectCwdDotenvKeyNames("/proj", d.readdir, d.stat, d.readFile);
-    expect(keys).toEqual(new Set(["A", "B", "C", "D", "E"]));
+    const result = collectCwdDotenvKeyNames("/proj", d.readdir, d.readDotenvFile);
+    expect(result.refusal).toBeUndefined();
+    expect(result.keys).toEqual(new Set(["A", "B", "C", "D", "E"]));
   });
 
   // R3-01 (review round 3, major): the previous version used `lstatSync`
   // (never follows a symlink) specifically to SKIP a symlinked `.env*` —
   // exactly backwards, since Bun's own loader follows it, and a git clone
   // preserves symlinks (`ln -s cfg.txt .env.local` needs no unusual syntax).
-  // `stat` (this function's 3rd argument) now follows symlinks, matching Bun.
+  // `readDotenvFile` (this function's 3rd argument) now follows symlinks,
+  // matching Bun — see `defaultReadDotenvFile`'s fd-based `fstat`.
   test("R3-01: a `.env` that is a symlink IS followed, same as Bun's own loader", () => {
     const d = deps({ ".env": { content: "KERYX_HOME=/evil" } });
-    // The injected `stat`/`readFile` here already behave as "resolved
-    // through the symlink" (real `statSync`/`readFileSync` do this by
-    // default) — this test documents the contract collectCwdDotenvKeyNames
-    // relies on, pinned end-to-end against the real filesystem below in
-    // "R3-01: real filesystem symlinks and parser-evasion probes".
-    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.stat, d.readFile)).toEqual(new Set(["KERYX_HOME"]));
+    // The injected `readDotenvFile` here already behaves as "resolved
+    // through the symlink" (the real implementation does this by default) —
+    // this test documents the contract collectCwdDotenvKeyNames relies on,
+    // pinned end-to-end against the real filesystem below in "R3-01: real
+    // filesystem symlinks and parser-evasion probes".
+    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.readDotenvFile).keys).toEqual(new Set(["KERYX_HOME"]));
   });
 
   test("a `.env` that is a directory is skipped, not read", () => {
     const d = deps({ ".env": { dir: true } });
-    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.stat, d.readFile)).toEqual(new Set());
+    const result = collectCwdDotenvKeyNames("/proj", d.readdir, d.readDotenvFile);
+    expect(result.refusal).toBeUndefined();
+    expect(result.keys).toEqual(new Set());
   });
 
   // R3 regression (flow 319 CI): `isDotenvFileName` used to accept ANY
@@ -117,7 +122,7 @@ describe("collectCwdDotenvKeyNames", () => {
       ".env.example": { content: "ANTHROPIC_API_KEY=your-key-here" },
       ".env.sample": { content: "ANTHROPIC_API_KEY=your-key-here" },
     });
-    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.stat, d.readFile)).toEqual(new Set());
+    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.readDotenvFile).keys).toEqual(new Set());
   });
 
   // Bun's precedence list also loads `.env.<NODE_ENV>.local` — missing this
@@ -128,28 +133,195 @@ describe("collectCwdDotenvKeyNames", () => {
       ".env.development.local": { content: "A=1" },
       ".env.test.local": { content: "B=2" },
     });
-    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.stat, d.readFile)).toEqual(new Set(["KERYX_HOME", "A", "B"]));
+    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.readDotenvFile).keys).toEqual(new Set(["KERYX_HOME", "A", "B"]));
   });
 
-  test("R3-01: a .env* file (or symlink target) larger than the read cap is skipped, not partially scanned", () => {
-    const d = deps({ ".env": { content: "KERYX_HOME=/evil", size: 32 * 1024 * 1024 } });
-    expect(collectCwdDotenvKeyNames("/proj", d.readdir, d.stat, d.readFile)).toEqual(new Set());
+  // R4-01 (review round 4, major): the previous version SKIPPED an over-cap
+  // file (contributed no keys) while Bun's own loader — no such cap — still
+  // loaded it and bound every key it names, reopening the class of bypass
+  // R3-01 closed for a `lstat`-skipped symlink. A guard that cannot fully
+  // scan a `.env*` file must refuse to start, not re-exec with an
+  // incomplete strip list.
+  test("R4-01: a .env* file (or symlink target) larger than the read cap is a REFUSAL, not a silent skip", () => {
+    const readdir = () => [".env"];
+    const readDotenvFile = (): DotenvReadOutcome => ({ kind: "too-large" });
+    const result = collectCwdDotenvKeyNames("/proj", readdir, readDotenvFile);
+    expect(result.keys).toEqual(new Set());
+    expect(result.refusal).toEqual({ file: path.join("/proj", ".env"), reason: "is larger than 16 MiB" });
+  });
+
+  test("R4-01: a .env* file this guard cannot read (EACCES, EIO, …) is a REFUSAL, not a silent skip", () => {
+    const readdir = () => [".env"];
+    const readDotenvFile = (): DotenvReadOutcome => ({ kind: "unreadable", reason: "EACCES: permission denied" });
+    const result = collectCwdDotenvKeyNames("/proj", readdir, readDotenvFile);
+    expect(result.keys).toEqual(new Set());
+    expect(result.refusal).toEqual({ file: path.join("/proj", ".env"), reason: "could not be read: EACCES: permission denied" });
+  });
+
+  // R4-01: a FIFO/device is `"not-regular"`, confirmed (scratchpad/f319) that
+  // Bun's own loader does not read one either (and does not hang), so this
+  // remains a silent skip, not a refusal — only a file Bun WOULD load but
+  // this guard could not fully account for refuses.
+  test("R4-01: a non-regular file (FIFO/device) is still a silent skip, not a refusal", () => {
+    const readdir = () => [".env"];
+    const readDotenvFile = (): DotenvReadOutcome => ({ kind: "not-regular" });
+    const result = collectCwdDotenvKeyNames("/proj", readdir, readDotenvFile);
+    expect(result.refusal).toBeUndefined();
+    expect(result.keys).toEqual(new Set());
+  });
+
+  // R4-01 TOCTOU: a file that stats small but GROWS past the cap between the
+  // initial check and the actual read must still be caught — simulated here
+  // via dependency injection (the real `defaultReadDotenvFile` closes this
+  // window itself by deciding from bytes actually read off a single fd, not
+  // from a separate `statSync`; this test pins the CALLER-visible contract:
+  // whatever `readDotenvFile` reports is trusted, no second-guessing from a
+  // stale size).
+  test("R4-01: a file that grows past the limit between stat and read still refuses (simulated via dependency injection)", () => {
+    let calls = 0;
+    const readdir = () => [".env"];
+    const readDotenvFile = (): DotenvReadOutcome => {
+      calls += 1;
+      // First call from a caller's own probe might have seen it as small;
+      // this injected reader represents the SAME single-fd read the real
+      // implementation performs, which observes the grown size and reports
+      // too-large — never "ok" with truncated content.
+      return { kind: "too-large" };
+    };
+    const result = collectCwdDotenvKeyNames("/proj", readdir, readDotenvFile);
+    expect(calls).toBe(1);
+    expect(result.refusal?.reason).toBe("is larger than 16 MiB");
+  });
+
+  test("R4-01: scanning stops at the first refusal rather than continuing to accumulate keys from later files", () => {
+    const readdir = () => [".env", ".env.local"];
+    const seen: string[] = [];
+    const readDotenvFile = (p: string): DotenvReadOutcome => {
+      seen.push(p);
+      if (p.endsWith(".env")) return { kind: "too-large" };
+      return { kind: "ok", content: "SHOULD_NOT_BE_SCANNED=1" };
+    };
+    const result = collectCwdDotenvKeyNames("/proj", readdir, readDotenvFile);
+    expect(result.refusal).toBeDefined();
+    expect(result.keys.has("SHOULD_NOT_BE_SCANNED")).toBe(false);
+    expect(seen).toEqual([path.join("/proj", ".env")]);
+  });
+});
+
+describe("defaultReadDotenvFile (real filesystem, R4-01)", () => {
+  function tmp(prefix: string): string {
+    return mkdtempSync(path.join(tmpdir(), prefix));
+  }
+
+  test("a missing file is `absent`", () => {
+    const dir = tmp("keryx-safe-exec-absent-");
+    try {
+      expect(defaultReadDotenvFile(path.join(dir, ".env"))).toEqual({ kind: "absent" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a normal small file is read in full", () => {
+    const dir = tmp("keryx-safe-exec-normal-");
+    try {
+      const file = path.join(dir, ".env");
+      writeFileSync(file, "KERYX_HOME=/det\n");
+      expect(defaultReadDotenvFile(file)).toEqual({ kind: "ok", content: "KERYX_HOME=/det\n" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A sparse file: apparent size (st_size) is what both Bun and this guard
+  // act on, without actually writing 17 MiB of real bytes — cheap to run.
+  test("R4-01: a sparse 17 MiB file is `too-large`", () => {
+    const dir = tmp("keryx-safe-exec-sparse-");
+    try {
+      const file = path.join(dir, ".env");
+      writeFileSync(file, "");
+      truncateSync(file, 17 * 1024 * 1024);
+      expect(defaultReadDotenvFile(file)).toEqual({ kind: "too-large" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A real (non-sparse) 17 MiB write, padded with a comment so a value-size
+  // check could not catch it either — mirrors the reviewer's exact R4-01
+  // repro shape (a huge comment line followed by the real payload).
+  test("R4-01: a real 17 MiB file (comment padding + a trailing key) is `too-large`", () => {
+    const dir = tmp("keryx-safe-exec-real-big-");
+    try {
+      const file = path.join(dir, ".env");
+      const padding = `#${"x".repeat(17 * 1024 * 1024)}\n`;
+      writeFileSync(file, `${padding}KERYX_HOME=/det\n`);
+      expect(defaultReadDotenvFile(file)).toEqual({ kind: "too-large" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("R4-01: a symlink to an oversize file is followed and still `too-large`", () => {
+    const dir = tmp("keryx-safe-exec-symlink-big-");
+    try {
+      const target = path.join(dir, "real-target.txt");
+      writeFileSync(target, "");
+      truncateSync(target, 17 * 1024 * 1024);
+      const link = path.join(dir, ".env.local");
+      symlinkSync(target, link);
+      expect(defaultReadDotenvFile(link)).toEqual({ kind: "too-large" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("R4-01: an unreadable file (chmod 000) is `unreadable`", () => {
+    // Root ignores file permission bits, so this case is meaningless (and
+    // would falsely fail) when this test runs as root.
+    if (process.getuid?.() === 0) return;
+    const dir = tmp("keryx-safe-exec-unreadable-");
+    try {
+      const file = path.join(dir, ".env");
+      writeFileSync(file, "KERYX_HOME=/det\n");
+      chmodSync(file, 0o000);
+      const outcome = defaultReadDotenvFile(file);
+      expect(outcome.kind).toBe("unreadable");
+    } finally {
+      chmodSync(path.join(dir, ".env"), 0o644);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a FIFO is `not-regular` — matches Bun's own loader, which does not read one either (verified with a writer already queued: process.env never sees the key, and Bun does not hang)", () => {
+    const dir = tmp("keryx-safe-exec-fifo-");
+    try {
+      const file = path.join(dir, ".env");
+      execFileSync("mkfifo", [file]);
+      expect(defaultReadDotenvFile(file).kind).toBe("not-regular");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
 describe("buildSafeChildEnv", () => {
-  function baseDeps(env: NodeJS.ProcessEnv, dotenvContent: string): Pick<SafeExecDeps, "env" | "cwd" | "readdir" | "stat" | "readFile"> {
+  function baseDeps(env: NodeJS.ProcessEnv, dotenvContent: string): Pick<SafeExecDeps, "env" | "cwd" | "readdir" | "readDotenvFile"> {
     return {
       env,
       cwd: "/proj",
       readdir: () => [".env"],
-      stat: () => ({ isFile: () => true, size: dotenvContent.length }),
-      readFile: (p) => (p === "/proj/.env" ? dotenvContent : undefined),
+      readDotenvFile: (p) => (p === "/proj/.env" ? { kind: "ok", content: dotenvContent } : { kind: "absent" }),
     };
   }
 
+  function okEnv(result: ReturnType<typeof buildSafeChildEnv>): NodeJS.ProcessEnv {
+    if (result.kind !== "ok") throw new Error(`expected "ok", got a refusal: ${JSON.stringify(result.refusal)}`);
+    return result.env;
+  }
+
   test("strips every key a cwd .env* file names, regardless of the CURRENT value", () => {
-    const child = buildSafeChildEnv(baseDeps({ KERYX_HOME: "/evil", OTHER: "kept" }, "KERYX_HOME=whatever-this-says"));
+    const child = okEnv(buildSafeChildEnv(baseDeps({ KERYX_HOME: "/evil", OTHER: "kept" }, "KERYX_HOME=whatever-this-says")));
     expect(child.KERYX_HOME).toBeUndefined();
     expect(child.OTHER).toBe("kept");
   });
@@ -159,21 +331,23 @@ describe("buildSafeChildEnv", () => {
   // value that arrived by shell expansion, or that the file's own syntax
   // disagreed with Bun about, is stripped exactly the same way.
   test("R2-01: KERYX_SAFE_EXEC set by a .env is stripped like any other dotenv-named key (there is no marker to spoof any more)", () => {
-    const child = buildSafeChildEnv(baseDeps({ KERYX_SAFE_EXEC: "1" }, "KERYX_SAFE_EXEC=1"));
+    const child = okEnv(buildSafeChildEnv(baseDeps({ KERYX_SAFE_EXEC: "1" }, "KERYX_SAFE_EXEC=1")));
     expect(child.KERYX_SAFE_EXEC).toBeUndefined();
   });
 
   test("BUN_OPTIONS, NODE_OPTIONS, BUN_CONFIG_* and BUN_INSTALL_* are stripped UNCONDITIONALLY, even with no matching cwd dotenv key", () => {
-    const child = buildSafeChildEnv(
-      baseDeps(
-        {
-          BUN_OPTIONS: "--preload=./p.js",
-          NODE_OPTIONS: "--require=./p.js",
-          BUN_CONFIG_REGISTRY: "https://evil.example",
-          BUN_INSTALL_CACHE_DIR: "/evil",
-          KEPT: "yes",
-        },
-        "", // no cwd dotenv even mentions these — stripped anyway, see the doc comment on ALWAYS_STRIPPED_ENV_KEYS
+    const child = okEnv(
+      buildSafeChildEnv(
+        baseDeps(
+          {
+            BUN_OPTIONS: "--preload=./p.js",
+            NODE_OPTIONS: "--require=./p.js",
+            BUN_CONFIG_REGISTRY: "https://evil.example",
+            BUN_INSTALL_CACHE_DIR: "/evil",
+            KEPT: "yes",
+          },
+          "", // no cwd dotenv even mentions these — stripped anyway, see the doc comment on ALWAYS_STRIPPED_ENV_KEYS
+        ),
       ),
     );
     expect(child.BUN_OPTIONS).toBeUndefined();
@@ -184,8 +358,25 @@ describe("buildSafeChildEnv", () => {
   });
 
   test("a real shell export with a name no cwd dotenv file mentions survives untouched", () => {
-    const child = buildSafeChildEnv(baseDeps({ REAL_VAR: "from-shell" }, "UNRELATED=1"));
+    const child = okEnv(buildSafeChildEnv(baseDeps({ REAL_VAR: "from-shell" }, "UNRELATED=1")));
     expect(child.REAL_VAR).toBe("from-shell");
+  });
+
+  // R4-01: buildSafeChildEnv must NEVER hand back an env built from an
+  // incomplete key scan — a refusal from collectCwdDotenvKeyNames propagates
+  // as `{kind: "refused"}`, not as "ok" with whatever keys were found before
+  // the refusing file.
+  test("R4-01: propagates a refusal instead of returning a partially-stripped env", () => {
+    const result = buildSafeChildEnv({
+      env: { KERYX_HOME: "/evil" },
+      cwd: "/proj",
+      readdir: () => [".env"],
+      readDotenvFile: () => ({ kind: "too-large" }),
+    });
+    expect(result.kind).toBe("refused");
+    if (result.kind === "refused") {
+      expect(result.refusal).toEqual({ file: path.join("/proj", ".env"), reason: "is larger than 16 MiB" });
+    }
   });
 });
 
@@ -302,8 +493,7 @@ describe("ensureSafeBunExec", () => {
       scriptPath: "/proj/src/cli.ts",
       args: ["shell", "--provider", "fake"],
       readdir: () => [".env"],
-      stat: () => ({ isFile: () => true, size: 64 }),
-      readFile: (p) => (p === "/proj/.env" ? "KERYX_HOME=/proj/.evil\n" : undefined),
+      readDotenvFile: (p) => (p === "/proj/.env" ? { kind: "ok", content: "KERYX_HOME=/proj/.evil\n" } : { kind: "absent" }),
       spawn: (command, args, options) => {
         expect(command).toBe("/opt/bun/bun");
         expect(args).toEqual(["--no-env-file", "--config=/dev/null", "/proj/src/cli.ts", "shell", "--provider", "fake"]);
@@ -316,6 +506,73 @@ describe("ensureSafeBunExec", () => {
     await done;
     expect(spawnEnv?.KERYX_HOME).toBeUndefined();
     expect(spawnEnv?.PATH).toBe("/usr/bin");
+  });
+
+  // R4-01: the refusal path — never re-exec, exit with DOTENV_REFUSAL_EXIT_CODE,
+  // print a message naming the file.
+  test("R4-01: refuses to start (no spawn) when a cwd .env* file is over the read cap, and exits with DOTENV_REFUSAL_EXIT_CODE", async () => {
+    let exitCode: number | undefined;
+    const errors: string[] = [];
+    await ensureSafeBunExec({
+      cwd: "/proj",
+      env: { PATH: "/usr/bin" },
+      execArgv: [],
+      execPath: "/opt/bun/bun",
+      scriptPath: "/proj/src/cli.ts",
+      args: [],
+      readdir: () => [".env"],
+      readDotenvFile: () => ({ kind: "too-large" }),
+      spawn: noSpawn,
+      logError: (message) => errors.push(message),
+      exit: (code) => {
+        exitCode = code;
+      },
+    });
+    expect(exitCode).toBe(DOTENV_REFUSAL_EXIT_CODE);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain(path.join("/proj", ".env"));
+    expect(errors[0]).toContain("refusing to start");
+    expect(errors[0]).toContain("larger than 16 MiB");
+  });
+
+  test("R4-01: refuses to start when a cwd .env* file cannot be read (EACCES-shaped), naming the file and the reason", async () => {
+    let exitCode: number | undefined;
+    const errors: string[] = [];
+    await ensureSafeBunExec({
+      cwd: "/proj",
+      env: {},
+      execArgv: [],
+      execPath: "/opt/bun/bun",
+      scriptPath: "/proj/src/cli.ts",
+      args: [],
+      readdir: () => [".env.local"],
+      readDotenvFile: () => ({ kind: "unreadable", reason: "EACCES: permission denied, open '/proj/.env.local'" }),
+      spawn: noSpawn,
+      logError: (message) => errors.push(message),
+      exit: (code) => {
+        exitCode = code;
+      },
+    });
+    expect(exitCode).toBe(DOTENV_REFUSAL_EXIT_CODE);
+    expect(errors[0]).toContain(path.join("/proj", ".env.local"));
+    expect(errors[0]).toContain("could not be read");
+    expect(errors[0]).toContain("EACCES");
+  });
+
+  // R4-01: the shipped shebang form never re-execs at all (hasSafeExecArgv
+  // is already true), so it never scans a .env* file and never refuses —
+  // pinning that the new refusal path is unreachable there.
+  test("R4-01: an oversize .env changes nothing when execArgv already carries the safe flags — the shipped form never scans", async () => {
+    await ensureSafeBunExec({
+      execArgv: ["--no-env-file", "--config=/dev/null"],
+      readdir: () => {
+        throw new Error("must not check the filesystem once execArgv is already safe");
+      },
+      readDotenvFile: () => {
+        throw new Error("must not read any .env file once execArgv is already safe");
+      },
+      spawn: noSpawn,
+    });
   });
 
   test("exits with the child's exit code", async () => {
@@ -683,7 +940,7 @@ describe("R3-01: collectDotenvKeyNames catches every parser-evasion shape the re
 });
 
 describe("R3-01: real filesystem symlinks and parser-evasion probes", () => {
-  function realDeps(): { readdir: (p: string) => string[]; stat: (p: string) => { isFile(): boolean; size: number } | undefined; readFile: (p: string) => string | undefined } {
+  function realDeps(): { readdir: (p: string) => string[]; readDotenvFile: (p: string) => DotenvReadOutcome } {
     return {
       readdir: (p) => {
         try {
@@ -692,21 +949,7 @@ describe("R3-01: real filesystem symlinks and parser-evasion probes", () => {
           return [];
         }
       },
-      stat: (p) => {
-        try {
-          const s = statSync(p);
-          return { isFile: () => s.isFile(), size: s.size };
-        } catch {
-          return undefined;
-        }
-      },
-      readFile: (p) => {
-        try {
-          return readFileSync(p, "utf8");
-        } catch {
-          return undefined;
-        }
-      },
+      readDotenvFile: defaultReadDotenvFile,
     };
   }
 
@@ -719,8 +962,9 @@ describe("R3-01: real filesystem symlinks and parser-evasion probes", () => {
         symlinkSync(target, path.join(dir, name));
       }
       const deps = realDeps();
-      const keys = collectCwdDotenvKeyNames(dir, deps.readdir, deps.stat, deps.readFile);
-      expect(keys).toEqual(new Set(["KERYX_HOME"]));
+      const result = collectCwdDotenvKeyNames(dir, deps.readdir, deps.readDotenvFile);
+      expect(result.refusal).toBeUndefined();
+      expect(result.keys).toEqual(new Set(["KERYX_HOME"]));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -735,7 +979,7 @@ describe("R3-01: real filesystem symlinks and parser-evasion probes", () => {
       writeFileSync(target, "KERYX_HOME=/det\n");
       symlinkSync(target, path.join(dir, ".env"));
       const deps = realDeps();
-      expect(collectCwdDotenvKeyNames(dir, deps.readdir, deps.stat, deps.readFile)).toEqual(new Set(["KERYX_HOME"]));
+      expect(collectCwdDotenvKeyNames(dir, deps.readdir, deps.readDotenvFile).keys).toEqual(new Set(["KERYX_HOME"]));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -748,7 +992,26 @@ describe("R3-01: real filesystem symlinks and parser-evasion probes", () => {
       writeFileSync(real, "KERYX_HOME=/det\n");
       linkSync(real, path.join(dir, ".env"));
       const deps = realDeps();
-      expect(collectCwdDotenvKeyNames(dir, deps.readdir, deps.stat, deps.readFile)).toEqual(new Set(["KERYX_HOME"]));
+      expect(collectCwdDotenvKeyNames(dir, deps.readdir, deps.readDotenvFile).keys).toEqual(new Set(["KERYX_HOME"]));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // R4-01: a real 17 MiB symlinked .env.local refuses end-to-end through
+  // collectCwdDotenvKeyNames (not just defaultReadDotenvFile in isolation).
+  test("R4-01: a real 17 MiB .env.local symlink refuses through the full scan, naming the symlink path", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-safe-exec-oversize-symlink-"));
+    try {
+      const target = path.join(dir, "pad.txt");
+      writeFileSync(target, "");
+      truncateSync(target, 17 * 1024 * 1024);
+      const link = path.join(dir, ".env.local");
+      symlinkSync(target, link);
+      const deps = realDeps();
+      const result = collectCwdDotenvKeyNames(dir, deps.readdir, deps.readDotenvFile);
+      expect(result.keys).toEqual(new Set());
+      expect(result.refusal).toEqual({ file: link, reason: "is larger than 16 MiB" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

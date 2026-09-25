@@ -45,6 +45,18 @@ is not consent to run its code, `keryx` starts with `--no-env-file
 --config=/dev/null` (baked into its shebang, and into every place it spawns
 itself) so neither happens by default.
 
+Those two flags are Bun-only, and are added only when the interpreter actually
+running keryx is Bun. If keryx is running under **Node** instead (the npm
+package under a Node-based version manager, or any `node <entry>`-style
+invocation), the flags are left off entirely — Node has no such flags and
+refuses to start with them. This matters for an installed schedule
+(`keryx trigger schedule`/`keryx trigger install`): the printed cron line or
+systemd/launchd unit bakes in the resolved interpreter, and only inserts the
+safe flags when that interpreter is Bun. Node does not auto-load a project's
+`.env`/`bunfig.toml` from the current working directory the way a
+shebang-bypassing Bun invocation does, so it needs no flags — and no
+equivalent isolation gap — in the first place.
+
 If you rely on a project `.env` for provider keys or other settings, you now
 have to opt in explicitly — either export the variables in your shell before
 running `keryx`, or run it with Bun's own flag:
@@ -104,6 +116,15 @@ launched with — `--inspect`, `--smol`, `--preload`, and so on — adding
 `bun --inspect src/cli.ts shell` still opens the inspector in the re-exec'd
 child; it does not silently lose `--inspect` the way an earlier version of
 this guard did.
+
+If a `.env*` file the guard would otherwise scan is larger than 16 MiB, or
+exists but cannot be read (permission denied, an I/O error, …), the guard
+refuses to start rather than re-exec with an incomplete strip list — it
+cannot tell what Bun would bind from a file it cannot fully read. It prints
+the exact file and reason to stderr and exits non-zero (exit code 78). Move
+or shrink the file, or run `keryx` through its installed launcher (npm, the
+standalone binary, or a `keryx` resolved via `PATH`), which never reads
+`.env` files at all and so never hits this check.
 
 Two platform gaps, so they are documented rather than silently unhandled:
 BusyBox `env` (Alpine, some minimal containers) does not implement the `-S`
