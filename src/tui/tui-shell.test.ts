@@ -2430,7 +2430,9 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
     // Flow 274 T7 widened the `deps = {...}` rebuild above (busInbox/busAck
     // carry-over), pushing `balancePanel.setProvider` a bit further out.
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 1400);
+    // Flow 338 widened it again — `sessionModelExplicit = true;` is set at
+    // the top of `switchTo`, ahead of the rebuild.
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 1600);
     expect(switchToBlock).toContain("void balancePanel.setProvider(ns.provider)");
   });
 
@@ -2470,12 +2472,15 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   // `deps` for the first time (the earlier three all ran before any join
   // could possibly have finished). review r1 F9 then REMOVED `busClientRef`
   // from the side-worker call site (above), so exactly THREE real call sites
-  // now share `busClientRef`: the initial build, `switchTo`, and this
+  // shared `busClientRef`: the initial build, `switchTo`, and this
   // join-success rebuild (which passes `selAtJoin`, not `currentSel`,
-  // review r1 F7).
-  test("exactly three real call sites share busClientRef — not fewer, not more", () => {
+  // review r1 F7). Flow 338 added a FOURTH: the routing classifier's
+  // turn-scoped rebuild (`runRoutingClassifierForTurn`'s routed
+  // provider/model, inside the per-turn dispatch IIFE) — same live getters,
+  // so it shares `busClientRef` too.
+  test("exactly four real call sites share busClientRef — not fewer, not more", () => {
     const occurrences = fnBody.split(", liveSlateSession, busClientRef)").length - 1;
-    expect(occurrences).toBe(3);
+    expect(occurrences).toBe(4);
     expect(fnBody).not.toContain("() => slateSession)");
   });
 });

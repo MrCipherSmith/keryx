@@ -199,6 +199,27 @@ written/edited, commands run and their exit status, tests run and their
 pass/fail counts) are sent — redacted through the same security service every
 other Jev-backed review command uses — to Jev on OpenRouter.
 
+**Routing classifier** (opt-in, off by default). Before a turn starts,
+`keryx shell` can sort the request into a category (`review`, `subagents`,
+`quick`, `coding`, `planning`, `docs`, `unattended` — the routing table's
+catalogue, `keryx routing list`) and dispatch it to that category's
+configured model instead of the session's own. A slash command always
+bypasses classification; a short chit-chat message resolves `quick` and a
+message naming a review resolves `review` without any model call. Otherwise
+Jev (when a credential resolves) is tried first, then the session's own
+model with a strict one-token label prompt, each stage bounded by a 3s
+timeout — a timeout, error, or low-confidence answer falls back to the next
+stage, and with nothing left, the turn simply runs on the session's own
+model, exactly as before this feature existed. An explicit `/model` switch
+during the session always wins over classification for the rest of that
+session. When a turn is routed, a small tag (e.g. `[quick -> anthropic/
+claude-haiku-4-5]`, naming the category, the resolved model, and which stage
+decided it) prints under that turn, and the sidebar's `Route` row shows
+whether routing is on and how many turns it has routed this session. Turn on
+with `/route on` (`/route off` turns it back off; bare `/route` prints the
+current state); the setting lives in
+`ShellConfig.routingClassifier.enabled` (`~/.local/share/keryx/auth.json`).
+
 ---
 
 ## sessions
