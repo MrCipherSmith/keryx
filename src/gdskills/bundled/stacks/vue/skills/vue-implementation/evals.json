@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "build a vue component with props and emits",
+      "add a pinia store action to update the cart",
+      "should this vue component use ref or reactive for this state",
+      "extract this vue logic into a composable",
+      "wire up v-model on this vue form",
+      "implement this vue 3 script setup component"
+    ],
+    "negative": [
+      "write a react component with props and state",
+      "fix this vue-tsc type error blocking the build",
+      "review this vue component diff for reactivity bugs",
+      "write a vitest test for this vue component",
+      "migrate this vue 2 options api component to vue 3",
+      "implement this node.js CLI command"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "prop-mutation-vs-emit",
+      "prompt": "A Vue child component has an 'items' prop for a todo list. A button handler currently does `props.items.push(newItem)` to add an item. What should this do instead so the parent's data stays in sync?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that props are one-way and must not be mutated in the child (e.g. via `props.items.push(...)`), and instead emits an event so the parent owns the state change -- naming the defineEmits declaration and the emit() call with the new item as payload.",
+          "pass_criteria": [
+            "Explicitly says not to mutate the prop directly (e.g. `props.items.push(...)`) since props flow one-way from parent to child",
+            "Shows the fix as code: a defineEmits<{...}>() declaration for an event (e.g. 'add-item' or 'update:items') and the emit(...) call passing the new item, not just a description of emitting something"
+          ],
+          "fail_criteria": [
+            "Recommends keeping `props.items.push(newItem)` (or an equivalent direct mutation of the prop) as the actual fix. Naming `props.items.push` only to explain why it is wrong does not count as this failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Don't call `props.items.push(newItem)` -- props flow one-way from parent to child, and mutating the array in place changes the parent's underlying data through a reference the child was never supposed to write to, which Vue also warns about at runtime. Instead, declare a typed emit and let the parent decide how to update its own state:\n\n```ts\nconst emit = defineEmits<{\n  'add-item': [item: TodoItem]\n}>()\n\nfunction onAdd(newItem: TodoItem) {\n  emit('add-item', newItem)\n}\n```\n\nIn the parent, listen for `@add-item` and push into its own `items` ref/reactive array there. Now the child never touches the prop directly, and the parent has one clear place where the list actually changes.",
+        "known_wrong": "Easiest fix: just keep doing `props.items.push(newItem)` inside the click handler. Since `items` is an array, JavaScript objects are passed by reference, so pushing into it from the child updates the same array the parent has -- it already works, no need to add an emit for something this simple.",
+        "vague": "Don't mutate the prop directly, emit an event instead so the parent controls the data update.",
+        "subtle_wrong": "Instead of mutating the prop, I'd clone it into local state so the child owns its own copy: `const localItems = ref([...props.items]); function onAdd(newItem) { localItems.value.push(newItem) }`, then render from `localItems` in the template. This avoids touching the prop directly and keeps the child's list working, and the parent can re-sync later if it needs to."
+      },
+      "anti_patterns": ["props.items.push"]
+    },
+    {
+      "id": "reactive-destructure-breaks-tracking",
+      "prompt": "I destructured a Pinia store's reactive state like `const { count } = store` inside a component so I don't have to write `store.count` everywhere. The template stopped updating when count changes elsewhere. What's wrong and how do I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that destructuring a Pinia store's reactive state directly captures a frozen snapshot value at that moment, breaking the reactive connection, and fixes it with storeToRefs(store) (or toRefs()/toRef() for a plain reactive object) before destructuring.",
+          "pass_criteria": [
+            "Identifies that destructuring the reactive state directly copies a snapshot value, breaking the reactive connection to the store",
+            "Names the concrete fix as code: `storeToRefs(store)` for a Pinia store (or `toRefs()`/`toRef()` for a plain reactive object) used before destructuring, e.g. `const { count } = storeToRefs(store)`"
+          ],
+          "fail_criteria": [
+            "Concludes that plain destructuring of the store's state should already work and looks for the bug elsewhere (e.g. a re-fetch or a missing watcher) instead of identifying the destructuring itself as the cause",
+            "Proposes a fix that does not use storeToRefs/toRefs/toRef at all, such as only wrapping the read in a manual watch-and-copy workaround"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The problem is the destructuring itself: `const { count } = store` reads `store.count`'s current value once and assigns it to a plain local variable -- it's a snapshot, not a live binding, so later changes to `store.count` never touch your local `count`. Pinia's reactive state only stays reactive through the store object itself (or through a ref/computed derived from it), not through a plain destructured value.\n\nFix it with `storeToRefs`, which converts the store's reactive properties into individual refs before you destructure them:\n\n```ts\nimport { storeToRefs } from 'pinia'\n\nconst store = useCounterStore()\nconst { count } = storeToRefs(store)\n```\n\nNow `count` is a `Ref<number>` that stays linked to `store.count`, so the template updates when it changes elsewhere. (Actions like `store.increment` stay destructured directly from `store`, not through `storeToRefs` -- functions don't need reactive wrapping.)",
+        "known_wrong": "That should already work -- JavaScript destructuring just reads the current property values, and since Pinia stores are reactive objects, `count` should update along with `store.count` automatically. If the template isn't updating, it's probably not related to the destructuring at all; check whether the action that changes `count` elsewhere is actually being called, or whether the component is even re-rendering.",
+        "vague": "The destructuring probably broke reactivity somewhere. Try to keep it wired to the store more directly instead of pulling it out as a plain variable.",
+        "subtle_wrong": "Rather than changing how you read `count`, keep a local ref synced manually with a watcher: `const count = ref(store.count); watch(() => store.count, (v) => { count.value = v })`. That way `count` stays a reactive ref in the component and updates whenever the store's value changes, without needing to change the original destructuring line."
+      }
+    }
+  ]
+}

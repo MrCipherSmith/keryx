@@ -1,0 +1,49 @@
+[
+  {
+    "query": "Use when building or changing a Vue 3 Single File Component, composable, or Pinia store -- covers <script setup> with type-based defineProps/defineEmits, choosing ref vs reactive, computed vs watch/watchEffect, composable extraction, and Pinia store/action design. Not for Options API legacy components (use vue2-to-vue3-migration) or Node.js service/CLI code with no .vue file (use nodejs-implementation).",
+    "decision": "fork",
+    "topMatch": "vue/vue2-to-vue3-migration",
+    "recordedAt": "2026-09-25T06:25:10.148Z",
+    "skillName": "vue-implementation"
+  },
+  {
+    "query": "Use when building or changing a Vue 3 Single File Component, composable, or Pinia store -- covers <script setup> with type-based defineProps/defineEmits, choosing ref vs reactive, computed vs watch/watchEffect, composable extraction, and Pinia store/action design. Not for Options API legacy components (use vue2-to-vue3-migration) or Node.js service/CLI code with no .vue file (use nodejs-implementation).",
+    "decision": "fork",
+    "topMatch": "vue/vue2-to-vue3-migration",
+    "recordedAt": "2026-09-25T06:25:21.007Z",
+    "skillName": "vue-implementation",
+    "justification": "Top match vue2-to-vue3-migration (0.417) shares vue/pinia/component vocabulary inherent to any two skills in the same framework pack, but is scoped to converting legacy Options API code to Composition API, not authoring new Composition API code -- distinct trigger surface (upgrade/convert/migrate prompts vs build/implement prompts), confirmed by clean trigger-accuracy eval. Second match vue-code-review (0.350) is read-only review, not authoring."
+  },
+  {
+    "query": "Use when a Vue 3 component or composable's test suite needs writing, extending, or fixing with Vue Test Utils and Vitest -- covers mount vs. shallowMount, querying by test id/role, awaiting trigger()/nextTick for async DOM updates, asserting wrapper.emitted() payloads, and Pinia test-store isolation with createTestingPinia. Not for plain Node.js/TypeScript unit tests with no .vue mount (use nodejs-testing) or React Testing Library tests (use react-testing).",
+    "decision": "fork",
+    "topMatch": "nextjs-nuxt/nextjs-nuxt-testing",
+    "recordedAt": "2026-09-25T06:25:27.390Z",
+    "skillName": "vue-testing",
+    "justification": "Top matches are sibling vue/* skills sharing pack-level vocabulary (component, pinia, script); nodejs-testing and react-testing (named explicitly as exclusions in the description) target a different mount surface (no .vue SFC / React JSX respectively). Confirmed distinct by clean trigger-accuracy eval against both a react-testing-library prompt and a plain node vitest prompt."
+  },
+  {
+    "query": "Use when reviewing changed Vue 3 Single File Component or composable code (.vue) for reactivity bugs -- lost reactivity from destructuring reactive()/props, missing watch cleanup, prop mutation instead of emit, v-for key misuse, v-html injection risk, and Pinia store boundary violations. Read-only, no repository convention-doc lookup and no MobX/React store review. Not for authoring or fixing the component (use vue-implementation or vue-build-fix).",
+    "decision": "fork",
+    "topMatch": "react/react-code-review",
+    "recordedAt": "2026-09-25T06:25:34.017Z",
+    "skillName": "vue-code-review",
+    "justification": "Overlap is with sibling vue/* skills (shared pack vocabulary) and existing review skills (review-frontend, code-mobx-store-review) that this description explicitly excludes (no MobX/React store review). This skill's scope -- Vue reactivity/prop-emit/Pinia boundary bugs in .vue diffs -- has no existing catalog equivalent. Confirmed distinct by clean trigger-accuracy eval."
+  },
+  {
+    "query": "Use when resolving a vue-tsc template type error, an eslint-plugin-vue lint failure, or a Vite build error in a Vue 3 project -- covers template expression type mismatches, defineProps/defineEmits type errors, unresolved SFC/component imports, and Vite plugin/HMR build failures. Applies the smallest root-cause fix and never silences the checker with an any cast or an eslint-disable. Not for a generic tsc error in a .ts file with no .vue involved (use nodejs-build-fix) or a JSX/React build failure (use react-build-fix).",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-build-fix",
+    "recordedAt": "2026-09-25T06:25:40.079Z",
+    "skillName": "vue-build-fix",
+    "justification": "Explicitly excludes and is distinct from nodejs-build-fix (plain .ts, no .vue) and react-build-fix (JSX/React) which the description names outright; overlap with sibling vue/* skills is pack-level vocabulary. Confirmed distinct by clean trigger-accuracy eval against both a plain-tsc negative and a react-build negative."
+  },
+  {
+    "query": "Use when migrating a Vue 2 (Options API) codebase or component to Vue 3 -- covers converting Options API to <script setup> Composition API, replacing the removed filters and $listeners/$children APIs, Vuex-to-Pinia store migration, v-model breaking changes (single default to multiple named bindings), global API changes (createApp vs new Vue), and Vue 2 lifecycle hook renames (beforeDestroy -> beforeUnmount). Not for a fresh Vue 3 component with no legacy code (use vue-implementation).",
+    "decision": "fork",
+    "topMatch": "nextjs-nuxt/nextjs-nuxt-upgrade-migration",
+    "recordedAt": "2026-09-25T06:25:46.482Z",
+    "skillName": "vue2-to-vue3-migration",
+    "justification": "Top match vue-implementation (same pack) shares Composition API/script-setup vocabulary but is explicitly excluded (fresh components, no legacy code) and scoped oppositely -- authoring new vs converting legacy. No existing catalog skill covers Vue 2->3 migration specifics (filters, $listeners/$children, Vuex->Pinia, v-model contract change). Confirmed distinct by clean trigger-accuracy eval."
+  }
+]

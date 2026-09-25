@@ -1,0 +1,71 @@
+{
+  "triggers": {
+    "positive": [
+      "review this vue component diff for reactivity bugs before merging",
+      "check this pinia store change for state mutation across stores",
+      "does this vue composable leak a watcher on unmount",
+      "review this vue template for v-html injection risk",
+      "check this vue component's v-for keys in this pull request",
+      "review this vue diff for prop mutation instead of emit"
+    ],
+    "negative": [
+      "review this react component diff for hook bugs",
+      "build a new vue component with a pinia store",
+      "fix this vue-tsc build error in this component",
+      "write a vitest test for this vue component",
+      "review this node.js service diff for floating promises",
+      "review this mobx store diff for action boundary violations"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "index-key-on-reorderable-list",
+      "prompt": "Review this part of a Vue component diff:\n```vue\n<li v-for=\"(task, index) in tasks\" :key=\"index\">{{ task.title }}</li>\n```\nThe list supports drag-to-reorder and delete-in-the-middle. Any issue?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": ":key" },
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that keying by array index on a list that can reorder or delete from the middle causes Vue to misattribute per-item state across re-renders, and recommends keying by a stable identifier from the task itself instead.",
+          "pass_criteria": [
+            "Identifies that `:key=\"index\"` is unsafe specifically because the list reorders/deletes in the middle, not merely that a key is present",
+            "Names the concrete fix: key by a stable identifier from the item, e.g. `:key=\"task.id\"`"
+          ],
+          "fail_criteria": [
+            "Concludes the key is fine because a `:key` binding exists at all, without addressing that an index key breaks under reorder/delete-in-the-middle"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag this: `:key=\"index\"` is a problem here specifically because the list supports drag-to-reorder and delete-in-the-middle. Vue uses the key to decide which existing DOM node/component instance to reuse across a re-render; when the key is the array index, reordering or removing a middle item shifts every subsequent item's index, so Vue reuses the wrong node for the wrong task -- component-local state (an open edit field, a checked checkbox, an input's value) can end up attached to the wrong row. Fix: key by a stable id that travels with the task, not its position:\n```vue\n<li v-for=\"task in tasks\" :key=\"task.id\">{{ task.title }}</li>\n```\n(dropped `index` from the loop var since it's unused now). If `task` genuinely has no stable id, that's the actual bug to fix upstream -- generate one when the task is created, don't fall back to index.",
+        "known_wrong": "This is fine -- there's already a `:key` bound on the `<li>`, which is exactly what Vue's v-for warning asks for. The list has a key, so this satisfies the requirement.",
+        "vague": "Using the index as a key can cause issues with dynamic lists, might be worth using something else.",
+        "subtle_wrong": "Worth a second look, but since `task.title` is already unique across the list in practice, I'd key on that instead of the index: `:key=\"task.title\"`. That avoids the index issue and doesn't require adding an id field to the data."
+      }
+    },
+    {
+      "id": "action-mutates-other-store-state-directly",
+      "prompt": "Review this Pinia action:\n```ts\n// in useCartStore\nfunction checkout() {\n  const userStore = useUserStore()\n  userStore.recentOrders.push(buildOrder(items.value))\n  items.value = []\n}\n```\nAny concerns?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that the cart store's action reaches into another store (userStore) and mutates its state array directly instead of calling a dedicated action on that store, and recommends adding/calling a userStore action (e.g. addRecentOrder) instead of pushing into its state from outside.",
+          "pass_criteria": [
+            "Identifies that `userStore.recentOrders.push(...)` mutates another store's state directly from outside that store, bypassing its own action layer",
+            "Recommends the concrete fix: call (or add) a userStore action such as `userStore.addRecentOrder(order)` instead of pushing into its state array from the cart store"
+          ],
+          "fail_criteria": [
+            "Treats the direct cross-store state mutation as acceptable because both stores are part of the same app/Pinia instance"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag `userStore.recentOrders.push(buildOrder(items.value))`: this mutates `userStore`'s state array directly from inside `useCartStore`'s `checkout` action, bypassing `userStore`'s own action layer entirely. Now there are two places `recentOrders` can change -- through `userStore`'s own actions, and through any other store that happens to reach in like this -- which makes it impossible to reason about where a change to that state actually came from, and any validation/side effect `userStore` might want on adding an order gets skipped here. Fix: give `userStore` an action for this and call it instead:\n```ts\n// in useUserStore\nfunction addRecentOrder(order: Order) {\n  recentOrders.push(order)\n}\n\n// in useCartStore.checkout\nconst userStore = useUserStore()\nuserStore.addRecentOrder(buildOrder(items.value))\nitems.value = []\n```\nNow `userStore` owns every mutation to its own state through one discoverable entry point.",
+        "known_wrong": "No concern -- both stores are part of the same Pinia instance in this app, so one store reaching into another's reactive state and pushing to it is just normal cross-store communication; Pinia doesn't enforce store boundaries anyway.",
+        "vague": "Might be better for the cart store to not touch the user store's data directly, worth reconsidering that.",
+        "subtle_wrong": "I'd tighten this slightly by having the cart store read `userStore.recentOrders` through a computed instead of accessing it live, but the push itself from `checkout` is a reasonable enough way to record the order without adding a whole new action just for this."
+      }
+    }
+  ]
+}
