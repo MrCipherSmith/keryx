@@ -1477,6 +1477,35 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     args: [],
     sideEffects: ["records the project's routing.config.json content fingerprint as approved, in the operator's own config dir"],
   },
+  // ---- routing profile (flow 327 — Routing A2) -----------------------------
+  // The model-profile catalogue: strength tier, price, context length,
+  // priority, and each field's source (reported/curated/guessed/operator/
+  // unknown), keyed by <provider>/<model>. `list` is read-only; `set` writes
+  // an operator correction to the per-user store — never the network.
+  {
+    module: "routing",
+    command: "routing profile list",
+    summary: "Every stored model profile: tier, price, context length, priority, each field's source, and availability.",
+    intent: ["каталог моделей", "model profiles", "keryx routing profile list", "цена и контекст модели"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured profile list" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "routing",
+    command: "routing profile set",
+    summary: "An operator correction to one model's profile field — stored with source \"operator\", never overwritten by a later refresh.",
+    intent: ["исправить цену модели", "override model tier", "set model profile", "keryx routing profile set"],
+    args: [
+      { name: "<provider>/<model>", type: "string", required: true, desc: "the profile to correct" },
+      { name: "tier", type: "enum", required: false, values: ["light", "standard", "deep"], desc: "strength tier override" },
+      { name: "price-in", type: "string", required: false, desc: "USD per million input tokens" },
+      { name: "price-out", type: "string", required: false, desc: "USD per million output tokens" },
+      { name: "context", type: "string", required: false, desc: "context length, in tokens" },
+      { name: "priority", type: "string", required: false, desc: "tie-break priority (higher wins)" },
+    ],
+    sideEffects: ["writes the chosen field (source: \"operator\") to the per-user model-profile store"],
+  },
   // ---- retention ----------------------------------------------------------
   {
     module: "retention",

@@ -1,0 +1,73 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.html"]
+metadata:
+  origin: authored
+---
+
+# Angular testing
+
+Test layout, runner, and fixture conventions for Angular components,
+services, and directives — narrows the common testing rules to
+`TestBed`-based Angular idiom.
+
+## Layout and runner
+
+- Co-locate a unit test with its source (`order-summary.ts` /
+  `order-summary.spec.ts`), matching whatever the project's own existing
+  spec files already do; do not invent a parallel `__tests__/` tree in an
+  Angular CLI project that uses co-located `.spec.ts` files.
+- Run the project's configured runner (`ng test`, or a Jest/Vitest setup if
+  the project has migrated off Karma) rather than assuming Karma is
+  present — check `angular.json`'s `test` builder or the project's
+  `package.json` `test` script before invoking a specific runner by name.
+
+## Component tests
+
+- Configure the module under test with `TestBed.configureTestingModule`
+  (importing the standalone component directly in `imports`, since
+  standalone components are imported, not declared), then
+  `TestBed.createComponent` to get a `ComponentFixture`.
+- Set signal-based inputs through `fixture.componentRef.setInput('name',
+  value)`, not by assigning the component instance's field directly —
+  direct field assignment on a signal input does not go through Angular's
+  input-binding machinery and can silently not reflect in the template the
+  way a real caller's binding would.
+- After a change that affects the DOM (setting an input, clicking a
+  button, resolving a promise/observable the component depends on), call
+  `fixture.detectChanges()` (or `await fixture.whenStable()` for
+  async work) before asserting on the rendered DOM — an assertion made
+  before change detection runs reads stale markup.
+- Query the DOM through `fixture.debugElement.query(By.css(...))` /
+  `By.directive(...)`, or `fixture.nativeElement.querySelector(...)` for
+  plain DOM assertions — prefer a stable selector (a `data-testid`, a
+  semantic role/label) over a CSS class that styling changes could break.
+
+## Services, HTTP, and doubles
+
+- Test an injectable service through `TestBed.inject(MyService)` (or
+  direct instantiation for a service with no dependencies), not by
+  reaching into a component's private field to get at the service
+  instance.
+- Mock `HttpClient`-backed calls with `provideHttpClientTesting()` /
+  `HttpTestingController` (`expectOne`, `.flush(...)`) rather than a
+  hand-rolled fetch stub — it verifies the exact request was made and lets
+  the test control the exact response, and `httpTestingController.verify()`
+  at the end of each test catches an unexpected extra request.
+- Stub a genuinely external dependency (a third-party SDK, `window`/
+  browser APIs the test environment can't provide) at that boundary via
+  Angular's provider overrides (`TestBed.overrideProvider`) — do not mock
+  the component's own signals/services, which is what the test is supposed
+  to exercise.
+
+## Determinism
+
+- Prefer `fakeAsync`/`tick()` (or `waitForAsync`) over a real `setTimeout`
+  in a spec so a test doesn't depend on wall-clock timing; flush pending
+  timers/microtasks explicitly rather than adding an arbitrary `tick(1000)`
+  guess.
+- Reset any shared test state (a spy's call count, a `TestBed` module
+  configured with `teardown: { destroyAfterEach: true }`, which is
+  Angular's own default) between tests so one spec's setup cannot leak
+  into the next — do not disable that default teardown to "fix" a
+  cross-test leak instead of finding the actual shared state.

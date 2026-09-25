@@ -38,6 +38,14 @@ export type BundledReviewer = {
   name: string;
   source: "bundled";
   path: string;
+  /**
+   * `metadata.engine`, when the reviewer declares one (flow 330) — e.g.
+   * `"jev"` for a reviewer dispatched as a deterministic CLI engine call
+   * (`keryx review <name> ...`) rather than an LLM sub-agent. Absent means
+   * the default: an LLM sub-agent dispatch, exactly as every reviewer before
+   * flow 330 already worked.
+   */
+  engine?: string;
 };
 
 /**
@@ -226,11 +234,22 @@ async function driftFor(
  */
 export async function collectReviewers(projectRoot: string): Promise<ReviewerInventory> {
   const bundledRoot = path.join(projectRoot, ".metaproject", "skills", "gdskills", "review");
-  const bundled: BundledReviewer[] = (await skillDirs(bundledRoot)).map((name) => ({
-    name,
-    source: "bundled",
-    path: path.posix.join(".metaproject", "skills", "gdskills", "review", name),
-  }));
+  const bundled: BundledReviewer[] = await Promise.all(
+    (await skillDirs(bundledRoot)).map(async (name) => {
+      // `metadata.engine` (flow 330): read best-effort — a reviewer with no
+      // engine declared, or a SKILL.md that vanished between the directory
+      // listing above and this read, is a plain LLM sub-agent reviewer.
+      const engine = await readFile(path.join(bundledRoot, name, "SKILL.md"), "utf8")
+        .then((content) => metadataList(content, "engine")[0])
+        .catch(() => undefined);
+      return {
+        name,
+        source: "bundled" as const,
+        path: path.posix.join(".metaproject", "skills", "gdskills", "review", name),
+        ...(engine !== undefined ? { engine } : {}),
+      };
+    }),
+  );
 
   const projectRoot_ = path.join(projectRoot, ".metaproject", "project-skills", PROJECT_REVIEWER_MODULE);
   const project: ProjectReviewer[] = [];
@@ -275,7 +294,7 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
     "## bundled",
     "",
     ...(inventory.bundled.length > 0
-      ? inventory.bundled.map((reviewer) => `- ${reviewer.name}`)
+      ? inventory.bundled.map((reviewer) => `- ${reviewer.name}${reviewer.engine !== undefined ? ` (engine: ${reviewer.engine})` : ""}`)
       : ["- none installed"]),
     "",
     "## project-local",

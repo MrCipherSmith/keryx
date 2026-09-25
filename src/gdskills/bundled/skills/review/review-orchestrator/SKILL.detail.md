@@ -43,3 +43,29 @@ suppressing it would trade real coverage for tidiness. Record the drift in
 `review_context` and name it once in the report, so the next person knows the
 profile is due a re-read. Never file it as a finding against the code under
 review: it is a fact about the review, not about the diff.
+
+## CLI-engine reviewers — dispatched as a command, not a sub-agent
+
+`review-jev-rules` (flow 330) is an ADDITIONAL reviewer, never replacing any
+other, and its dispatch mechanism differs from every reviewer named in
+SKILL.md's Routing Table: there is no platform-native agent to invoke,
+because it is a deterministic **keryx program**. Run it with `keryx review
+jev-rules --scope <scope.json> --json` — the SAME `scope.json` every other
+Wave A/B reviewer's dispatch already reads, so it checks exactly the same
+hunks. Read its `--json` output as a `REVIEW_RESULT` and merge its `findings`
+into the consolidated array exactly like a sub-agent reviewer's: same
+Sub-Agent Report Quality Gate, same dedup, same Wave C verification.
+
+Gate it BEFORE running the command, not after: skip it — recorded in `Skipped
+reviewers` with the reason, never silently absent — when `review.jev.rules`
+is not `true` in `.metaproject/tasks.config.json`, or when no Jev/OpenRouter
+credential is resolvable. Either gate failing means `keryx review jev-rules`
+itself would refuse before any read or network call, so checking first saves
+a doomed dispatch.
+
+`keryx review reviewers --json` marks a CLI-engine reviewer with
+`"engine": "jev"` on its `bundled` entry — the field's presence, not its
+absence, is what distinguishes it from the default (an LLM sub-agent
+dispatch). A future engine-backed reviewer follows the same pattern: gate on
+its own opt-in and reachability, dispatch as a command, merge its `--json`
+output the same way.

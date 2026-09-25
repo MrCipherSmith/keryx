@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "This Server Component in my Next.js app imports useState, and the build keeps failing because of it, what's the actual fix?",
+      "Every time this Next.js page renders, the console throws a hydration mismatch error, and I need to actually fix the root cause instead of suppressing it.",
+      "Running nuxi typecheck, I keep getting a failure because it can't resolve this auto-imported composable, how do I fix the build?",
+      "This Next.js route.ts file has an invalid export and won't build",
+      "Fix this nuxt build error about a composable being called outside setup",
+      "My next build is failing because a Server Component in this file imports a browser-only API, what's the correct fix?",
+      "Nuxt build can't find this component even though it's in the components folder"
+    ],
+    "negative": [
+      "Add a new Next.js server action for creating an order",
+      "Review this Next.js server action for missing auth checks",
+      "Write a test for this Nuxt composable",
+      "Migrate this Nuxt 2 project to Nuxt 3",
+      "Fix this Vite build error in a plain Vue component with no Nuxt involved",
+      "Fix this generic tsc module resolution error in a Node script"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-suppress-hydration-warning",
+      "prompt": "My Next.js page shows a hydration mismatch warning in the console because it renders new Date().toLocaleTimeString() directly in the component. What's the right fix?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "suppressHydrationWarning" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the actual nondeterminism -- making the time value consistent between server and client (e.g. computing it once and passing it down, or only rendering the time after mount on the client) -- rather than adding suppressHydrationWarning to hide the warning.",
+          "pass_criteria": [
+            "Names a concrete fix for the nondeterminism itself: e.g. only render the live time after the component mounts client-side (using a mounted-state check or an effect), or pass a server-computed timestamp down as a stable prop instead of calling new Date() during render on both sides",
+            "Shows or names the specific code change (the mounted-flag pattern, useEffect setting state after mount, or the prop being passed) rather than only describing the idea in the abstract"
+          ],
+          "fail_criteria": [
+            "Recommends adding suppressHydrationWarning as the fix -- mentioning it only to say it should not be used here is not a failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The mismatch happens because new Date().toLocaleTimeString() evaluates once on the server (at render/build time) and again on the client during hydration, producing two different strings for the same node. Don't paper over it with suppressHydrationWarning -- instead make the client-rendered time appear only after mount, so the server and initial client render agree (both render nothing or a static placeholder), and the live value fills in afterward:\n\nconst [time, setTime] = useState<string | null>(null);\nuseEffect(() => { setTime(new Date().toLocaleTimeString()); }, []);\nreturn <span>{time ?? '--:--:--'}</span>;\n\nThis way the server HTML and the client's first render both show the placeholder, hydration matches, and the real time appears right after mount.",
+        "known_wrong": "Easiest fix: add suppressHydrationWarning to the element rendering the time. React will stop complaining about the mismatch and the time still displays correctly on the client, so functionally nothing is lost.",
+        "vague": "You should make the time rendering consistent between server and client instead of just silencing the warning.",
+        "subtle_wrong": "Fix the root cause by moving the Date().toLocaleTimeString() call into a useMemo with an empty dependency array instead of calling new Date() inline in the JSX: const time = useMemo(() => new Date().toLocaleTimeString(), []); return <span>{time}</span>;. Memoizing it means the value is computed exactly once per mount rather than on every render, so the server and client agree on a single stable value."
+      },
+      "anti_patterns": ["suppressHydrationWarning"]
+    },
+    {
+      "id": "narrow-use-client-not-widen",
+      "prompt": "Next.js flags a Server/Client boundary build error because a small icon-button inside my Server Component page uses the useState hook, and that hook needs client-side rendering to run at all. How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "'use client'" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer adds 'use client' to the small icon-button component itself (extracting it into its own file if needed), not to the parent page/layout, so only the component that actually needs client state gets the directive.",
+          "pass_criteria": [
+            "States that 'use client' should be added to the icon-button component's own file, not the parent page",
+            "Names extracting the icon-button into its own component file if it currently isn't one, so the directive can be scoped to just it"
+          ],
+          "fail_criteria": [
+            "Recommends adding 'use client' to the page or a shared parent/layout component as the fix -- mentioning that as something to avoid is not a failure"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The fix is to add 'use client' to the icon-button component itself, not to the page. If the icon-button isn't already its own file, extract it into one (e.g. IconButton.tsx) and put 'use client' as the first line of that file -- that's the component that actually calls useState, so it's the one that needs the client boundary. Leave the page (page.tsx) with no directive so it stays a Server Component and everything else on the page keeps rendering server-side. Pass any props the icon-button needs down from the page as usual.",
+        "known_wrong": "Just add 'use client' to the top of the page.tsx file that contains it -- that's the fastest way to make the error go away without having to split anything into a new file.",
+        "vague": "Add 'use client' somewhere so the hook works, ideally not too broadly.",
+        "subtle_wrong": "I'd add 'use client' to the layout.tsx that wraps this page, since that's one level up from the page itself and technically not the page file -- that should satisfy the boundary requirement while being less invasive than touching the page directly."
+      },
+      "anti_patterns": []
+    }
+  ]
+}

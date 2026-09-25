@@ -3,6 +3,98 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.1] — 2026-09-25
+
+More of the Jev plan: Jev now helps in review, in `keryx flow`, and in the
+shell after every turn. Routing works out a model for each kind of task from
+the models your provider actually serves. A benchmark measures whether any of
+this helps. Every Jev feature is opt-in and advisory. Each one computes the
+facts itself first and asks Jev only yes/no questions.
+
+### Added
+- **`keryx review jev-rules` — an additional reviewer that checks every
+  changed hunk against every applicable project rule.**
+  - Rules come from `.metaproject/rules`, `rules/`, convention skills and
+    `--rules`, and are split into clauses. The clauses are filtered before
+    any code is checked:
+    - only clauses tagged as code-checkable are kept (the tagging is
+      cached per rule file);
+    - process rules (commits, TDD, workflow, prompting and similar) are
+      dropped;
+    - unfilled template lines are dropped;
+    - docs hunks are checked only against docs rules.
+  - The call budget is spread round-robin over every hunk, code first, and
+    the output reports how many hunks were reached.
+  - keryx writes schema-valid findings, capped at `minor` unless a rule
+    says otherwise.
+  - It runs in the orchestrator's Wave B as a CLI-engine reviewer
+    (`engine: jev`) and replaces no existing reviewer. In the shell it is
+    `/jevrules`. Opt-in: `review.jev.rules`.
+  - Measured on one real PR: 121 findings at $0.127 before the filters,
+    2 findings at $0.0034 after, with every applicable hunk reached. Both
+    remaining findings were wrong, so treat it as quiet and cheap, not yet
+    precise.
+- **`keryx flow check-ac <id> [--diff|--pr] [--refresh] [--json]` — Jev checks
+  a change against the flow's frozen acceptance criteria.** Each criterion
+  comes back likely-met, not-evident, or not-checkable.
+  - Criteria about live checks, CI, health or publishing are
+    not-checkable, decided without a model. For the rest, keryx first finds
+    which named files, symbols and flags appear in the diff, then asks Jev.
+  - An advisory note is printed at `flow implemented` and `flow complete`,
+    capped at 20 s.
+  - `review ingest` attaches the result only when it was computed for the
+    diff under review.
+  - In the shell: an AC tab in `/flows`, and `/ac`. The cache key is the
+    criteria plus the diff, and a stale result is never shown as current.
+    Opt-in: `review.jev.ac_check`.
+- **A turn guard in `keryx shell`** (`/guard on|off`, `keryx shell --guard`).
+  After an agent turn, keryx collects what the tools actually did and flags
+  two things in one line: a reply that says it is done when it is not, and a
+  reply that contradicts a failed test or command. `/guard` shows the
+  details.
+  - A real tool failure, or a failed build/test/install/typecheck command
+    the reply never mentions, is flagged without Jev.
+  - Ordinary nonzero exits (grep, test, diff) are passed to Jev as facts,
+    not flagged.
+  - It runs after the turn and never delays the next prompt. Off by
+    default.
+- **Model profiles and a derived default routing table.**
+  - Every model gets a strength tier, price, context size and priority,
+    each with its source: curated for Anthropic, OpenAI and Gemini;
+    reported by any provider's `/models`; or guessed from the name. The
+    profiles live in `model-profiles.json`, mode 0600.
+  - With no routing configured, `/routing` derives a table anchored on the
+    session model:
+    - review and planning get the strongest model not weaker than the
+      session model;
+    - subagents, docs and unattended get one step down;
+    - quick gets the smallest class;
+    - default and coding keep the session model.
+  - Ranking goes by family, then by version within the family, both dotted
+    and hyphenated. Parameter sizes such as `7b` are never read as
+    versions. Non-chat and `:free` models are never derived.
+  - `keryx routing profile list|set`.
+- **`bench/jev-review` — a benchmark of Jev with and without it.** The
+  dataset is this repository's own review history, 1,638 findings with
+  their dispositions. Each component runs through a common adapter.
+  - Every rate is printed with n and a 95% interval, and a rate is marked
+    anecdotal below n=10.
+  - It runs offline by default; `--live` spends under a cost cap.
+  - The results page says plainly where Jev did not beat a naive baseline.
+
+### Changed
+- **`keryx review conform` reports one verdict per clause**, with the
+  worst hunks, instead of one row per hunk. On a real PR the text report
+  went from 297 lines to 60.
+  - `--max-hunk-calls` caps the Jev calls. A clause judged on only some of
+    its hunks says "judged on K of N", and a clause that got no hunks reads
+    "not evaluated" with the reason. `--detail` and `--json` keep the
+    per-hunk rows.
+
+### Fixed
+- `keryx review ci-triage`: a rejected cached lookup no longer poisons later
+  jobs, and the pagination gap is documented.
+
 ## [0.3.0] — 2026-09-25
 
 The agent platform release. keryx now detects a project's stack and installs

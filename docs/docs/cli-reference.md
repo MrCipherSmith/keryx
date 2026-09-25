@@ -1264,8 +1264,10 @@ recorded as cross-family when both sides in fact ran the same vendor.
 The **routing table** — flow 305 — maps a task category to a model, so
 different kinds of work land on different providers/models without running
 `/model` before every turn. Two config layers, same precedence pattern as
-`security.config.json`: **explicit per-call override > per-project
-`routing.config.json` > per-user entry (shell config) > session default**.
+`security.config.json`, plus flow 327's automatically-built **derived**
+layer: **explicit per-call override > per-project `routing.config.json` >
+per-user entry (shell config) > derived (flow 327, below) > session
+default**.
 
 Categories (PRD `docs/requirements/keryx-jev-router/PRD.md` §4): `default`,
 `review`, `subagents`, `quick`, `coding`, `planning`, `docs`, `unattended`.
@@ -1307,25 +1309,138 @@ keryx routing set <category> <provider>/<model> [--user|--project]
 keryx routing set <category> <provider> [--user|--project]
 keryx routing unset <category> [--user|--project]
 keryx routing trust
+keryx routing profile list [--json]
+keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>
 ```
 
 | Subcommand | Flags | Description |
 |---|---|---|
-| `list` | `--json` | Every category, its resolved assignment (`session default`, `<provider>/<model>`, or `<provider> (provider default)`), which layer answered (`project`, `user`, or `default`), and — when applicable — the not-connected entry it fell back from. |
+| `list` | `--json` | Every category, its resolved assignment (`session default`, `<provider>/<model>`, `<provider> (provider default)`, or `auto (derived from <provider>'s models) -> …`), which layer answered (`project`, `user`, `derived`, or `default`), and — when applicable — the not-connected or unavailable entry it fell back from. |
 | `set` | `<category> <provider>/<model>`, `--user`\|`--project` | Pin an exact model for a category. Default layer: `--user`. A `--project` write is not auto-approved — run `keryx routing trust` afterward. |
 | `set` | `<category> <provider>`, `--user`\|`--project` | Pin a provider's own default model for a category (no `/model` — the "provider default" form). |
 | `unset` | `<category>`, `--user`\|`--project` | Clear a category back to `session default`. Default layer: `--user`. |
 | `trust` | — | Print `routing.config.json`'s entries and approve its current content, so the project layer starts applying. |
+| `profile list` | `--json` | Every stored model profile: strength tier, input/output price per million tokens, context length, priority, each field's source, and availability. |
+| `profile set` | `<provider>/<model>`, `--tier`\|`--price-in`\|`--price-out`\|`--context`\|`--priority <value>` | An operator correction to one profile field — stored with `source: "operator"`, never overwritten by a later refresh. |
 
 In the TUI, `/routing` opens a list+detail modal: the list side shows every
-category's current resolution (with a not-connected fallback notice inline,
-and an unapproved-project notice when relevant); selecting one opens a
-**flat** searchable model picker — one list spanning every connected
+category's current resolution (with a not-connected/unavailable fallback
+notice inline, an `auto (derived from …)` marker for a category nobody
+configured, and an unapproved-project notice when relevant); selecting one
+opens a **flat** searchable model picker — one list spanning every connected
 provider's models (built on the same type-to-filter machinery `/model` uses),
 never a "pick a provider first" step — with a "provider default" row per
-connected provider and a "session default" row. A confirmed pick writes
-immediately to the per-user layer. `t` on the list side shows the project
-file's entries and arms an approval; `y` confirms, any other key cancels.
+connected provider and a "session default" row. Each model row also shows its
+profile (tier, price, context, priority, each field's source), and an
+`available: false` model is marked `UNAVAILABLE` (still selectable). A
+confirmed pick writes immediately to the per-user layer. `t` on the list side
+shows the project file's entries and arms an approval; `y` confirms, any
+other key cancels.
+
+### Model profiles and the derived default table (flow 327)
+
+Keryx records what it honestly knows about each connected model — strength
+tier, input/output price per million tokens, and context length — in a
+per-user **model profile** catalogue (`docs/requirements/keryx-jev-router/
+PRD.md` §6), keyed by `<provider>/<model>`. Every field carries its own
+**source**, in the order each is tried:
+
+- `reported` — read directly off a provider's live `/models` response, when
+  it carries `pricing`/`context_length` (confirmed for OpenRouter; parsed
+  generically for any gateway that returns the same shape).
+- `curated` — a small, hand-maintained seed table for the three providers
+  with no live `/models` endpoint at all: `anthropic`, `openai`, `gemini`.
+  Shows up from the FIRST read of the catalogue, before anything is written.
+- `guessed` — strength tier only, from the same name-pattern heuristic
+  `keryx review tier` already uses (`nano`/`mini`/`haiku`/… → `light`,
+  `opus`/`pro`/`large`/… → `deep`) — never used for price.
+- `operator` — set by `keryx routing profile set` or `/routing`'s picker.
+  Never overwritten by a later refresh.
+- `unknown` — a price/context field with no reported/curated/operator value.
+  Never `0`, never a fabricated number.
+
+A profile is refreshed — diffed against what's already stored, never
+wholesale replaced — every time a provider's live model list is fetched: at
+`keryx shell` startup, on `keryx providers status --refresh`, and on a
+`/connect` **Test**/`keryx providers test` (whose result then mentions the
+diff, e.g. `ok — 12 model(s) (profiles: 3 added, 1 changed, 1 now
+unavailable)`). A model no longer listed is marked `available: false` and
+KEPT, never deleted; a routing entry that resolves to an unavailable model is
+treated as unresolved at that layer and falls through, shown as:
+
+```
+<provider>/<model> — unavailable, falling back to <resolved>
+```
+
+**Storage.** The profile catalogue lives in its own file,
+`model-profiles.json`, in keryx's per-user config directory (next to
+`auth.json` and `provider-catalog.json`) — mode `0600`, written atomically
+under a file lock, never inside `auth.json`: that file holds credentials,
+and a catalogue that grows to hundreds of entries has no business sharing it.
+Every read-modify-write (a live refresh, `providers test`, `routing profile
+set`) serializes on that lock, so two providers refreshing at once — the
+common case at `keryx shell` startup — never lose one's update to the
+other's. An existing `auth.json`'s legacy `modelProfiles` field (from an
+earlier release) is migrated into `model-profiles.json` once, automatically,
+on the next write, and then removed from `auth.json`.
+
+**Non-chat models are never auto-derived.** An embedding, image,
+text-to-speech/speech-to-text, moderation or rerank model — detected by id
+pattern, and by a gateway's own `/models` modality metadata when it carries
+one (confirmed for OpenRouter's `architecture.output_modalities`/
+`architecture.modality`) — and an OpenRouter `:free` variant are excluded
+from derivation entirely, even when one would otherwise be the strongest or
+only candidate. Both are still listed in `/routing`'s flat picker and can be
+picked manually — marked `non-chat/free — never auto-derived` there and in
+`keryx routing profile list`.
+
+**Derived default routing**, anchored on the SESSION's own model. When a
+category has nothing configured at any layer, keryx derives a sensible
+default from the session's own connected provider's models and their
+profiles:
+
+- One available chat model becomes the default for every category (except
+  `default`/`coding`).
+- With several models, ranked first by **family size class**
+  (`opus`/`sonnet`/`haiku`-style hints — flagship > mini/flash/lite — the
+  same size-word table `keryx review tier` uses) and, WITHIN the same family
+  and vendor, by the **version number** parsed from the id — both a dotted
+  spelling (`opus-5.5` > `opus-4.7`, `gemini-3.8-flash` > `gemini-3.1-flash`)
+  and a real Anthropic-style HYPHENATED one, where a run of 2-3 adjacent
+  short (1-2 digit) numeric tokens reads as a dotted version
+  (`claude-opus-4-8` → `4.8`, so `claude-opus-5-1` > `claude-opus-4-8`).
+  Parsed conservatively: a date/snapshot-shaped token (6-8 bare digits, e.g.
+  a `-20250514` suffix) and more than one such numeric group in the same id
+  both still yield no version rather than a guess. `gpt-4o`-style ids (a
+  short number plus one trailing letter) parse the number alone as the
+  version, with the letter kept only as an ignored variant tag — so `gpt-4o`
+  and `gpt-4.1` land in the same family and `gpt-4.1` correctly outranks
+  `gpt-4o`, a deliberate, documented choice rather than refusing that pair's
+  comparison outright. A **parameter-size token** (`7b`, `32b`, `70b`,
+  `1.5b`, `8x7b` — a total or MoE "N experts x M billion" param count) is
+  NEVER a version — it always stays in the family key instead, so
+  `qwen2.5-coder-7b`/`qwen2.5-coder-32b` and `llama-3.3-70b`/`llama-3.3-8b`
+  key to different families and are never version-compared against each
+  other (only the one real vendor shape that needs it, `4o`'s trailing `o`,
+  is ever read as a version-plus-variant-tag; every other trailing letter
+  after a short digit run is a size suffix). A trailing `-latest`/`-preview`
+  alias word is also dropped from the family key alone (never from the id
+  itself), so `claude-3-7-sonnet-latest` joins the same family as
+  `claude-sonnet-5`. Two versions of the same family are NEVER decided by
+  alphabetical order — the id-string fallback only ever applies when a
+  version is unparseable on both sides:
+  - `planning`/`review` get the strongest model not weaker than the session
+    model — the session model itself when nothing is stronger.
+  - `subagents`/`docs`/`unattended` get the next size step DOWN from the
+    session's own family (an Opus session gives Sonnet) — never the
+    smallest class, the session model itself when there is no middle step.
+  - `quick` gets the smallest class present (haiku/flash/mini-style).
+  - `default`/`coding` stay the session's own model, unchanged.
+  - Ties are broken toward the session model itself, then by
+    `priority.value`.
+
+`keryx routing list` shows a derived category as
+`auto (derived from <provider>'s models) -> …`.
 
 ---
 
@@ -2825,6 +2940,7 @@ keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
+keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]
 keryx flow implemented <id> --pr <url>
 keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]
 keryx flow confirm <id> [--merged]
@@ -2856,6 +2972,7 @@ keryx flow schema [--out <path>]
 | `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
 
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
+| `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
 | `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
 | `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
@@ -2875,6 +2992,80 @@ When the `security` module is enabled, `complete` adds a `security` completion
 gate. Advisory (the default) makes it informational (`pass`, never blocks);
 `enforced`/`ci`/`gateway` mode can fail the gate and hold the flow in
 `in-progress`. The gate is omitted entirely when the module is disabled.
+
+### `flow check-ac`
+
+Jev checks a flow's change against its FROZEN acceptance criteria (flow 328). **Always
+advisory**: it never changes flow state, never confirms an AC, and its own errors
+never fail a caller command.
+
+```
+keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]
+```
+
+The change defaults to the flow worktree's diff against its base branch (or
+`origin/main`), against their MERGE BASE — same reasoning `review floor`'s
+`--ref` uses. `--diff <ref>` diffs against another ref's merge base instead;
+`--pr <n>` reads the pull request's diff via `gh pr diff <n>` (repo inferred
+from the checkout's `origin` remote) instead of local git.
+
+Results are cached per flow, keyed on (criteria checksum, diff hash) — a
+repeat call against an unchanged diff and unchanged frozen criteria reads the
+cache instead of asking Jev again. `--refresh` bypasses that cache even when
+both match, forcing a fresh Jev call — the same "the cache exists, ask
+anyway" shape as `keryx providers status --refresh` and `keryx learn accept
+--refresh`.
+
+For every criterion in `acceptance-criteria.md`:
+
+1. **Deterministic facts first (AC2).** Backticked tokens, file paths and
+   `keryx <cmd>` names named IN the criterion's own text are checked against
+   the diff and the changed-file list, and any changed TEST file mentioning
+   one is noted — computed with no model call, and placed above the diff in
+   Jev's `state`.
+2. **`not-checkable`, without a model (AC3).** A criterion about a live
+   check, CI green, `keryx health run`, docs being published, or a manual/
+   human-process step is recognised by an explicit, documented marker list
+   and never sent to Jev — always listed, never dropped.
+3. **One `noul` question per remaining criterion (AC4).** Batched under the
+   vendor's 64k `state`+`questions` budget (packed to half that, with a cap
+   on criteria per batch — a real large diff can make a few generic tokens
+   match far more hunks than the documented ceiling actually affords), with
+   only the diff regions the criterion's own tokens matched — redacted via
+   `src/security/service.ts` — or, when nothing matched, the changed-file
+   list and that fact. Opt-in per project:
+   `{"review":{"jev":{"ac_check":true}}}` in `.metaproject/tasks.config.json`.
+   Without the opt-in, or without an OpenRouter credential, the command
+   still prints every criterion's deterministic evidence and says plainly
+   that Jev was not asked — nothing is silently skipped.
+
+Each checkable criterion is reported `likely-met` or `not-evident` (Jev's
+probability against a 0.5 threshold), alongside its probability, facts and
+matched evidence paths.
+
+**Cached (AC8).** Results are cached per flow under `.metaproject/data/ac-check/`
+(gitignored, mode 0600), keyed by (criteria checksum, diff hash) — an
+unchanged diff against unchanged criteria reads the cache rather than asking
+Jev again.
+
+**Advisory notices (AC5).** `flow implemented` and `flow complete` print a
+one-line summary (counts, and which criteria are not evident) when the
+opt-in is on — never blocking, and a check failure is one line, not a
+command failure.
+
+**Review attachment (AC6).** `keryx review ingest` for a flow with the
+opt-in attaches the latest CACHED result as `ac-check.md` in the review
+package, so reviewers see which criteria are in doubt — this never triggers
+a fresh Jev call itself. The cache is attached only when its key (criteria
+checksum + diff hash) matches THIS round's own diff (the merge-base of
+`--ref`/the recorded `--head`, the same shape `check-ac` itself diffs
+against); a cache that exists but does not match gets a short STALE note
+instead (naming when it WAS checked, and that `--refresh` re-checks it),
+never a report that reads as current when it is not.
+
+**Shell (AC7).** `/flows`' modal carries an "AC" tab with per-criterion
+markers (met / not evident / not checkable / not run); `c` re-runs the check
+for the selected flow, and `/ac` opens the modal straight to that tab.
 
 ### The default task scaffold
 
@@ -4284,6 +4475,141 @@ remains a hint, not a diagnosis** — treat a non-`DETERMINISTIC` verdict
 accordingly regardless of `--top`. See the flow 307 journal
 (`.metaproject/flows/307-*/journal.md`) for the full per-case breakdown and
 the evidence behind each of the eight labels.
+
+### `review jev-rules`
+
+Flow 330. An ADDITIONAL orchestrator reviewer — never replacing any other —
+that checks every changed hunk against every applicable clause of every
+discovered project rule, scored by Jev's `noul` "does this hunk VIOLATE this
+clause?" and written up entirely by keryx: Jev supplies only a probability,
+never prose. Unlike `review conform`, this is dispatched by
+`review-orchestrator` itself (Wave B), as a CLI call rather than an LLM
+sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
+
+```bash
+keryx review jev-rules --scope scope.json --json
+keryx review jev-rules --pr 712 --repo MrCipherSmith/keryx --rules rules/core --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <ref>` \| `--pr <n>` \| `--scope <scope.json>` | Exactly one is required. `--scope` takes the whole `keryx review scope --json` document (the same file every other reviewer's dispatch reads) — the orchestrator's own path. `--diff`/`--pr` build the scope themselves via `hunkRegionsFromDiff`. |
+| `--rules <paths>` | Comma-separated extra rule files/directories, checked in addition to auto-discovery (`.metaproject/rules/**`, `rules/**`, and any project-skill/installed gdskill whose name or `metadata.category` marks it a coding convention). The category filter below is bypassed only for an entry naming ONE FILE explicitly; an entry naming a DIRECTORY is walked and its files are filtered exactly like auto-discovery — naming a whole directory is not the same as naming one document. |
+| `--max-calls <n>` | Caps how many `(hunk, rule clause)` pairs are scored, default 150. Hunks are ranked code, then tests, then docs, and the budget is allocated round-robin across hunks (see "Fair budget allocation" below) rather than draining on the first hunk in diff order; anything beyond the cap is reported dropped, never silently, and per-hunk coverage is reported under `selection.hunkCoverage`. |
+| `--threshold <0..1>` | Below this Jev probability a pair is not reported. Default `0.5`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model — used for both clause tagging and violation scoring. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`, a JSON array consumed in call order — tagging calls first, then violation calls) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats`, plus `tokens`/`selection` (including `hunkCoverage`)/`ruleSources` (with `category`)/`excludedSources`/`droppedClauses`/`droppedPlaceholderClauses`) conforming to `reviewer-finding.schema.json`. |
+
+**Finding synthesis is deterministic.** `problem` quotes the violated clause;
+`impact` is the rule's own stated rationale (its first clause under a
+heading naming rationale/why/purpose/reason) or a fixed template when the
+rule states none; `suggested_fix` names the clause to bring the hunk in line
+with; `evidence` carries every hunk location and Jev's probability. Severity
+is capped at `minor` unless the clause itself declares a higher one
+(`[severity: major]`, trailing on the clause text) — the same marker syntax
+`review conform`'s `[state:pr]` already uses. One finding per `(rule clause,
+file)`, deduped across every hunk of that file with a hunk list, never one
+finding per hunk.
+
+**Four precision/cost filters run before any hunk is scored:**
+
+1. **`--rules` bypass, scoped to one file.** `discoverRuleSources`
+   (`src/commands/review-jev-rules.ts`) only lets a `--rules` entry that
+   names ONE FILE explicitly skip the category filter below. A `--rules`
+   DIRECTORY is walked and every file it contains is filtered exactly like
+   `.metaproject/rules/**` auto-discovery — a live re-measurement found the
+   opposite bug: passing `--rules .metaproject/rules` (the whole 41-doc
+   corpus, as a directory) bypassed the category filter for every file in
+   it, unconditionally.
+2. **Rule-source category filter.** Before clause extraction runs at all,
+   each discovered source (auto-discovered, or found by walking a `--rules`
+   directory — never a `--rules` entry naming that one file explicitly) is
+   classified `code`/`process`/`docs` — explicit frontmatter first
+   (`applies_to: code|process|docs` at the frontmatter's top level, or
+   `metadata.category`), else a documented filename/title heuristic
+   (`PROCESS_RULE_HEURISTIC_TERMS` in `src/review/jev-rules.ts`: `commit`,
+   `git`, `tdd`, `workflow`, `definition-of-done`, `documentation`,
+   `requirements`, `plan`, `prompting`, `subagent`, `skill`, `jobs`,
+   `orchestrat`, `review-process`, `release`). A `process`/`docs` source is
+   excluded before it ever reaches tagging or scoring — reported with its
+   reason under `excludedSources` in `--json` (and counted in the summary
+   line).
+3. **Placeholder/template clause drop.** `isPlaceholderClauseText`
+   (`src/review/jev-rules.ts`, a pure function) drops a clause extracted
+   from authoring scaffolding a rule author never filled in — a checklist
+   item still carrying a `<...>` placeholder (`[x] <criterion 1> — verified
+   by <test>`), text dominated by `<...>` placeholders, or a bare code-fence
+   line — BEFORE it is offered a tagging call. Dropped clauses are reported
+   under `droppedPlaceholderClauses` in `--json` and counted in the summary
+   line.
+4. **Clause-kind AND file-kind gating.** Every rule doc's remaining clauses
+   are tagged `state_kind: "pr" | "report" | "hunk"` and `checkable` —
+   REUSING `review conform`'s own tagging
+   (`applyClauseTags`/`buildClauseTagQuestions`/`clauseTagFromChoice`), an
+   explicit `[state:hunk]`/`[not-checkable: ...]` marker on the clause text
+   when the rule author wrote one, else a single Jev `choice` call per doc's
+   untagged clauses, cached by the doc's content hash at
+   `.metaproject/data/review-jev-rules/clause-tags.json` (a jev-rules-
+   specific cache file, so a `review conform` run and a `review-jev-rules`
+   run never race on the same one). Only a clause tagged `state_kind:
+   "hunk"` and `checkable` is ever paired against a hunk — a
+   `"pr"`/`"report"`-kind or not-checkable clause is dropped and reported
+   (count in the summary line, full `(ruleId, clauseId, reason)` list under
+   `droppedClauses` in `--json`). On top of that, `clauseFileKindApplicability`
+   gates by file kind: a docs hunk (`.md`/`.mdx`/`.txt`) pairs only with a
+   `docs`-categorised source or a clause explicitly tagged
+   `[docs-applicable]`; a code source never pairs with a docs hunk, and
+   vice versa — the fix for a code-convention clause matching a
+   `cli-reference.md` hunk with no declared path restriction. Tagging is
+   one-time per doc content: the usage summary counts it separately,
+   `tagging: N call(s) (cached next run)`, from `violation: N call(s)` (the
+   `noul` scoring calls).
+
+**Fair budget allocation.** Hunks are ranked code (non-docs, non-test) first,
+then test files, then docs files — `hunkPriorityRank` in
+`src/review/jev-rules.ts` — with the diff's own order breaking ties within a
+rank. `selectRuleHunkPairs` then spends `--max-calls` round-robin across
+hunks: `K = max(1, floor(maxCalls / hunks-with-a-pair))` pairs per hunk per
+round, computed once, so every hunk in the rotation gets at least one round
+while the budget allows one K-sized slice per hunk; a hunk whose pairs run
+out simply drops from the rotation and the freed capacity keeps circulating.
+This is the direct fix for a measured bug: on a live PR, the entire default
+150-call budget landed on a single docs hunk in `cli-reference.md`
+(processed first in diff order under the old first-come allocation), and not
+one code hunk was ever scored. `selection.hunkCoverage` in `--json` reports
+one `{path, startLine, endLine, applicablePairs, selectedPairs}` per hunk
+that had something to check, and `selection.hunksReached`/
+`hunksNeverReached` (also named in plain text in `summary`) say how many of
+those hunks the budget actually reached.
+
+These fixes are the answer to a measured problem: a live check of this
+reviewer against a merged PR of this repository, using this repository's own
+41-doc `.metaproject/rules/**` corpus (none of which declares
+`metadata.paths`/`stack_requires`), hand-labelled ~1/10 findings correct —
+several of the false positives were exactly a process/agent-behaviour rule
+(commit-message formatting, TDD workflow, an agent's own prompting standard)
+paired against a code hunk it was never meant to describe. A follow-up
+re-measurement then found the `--rules` directory bypass and the
+first-hunk-drains-the-budget allocation described above. See
+`.metaproject/flows/330-*/journal.md` for the full before/after numbers.
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.rules: true` in `.metaproject/tasks.config.json`.
+Every hunk, every rule-clause, and every clause sent to a tagging call is
+redacted first (`src/security/service.ts`), the same floor `review
+conform`/`review ci-triage` already apply. With the setting off, or with no
+OpenRouter credential, the command refuses before any read and makes no
+network call.
+
+**Two caches**, both gitignored and mode `0600` under
+`.metaproject/data/review-jev-rules/`: `violation-cache.json`, keyed on the
+clause text and hunk location (a re-run over unchanged hunks and unchanged
+rules costs zero additional Jev calls), and `clause-tags.json`, keyed on the
+rule doc's own content hash (a re-run against a DIFFERENT diff but the SAME
+rule corpus costs zero additional tagging calls, even though the hunks —
+and so the violation cache — miss).
 
 ### `review ci-triage --eval`
 

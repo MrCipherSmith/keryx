@@ -35,8 +35,14 @@ export interface GeneratedAgentFile {
 }
 
 export interface GeneratedAgentPair {
-  readonly auditor: GeneratedAgentFile;
-  readonly fixer: GeneratedAgentFile;
+  // R1 review, PR #719 (M2): a pack that ships no `review` skills has
+  // nothing for a generated auditor to point at, and one with no
+  // `build-fix` skills has nothing for a generated fixer to point at — the
+  // pair is not always a pair. Either half is `undefined`, never a
+  // placeholder persona claiming coverage the pack's own `skills` map (and
+  // the gate that scored it) never had.
+  readonly auditor: GeneratedAgentFile | undefined;
+  readonly fixer: GeneratedAgentFile | undefined;
 }
 
 /** Read-only tool allowlist every generated `<id>-code-auditor` carries — never `apply_patch`/`shell_exec`. */
@@ -152,14 +158,38 @@ function assertSafePack(pack: StackPackForAgentGeneration): void {
   for (const item of pack.agentProfile.fixGuardrails) assertNoControlChars("agentProfile.fixGuardrails item", item);
 }
 
+/**
+ * "a" or "an" for a pack's own `displayName` (R1 review, PR #719, minor:
+ * "A Angular-focused..." read wrong). Vowel-SOUND, not vowel-letter, is the
+ * actual English rule, but every display name this generator has ever seen
+ * (Go, Python, NestJS, Angular, Vue, React, MobX, ...) follows plain
+ * first-letter vowel/consonant, so that is what this checks — simple and
+ * correct for the real, bounded input space rather than a general English
+ * pronunciation engine.
+ */
+function indefiniteArticle(displayName: string): "a" | "an" {
+  return /^[aeiou]/i.test(displayName) ? "an" : "a";
+}
+
+/** Capitalized indefinite article, for starting a sentence ("An Angular...", "A Go..."). */
+function capitalizedIndefiniteArticle(displayName: string): "A" | "An" {
+  return indefiniteArticle(displayName) === "an" ? "An" : "A";
+}
+
 const STATUS_LINE =
   "The reply's first line is `STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED` per the subagent-result contract.";
 
 function auditorDescription(pack: StackPackForAgentGeneration): string {
+  // R1 review, PR #719 (M2): this used to say "this pack's governance gate
+  // has confirmed" for the `auditFocus` list. The honest gate scores
+  // implement/test/build-fix judge scenarios; it has never evaluated a
+  // review scenario for any stack pack, so `auditFocus` is authored
+  // guidance, not a gate-confirmed claim. Say what is actually true: the
+  // pack shipped it, not that anything judged it.
   return (
     `Reviews ${pack.agentProfile.displayName} code, read-only, for the ${pack.agentProfile.auditFocus.length} ` +
-    `stack-specific risk patterns this pack's governance gate has confirmed for ${pack.id} (correctness, resource, ` +
-    `and security patterns particular to ${pack.agentProfile.displayName}). Dispatched for a stack-specific code-` +
+    `stack-specific risk patterns this pack's authors documented for ${pack.id} (correctness, resource, and ` +
+    `security patterns particular to ${pack.agentProfile.displayName}). Dispatched for a stack-specific code-` +
     `quality pass distinct from generic review, gated the same stack_requires-style way review-orchestrator already ` +
     `uses for per-stack reviewers.`
   );
@@ -167,7 +197,7 @@ function auditorDescription(pack: StackPackForAgentGeneration): string {
 
 function fixerDescription(pack: StackPackForAgentGeneration): string {
   return (
-    `Reproduces and fixes a ${pack.agentProfile.displayName} build, lint, type-check, or test failure with the ` +
+    `Reproduces and fixes ${indefiniteArticle(pack.agentProfile.displayName)} ${pack.agentProfile.displayName} build, lint, type-check, or test failure with the ` +
     `smallest root-cause change, isolated in a worktree. Dispatched after a ${pack.id} build/CI command fails and ` +
     `needs a targeted fix rather than a full implementation pass, always re-running the same commands to prove the ` +
     `fix actually holds.`
@@ -176,12 +206,13 @@ function fixerDescription(pack: StackPackForAgentGeneration): string {
 
 function auditorBody(pack: StackPackForAgentGeneration): string {
   const displayName = pack.agentProfile.displayName;
+  // R1 review, PR #719 (M2): an auditor is only ever generated when
+  // `pack.skills.review` is non-empty (see `generateStackAgentPair` below),
+  // so this always points at a real skill — never the placeholder "this
+  // stack's review skill" text that used to run when the list was empty.
   const reviewSkills = pack.skills.review ?? [];
   const focusList = pack.agentProfile.auditFocus.map((item) => `   - ${item}`).join("\n");
-  const skillsLine =
-    reviewSkills.length > 0
-      ? `the \`${reviewSkills.join("`, `")}\` skill(s)`
-      : "this stack's review skill";
+  const skillsLine = `the \`${reviewSkills.join("`, `")}\` skill(s)`;
   return [
     `# ${displayName} Code Auditor`,
     "",
@@ -240,57 +271,76 @@ function fixerBody(pack: StackPackForAgentGeneration): string {
  * Generate the `<id>-code-auditor` / `<id>-build-fixer` pair for one stack
  * pack. Pure: given the same `pack`, always returns byte-identical
  * `content` for each file — no timestamp, no random id, no environment
- * read. Callers write these to
- * `src/gdskills/bundled/agents/<fileName>` and list both `name`s in that
+ * read. Callers write the files that exist to
+ * `src/gdskills/bundled/agents/<fileName>` and list their `name`s in that
  * pack's `agent-refs.json`.
+ *
+ * R1 review, PR #719 (M2): an auditor needs `pack.skills.review` non-empty
+ * and a fixer needs `pack.skills["build-fix"]` non-empty — a persona with
+ * no matching skill bucket has nothing to point at and nothing the gate
+ * ever scored, so it is not generated at all, rather than shipped with a
+ * dangling reference to a skill that does not exist. A pack whose
+ * `agentProfile` produces neither (both buckets empty) throws, since that
+ * pack should not carry an `agentProfile` in the first place.
  */
 export function generateStackAgentPair(pack: StackPackForAgentGeneration): GeneratedAgentPair {
   assertSafePack(pack);
   const auditorName = `${pack.id}-code-auditor`;
   const fixerName = `${pack.id}-build-fixer`;
+  const reviewSkills = pack.skills.review ?? [];
+  const buildFixSkills = pack.skills["build-fix"] ?? [];
 
-  const auditorFrontmatter = frontmatter({
-    name: auditorName,
-    description: auditorDescription(pack),
-    role:
-      `A ${pack.agentProfile.displayName}-focused code auditor who reads for this stack's known risk patterns ` +
-      "without editing anything, and ranks findings by real-world impact rather than listing every theoretical concern equally.",
-    tools: AUDITOR_TOOLS,
-    model_tier: "deep",
-    policy_profile: "read-only",
-    skills: pack.skills.review ?? [],
-    stacks: [pack.id],
-    output_contract: "subagent-result",
-    isolation: "none",
-    origin: { kind: "generated", sourceRef: pack.id },
-  });
+  if (reviewSkills.length === 0 && buildFixSkills.length === 0) {
+    throw new InvalidStackPackFieldError(
+      `pack "${pack.id}" has an agentProfile but both skills.review and skills["build-fix"] are empty — nothing to generate a persona from`,
+    );
+  }
 
-  const fixerFrontmatter = frontmatter({
-    name: fixerName,
-    description: fixerDescription(pack),
-    role:
-      `A ${pack.agentProfile.displayName} build-and-test fixer who reproduces the reported failure, finds the ` +
-      "smallest root-cause fix, and proves the original commands pass again before reporting done.",
-    tools: FIXER_TOOLS,
-    model_tier: "standard",
-    policy_profile: "workspace-write",
-    skills: pack.skills["build-fix"] ?? [],
-    stacks: [pack.id],
-    output_contract: "subagent-result",
-    isolation: "worktree",
-    origin: { kind: "generated", sourceRef: pack.id },
-  });
+  const auditor: GeneratedAgentFile | undefined =
+    reviewSkills.length === 0
+      ? undefined
+      : {
+          name: auditorName,
+          fileName: `${auditorName}.md`,
+          content: `${frontmatter({
+            name: auditorName,
+            description: auditorDescription(pack),
+            role:
+              `${capitalizedIndefiniteArticle(pack.agentProfile.displayName)} ${pack.agentProfile.displayName}-focused code auditor who reads for this stack's known risk patterns ` +
+              "without editing anything, and ranks findings by real-world impact rather than listing every theoretical concern equally.",
+            tools: AUDITOR_TOOLS,
+            model_tier: "deep",
+            policy_profile: "read-only",
+            skills: reviewSkills,
+            stacks: [pack.id],
+            output_contract: "subagent-result",
+            isolation: "none",
+            origin: { kind: "generated", sourceRef: pack.id },
+          })}\n\n${auditorBody(pack)}`,
+        };
 
-  return {
-    auditor: {
-      name: auditorName,
-      fileName: `${auditorName}.md`,
-      content: `${auditorFrontmatter}\n\n${auditorBody(pack)}`,
-    },
-    fixer: {
-      name: fixerName,
-      fileName: `${fixerName}.md`,
-      content: `${fixerFrontmatter}\n\n${fixerBody(pack)}`,
-    },
-  };
+  const fixer: GeneratedAgentFile | undefined =
+    buildFixSkills.length === 0
+      ? undefined
+      : {
+          name: fixerName,
+          fileName: `${fixerName}.md`,
+          content: `${frontmatter({
+            name: fixerName,
+            description: fixerDescription(pack),
+            role:
+              `${capitalizedIndefiniteArticle(pack.agentProfile.displayName)} ${pack.agentProfile.displayName} build-and-test fixer who reproduces the reported failure, finds the ` +
+              "smallest root-cause fix, and proves the original commands pass again before reporting done.",
+            tools: FIXER_TOOLS,
+            model_tier: "standard",
+            policy_profile: "workspace-write",
+            skills: buildFixSkills,
+            stacks: [pack.id],
+            output_contract: "subagent-result",
+            isolation: "worktree",
+            origin: { kind: "generated", sourceRef: pack.id },
+          })}\n\n${fixerBody(pack)}`,
+        };
+
+  return { auditor, fixer };
 }

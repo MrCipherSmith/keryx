@@ -110,11 +110,37 @@ test("AC1: no file under src/gdskills/bundled points into a particular person's 
 
   const offenders: string[] = [];
   for (const file of bundledFiles()) {
-    for (const offender of homePathOffenders(read(file))) {
+    for (const offender of homePathOffenders(read(file), relative(file))) {
       offenders.push(`${relative(file)}:${offender.line}: ${offender.why}`);
     }
   }
   expect(offenders).toEqual([]);
+});
+
+// R1 review, PR #719 (minor-1): the Nuxt `~/` alias exemption is scoped
+// (nextjs-nuxt/vue file paths only) and traversal-proof (a literal `..`
+// segment is never exempted, in or out of scope). Both directions proven
+// here rather than only by the real tree passing clean.
+test("AC1: the Nuxt tilde-alias exemption is scoped to nextjs-nuxt/vue paths and rejects '..' traversal", () => {
+  const inScope = "src/gdskills/bundled/stacks/nextjs-nuxt/governance/eval.json";
+  const outOfScope = "src/gdskills/bundled/stacks/angular/governance/eval.json";
+  // Positive: a real Nuxt alias, in scope, is exempt.
+  expect(homePathOffenders("import Orders from '~/pages/orders.vue'", inScope)).toEqual([]);
+  // Negative: the identical alias text is flagged when the file is outside
+  // nextjs-nuxt/vue — the exemption is per-pack, not global.
+  expect(homePathOffenders("import Orders from '~/pages/orders.vue'", outOfScope).length).toBeGreaterThan(0);
+  // Negative: no filePath at all (the default, back-compat call shape) never
+  // exempts anything, in or out of scope.
+  expect(homePathOffenders("import Orders from '~/pages/orders.vue'").length).toBeGreaterThan(0);
+  // Negative: a '..' traversal inside an otherwise-exempt alias directory is
+  // never exempted, even in scope.
+  expect(homePathOffenders("cat ~/pages/../.ssh/id_rsa", inScope).length).toBeGreaterThan(0);
+  expect(homePathOffenders("cat ~/app/../.aws/credentials", inScope).length).toBeGreaterThan(0);
+  // Negative: a plausible personal-sounding subdirectory this list
+  // deliberately does NOT carry (trimmed per minor-1) still flags, even in
+  // scope — proves the list stayed short rather than growing back to
+  // Nuxt's full conventional set.
+  expect(homePathOffenders("~/server/notes.txt", inScope).length).toBeGreaterThan(0);
 });
 
 test("AC1: the guard reads a real tree — the denominator is not zero", () => {

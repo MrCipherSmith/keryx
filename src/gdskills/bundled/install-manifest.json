@@ -78,6 +78,44 @@
       ],
       "stackDetectionAware": true
     },
+    "vue": {
+      "description": "Common rules plus the Vue stack pack component (`vue-rules` + `vue-skills`, from src/gdskills/bundled/stacks/vue/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:vue",
+        "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
+    "angular": {
+      "description": "Common rules plus the Angular stack pack component (`angular-rules` + `angular-skills`, from src/gdskills/bundled/stacks/angular/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:angular",
+        "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
+    "nextjs-nuxt": {
+      "description": "Common rules plus the Next.js/Nuxt meta-framework stack pack component (`nextjs-nuxt-rules` + `nextjs-nuxt-skills`, from src/gdskills/bundled/stacks/nextjs-nuxt/) alongside its React and Vue bases, installed when `keryx stack detect` finds a matching tag (nextjs or nuxt).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:react",
+        "framework:vue",
+        "framework:nextjs-nuxt",
+        "lang:ts-js-node"
+      ],
+      "stackDetectionAware": true
+    },
     "full": {
       "description": "Every registered module and component, unconditionally.",
       "modules": [
@@ -89,8 +127,12 @@
         "react-review-skills",
         "mobx-review-skill",
         "mobx-store-template-rule",
+        "mobx-rules",
+        "mobx-skills",
         "nestjs-review-skill",
         "nestjs-dto-rule",
+        "nestjs-rules",
+        "nestjs-skills",
         "python-rules",
         "python-skills",
         "ts-js-node-rules",
@@ -98,7 +140,13 @@
         "react-rules",
         "react-skills",
         "go-rules",
-        "go-skills"
+        "go-skills",
+        "vue-rules",
+        "vue-skills",
+        "angular-rules",
+        "angular-skills",
+        "nextjs-nuxt-rules",
+        "nextjs-nuxt-skills"
       ],
       "components": [
         "lang:ts-js-node",
@@ -106,7 +154,10 @@
         "capability:mobx",
         "framework:nestjs",
         "lang:python",
-        "lang:go"
+        "lang:go",
+        "framework:vue",
+        "framework:angular",
+        "framework:nextjs-nuxt"
       ]
     }
   },
@@ -441,6 +492,178 @@
       "defaultInstall": true,
       "cost": "medium",
       "stability": "stable"
+    },
+    "nestjs-rules": {
+      "kind": "rule",
+      "description": "NestJS stack pack rules (coding-style, patterns, security, testing; scoped to *.ts) from src/gdskills/bundled/stacks/nestjs/rules/. Complements, does not replace, the existing nestjs-dto-rule.",
+      "paths": [
+        "src/gdskills/bundled/stacks/nestjs/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "nestjs-skills": {
+      "kind": "skill",
+      "description": "NestJS stack pack skills (implementation, testing, build-fix) from src/gdskills/bundled/stacks/nestjs/skills/. Complements, does not replace, the existing nestjs-review-skill (review-backend).",
+      "paths": [
+        "src/gdskills/bundled/stacks/nestjs/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "vue-rules": {
+      "kind": "rule",
+      "description": "Vue stack pack rules (coding-style, patterns, security, testing; scoped to *.vue) from src/gdskills/bundled/stacks/vue/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/vue/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "vue-skills": {
+      "kind": "skill",
+      "description": "Vue stack pack skills (implementation, testing, code review, build-fix, Vue 2 to Vue 3 migration) from src/gdskills/bundled/stacks/vue/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/vue/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "angular-rules": {
+      "kind": "rule",
+      "description": "Angular stack pack rules (coding-style, patterns, security, testing; scoped to *.ts/*.html) from src/gdskills/bundled/stacks/angular/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/angular/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "angular-skills": {
+      "kind": "skill",
+      "description": "Angular stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/angular/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/angular/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "ts-js-node-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "nextjs-nuxt-rules": {
+      "kind": "rule",
+      "description": "Next.js/Nuxt meta-framework stack pack rules (coding-style, patterns, security, testing; scoped to *.tsx/*.jsx/*.vue) from src/gdskills/bundled/stacks/nextjs-nuxt/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/nextjs-nuxt/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "react-rules",
+        "vue-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "nextjs-nuxt-skills": {
+      "kind": "skill",
+      "description": "Next.js/Nuxt meta-framework stack pack skills (implementation, testing, code review, build-fix, upgrade migration) from src/gdskills/bundled/stacks/nextjs-nuxt/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/nextjs-nuxt/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "react-skills",
+        "vue-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "mobx-rules": {
+      "kind": "rule",
+      "description": "MobX stack pack rules (coding-style, patterns, security, testing; scoped to *.ts/*.tsx) from src/gdskills/bundled/stacks/mobx/rules/. Complements, does not replace, the existing mobx-store-template-rule.",
+      "paths": [
+        "src/gdskills/bundled/stacks/mobx/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "react-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "mobx-skills": {
+      "kind": "skill",
+      "description": "MobX stack pack skills (store implementation, observable testing) from src/gdskills/bundled/stacks/mobx/skills/. Complements, does not replace, the existing mobx-review-skill (code-mobx-store-review).",
+      "paths": [
+        "src/gdskills/bundled/stacks/mobx/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "react-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
     }
   },
   "components": {
@@ -478,7 +701,9 @@
       "family": "capability",
       "modules": [
         "mobx-review-skill",
-        "mobx-store-template-rule"
+        "mobx-store-template-rule",
+        "mobx-rules",
+        "mobx-skills"
       ],
       "detectionMarkers": [
         "mobx"
@@ -491,7 +716,9 @@
       "family": "framework",
       "modules": [
         "nestjs-review-skill",
-        "nestjs-dto-rule"
+        "nestjs-dto-rule",
+        "nestjs-rules",
+        "nestjs-skills"
       ],
       "detectionMarkers": [
         "nestjs"
@@ -521,6 +748,46 @@
       ],
       "detectionMarkers": [
         "go"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:vue": {
+      "family": "framework",
+      "modules": [
+        "vue-rules",
+        "vue-skills"
+      ],
+      "detectionMarkers": [
+        "vue"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:angular": {
+      "family": "framework",
+      "modules": [
+        "angular-rules",
+        "angular-skills"
+      ],
+      "detectionMarkers": [
+        "angular"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:nextjs-nuxt": {
+      "family": "framework",
+      "modules": [
+        "nextjs-nuxt-rules",
+        "nextjs-nuxt-skills"
+      ],
+      "detectionMarkers": [
+        "nextjs",
+        "nuxt"
       ],
       "provenance": {
         "origin": "authored"

@@ -58,6 +58,17 @@ test("saveShellConfig writes atomically: same content and mode as before, and no
   expect(entries).toEqual(["auth.json"]); // no `*.tmp` sibling left behind
 });
 
+// Round 2 item 2 added, then round 3 removed, a shared `auth.json` sync lock
+// (`withAuthFileLockSync`) `saveShellConfig` and `model-profile.ts`'s
+// migration strip used to take — it could block every `saveShellConfig`
+// call, including hot TUI paths, for up to its own 2s timeout on
+// contention. `saveShellConfig` is back to its pre-lock, unconditional
+// read-merge-write (see its own doc); the migration strip now protects
+// itself with a narrow, lock-free read/verify/write instead
+// (`stripModelProfilesFromAuthJsonUnlocked`,
+// `../harness/routing/model-profile.ts` — its own tests, in
+// `model-profile.test.ts`, cover that retry/verify window directly).
+
 test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)", () => {
   if (process.platform === "win32") {
     return; // Windows uses %APPDATA%; skip the XDG assertion

@@ -1,0 +1,73 @@
+---
+extends: common
+paths: ["**/*.vue"]
+metadata:
+  origin: authored
+---
+
+# Vue coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to Vue Single File
+Component conventions. Applies only to `*.vue` files -- the `<script>`
+block's own TypeScript style still comes from `ts-js-node`'s coding-style
+rule, which this file `extends` transitively through the pack's `extends`.
+
+## Script setup and typing
+
+- Use `<script setup lang="ts">` for new components; do not introduce the
+  Options API or a bare (non-setup) `<script>` block in new files unless the
+  project has no `<script setup>` components at all yet.
+- Declare props with the type-only form, `defineProps<{ ... }>()`, not the
+  runtime-object form (`defineProps({ foo: String })`), so prop types are
+  checked against actual usage instead of a separate runtime shape. Use
+  `withDefaults(defineProps<Props>(), { ... })` for default values rather
+  than mutating the returned props object.
+- Declare emits with the type-only form: `defineEmits<{ change: [id: number]
+  }>()` (named-tuple syntax) rather than the untyped string-array form
+  (`defineEmits(['change'])`).
+- On Vue 3.5+ projects, destructuring `defineProps()` directly
+  (`const { title } = defineProps<Props>()`) is reactive and preferred over
+  a separate `props.title` reference; on pre-3.5 projects, keep the props
+  object intact (`props.title`, or `toRefs(props)`) since a destructured
+  prop is a frozen snapshot, not a live binding.
+- Type `ref<T>()` explicitly when the initial value's inferred type is
+  narrower than the eventual type (`ref<string | null>(null)`, not a bare
+  `ref(null)` that infers `Ref<null>`).
+
+## Naming and structure
+
+- Component file and `name` (when set) in `PascalCase`
+  (`OrderSummary.vue`); composable files and exported function names in
+  `camelCase` prefixed with `use` (`useOrderTotals.ts`).
+- One component per `.vue` file; a template that needs its own local
+  sub-markup repeated more than once becomes its own child component, not a
+  `v-for` over inline duplicated markup.
+- Order SFC blocks `<script setup>`, `<template>`, `<style>` (or the
+  project's existing established order) consistently across the codebase;
+  do not invent a third ordering in new files.
+- Multi-word component names (`UserCard`, not `Card`) to avoid clashing
+  with current and future HTML elements, matching `eslint-plugin-vue`'s
+  `multi-word-component-names` rule.
+
+## Formatting and imports
+
+- Format with the project's configured formatter (Prettier or the
+  project's own config); do not hand-format around a formatter that is
+  already configured.
+- Run the project's configured `eslint` (with `eslint-plugin-vue`) instead
+  of hand-checking template directive order, unused template refs, or
+  v-for/v-if precedence; fix what it flags rather than adding a blanket
+  disable comment.
+- Prefer auto-imported composables/components only when the project has
+  `unplugin-auto-import`/`unplugin-vue-components` (or Nuxt) configured;
+  otherwise import explicitly -- do not assume auto-import is active.
+
+## Errors
+
+- Surface a composable or store action's failure to the caller (thrown
+  error, or a returned error/result shape the caller checks) instead of
+  swallowing it in a bare `catch` with no rethrow and no user-visible
+  state change.
+- Use Vue's `onErrorCaptured` (component-tree scope) or a top-level
+  `app.config.errorHandler` (app-wide scope) for error boundaries, not an
+  ad hoc `try/catch` wrapped around every template-triggered call site.

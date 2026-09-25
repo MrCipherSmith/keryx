@@ -1,0 +1,42 @@
+{
+  "id": "nextjs-nuxt",
+  "family": "framework",
+  "extends": ["react", "vue"],
+  "modules": ["nextjs-nuxt-rules", "nextjs-nuxt-skills"],
+  "detectionMarkers": ["nextjs", "nuxt"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 318, Wave 4 batch 2"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["nextjs-nuxt-implementation"],
+    "test": ["nextjs-nuxt-testing"],
+    "review": ["nextjs-nuxt-code-review"],
+    "build-fix": ["nextjs-nuxt-build-fix"],
+    "migrate": ["nextjs-nuxt-upgrade-migration"]
+  },
+  "agentProfile": {
+    "displayName": "Next.js / Nuxt",
+    "auditFocus": [
+      "a Next.js Server Component importing browser-only APIs, hooks, or event handlers with no 'use client' boundary, or a 'use client' pushed higher up the tree than the leaf that actually needs it",
+      "a Nuxt composable (a useX function) called outside a component's setup()/<script setup> context, a plugin, or middleware, where it cannot access Nuxt's injection context",
+      "a server-only secret read without the framework's public-var guard (a bare env var reaching the client instead of NEXT_PUBLIC_-prefixed, or Nuxt's private runtimeConfig read from a component instead of its public: block)",
+      "a data-fetch that re-runs on every request when the route was clearly meant to be static/ISR (Next's revalidate) or Nuxt's cached/prerendered, or a page marked static that actually needs per-request data",
+      "a Server Action ('use server') or Nuxt server route (server/api/**) with no auth/authorization check before it touches data",
+      "a component rendering a nondeterministic value (Date.now(), Math.random(), locale-dependent formatting) directly in its render path, which mismatches between server and client hydration"
+    ],
+    "buildCommands": [
+      "the project's type-check script (tsc --noEmit for Next.js, or nuxi typecheck for Nuxt)",
+      "next build (Next.js) or nuxi build (Nuxt) — read the framework's own build output for prerender, route, and boundary errors, not just exit code",
+      "the project's lint script (next lint / eslint-config-next, or @nuxt/eslint-config)",
+      "the project's test script (Jest or Vitest with React Testing Library, or Vitest with Vue Test Utils/@nuxt/test-utils)"
+    ],
+    "fixGuardrails": [
+      "never move a 'use client' directive up to a shared layout or ancestor component to silence a Server/Client Component boundary error — narrow it to the actual leaf that needs browser APIs, state, or event handlers",
+      "never hand-import or re-path a Nuxt auto-imported composable/component to unblock a type or resolution error when the real fix is registering or exporting it correctly (checking nuxt.config.ts's imports/components dirs)",
+      "never rename a server-only secret under NEXT_PUBLIC_ or into Nuxt's public runtimeConfig just to make it reachable from client code that shouldn't have it",
+      "never delete or skip a failing SSR/hydration test, or wrap a hydration mismatch in suppressHydrationWarning/<ClientOnly>, to reach a green build instead of fixing the nondeterministic render"
+    ]
+  }
+}

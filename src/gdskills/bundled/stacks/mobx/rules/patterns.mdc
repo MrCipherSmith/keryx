@@ -1,0 +1,122 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.tsx"]
+metadata:
+  origin: authored
+---
+
+# MobX patterns
+
+Idiomatic MobX design patterns and their anti-patterns, narrowing the
+common architecture rules to how state, actions, and reactions should be
+composed in a MobX + React codebase.
+
+## The async action shape
+
+The standard shape for a store method that calls an API and updates
+loading/error/data state:
+
+```typescript
+private performFetch = async () => {
+  try {
+    runInAction(() => {
+      this.loading = true;
+      this.error = null;
+    });
+
+    const data = await this.service.getAll();
+
+    runInAction(() => {
+      if (this.disposed) return;
+      this.items = data;
+    });
+  } catch (err: unknown) {
+    runInAction(() => {
+      if (this.disposed) return;
+      this.error = err instanceof Error ? err.message : "Fetch failed";
+    });
+  } finally {
+    runInAction(() => {
+      if (this.disposed) return;
+      this.loading = false;
+    });
+  }
+};
+```
+
+Anti-pattern: mutating `this.loading`/`this.items` directly after the
+`await` with no `runInAction` — this throws under `enforceActions: "observed"`
+and silently misses the reaction under looser settings, either way
+producing a UI that does not update.
+
+## `flow` as an alternative to `runInAction`
+
+For a store with many async actions, `flow` (a generator-based action)
+avoids repeating `runInAction` around every post-`await` mutation, since
+the whole generator body already runs inside one action:
+
+```typescript
+import { flow } from "mobx";
+
+fetchItems = flow(function* (this: ItemStore) {
+  this.loading = true;
+  try {
+    this.items = yield this.service.getAll();
+  } finally {
+    this.loading = false;
+  }
+});
+```
+
+Use `flow` when a store's async methods are mostly sequential awaits with
+state writes in between; keep plain `async`/`runInAction` when a method
+needs to interleave with non-MobX async code (`Promise.all`, cancellation
+tokens) where the generator form adds friction.
+
+## Reaction ownership and disposal
+
+- `reaction`/`autorun`/`when` created inside a store belong to that
+  store's lifecycle: push the disposer into a `disposers: IReactionDisposer[]`
+  array in the constructor (or an `init()` called by the parent) and call
+  every disposer in `dispose()`.
+- Prefer `reaction(() => selector, handler)` over `autorun` when the
+  handler should only run in response to a specific observable changing,
+  not on every observable it happens to read — `autorun` re-subscribes to
+  everything it touches on each run, which can widen its dependency set
+  unintentionally.
+- A component should not create a raw `autorun`/`reaction` in its render
+  body; either derive the value with `@computed` in the store and let
+  `observer` handle re-rendering, or start the reaction in a `useEffect`
+  and dispose it in the cleanup function.
+
+## Bidirectional store sync needs an equality guard
+
+When Store A writes to Store B and Store B writes back to Store A, guard
+the reverse direction with `if (newValue !== currentValue)` before
+propagating, or the two stores bounce a change back and forth forever.
+See `rules/coding-style.mdc` for where that callback belongs (private,
+not a public UI action).
+
+## View↔Store boundary
+
+- A component reads store state and calls store actions; it does not
+  hold a parallel copy of store state in `useState` "for convenience" —
+  that copy silently desyncs from the store the first time an action
+  outside that component's tree mutates the same field.
+- Data loading triggered by mounting belongs in the owning store's
+  `init()`/`onMount()`, called by the *parent* store or the top-level
+  provider — not scattered across every consuming component's
+  `useEffect`, which makes it impossible to reason about how many times a
+  fetch fires as the tree re-renders.
+- A store must not import a React component or hook; it may accept
+  plain callback props for the rare case a parent needs to react to a
+  child store's internal event.
+
+## Anti-pattern: computed-as-action
+
+A `@computed` getter must never mutate state — a getter with a
+side-effecting write inside it runs outside an explicit action
+transaction and MobX will throw ("computed value is allowed to be
+mutated only through action") the moment `enforceActions` is on. If a
+"derived" value also needs to cache an expensive side effect, that is an
+action-triggered `reaction`, not a computed.

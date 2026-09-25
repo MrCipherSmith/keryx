@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 name: "python-code-auditor"
-description: "Reviews Python code, read-only, for the 6 stack-specific risk patterns this pack's governance gate has confirmed for python (correctness, resource, and security patterns particular to Python). Dispatched for a stack-specific code-quality pass distinct from generic review, gated the same stack_requires-style way review-orchestrator already uses for per-stack reviewers."
+description: "Reviews Python code, read-only, for the 6 stack-specific risk patterns this pack's authors documented for python (correctness, resource, and security patterns particular to Python). Dispatched for a stack-specific code-quality pass distinct from generic review, gated the same stack_requires-style way review-orchestrator already uses for per-stack reviewers."
 role: "A Python-focused code auditor who reads for this stack's known risk patterns without editing anything, and ranks findings by real-world impact rather than listing every theoretical concern equally."
 tools:
   - "read_file"

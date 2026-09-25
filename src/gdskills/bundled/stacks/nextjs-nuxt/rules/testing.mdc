@@ -1,0 +1,64 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx", "**/*.vue"]
+metadata:
+  origin: authored
+---
+
+# Next.js / Nuxt testing
+
+Test layout, runner, and mocking conventions for Next.js and Nuxt
+projects. Narrows `core-common-rules`; generic test-writing guidance
+(determinism, one behavior per test) still comes from there.
+
+## Layout and runner
+
+- Co-locate a component/page test next to what it tests
+  (`app/orders/page.test.tsx`, `pages/orders.test.ts` next to
+  `orders.vue`, or a project's existing `__tests__`/`tests` convention —
+  match what the project already does rather than introducing a second
+  layout).
+- Next.js: Jest or Vitest with React Testing Library is standard for
+  component/page tests; a Server Component that only renders server-side
+  (no interactivity) is usually tested by rendering its resolved output or
+  through an integration/e2e test, since RTL's `render()` alone does not
+  execute the App Router's server data-fetching lifecycle.
+- Nuxt: Vitest with `@nuxt/test-utils` (`mountSuspended` for a component
+  that uses auto-imported composables or Nuxt context) or Vue Test Utils
+  directly for a plain, context-free component. Use `@nuxt/test-utils`'s
+  `mountSuspended`/`renderSuspended` when the component under test calls
+  `useFetch`/`useAsyncData`/a Nuxt composable — a plain Vue Test Utils
+  `mount()` has no Nuxt runtime context to resolve those against.
+
+## Mocking the network boundary
+
+- Mock at the network boundary (MSW, or the project's existing HTTP mock
+  layer) for a component/page test that calls `fetch`/`useFetch` — not by
+  mocking the framework's data-fetching hook itself, which tests the mock
+  instead of the component's actual request/response handling.
+- A Server Action or Nuxt server route under test should be called
+  through its real handler with a mocked downstream dependency (database
+  client, external API), not have its entire body replaced by a stub —
+  the goal is proving the handler's own auth/validation logic runs, not
+  just that some function returns the expected shape.
+
+## Determinism and fixtures
+
+- Freeze or inject time (`vi.setSystemTime`, a clock passed as a
+  parameter) for any test touching a component that renders `Date.now()`-
+  or locale-dependent output — the same nondeterminism that causes a
+  hydration mismatch in the app causes a flaky test in CI.
+- Use fixtures/factories for route params, `searchParams`, and Nuxt route
+  objects (`useRoute()` mocked with a realistic shape) instead of
+  hand-built partial objects that happen to satisfy today's test but drift
+  from the real router's shape.
+
+## Coverage expectations
+
+- Cover: the interactive/client boundary (event handlers, form
+  submission, a Server Action's success and validation-failure paths, a
+  Nuxt composable's loading/error/data states), not just the happy-path
+  render.
+- Do not chase coverage on generated framework files (`layout.tsx` that
+  only renders `{children}`, an empty `error.vue`) — spend test budget on
+  logic the project actually wrote.

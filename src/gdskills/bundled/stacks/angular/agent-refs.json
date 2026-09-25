@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "Demoted from stable (R1 review round 2, PR #719, N-M1): a realism sweep found angular-implementation's and angular-testing's positive/negative trigger prompts were trigger-prefix near-copies or scorer-avoidant phrasing rather than genuinely independent realistic requests. Rewritten with natural phrasing per the reviewer's own probes and NOT iterated against the router. Honest result: angular-implementation's trigger accuracy collapsed (TP 1/7) and angular-testing picked up a real false positive (an e2e/staging negative it should not select) -- both accepted as the true routing signal rather than polished back to a passing score. angular-build-fix and angular-code-review still pass cleanly. A pack needs every skill to pass, so angular reverts to stability: \"experimental\"; the generated agent-code-auditor/build-fixer pair is removed."
+}

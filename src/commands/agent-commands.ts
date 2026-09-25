@@ -139,6 +139,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/flows", description: "Browse project flows and inspect one", modes: BOTH },
   {
+    name: "/ac",
+    description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check",
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/workspace",
     description: "Show this session's SAC workspace and its slates",
     // TUI-only: the sidebar entry, mouse click, and 3-tab modal all need the
@@ -213,6 +218,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // target, then walk its clauses. TUI-only, same reasoning as `/ci`.
     name: "/conform",
     description: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 330 (AC7): a one-shot check of the working diff's hunks against
+    // every applicable project rule clause, with Jev, printed grouped by
+    // rule. TUI-only, same reasoning as `/ci`/`/conform`.
+    name: "/jevrules",
+    description: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule",
     modes: AGENT_ONLY,
   },
   {

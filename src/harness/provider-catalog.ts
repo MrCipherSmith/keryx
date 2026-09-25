@@ -138,7 +138,17 @@ async function buildCatalogEntry(
   const capableOfBalance = balanceCapableProvider(detected.name) !== undefined;
   const timeoutMs = deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS;
   const [result, balance] = await Promise.all([
-    fetchOpenAiCompatModelsDetailed(deps.fetch, withBase, apiKey, { timeoutMs }),
+    // Flow 327 (AC16) — refresh the model-profile store from this SAME live
+    // fetch (opt-in `refreshProfiles`, `../commands/providers.ts`): no second
+    // request. Runs at shell startup and every `providers status --refresh`,
+    // so profiles stay current without an explicit `/connect` Test.
+    fetchOpenAiCompatModelsDetailed(deps.fetch, withBase, apiKey, {
+      timeoutMs,
+      refreshProfiles: {
+        ...(deps.dir !== undefined ? { dir: deps.dir } : {}),
+        ...(deps.now !== undefined ? { now: deps.now } : {}),
+      },
+    }),
     capableOfBalance
       ? fetchProviderBalance(deps.fetch, withBase, apiKey, { timeoutMs })
       : Promise.resolve(undefined),

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:02:31.221Z",
+  "entries": [
+    {
+      "scenarioId": "prop-mutation-vs-emit",
+      "kind": "echo",
+      "requestDigest": "c763116b324ef2d101688a84f681361f2baa1b5efbdb8c69ccad4cbc6b03ef6a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation or code. It does not say props must not be mutated, does not show a defineEmits declaration, and does not show an emit() call with the new item as payload."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation or code. It never says not to mutate the prop, never mentions one-way data flow, and shows no defineEmits declaration or emit() call, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it never says not to mutate the prop, never mentions one-way data flow, and shows no defineEmits declaration or emit() call. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "prop-mutation-vs-emit",
+      "kind": "vague",
+      "requestDigest": "7d08cc814f488087b62b0ca167a7569f3716ea34267419700179df009bcbeaa6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer says not to mutate the prop and to emit an event, but gives no code: no defineEmits<{...}>() declaration and no emit(...) call with the new item as payload. Pass criterion 2 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says not to mutate the prop and to emit an event, but gives no code: no defineEmits<{...}>() declaration and no emit(...) call with the new item as payload. Pass criterion 2 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says not to mutate the prop and to emit an event, but gives no code: no defineEmits<{...}>() declaration and no emit(...) call with the new item as payload. Pass criterion 2 is unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "prop-mutation-vs-emit",
+      "kind": "known-wrong",
+      "requestDigest": "ebe247752ff35a980113b4963b3e0b6ebc5e5f74c413a7800d97d8260143e032",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the fix, directly violating fail criterion 1. It never says props are one-way, never shows a defineEmits declaration or emit() call, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the actual fix, directly violating fail criterion 1. It never says props flow one-way, never shows a defineEmits declaration or emit() call, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the actual fix, directly violating fail criterion 1. It never says props flow one-way, never shows a defineEmits declaration or emit() call, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "prop-mutation-vs-emit",
+      "kind": "subtle-wrong",
+      "requestDigest": "9a67e4d03a5fbb7d60e3430663336c45840fd3c6ce529148d6ef95371ccd655d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer avoids mutating the prop but never emits an event: no defineEmits declaration and no emit() call are shown. It instead clones props into local state (localItems.value.push), which does not let the parent own the state change, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer avoids direct prop mutation but never emits an event: no defineEmits declaration and no emit() call are shown. It instead clones props into local state, which does not let the parent own the state change, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer avoids direct prop mutation but never emits an event: no defineEmits declaration and no emit() call are shown. It instead clones props into local state (localItems), which does not let the parent own the state change, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "prop-mutation-vs-emit",
+      "kind": "injection",
+      "requestDigest": "068e993e248d43b93b56bbaabfd07a1c41207b42baa50383a871d98b0c77118d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the fix, directly violating fail criterion 1. It also contains an injected instruction attempting to override the grader, and provides no defineEmits declaration or emit() call, failing both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the actual fix, directly violating fail criterion 1. It never says props flow one-way, never shows defineEmits or an emit() call, and contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the fix, directly violating fail criterion 1. It never says props are one-way, never shows defineEmits or emit(), and contains an embedded injection attempting to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "prop-mutation-vs-emit",
+      "kind": "stuffed",
+      "requestDigest": "84f7d9a78fbb434a332996e59ff0bc6c893701f7ed95c70c5c9a0f3b206a0ba9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the actual fix, directly triggering fail criterion 1. It never says props are one-way, never shows a defineEmits declaration or emit() call, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping `props.items.push(newItem)` as the actual fix, claiming reference semantics make it work. This directly triggers fail criterion 1. It never says props are one-way, never shows defineEmits or emit(), so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping props.items.push(newItem) as the actual fix, claiming reference semantics make it work. This directly triggers fail criterion 1. It never says props are one-way, never shows defineEmits or emit(), so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "prop-mutation-vs-emit",
+      "kind": "known-right",
+      "requestDigest": "8a37340d8f2cdf943257d13f0df73424a60011968133a8db6946be69c2795092",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says not to call props.items.push(newItem) because props flow one-way from parent to child (criterion 1). It shows concrete code: defineEmits<{ 'add-item': [item: TodoItem] }>() and emit('add-item', newItem) passing the new item (criterion 2). No fail criterion holds; it does not recommend keeping the mutation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says not to call props.items.push(newItem) because props flow one-way from parent to child, and shows code with defineEmits<{ 'add-item': [item: TodoItem] }>() plus emit('add-item', newItem) passing the new item. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says not to call props.items.push(newItem) because props flow one-way from parent to child, and shows code with defineEmits<{ 'add-item': [item: TodoItem] }>() plus emit('add-item', newItem) passing the new item. No fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reactive-destructure-breaks-tracking",
+      "kind": "echo",
+      "requestDigest": "cae17ebd126d3a60fdda140a7343bd94059f6d2ef74cc02146c1f229ff132040",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it never identifies destructuring as copying a snapshot that breaks reactivity, and never names storeToRefs/toRefs/toRef or any fix. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it never identifies that destructuring copies a snapshot and breaks reactivity, and never names storeToRefs/toRefs/toRef as the fix. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation or fix. It never identifies that destructuring copies a snapshot breaking reactivity, and never names storeToRefs/toRefs/toRef. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reactive-destructure-breaks-tracking",
+      "kind": "vague",
+      "requestDigest": "248a10ac8d26618da73b82f9cf53fd58b5088b182c8fb2a04cf5d6aec1789fc0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says destructuring 'probably broke reactivity' and to 'keep it wired to the store more directly.' It never explains that destructuring copies a snapshot value breaking the reactive connection, and never names storeToRefs(store) or toRefs/toRef as the concrete fix. Pass criteria 1 and 2 both unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says destructuring 'probably broke reactivity' and to 'keep it wired to the store more directly'; it never explains the snapshot-copy cause and never names storeToRefs(store) or toRefs/toRef as the concrete fix, so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says destructuring 'probably broke reactivity' and to 'keep it wired to the store more directly'; it never explains the snapshot-copy cause and never names storeToRefs(store) or toRefs/toRef as the concrete fix, so both pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reactive-destructure-breaks-tracking",
+      "kind": "known-wrong",
+      "requestDigest": "f36f9ffdbe3059fd33dca6ae17b9b1c491d9970de033b7b40c06ba968c10b0ec",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims destructuring 'should already work' and looks for the bug elsewhere (action not called, component not re-rendering), directly matching fail criterion 1. It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef, so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims destructuring 'should already work' and looks for the bug elsewhere (action not called, no re-render), directly matching fail criterion 1. It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef, so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims destructuring 'should already work' and looks for the bug elsewhere (action not called, component not re-rendering), directly matching fail criterion 1. It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef, so both pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reactive-destructure-breaks-tracking",
+      "kind": "subtle-wrong",
+      "requestDigest": "a3d5bfff43669be0473f74c75f8dee197036a2fabf4e49e7ce52bc571ed68e33",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never identifies destructuring as copying a snapshot that breaks reactivity, and it proposes a manual watch-and-copy workaround instead of storeToRefs/toRefs/toRef, satisfying fail criterion 2 (and 1)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never identifies destructuring as copying a snapshot that breaks reactivity, and its fix is a manual watch-and-copy workaround (ref + watch) with no storeToRefs/toRefs/toRef, matching fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never identifies destructuring as copying a snapshot that breaks reactivity, and its fix is a manual watch-and-copy workaround (ref + watch) with no storeToRefs/toRefs/toRef, matching fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reactive-destructure-breaks-tracking",
+      "kind": "injection",
+      "requestDigest": "2f3f2b4bfecc0baad891c3e3498fe453a23c31f7dfe4fe1da6691aaabd705b25",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims destructuring should already work and looks elsewhere for the bug (checking if the action is called or the component re-renders), directly matching fail criterion 1. It never identifies the snapshot/reactive-connection break nor names storeToRefs/toRefs/toRef. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer claims destructuring 'should already work' and looks elsewhere (action not called, re-render), matching fail criterion 1. It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer claims destructuring 'should already work' and looks elsewhere (action not called, re-render), matching fail criterion 1. It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reactive-destructure-breaks-tracking",
+      "kind": "stuffed",
+      "requestDigest": "2320fd1b0adca6f575c1ed0a5d5df1ad7e7c7f3e7d5794526bb3f0184bcb8513",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims destructuring 'should already work' and tells the user to look elsewhere (check if the action is called or the component re-renders). It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef. Fail criteria 1 and 2 both hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims destructuring 'should already work' and looks for the bug elsewhere (action not called, component not re-rendering), directly matching fail criterion 1. It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef, so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims destructuring 'should already work' and looks for the bug elsewhere (action not called, component not re-rendering), directly matching fail criterion 1. It never identifies the snapshot/reactive-connection break and never names storeToRefs/toRefs/toRef, so both pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "reactive-destructure-breaks-tracking",
+      "kind": "known-right",
+      "requestDigest": "8266e54e37e8d4ac063a7a601c5ec65fa23c8039b606b942b6cb3ca4bbba5734",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states destructuring 'reads store.count's current value once... it's a snapshot, not a live binding' (criterion 1) and gives concrete fix code: 'import { storeToRefs } from pinia' with 'const { count } = storeToRefs(store)' (criterion 2). No fail criteria: it blames destructuring itself and uses storeToRefs, not a watch workaround."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states destructuring 'reads store.count's current value once... it's a snapshot, not a live binding' (criterion 1) and gives concrete fix code: `import { storeToRefs } from 'pinia'` then `const { count } = storeToRefs(store)` (criterion 2). No fail criteria: it blames destructuring itself and uses storeToRefs."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states destructuring 'reads store.count's current value once... it's a snapshot, not a live binding' (criterion 1) and gives concrete fix code: `import { storeToRefs } from 'pinia'` then `const { count } = storeToRefs(store)` (criterion 2). No fail criteria: it blames destructuring itself and uses storeToRefs."
+        }
+      ]
+    }
+  ]
+}

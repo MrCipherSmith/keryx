@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "honest gate (flow 318, T13): every skill fails the trigger-accuracy check with real same-pack/cross-pack collisions (falsePositive implementation 3/6, testing 4/6, code-review 3/6, build-fix 1/6, upgrade-migration 3/6) -- see src/gdskills/bundled/stacks/nextjs-nuxt/governance/eval.json and the flow 318 journal for the root cause (the same-pack-siblings-never-block selection rule against a 5-skill meta-framework pack sharing heavy vocabulary, plus the negation-unaware scorer indexing this pack's own disclaimer clauses as positive vocabulary). Stays experimental; no generated agent pair."
+}

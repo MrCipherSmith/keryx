@@ -92,7 +92,7 @@ export type ContractInfo = {
   sourcePath?: string;
 };
 
-type JsonSchema = {
+export type JsonSchema = {
   $ref?: string;
   $defs?: Record<string, JsonSchema>;
   type?: string | string[];

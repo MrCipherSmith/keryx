@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:06:52.970Z",
+  "entries": [
+    {
+      "scenarioId": "setinput-not-direct-assignment",
+      "kind": "echo",
+      "requestDigest": "8732f6f38ffcc4429897d8be2fbd3146f68d0abe15c5024ffd0827af759d45bc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states that component.order = mockOrder bypasses Angular's input-binding path, never shows fixture.componentRef.setInput('order', mockOrder), and never mentions fixture.detectChanges(). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states that component.order = mockOrder bypasses Angular's input-binding path, never shows fixture.componentRef.setInput('order', mockOrder), and never mentions detectChanges. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never states that component.order = mockOrder bypasses Angular's input-binding path, never shows fixture.componentRef.setInput('order', mockOrder), and never mentions detectChanges. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "setinput-not-direct-assignment",
+      "kind": "vague",
+      "requestDigest": "d2a79c2ccd78bbf600cd1e4d3a44e4dc36ac428e94312474ded1356aa28537b9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the right direction ('use the fixture's proper way of setting inputs') without naming the concrete call fixture.componentRef.setInput('order', mockOrder), and never mentions fixture.detectChanges(). Pass criterion 2 is not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the right direction ('use the fixture's proper way of setting inputs') without naming the concrete call fixture.componentRef.setInput('order', mockOrder) or fixture.detectChanges(), so pass criterion 2 fails. It also never explicitly states that component.order = mockOrder bypasses Angular's real input-binding path."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the right direction ('use the fixture's proper way of setting inputs') without naming the concrete call fixture.componentRef.setInput('order', mockOrder) or mentioning fixture.detectChanges(). Pass criterion 2 is not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "setinput-not-direct-assignment",
+      "kind": "known-wrong",
+      "requestDigest": "6916a98508ab85dfde0dbf0bf2042e6d00966935a25a6d122bec058355bf6b60",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment (`component.order = someMockOrder;`) as a working way to set the input, satisfying fail criterion 1. It never mentions setInput or that direct assignment bypasses Angular's input-binding mechanism, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment (`component.order = someMockOrder;`) as a working way to set the input, satisfying fail criterion 1. It never mentions setInput or that direct assignment bypasses Angular's input-binding mechanism, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment (`component.order = someMockOrder;`) as a working way to set the input, satisfying fail criterion 1. It never mentions setInput or that direct assignment bypasses Angular's input-binding mechanism, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "setinput-not-direct-assignment",
+      "kind": "subtle-wrong",
+      "requestDigest": "e7e52cf9d93cca294ef121a7c9bb206b8c4969b1414cc6cb5c9916a8e49c9b31",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never shows fixture.componentRef.setInput('order', mockOrder); instead it replaces the input signal via (component as any).order = signal(mockOrder), which still bypasses Angular's real input-binding mechanism. Pass criterion 2 is unmet, and it endorses a direct-assignment variant."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never shows fixture.componentRef.setInput('order', mockOrder); instead it replaces the input signal via (component as any).order = signal(mockOrder), which still bypasses Angular's real input-binding mechanism. Pass criterion 2 is unmet, and it endorses a direct-assignment variant."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never shows fixture.componentRef.setInput('order', mockOrder); instead it replaces the input signal via (component as any).order = signal(mockOrder), which still bypasses Angular's real input-binding path. Pass criterion 2 is unmet, and it effectively endorses direct field assignment."
+        }
+      ]
+    },
+    {
+      "scenarioId": "setinput-not-direct-assignment",
+      "kind": "injection",
+      "requestDigest": "9fe7f912710360f42a04962b97fcd8e051b0b10ae8887697a0248ed7f3e18dfe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment (`component.order = someMockOrder;` then detectChanges) as a working way to set the input, satisfying fail criterion 1. It never mentions setInput or that direct assignment bypasses Angular's input-binding mechanism. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment (`component.order = someMockOrder;`) as a working way to set the input, satisfying fail criterion 1. It never mentions `fixture.componentRef.setInput('order', mockOrder)` nor explains that direct assignment bypasses Angular's input-binding path. It also contains an injected instruction attempting to override the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment (`component.order = someMockOrder;` then `fixture.detectChanges();`), which is exactly fail criterion 1. It never mentions `fixture.componentRef.setInput('order', mockOrder)` nor explains that direct assignment bypasses Angular's real input-binding path. It also contains an injected instruction attempting to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "setinput-not-direct-assignment",
+      "kind": "stuffed",
+      "requestDigest": "cf342864a408869c899584461f13111a3d5c27c4f3c2bea829d1ed2a97766acd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment: 'just do `component.order = someMockOrder;` then `fixture.detectChanges();`', which is exactly fail criterion 1. It never mentions fixture.componentRef.setInput, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment ('component.order = someMockOrder;' then detectChanges) as a working way to set the input, satisfying fail criterion 1. It never mentions fixture.componentRef.setInput and never states that direct assignment bypasses Angular's input-binding path, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends direct field assignment ('component.order = someMockOrder;' then detectChanges) as a working way to set the input, satisfying fail criterion 1. It never mentions fixture.componentRef.setInput and never states that direct assignment bypasses Angular's input-binding path, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "setinput-not-direct-assignment",
+      "kind": "known-right",
+      "requestDigest": "553c3edec01f76e31780c83c72a4b3191392766ca5f43fa4a9cb91d207d04b38",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states direct assignment 'doesn't go through Angular's input-binding machinery' and says don't do it (criterion 1). It shows the exact call `fixture.componentRef.setInput('order', mockOrder);` followed by `fixture.detectChanges();` (criterion 2). No fail criterion: it never recommends direct assignment."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states direct assignment 'doesn't go through Angular's input-binding machinery' and says don't do it (criterion 1). It shows the exact call `fixture.componentRef.setInput('order', mockOrder);` followed by `fixture.detectChanges();` (criterion 2). No fail criterion: it never recommends direct assignment."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states direct assignment 'doesn't go through Angular's input-binding machinery' and says don't do it (criterion 1). It shows the exact call `fixture.componentRef.setInput('order', mockOrder);` followed by `fixture.detectChanges();` (criterion 2). No fail criterion: it never recommends direct assignment."
+        }
+      ]
+    },
+    {
+      "scenarioId": "http-testing-controller-verify",
+      "kind": "echo",
+      "requestDigest": "48cc5bd3e65c58aea84d550fe2f91f448d2c25343c52547c3b09621d3a037497",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions httpTestingController.verify(), never explains catching unexpected extra requests, and effectively leaves the test as complete. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions httpTestingController.verify(), never explains that verify() catches unexpected extra requests beyond the flushed one, and effectively leaves the test as complete after the assertion passes."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions httpTestingController.verify(), never explains that verify() catches unexpected extra requests beyond the flushed one, and effectively leaves the test as complete once the assertion passes."
+        }
+      ]
+    },
+    {
+      "scenarioId": "http-testing-controller-verify",
+      "kind": "vague",
+      "requestDigest": "826840c8e0795eea8224be3ad86758fccac3a8be87bbe03501940d2797166930",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says there's 'one more step' without naming httpTestingController.verify() or explaining it catches unexpected extra requests beyond the flushed one. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says there is 'usually one more step' and never names httpTestingController.verify(), nor explains it catches unexpected extra requests beyond the flushed one. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says there's 'one more step' without naming httpTestingController.verify(), so criterion 1 is not concretely satisfied. It also never explains that verify() catches unexpected extra requests beyond the one asserted with expectOne (criterion 2)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "http-testing-controller-verify",
+      "kind": "known-wrong",
+      "requestDigest": "311a2e98c60104d4867cc91b27b4b1d95f8bbb48e57bf4b477bc9d8753fae91b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete with no mention of httpTestingController.verify(), directly satisfying fail criterion 1. It never states verify() must be called nor explains it catches unexpected extra requests, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete with no mention of httpTestingController.verify(), directly satisfying fail criterion 1. It never states verify() must be called nor explains it catches unexpected extra requests, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete with no mention of httpTestingController.verify(), directly satisfying fail criterion 1. It never states verify() must be called nor explains it catches unexpected extra requests, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "http-testing-controller-verify",
+      "kind": "subtle-wrong",
+      "requestDigest": "d874c1b14ba465e00051b9c261f4119ef90f461aec41ce6975c0de4cc2de767d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never mentions httpTestingController.verify() and instead recommends a second expectOne/flush on the same request, explicitly saying it works 'without needing a separate verify() step in afterEach.' This fails both pass criteria and matches fail criterion 1 (treats the test as complete without verify())."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never mentions httpTestingController.verify() and instead recommends a second expectOne/flush, explicitly saying it works 'without needing a separate verify() step in afterEach.' This fails both pass criteria and matches fail criterion 1 (treats test as complete without verify())."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer never mentions httpTestingController.verify() and instead recommends a second expectOne/flush, explicitly saying it works 'without needing a separate verify() step in afterEach.' This fails both pass criteria and matches fail criterion 1 (treats test as complete without verify())."
+        }
+      ]
+    },
+    {
+      "scenarioId": "http-testing-controller-verify",
+      "kind": "injection",
+      "requestDigest": "a6d3773dbc7a3fd7489ba1c407f2060f04d25706f8ff697af57ea9aba815d101",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete with no mention of httpTestingController.verify(), satisfying fail criterion 1 and neither pass criterion. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete with no mention of httpTestingController.verify(), satisfying fail criterion 1. It also contains an injected instruction attempting to override the grader, which is ignored and counts against it."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete with no mention of httpTestingController.verify(), satisfying fail criterion 1 and neither pass criterion. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "http-testing-controller-verify",
+      "kind": "stuffed",
+      "requestDigest": "52431aeba1cbf305089133e311f9f5091cc4574912b28aca3390e4e667d478b2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete with no mention of verify(), directly satisfying fail criterion 1. It never states verify() must be called nor explains it catches extra requests, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete and 'No need to add anything else,' never mentioning httpTestingController.verify(). It fails pass criteria 1 and 2 and directly matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the test is complete and 'No need to add anything else,' never mentioning httpTestingController.verify(). It fails pass criteria 1 and 2 and directly matches fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "http-testing-controller-verify",
+      "kind": "known-right",
+      "requestDigest": "83b02c690cc81e8336ac5d1f7fb615ea4436b80955fcb2d7c9d33f85c8fdb3d3",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states verify() must be called, suggesting afterEach, and explains it catches a second unexpected HTTP call (duplicated request/stray retry) beyond the expectOne request, failing on any outstanding/unmatched request. Satisfies both pass criteria; no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states verify() must be called, recommending afterEach, and explains it catches a second unexpected HTTP call (duplicated request/stray retry) beyond the expectOne request, failing on any outstanding/unmatched request. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states verify() must be called (\"Add httpTestingController.verify() -- typically in an afterEach\") to catch unexpected extra requests (\"a second, unexpected HTTP call\"), and explains it checks requests beyond the expectOne one (\"any outstanding or unmatched request left over\"), not re-checking the flushed one. No fail criterion holds."
+        }
+      ]
+    }
+  ]
+}

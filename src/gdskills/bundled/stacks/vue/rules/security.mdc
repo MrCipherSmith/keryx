@@ -1,0 +1,60 @@
+---
+extends: common
+paths: ["**/*.vue"]
+metadata:
+  origin: authored
+---
+
+# Vue security
+
+Narrows `core-common-rules`' stack-agnostic security rules to Vue-specific
+render-time and routing risks. Applies only to `*.vue` files; server-side
+Node.js concerns (request validation, dependency risk) still come from
+`ts-js-node`'s security rule.
+
+## Template injection (XSS)
+
+- Never bind `v-html` to a value that includes user-controlled or
+  unsanitized content -- `v-html` renders raw HTML with no escaping, so a
+  string containing `<script>`/`onerror=`/etc. executes. Sanitize with a
+  library such as DOMPurify immediately before the `v-html` binding if raw
+  HTML rendering is genuinely required, and keep the sanitize call next to
+  the binding so it cannot be bypassed by a later edit.
+- Prefer interpolation (`{{ value }}`) or bound attributes (`:title="value"`)
+  over `v-html` whenever the content is plain text -- both are
+  auto-escaped by Vue's compiler, `v-html` is not.
+- Treat a dynamic `:href`/`:src` bound to user-controlled input as
+  untrusted: reject or allowlist the scheme (`http:`/`https:`/`mailto:`)
+  before binding it, since a `javascript:` URI in an anchor's `href` still
+  executes on click.
+- Never pass a user-controlled string into `render()`'s `h()` calls as a
+  raw HTML string; `h()` treats string children as text, but a manually
+  constructed VNode tree that re-injects raw markup reintroduces the same
+  risk `v-html` has.
+
+## Routing and SSR
+
+- Validate and narrow a Vue Router dynamic segment (`route.params.id`)
+  before using it in a query, redirect target, or `v-html`-rendered value
+  -- a route param is attacker-controlled input, not a trusted internal
+  value.
+- In a server-rendered (Nuxt or custom SSR) app, never read a secret,
+  session token, or unsanitized request header directly into a `ref`/
+  `reactive()` value that gets serialized into the client-hydrated state --
+  anything in the initial state payload is visible in the page source.
+- Guard a navigation guard's redirect target (`next('/somewhere')` or
+  `router.push()`) built from a query parameter against open-redirect: only
+  redirect to a same-origin, allowlisted path, never an unvalidated
+  `redirect` query value passed straight through.
+
+## Store and state exposure
+
+- Do not store a raw auth token or other secret in a Pinia store field
+  that is included in a `persist`/localStorage plugin without explicit
+  review -- persisted store state survives in the browser's storage past
+  the session and is readable by any script with DOM access on that
+  origin.
+- Scope a Pinia store's `$reset()` (or manual reset) to run on logout for
+  any store holding user-specific data, so a shared browser session (or a
+  test suite reusing app state) does not leak the previous user's data
+  into the next session.

@@ -1,0 +1,63 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.tsx"]
+metadata:
+  origin: authored
+---
+
+# MobX testing
+
+Narrows the common testing rules to what is specific about testing MobX
+stores, actions, and reactions — test layout, runner, and framework
+concerns for React components themselves still come from the `react`
+pack's own `rules/testing.mdc`.
+
+## Store tests are plain unit tests
+
+- A store with no React dependency (no `observer`, no hook) is tested by
+  constructing it directly and calling its actions/reading its computeds
+  — no React Testing Library render is needed. Co-locate the test next to
+  the store (`xyz.store.test.ts` beside `xyz.store.ts`), matching the
+  project's existing test-file convention.
+- Mock the store's injected dependencies (an API service passed into the
+  constructor), not MobX itself — MobX's reactivity is the thing under
+  test, not something to stub out.
+
+## Awaiting async actions and reactions
+
+- After calling an async action in a test, `await` the action's own
+  returned promise (for a plain `async` method) or `await` a `when(...)`
+  predicate on the resulting state (`await when(() => !store.loading)`)
+  before asserting — do not assert immediately after the call and rely on
+  a fixed `setTimeout`/sleep, which is both slower and flaky.
+- When asserting on a value only a `reaction`/`autorun` sets, wait for
+  that reaction to have run (`await when(() => condition)`, or `await
+  Promise.resolve()` for microtask-only sync reactions) rather than
+  asserting synchronously right after the triggering mutation.
+
+## `enforceActions` in tests
+
+- Keep `enforceActions` at the project's real (usually `"observed"` or
+  `"always"`) setting in tests rather than relaxing it to `"never"` for
+  convenience — a test that mutates observable state outside an action
+  should fail the same way production code would, since that failure is
+  exactly the bug class these tests exist to catch.
+- If a test genuinely needs to seed store state directly (bypassing
+  actions, e.g. to set up a precondition), wrap that seeding assignment
+  in `runInAction` rather than disabling `enforceActions` for the whole
+  suite.
+
+## Testing disposal and reaction cleanup
+
+- Assert that `dispose()` actually stops a store's reactions: trigger a
+  mutation after `dispose()` and confirm the disposed reaction's effect
+  did not run again — a leaked, undisposed `autorun`/`reaction` is a real
+  bug that a naive "does dispose() throw" test will not catch.
+
+## Component tests still need `observer`-aware setup
+
+- A test rendering an `observer` component must trigger the store
+  mutation the same way production code would (through the store's own
+  action) and then assert on the rendered output after that action
+  resolves — do not directly reassign an observable field the component
+  reads and expect the same ordering guarantees an action provides.

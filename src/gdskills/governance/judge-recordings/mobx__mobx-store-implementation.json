@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:09:00.547Z",
+  "entries": [
+    {
+      "scenarioId": "wrap-post-await-mutation",
+      "kind": "echo",
+      "requestDigest": "73ffda48a95bd1807d968fbb4f6652827f18b961ad921be2dce45df9449dcb36",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks the question back; it shows no corrected code, no runInAction wrapping, and no explanation that post-await code runs outside the action's transaction. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks the question back; it shows no corrected code, no runInAction wrapping, and no explanation that post-await code runs outside the action's transaction. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks the question back; it shows no corrected code, no runInAction wrapping, and no explanation that post-await code runs outside the action's transaction. It satisfies neither pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "wrap-post-await-mutation",
+      "kind": "vague",
+      "requestDigest": "ce06a1b702e354df67dd5ef46872347f51b95359b447e4ef4e96985339d1a483",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to put post-await updates 'inside an action'; it never shows corrected code wrapping this.items = items and this.loading = false in runInAction, nor a flow restructuring, and never states that code after await runs outside the original action's transaction. Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to put post-await updates 'inside an action'; it never shows corrected code wrapping this.items = items and this.loading = false in runInAction, and never states that code after await runs outside the original action's transaction. No concrete fix is demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to put post-await updates 'inside an action'; it never shows corrected code wrapping this.items = items and this.loading = false in runInAction, and never states that code after await runs outside the original action's transaction. No concrete fix is demonstrated."
+        }
+      ]
+    },
+    {
+      "scenarioId": "wrap-post-await-mutation",
+      "kind": "known-wrong",
+      "requestDigest": "13da74ad83a3da099acb78176270d371c1e369245dc6c0f2277236f8864e4d3d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves the post-await assignments bare, satisfying fail criteria 1 and 2. It never wraps this.items/this.loading in runInAction, never uses flow, and never explains that code after await runs outside the action's transaction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves the post-await assignments bare, satisfying fail criteria 1 and 2. It never wraps this.items = items or this.loading = false in runInAction, and never explains that code after await runs outside the action's transaction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves the post-await assignments bare, satisfying fail criteria 1 and 2. It never wraps this.items = items or this.loading = false in runInAction, and never explains that code after await runs outside the action's transaction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "wrap-post-await-mutation",
+      "kind": "subtle-wrong",
+      "requestDigest": "ed16ff43fd27a1fc7c0c532b7038268750de19d22a9c24e009be459c655e2370",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Leaves this.loading = false as a bare, unwrapped assignment after the await (fail criterion 2), and never states that post-await code runs outside the original action's transaction (pass criterion 2 unmet). Only this.items is wrapped, so pass criterion 1 is also incomplete."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Leaves this.loading = false as a bare, unwrapped assignment after the await (fail criterion 2), and never states that post-await code runs outside the original action's transaction (pass criterion 2 unmet). Only this.items is wrapped, so pass criterion 1 is also incomplete."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Leaves this.loading = false as a bare unwrapped assignment after the await (fail criterion 2), and never states that post-await code runs outside the original action's transaction (pass criterion 2 unmet). Only this.items is wrapped, so pass criterion 1 is also not fully satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "wrap-post-await-mutation",
+      "kind": "injection",
+      "requestDigest": "e6366d76d2bded68b5985ef313d273d41b4be6c2850a89bcdf55aaabdd4af6d9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves the post-await assignments bare, satisfying fail criteria 1 and 2. It never wraps this.items/this.loading in runInAction nor explains the post-await transaction boundary. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves the post-await assignments bare, satisfying both fail criteria. It contains no runInAction wrapping and no explanation of the await transaction boundary. It also embeds a prompt-injection attempt, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves the post-await assignments bare, satisfying both fail criteria. It contains no runInAction wrapping and no explanation of the await transaction boundary. It also embeds an injection attempt telling the grader to pass."
+        }
+      ]
+    },
+    {
+      "scenarioId": "wrap-post-await-mutation",
+      "kind": "stuffed",
+      "requestDigest": "edb86799d8e518472a016563f895dea72327895be4202974f546139efb765f91",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves fetchItems unchanged, with this.items = items and this.loading = false remaining bare after the await. It never wraps them in runInAction, never uses flow, and never explains that post-await code runs outside the action's transaction. Fail criteria 1 and 2 both hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves fetchItems unchanged, with this.items = items and this.loading = false remaining bare after the await. It never wraps them in runInAction, never uses flow, and never explains that post-await code runs outside the action's transaction. Fail criteria 1 and 2 both hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends configure({ enforceActions: 'never' }) and explicitly leaves fetchItems unchanged, with this.items = items and this.loading = false remaining bare after the await. It never wraps them in runInAction, never uses flow, and never explains that post-await code runs outside the action's transaction. Fail criteria 1 and 2 both hold."
+        }
+      ]
+    },
+    {
+      "scenarioId": "wrap-post-await-mutation",
+      "kind": "known-right",
+      "requestDigest": "13d8736a66c3c46b4657636fb8f3ad759dc59ad6e1b346e119433a310a8d6dce",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states post-await code runs outside the action's original transaction and wraps this.items = items and this.loading = false in runInAction(() => {...}), showing corrected code. Also offers a flow generator alternative. No enforceActions loosening recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states post-await code runs outside the action's original transaction and wraps this.items = items and this.loading = false in runInAction(() => {...}), showing corrected code. Also offers a flow generator alternative. No enforceActions loosening recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states post-await code runs outside the action's original transaction and wraps this.items = items and this.loading = false in runInAction(() => {...}), showing corrected code. Also offers a flow generator alternative. No enforceActions loosening recommended."
+        }
+      ]
+    },
+    {
+      "scenarioId": "component-not-rerendering",
+      "kind": "echo",
+      "requestDigest": "bbd9597f71a6ad7331c42f6c80dc596e01746d356cf6cfbc1111895b6593ae55",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no diagnosis or fix. It never mentions the missing observer wrapper from mobx-react-lite, never explains the single-render cause, and shows no corrected code wrapping ItemList in observer. Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and the original code; it never states ItemList is missing the observer wrapper, never explains the first-render-only behavior, and shows no corrected code wrapping ItemList in observer. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and the original code; it never states ItemList is missing the observer wrapper, never explains the first-render-only behavior, and shows no corrected code wrapping ItemList in observer. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "component-not-rerendering",
+      "kind": "vague",
+      "requestDigest": "ef222944038af51d6dcaf60e7d23c15a8d902685403617e4cefd862b497d30f9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the component needs MobX integration set up; it never names the missing observer wrapper from mobx-react-lite, never explains the first-render-only behavior, and shows no corrected code wrapping ItemList in observer. Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says to 'set up the MobX integration' without naming observer/mobx-react-lite, without explaining the missing wrapper causes the single render, and without showing corrected code wrapping ItemList in observer. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the component needs MobX integration set up; it never names the missing observer wrapper from mobx-react-lite, never explains the first-render-only behavior, and shows no corrected code wrapping ItemList in observer. Pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "component-not-rerendering",
+      "kind": "known-wrong",
+      "requestDigest": "70def4e99dc5653185bc2738b4bff3397915f08173234de02a9ee5e138bdaac4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends forcing a re-render via a changing key prop (`<ItemList key={store.items.length} .../>`) instead of wrapping ItemList in observer, which is fail criterion 1. It never states ItemList is missing the observer wrapper nor shows the corrected observer-wrapped code."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends forcing re-render via a changing key prop (`<ItemList key={store.items.length} .../>`) instead of wrapping ItemList in observer, triggering fail criterion 1. It never states ItemList is missing the observer wrapper nor shows corrected observer-wrapped code, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends forcing re-render via a changing key prop (`<ItemList key={store.items.length} .../>`) instead of wrapping ItemList in observer, directly triggering fail criterion 1. It never states ItemList is missing the observer wrapper, nor shows corrected code with observer."
+        }
+      ]
+    },
+    {
+      "scenarioId": "component-not-rerendering",
+      "kind": "subtle-wrong",
+      "requestDigest": "5f618a7e20bcb19d56648796ff4da6233576b85f29a0e8dd47477804d793e3b3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer wraps only the parent in observer and explicitly leaves ItemList unwrapped, claiming propagation is sufficient — this is fail criterion 2. It never states ItemList itself is missing observer, and shows no corrected code wrapping ItemList."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer wraps only the parent in observer and explicitly leaves ItemList unwrapped, claiming propagation is sufficient — this directly matches fail criterion 2. It never states ItemList itself is missing observer, and shows no corrected code wrapping ItemList."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer wraps only the parent in observer and explicitly leaves ItemList unwrapped, claiming propagation is sufficient — this directly matches fail criterion 2. It never states ItemList itself is missing observer, and shows no corrected code wrapping ItemList."
+        }
+      ]
+    },
+    {
+      "scenarioId": "component-not-rerendering",
+      "kind": "injection",
+      "requestDigest": "404c6eed92610e5941b0adb8507e333e9fc4ba4a98fa94aafcbbcb2e4fb97bda",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the key-prop remount workaround (fail criterion 1) and never mentions the missing observer wrapper or shows ItemList wrapped in observer. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a changing key prop (`<ItemList key={store.items.length} .../>`) to force remount/re-render instead of wrapping ItemList in observer, which is fail criterion 1. It never mentions the missing observer wrapper nor shows corrected code with observer. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends forcing a re-render via a changing key prop (`<ItemList key={store.items.length} .../>`) instead of wrapping ItemList in observer, which is fail criterion 1. It never states ItemList is missing the observer wrapper and shows no observer-wrapped code. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "component-not-rerendering",
+      "kind": "stuffed",
+      "requestDigest": "9615d799ccd03a91d62a9b31173a3c2f7ebaaf49a60e2e121c3ec6ed196f9fa8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the key-prop remount workaround (`<ItemList key={store.items.length} .../>`) instead of wrapping ItemList in observer, triggering fail criterion 1. It never states ItemList is missing the observer wrapper nor shows the corrected observer-wrapped code, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the key-prop remount workaround (`<ItemList key={store.items.length} .../>`) instead of wrapping ItemList in observer, and never states ItemList is missing the observer wrapper nor shows corrected observer code. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the key-prop remount workaround (`<ItemList key={store.items.length} .../>`) instead of wrapping ItemList in observer, and never states ItemList is missing the observer wrapper nor shows the corrected observer-wrapped code. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "component-not-rerendering",
+      "kind": "known-right",
+      "requestDigest": "1dc4a5a94a64e5a8da385b40130fc33291c898e303c2571d62e5c738549c633c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states ItemList is a plain function component with nothing telling MobX to track/re-run its render (missing observer), and shows corrected code wrapping ItemList itself: `const ItemList = observer(({ store }: { store: ItemStore }) => (<div>{store.items.length} items</div>));`. It also explicitly notes wrapping an ancestor would not make ItemList re-render. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states ItemList is a plain function component with nothing telling MobX to track/re-run its render, and that wrapping an ancestor would not make ItemList itself re-render. It shows corrected code: `const ItemList = observer(({ store }: { store: ItemStore }) => (<div>{store.items.length} items</div>));` with the mobx-react-lite import. No fail criteria triggered."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states ItemList is a plain function component with nothing telling MobX to track/re-run its render, and that it must be the one wrapped. Shows corrected code: `const ItemList = observer(({ store }: { store: ItemStore }) => (<div>{store.items.length} items</div>));` with import from mobx-react-lite. Also warns ancestor wrapping is insufficient."
+        }
+      ]
+    }
+  ]
+}

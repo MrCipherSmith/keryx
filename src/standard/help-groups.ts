@@ -131,7 +131,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "routing",
     group: "Connect a model provider",
-    summary: "Category -> model routing table: list, set, unset (per-user default; --project for the project layer).",
+    summary: "Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set).",
   },
   { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
   {
@@ -284,6 +284,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   { kind: "slash", name: "/flows", group: "Managed work", summary: "Browse project flows and inspect one." },
   {
     kind: "slash",
+    name: "/ac",
+    group: "Managed work",
+    summary: "Check the active flow's frozen acceptance criteria (advisory, cached) — same modal as /flows, AC tab.",
+  },
+  {
+    kind: "slash",
     name: "/review",
     group: "Managed work",
     summary: "Show project-wide items needing review (proposals, blocked sessions).",
@@ -299,6 +305,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/conform",
     group: "Managed work",
     summary: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev.",
+  },
+  {
+    kind: "slash",
+    name: "/jevrules",
+    group: "Managed work",
+    summary: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule.",
   },
   {
     kind: "slash",

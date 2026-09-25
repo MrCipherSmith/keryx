@@ -63,22 +63,40 @@ export interface RoutingLayers {
   readonly project?: RoutingTable;
   /** The per-user entry in shell config (`src/lib/shell-config.ts`). */
   readonly user?: RoutingTable;
+  /**
+   * Flow 327, PRD §6.3 — the table keryx builds itself from the session
+   * provider's own models/profiles when the operator has configured nothing
+   * (`deriveDefaultTable`, `./derive-default-table.ts`). Sits below `user`
+   * and above `default` in precedence. A caller that never derives anything
+   * (Flow A's own tests, unmodified — AC14) simply omits this field, which is
+   * byte-identical to before this layer existed.
+   */
+  readonly derived?: RoutingTable;
 }
 
-/** Which layer actually produced a resolution — for `keryx routing list` / `/routing`. */
-export type RoutingSource = "override" | "project" | "user" | "default";
+/**
+ * Which layer actually produced a resolution — for `keryx routing list` /
+ * `/routing`. `"derived"` (flow 327, PRD §6.3) is a NEW rung between `"user"`
+ * and `"default"`: a table keryx builds itself from the session provider's
+ * own models when the operator has configured nothing (`deriveDefaultTable`,
+ * `./derive-default-table.ts`).
+ */
+export type RoutingSource = "override" | "project" | "user" | "derived" | "default";
 
 export interface ResolvedCategory {
   readonly assignment: CategoryAssignment;
   readonly source: RoutingSource;
   /**
-   * AC10 — the FIRST layer's assignment that was skipped because it named an
-   * unconnected provider/model, when one was. `undefined` on the ordinary
-   * path (nothing was rejected). Carried through so a caller can show
-   * `"<provider>/<model> - not connected, falling back to <resolved>"`
-   * without re-deriving which layer that was.
+   * AC10 (flow 305) / AC10 (flow 327) — the FIRST layer's assignment that was
+   * skipped, when one was: either because it named an unconnected
+   * provider/model (`reason` omitted — the original flow 305 shape, kept
+   * byte-identical so `table.test.ts`'s existing `toEqual` assertions never
+   * see an extra key, AC14), or because it named a model whose profile is
+   * `available: false` (`reason: "unavailable"`, flow 327 — PRD §6.2). A
+   * caller distinguishes the two to show the right notice
+   * (`describeFallbackNotice` vs `describeUnavailableNotice`, below).
    */
-  readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource };
+  readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource; readonly reason?: "unavailable" };
 }
 
 /**
@@ -92,45 +110,89 @@ export interface ResolvedCategory {
  */
 export type ConnectedPredicate = (providerId: string, modelId?: string) => boolean;
 
+/**
+ * Flow 327, PRD §6.2 — whether `providerId`/`modelId`'s stored profile is
+ * `available: true` (or has no profile at all, which is "no evidence either
+ * way", never treated as unavailable). Built from a profile map via
+ * `availablePredicateFromProfiles` (`./model-profile.ts`) — this module
+ * itself has no dependency on the profile store, mirroring `ConnectedPredicate`'s
+ * own "caller builds it from what it already has" contract.
+ */
+export type AvailablePredicate = (providerId: string, modelId: string) => boolean;
+
 /** The permissive default: everything is "connected" — existing callers that pass no predicate see no behavior change (AC1 unchanged). */
 const ALWAYS_CONNECTED: ConnectedPredicate = () => true;
 
-function isAssignmentConnected(assignment: CategoryAssignment, connected: ConnectedPredicate): boolean {
-  if (assignment.kind === "session-default") return true;
-  if (assignment.kind === "model") return connected(assignment.providerId, assignment.modelId);
-  return connected(assignment.providerId);
+/** The permissive default: everything is "available" — a caller that passes no predicate sees no behavior change (AC14: Flow A's resolution is unaffected). */
+const ALWAYS_AVAILABLE: AvailablePredicate = () => true;
+
+/**
+ * Why a candidate assignment was skipped, when it was. `undefined` (the
+ * ordinary path) means it was accepted. Kept as a private union rather than
+ * folded into `ResolvedCategory.rejected.reason` directly so the "not
+ * connected" case can still produce a `rejected` object with NO `reason` key
+ * at all (AC14 — see `ResolvedCategory`'s doc).
+ */
+function rejectionReason(assignment: CategoryAssignment, connected: ConnectedPredicate, available: AvailablePredicate): "not-connected" | "unavailable" | undefined {
+  if (assignment.kind === "session-default") return undefined;
+  if (assignment.kind === "model") {
+    if (!connected(assignment.providerId, assignment.modelId)) return "not-connected";
+    if (!available(assignment.providerId, assignment.modelId)) return "unavailable";
+    return undefined;
+  }
+  // "provider-default" — only the connected-check applies (flow 305's
+  // original scope); resolving it to a concrete model id to also check
+  // availability would pull `provider-default.ts` (which itself imports
+  // `../../commands/providers`) into this leaf module for a case the PRD's
+  // worked examples never exercise. A provider-default row's OWN concrete
+  // model, once resolved downstream (`resolveProviderDefaultModelId`), is
+  // checked for availability by whatever calls that — not here.
+  return connected(assignment.providerId) ? undefined : "not-connected";
 }
 
 /**
  * Resolve one category against the injected layers, with the precedence order
- * the operator fixed (PRD §5): explicit override > per-project > per-user >
- * `default` (the session's own model, unconditionally available). Reports
- * WHICH layer answered, for display (`keryx routing list`, `/routing`).
+ * the operator fixed (PRD §5, extended by §6.3): explicit override >
+ * per-project > per-user > **derived** (flow 327) > `default` (the session's
+ * own model, unconditionally available). Reports WHICH layer answered, for
+ * display (`keryx routing list`, `/routing`).
  *
- * AC10: `connected` (default: everything is connected, i.e. unchanged
- * behavior) is checked against EVERY candidate layer in precedence order; an
- * assignment naming an unconnected provider/model is treated as though that
- * layer had nothing configured for the category and resolution moves to the
- * next layer, all the way down to `default` if every configured layer names
- * something unconnected.
+ * AC10 (flow 305): `connected` (default: everything is connected, i.e.
+ * unchanged behavior) is checked against EVERY candidate layer in precedence
+ * order; an assignment naming an unconnected provider/model is treated as
+ * though that layer had nothing configured for the category and resolution
+ * moves to the next layer, all the way down to `default` if every configured
+ * layer names something unconnected.
+ *
+ * AC10 (flow 327): `available` (default: everything is available, i.e.
+ * unchanged behavior — AC14) is checked the same way, for a `"model"`
+ * assignment whose profile is `available: false` (PRD §6.2). Both checks run
+ * per candidate; either one failing rejects that layer's entry.
  */
 export function resolveCategoryDetailed(
   category: RoutingCategory,
   layers: RoutingLayers,
   connected: ConnectedPredicate = ALWAYS_CONNECTED,
+  available: AvailablePredicate = ALWAYS_AVAILABLE,
 ): ResolvedCategory {
   const candidates: ReadonlyArray<{ assignment: CategoryAssignment; source: RoutingSource }> = [
     ...(layers.override !== undefined ? [{ assignment: layers.override, source: "override" as const }] : []),
     ...(layers.project?.[category] !== undefined ? [{ assignment: layers.project[category]!, source: "project" as const }] : []),
     ...(layers.user?.[category] !== undefined ? [{ assignment: layers.user[category]!, source: "user" as const }] : []),
+    ...(layers.derived?.[category] !== undefined ? [{ assignment: layers.derived[category]!, source: "derived" as const }] : []),
   ];
 
-  let rejected: { assignment: CategoryAssignment; source: RoutingSource } | undefined;
+  let rejected: { assignment: CategoryAssignment; source: RoutingSource; reason?: "unavailable" } | undefined;
   for (const candidate of candidates) {
-    if (isAssignmentConnected(candidate.assignment, connected)) {
+    const reason = rejectionReason(candidate.assignment, connected, available);
+    if (reason === undefined) {
       return { ...candidate, ...(rejected !== undefined ? { rejected } : {}) };
     }
-    rejected ??= candidate;
+    // Only the FIRST rejection is carried through (matches flow 305's
+    // original `rejected ??=` behavior); `reason` is added ONLY for
+    // "unavailable" so the "not connected" shape stays exactly
+    // `{assignment, source}` — no `reason` key at all — for AC14.
+    rejected ??= reason === "unavailable" ? { ...candidate, reason } : { ...candidate };
   }
   return { assignment: SESSION_DEFAULT_ASSIGNMENT, source: "default", ...(rejected !== undefined ? { rejected } : {}) };
 }
@@ -138,15 +200,16 @@ export function resolveCategoryDetailed(
 /**
  * `resolveCategory(category, layers): CategoryAssignment` (AC1's exact
  * signature) — the assignment alone, for a caller that does not need to know
- * which layer answered. `connected` is optional and additive (AC10); omitted,
- * behavior is byte-identical to before AC10.
+ * which layer answered. `connected`/`available` are optional and additive
+ * (AC10); omitted, behavior is byte-identical to before either existed.
  */
 export function resolveCategory(
   category: RoutingCategory,
   layers: RoutingLayers,
   connected: ConnectedPredicate = ALWAYS_CONNECTED,
+  available: AvailablePredicate = ALWAYS_AVAILABLE,
 ): CategoryAssignment {
-  return resolveCategoryDetailed(category, layers, connected).assignment;
+  return resolveCategoryDetailed(category, layers, connected, available).assignment;
 }
 
 /** Build a `ConnectedPredicate` from a plain provider list (`configuredProviders()`, `detectProviders()`, or an injected `getDetectedProviders()`) — the shared, non-network-probing shape every call site uses. */
@@ -170,6 +233,16 @@ export function describeFallbackNotice(rejected: CategoryAssignment, resolved: C
   return `${describeAssignment(rejected)} - not connected, falling back to ${describeAssignment(resolved)}`;
 }
 
+/** Flow 327 AC11/AC26 exact notice text: `"<provider>/<model> — unavailable, falling back to <resolved>"` (em dash, distinct from the "not connected" notice above). */
+export function describeUnavailableNotice(rejected: CategoryAssignment, resolved: CategoryAssignment): string {
+  return `${describeAssignment(rejected)} — unavailable, falling back to ${describeAssignment(resolved)}`;
+}
+
+/** Picks the right notice for a `ResolvedCategory.rejected` entry (flow 305's "not connected" vs flow 327's "unavailable", `ResolvedCategory`'s own doc). */
+export function describeRejectionNotice(rejected: { readonly assignment: CategoryAssignment; readonly reason?: "unavailable" }, resolved: CategoryAssignment): string {
+  return rejected.reason === "unavailable" ? describeUnavailableNotice(rejected.assignment, resolved) : describeFallbackNotice(rejected.assignment, resolved);
+}
+
 /** Human-readable form of an assignment, shared by the CLI and the TUI. */
 export function describeAssignment(assignment: CategoryAssignment): string {
   switch (assignment.kind) {
@@ -184,6 +257,21 @@ export function describeAssignment(assignment: CategoryAssignment): string {
       return exhaustive;
     }
   }
+}
+
+/**
+ * AC11/AC20 — the resolved text for one `keryx routing list`/`/routing` row,
+ * distinguishing `session default` / `auto (derived from <provider>'s
+ * models) -> <resolved>` (flow 327, PRD §6.4) / an explicit
+ * `<provider>/<model>` / `<provider> (provider default)`. Shared by the CLI
+ * (`src/commands/routing.ts`) and the TUI (`src/tui/routing-inspector.ts`) so
+ * the two never drift.
+ */
+export function describeCategoryResolution(row: { readonly source: RoutingSource; readonly assignment: CategoryAssignment }, sessionProviderId: string | undefined): string {
+  if (row.source === "derived" && sessionProviderId !== undefined) {
+    return `auto (derived from ${sessionProviderId}'s models) -> ${describeAssignment(row.assignment)}`;
+  }
+  return describeAssignment(row.assignment);
 }
 
 /** Parse a `keryx routing set`/`/routing` picker target into a `CategoryAssignment`. */

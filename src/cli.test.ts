@@ -158,7 +158,15 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // Flow 305 review finding (AC11): `keryx routing trust` — approve a
     // project routing.config.json's current content.
     "  keryx routing trust\n",
-    "  routing   Category -> model routing table: list, set, unset (per-user default; --project for the project layer)\n",
+    // Flow 327 (Routing A2): `keryx routing profile list|set` — the
+    // model-profile catalogue (tier/price/context/priority + sources), and
+    // the routing summary row's text widened to mention it. The row's TEXT
+    // is the flow-327 wording directly (not a REPLACED_LINES pair) because
+    // the row itself never existed in the pre-flow-303 fixture — flow 305
+    // added it as a NEW_LINES entry, and this just updates that same entry.
+    "  keryx routing profile list [--json]\n",
+    "  keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>\n",
+    "  routing   Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set)\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
@@ -195,11 +203,15 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
 
   // The ONLY lines later flows may add to a rich help. Flow 313 (W4, T8):
   // `serve-mcp --harness` binds the cross-harness memory identity at launch —
-  // one synopsis line and one flag line.
+  // one synopsis line and one flag line. Flow 328: `flow check-ac`, the
+  // advisory Jev-vs-frozen-criteria check — one USAGE line in `flow --help`.
   const RICH_NEW_LINES: Readonly<Record<string, readonly string[]>> = {
     "serve-mcp": [
       "  keryx serve-mcp --harness <id> [--cwd <project-root>]  # bind a cross-harness memory identity\n",
       "  --harness    Bind this server process's cross-harness memory identity once at launch (or set KERYX_HARNESS; --harness wins). Used by memory.search filtering, memory.handoff, and the Source-Harness stamped on memory.propose writes. Unknown id refuses to start.\n",
+    ],
+    flow: [
+      "  keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)\n",
     ],
   };
 

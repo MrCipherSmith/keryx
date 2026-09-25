@@ -4,6 +4,23 @@
 import { randomUUID } from "node:crypto";
 import { interruptedCompletionLine, isCompletionInterrupted, listFlowDirs, readFlow } from "../flow/store";
 import type { FlowState } from "../flow/types";
+// Flow 328, AC7: reading a flow's CACHED check-ac result is a pure core read
+// — the TUI never triggers a Jev call itself here, only shows what `keryx
+// flow check-ac`/the advisory notices already cached. Through the flow
+// facade (`../flow/service`), not `../flow/check-ac` directly — import
+// policy rule 2 only excuses an edge whose target is a `service.ts`.
+import { acCheckCacheKey, acCheckCachePath, readAcCheckCache, statusLabel, type AcCheckStatus } from "../flow/service";
+// Review finding: staleness used to compare only the CRITERIA CHECKSUM half
+// of the cache key, so a criteria-unchanged-but-diff-changed flow still read
+// as fresh. The full key needs the diff too, and computing a diff is a git
+// call this list render cannot afford to make unbounded — `resolveDiffAgainstBase`
+// is the SAME diff resolution `keryx flow check-ac` itself uses (so the hash
+// this computes matches what the cache was keyed against), reused here with a
+// short, TUI-only timeout via `defaultGitSpawn`'s own `timeoutMs`. TUI
+// (client) importing `src/commands/` (adapter) is already the established
+// shape for this module (`tui-shell.ts` imports `runCheckAc` from the same
+// file) — no zone rule forbids client -> adapter, only core -> client/adapter.
+import { defaultGitSpawn, resolveDiffAgainstBase } from "../commands/flow-check-ac";
 import {
   localWorkspaceAuthorizationServer,
   WorkspaceService,
@@ -40,7 +57,25 @@ export type FlowInspectorItem = {
    * Absent otherwise.
    */
   interrupted?: string | undefined;
+  /** Flow 328, AC7: the flow's last CACHED check-ac markers, or absent when nothing has been cached yet ("not run"). */
+  acMarkers?: readonly AcMarker[];
+  /** When the cached markers were computed. */
+  acCheckedAt?: string;
+  /**
+   * Whether the cached markers still match this flow's CURRENT full cache
+   * key (criteria checksum + diff hash) — `true`/`false` when it could be
+   * determined, `"unknown"` when the criteria checksum matches but the
+   * current diff could not be computed quickly enough to compare the diff
+   * hash too (review finding: never reported as fresh in that case — a
+   * cache whose freshness could not be confirmed is not the same fact as
+   * one confirmed fresh, and showing it as fresh would be the worse of the
+   * two wrong answers).
+   */
+  acCheckStale?: boolean | "unknown";
 };
+
+/** Flow 328, AC7: one criterion's cached status, for the /flows sidebar and detail tab. */
+export type AcMarker = { readonly id: string; readonly status: AcCheckStatus; readonly label: string };
 
 export function workspaceFromManifest(manifest: WorkspaceManifest): WorkspaceInfo {
   return {
@@ -172,6 +207,40 @@ export function sortFlowsNewestFirst(items: readonly FlowInspectorItem[]): FlowI
   });
 }
 
+/** ~800ms: cheap enough that one flow's freshness check never noticeably
+ * delays the `/flows` list render (this runs once per flow that has a
+ * cache), short enough that a slow or unreachable `git` still resolves the
+ * list quickly. Nothing depends on the exact number; missing this bound
+ * degrades to `"unknown"`, never to a false "fresh". */
+const AC_FRESHNESS_TIMEOUT_MS = 800;
+
+/**
+ * The full-key freshness check (review finding: the old code compared only
+ * the criteria-checksum HALF of the key, so a diff-changed-but-criteria-
+ * unchanged flow still read as fresh). A checksum mismatch (or no checksum
+ * at all — never frozen) is decidable with no git call and is always `true`
+ * (stale). A checksum match still needs the diff hash compared, which needs
+ * a diff — computed with the exact merge-base shape `keryx flow check-ac`
+ * itself uses (so the hash lines up with what the cache was keyed against),
+ * bounded to {@link AC_FRESHNESS_TIMEOUT_MS} so a slow or unreachable `git`
+ * degrades to `"unknown"` rather than blocking — or worse, silently reading
+ * as fresh.
+ */
+async function computeAcCheckStaleness(cwd: string, cache: { readonly key: string }, flow: FlowState): Promise<boolean | "unknown"> {
+  if (flow.acChecksum === null || !cache.key.startsWith(`${flow.acChecksum}:`)) {
+    return true;
+  }
+  try {
+    const diffText = await resolveDiffAgainstBase(defaultGitSpawn, flow.baseBranch ?? "origin/main", {
+      cwd,
+      timeoutMs: AC_FRESHNESS_TIMEOUT_MS,
+    });
+    return cache.key !== acCheckCacheKey(flow.acChecksum, diffText);
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem[]> {
   try {
     const dirs = await listFlowDirs(cwd);
@@ -182,6 +251,18 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
         const item = flowItemFromState(flow, dir);
         if (await isCompletionInterrupted(cwd, flow, dir)) {
           item.interrupted = interruptedCompletionLine(flow.id);
+        }
+        // Flow 328, AC7: never triggers a Jev call — shows the last cached
+        // check-ac result, or nothing ("not run" is the marker-less default).
+        try {
+          const cache = await readAcCheckCache(acCheckCachePath(cwd, dir));
+          if (cache !== undefined) {
+            item.acMarkers = cache.verdicts.map((v) => ({ id: v.id, status: v.status, label: statusLabel(v.status) }));
+            item.acCheckedAt = cache.at;
+            item.acCheckStale = await computeAcCheckStaleness(cwd, cache, flow);
+          }
+        } catch {
+          // Cache unreadable — same as "not run"; never blocks the flow list.
         }
         items.push(item);
       } catch {
