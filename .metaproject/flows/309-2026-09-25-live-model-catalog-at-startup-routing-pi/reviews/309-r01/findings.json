@@ -1,0 +1,142 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "OpenRouter's balance endpoint used a doubled `/api` path (`balancePath: \"/api/v1/credits\"` against a `baseUrl` that already ends in `/api`) and parsed a response shape neither `/v1/credits` nor any other OpenRouter endpoint returns (`body.credits.{total,used,remaining}`).",
+    "impact": "`keryx providers status`, `/connect` and the routing picker's balance column always showed OpenRouter as having no balance (a 404 or a malformed body makes `fetchProviderBalance` return `undefined`), even for a correctly connected, funded key — the AC5 balance feature silently did not work for the most common hosted provider.",
+    "suggested_fix": "Read the real `/v1/key` endpoint (`data.limit_remaining`, or fall back to `data.limit` when the key has no spending cap) and fall back to `/v1/credits` only for an unlimited key, both against the correct base URL.",
+    "evidence": "Checked directly against openrouter.ai: `/api/v1/credits` 404s when appended to a `baseUrl` that already ends in `/api`, and neither `/v1/key` nor `/v1/credits` returns a top-level `credits` object.",
+    "confidence": "high",
+    "file": "src/commands/providers.ts",
+    "class_scope": {
+      "sites": [
+        "src/commands/providers.ts OPENAI_COMPAT_PROVIDERS[].balancePath (one entry per hosted provider with a documented balance endpoint: openrouter, deepseek)",
+        "src/commands/providers.ts fetchProviderBalance's per-balanceKind response parser"
+      ],
+      "enumeration_method": "grepped `balanceKind`/`balancePath` across every OPENAI_COMPAT_PROVIDERS entry and cross-checked each configured path and parser branch against that vendor's own documented balance endpoint; only the openrouter entry's path and parser mismatched, deepseek's `/user/balance` was already correct"
+    },
+    "global_id": "309-r01#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At merge commit 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b, src/commands/providers.ts's OPENAI_COMPAT_PROVIDERS entry for openrouter carries `balancePath: \"/v1/key\"` (was the doubled `/api/v1/credits`), and fetchProviderBalance's openrouter branch reads `data.limit_remaining` (falling back to `/v1/credits`'s `data.total_credits - data.total_usage` only when the key has no spending cap). Live-checked in the flow-309 worktree: `env -u OPENROUTER_API_KEY bun src/cli.ts providers status --refresh` returned `openrouter (OpenRouter): ok — 460 model(s) · balance $9.99`. `bun test src/commands/providers.balance.test.ts` at this commit: part of a 64-pass, 0-fail run across the flow's six test files.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b (PR #712, commit 'fix(providers): real OpenRouter balance, locked catalog merge, no fake provider in the catalog'); verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The full-refresh cache writer (`saveProviderCatalogCache`) and the single-provider patch writer `providers test` uses (`updateProviderCatalogEntry`) both wrote `provider-catalog.json` with no lock between them. A `providers test` patch landing while a slower full refresh (up to `CATALOG_FETCH_TIMEOUT_MS` per provider, run in parallel at `keryx shell` startup) was still in flight was silently clobbered once the older refresh finally finished and overwrote the whole file unconditionally.",
+    "impact": "A provider an operator had just re-tested and fixed via `providers test` (or the `/connect` row's `[Test]` button) could have that corrected entry silently reverted to an older, still-in-flight startup refresh's result — a lost update with no error and nothing on the record showing it happened.",
+    "suggested_fix": "Have both writers take the same on-disk lock (`withFileLock` over `provider-catalog.json.lock`) and have the full refresh merge into whatever is currently on disk rather than overwrite unconditionally, so a newer single-entry patch always wins over an older in-flight refresh.",
+    "evidence": "Traced both writers in provider-catalog-cache.ts: neither took a lock, and `saveProviderCatalogCache` replaced the whole file unconditionally.",
+    "confidence": "high",
+    "file": "src/harness/provider-catalog-cache.ts",
+    "class_scope": {
+      "sites": [
+        "src/harness/provider-catalog-cache.ts saveProviderCatalogCache (full-refresh writer)",
+        "src/harness/provider-catalog-cache.ts updateProviderCatalogEntry (providers-test single-entry writer)"
+      ],
+      "enumeration_method": "grepped every call to writeOwnerOnlyFileAtomic( and catalogFile( in provider-catalog-cache.ts to enumerate every writer of provider-catalog.json; these two are the only ones"
+    },
+    "global_id": "309-r01#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At merge commit 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b, src/harness/provider-catalog-cache.ts's saveProviderCatalogCache and updateProviderCatalogEntry both take the same withFileLock over `provider-catalog.json.lock`, and the full-refresh writer merges into the current on-disk providers map (`{ ...current.providers, [entry.name]: entry }`) instead of overwriting the file. `bun test src/harness/provider-catalog-cache.test.ts` at this commit passed, including \"saveProviderCatalogCache: a refresh's OWN (newer) read still wins over an older on-disk entry — the merge only protects entries NEWER than the refresh start\" — part of the 64-pass, 0-fail run across the flow's six test files.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b; verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The synthetic `fake` test-double provider (used by shell tests / `keryx shell --provider fake`) was not excluded from the live provider catalog, so it could appear in `providers status`, `/connect` and the `/routing` picker next to real providers.",
+    "impact": "An operator could see a `fake` row with no real status or balance mixed in with genuinely connected providers in every user-facing catalog reader.",
+    "suggested_fix": "Exclude `detected.name === \"fake\"` at the single point every catalog reader inherits from — `buildCatalogEntry` returning `undefined` for it before it ever reaches the catalog.",
+    "evidence": "provider-catalog.ts's buildCatalogEntry had no early-return for the fake provider.",
+    "confidence": "high",
+    "file": "src/harness/provider-catalog.ts",
+    "global_id": "309-r01#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At merge commit 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b, src/harness/provider-catalog.ts's buildCatalogEntry returns `undefined` for `detected.name === \"fake\"` before any fetch or catalog write. `bun test src/commands/providers.status.test.ts` at this commit passed, including \"keryx providers status: with no credential configured, nothing shows — the synthetic fake provider is excluded and never a guessed real one\". Live-checked: `env -u OPENROUTER_API_KEY bun src/cli.ts providers status --refresh` in the flow-309 worktree listed 9 real connected providers and no `fake` row.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b; verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The AC6 startup notice callback (`providerCatalogReady.then(...)`) painted directly into `announceStartupNotice`/`splash`/`io` with no check that the shell had already been torn down (e.g. the operator hit Esc/exit while a slow or timed-out provider probe was still resolving).",
+    "impact": "A late-resolving catalog refresh could paint a notice into a destroyed shell surface — a use-after-teardown write.",
+    "suggested_fix": "Guard the callback the same way the bus-join callbacks already do: `if (destroyed) return;` before doing anything with the resolved catalog.",
+    "evidence": "tui-shell.ts's providerCatalogReady.then callback had no destroyed check.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "global_id": "309-r01#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At merge commit 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b, src/tui/tui-shell.ts's `providerCatalogReady.then((catalog) => { if (destroyed) return; ... })` guards every use of `announceStartupNotice`/`splash`/`io` behind the shell's own `destroyed` flag. `bun test src/tui/provider-catalog-startup.test.ts` at this commit passed, including a source-text audit asserting the guard sits inside the launchTuiAgentShell scope reached by the AC6 notice path — part of the 64-pass, 0-fail run across the flow's six test files.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b; verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "`fetchProviderBalance`'s response body was read and JSON-parsed with no size cap, unlike the `/models` fetch which already refuses an oversized body via `MODELS_RESPONSE_BODY_LIMIT_BYTES`.",
+    "impact": "A balance endpoint returning an unexpectedly large body (a misconfigured custom provider, or a compromised endpoint) could be read to completion with no bound.",
+    "suggested_fix": "Cap the balance response body the same way the `/models` parser does.",
+    "evidence": "fetchProviderBalance had no equivalent of a response-body size limit.",
+    "confidence": "high",
+    "file": "src/commands/providers.ts",
+    "global_id": "309-r01#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At merge commit 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b, src/commands/providers.ts declares `export const BALANCE_RESPONSE_BODY_LIMIT_BYTES = 1_000_000;` (doc comment: \"the same defence MODELS_RESPONSE_BODY_LIMIT_BYTES gives /models (flow 309 review, finding 5)\") and fetchProviderBalance's body read is bounded by it, mirroring the existing /models cap. `bun test src/commands/providers.balance.test.ts` at this commit: part of the 64-pass, 0-fail run across the flow's six test files.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b; verified refuted by operator-agent (see verifications.json)"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The F-004 fix (the `if (destroyed) return;` guard on the startup notice callback) has no dedicated test exercising the destroyed-before-resolve race. `provider-catalog-startup.test.ts` covers the AC6 notice text and `provider-catalog.test.ts` covers the hang/timeout bound (AC2), but nothing drives the callback to fire after the shell is torn down and asserts it is a no-op.",
+    "impact": "A future refactor of the startup notice path could silently drop the destroyed guard with nothing failing to catch it.",
+    "suggested_fix": "Add a unit/integration test that resolves `providerCatalogReady` after simulating shell teardown and asserts `announceStartupNotice` is not called.",
+    "evidence": "Read provider-catalog-startup.test.ts and provider-catalog.test.ts in full: neither exercises the destroyed-guard branch.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "global_id": "309-r01#F-006",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "agent (closing agent, not a human decision): round 2 approved and PR #712 (7abc0fb0bbb5c0b91dc930e6ca0f05295eecdc5b) merged with this gap open; the test was then added in the 0.2.164 release PR (src/tui/provider-catalog-startup.test.ts, F-006 case, revert-checked)"
+    }
+  }
+]

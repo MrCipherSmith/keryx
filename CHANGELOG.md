@@ -3,6 +3,79 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.164] — 2026-09-25
+
+Two more pieces of the Jev plan, and a routing picker that lists the models
+your providers actually serve today.
+
+### Added
+- **`keryx review conform`: check a PR, a review or a diff against a
+  reference document.** `keryx review conform --ref <doc> (--pr <n> |
+  --report <dir> | --diff <ref>) [--explain] [--threshold] [--json]` splits a
+  rules file, skill or project skill into clauses without a model (heading +
+  item, stable ids), tags each as about the PR, a review report, code hunks,
+  or not checkable, and computes the checkable facts first: which PR-body
+  sections are present and filled, the hand-written line count, a report's
+  section order, which fields each finding records. Jev then scores each
+  clause (`satisfied` / `likely-violated`); `not-checkable` clauses are always
+  listed, never guessed. `--explain` asks the model routed to the `review`
+  category for a short advisory explanation of each violated clause and never
+  writes to GitHub. `/conform` in the shell picks a recent document and a
+  target and shows the clauses grouped by kind with their evidence.
+  - Opt-in per project (`review.jev.conform` in
+    `.metaproject/tasks.config.json`): the document's clauses, the PR text,
+    the report and the diff are sent to Jev after secret redaction; nothing
+    leaves the machine otherwise. Only the document's file name reaches the
+    `--explain` model. The clause-tag cache and the recent-documents list live
+    under `.metaproject/data/review-conform/`, which is gitignored, mode 0600.
+  - Measured live against a real process document: Jev answers cautiously
+    (none of 115 scores reached 0.8), so treat a `likely-violated` as a
+    prompt for a human look, not a verdict.
+- **`keryx providers status [--json] [--refresh]`** prints every connected
+  provider's catalog: status (ok, auth failed, unreachable, timeout, not
+  supported), model count, balance where the provider documents one, and when
+  it was fetched.
+
+### Changed
+- **CI triage v2.** `keryx review ci-triage` now computes deterministic
+  signals before asking Jev — whether a rerun of the job passed, whether the
+  same test failed on other branches and later passed there, whether the
+  failing test is near the diff, and log markers for a lost runner, network,
+  out-of-memory, timeout and a broken dependency install — and puts them
+  above the log. A rerun that passed, or the same job passing later on the
+  same commit, decides the verdict by itself (`DETERMINISTIC:`), with Jev's
+  probabilities still printed beside it; an ambiguous job name or a run that
+  falls outside the fetched history withholds that and shows an advisory line
+  instead. Every failed job is triaged (at most 10; `--job` narrows), and
+  `--json` prints `{results, notTriaged}`. `--eval <manifest> [--live]` runs a
+  committed set of 8 labelled real runs; measured live, top-1 accuracy was 4/8
+  before and after the signals — the docs say so. `/ci` shows the same
+  evidence.
+- **`/routing` lists the models your connected providers serve now.** The
+  picker read hardcoded model lists and offered providers you had not
+  connected. At shell startup keryx now fetches every connected provider's
+  model list in parallel ("checking providers…", 8 s per provider, never
+  blocking the prompt), which doubles as an availability check; the result is
+  cached for 5 minutes (mode 0600, no credentials) and `providers test`
+  refreshes it. A provider whose fetch failed shows its curated list marked
+  `(offline list)`; one whose key was rejected is left out. `/connect` rows
+  show status, balance and age, and a provider that fails at startup gets one
+  notice line.
+
+### Fixed
+- **The OpenRouter balance was never shown.** The request went to
+  `/api/api/v1/credits` and the parser expected a shape neither endpoint
+  returns. It now reads what is left of the key's limit from `/api/v1/key`, and
+  falls back to `/api/v1/credits` for a key without a limit.
+- **A rejected Jev key says where it came from.** A 401 names whether the
+  `OPENROUTER_API_KEY` environment variable or the saved key was used, and
+  flags a key that does not look like an OpenRouter key. Error bodies are
+  redacted.
+- **Jev `choice` questions** send their options as an object; the live
+  endpoint rejected an array.
+- `gh` and `git` calls made by CI triage and `review conform` have a timeout
+  and an output cap.
+
 ## [0.2.163] — 2026-09-25
 
 ### Added

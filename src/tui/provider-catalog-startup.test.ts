@@ -74,3 +74,12 @@ test("flow 309 AC6: a provider that fails at startup is surfaced through announc
   expect(reactionBody).toContain("unreachable");
   expect(reactionBody).toContain("timeout");
 });
+
+test("flow 309 review F-006: the startup-notice reaction returns before painting once the shell is destroyed", () => {
+  const readyReactionAt = SOURCE.indexOf("void providerCatalogReady.then((catalog) => {", FN_START);
+  expect(readyReactionAt).toBeGreaterThan(FN_START);
+  const reactionBody = SOURCE.slice(readyReactionAt, SOURCE.indexOf("});", readyReactionAt));
+  const guardAt = reactionBody.indexOf("if (destroyed) return;");
+  expect(guardAt).toBeGreaterThan(-1);
+  expect(guardAt).toBeLessThan(reactionBody.indexOf("announceStartupNotice("));
+});
