@@ -59,7 +59,7 @@
             "Shows or names the actual fix: inject the service as a class field/constructor (e.g. `private readonly orders = inject(OrdersService);`) before the setTimeout, then reference that already-injected variable inside the callback"
           ],
           "fail_criteria": [
-            "Recommends calling inject() directly inside the setTimeout callback as a working solution"
+            "Recommends calling inject() inside the setTimeout callback as a working fix -- whether directly inline, or one level removed through a private helper method that is itself only ever invoked from inside the callback -- without actually injecting the service in the constructor/field initializer beforehand"
           ]
         }
       ],
@@ -67,7 +67,7 @@
         "known_right": "No -- inject() only works inside Angular's injection context, which is the constructor, a field initializer, or code explicitly wrapped in runInInjectionContext(). A setTimeout callback runs later, outside that context, so calling inject() there throws at runtime instead of returning the service. Inject the service once where the class is constructed and capture the reference in a field, then use that field inside the callback:\n\nexport class OrderPanel {\n  private readonly orders = inject(OrdersService);\n\n  ngOnInit() {\n    setTimeout(() => {\n      this.orders.refresh();\n    }, 500);\n  }\n}\n\nThe closure over `this.orders` is what makes the deferred call work, not calling inject() again inside the timeout.",
         "known_wrong": "Sure, just call inject(OrdersService) inside the setTimeout callback right where you need it -- that keeps the dependency close to where it's used instead of adding another field to the class. Angular's DI will resolve it fine whenever the callback runs.",
         "vague": "You shouldn't call inject() just anywhere -- it needs to happen at the right time in the component's lifecycle, so grab the service earlier instead of inside the callback.",
-        "subtle_wrong": "Calling inject() inside the setTimeout callback usually throws, so instead I'd wrap the whole setTimeout callback body in runInInjectionContext(this.injector, () => { const orders = inject(OrdersService); orders.refresh(); }), passing in the component's own EnvironmentInjector -- that way inject() still runs at call time right where it's used, without moving it up to the constructor."
+        "subtle_wrong": "Calling inject() directly inline inside the setTimeout callback throws, but you can fix that by pulling it into its own private method instead: define `private getOrders() { return inject(OrdersService); }` on the class, then call `this.getOrders().refresh()` from inside the setTimeout callback. Since the inject() call now lives in a named method rather than the callback body itself, it's no longer really \"inside\" the callback, so it resolves normally."
       }
     }
   ]

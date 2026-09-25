@@ -46,7 +46,7 @@
     },
     {
       "id": "fix-missing-provider-not-new",
-      "prompt": "ng build (and the app at runtime) fails with: NullInjectorError: No provider for OrdersService!. What's the correct fix?",
+      "prompt": "The ng build itself succeeds, but the app throws at bootstrap: NullInjectorError: No provider for OrdersService!. What's the correct fix?",
       "strictness": "high",
       "expected_behavior": [
         {

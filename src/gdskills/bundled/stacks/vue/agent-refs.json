@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "honest gate (flow 318, T13): vue-build-fix fails -- falsePositive=1 (a same-pack near-miss collision with vue-implementation) and its template-union-type-narrowing behavior scenario scores 0.4, below the 0.8 PACK_BEHAVIOR_PASS_FLOOR, even though every other vue skill (implementation, testing, code-review, vue2-to-vue3-migration) clears the gate cleanly. See src/gdskills/bundled/stacks/vue/governance/eval.json. Stays experimental; no generated agent pair."
+  "note": "honest gate (flow 318, T13; attribution corrected in R1 review PR #719, minor-3): vue-build-fix fails -- falsePositive=1 (trigger-negative-1, \"fix this tsc error in a plain typescript service file\": a CROSS-pack collision with ts-js-node/nodejs-build-fix, not a same-pack near-miss) and its template-union-type-narrowing behavior scenario scores 0.4, below the 0.8 PACK_BEHAVIOR_PASS_FLOOR, even though every other vue skill (implementation, testing, code-review, vue2-to-vue3-migration) clears the gate cleanly. See src/gdskills/bundled/stacks/vue/governance/eval.json. Stays experimental; no generated agent pair."
 }

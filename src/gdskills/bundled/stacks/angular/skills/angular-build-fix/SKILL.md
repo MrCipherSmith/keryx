@@ -1,6 +1,6 @@
 ---
 name: angular-build-fix
-description: "Use when resolving an `ng build` failure, an AOT/Ivy template type-checking error (a property that doesn't exist on the bound type, an @if/@for control-flow type mismatch), a missing NgModule declaration/import error, or a DI 'No provider for X' resolution error blocking an Angular build. Applies the smallest root-cause fix and never silences the compiler with strictTemplates: false, an `any` cast in a template context, or `@Injectable` removal. Not for a plain TypeScript compile failure outside any Angular template, and not for authoring a fresh component or injectable from scratch (use angular-implementation)."
+description: "Use when resolving an `ng build` failure, an AOT/Ivy template type-checking error (a property that doesn't exist on the bound type, an @if/@for control-flow type mismatch), a missing NgModule declaration/import error, or a NullInjectorError/'No provider for X' DI resolution error surfacing when the built app bootstraps. Applies the smallest root-cause fix and never silences the compiler with strictTemplates: false, an `any` cast in a template context, or `@Injectable` removal. Not for a plain TypeScript compile failure outside any Angular template, and not for authoring a fresh component or injectable from scratch (use angular-implementation)."
 triggers:
   - "fix this ng build AOT template type error"
   - "resolve this Angular No provider for X DI error"

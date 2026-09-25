@@ -1079,8 +1079,10 @@ cover MobX's build-failure surface).
     `agent-refs.json`'s `note`. Stays `experimental`; no generated pair.
   - **vue — gate FAIL, but only on one skill.** `vue-implementation`,
     `vue-testing`, `vue-code-review`, and `vue2-to-vue3-migration` all clear
-    the gate cleanly. `vue-build-fix` alone fails: `falsePositive=1` (a
-    same-pack near-miss collision with `vue-implementation`) and its
+    the gate cleanly. `vue-build-fix` alone fails: `falsePositive=1`
+    (`trigger-negative-1`, "fix this tsc error in a plain typescript service
+    file" — a CROSS-pack collision with `ts-js-node/nodejs-build-fix`, not a
+    same-pack near-miss; corrected in R1 review, PR #719, minor-3) and its
     `template-union-type-narrowing` behavior scenario scores `0.4`, below
     the `0.8` `PACK_BEHAVIOR_PASS_FLOOR` — but a pack needs every skill's
     report to pass, so the whole pack stays `experimental`; no generated
@@ -1145,6 +1147,21 @@ cover MobX's build-failure surface).
 
 ## Risks
 
+- **A `stable` pack's install-manifest modules depend on `experimental`
+  ones.** `nestjs-rules`/`nestjs-skills` and `angular-rules`/
+  `angular-skills` (both `stable`) declare `dependencies: ["ts-js-node-rules"]`/
+  `["ts-js-node-skills"]`; `mobx-rules`/`mobx-skills` (also `stable`) depend
+  on `react-rules`/`react-skills` — and `ts-js-node`/`react` are both
+  `experimental` (flow 316/317; `react`'s `no-disable-hooks-lint` behavior
+  scenario still fails at trials=10). Nothing in the install/doctor pipeline
+  currently checks that a `stable` module's own dependency chain is itself
+  `stable`, so installing a `stable` profile can pull in `experimental`
+  content transitively with no warning (R1 review, PR #719, info). Not
+  incorrect — a stack pack's rules/skills genuinely do extend their base
+  stack's content regardless of the base's own gate status — but worth
+  flagging as a gap in what `stability` actually guarantees end to end; a
+  future pass could add a `keryx skills doctor`-style check that surfaces
+  (not blocks) this specific shape.
 - **Detection false-negatives on monorepos.** Extending
   `detectProjectStack`'s fail-open discipline to more signal sources
   (multiple manifest formats in one repo) risks a signal source

@@ -44,7 +44,7 @@
     },
     {
       "id": "vmodel-single-to-multiple-bindings",
-      "prompt": "After the framework major-version upgrade, a custom input component that used to work with `v-model` on the older Options API release now doesn't update the parent's data at all on the newer one. The component still defines `props: ['value']` and `emit('input', newVal)`. What's wrong?",
+      "prompt": "We just upgraded this Vue app's major version. A custom input component that used to work fine with `v-model` back on the Options API release now doesn't update the parent's data at all. The component still defines `props: ['value']` and `emit('input', newVal)`. What's wrong?",
       "strictness": "high",
       "expected_behavior": [
         { "grader": "regex", "value": "modelValue" },

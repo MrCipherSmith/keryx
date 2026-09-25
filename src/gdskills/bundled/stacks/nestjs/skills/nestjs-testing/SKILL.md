@@ -40,22 +40,37 @@ provider/class and an e2e test for "does this endpoint work end to end".
 
 ### Step 2: Build the testing module
 
+Two equally valid ways to get a test double in, depending on how the module
+is assembled -- pick one, never both for the same provider:
+
 ```typescript
+// (a) hand-assembled providers array (the common case for a focused unit
+// test): declare the mock directly, no override needed -- you already
+// control the whole providers list.
 const moduleRef = await Test.createTestingModule({
   providers: [UsersService, { provide: UsersRepository, useValue: mockRepo }],
-  // or: imports: [UsersModule] for an e2e-style compile
-})
+}).compile();
+```
+
+```typescript
+// (b) importing a real module you don't want to hand-reassemble (an
+// e2e-style compile): `.overrideProvider(Token).useValue(...)` (or
+// `.useFactory`/`.useClass`) swaps ONE provider UsersModule already
+// declares, without rewriting the whole module's provider list yourself.
+const moduleRef = await Test.createTestingModule({ imports: [UsersModule] })
   .overrideProvider(UsersRepository)
   .useValue(mockRepo)
   .compile();
 ```
 
-Use `.overrideProvider(Token).useValue(...)` (or `.useFactory`/`.useClass`)
-to replace a real dependency with a test double -- never `new` the class
-under test directly with hand-built fakes, and never monkey-patch the
-compiled module's internals. The same `.overrideGuard()`/
-`.overrideInterceptor()`/`.overridePipe()`/`.overrideFilter()` methods exist
-for testing a controller/module with one of those swapped out.
+Either way: never `new` the class under test directly with hand-built fakes
+when the test needs to prove the module's own DI wiring (exports,
+provider registration) actually resolves -- that's what
+`Test.createTestingModule` is for, and `new` skips it entirely. Never
+monkey-patch the compiled module's internals either. The same
+`.overrideGuard()`/`.overrideInterceptor()`/`.overridePipe()`/
+`.overrideFilter()` methods exist for testing a controller/module with one
+of those swapped out.
 
 ### Step 3 (unit): Get the instance and assert
 
@@ -108,7 +123,7 @@ missing `app.close()`).
 
 | Rationalization | Why it is wrong |
 |---|---|
-| "I'll just `new UsersService(mockRepo)` directly, it's simpler than the testing module" | Skips Nest's own DI wiring, so the test can pass while the real module would fail to compile (missing export, wrong token) |
+| "I'll just `new UsersService(mockRepo)` directly, it's simpler than the testing module" | Fine for a pure unit test of the service's own logic (NestJS's own docs show this too) -- wrong specifically when the test needs to prove the MODULE's own DI wiring (exports, provider registration, guard/pipe pipeline) actually resolves, since `new` bypasses that wiring entirely and can pass while the real module would fail to compile |
 | "I'll stub the private method that calls the repository instead of mocking the repository" | Reaches inside the unit under test instead of mocking its actual dependency boundary; couples the test to an implementation detail |
 | "This e2e spec is slow because of app.init()/app.close(), I'll skip close() to speed it up" | Leaks open DB connections/timers across spec files; a later suite hanging or flaking is the actual cost |
 | "This test keeps failing after my change, I'll just skip it for now" | Hides a real regression or a stale test expectation; determine which one it is and fix that, don't silence the signal |

@@ -45,26 +45,28 @@
     },
     {
       "id": "flag-onpush-inplace-mutation",
-      "prompt": "Reviewing this Angular component diff:\n\n```ts\n@Component({\n  selector: 'app-cart',\n  changeDetection: ChangeDetectionStrategy.OnPush,\n  template: `@for (item of items; track item.id) { <div>{{ item.name }}</div> }`\n})\nexport class Cart {\n  items: CartItem[] = [];\n\n  addItem(item: CartItem) {\n    this.items.push(item);\n  }\n}\n```\n\nWhat should be flagged about addItem, given this component is OnPush?",
+      "prompt": "Reviewing this Angular diff. `CartList` is a child OnPush component; `CartPage` is its parent and passes `items` down as an `@Input`:\n\n```ts\n@Component({\n  selector: 'app-cart-list',\n  changeDetection: ChangeDetectionStrategy.OnPush,\n  template: `@for (item of items; track item.id) { <div>{{ item.name }}</div> }`\n})\nexport class CartList {\n  @Input() items: CartItem[] = [];\n}\n\n@Component({ selector: 'app-cart-page', template: `<app-cart-list [items]=\"items\" />` })\nexport class CartPage {\n  items: CartItem[] = [];\n\n  addItem(item: CartItem) {\n    this.items.push(item);\n  }\n}\n```\n\n`CartPage.addItem` runs (e.g. from a button click in `CartPage`'s own template), but `CartList`'s rendered list doesn't update. What should be flagged?",
       "strictness": "high",
       "expected_behavior": [
         {
           "grader": "judge",
-          "rubric": "A correct review flags that addItem mutates the items array in place (push) inside an OnPush component, so Angular won't detect the change and re-render the template, and names the fix: replace the array with a new reference (e.g. this.items = [...this.items, item]) or model items as a signal updated via .update()/.set().",
+          "rubric": "A correct review flags that CartPage.addItem mutates the items array in place (push) rather than reassigning it, so the SAME array reference is still bound to CartList's @Input -- CartList is OnPush, and OnPush only re-checks a child on a new input reference (or its own event/async-pipe/signal), so a mutation of the same object the parent already passed down produces no reference change for the child to notice. Names the fix: the parent reassigns items to a new array (e.g. this.items = [...this.items, item]) or items is modeled as a signal.",
           "pass_criteria": [
-            "States that `this.items.push(item)` mutates the array in place and that OnPush will not pick up a mutation on the same reference",
-            "Names a concrete fix: reassigning items to a new array (e.g. `this.items = [...this.items, item]`) or converting items to a signal updated with .update()"
+            "States that `this.items.push(item)` in CartPage mutates the array in place, so the SAME object reference is still bound to CartList's `items` @Input -- object identity did not change",
+            "States that CartList is OnPush and only re-checks on a new @Input reference (or its own event/async-pipe/signal source), so the child's own re-render is what fails to happen here -- CartPage re-rendering itself (the click handler ran inside CartPage) does not, on its own, make CartList re-check",
+            "Names a concrete fix: CartPage reassigns items to a new array before/instead of mutating in place (e.g. `this.items = [...this.items, item];`), or items is modeled as a signal passed down and read via `input<CartItem[]>()`"
           ],
           "fail_criteria": [
-            "Says the code is correct as-is with no OnPush-related concern"
+            "Says the code is correct as-is with no OnPush-related concern",
+            "Claims reassigning items to itself (e.g. `this.items = this.items;`) or calling `this.items = [...this.items]` with no actual new item added forces CartList to update -- neither changes what CartList's own re-check condition needs (a genuinely different, mutation-carrying reference), and the first is a no-op no-reference-change at all"
           ]
         }
       ],
       "calibration": {
-        "known_right": "Flag `addItem`: `this.items.push(item)` mutates the existing array in place. Since Cart is OnPush, Angular only re-checks the component on a new input/signal reference or an event inside the component -- a template-bound array pushed to on the same reference produces no reference change for OnPush to notice, so the new item may not render until some unrelated change-detection trigger happens to run. Fix by replacing the reference: `this.items = [...this.items, item];`, or better, model `items` as a signal (`items = signal<CartItem[]>([]);`) and update it with `this.items.update(current => [...current, item]);` so the template's `@for` tracks the signal directly.",
-        "known_wrong": "This is fine -- `items` is declared as a regular array field and push() is the normal way to add to it. OnPush doesn't need anything special here since the template just iterates over items.",
-        "vague": "Something about how items get updated here might not play well with OnPush -- worth a second look.",
-        "subtle_wrong": "I'd flag this but suggest a lighter fix: keep `this.items.push(item)` as-is, and just call `this.cdr.markForCheck()` right after it inside addItem to force the check. That avoids restructuring how items is stored while still making sure OnPush picks up the change on every call site that mutates it."
+        "known_right": "Flag `CartPage.addItem`: `this.items.push(item)` mutates the array CartPage already passed to CartList's `items` @Input, so CartList still holds a reference to the SAME object -- its identity never changed. CartList is OnPush, and OnPush only re-checks a component on a new @Input reference, an event that happens inside that component itself, an async pipe emission, or a signal read -- none of which fired for CartList here; CartPage's own click handler running is CartPage's event, not CartList's. Fix by having CartPage reassign the reference: `this.items = [...this.items, item];`, or better, model `items` as a signal input (`items = input<CartItem[]>([]);` on CartList, updated via a signal on CartPage) so the template's `@for` tracks the signal directly.",
+        "known_wrong": "This is fine -- `items` is declared as a regular array field and push() is the normal way to add to it. OnPush doesn't need anything special here since CartList's template just iterates over items and Angular tracks array mutations automatically.",
+        "vague": "Something about how items get passed down here might not play well with OnPush -- worth a second look at how the child picks up the change.",
+        "subtle_wrong": "The real fix is simpler than restructuring the array: right after `this.items.push(item)`, just do `this.items = this.items;` in CartPage. Since Angular's input binding re-evaluates on the parent's own change detection pass, reassigning the field (even to itself) is enough to make CartList see it as a fresh binding and re-render."
       }
     }
   ]

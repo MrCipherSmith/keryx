@@ -13,7 +13,7 @@
       "Write React Testing Library tests for this component's rendered list",
       "Implement a new standalone Angular component that shows order history",
       "Fix this ng build AOT compile error about a missing provider",
-      "Set up an automated login flow check against the live staging environment before release",
+      "Write an end-to-end test against the live staging environment that checks the login flow before release",
       "Write unit tests for this Go struct's JSON marshaling using the standard testing package"
     ]
   },

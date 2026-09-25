@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*.tsx", "**/*.jsx", "**/*.vue"]
+paths: ["**/*.tsx", "**/*.jsx", "**/*.vue", "**/*.ts"]
 metadata:
   origin: authored
 ---

@@ -85,7 +85,8 @@
         "skill-lifecycle"
       ],
       "components": [
-        "framework:vue"
+        "framework:vue",
+        "lang:ts-js-node"
       ],
       "stackDetectionAware": true
     },
@@ -96,7 +97,8 @@
         "skill-lifecycle"
       ],
       "components": [
-        "framework:angular"
+        "framework:angular",
+        "lang:ts-js-node"
       ],
       "stackDetectionAware": true
     },
@@ -109,7 +111,8 @@
       "components": [
         "framework:react",
         "framework:vue",
-        "framework:nextjs-nuxt"
+        "framework:nextjs-nuxt",
+        "lang:ts-js-node"
       ],
       "stackDetectionAware": true
     },

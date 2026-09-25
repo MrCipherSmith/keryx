@@ -10,7 +10,7 @@
       "This store test sometimes reads stale state before the reaction has run, fix the wait"
     ],
     "negative": [
-      "Add a new @action.bound method to this stores constructor that fetches items from the API and wraps the loading/error update in runInAction",
+      "Add a new @action.bound method to this store's constructor that fetches items from the API and wraps the loading/error update in runInAction",
       "Write a React Testing Library test that clicks this button and checks the handler prop was called",
       "Add a @computed get totalPrice getter to this store class that sums the items array",
       "Write a Vitest test for this plain utility function that formats a currency string",
