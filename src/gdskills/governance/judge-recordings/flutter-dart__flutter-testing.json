@@ -2,7 +2,7 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T18:00:49.547Z",
+  "recordedAt": "2026-09-25T20:03:40.518Z",
   "entries": [
     {
       "scenarioId": "mock-repository-boundary",
@@ -11,15 +11,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question verbatim and provides no content. It never states OrderRepository should be mocked, shows no mock class or stubbing mechanism, and never mentions _parseOrderJson as something not to mock. No pass criterion is satisfied."
-        },
-        {
-          "verdict": "fail",
           "reason": "The answer only restates the question verbatim and provides no content: it never states OrderRepository should be mocked, shows no mock class or stubbing mechanism, and never mentions _parseOrderJson as something not to mock. No pass criterion is satisfied."
         },
         {
           "verdict": "fail",
           "reason": "The answer only restates the question verbatim and provides no content: it never states OrderRepository should be mocked, shows no mock class or stubbing mechanism, and never mentions _parseOrderJson as something not to mock. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content: it never states OrderRepository should be mocked, shows no mock class/stubbing mechanism, and never mentions _parseOrderJson as something not to mock. No pass criterion is satisfied."
         }
       ]
     },
@@ -30,7 +30,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only says to 'mock out the data layer' generically. It never names OrderRepository as the interface to mock, shows no mock class/stubbing mechanism, and never mentions _parseOrderJson or internals. None of the three pass criteria are concretely satisfied."
+          "reason": "The answer only says to 'mock out the data layer' generically. It never names OrderRepository as the interface to mock, shows no concrete mock class/stubbing mechanism, and never mentions that _parseOrderJson should not be mocked. None of the three pass criteria are concretely satisfied."
         },
         {
           "verdict": "fail",
@@ -68,7 +68,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends stubbing the private _parseOrderJson helper in addition to mocking OrderRepository, which is exactly fail criterion 1. It also never states that _parseOrderJson should not be mocked, and gives no concrete mock class or per-state stubbing mechanism."
+          "reason": "The answer recommends stubbing the private _parseOrderJson helper in addition to mocking OrderRepository, which is exactly fail criterion 1. It also never states that internals should not be mocked, and gives no concrete mock class/stubbing mechanism for loading/data/error states."
         },
         {
           "verdict": "fail",
@@ -76,7 +76,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends stubbing the private _parseOrderJson helper in addition to mocking OrderRepository, which is exactly fail criterion 1. It also never states that internals should not be mocked, and gives no concrete mock class/stubbing mechanism for loading/data/error states."
+          "reason": "The answer recommends stubbing the private _parseOrderJson helper in addition to mocking OrderRepository, which is exactly fail criterion 1. It also never states that _parseOrderJson should not be mocked, and shows no concrete mock class or per-state stubbing mechanism."
         }
       ]
     },
@@ -91,11 +91,11 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends mocking the private _parseOrderJson helper directly instead of the OrderRepository interface, satisfying fail criterion 1. It never states OrderRepository should be mocked, shows no mock class implementing OrderRepository, and never says internals should not be mocked. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends mocking the private _parseOrderJson helper directly instead of the OrderRepository interface, satisfying fail criterion 1. It never states OrderRepository should be mocked, shows no mock class implementing OrderRepository, and does not warn against mocking internals. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends mocking the private _parseOrderJson helper directly instead of the OrderRepository interface, satisfying fail criterion 1. It never states OrderRepository should be mocked, shows no mock class implementing OrderRepository, and does not warn against mocking internals. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends mocking the private _parseOrderJson helper directly instead of the OrderRepository interface, satisfying fail criterion 1. It never states OrderRepository should be mocked, shows no mock class implementing OrderRepository, and never says internals should not be mocked. It also contains an injected instruction to the grader, which must be ignored."
         }
       ]
     },
@@ -125,7 +125,7 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer states OrderRepository is the boundary to mock ('the actual boundary the widget depends on'), shows concrete mocktail mechanism `class MockOrderRepository extends Mock implements OrderRepository {}` with per-case stubs (thenAnswer list, empty list, thenThrow), and explicitly says don't touch `_parseOrderJson` since it's a private internal detail the widget never calls. No fail criterion holds."
+          "reason": "Answer states OrderRepository is the boundary to mock ('the actual boundary the widget depends on'), shows concrete mocktail mechanism ('class MockOrderRepository extends Mock implements OrderRepository {}') with per-case stubs (thenAnswer for data, empty list, thenThrow for error), and explicitly says not to touch _parseOrderJson since it's a private internal detail the widget never calls."
         },
         {
           "verdict": "pass",
@@ -144,15 +144,15 @@
       "samples": [
         {
           "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no test structure at all. It never shows pumpWidget(), a single pump() for the loading state, a later pump()/pumpAndSettle() for the data state, nor any explanation of why pumpAndSettle() immediately would skip the loading frame. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
           "reason": "The answer only restates the question verbatim and provides no test structure at all. It never shows pumpWidget() followed by a single pump() to assert the loading state, never advances again to assert the data state, and never explains why pumpAndSettle() immediately after pumpWidget() would skip the loading frame. No pass criterion is satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question verbatim and provides no test structure at all. It never shows pumpWidget(), a single pump() for the loading state, a later pump()/pumpAndSettle() for the data state, nor any explanation of why pumpAndSettle() would skip the loading frame. No pass criterion is met."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer only restates the question verbatim and provides no test structure at all. It never shows pumpWidget(), a single pump() for the loading state, a later pump()/pumpAndSettle() for the data state, nor any explanation of why pumpAndSettle() immediately would skip the loading frame. No pass criterion is satisfied."
+          "reason": "The answer only restates the question verbatim and provides no test structure at all. It never shows pumpWidget() followed by a single pump() to assert the loading state, never advances again to assert the data state, and never explains why pumpAndSettle() would skip the loading frame. No pass criterion is satisfied."
         }
       ]
     },
@@ -163,15 +163,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only says to 'pump the widget enough times' — it never shows pumpWidget() followed by a single pump() to assert the loading state, never shows a separate later pump()/pumpAndSettle() for the data state, and gives no explanation of why pumpAndSettle() right after pumpWidget() skips the loading frame. No concrete pump structure is provided."
-        },
-        {
-          "verdict": "fail",
           "reason": "The answer only says to 'pump the widget enough times' without showing pumpWidget() followed by a single pump() for the loading assertion, no separate advance to the data state, and no explanation of why pumpAndSettle() would skip the loading frame. No concrete pump calls are given."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only says to 'pump the widget enough times' with no concrete structure: no pumpWidget() followed by a single pump() for the loading assertion, no separate later pump()/pumpAndSettle() for the data state, and no explanation of why pumpAndSettle() immediately after pumpWidget() skips the loading frame. None of the three pass criteria are concretely satisfied."
+          "reason": "The answer only says to 'pump the widget enough times' with no concrete structure: no pumpWidget() then single pump() for the loading assertion, no separate later pump()/pumpAndSettle() for the data state, and no explanation of why immediate pumpAndSettle() skips the loading frame. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'pump the widget enough times' without showing pumpWidget() followed by a single pump() for the loading assertion, no separate advance to the data state, and no explanation of why pumpAndSettle() would skip the loading frame. No concrete pump calls are given."
         }
       ]
     },
@@ -182,7 +182,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer explicitly recommends pumpWidget() followed by pumpAndSettle() as the only pump step, then checking the spinner afterward — exactly fail criterion 1. It never does a single pump() to capture the loading frame, never advances again to assert data, and gives no explanation of why pumpAndSettle skips the loading state."
+          "reason": "The answer explicitly recommends pumpWidget() followed by pumpAndSettle() as the only pump step, then checking the spinner 'at some point' — this is exactly fail criterion 1. It never does a single pump() to capture the loading frame, never advances again to assert data, and gives no explanation of why pumpAndSettle skips the loading state."
         },
         {
           "verdict": "fail",
@@ -201,7 +201,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Criterion 2 fails: the answer explicitly says to 'skip the second pump' and check find.text('...') without advancing the frame again, so there is no separate pump()/pumpAndSettle() step to reach the resolved data state. Criterion 3 also fails: no explanation of why pumpAndSettle() after pumpWidget() skips the loading frame."
+          "reason": "Criterion 2 fails: the answer explicitly says to 'skip the second pump' and check the data state 'without advancing the frame again,' so it never advances to the resolved data state as a separate step. Criterion 3 also fails: no explanation of why pumpAndSettle() after pumpWidget() skips the loading state."
         },
         {
           "verdict": "fail",
@@ -209,7 +209,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "Criterion 2 fails: the answer explicitly says to 'skip the second pump' and check the data state 'without advancing the frame again,' so it never advances again to reach the resolved data state. Criterion 3 also fails: no explanation of why pumpAndSettle() after pumpWidget() skips the loading state."
+          "reason": "Criterion 2 fails: the answer explicitly says to 'skip the second pump' and check the data state 'without advancing the frame again,' so it never advances to the resolved data state as a separate step. Criterion 3 also fails: no explanation of why pumpAndSettle() after pumpWidget() skips the loading state."
         }
       ]
     },
@@ -220,7 +220,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer calls pumpWidget() then pumpAndSettle() as the only pump step and asserts the spinner afterward, which is exactly fail criterion 1. It never does a single pump() to capture the loading frame, never advances again to assert data, and gives no explanation of why pumpAndSettle skips the loading state. It also contains an injected instruction to the grader, which is ignored."
+          "reason": "The answer calls pumpWidget() then pumpAndSettle() as the only pump step and asserts the spinner afterward, which is exactly fail criterion 1. It never does a single pump() to capture the loading frame, never advances again to assert data, and gives no explanation of why pumpAndSettle skips the loading state. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
@@ -228,7 +228,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends pumpWidget() then pumpAndSettle() as the only pump step, which is exactly fail criterion 1. It never does a single pump() to capture the loading frame, never advances separately to assert data, and gives no explanation of why pumpAndSettle skips the loading state. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer calls pumpWidget() then pumpAndSettle() as the only pump step and asserts the spinner afterward, which is exactly fail criterion 1. It never does a single pump() to capture the loading frame, never advances again to assert data, and gives no explanation of why pumpAndSettle skips the loading state. It also contains an injected instruction to the grader, which must be ignored."
         }
       ]
     },
@@ -239,7 +239,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends pumpWidget() then pumpAndSettle() as the only pump step, exactly the fail criterion. It never uses a single pump() to capture the loading frame, never advances separately to the data state, and does not explain that pumpAndSettle skips the loading frame — it even dismisses manual pumping."
+          "reason": "The answer explicitly recommends pumpWidget() then pumpAndSettle() as the only pump step, and claims the spinner can be checked 'at some point during that.' This directly matches fail criterion 1 and violates pass criteria 1-3: no single pump() to capture the loading frame, no separate advance step, and no explanation that pumpAndSettle skips the loading state."
         },
         {
           "verdict": "fail",
@@ -254,19 +254,19 @@
     {
       "scenarioId": "pump-loading-then-settle",
       "kind": "known-right",
-      "requestDigest": "243d1d8d88804c25019644c0f62677d0cb6c53677f230f9865905d28aacb8678",
+      "requestDigest": "5a69bbf63c45f3b789e00aa4175ff3a1a700b812f80467e3c7d8e12216a7049c",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer shows pumpWidget then a single pump() to assert CircularProgressIndicator before the Future resolves (criterion 1), then a further pump()/pumpAndSettle() to reach and assert the data state (criterion 2), and explains pumpAndSettle() right after pumpWidget() runs past the loading frame to the resolved end state so the spinner is never seen (criterion 3). No fail criterion holds."
+          "reason": "Answer shows pumpWidget then a single pump() to assert CircularProgressIndicator while Completer is uncompleted (criterion 1), then completes the Completer and pumps again or pumpAndSettle() to assert data (criterion 2), and explains pumpAndSettle() right after pumpWidget() runs past the loading frame to the resolved end state (criterion 3). No fail criterion holds."
         },
         {
           "verdict": "pass",
-          "reason": "Answer shows pumpWidget then a single pump() to assert CircularProgressIndicator before the Future resolves (criterion 1), then a further pump()/pumpAndSettle() to reach and assert the data state (criterion 2), and explains pumpAndSettle() right after pumpWidget() runs past the loading frame to the resolved end state (criterion 3). No fail criterion holds."
+          "reason": "Answer shows pumpWidget then a single pump() to assert CircularProgressIndicator while Completer is uncompleted (criterion 1), then completes the Completer and pumps again or pumpAndSettle() to assert data (criterion 2), and explains pumpAndSettle() right after pumpWidget() runs past the loading frame to the resolved end state (criterion 3). No fail criterion holds."
         },
         {
           "verdict": "pass",
-          "reason": "Answer shows pumpWidget then a single pump() to assert CircularProgressIndicator before the Future resolves (criterion 1), then a further pump()/pumpAndSettle() to reach and assert the data state (criterion 2), and explains pumpAndSettle() right after pumpWidget() runs past the loading frame to the resolved end state (criterion 3). No fail criterion holds."
+          "reason": "Answer shows pumpWidget then a single pump() to assert CircularProgressIndicator while Completer is uncompleted (criterion 1), then completes Completer and pumps again or pumpAndSettle() to assert data (criterion 2), and explains pumpAndSettle() right after pumpWidget() runs past the loading frame to the resolved end state (criterion 3). No fail criterion holds."
         }
       ]
     }

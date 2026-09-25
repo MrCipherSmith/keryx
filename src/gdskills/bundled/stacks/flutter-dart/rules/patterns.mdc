@@ -48,9 +48,9 @@ already in use rather than introducing a second approach.
   the `Future` completed. This applies whether the context came from a
   `StatefulWidget`'s own `State` or from a `StatelessWidget`'s `build`
   parameter.
-- A `select`/`if` gate on `context.mounted` (or `mounted` inside `State`)
-  immediately after the `await`, before the first subsequent use of
-  `context`/`setState`, is the fix — not a `try`/`catch` around the
+- An early-return `if` check on `context.mounted` (or `mounted` inside
+  `State`) immediately after the `await`, before the first subsequent use
+  of `context`/`setState`, is the fix — not a `try`/`catch` around the
   eventual error, and not skipping the check because the async call
   "usually" resolves quickly.
 

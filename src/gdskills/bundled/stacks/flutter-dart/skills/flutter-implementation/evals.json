@@ -36,7 +36,7 @@
           ],
           "fail_criteria": [
             "Recommends using context to show the SnackBar right after the await with no context.mounted (or mounted) check at all.",
-            "Substitutes a try/catch around the eventual error for an actual context.mounted check, or claims the check is unnecessary because the await 'usually' resolves quickly."
+            "Wraps the context use in a try/catch to swallow the error an unmounted context would throw -- whether instead of a context.mounted check or bolted on alongside one as extra insurance -- or claims the check is unnecessary because the await 'usually' resolves quickly. A correct context.mounted check needs no try/catch backstop."
           ]
         }
       ],

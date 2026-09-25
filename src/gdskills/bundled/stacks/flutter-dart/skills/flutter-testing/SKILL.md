@@ -119,7 +119,7 @@ Generated: test/order/order_screen_test.dart
 | "I'll mock the private `_formatOrder` helper this widget calls internally" | That is an internal collaborator, not the external boundary; mocking it tests that the widget calls its own helper a particular way, not that it produces correct behavior, and breaks on every internal refactor |
 | "pumpAndSettle() times out, I'll just add a fixed pump(Duration(seconds: 2)) and move on" | A `pumpAndSettle()` timeout usually means something under test never stops animating (a repeating timer); reach for a bounded `pump(duration)` sized to the actual transition instead of guessing a delay that papers over the real cause |
 | "I'll await Future.delayed(Duration(milliseconds: 500)) so the mocked repository call has time to resolve" | A mocked `Future` resolves whenever the test tells it to, not on a wall-clock delay; control the mock directly (or use `pump()`) so the test doesn't depend on timing |
-| "wantErr-style boolean check is enough for the error state test" | Assert the actual rendered error content (`find.text('Failed to load orders')`), not just that some error branch was hit, so a wrong error message still fails the test |
+| "A boolean 'did it show an error' check is enough for the error state test" | Assert the actual rendered error content (`find.text('Failed to load orders')`), not just that some error branch was hit, so a wrong error message still fails the test |
 
 ## Verification
 
