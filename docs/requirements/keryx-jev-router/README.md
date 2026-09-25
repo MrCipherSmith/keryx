@@ -1,5 +1,5 @@
 # Keryx Task Router
-Version: 0.3.0 (draft — reworked per operator direction, 2026-09-25)
+Version: 0.4.0 (draft — reworked per operator direction, 2026-09-25)
 
 ## Purpose
 
@@ -44,11 +44,20 @@ operator" before scheduling Flow A.
   per-user (shell config), with the precedence: explicit override >
   per-project > per-user > **derived** > `default`.
 - **Model profile discovery**: a per-`<provider>/<model>` record of
-  strength tier, price per million input/output tokens, and context
-  length, captured/refreshed whenever a provider connects or its model
-  list is tested/refreshed, with an honest `source` per field (reported by
-  the gateway, a curated table, guessed from the model name, or
-  explicitly unknown — never a fabricated price).
+  strength tier, price per million input/output tokens, context length,
+  and a priority, captured/refreshed whenever a provider connects or its
+  model list is tested/refreshed, with an honest `source` per field
+  (reported by the gateway, a curated table, guessed from the model name,
+  set by the operator, or explicitly unknown — never a fabricated price).
+  The curated table seeds with exactly Anthropic/OpenAI/Gemini (the three
+  providers keryx has no live `/models` source for today) and GROWS as
+  every other connected provider's discovered profiles are added to the
+  same per-user catalogue. `priority` is computed automatically from
+  price on every connect/refresh unless the operator has set it, and is
+  never recomputed once they do. A model that disappears from a
+  provider's live list is marked unavailable and kept, not deleted, so a
+  routing entry pointing at it falls back visibly instead of silently
+  breaking or silently pointing at a ghost.
 - **Derived default routing**: when the operator has configured nothing,
   keryx builds a category table from the session's own connected
   provider's models and their profiles — one model means that model for

@@ -1,6 +1,6 @@
 # Keryx Task Router — PRD
 
-Version: 0.3.0 (draft — reworked per operator direction, 2026-09-25)
+Version: 0.4.0 (draft — reworked per operator direction, 2026-09-25)
 Base: `origin/main` @ `e04715a2`, keryx `0.2.161`
 Branch: `docs/jev-prd` (draft PR #701)
 
@@ -234,7 +234,8 @@ sites:
 
 ```ts
 // src/harness/routing/model-profile.ts (new)
-export type ProfileSource = "reported" | "curated" | "guessed" | "unknown";
+export type ProfileSource = "reported" | "curated" | "guessed" | "operator" | "unknown";
+export type PrioritySource = "auto" | "operator";
 
 export interface ModelProfile {
   providerId: string;
@@ -243,8 +244,11 @@ export interface ModelProfile {
   priceInputPerMillion: { value: number; source: ProfileSource } | { value: "unknown"; source: "unknown" };
   priceOutputPerMillion: { value: number; source: ProfileSource } | { value: "unknown"; source: "unknown" };
   contextLength: { value: number; source: ProfileSource } | { value: "unknown"; source: "unknown" };
-  priority: number;
-  overridden: boolean;
+  priority: { value: number; source: PrioritySource };
+  /** False once a live fetch no longer lists this model (§6.2) — the profile is kept, not deleted. */
+  available: boolean;
+  /** Last time this model was present in a live fetch (updates only while `available`). */
+  lastSeenAt: string;
   refreshedAt: string;
 }
 ```
@@ -260,20 +264,38 @@ Field provenance, in the order each is tried, honestly:
   pair keryx reads today. Capturing these means EXTENDING
   `fetchOpenAiCompatModelsDetailed`'s parsing, not reusing existing
   plumbing — the fields exist on the wire today for OpenRouter and are
-  simply unread. The standard OpenAI-compatible `/v1/models` shape most
-  other compat gateways in the registry speak (DeepSeek, Z.AI, Cerebras,
-  Groq, Moonshot, Grok, …) is not documented to carry pricing/context per
-  entry, and this design does not assume it does — unverified per gateway
-  (PLAN.md open question); treat `reported` as OpenRouter-only until each
-  gateway is checked individually.
-- **`curated`** — a small, hand-maintained table keryx does not have
-  today. `OPENAI_COMPAT_PROVIDERS` carries only a curated model-ID *list*
-  plus a free-text provider-level `note` (e.g. "cheap per-token",
-  `providers.ts:317,328`) — no structured per-model price/context/tier.
-  Building this table (starting with the native adapters — Anthropic,
-  OpenAI, Gemini — whose pricing/context are stable and well-documented)
-  is new work this design proposes, not a lookup into something that
-  already exists.
+  simply unread. Parsing is OPPORTUNISTIC and generic, not OpenRouter-
+  specific: whatever gateway a provider's `/models` response comes from,
+  keryx reads `pricing`/`context_length` when present and falls through to
+  `curated`/`guessed`/`unknown` per field when absent — no gateway
+  allowlist to maintain. Whether the standard OpenAI-compatible `/v1/models`
+  shape other compat gateways in the registry speak (DeepSeek, Z.AI,
+  Cerebras, Groq, Moonshot, Grok, …) actually carries these fields is
+  unverified per gateway (checked opportunistically as each is connected,
+  not blocking this design).
+- **`curated`** — a small, hand-maintained price/context/tier table keryx
+  ships with, seeded with **Anthropic, OpenAI, and Gemini only** (the
+  operator's decision, 2026-09-25) — the exact three providers keryx
+  already hand-maintains a model-ID list for and nothing more
+  (`ANTHROPIC_MODELS`/`OPENAI_MODELS`/`GEMINI_MODELS`,
+  `src/commands/select.ts:75,84,93`), and the exact three that go through
+  their own native `ProviderPort` adapters rather than the OpenAI-compat
+  `/models` fetch (`make-provider.ts:88-113`) — so they have no live
+  pricing/context source at all today and a hand-maintained table is the
+  ONLY way to profile them beyond a `guessed` tier. **The catalogue is not
+  static**: it MUST grow as providers are connected. When any provider
+  connects — built-in or a custom `llm-providers.json` entry — its
+  discovered model profiles (reported pricing/context where the gateway's
+  `/models` response carries them, `guessed` tier otherwise) are added to
+  the operator's own model catalogue (§6.2) alongside the three curated
+  seed entries. The catalogue an operator actually has, at any point in
+  time, is therefore "curated seed plus everything discovered so far" —
+  never only the seed, and never something keryx invents beyond what was
+  either hand-curated at v1 or actually observed on a connected provider.
+  Each field keeps its OWN source as it was captured (a DeepSeek model
+  discovered with a `guessed` tier and `unknown` price stays exactly that
+  — it is never later relabeled `curated` just because it sits beside
+  Anthropic's curated entries in the same store).
 - **`guessed`** — a name-pattern heuristic, for **strength tier only**,
   never for price: a wrong guessed price is worse than an admitted
   unknown. Reuses `MODEL_RANK_HINTS`/`rankModelId`
@@ -287,23 +309,56 @@ Field provenance, in the order each is tried, honestly:
   `standard`, rank `> 0` -> `deep`; `undefined` (no hint matched at all) ->
   `standard`, marked `guessed` with a note that it is a bare default, not
   even a guess.
+- **`operator`** — the operator set this field themselves (`/routing`
+  modal, §7, or `keryx routing profile set`, §8). An `operator`-sourced
+  field is NEVER overwritten by a later refresh (§6.2) until the operator
+  explicitly clears it — this replaces a separate "overridden" flag with
+  the same per-field `source` tag every other provenance already uses, so
+  "who last touched this field" is always one place, not two.
 - **`unknown`** — used ONLY for price/context, never silently coerced to
-  `0` or a made-up number: a model with no reported or curated price is
-  `"unknown"`, exactly as the operator specified, so any caller doing cost
-  math treats it as "cannot compute", not "free."
-- The operator can correct any field from the `/routing` modal (§7) or
-  `keryx routing profile set <provider>/<model> --tier|--price-in|
-  --price-out|--context <value>` (§8); a corrected field is marked
-  `overridden: true` and is never overwritten by a later refresh until
-  explicitly cleared.
+  `0` or a made-up number: a model with no reported, curated, or
+  operator-set price is `"unknown"`, exactly as the operator specified, so
+  any caller doing cost math treats it as "cannot compute", not "free."
 
-`priority` is a plain ordering number (higher wins a tie), defaulting to 0
-for every profile; it exists so an operator (or a future ranking
-refinement) can break a tie between two models §6.3's derivation would
-otherwise treat as equal (same tier, same price) without inventing a
-second heuristic axis.
+### Auto-priority
 
-### 6.2 Storage and refresh
+`priority` is a plain ordering number (higher wins a tie). Unless the
+operator has set one (`source: "operator"`, never overwritten by a later
+refresh, same rule as every other field), keryx computes it automatically
+— **both on first connection and on every refresh** (the operator's
+decision, 2026-09-25):
+
+```
+priority.value = known price(priceInputPerMillion) ? -priceInputPerMillion.value
+                                                     : PRIORITY_UNKNOWN_PRICE  // a fixed, documented sentinel below every known price
+```
+
+i.e. **the cheaper a model's known input price, the higher its
+auto-priority**; a model with an `unknown` price sorts below every
+model keryx has a real number for. Justification:
+
+- It reproduces the operator's own example directly: among several
+  `light`-tier candidates for `quick`/`subagents`/`docs`, the auto-priority
+  order already puts the cheapest first — because §6.3's derivation
+  compares price BEFORE priority for those categories, priority's
+  cheaper-first rule simply agrees with, rather than fights, that
+  comparison, so the two never produce a contradictory answer.
+- It does not fight §6.3's `planning`/`review` preference for the
+  STRONGEST model either: priority there is consulted only after tier and
+  price have both already been compared and still tied — preferring the
+  cheaper of two otherwise-equally-ranked strong models in that residual
+  case is still the cost-conscious, defensible default, not a contradiction
+  of "prefer strength."
+- One rule, not two tier-conditional rules (a "prefer cheap" rule for
+  light tiers and a mirrored "prefer expensive" rule for deep tiers) —
+  the same "uniform rule over tier-conditional special-casing" reasoning
+  §6.3 already applies to its own category grouping.
+- An `unknown`-priced model sorting last (rather than, say, in the middle)
+  is consistent with §6.1's own "unknown is never treated as good news"
+  stance — keryx has no basis to prefer a model it cannot price over one
+  it can.
+
+### 6.2 Storage, refresh, and availability
 
 Profiles are stored **per user**, next to the existing per-user provider/
 credential state (`src/lib/shell-config.ts`, alongside `apiKeys`/
@@ -316,6 +371,28 @@ every `/connect` `[Test]` refresh (`testProviderConnection`) or `keryx
 providers test` run — the same trigger points that already call
 `fetchOpenAiCompatModelsDetailed` today, extended to also update the
 profile store rather than adding a third, separate refresh path.
+
+A refresh is a DIFF against the profiles already stored for that provider,
+never a wholesale replace (the operator's decision, 2026-09-25):
+
+- A model id present in the new live list but not previously stored gets a
+  fresh profile (curated/reported/guessed per §6.1), `available: true`.
+- A model id present in both gets its non-`operator`-sourced fields updated
+  (price/context/tier may have changed; `guessed`/`reported`/`curated`
+  fields refresh freely) while every `operator`-sourced field — including
+  a manually set `priority` — is left untouched; `available` stays `true`
+  and `lastSeenAt` advances.
+- A model id previously stored but ABSENT from the new live list is marked
+  `available: false` — its profile (including any operator overrides) is
+  KEPT, not deleted, so a routing entry that still points at it, and the
+  reason it stopped resolving, both stay inspectable (§6.3, §7).
+- A routing table entry (explicit, per-project, per-user, or derived —
+  §5, §6.3) whose resolved model is `available: false` is treated as
+  UNRESOLVED at that layer, and resolution falls through to the next layer
+  in the precedence chain exactly as if that layer had configured nothing
+  for the category — an unavailable model is never silently dispatched to.
+  `/routing` and `keryx routing list` show this as `<provider>/<model> —
+  unavailable, falling back to <resolved>` (§6.4, §7).
 
 ### 6.3 Derived default routing (the `derived` precedence layer)
 
@@ -330,8 +407,10 @@ override** (§9.5) > **per-project config** > **per-user config** >
 model, used only when derivation itself cannot run — e.g. provider
 detection failed, or produced no comparable candidate).
 
-Derivation rule, run against the session's own provider only in v1 (see
-§Non-goals and PLAN.md open questions for cross-provider derivation):
+Derivation rule, run against the session's own provider's AVAILABLE models
+only (`available: true`, §6.2) and only in v1 against the session's own
+provider (see §Non-goals and PLAN.md open questions for cross-provider
+derivation):
 
 - **One model**: that model is the derived entry for EVERY category,
   `quick` through `unattended` alike — there is nothing to differentiate,
@@ -341,13 +420,14 @@ Derivation rule, run against the session's own provider only in v1 (see
   rule:
   - `quick`, `subagents`, `docs` -> the **lightest, cheapest** model
     (lowest `strengthTier`, tie-broken by lowest `priceInputPerMillion`,
-    then `priority`). These are the high-volume, low-stakes, mechanical
-    categories — small edits, parallel subagent work, documentation —
-    where a wrong choice costs little, and routing them cheap is the
-    single largest aggregate-spend lever available.
+    then highest `priority.value`). These are the high-volume, low-stakes,
+    mechanical categories — small edits, parallel subagent work,
+    documentation — where a wrong choice costs little, and routing them
+    cheap is the single largest aggregate-spend lever available.
   - `planning`, `review` -> the **strongest** model (highest
     `strengthTier`, tie-broken by highest `priceInputPerMillion` as a
-    capability proxy when tier ties, then `priority`). These are the
+    capability proxy when tier ties, then highest `priority.value`). These
+    are the
     low-volume, high-stakes categories — a missed finding, a bad
     architecture call — where the cost of a MISTAKE dominates the cost of
     the call, and they run far less often than `default`/`coding`, so
@@ -376,11 +456,18 @@ A derived entry is shown in `/routing` (§7) as `auto (derived from
 chose it) — until the operator overrides that category, at which point it
 becomes an explicit entry and derivation no longer applies to it. The flat
 model picker (§7) also shows each model's profile — tier, price, context
-length, and the source of each — so an operator deciding whether to accept
-or override a derived entry can see WHY it was picked. The `/connect`
-`[Test]` result (and `keryx providers test`) mentions when a refresh
-updated stored model profiles, since that is the moment a derived entry
-can silently change underneath the operator.
+length, priority, and the source of each — so an operator deciding whether
+to accept or override a derived entry can see WHY it was picked. A model
+marked `available: false` (§6.2) is shown struck through or greyed in the
+flat picker (still selectable, since an operator may knowingly want to
+point at a model they expect to come back) with an explicit `unavailable`
+label; a category CURRENTLY resolving to an unavailable model shows the
+fallback it landed on instead (§6.2). The `/connect` `[Test]` result (and
+`keryx providers test`) mentions when a refresh updated stored model
+profiles — how many were added, how many changed, how many newly went
+unavailable — since that is the moment a derived entry, or an explicit one
+pointing at a now-vanished model, can silently change underneath the
+operator.
 
 ## 7. `/routing` TUI modal
 
@@ -440,10 +527,11 @@ list/test/remove shape (`src/commands/providers.ts:1065-1090`):
   parity rule in §11). This subsumes the earlier design's standalone
   `keryx route explain` command — one CLI surface, not two.
 - `keryx routing profile list [--json]` — every stored model profile
-  (§6.1), its fields, and each field's source.
+  (§6.1), its fields, each field's source, and its `available` status.
 - `keryx routing profile set <provider>/<model> --tier|--price-in|
-  --price-out|--context <value>` — an operator correction (§6.1),
-  marking that field `overridden: true`.
+  --price-out|--context|--priority <value>` — an operator correction
+  (§6.1), storing that field with `source: "operator"` so it is never
+  overwritten by a later refresh.
 - Every write subcommand supports `--user`/`--project` to target a layer
   explicitly, defaulting to `--user` (matching §5/PLAN.md open question 2).
 
@@ -761,20 +849,21 @@ blog post on 2026-09-25:
 - R15: A `ModelProfile` record (§6.1) is captured/refreshed at both
   `fetchOpenAiCompatModelsDetailed` and `testProviderConnection` call
   sites, stored per-user (§6.2), with every field's `source` one of
-  `reported`/`curated`/`guessed`/`unknown` — verified by a test that a
-  live-response fixture carrying OpenRouter's `pricing`/`context_length`
-  fields produces `source:"reported"`, and a fixture without them falls
-  through to `guessed`/`unknown`.
+  `reported`/`curated`/`guessed`/`operator`/`unknown` — verified by a test
+  that a live-response fixture carrying `pricing`/`context_length` fields
+  (from any gateway, not only OpenRouter) produces `source:"reported"`,
+  and a fixture without them falls through to `guessed`/`unknown`.
 - R16: Strength-tier guessing reuses `rankModelId`/`MODEL_RANK_HINTS`
   (`model-tier.ts:205-258`) rather than a second heuristic table —
   verified by a test asserting the same rank -> tier mapping for a shared
   set of model ids.
 - R17: A guessed or unreported price/context field is always `"unknown"`,
   never `0` or a fabricated number — verified by a test.
-- R18: An operator correction to any profile field is marked
-  `overridden: true` and survives the next refresh unchanged until
-  explicitly cleared — verified by a test: a refresh after an override
-  leaves the overridden field untouched while updating the rest.
+- R18: An operator correction to any profile field (including `priority`)
+  is stored with `source: "operator"` and survives the next refresh
+  unchanged until the operator explicitly clears it — verified by a test:
+  a refresh after an operator-sourced field leaves that field untouched
+  while updating every non-`operator` field on the same profile.
 - R19: With no per-project/per-user configuration at all, `keryx routing
   list` (R2) reports every category's DERIVED resolution (§6.3) —
   `session default` only when derivation itself could not run — verified
@@ -782,11 +871,42 @@ blog post on 2026-09-25:
   (reported/curated) prices; several models with guessed prices/unknown
   fields; and an explicit per-user override winning over a derived entry.
 - R20: `/routing` (R3) shows each model's profile (tier, price, context,
-  and each field's source) in the flat picker, and marks which categories
-  are currently `auto (derived from <provider>'s models)` vs. explicit vs.
-  session-default.
+  priority, and each field's source) in the flat picker, and marks which
+  categories are currently `auto (derived from <provider>'s models)` vs.
+  explicit vs. session-default.
 - R21: The `/connect` `[Test]` result (and `keryx providers test`)
-  mentions when a test refresh updated stored model profiles.
+  mentions when a test refresh updated stored model profiles — added,
+  changed, and newly-unavailable counts.
+- R22: The curated seed table (§6.1) ships with exactly Anthropic, OpenAI,
+  and Gemini entries; connecting ANY other provider (built-in or a custom
+  `llm-providers.json` entry) adds its discovered profiles to the SAME
+  per-user catalogue store as the curated seed — verified by a test that
+  connecting a non-seeded provider results in `keryx routing profile list`
+  showing its models alongside the three curated ones, each retaining its
+  own `source` per field.
+- R23: `priority` is computed automatically — `-priceInputPerMillion` when
+  known, a fixed documented sentinel below every known price when
+  `unknown` (§6.1 "Auto-priority") — on first profile creation AND on
+  every refresh, UNLESS `source: "operator"` (R18) — verified by a test
+  asserting: two profiles with known prices sort cheaper-first by
+  auto-priority; an operator-set priority is never recomputed by a
+  subsequent refresh even when that model's price later becomes known/
+  changes.
+- R24: A model id no longer present in a provider's live `/models` list is
+  marked `available: false` on its stored profile (kept, never deleted);
+  a model id newly present gets a fresh profile with `available: true` —
+  verified by a test simulating two refreshes with a shrunk and then a
+  grown model list.
+- R25: A routing table entry (any layer, §5/§6.3) whose resolved model is
+  `available: false` is treated as unresolved at that layer and falls
+  through to the next layer in the precedence chain — verified by a test
+  where an explicit per-user entry names a now-unavailable model and
+  resolution falls through to the per-project/derived/default layer below
+  it, exactly as if the per-user layer had nothing configured.
+- R26: `keryx routing list`/`/routing` show an unavailable-and-falling-back
+  entry explicitly (`<provider>/<model> — unavailable, falling back to
+  <resolved>`), never silently substituting the fallback with no
+  indication anything changed.
 
 ## Related modules
 

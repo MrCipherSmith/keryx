@@ -1,6 +1,6 @@
 # Keryx Task Router — Implementation Plan
 
-Version: 0.2.0 (draft — reworked per operator direction, 2026-09-25)
+Version: 0.4.0 (draft — reworked per operator direction, 2026-09-25)
 Base: `origin/main` @ `e04715a2`, keryx `0.2.161`
 
 This plan splits `PRD.md` into flows sized the way recent flows in this
@@ -119,14 +119,17 @@ provider actually offers (PRD §6).
 Draft acceptance criteria:
 
 - AC1: `src/harness/routing/model-profile.ts` (new) defines `ModelProfile`/
-  `ProfileSource` (PRD §6.1): `strengthTier`, `priceInputPerMillion`,
-  `priceOutputPerMillion`, `contextLength` (each `{value, source}`,
-  `source` one of `reported`/`curated`/`guessed`/`unknown`), `priority`,
-  `overridden`, `refreshedAt`.
+  `ProfileSource`/`PrioritySource` (PRD §6.1): `strengthTier`,
+  `priceInputPerMillion`, `priceOutputPerMillion`, `contextLength` (each
+  `{value, source}`, `source` one of `reported`/`curated`/`guessed`/
+  `operator`/`unknown`), `priority` (`{value, source: "auto"|"operator"}`),
+  `available` (boolean), `lastSeenAt`, `refreshedAt`.
 - AC2: `fetchOpenAiCompatModelsDetailed` and `testProviderConnection`
   (`src/commands/providers.ts:613`, `:838`) are extended to parse
-  `pricing`/`context_length` off a gateway's `/models` response body when
-  present (confirmed present for OpenRouter, PRD §6.1) and to call a new
+  `pricing`/`context_length` off ANY gateway's `/models` response body,
+  generically, when present (confirmed present for OpenRouter, PRD §6.1;
+  parsing is not gateway-specific — it reads the fields when they exist
+  and falls through per-field when they don't) and to call a new
   `refreshModelProfiles(...)` after a successful live fetch — additive:
   both functions' existing return shape (`ModelsResolveResult`) is
   unchanged, profiles are a side effect written to the per-user store
@@ -134,61 +137,111 @@ Draft acceptance criteria:
   function needs to change.
 - AC3: Profiles are stored per-user in `src/lib/shell-config.ts` (alongside
   `apiKeys`/`modelParams`), keyed by `<providerId>/<modelId>`, readable/
-  writable through `loadModelProfiles`/`saveModelProfiles`.
-- AC4: Strength-tier guessing reuses `rankModelId`/`MODEL_RANK_HINTS`
+  writable through `loadModelProfiles`/`saveModelProfiles`. The store is
+  ONE catalogue, not split by provenance: a curated seed entry (AC4a) and
+  a later-discovered entry from any other provider live side by side in
+  the same keyed map.
+- AC4a: A hand-maintained curated seed table ships for EXACTLY the three
+  providers with no live `/models` source today —
+  `ANTHROPIC_MODELS`/`OPENAI_MODELS`/`GEMINI_MODELS`
+  (`src/commands/select.ts:75,84,93`) — with a price/context/tier entry
+  per listed model id. It seeds the per-user catalogue (AC3) on first use,
+  never overwriting an already-stored (especially `operator`-sourced)
+  entry for the same id.
+- AC4b: Connecting ANY other provider — built-in compat-registry entry or
+  a custom `llm-providers.json` entry — adds its discovered profiles
+  (AC2's parsing) to the SAME per-user catalogue (AC3) the curated seed
+  lives in, each retaining its own per-field `source` independent of every
+  other entry in the store (the operator's decision, 2026-09-25: "the
+  catalogue is curated seed plus everything discovered").
+- AC5: Strength-tier guessing reuses `rankModelId`/`MODEL_RANK_HINTS`
   (`src/gdskills/model-tier.ts:205-258`) unmodified: rank `< 0` -> `light`,
   `0` -> `standard`, `> 0` -> `deep`, `undefined` -> `standard` (source
   `guessed`) — never a new/second regex table.
-- AC5: A price or context-length field with no `reported`/`curated` source
-  is `{value:"unknown", source:"unknown"}` — NEVER `0` or a fabricated
-  number — verified by a test.
-- AC6: `keryx routing profile list [--json]` (extends
-  `src/commands/routing.ts` from Flow A) prints every stored profile with
-  its fields and sources; `keryx routing profile set <provider>/<model>
-  --tier|--price-in|--price-out|--context <value>` writes an operator
-  correction, marking that field `overridden: true`; a subsequent refresh
-  (AC2) leaves an `overridden` field untouched while updating the rest.
-- AC7: `resolveCategory` (Flow A AC1) gains a `derived` rung between
+- AC6: A price or context-length field with no `reported`/`curated`/
+  `operator` source is `{value:"unknown", source:"unknown"}` — NEVER `0`
+  or a fabricated number — verified by a test.
+- AC7: `priority` is computed automatically as `-priceInputPerMillion`
+  when known, else a fixed documented sentinel below every known price
+  (PRD §6.1 "Auto-priority") — on first profile creation AND on every
+  refresh (the operator's decision, 2026-09-25) — UNLESS the profile's
+  `priority.source` is already `"operator"`, in which case it is never
+  recomputed. Proven by a test: two profiles with known, different prices
+  auto-rank cheaper-first; an operator-set priority survives a refresh
+  that changes that model's price.
+- AC8: `keryx routing profile list [--json]` (extends
+  `src/commands/routing.ts` from Flow A) prints every stored profile —
+  including catalogue-grown (non-seed) entries — with its fields, sources,
+  `available` status, and `priority`; `keryx routing profile set
+  <provider>/<model> --tier|--price-in|--price-out|--context|--priority
+  <value>` writes an operator correction, storing that field with
+  `source: "operator"`; a subsequent refresh (AC2) leaves every
+  `operator`-sourced field on that profile untouched while updating the
+  rest.
+- AC9: A refresh (AC2) DIFFS against the profiles already stored for that
+  provider (PRD §6.2): a newly-listed model id gets a fresh profile
+  (`available: true`); a model id no longer listed is marked
+  `available: false` and KEPT, never deleted; a model id in both updates
+  its non-`operator` fields and advances `lastSeenAt`. Proven by a test
+  simulating a shrunk-then-grown live model list across two refreshes.
+- AC10: `resolveCategory` (Flow A AC1) gains a `derived` rung between
   per-user and `default` (PRD §6.3 precedence: explicit > per-project >
-  per-user > derived > default). `deriveDefaultTable(providerId, models,
-  profiles)` is a PURE function: one model -> that model for every
-  category; several models -> lightest-priced (`quick`/`subagents`/
-  `docs`), strongest (`planning`/`review`), session model unchanged
-  (`default`/`coding`); a category with no comparable (all-`unknown`)
-  candidate falls through to the bare session model. Derivation reads only
-  the SESSION's current provider's models in v1 (cross-provider derivation
-  is out of scope — PLAN.md open question 10).
-- AC8: `keryx routing list` (Flow A AC3) reports a category with no
+  per-user > derived > default), and treats any layer's resolved model as
+  UNRESOLVED at that layer when its profile is `available: false`,
+  falling through to the next layer (PRD §6.2). `deriveDefaultTable
+  (providerId, models, profiles)` is a PURE function: one AVAILABLE model
+  -> that model for every category; several available models ->
+  lightest-priced (`quick`/`subagents`/`docs`), strongest (`planning`/
+  `review`), session model unchanged (`default`/`coding`), tie-broken by
+  `priority.value` after tier/price; a category with no comparable
+  (all-`unknown`) candidate falls through to the bare session model.
+  Derivation reads only the SESSION's current provider's models in v1
+  (cross-provider derivation is out of scope — PLAN.md open question 8).
+- AC11: `keryx routing list` (Flow A AC3) reports a category with no
   explicit config as `auto (derived from <provider>'s models)` — distinct
   from `session default` — including which profile fields (and their
-  sources) the derivation used.
-- AC9: The `/routing` modal (Flow A AC4) shows, per model in the flat
-  picker, its strength tier, price (or "unknown"), context length, and
-  source per field, and marks which categories are currently derived vs.
-  explicit vs. session-default.
-- AC10: The `/connect` `[Test]` result and `keryx providers test`'s output
-  mention when the refresh updated stored model profiles (e.g. "3 model
-  profiles refreshed").
-- AC11: CI is green; `keryx health run` passes; Flow A's existing tests are
+  sources) the derivation used, and reports an explicit/per-project/
+  per-user entry pointing at an unavailable model as `<provider>/<model> —
+  unavailable, falling back to <resolved>` (AC10).
+- AC12: The `/routing` modal (Flow A AC4) shows, per model in the flat
+  picker, its strength tier, price (or "unknown"), context length,
+  priority, source per field, and `available`/`unavailable` status
+  (an unavailable model is shown greyed/struck-through, still selectable),
+  and marks which categories are currently derived vs. explicit vs.
+  session-default vs. falling-back-from-unavailable.
+- AC13: The `/connect` `[Test]` result and `keryx providers test`'s output
+  mention when the refresh updated stored model profiles, with counts
+  (e.g. "3 added, 1 changed, 1 now unavailable").
+- AC14: CI is green; `keryx health run` passes; Flow A's existing tests are
   unmodified in their pre-existing assertions.
 
 Tasks:
 - T1 (S): `model-profile.ts` types (AC1).
 - T2 (M): extend `fetchOpenAiCompatModelsDetailed`/`testProviderConnection`
-  parsing + `refreshModelProfiles` wiring (AC2).
-- T3 (S): per-user profile store (AC3).
-- T4 (S): tier-guess via `rankModelId` reuse (AC4, AC5).
-- T5 (M): `keryx routing profile list|set` (AC6).
-- T6 (M): `deriveDefaultTable` + `resolveCategory` integration (AC7).
-- T7 (S): `keryx routing list` derived-entry reporting (AC8).
-- T8 (M): `/routing` modal profile display (AC9).
-- T9 (S): `/connect` Test / `keryx providers test` profile-refresh mention
-  (AC10).
-- T10 (M): tests — one-model provider, several models with known
+  parsing (generic, any gateway) + `refreshModelProfiles` wiring (AC2).
+- T3 (S): per-user profile store, one catalogue (AC3).
+- T4 (S): curated seed table for Anthropic/OpenAI/Gemini + seeding logic
+  that never overwrites an existing entry (AC4a).
+- T5 (S): catalogue-growth wiring — any provider's discovery adds to the
+  same store (AC4b).
+- T6 (S): tier-guess via `rankModelId` reuse (AC5, AC6).
+- T7 (M): auto-priority computation + operator-set exemption (AC7).
+- T8 (M): `keryx routing profile list|set` incl. `--priority` (AC8).
+- T9 (M): refresh-diff logic — added/changed/unavailable (AC9).
+- T10 (M): `deriveDefaultTable` + `resolveCategory` integration, including
+  the unavailable-falls-through rule (AC10).
+- T11 (S): `keryx routing list` derived/unavailable-entry reporting
+  (AC11).
+- T12 (M): `/routing` modal profile + availability display (AC12).
+- T13 (S): `/connect` Test / `keryx providers test` profile-refresh
+  counts (AC13).
+- T14 (L): tests — one-model provider, several models with known
   (reported/curated) prices, several with guessed prices/unknown fields,
-  user override surviving a refresh, cross-checked against
+  catalogue growth from a non-seeded provider, auto-priority ordering,
+  operator-set priority surviving a refresh, availability
+  marking/fallback across two refreshes, cross-checked against
   `model.test.ts`-style fixtures.
-- T11 (S): docs.
+- T15 (S): docs.
 
 ## Flow B — classifier abstraction + main-model classifier
 
@@ -429,10 +482,15 @@ review.
 - Flow A2's `deriveDefaultTable` (PRD §6.3) is a pure function tested
   without any fetch/provider stub at all: one-model provider; several
   models with known (reported/curated) prices; several models with
-  guessed prices and/or `unknown` fields; and a per-user override winning
-  over a derived entry for the same category. `refreshModelProfiles`
-  itself is tested with an injected `/models` response fixture (with and
-  without `pricing`/`context_length` present), never a real network call.
+  guessed prices and/or `unknown` fields; an unavailable model excluded
+  from candidates; and a per-user override winning over a derived entry
+  for the same category. `refreshModelProfiles` itself is tested with an
+  injected `/models` response fixture (with and without `pricing`/
+  `context_length` present, and with a shrunk/grown model list across two
+  calls to exercise availability marking), never a real network call.
+  Auto-priority (PRD §6.1) is tested as its own pure function: ordering by
+  known price, the fixed sentinel for `unknown`, and an operator-set
+  priority surviving a refresh that would otherwise recompute it.
 
 ## Open questions for the operator
 
@@ -468,23 +526,25 @@ review.
    but the operator may prefer starting with scheduled/`flow-next`
    authoring instead, or a different subagent path. Needs a decision
    before Flow D is scheduled.
-8. **Per-gateway `reported` pricing/context coverage** (PRD §6.1): only
-   OpenRouter's `/api/v1/models` is confirmed to carry `pricing`/
-   `context_length` per model. Which of DeepSeek/Z.AI/Cerebras/Groq/
-   Moonshot/Grok's `/v1/models` responses (if any) also carry usable
-   pricing/context needs a per-gateway check before Flow A2 ships
-   `reported`-source parsing for anything beyond OpenRouter — until then,
-   every non-OpenRouter model profile falls through to `curated`/`guessed`/
-   `unknown`.
-9. **Curated table starting scope** (PRD §6.1, `curated` source): start
-   with just the three native adapters (Anthropic/OpenAI/Gemini), whose
-   pricing/context are stable and well-documented, or is a wider
-   hand-maintained table worth the maintenance burden from day one?
-10. **Cross-provider derivation** (PRD §6.3, §Non-goals): confirmed out of
-    scope for v1 per the operator's own suggestion (derive from the
-    session's current provider only). Worth revisiting once there is usage
-    data showing operators keep multiple providers connected where none of
-    them, alone, has a good `planning`/`quick` spread.
-11. **`priority` field provenance** (PRD §6.1): operator-only forever, or
-    should it ever be set automatically (e.g. from a vendor-published
-    benchmark score) once such a source exists?
+8. **Cross-provider derivation** (PRD §6.3, §Non-goals): confirmed out of
+   scope for v1 per the operator's own suggestion (derive from the
+   session's current provider only). Worth revisiting once there is usage
+   data showing operators keep multiple providers connected where none of
+   them, alone, has a good `planning`/`quick` spread.
+
+**Answered** (2026-09-25, captured as PRD §6/§17 requirements — kept here
+only as a changelog, not as open items):
+
+- *Curated table starting scope*: seeded with exactly Anthropic, OpenAI,
+  and Gemini (PRD §6.1); the catalogue grows with every connected
+  provider's discovered profiles (R22). Per-gateway coverage of
+  `pricing`/`context_length` beyond OpenRouter is resolved architecturally
+  — parsing is generic and opportunistic per field, no gateway allowlist,
+  so nothing blocks on checking each gateway individually (PRD §6.1's
+  `reported` bullet).
+- *`priority` field provenance*: auto-computed from price on every
+  creation/refresh unless operator-set (PRD §6.1 "Auto-priority", R23); a
+  user-set priority is never overwritten.
+- *Refresh behavior for models that disappear*: marked `available: false`
+  and kept, never deleted; routing entries pointing at them fall back to
+  the next precedence layer and show it (PRD §6.2, R24–R26).
