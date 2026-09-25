@@ -40,7 +40,7 @@ import { envWithSavedApiKeys } from "../../lib/shell-config";
 // forbidden). The same helper `../../review/ci-triage.ts` uses over its log
 // excerpt, reused here so a vendor error body gets the identical redaction
 // floor before it is embedded in an Error message (flow 307 review, item 4).
-import { redactSensitiveText } from "../../security/redact";
+import { redactSensitiveText } from "../../security/service";
 
 /** `POST` target for every Jev/System-One call this client makes. */
 export const JEV_ENDPOINT = "https://openrouter.ai/api/v1/systemone";
