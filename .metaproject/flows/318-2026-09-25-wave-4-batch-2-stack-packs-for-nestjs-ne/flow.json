@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 2: stack packs for nestjs, nextjs-nuxt, vue, angular, mobx",
   "status": "in-progress",
   "createdAt": "2026-09-25T06:09:18.148Z",
-  "updatedAt": "2026-09-25T12:41:36.640Z",
+  "updatedAt": "2026-09-25T13:56:26.928Z",
   "source": {
     "type": "description",
     "ref": null
@@ -219,7 +219,7 @@
       "id": "T11",
       "title": "Extend install-manifest.json for all 5 packs (modules/components/profiles)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -227,13 +227,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Judge calibration: judge-check --record for every new skill until AG green",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -241,13 +242,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Honest gate run (deepseek runner+judge, trials=10) for every new skill",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -255,13 +257,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
       "title": "Stability promotion + agents generate for packs that clear the gate",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -269,13 +272,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
       "title": "Update W1/W2 docs with batch-2 implementation notes",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -283,7 +287,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
@@ -292,8 +297,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T13:56:26.928Z",
+            "outcome": "started",
+            "detail": "PR #719 opened (draft) against main"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -448,6 +459,36 @@
       "at": "2026-09-25T12:41:36.640Z",
       "event": "task-done",
       "detail": "T9: Author angular pack (extends ts-js-node)"
+    },
+    {
+      "at": "2026-09-25T12:55:51.026Z",
+      "event": "task-done",
+      "detail": "T11: Extend install-manifest.json for all 5 packs (modules/components/profiles)"
+    },
+    {
+      "at": "2026-09-25T13:10:25.089Z",
+      "event": "task-done",
+      "detail": "T12: Judge calibration: judge-check --record for every new skill until AG green"
+    },
+    {
+      "at": "2026-09-25T13:51:19.258Z",
+      "event": "task-done",
+      "detail": "T13: Honest gate run (deepseek runner+judge, trials=10) for every new skill"
+    },
+    {
+      "at": "2026-09-25T13:51:38.213Z",
+      "event": "task-done",
+      "detail": "T14: Stability promotion + agents generate for packs that clear the gate"
+    },
+    {
+      "at": "2026-09-25T13:53:45.593Z",
+      "event": "task-done",
+      "detail": "T15: Update W1/W2 docs with batch-2 implementation notes"
+    },
+    {
+      "at": "2026-09-25T13:56:26.928Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — PR #719 opened (draft) against main"
     }
   ]
 }

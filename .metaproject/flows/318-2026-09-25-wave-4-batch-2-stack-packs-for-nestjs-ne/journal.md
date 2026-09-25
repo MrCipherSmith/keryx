@@ -146,3 +146,4 @@
   fix: a `keryx flow base repair <id> --to <branch> --reason` command,
   analogous to `flow renumber`, gated the same way — requiring an explicit
   reason and never inferred).
+- 2026-09-25T13:56:26.928Z - task-attempt: T16: started (attempt 1) — PR #719 opened (draft) against main
