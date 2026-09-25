@@ -1,0 +1,78 @@
+{
+  "triggers": {
+    "positive": [
+      "Take a look at this diff before I open the PR for the mobile app",
+      "Anything risky in these ViewModel changes I should fix before merge",
+      "Can you spot problems in this screen's new composable before I push",
+      "Double-check this Kotlin diff doesn't introduce any leaks",
+      "Give this Android pull request a once-over for correctness",
+      "Flag anything sketchy in this profile screen's changes",
+      "Is this manifest change safe to ship"
+    ],
+    "negative": [
+      "Review this SwiftUI diff for retain cycles before merging",
+      "Check this Flutter pull request for setState misuse",
+      "Review this ASP.NET Core controller diff for missing authorization",
+      "Check this React diff for missing hook dependencies",
+      "Review this Python diff for unhandled exceptions",
+      "Write tests covering this screen's new error state",
+      "Fix the compile error in this ViewModel after the merge"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "globalscope-in-viewmodel-diff",
+      "prompt": "Here's a diff to a ProfileViewModel: it adds a new `refresh()` function whose body is `GlobalScope.launch { val data = repository.fetch(); _state.value = ProfileUiState.Content(data) }`, called from the screen's pull-to-refresh handler. What do you flag in review?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "viewModelScope" },
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags the GlobalScope.launch in refresh() as the primary finding: it should be viewModelScope.launch instead, because GlobalScope is not cancelled when the ViewModel is cleared, so a slow fetch can still resolve and write to _state.value after the screen (and this ViewModel) are gone, and the finding names the actual risk (a completed background call writing state, or the exposed StateFlow's writer outliving its owner) rather than only restating that GlobalScope is discouraged.",
+          "pass_criteria": [
+            "Names the exact line/construct (GlobalScope.launch in refresh()) as the finding, not a generic 'watch your coroutines' comment.",
+            "States the concrete fix direction: replace GlobalScope.launch with viewModelScope.launch.",
+            "Explains the actual risk in this diff: an in-flight fetch can complete and write to _state.value after the ViewModel/screen is gone, since nothing cancels a GlobalScope coroutine when the ViewModel is cleared."
+          ],
+          "fail_criteria": [
+            "Does not flag the GlobalScope.launch call as a finding at all.",
+            "Flags it only as a vague style nit ('avoid GlobalScope, it's not idiomatic') with no explanation of the actual lifecycle/leak risk it causes in this specific diff."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag `refresh()`'s use of `GlobalScope.launch` as the main issue in this diff: it should be `viewModelScope.launch` instead. As written, if the user pulls to refresh and then immediately backs out of the screen, `GlobalScope.launch` keeps running -- nothing about it is tied to this ViewModel's lifecycle -- so `repository.fetch()` can still complete and write to `_state.value` well after the ViewModel has been cleared and the screen is gone. `viewModelScope` is cancelled automatically in `onCleared()`, which is exactly the guarantee this refresh call needs. Fix direction: `viewModelScope.launch { val data = repository.fetch(); _state.value = ProfileUiState.Content(data) }`.",
+        "known_wrong": "This looks fine -- `refresh()` is a short, one-shot network call triggered by a manual pull-to-refresh gesture, so `GlobalScope.launch` here is low-risk; users don't typically leave a screen mid-refresh, and even if they do, updating a `StateFlow` no one is collecting anymore doesn't really cause a problem.",
+        "vague": "Coroutine scoping in this ViewModel could probably be tightened up a bit.",
+        "subtle_wrong": "Worth a note that `GlobalScope.launch` is used here instead of `viewModelScope.launch`, but since `_state` is a `StateFlow` and writing to a `StateFlow` with no active collectors is a no-op performance-wise, this isn't really a correctness issue -- more of a style preference. I'd leave a comment but wouldn't block the PR on it."
+      },
+      "anti_patterns": ["GlobalScope"]
+    },
+    {
+      "id": "forced-unwrap-external-data",
+      "prompt": "This diff adds `val userId = intent.getStringExtra(\"user_id\")!!` at the top of an Activity's `onCreate()`, reading an extra from the incoming Intent that launched it. What's worth flagging here?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags the `!!` on intent.getStringExtra(\"user_id\") as a crash risk: getStringExtra returns a nullable String, and since the Intent came from outside this code (another activity, a deep link, a notification, a test harness) there is no compile-time guarantee the extra is present, so a missing extra crashes onCreate() with an NPE; the fix direction is a safe call/Elvis default or requireNotNull with a message, not simply asserting the value is always there.",
+          "pass_criteria": [
+            "Names the specific line (`intent.getStringExtra(\"user_id\")!!`) as the finding.",
+            "States why it's risky: the extra is nullable and Intent-sourced (from outside this code's control), so a missing extra causes an NPE crash at onCreate().",
+            "Gives a concrete fix direction: a safe call with a default/early return, or requireNotNull(...) { \"...\" } with an explanatory message, instead of the bare !!."
+          ],
+          "fail_criteria": [
+            "Does not flag the forced-unwrap on intent.getStringExtra(\"user_id\") at all.",
+            "Excuses the `!!` on the grounds that this Activity is always launched from a known, controlled place in the same app, without noting that an Intent can still arrive from a deep link, a test, or the OS restoring the Activity in a way that omits the extra."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Flag `intent.getStringExtra(\"user_id\")!!` -- `getStringExtra` returns `String?`, and an `Intent` is fundamentally external input: it can come from a deep link, a notification, another app if this Activity is exported, or the system recreating the Activity, none of which are guaranteed to include the extra the way an internal call site would be. The `!!` turns a missing extra into an immediate crash in `onCreate()`. Fix direction: either bail out safely (`val userId = intent.getStringExtra(\"user_id\") ?: run { finish(); return }`) or fail loudly with context via `requireNotNull(intent.getStringExtra(\"user_id\")) { \"ProfileActivity requires a user_id extra\" }` if a missing value truly should never happen and you want a clear crash message instead of a bare NPE.",
+        "known_wrong": "This is fine -- this Activity is only ever started from one place in our own code, and that call site always sets the `user_id` extra, so the `!!` will never actually fail in practice.",
+        "vague": "Might want to handle the null case here a bit more carefully.",
+        "subtle_wrong": "The `!!` itself isn't great style, but I'd let it go for now since `onCreate()` already wraps this in a `try/catch` further down that logs and finishes the Activity on any exception -- so a crash here gets handled gracefully one level up regardless of whether the extra is missing."
+      }
+    }
+  ]
+}

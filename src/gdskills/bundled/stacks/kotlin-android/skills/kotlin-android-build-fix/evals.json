@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Gradle sync is red after I touched this module's build file",
+      "The build broke right after bumping a library version",
+      "assembleDebug is failing and I can't tell why",
+      "Something in this module won't compile since the merge",
+      "CI is red on the Android job, can you sort it out",
+      "This module's static analysis task is blocking the build",
+      "The app won't build after pulling the latest changes"
+    ],
+    "negative": [
+      "Xcode build is failing after this Swift package bump",
+      "Flutter's pub get is failing after this dependency change",
+      "dotnet build is failing after this NuGet package update",
+      "npm run build is failing after this dependency bump",
+      "pip install is failing after this requirements.txt change",
+      "Implement a new screen for the checkout flow",
+      "Review this diff for goroutine-style leaks before merging"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "non-exhaustive-sealed-when",
+      "prompt": "After adding a new `ProfileUiState.RateLimited` variant to our sealed interface, the `when (state)` in ProfileScreen.kt no longer compiles because it's not exhaustive. What's the right way to fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct fix adds a real branch to the when block that handles the new RateLimited state with its own appropriate UI/behavior, keeping the when exhaustive by design; it does not add a catch-all else branch that silently does nothing or reuses an unrelated existing branch, since that would defeat the reason the state is modeled as a sealed hierarchy in the first place -- to force every case to be handled.",
+          "pass_criteria": [
+            "States that a dedicated branch for RateLimited should be added to the when, not a generic else/catch-all.",
+            "Names or sketches what that branch should actually do (show a rate-limit specific message/UI, or otherwise something specific to that state), not just 'handle it'.",
+            "Explains why an else/catch-all branch would be the wrong fix here: it would silently swallow this case (and any future new case) instead of forcing it to be handled."
+          ],
+          "fail_criteria": [
+            "Recommends adding an `else -> {}` (or equivalent catch-all) branch to make the when compile without giving RateLimited its own real handling.",
+            "Recommends reverting or removing the new RateLimited variant just to make the existing when compile again."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Add a real `is ProfileUiState.RateLimited ->` branch to the `when (state)` in `ProfileScreen.kt` that renders whatever this state should actually show -- most likely a message telling the user to try again later, similar in shape to how the `Error` branch is handled but with rate-limit-specific copy. Don't reach for `else -> {}` to make the compiler stop complaining: the whole point of modeling `ProfileUiState` as a sealed interface is that adding a new variant forces every `when` over it to be updated, and an `else` branch throws that guarantee away -- the next new state added later would silently fall into the same catch-all with no one noticing.",
+        "known_wrong": "Easiest fix: add `else -> {}` at the bottom of the `when (state)` block. It makes the compiler happy immediately and you can come back and add real handling for `RateLimited` later once there's time to design the UI for it.",
+        "vague": "Add a branch for the new state so the when compiles properly.",
+        "subtle_wrong": "Add `is ProfileUiState.RateLimited -> { /* reuse existing error UI for now */ }` that just falls through to whatever the `Error` branch already renders, without adding a distinct case -- that satisfies the exhaustiveness check without having to design new UI right now, and you can split it out into its own real branch in a follow-up."
+      }
+    },
+    {
+      "id": "detekt-suppress-vs-root-cause",
+      "prompt": "detekt is failing on a new `ProfileRepository.kt` file with a `TooGenericExceptionCaught` finding on a broad `catch (e: Exception)` block that just logs and returns a default value. How should this get fixed?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct fix narrows the catch to the specific exception type(s) the call can actually throw (or a small, deliberate set of them) instead of catching the broad Exception type, so the underlying issue detekt is flagging -- a catch clause wide enough to also swallow unrelated bugs -- is actually addressed; it does not add a blanket @Suppress(\"TooGenericExceptionCaught\") annotation or disable the rule in detekt.yml to make the finding disappear without changing the catch itself.",
+          "pass_criteria": [
+            "States that the catch clause should be narrowed to the specific exception type(s) the call can actually throw, not left as a broad catch (e: Exception).",
+            "Explicitly rejects silencing the finding via @Suppress or a detekt.yml rule disable as the fix.",
+            "The fix addresses the actual catch block detekt flagged, not an unrelated part of the file."
+          ],
+          "fail_criteria": [
+            "Recommends adding @Suppress(\"TooGenericExceptionCaught\") to the function or catch block to make the finding disappear.",
+            "Recommends disabling the TooGenericExceptionCaught rule in detekt.yml (project-wide or for this file) instead of narrowing the catch."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Narrow the `catch (e: Exception)` to whatever this call can actually throw -- for a repository call that's usually something like `IOException`/`HttpException` from the network client, possibly alongside a serialization exception if parsing happens in the same block. Catch those specific types (or a small sealed set of them with a multi-catch) instead of the broad `Exception`, so a genuine, unrelated bug elsewhere in that block (a `NullPointerException` from a real logic error) doesn't get silently swallowed and turned into 'just return the default' along with the network failures you actually meant to handle. Don't add `@Suppress(\"TooGenericExceptionCaught\")` here -- that keeps the broad catch exactly as risky as detekt flagged it, just with the warning turned off.",
+        "known_wrong": "Add `@Suppress(\"TooGenericExceptionCaught\")` right above the function -- the broad catch is intentional here since we want to return a default value no matter what goes wrong, and the annotation tells detekt that's a deliberate choice.",
+        "vague": "Tighten up the exception handling so it's not catching more than it should.",
+        "subtle_wrong": "Leave the broad `catch (e: Exception)` as is, but add a `detekt.yml` exclusion for this one file under the `TooGenericExceptionCaught` rule's `excludes` list -- that keeps the rule active for the rest of the module while acknowledging this specific file's catch is intentionally broad."
+      }
+    }
+  ]
+}

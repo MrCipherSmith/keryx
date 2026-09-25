@@ -1,0 +1,38 @@
+{
+  "id": "kotlin-android",
+  "family": "framework",
+  "modules": ["kotlin-android-rules", "kotlin-android-skills"],
+  "detectionMarkers": ["kotlin", "android", "gradle"],
+  "provenance": { "origin": "authored", "sourceRef": "flow 336, Wave 4 batch 4" },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["compose-implementation"],
+    "test": ["kotlin-android-testing"],
+    "review": ["kotlin-android-code-review"],
+    "build-fix": ["kotlin-android-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Kotlin/Android",
+    "auditFocus": [
+      "`!!` forced-unwrap on a value from an external source (network response, Intent extra, savedInstanceState) instead of a safe call (`?.`) or explicit null handling",
+      "`GlobalScope.launch`/`GlobalScope.async` inside a ViewModel or composable instead of `viewModelScope`/`lifecycleScope`, losing structured cancellation",
+      "state read or mutated directly inside a composable body instead of via `remember`/`rememberSaveable`/hoisted state, causing recomposition to re-run side effects",
+      "a suspend call, `Toast`, navigation, or analytics event fired directly in a composable body instead of inside `LaunchedEffect`/`DisposableEffect`/a callback",
+      "a ViewModel exposing `MutableStateFlow`/`MutableLiveData` directly to the UI layer instead of a read-only `StateFlow`/`LiveData` view",
+      "secrets or API keys stored in plain `SharedPreferences`, `BuildConfig` fields committed to source, or a manifest component left `exported=\"true\"` with no permission"
+    ],
+    "buildCommands": [
+      "./gradlew assembleDebug",
+      "./gradlew testDebugUnitTest",
+      "./gradlew lint",
+      "./gradlew ktlintCheck || ./gradlew detekt"
+    ],
+    "fixGuardrails": [
+      "never add `!!` or a blanket `@Suppress` annotation to silence a null-safety or lint warning instead of fixing the underlying nullability or logic",
+      "never widen a Gradle/AGP/Kotlin version pin or disable a lint/detekt rule repo-wide just to make one failure disappear without saying so in the report",
+      "never move a `LaunchedEffect`/`DisposableEffect` body directly into the composable function to work around a recomposition bug -- fix the key or hoist the state instead",
+      "never delete or weaken a failing test's assertion to reach a green build; fix the root cause or say the test caught a real bug"
+    ]
+  }
+}

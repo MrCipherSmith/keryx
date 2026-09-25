@@ -1,0 +1,77 @@
+{
+  "triggers": {
+    "positive": [
+      "I need to add a save button on this screen that persists a form to the backend",
+      "Add an expandable settings section with a toggle to this app screen",
+      "Hook up loading and error states from the repository call to the UI",
+      "Build a new profile edit screen that reads from and writes to our data layer",
+      "This screen needs a snackbar to show up once after a background save finishes",
+      "Add pagination to this list screen backed by a paging data source",
+      "Wire a search field on this screen to filter a list as the user types"
+    ],
+    "negative": [
+      "Implement this feature with a SwiftUI view backed by @State and @Published",
+      "Add a StatefulWidget in Flutter that manages this form's local state",
+      "Implement this ASP.NET Core minimal API endpoint for saving a record",
+      "Add a new React component with useState and useEffect for this form",
+      "Write a Django view that handles this form submission",
+      "Fix this failing Gradle build after bumping the Compose Compiler version",
+      "Review this Kotlin diff for goroutine-style concurrency leaks before merge"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "state-hoisting-scope",
+      "prompt": "On a settings screen I'm building, there's a card with an arrow icon that expands to reveal a couple of extra options underneath. Nothing else on the screen needs to know whether it's expanded. Where should that expanded/collapsed flag live?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer keeps the expanded/collapsed flag as local composable state, created with `remember { mutableStateOf(false) } ` inside the card composable itself, rather than pushing it up into a ViewModel or a parent screen's own state holder -- since nothing else needs to read or drive it, hoisting it further only adds indirection with no benefit. It should not leave the flag as a bare `var` with no `remember`, since that value would be lost on every recomposition.",
+          "pass_criteria": [
+            "States the flag should be local to the card composable via `remember` (or `rememberSaveable` if the answer wants it to survive rotation), not pushed into the ViewModel.",
+            "Explains that hoisting further (to a parent screen or the ViewModel) is unnecessary here specifically because nothing else needs to read or change the value.",
+            "Shows or names the concrete construct (`remember { mutableStateOf(false) }`), not just 'keep it local'."
+          ],
+          "fail_criteria": [
+            "Recommends putting the expanded/collapsed flag into the ViewModel or a shared/hoisted state holder even though nothing else needs it.",
+            "Describes storing the flag as a bare `var` inside the composable with no `remember` wrapper, which would reset on every recomposition."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Since nothing outside this card needs to read or drive that flag, keep it local: `var expanded by remember { mutableStateOf(false) }` right inside the card's own composable function, and flip it in the arrow icon's `onClick`. There's no reason to hoist it to a parent screen or push it into the ViewModel -- hoisting only earns its keep when a sibling composable or the caller actually needs to observe or control the value, and here nothing does. If you later want the card to stay expanded across a screen rotation, swap `remember` for `rememberSaveable`, but that's a separate decision from where the state lives.",
+        "known_wrong": "Put it in the ViewModel as part of the screen's UiState, something like `isSectionExpanded: Boolean` on the state data class, and toggle it through a `ViewModel` function the composable calls on click. That way everything about the screen's state lives in one place and is easier to find later, even though only this one card actually reads it right now.",
+        "vague": "Keep the state close to where it's used and make sure it's remembered properly across recompositions.",
+        "subtle_wrong": "You can just declare `var expanded = false` at the top of the card's composable function and flip it in the click handler -- that's simpler than wiring up `remember`, and since it's just a UI toggle it doesn't need to go through the ViewModel."
+      }
+    },
+    {
+      "id": "viewmodel-save-coroutine-scope",
+      "prompt": "I'm wiring up a save button in this ViewModel. Clicking it should call a suspend function on the repository to persist some data. How should I launch that call?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "viewModelScope" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer launches the repository save call inside `viewModelScope.launch { ... }` from the ViewModel, not `GlobalScope.launch`, because viewModelScope is cancelled automatically when the ViewModel is cleared, while a GlobalScope coroutine keeps running (and can still mutate state) after the screen and ViewModel are gone.",
+          "pass_criteria": [
+            "Names `viewModelScope.launch` (or `viewModelScope.launch { }` with the repository call inside it) as the concrete launch mechanism.",
+            "Explains why: viewModelScope ties the coroutine's lifetime to the ViewModel, cancelling it when the ViewModel is cleared, unlike an unscoped or globally-scoped coroutine."
+          ],
+          "fail_criteria": [
+            "Recommends `GlobalScope.launch` (or an equivalent unstructured, unscoped coroutine) for the save call. Mentioning GlobalScope only to explain why it should be avoided here is not a failure.",
+            "Recommends launching the coroutine with no scope tied to the ViewModel's lifecycle at all, or launching it from a Composable's `rememberCoroutineScope()` instead of the ViewModel that owns the save action."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Launch it inside `viewModelScope.launch { repository.save(data) }` right in the ViewModel function the button click calls. `viewModelScope` is already tied to this ViewModel's lifecycle -- Jetpack's `ViewModel` cancels it automatically in `onCleared()`, so if the user navigates away mid-save the coroutine gets cancelled along with everything else, instead of continuing to run against a repository call whose result no screen is left to observe. Don't reach for `GlobalScope.launch` here: nothing would cancel it when the ViewModel goes away, so it can keep running -- and potentially push a state update or trigger a side effect -- well after the screen that started it is gone.",
+        "known_wrong": "Just fire it with `GlobalScope.launch { repository.save(data) }` inside the click handler -- it's a simple save call, and using GlobalScope means you don't have to worry about scope lifetimes at all, it'll just run in the background regardless of what the ViewModel or screen is doing.",
+        "vague": "Launch the save call in a coroutine tied to the ViewModel's own lifecycle so it doesn't leak.",
+        "subtle_wrong": "Since this ViewModel already exposes a `CoroutineScope` field you constructed yourself with `CoroutineScope(Dispatchers.IO)` in its init block, just launch the save call on that: `scope.launch { repository.save(data) }`. It keeps the save logic off viewModelScope so a slow save doesn't interact with anything else the ViewModel launches on viewModelScope."
+      },
+      "anti_patterns": ["GlobalScope"]
+    }
+  ]
+}
