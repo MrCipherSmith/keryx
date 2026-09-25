@@ -10,7 +10,7 @@
   "title": "Release hardening for PR 700: project hook trust, security-gate override, observer containment, help and upgrade polish",
   "status": "in-progress",
   "createdAt": "2026-09-25T07:06:08.133Z",
-  "updatedAt": "2026-09-25T07:11:32.666Z",
+  "updatedAt": "2026-09-25T08:02:47.435Z",
   "source": {
     "type": "description",
     "ref": null
@@ -92,21 +92,28 @@
       "id": "T5",
       "title": "Lane A: project hook trust gate and tighten-only built-ins (R700-01/02, hooks.ts writes)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T07:19:28.871Z",
+            "outcome": "started",
+            "detail": "319-T5 opus design done (D1-D16; coordinator checks: visible per-session notice, worktree digest from executed file); sonnet implementer dispatched"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Lane B: contained observer/impact-evidence writes and ratchet coverage (R700-03/04)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -120,13 +127,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Lane C1: CLI help, usage, registry and docs (R700-05/07/08/09/13/18)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -140,13 +148,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Lane C2: update idempotence, labels, import provenance, update.ts (R700-06/10/11/12/14)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -160,7 +169,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -254,6 +264,31 @@
       "at": "2026-09-25T07:11:32.666Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 1) — 319-T8 sonnet worker"
+    },
+    {
+      "at": "2026-09-25T07:19:28.871Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 319-T5 opus design done (D1-D16; coordinator checks: visible per-session notice, worktree digest from executed file); sonnet implementer dispatched"
+    },
+    {
+      "at": "2026-09-25T07:22:14.777Z",
+      "event": "task-done",
+      "detail": "T8: Lane C2: update idempotence, labels, import provenance, update.ts (R700-06/10/11/12/14)"
+    },
+    {
+      "at": "2026-09-25T07:25:39.884Z",
+      "event": "task-done",
+      "detail": "T6: Lane B: contained observer/impact-evidence writes and ratchet coverage (R700-03/04)"
+    },
+    {
+      "at": "2026-09-25T07:30:18.891Z",
+      "event": "task-done",
+      "detail": "T7: Lane C1: CLI help, usage, registry and docs (R700-05/07/08/09/13/18)"
+    },
+    {
+      "at": "2026-09-25T08:02:47.435Z",
+      "event": "task-done",
+      "detail": "T5: Lane A: project hook trust gate and tighten-only built-ins (R700-01/02, hooks.ts writes)"
     }
   ]
 }
