@@ -3,9 +3,10 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [0.3.4] — 2026-09-25
+## [0.3.5] — 2026-09-25
 
-Fixes from a live review of a real PR with every Jev reviewer.
+Fixes from a live review of a real PR with every Jev reviewer. (0.3.4 was
+not published: its tag landed on the wrong commit and the release job refused it.)
 
 ### Fixed
 - **`review-jev-docs` no longer crashes on a large diff.** A batch that
