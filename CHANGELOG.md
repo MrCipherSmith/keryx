@@ -3,7 +3,7 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.3.6] — 2026-09-25
 
 ### Fixed
 - **A single transient Jev/OpenRouter blip no longer kills a whole review run.**
@@ -13,6 +13,9 @@ All notable changes to `keryx` are documented here. The format follows
   a refused connection, up to twice with a short pause before giving up — a
   `HTTP 503` that used to fail the run outright now recovers on its own if the
   vendor was only down for a moment.
+- **`keryx auth login` keeps its Ctrl-C handler for a second press.** It was
+  registered once, so a second Ctrl-C during the login took Node's default
+  exit instead of the cancel path.
 
 ## [0.3.5] — 2026-09-25
 
