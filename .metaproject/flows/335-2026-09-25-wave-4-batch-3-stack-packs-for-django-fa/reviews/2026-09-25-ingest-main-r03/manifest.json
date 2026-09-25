@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-25-ingest-main",
+  "reviewId": "2026-09-25-ingest-main-r03",
   "mode": "ingest",
   "status": "closed",
   "target": {
     "kind": "report",
     "ref": "main",
-    "head": "708779e8d8e35b5a5e98ea642e03f7ba42edb122"
+    "head": "2ba72932"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main/scope.md",
-    "coverage": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main/coverage.md",
-    "report": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main/report.md",
-    "findings": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main/findings.json",
-    "learning": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main/learning.md",
-    "decisions": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main/decisions.md"
+    "scope": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main-r03/scope.md",
+    "coverage": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main-r03/coverage.md",
+    "report": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main-r03/report.md",
+    "findings": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main-r03/findings.json",
+    "learning": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main-r03/learning.md",
+    "decisions": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-25-ingest-main-r03/decisions.md"
   },
   "coverage": [
     {
@@ -25,17 +25,15 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 15,
+    "total": 5,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": null,
-    "dropped_findings_cap": 5,
-    "retained": 10,
+    "dropped_findings_cap": 0,
+    "retained": 5,
     "dismissed_by_round": null,
-    "by_reason": {
-      "findings_cap:review-orchestrator": 5
-    },
+    "by_reason": {},
     "not_measured": [
       {
         "stage": "low_confidence",
@@ -55,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-25T21:47:02.286Z",
-  "updatedAt": "2026-09-25T22:34:15.749Z",
+  "createdAt": "2026-09-25T22:33:47.974Z",
+  "updatedAt": "2026-09-25T22:34:27.777Z",
   "flow": {
     "id": "335",
     "path": ".metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa"

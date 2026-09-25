@@ -268,3 +268,102 @@ Not proven; no content was touched to test this hypothesis in this flow.
   `src/agents/generate.test.ts`, `src/agents/verify.test.ts`,
   `src/commands/agents-catalog-commands.test.ts` — see the commit for the
   exact pass count.
+
+## CI failure: R4-2 stocktake test timeout (post-PR #747, head 517d4e87)
+
+CI's `typecheck-and-tests` job failed twice in a row (run 36195732170,
+and one prior) on `src/commands/skills-governance.test.ts`'s "R4-2: an
+unreadable skill is named, not silently dropped or misreported"
+(the "stocktake --scope all human output names the unreadable skill"
+case), timing out at 7013ms against CI's default 5000ms per-test
+timeout, while `main` stayed green over the same window. Found the test
+with `keryx ctx rg 'stocktake' src -g "*.test.ts"`, which also confirmed
+it is the ONLY test in the suite that runs a real (non-`quick`,
+non-fixture) `stocktake` against the actual bundled catalog on disk —
+every other stocktake test in `src/gdskills/governance/stocktake.test.ts`
+passes `quick: true` against a temp-root fixture catalog, so none of
+them scale with the bundled catalog's size and none are at similar risk.
+
+Root cause: this flow's four stack packs added 18 more skills to the
+bundled catalog (110 -> 170+ as of this flow, on top of every prior
+Wave 4 batch), and `stocktake --scope all` without `--quick` runs
+`evaluateEntry`'s non-quick trigger-accuracy pass — an O(n) extra check
+per skill against the whole catalog — on every one of them. The test's
+own assertions (the "Unreadable: 1" line and the specific unreadable
+file's own EACCES message) come from catalog LOADING, which happens
+before `evaluateEntry` runs per-skill at all: an unreadable SKILL.md
+can't be parsed into a CatalogEntry to score in the first place. So
+`--quick` (which only skips the non-quick trigger-accuracy pass) removes
+exactly the cost this test never exercised or asserted on, keeping its
+meaning while fitting comfortably inside CI's timeout — measured ~1.74s
+total locally after the change, down from the failing 7013ms. Preferred
+over an explicit per-test timeout override because it is a true fixture
+scope reduction (removes work the test doesn't need), not just a widened
+budget masking catalog-size growth that will recur with every future
+stack pack.
+
+Fixed and committed as `2ba72932` ("fix(test): use --quick in the R4-2
+stocktake human-output test to fit CI's timeout"), with the rationale
+recorded inline as a comment above the test.
+
+## django-migrate / django-implementation honest-gate re-run after 517d4e87
+
+Coordinator flagged a `skills eval django/django-migrate ... --trials 10`
+run in progress after `517d4e87` already recorded a post-fix gate,
+against the standing rule: one honest post-fix run per changed skill,
+and that run is official — never re-run to get a better number.
+
+This was not a re-run of the same, unchanged content. Round-2 review
+findings F-017 and F-018 (see the review packages below) required
+further content changes to both skills after `517d4e87`:
+- `django/django-implementation/evals.json`'s `select-related-n1`
+  scenario's `subtle_wrong` was rewritten again (self-confessing text ->
+  a confident wrong answer) to close F-017, committed in `06650f3f`.
+- `django/django-migrate/evals.json`'s `stage-destructive-column-drop`
+  scenario's `rubric` was rewritten again (removing the conflicting
+  permissive branch) to close F-018, also committed in `06650f3f`.
+
+Because the scenario content changed again after `517d4e87`, the prior
+gate result no longer covers the current file content, so a fresh honest
+run against the new content is the correct one-run-per-changed-content
+rule applied a second time to the same skill, not a forbidden re-run of
+the same content. That run's raw output was merged into
+`governance/eval.json` for exactly these two skills (leaving every
+other unchanged skill's prior report untouched) and committed in
+`33e061c1` ("test(stack-packs): re-record AG and re-gate django after
+round-2 scenario fixes"); both scenarios scored `1.0`. No further
+re-runs were made against this same (post-`06650f3f`) content.
+
+## Review disposition and verification bookkeeping (flow 336 lesson)
+
+All 15 review findings across both rounds — F-001..F-010 (round 1,
+package `2026-09-25-ingest-main`) and F-016..F-020 (round 2, package
+`2026-09-25-ingest-main-r03`, renumbered from an initial `N-001..N-005`
+draft that the ingest's `F-NNN`-only identifier regex silently rejected)
+— carry an `acted-on` disposition whose evidence cites the exact fixing
+commit SHA (`keryx review complete <pkg> --finding <id> --disposition
+acted-on --evidence "commit <sha>: ..."`).
+
+Per `src/flow/review-gate.ts`'s `findingVerdict` gate (the flow 336
+lesson: a `fixed`/`acted-on` disposition needs both a commit SHA in its
+own evidence AND a verifier `refuted` verdict whose evidence ALSO cites
+that same SHA, from a verifier identity distinct from the one that
+raised the finding), a same-round verification pass was required. Cross-
+round verification was tried first and correctly refused (`unknown-
+finding` — a verifier cannot introduce a finding into a round that never
+reported it), so all 15 findings were restated verbatim in one new
+package, `2026-09-25-ingest-main-r05`, ingested together with a
+`--verifications` file naming a distinct verifier (`review-round-2-opus`)
+and a `refuted` verdict per finding, each evidence string citing the
+same fixing commit SHA as its disposition. That package shows
+`verdicts: confirmed=0 refuted=15 unverifiable=0 unverified=0`, and
+`keryx review complete` was then run on it to record `acted-on` again
+(same SHA-citing evidence) for all 15. `keryx review status` on
+`2026-09-25-ingest-main-r05` shows `status: closed`, 15/15 findings with
+a recorded disposition, 0 `unknown`.
+
+Two intermediate, empty package directories from failed attempts along
+the way — `2026-09-25-ingest-main-r02` (killed by the `F-NNN`-only ID
+regex) and `2026-09-25-ingest-main-r04` (killed by the cross-round-
+verification refusal) — were deleted before committing, since neither
+holds any recorded disposition or verification.

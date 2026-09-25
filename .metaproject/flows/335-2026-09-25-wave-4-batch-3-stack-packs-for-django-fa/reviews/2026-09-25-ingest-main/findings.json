@@ -15,7 +15,11 @@
       ],
       "enumeration_method": "reviewer read every scenario in java-kotlin-spring-implementation/evals.json for calibration/rubric correctness against Spring's default @Transactional propagation semantics; this is the only scenario in that file with this defect"
     },
-    "global_id": "2026-09-25-ingest-main#F-001"
+    "global_id": "2026-09-25-ingest-main#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c0ef2ec6 (java-kotlin-spring-implementation#transactional-self-invocation rewritten to a REQUIRES_NEW premise; verified by round-2 review)"
+    }
   },
   {
     "id": "F-002",
@@ -33,7 +37,11 @@
       ],
       "enumeration_method": "reviewer read every scenario in django-migrate/evals.json for calibration/rubric correctness against Django's documented multi-deploy column-removal pattern; this is the only scenario in that file with this defect"
     },
-    "global_id": "2026-09-25-ingest-main#F-002"
+    "global_id": "2026-09-25-ingest-main#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit fa3bedc6 (django-migrate#stage-destructive-column-drop subtle_wrong rewritten to a pipeline-order-only premise); refined further in commit 06650f3f"
+    }
   },
   {
     "id": "F-003",
@@ -52,7 +60,11 @@
       ],
       "enumeration_method": "reviewer grepped every detectionMarkers array introduced or touched by this PR against src/stack/detect.ts's own per-tag emission logic; these are the only two sites listing java-kotlin-spring's detection markers"
     },
-    "global_id": "2026-09-25-ingest-main#F-003"
+    "global_id": "2026-09-25-ingest-main#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 2d0c3158 (detectionMarkers narrowed to spring/spring-boot in pack.json and install-manifest.json)"
+    }
   },
   {
     "id": "F-004",
@@ -74,7 +86,11 @@
       ],
       "enumeration_method": "reviewer cross-referenced every SKILL.md worked-example section against every evals.json calibration/scenario string across all four new packs (19 skills), diffing shared identifiers and phrasing; these five are every SKILL.md found reusing an eval's own scenario identifiers or answer text"
     },
-    "global_id": "2026-09-25-ingest-main#F-004"
+    "global_id": "2026-09-25-ingest-main#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commits c0ef2ec6 (3 java-kotlin-spring SKILL.md files), b67d6406+fa3bedc6 (fastapi-build-fix and django-testing worked examples); the fastapi-build-fix residual identified by round-2 review is tracked as F-016 and fixed in commit e2c9c61c"
+    }
   },
   {
     "id": "F-005",
@@ -86,7 +102,11 @@
     "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
     "confidence": "low",
     "file": "src/gdskills/bundled/stacks/fastapi/skills/fastapi-build-fix/evals.json",
-    "global_id": "2026-09-25-ingest-main#F-005"
+    "global_id": "2026-09-25-ingest-main#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit b67d6406 (pydantic-mismatch-not-any premise corrected to the class Config + model_config error case)"
+    }
   },
   {
     "id": "F-006",
@@ -98,7 +118,11 @@
     "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
     "confidence": "low",
     "file": "src/gdskills/bundled/stacks/rust/skills/rust-build-fix/SKILL.md",
-    "global_id": "2026-09-25-ingest-main#F-006"
+    "global_id": "2026-09-25-ingest-main#F-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 9aebce7b (needless_clone replaced with clippy::redundant_clone)"
+    }
   },
   {
     "id": "F-007",
@@ -110,7 +134,11 @@
     "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
     "confidence": "low",
     "file": "src/gdskills/bundled/stacks/django/skills/django-implementation/SKILL.md",
-    "global_id": "2026-09-25-ingest-main#F-007"
+    "global_id": "2026-09-25-ingest-main#F-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit fa3bedc6 (django-implementation now owns Django major-version upgrades, django-migrate points to it one-directionally)"
+    }
   },
   {
     "id": "F-008",
@@ -122,7 +150,11 @@
     "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
     "confidence": "low",
     "file": "src/gdskills/bundled/stacks/django/skills/django-implementation/evals.json",
-    "global_id": "2026-09-25-ingest-main#F-008"
+    "global_id": "2026-09-25-ingest-main#F-008",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit fa3bedc6 (select-related-n1 subtle_wrong targets the wrong relation); refined further in commit 06650f3f"
+    }
   },
   {
     "id": "F-009",
@@ -134,7 +166,11 @@
     "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
     "confidence": "low",
     "file": "src/gdskills/bundled/stacks/java-kotlin-spring/skills/*/evals.json",
-    "global_id": "2026-09-25-ingest-main#F-009"
+    "global_id": "2026-09-25-ingest-main#F-009",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 9aebce7b (c-cpp near-miss negatives added to rust-build-fix and rust-implementation, awkward positive trigger reworded)"
+    }
   },
   {
     "id": "F-010",
@@ -146,6 +182,10 @@
     "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
     "confidence": "low",
     "file": "src/gdskills/bundled/stacks/java-kotlin-spring/skills/java-kotlin-spring-testing/SKILL.md",
-    "global_id": "2026-09-25-ingest-main#F-010"
+    "global_id": "2026-09-25-ingest-main#F-010",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c0ef2ec6 (@MockBean replaced with @MockitoBean in SKILL.md, rules/testing.mdc, and the narrowest-test-slice eval)"
+    }
   }
 ]
