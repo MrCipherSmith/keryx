@@ -8,6 +8,54 @@ at all, alongside an answer that actually used it. Flow 316 replaced that for
 behavior scenarios with a rubric graded by a separate LLM judge call. This
 guide covers how to write one.
 
+## Exclusion clauses in a `description`/`triggers` are safe to write (flow 334)
+
+This is unrelated to judge rubrics, but the same "don't fight the grader,
+write for it" spirit applies to a skill's `SKILL.md` frontmatter
+`description`/`triggers`, which drive the SEPARATE lexical trigger scorer
+(`src/gdskills/governance/scout.ts`, `checkSkillSelected`/`scoutSkill`) that
+`keryx skills eval <id>`'s `triggerAccuracy` and `keryx skills scout` both
+use.
+
+Before flow 334, that scorer was a plain bag-of-words/IDF match with no
+negation handling: text inside a skill's own exclusion clause — "Use when X.
+**Not for** Y (use \`other-skill\` instead)." — counted Y's words as ordinary
+POSITIVE evidence for the skill, exactly as if the description had claimed
+them. Authors were working around this by stripping words out of
+descriptions and stuffing eval prompts with jargon instead of writing the
+clause the convention already recommends. Concrete measured case: before the
+fix, `ts-js-node/nodejs-implementation`'s description — "... Not for UI
+markup/rendering code (use the matching UI framework pack) or writing/fixing
+tests (use nodejs-testing)." — scored 0.682 against the query "write vitest
+tests for this service", purely from "writing"/"tests" sitting inside its own
+disclaimer.
+
+**The scorer now strips exclusion-clause text before scoring, on both the
+entry and query side** (`stripExclusionClauses` in `scout.ts`). Write your
+disclaimer normally — do not strip the topic word out of your description to
+avoid a false match, and do not avoid stating what a skill is NOT for. The
+recognized forms, surveyed from the bundled catalog:
+
+- `Not for <clause>.` / `NOT for: <clause>.` — the dominant convention (37+
+  bundled skills), usually paired with a redirect: `Not for X (use
+  \`other-skill\`).`
+- `Do not use for <clause>.`
+- A sentence that OPENS with `Never <clause>.` (a mid-sentence `never` in
+  otherwise-ordinary prose — "a fix that never widens beyond the failure" —
+  is deliberately left alone; only a sentence-initial `Never` is treated as
+  an exclusion clause, to avoid over-triggering on normal English).
+- A `(not <clause>)` parenthetical aside, anywhere in the text.
+- A standalone `Use \`<other-skill>\` instead.` redirect with no `Not for`
+  wrapper.
+
+Excluded tokens are dropped from the entry's positive evidence; they are
+**not** turned into negative evidence (a skill is not penalized for the
+topic it disclaims — see the `stripExclusionClauses` section comment in
+`scout.ts` for the full reasoning). This is layered on top of the shared
+tokenizer (`src/lib/route-tokens.ts`), not a change to it, and it does not
+touch behavior-scenario judging on this page — it only affects
+`triggerAccuracy` and `scoutSkill`'s use/fork overlap decision.
+
 ## The schema
 
 A behavior scenario's `expected_behavior` array may carry at most one judge
