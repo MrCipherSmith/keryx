@@ -2,6 +2,10 @@
 // injected fake `fetch`. No test in this file opens a real socket.
 
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { saveShellConfig } from "../../lib/shell-config";
 import {
   callJevSystemOne,
   DEFAULT_JEV_MODEL,
@@ -11,6 +15,7 @@ import {
   JEV_MODEL_LATEST,
   JEV_TOKEN_BUDGET,
   JevAnswerValidationError,
+  JevAuthRejectedError,
   JevBudgetError,
   JevCredentialError,
   JevRequestError,
@@ -19,6 +24,7 @@ import {
   JevTimeoutError,
   preflightBudget,
   resolveJevApiKey,
+  resolveJevApiKeyResolution,
   type JevQuestions,
 } from "./jev-client";
 
@@ -124,6 +130,107 @@ describe("AC3: 64k token pre-flight budget", () => {
       callJevSystemOne(fetchFn, { state: hugeState, questions: ONE_QUESTION }, { env: ENV_WITH_KEY }),
     ).rejects.toBeInstanceOf(JevBudgetError);
     expect((fetchFn as unknown as { calls: unknown[] }).calls).toHaveLength(0);
+  });
+});
+
+describe("flow 307 AC7: a rejected credential names its source and checks the sk-or- prefix", () => {
+  test("resolveJevApiKeyResolution reports source 'env' for OPENROUTER_API_KEY", () => {
+    expect(resolveJevApiKeyResolution({ OPENROUTER_API_KEY: "sk-or-env" })).toEqual({ key: "sk-or-env", source: "env" });
+  });
+
+  test("resolveJevApiKeyResolution reports source 'none' when nothing is set", () => {
+    expect(resolveJevApiKeyResolution({})).toEqual({ key: undefined, source: "none" });
+  });
+
+  test("a 401 from an env-sourced key names the environment variable, without printing the key", async () => {
+    const fetchFn = fakeFetch({ error: "invalid credentials" }, 401);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: { OPENROUTER_API_KEY: "sk-or-real-looking" } });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevAuthRejectedError);
+    expect(caught).toBeInstanceOf(JevRequestError);
+    const err = caught as JevAuthRejectedError;
+    expect(err.source).toBe("env");
+    expect(err.message).toContain("OPENROUTER_API_KEY environment variable");
+    expect(err.message).not.toContain("sk-or-real-looking");
+  });
+
+  test("a 401 from an env-sourced key that does not start with sk-or- flags the missing prefix", async () => {
+    const fetchFn = fakeFetch({ error: "invalid credentials" }, 401);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: { OPENROUTER_API_KEY: "not-an-openrouter-key" } });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevAuthRejectedError);
+    const err = caught as JevAuthRejectedError;
+    expect(err.message).toContain("does not look like an OpenRouter key");
+    expect(err.message).toContain('"sk-or-"');
+    expect(err.message).not.toContain("not-an-openrouter-key");
+  });
+
+  test("a 401 from a SAVED key (no env var; keryx shell config) names the saved source", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-jev-cfg-"));
+    saveShellConfig({ openrouterKey: "sk-or-saved" }, dir);
+    const fetchFn = fakeFetch({ error: "invalid credentials" }, 401);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: {}, dir });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevAuthRejectedError);
+    const err = caught as JevAuthRejectedError;
+    expect(err.source).toBe("saved");
+    expect(err.message).toContain("saved OpenRouter key");
+    expect(err.message).not.toContain("sk-or-saved");
+  });
+
+  test("a non-401 non-2xx response stays a plain JevRequestError, not JevAuthRejectedError", async () => {
+    const fetchFn = fakeFetch({ error: "server error" }, 500);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevRequestError);
+    expect(caught).not.toBeInstanceOf(JevAuthRejectedError);
+  });
+
+  test("flow 307 review item 4: a 401 body that echoes the submitted key never carries it into the error message", async () => {
+    const submittedKey = "sk-or-v1-abcdef1234567890abcdef1234567890";
+    // Some gateways echo the offending credential back in an "invalid key" body.
+    const fetchFn = fakeFetch({ error: "invalid api key", key: submittedKey }, 401);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: { OPENROUTER_API_KEY: submittedKey } });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevAuthRejectedError);
+    const err = caught as JevAuthRejectedError;
+    expect(err.message).not.toContain(submittedKey);
+    expect(err.message).toContain("[REDACTED:secret]");
+  });
+
+  test("flow 307 review item 4: a non-401 error body that echoes a key is also redacted", async () => {
+    const submittedKey = "sk-or-v1-abcdef1234567890abcdef1234567890";
+    const fetchFn = fakeFetch({ error: "server error", echoedKey: submittedKey }, 500);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevRequestError);
+    const err = caught as JevRequestError;
+    expect(err.message).not.toContain(submittedKey);
+    expect(err.message).toContain("[REDACTED:secret]");
   });
 });
 

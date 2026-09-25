@@ -1,0 +1,11 @@
+{
+  "runId": "35885829526",
+  "workflowName": "CI",
+  "headBranch": "fix/help-terminal-slash",
+  "headSha": "0e744bf959dc1c48bc98a6f5d5df2678f6edf125",
+  "conclusion": "failure",
+  "jobs": [
+    { "name": "opentui native (darwin-x64)", "conclusion": "failure", "status": "completed" },
+    { "name": "typecheck-and-tests", "conclusion": "success", "status": "completed" }
+  ]
+}

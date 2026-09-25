@@ -1,0 +1,17 @@
+{
+  "runs": {
+    "35865793959": {
+      "runId": "35865793959",
+      "workflowName": "CI",
+      "headBranch": "main",
+      "headSha": "5b6eb8105a866e26d2b2004d22d54f70e97f34fb",
+      "conclusion": "failure",
+      "jobs": [
+        { "name": "typecheck-and-tests", "conclusion": "failure", "status": "completed" }
+      ]
+    }
+  },
+  "logs": {
+    "35865793959": "typecheck-and-tests\tTypecheck and core gate (offline, model-free)\t766 |     expect(providerReportsUsage(\"deepseek\")).toBe(false);\ntypecheck-and-tests\tTypecheck and core gate (offline, model-free)\terror: expect(received).toBe(expected)\ntypecheck-and-tests\tTypecheck and core gate (offline, model-free)\t      at <anonymous> (/home/runner/work/keryx/keryx/src/commands/trigger-dispatch.test.ts:766:46)\ntypecheck-and-tests\tTypecheck and core gate (offline, model-free)\t(fail) AC14: spend is reserved before the first model call and never fails open > only providers known to report usage are accepted [85.95ms]\n"
+  }
+}

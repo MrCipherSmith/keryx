@@ -1,0 +1,9 @@
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	##[group]coverage guard:
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	1 tests failed:
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	(fail) the core gate and the client matrix between them run every test in src/ [6.41ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 7765 pass
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 12 skip
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 1 fail
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	Ran 7778 tests across 591 files.
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	error: script "test:core" exited with code 1
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	##[error]Process completed with exit code 1.

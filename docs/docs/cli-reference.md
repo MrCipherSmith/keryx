@@ -3726,23 +3726,40 @@ than implying a guarantee that does not exist.
 
 ### `review ci-triage`
 
-Advisory-only triage for one failed CI run's job: flaky, infra, or real
+Advisory-only triage for a failed CI run's job(s): flaky, infra, or real
 regression, scored by Jev (TypeSafe System One) over a redacted, bounded
-excerpt of the job's own log. Flow 306.
+excerpt of the job's own log **plus a small block of deterministic signals**
+computed before Jev is ever asked. Flow 306 (Jev client, opt-in gate,
+advisory rendering); flow 307 (signals, every-failed-job default, the
+evaluation harness, this section's measured-accuracy numbers).
 
 ```bash
-keryx review ci-triage --run 36095133327 --job typecheck-and-tests --json
+keryx review ci-triage --run 36095133327 --json
 ```
 
 | Flag | Description |
 |---|---|
-| `--run <id>` | Required. The CI run id (e.g. a GitHub Actions run id). |
-| `--job <name>` | Which of the run's jobs to triage. Omitted, the first job whose conclusion is `failure` is used. |
-| `--test <name>` | Override the failing test name instead of the best-effort extraction from the log excerpt. |
+| `--run <id>` | Required (unless `--eval`). The CI run id (e.g. a GitHub Actions run id). |
+| `--job <name>` | Narrows to one of the run's jobs (reaches it directly even when it is beyond the `MAX_JOBS_TRIAGED` cap below). Omitted, **every job whose conclusion is `failure` is triaged** (flow 307, AC3), up to the cap — one verdict each. |
+| `--test <name>` | Override the failing test name instead of the best-effort extraction from the log excerpt. Only applied when exactly one job is in scope. |
 | `--repo <owner/repo>` | Passed to the live `gh` adapter; omitted, `gh` resolves the repository from the current checkout. |
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
-| `--fixtures <dir>` | Answers BOTH the CI read and the Jev call from files on disk (`ci-run-info.json`, `ci-failed-log.txt`, optional `ci-history.json`, `jev-response.json`) — no real `gh` call, no real network call. |
-| `--json` | Prints `{runId, job, testName, verdict, usage}` instead of the human-readable advisory text. |
+| `--fixtures <dir>` | Answers BOTH the CI read and the Jev call from files on disk (`ci-run-info.json`, `ci-failed-log.txt`, optional `ci-history.json`, `ci-attempts.json`, `ci-changed-files.json`, `ci-runs-by-head-sha.json`, `ci-related-runs.json`, `jev-response.json`) — no real `gh` call, no real network call. |
+| `--json` | Prints `{results, notTriaged}`: `results` is an array, one entry per triaged job, each `{runId, job, testName, verdict, usage}`; `notTriaged` names any failed jobs beyond the `MAX_JOBS_TRIAGED` cap (empty when nothing was skipped). |
+| `--eval <file>` | Flow 307 (AC5/AC6). Replays a labelled evaluation manifest (JSON, `{cases: [{id, runId, job, truth, fixturesDir}]}`) and reports **before** (flow 306: log only) and **after** (flow 307: log + signals) accuracy and cost, plus a per-case line. Offline (fixtures) by default. See below. |
+| `--live` | Only with `--eval`: replay against the real `gh`/Jev instead of each case's `fixturesDir` — the opt-in gate and credential check both apply, same as a plain `--run`. |
+
+**A bounded number of jobs per run (flow 307 review, `MAX_JOBS_TRIAGED = 10`).**
+Without `--job`, at most 10 failed jobs of one run are triaged — each job costs
+one Jev call and (with signals) a bounded number of extra `gh` reads, so an
+unbounded number of failed jobs no longer means an unbounded number of calls.
+Jobs beyond the cap are listed rather than silently triaged or silently
+dropped: `notTriaged` in the `--json` output, and a
+`not triaged (cap 10; use --job)` line in the text output. `--job <name>`
+still reaches any one of them directly. The failed-step log and the
+run-level signals (`priorAttempts`/`changedFiles`/`runsForHeadSha`) are each
+read once per run and reused across every job triaged, rather than
+re-fetched per job.
 
 ### `review conform`
 
@@ -3806,12 +3823,14 @@ OpenRouter/TypeSafe, so the mere presence of an `OPENROUTER_API_KEY` never
 implies consent. With the setting off, or with no OpenRouter credential
 (`OPENROUTER_API_KEY`, or a saved `openrouterKey`), the command refuses and
 makes **no network call** — neither the CI read port nor the Jev client is
-ever reached in that state.
+ever reached in that state. (`--eval` without `--live` needs neither: nothing
+it reads ever leaves the machine.)
 
-**Advisory only, by construction.** The CI read port
-(`src/review/ci-port.ts`) has exactly three read methods and no write method
-at all — there is no rerun, status-check, or merge call anywhere on this
-path to call. The printed verdict is always labelled `ADVISORY ONLY`.
+**Advisory only, by construction.** The CI read port (`src/review/ci-port.ts`)
+has exactly six read methods (three from flow 306, three flow 307 added for
+signals) and no write method at all — there is no rerun, status-check, or
+merge call anywhere on this path to call. The printed verdict is always
+labelled `ADVISORY ONLY`.
 
 **Per-option probability, not a single `choice` answer.** OpenRouter's own
 TypeSafe SDK guide documents no shape for a `choice` answer that carries a
@@ -3819,10 +3838,100 @@ probability per option — only the chosen option. So this command asks one
 `noul` question per bucket (`flaky`, `infra`, `real-regression`) instead of
 one `choice` question, and reports the three probabilities together.
 
-**Vendor-reported accuracy only.** This classifier ships with no measured
-precision/recall on this repository's own CI history — `PLAN.md`'s Phase 7
-evaluation (`docs/requirements/keryx-jev-review/PLAN.md`) is where that gets
-measured. Treat the verdict as a hint, not a diagnosis.
+**Deterministic signals, computed before Jev is asked (flow 307, AC1/AC2).**
+For every failed job, through `CiPort` and `git show` only — never a write:
+
+- **rerun** — did the SAME job pass on an EARLIER attempt of this SAME run
+  (a "re-run failed jobs"/"re-run all jobs" rerun)?
+- **history** — of a bounded window of this workflow's other recent runs
+  (last 50, at most 8 actually inspected, at most 5 logs actually fetched),
+  how many failed the SAME test on ANOTHER branch, and how many of those
+  later passed on that branch?
+- **diff proximity** — does this commit change the failing test file itself,
+  a file in its own directory, or (best-effort, via `git show <sha>:<path>`)
+  a file the test imports?
+- **log markers** — timeout/runner-lost/network/OOM/dependency-install-
+  corruption phrases in the log text itself.
+- **same head, later** — did a LATER run of the exact same commit (a manual
+  re-trigger, not a new push) have THIS SAME JOB conclude success? A later
+  run that is merely green AT RUN LEVEL does not prove this specific job
+  passed (the run could have skipped, dropped, or renamed it, or another job
+  in it could be the one still failing) — this is verified by reading that
+  later run's own job list through `CiPort.runInfo` and requiring a job of
+  the same name to have concluded `success`. When a later run is green at
+  run level but this job cannot be confirmed there, no deterministic
+  override is applied; the run is still mentioned as an advisory-only
+  evidence line.
+
+These are placed in Jev's `state` as a labelled block above the log excerpt
+(redacted the same as everything else, and counted against the same 64k
+budget), and the questions are rewritten to point at that block explicitly.
+Printed evidence lines mirror `state`'s signals block exactly.
+
+**Deterministic override (AC8).** When the rerun or same-head signal alone
+answers the question — the same job/test passed on another attempt, or a
+later run of the same commit passed — the verdict says `DETERMINISTIC` and
+names the reason, and **Jev's probabilities are still shown beside it**, not
+replaced: the signals decide `top`, not the numbers under it.
+
+**A known signal gap, found while building the evaluation set:** the
+cross-branch history signal matches candidate runs by JOB NAME. The SAME test
+failing under a DIFFERENT job-matrix leg (e.g. `opentui native (darwin-x64)`
+vs. `opentui native (linux-x64)` — the real `schedules-sidebar.test.ts` AC11
+flake did exactly this across two of this evaluation set's cases) is not
+picked up by that signal today. Diff proximity is also a heuristic that can
+point the wrong way on a PR whose OWN diff is the flakiness fix landing in
+the same commit as the failure (also observed in the evaluation set).
+
+**Measured accuracy (flow 307, AC6) — honestly, whatever it is.** A live run
+of `--eval` against the real runs of the eight cases in
+`src/commands/fixtures/ci-triage-eval/` (`gh`/Jev, not fixtures; 2026-09-25):
+
+| | accuracy | cost |
+|---|---|---|
+| before (flow 306: log only) | **4/8 = 50%** | $0.00077 |
+| after (flow 307: log + signals) | **4/8 = 50%** | $0.00083 |
+
+Raw top-1 accuracy did not move. Signals fixed one case (a thin log excerpt
+that Jev alone read as `infra`; the diff-proximity and cross-branch-history
+evidence correctly pointed at `real-regression`) and broke a different one
+(a job whose log said `timed out after 5000ms` — about as clear an `infra`/
+`flaky` marker as a log gets — that Jev alone got right and got wrong once
+the signals block and its more pointed question wording were added). The two
+runs of the identical underlying regression in this set (same test, same
+root cause, different CI runs) also got different verdicts from Jev BEFORE
+any signal was added, which is a reminder that the model's own answer is not
+perfectly stable run-to-run holding the failure fixed. **This classifier
+remains a hint, not a diagnosis** — treat a non-`DETERMINISTIC` verdict
+accordingly regardless of `--top`. See the flow 307 journal
+(`.metaproject/flows/307-*/journal.md`) for the full per-case breakdown and
+the evidence behind each of the eight labels.
+
+### `review ci-triage --eval`
+
+```bash
+keryx review ci-triage --eval src/commands/fixtures/ci-triage-eval/manifest.json
+keryx review ci-triage --eval src/commands/fixtures/ci-triage-eval/manifest.json --live --repo MrCipherSmith/keryx
+```
+
+The committed evaluation set
+(`src/commands/fixtures/ci-triage-eval/manifest.json` + `cases/`) is eight
+labelled failed CI jobs from this repository's own history (four real
+regressions, three flaky, one infra), each with the real run id, job name,
+head sha and head branch, and a truth label checked against `gh run view
+--json jobs` and the job's own `--log-failed` text before being recorded.
+Log excerpts are authored to be representative rather than a byte-exact copy
+(the same discipline `src/commands/fixtures/ci-triage/` already follows); no
+secret appears in any fixture file.
+
+Offline (the default) replays every case from its own `fixturesDir` — a
+canned `jev-response.json`, so `before`/`after` differ only where a case's
+fixtures carry deterministic evidence (none of the eight do today: every real
+fix in this set landed as a new commit, never an actual CI rerun, which is
+itself an honest finding about this repository's CI history). `--live`
+replays the SAME run/job pairs against the real `gh` and the real Jev
+endpoint instead, and is where `before` and `after` can actually differ,
+since the two passes ask Jev different questions.
 
 ### `review budget`
 
