@@ -127,26 +127,31 @@ function stemLite(token: string): string {
 }
 
 /**
- * Tokenizes `text` for scoring, with exclusion-clause text removed first
- * (flow 334, `stripExclusionClauses` below) — applied uniformly to BOTH
- * sides of a comparison. An entry's own description/triggers obviously need
- * this (that is the leak this flow fixes — see the section comment below).
- * A QUERY needs it too whenever the query itself is (or contains) a skill's
- * own description — `scoutSkill`'s and `nearestSkills`'s self-identification
- * checks, and `keryx skills scout` run against a candidate's own drafted
- * description, both pass a skill description as the query. Without this, a
+ * Tokenizes `text` for scoring. `stripExclusions: true` removes
+ * exclusion-clause text first (flow 334, `stripExclusionClauses` below).
+ *
+ * WHICH SIDE GETS `stripExclusions: true` (flow 334 review round 1, the
+ * blocker/query-side finding): an entry's own description/triggers ALWAYS
+ * do (`entryLexicalTokens` — that is the leak this flow fixes). The QUERY
+ * side is stripped ONLY when the query IS (or quotes) a skill's own
+ * description — `scoutSkill`'s and `nearestSkills`'s self-identification
+ * checks, and `keryx skills scout`/`bundle/external.ts`'s candidate-vetting
+ * callers, all pass a skill description as the query, and without this a
  * skill whose description names ANOTHER skill in its own "not for" clause
  * (`quality/pr`: "... NOT for rewriting the body of a pull request ... (use
  * `pr-issue-documenter`)") would have that sibling's name still counted as
  * QUERY intent even though it is no longer counted as the ENTRY's own
- * evidence — inflating the sibling's score and, in the observed case,
- * making it outrank the skill whose own description was the query. An
- * ordinary live user query essentially never opens a sentence with "not
- * for"/"do not use for" or starts a sentence with "never", so this has no
- * observed effect on normal routing queries.
+ * evidence.
+ *
+ * `checkSkillSelected`/`checkSkillSelectedLeaveOneOut` NEVER strip their
+ * query — that query is always a live routing prompt or a trigger-accuracy
+ * probe (real or synthesized), never a skill description, and stripping it
+ * would corrupt ordinary free text: "Never mind the tests, push my branch"
+ * legitimately opens with "Never" and must keep every one of its words.
  */
-function lexicalTokens(text: string): Set<string> {
-  return new Set([...routeTokens(normalizeRouteText(stripExclusionClauses(text)))].map(stemLite));
+function lexicalTokens(text: string, options: { stripExclusions?: boolean } = {}): Set<string> {
+  const source = options.stripExclusions === true ? stripExclusionClauses(text) : text;
+  return new Set([...routeTokens(normalizeRouteText(source))].map(stemLite));
 }
 
 // ---------------------------------------------------------------------------
@@ -172,18 +177,9 @@ function lexicalTokens(text: string): Set<string> {
 // set. A survey of the bundled catalog (`keryx ctx rg`, flow 334 journal)
 // found the convention lives almost entirely in the `description:` field as
 // "NOT for <clause>[, and NOT for <clause>]* (use `<x>` instead)." — that
-// survey drove the opener list below.
+// survey drove the marker list below.
 //
 // SCOPE OF THE FIX, DELIBERATELY NARROW:
-//   - `lexicalTokens` (the one function both `entryLexicalTokens` and
-//     `rankCatalog`'s query tokenization call) strips exclusion clauses
-//     uniformly, so ENTRY text and QUERY text are treated the same way —
-//     see `lexicalTokens`'s own doc comment for why the query side needs
-//     this too (self-identification queries built from a skill's own
-//     description carry the same clauses an entry does). An ordinary live
-//     routing query essentially never opens with "not for"/"never", so this
-//     has no observed effect on normal queries; it only matters when the
-//     query itself is (or quotes) a skill description.
 //   - Excluded tokens are DROPPED, not counted as negative evidence. A
 //     negative-weight scheme risks penalizing a skill for a topic it
 //     explicitly disclaims (`push`'s "NOT for creating the commits" clause
@@ -194,41 +190,109 @@ function lexicalTokens(text: string): Set<string> {
 //     the flow 334 journal for the full reasoning.
 //   - `src/lib/route-tokens.ts` (the shared tokenizer both the scorer and
 //     the live router use) is untouched — negation handling is layered on
-//     top of it here, in the one place that reads ENTRY definitions.
+//     top of it here.
+//   - Deliberately NOT handled (flow 334 review round 1, minors): a plain
+//     `without` is left alone — it is too ambiguous a signal on its own
+//     ("a fix without touching the schema" is not an exclusion clause; the
+//     multi-word markers below are all far more specific) — and a
+//     NOT-for clause that spans MULTIPLE sentences (no bundled skill does
+//     this today; the survey found the convention is always one sentence)
+//     is only handled within the sentence it starts in, not merged forward
+//     into a following sentence that has no marker of its own. Both are
+//     recorded here rather than guessed at with a fragile heuristic.
 // ---------------------------------------------------------------------------
 
-/** Sentence-level exclusion-clause openers, matched case-insensitively at any position within a sentence. Anchored on the multi-word phrasing the survey found (`not for`, `do not use for`) so an unrelated, legitimate "not" elsewhere in a sentence (e.g. "figures out why the build is not passing") is never swept up. */
-const EXCLUSION_SENTENCE_OPENERS: readonly RegExp[] = [/\bnot\s+for\b/i, /\bdo\s+not\s+use\s+for\b/i];
+/** Multi-word phrase markers for an exclusion clause, matched case-insensitively ANYWHERE within a sentence (not just at its start — despite the name a plain "not for" is not always the sentence's first word, e.g. "Use when X, not for Y."). Each is multi-word/distinctive enough that an unrelated, legitimate use of "not"/"does" elsewhere in a sentence (e.g. "figures out why the build is not passing", "does not require network access" as a capability note) is the accepted, documented tradeoff — "does not" in particular is intentionally broad per the flow 334 review's explicit request to recognize "Does NOT …" clauses. */
+const EXCLUSION_CLAUSE_MARKERS: readonly RegExp[] = [/\bnot\s+for\b/i, /\bdo\s+not\s+use\s+for\b/i, /\bdoes\s+not\b/i];
 
-/** A sentence that itself OPENS with "Never …" is treated as a whole exclusion clause (flow parameters name "Never X" explicitly). Restricted to sentence-initial position — unlike `not for`, a bare `never` appearing later in an otherwise-positive sentence is common ordinary English ("a fix that never widens beyond the failure") and would over-trigger if matched anywhere. */
+/** A sentence that itself OPENS with "Never …" is treated as a whole exclusion clause (flow parameters name "Never X" explicitly). Restricted to sentence-initial position — unlike the markers above, a bare `never` appearing later in an otherwise-positive sentence is common ordinary English ("a fix that never widens beyond the failure") and would over-trigger if matched anywhere. */
 const LEADING_NEVER = /^\s*never\b/i;
 
-/** `(not …)`/`(never …)` parenthetical asides anywhere in the text — e.g. "(not the CLI form)" — stripped independent of sentence splitting, since a parenthetical is not reliably sentence-delimited by `.`/`!`/`?`. */
-const NEGATED_PARENTHETICAL = /\(\s*(?:not|never)\b[^)]*\)/gi;
+/** A `(not only X but also Y)` parenthetical is an INCLUSIVE idiom — the opposite of an exclusion — and must never be stripped by `PARENTHETICAL`'s handler below just because it starts with "not". */
+const NOT_ONLY_BUT_ALSO = /\bnot\s+only\b[\s\S]*\bbut\s+also\b/i;
 
-/** A "use `<x>` instead" redirect: `<x>` names ANOTHER skill, not this one's own topic, so it must not count as this entry's evidence even inside an otherwise-kept sentence (e.g. a bare "Use `pr-issue-documenter` instead." redirect with no "not for" wrapper). Scoped to `use … instead` so it never matches the extremely common "Use when …" description opener (which has no "instead"). */
-const USE_INSTEAD_PHRASE = /\buse\b[^.!?()]*?\binstead\b/gi;
+/** Any `(...)` parenthetical, inspected one at a time by `stripParentheticals` below — starts with `not`/`never` (an aside naming what this is NOT, or what to never do) or `see` (a cross-reference, e.g. "(see api-truth)") get dropped, unless `NOT_ONLY_BUT_ALSO` says the parenthetical is the inclusive idiom above. */
+const PARENTHETICAL = /\(([^()]*)\)/g;
 
-/** Splits `text` into sentences on `.`/`!`/`?` followed by whitespace — good enough for the short, plainly-punctuated frontmatter prose this scores; a missed split only widens what one sentence-level strip removes, it never causes a clause to be missed entirely (the parenthetical and "use…instead" patterns run independently of sentence boundaries too). */
+/**
+ * A "use `<x>` instead" redirect naming ONE other skill immediately after
+ * "use": `<x>` is the OTHER skill's topic, not this entry's own, so it must
+ * not count as this entry's evidence even inside an otherwise-kept sentence
+ * (e.g. a bare "Use `pr-issue-documenter` instead." redirect with no
+ * "not for" wrapper).
+ *
+ * BLOCKER FIX (flow 334 review round 1): the original pattern
+ * (`/\buse\b[^.!?()]*?\binstead\b/gi`) matched from the FIRST "use" in the
+ * sentence — almost always the ubiquitous "Use when …" description opener —
+ * through to ANY later "instead", deleting the skill's entire positive
+ * description whenever the two co-occurred anywhere in one sentence (real
+ * case: `core/entity-skill-router`'s own query dropped from rank 1, score
+ * 1.000, to rank 28, score 0.094). The `[^.!?()]*?` gap was also unbounded
+ * (bar the sentence itself), so a crafted string with many repeated "use"
+ * tokens is quadratic in the backtracking engine — reachable from
+ * `bundle/external.ts:507`'s `scoutSkill` call over an external candidate's
+ * (untrusted) name+description.
+ *
+ * Fixed shape: "use" immediately followed by exactly ONE identifier-shaped
+ * token (optionally backtick/quote-wrapped — a bare word like `commit` or a
+ * hyphenated skill id like `pr-issue-documenter`), then "instead" within a
+ * few words. This cannot match "Use when implementing a new feature …
+ * instead" (many words, not one identifier, between "use" and "instead")
+ * and has no unbounded gap to backtrack over.
+ */
+const USE_INSTEAD_PHRASE = /\buse\s+[`'"]?[a-z][\w-]{0,60}[`'"]?(?:\s+\S+){0,3}?\s+instead\b/gi;
+
+/**
+ * Splits `text` into sentences on `.`/`!`/`?` followed by whitespace —
+ * good enough for the short, plainly-punctuated frontmatter prose this
+ * scores. `e.g.`/`i.e.` abbreviations are protected first (flow 334 review
+ * round 1 minor) so "NOT for X, e.g. Y and Z." does not get cut short at
+ * "e.g." and leave "Y and Z" un-excluded as a spurious new "sentence". A
+ * missed split only widens what one sentence-level strip removes, it never
+ * causes a clause to be missed entirely (the parenthetical and
+ * "use…instead" patterns run independently of sentence boundaries too).
+ */
+const ABBREVIATION_PERIOD_PLACEHOLDER = ""; // Unicode Private Use Area — never occurs in real prose, and not a control character (unlike U+0000), so it does not trip `no-control-regex`.
+
 function splitSentences(text: string): string[] {
-  return text.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.trim().length > 0);
+  const abbreviationsProtected = text.replace(/\b(e\.g|i\.e)\.(?=\s)/gi, `$1${ABBREVIATION_PERIOD_PLACEHOLDER}`);
+  return abbreviationsProtected
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.replaceAll(ABBREVIATION_PERIOD_PLACEHOLDER, "."))
+    .filter((sentence) => sentence.trim().length > 0);
+}
+
+/**
+ * Strips `(not …)`/`(never …)`/`(see …)` parenthetical asides, preserving a
+ * `(not only X but also Y)` inclusive idiom untouched (flow 334 review
+ * round 1 minors — "(see x)" cross-references, and protecting the idiom).
+ * Independent of sentence splitting, since a parenthetical is not reliably
+ * sentence-delimited by `.`/`!`/`?`. Non-nested (`[^()]*`) — a nested paren
+ * inside frontmatter prose has not been observed in the bundled catalog.
+ */
+function stripParentheticals(text: string): string {
+  return text.replace(PARENTHETICAL, (whole, inner: string) => {
+    if (NOT_ONLY_BUT_ALSO.test(whole)) return whole;
+    if (/^\s*(?:not|never|see)\b/i.test(inner)) return " ";
+    return whole;
+  });
 }
 
 /**
  * Removes exclusion-clause text from `text`, returning what is left to
  * score as POSITIVE evidence. Exported for direct unit testing (flow 334)
- * — the entry-scoring pipeline (`entryLexicalTokens`) is the only other
- * caller.
+ * — `entryLexicalTokens` (always) and `lexicalTokens` with
+ * `stripExclusions: true` (query side, description-shaped callers only —
+ * see `lexicalTokens`'s own doc comment) are the only other callers.
  */
 export function stripExclusionClauses(text: string): string {
-  const withoutParentheticals = text.replace(NEGATED_PARENTHETICAL, " ");
+  const withoutParentheticals = stripParentheticals(text);
 
   const kept: string[] = [];
   for (const sentence of splitSentences(withoutParentheticals)) {
     let cutAt = -1;
-    for (const opener of EXCLUSION_SENTENCE_OPENERS) {
-      const match = opener.exec(sentence);
-      opener.lastIndex = 0; // these openers are not /g, but exec on a shared regex literal is otherwise stateless here — reset defensively
+    for (const marker of EXCLUSION_CLAUSE_MARKERS) {
+      const match = marker.exec(sentence);
       if (match !== null && (cutAt === -1 || match.index < cutAt)) cutAt = match.index;
     }
     if (LEADING_NEVER.test(sentence)) {
@@ -241,7 +305,7 @@ export function stripExclusionClauses(text: string): string {
       continue; // the whole exclusion clause (through sentence end) is dropped
     }
 
-    // No sentence-level opener: still strip a standalone "use X instead"
+    // No sentence-level marker: still strip a standalone "use X instead"
     // redirect inside an otherwise-kept sentence.
     kept.push(sentence.replace(USE_INSTEAD_PHRASE, " "));
   }
@@ -272,10 +336,28 @@ export function stripExclusionClauses(text: string): string {
  */
 export type LexicalField = "full" | "description-only";
 
-/** `name + description` (+ `triggers` when `field` is `"full"`), tokenized and stemmed (via `lexicalTokens`, which strips exclusion-clause text first — flow 334) — the text an entry is scored on. */
+/**
+ * Joins `parts` with a forced sentence boundary between each one (flow 334
+ * review round 1 minor): `stripExclusionClauses` cuts an exclusion clause
+ * only through the END OF ITS SENTENCE, so joining `description` straight
+ * into `triggers` with a bare space — when a description happens to be
+ * missing its trailing period — would let an unterminated "NOT for X"
+ * swallow every trigger phrase that follows it as part of the SAME
+ * sentence. Every bundled description observed ends in `.`/`!`/`?` already,
+ * so this is a no-op there; it only matters for a future author who forgets
+ * the period.
+ */
+function joinAsSentences(parts: readonly string[]): string {
+  return parts
+    .filter((part) => part.length > 0)
+    .map((part) => (/[.!?]$/.test(part.trim()) ? part : `${part}.`))
+    .join(" ");
+}
+
+/** `name + description` (+ `triggers` when `field` is `"full"`), tokenized and stemmed (via `lexicalTokens`, which always strips exclusion-clause text for an entry — flow 334) — the text an entry is scored on. */
 function entryLexicalTokens(entry: CatalogEntry, field: LexicalField): Set<string> {
   const parts = field === "full" ? [entry.name, entry.description, ...entry.triggers] : [entry.name, entry.description];
-  return lexicalTokens(parts.join(" "));
+  return lexicalTokens(joinAsSentences(parts), { stripExclusions: true });
 }
 
 interface LexicalIndex {
@@ -323,10 +405,21 @@ function coverageScore(
   return { score: queryWeight === 0 ? 0 : matchedWeight / queryWeight, shared };
 }
 
-/** Every catalog entry scored against `query`, sorted by score descending then id ascending (deterministic ties) — the FULL ranking, uncapped (`scoutSkill` caps it to 5 for display; the trigger grader needs the whole thing to check what outranks what). */
-function rankCatalog(query: string, catalog: readonly CatalogEntry[], field: LexicalField = "full"): ScoutMatch[] {
+/**
+ * Every catalog entry scored against `query`, sorted by score descending
+ * then id ascending (deterministic ties) — the FULL ranking, uncapped
+ * (`scoutSkill` caps it to 5 for display; the trigger grader needs the
+ * whole thing to check what outranks what).
+ *
+ * `stripQueryExclusions` (flow 334 review round 1): whether `query` itself
+ * gets exclusion-clause stripping — see `lexicalTokens`'s doc comment for
+ * the rule. Callers must pass this explicitly and deliberately; there is no
+ * default, so a future new caller cannot silently inherit the wrong side of
+ * that rule.
+ */
+function rankCatalog(query: string, catalog: readonly CatalogEntry[], field: LexicalField, stripQueryExclusions: boolean): ScoutMatch[] {
   const index = buildLexicalIndex(catalog, field);
-  const queryTokens = lexicalTokens(query);
+  const queryTokens = lexicalTokens(query, { stripExclusions: stripQueryExclusions });
   const scored = catalog.map((entry) => {
     const entryTokens = index.tokensById.get(entry.id) ?? new Set<string>();
     const { score, shared } = coverageScore(queryTokens, entryTokens, index.idf);
@@ -344,6 +437,16 @@ function rankCatalog(query: string, catalog: readonly CatalogEntry[], field: Lex
  * Score `query` against `catalog` and decide `use | fork | create`. Top 5
  * matches, sorted by score descending then id (a deterministic tie-break so
  * two runs against the same catalog always report the same order).
+ *
+ * `query` here is always a SKILL-DESCRIPTION-shaped string in every real
+ * caller — `keryx skills scout <query>`'s pre-creation dedupe query, an
+ * external candidate's own `name + description`
+ * (`bundle/external.ts:507`), and `nearestSkills`'/self-identification
+ * callers' `entry.description` — never a live agent routing prompt (that is
+ * `checkSkillSelected`, which never strips its query). So `query` gets the
+ * same exclusion-clause stripping an entry's own text gets (flow 334 review
+ * round 1) — a candidate description's own "Not for X (use Y instead)"
+ * clause must not count Y as what THIS candidate is asking to reuse.
  */
 export function scoutSkill(query: string, catalog: readonly CatalogEntry[], options: ScoutOptions = {}): ScoutResult {
   const use = options.threshold?.use ?? SCOUT_USE_THRESHOLD;
@@ -351,7 +454,7 @@ export function scoutSkill(query: string, catalog: readonly CatalogEntry[], opti
 
   const excludeIds = options.excludeIds;
   const scoredCatalog = excludeIds !== undefined && excludeIds.length > 0 ? catalog.filter((entry) => !excludeIds.includes(entry.id)) : catalog;
-  const scored = rankCatalog(query, scoredCatalog);
+  const scored = rankCatalog(query, scoredCatalog, "full", true);
   const matches = scored.slice(0, 5);
   const top = scored[0];
   let decision: ScoutDecision = "create";
@@ -412,7 +515,11 @@ export interface SkillSelectionCheck {
  */
 export function checkSkillSelected(query: string, skillId: string, catalog: readonly CatalogEntry[], options: ScoutOptions = {}): SkillSelectionCheck {
   const fork = options.threshold?.fork ?? SCOUT_FORK_THRESHOLD;
-  const ranked = rankCatalog(query, catalog, options.field ?? "full");
+  // `query` here is always a live routing/trigger-accuracy prompt, never a
+  // skill description — `stripQueryExclusions` is UNCONDITIONALLY false
+  // (flow 334 review round 1), not driven by `options`, so ordinary free
+  // text ("Never mind the tests, push my branch") is never corrupted.
+  const ranked = rankCatalog(query, catalog, options.field ?? "full", false);
   const index = ranked.findIndex((match) => match.skillId === skillId);
   if (index === -1) return { selected: false, score: 0, rank: -1 };
 
@@ -514,7 +621,9 @@ export function nearestSkills(skillId: string, catalog: readonly CatalogEntry[],
   const skill = catalog.find((entry) => entry.id === skillId);
   if (skill === undefined) return [];
   const query = skill.description.length > 0 ? skill.description : skill.name;
-  const ranked = rankCatalog(query, catalog, "full").filter((match) => match.skillId !== skillId);
+  // `query` is `skillId`'s own description — strip its exclusion clauses too
+  // (flow 334 review round 1), same rule as `scoutSkill`.
+  const ranked = rankCatalog(query, catalog, "full", true).filter((match) => match.skillId !== skillId);
   return ranked.slice(0, limit);
 }
 

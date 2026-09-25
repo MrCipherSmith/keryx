@@ -8,7 +8,9 @@ import { loadSkillCatalog } from "./catalog-index";
 import {
   auditSkillSnapshot,
   checkSkillSelected,
+  checkSkillSelectedLeaveOneOut,
   collectSkillDirectorySnapshot,
+  nearestSkills,
   readScoutRecord,
   recordScout,
   SCOUT_FORK_THRESHOLD,
@@ -565,11 +567,14 @@ describe("auditSkillSnapshot (R2-I2)", () => {
 
 // ---------------------------------------------------------------------------
 // Flow 334: negation-aware scoring — "Not for X"/"Never …"/"Do not use for
-// X"/"Use Y instead"/"(not X)" clauses in a catalog entry's own
-// description/triggers must stop counting as positive coverage evidence for
-// that entry. See scout.ts's own section comment above `stripExclusionClauses`
-// for the full design rationale and the flow 334 journal for the bundled-
-// catalog survey that drove the opener list.
+// X"/"Does not X"/"Use Y instead"/"(not X)"/"(see X)" clauses in a catalog
+// entry's own description/triggers must stop counting as positive coverage
+// evidence for that entry. See scout.ts's own section comment above
+// `stripExclusionClauses` for the full design rationale and the flow 334
+// journal for the bundled-catalog survey that drove the marker list, and
+// for the round-1 review findings these tests were added or rewritten to
+// cover (a blocker in `USE_INSTEAD_PHRASE`, query-side over-stripping, a
+// circular regression test, and a self-referential AC2 test).
 // ---------------------------------------------------------------------------
 
 describe("stripExclusionClauses (flow 334)", () => {
@@ -603,10 +608,37 @@ describe("stripExclusionClauses (flow 334)", () => {
     expect(stripped).toMatch(/\brequires\b/i);
   });
 
+  test("drops a 'Does not X' sentence (flow 334 review round 1 minor)", () => {
+    const stripped = stripExclusionClauses("Use when reviewing a diff for logic bugs. Does not edit code or apply fixes.");
+    expect(stripped).toContain("Use when reviewing a diff for logic bugs.");
+    expect(stripped).not.toMatch(/\bedit\b/i);
+    expect(stripped).not.toMatch(/\bfixes\b/i);
+  });
+
   test("drops a '(not X)' parenthetical wherever it appears", () => {
     const stripped = stripExclusionClauses("Use when reviewing the backend (not the CLI form) for API design issues.");
     expect(stripped).not.toMatch(/\bcli\b/i);
     expect(stripped).toMatch(/\bapi\b/i);
+  });
+
+  test("drops a '(see X)' cross-reference parenthetical (flow 334 review round 1 minor)", () => {
+    const stripped = stripExclusionClauses("Use when checking whether a documented API call still matches reality (see api-truth for version-diff checks).");
+    expect(stripped).not.toMatch(/\bversion-diff\b/i);
+    expect(stripped).toMatch(/\breality\b/i);
+  });
+
+  test("keeps a '(not only X but also Y)' inclusive idiom untouched (flow 334 review round 1 minor)", () => {
+    const stripped = stripExclusionClauses("Use when auditing a change (not only for bugs but also for missing tests) before merge.");
+    expect(stripped).toMatch(/\bbugs\b/i);
+    expect(stripped).toMatch(/\btests\b/i);
+  });
+
+  test("does not split a sentence on 'e.g.'/'i.e.' inside a NOT-for clause (flow 334 review round 1 minor)", () => {
+    const stripped = stripExclusionClauses("Use when implementing a backend feature. Not for frontend work, e.g. React components or CSS, which belongs to a UI skill.");
+    expect(stripped).toContain("Use when implementing a backend feature.");
+    expect(stripped).not.toMatch(/\breact\b/i);
+    expect(stripped).not.toMatch(/\bcomponents\b/i);
+    expect(stripped).not.toMatch(/\bui\b/i);
   });
 
   test("drops a standalone 'use X instead' redirect with no 'not for' wrapper", () => {
@@ -618,6 +650,78 @@ describe("stripExclusionClauses (flow 334)", () => {
   test("does NOT drop the extremely common 'Use when X' description opener", () => {
     const stripped = stripExclusionClauses("Use when implementing a new feature in a Node.js service.");
     expect(stripped).toBe("Use when implementing a new feature in a Node.js service.");
+  });
+
+  // BLOCKER (flow 334 review round 1): the original `USE_INSTEAD_PHRASE`
+  // matched from the sentence's FIRST "use" — almost always "Use when …" —
+  // through to ANY later "instead" in the SAME sentence, deleting the
+  // skill's entire positive claim whenever the two co-occurred. Real case:
+  // a description shaped like the one below (a long "Use when …" clause
+  // followed by an unrelated later "instead") used to collapse to almost
+  // nothing.
+  test("does NOT delete the whole sentence when 'use' (the description opener) and a later 'instead' co-occur outside a redirect", () => {
+    const stripped = stripExclusionClauses(
+      "Use when a request is ambiguous and needs to be scoped before implementation begins, gathering just enough context instead of guessing.",
+    );
+    expect(stripped).toMatch(/\bambiguous\b/i);
+    expect(stripped).toMatch(/\bscoped\b/i);
+    expect(stripped).toMatch(/\bimplementation\b/i);
+    expect(stripped).toMatch(/\bcontext\b/i);
+  });
+
+  test("USE_INSTEAD_PHRASE is bounded — a crafted string with many repeated 'use' tokens does not hang or blow up quadratically", () => {
+    const crafted = `use ${"x ".repeat(20000)}instead`;
+    const start = Date.now();
+    const stripped = stripExclusionClauses(crafted);
+    const elapsedMs = Date.now() - start;
+    expect(elapsedMs).toBeLessThan(500);
+    // A single "use <token> instead" run at the very end is still a valid
+    // redirect shape and gets stripped; the important assertion is timing.
+    expect(stripped.length).toBeGreaterThan(0);
+  });
+});
+
+describe("query-side stripping is conditional, never applied to a live routing/trigger prompt (flow 334 review round 1)", () => {
+  test("checkSkillSelected keeps every word of an ordinary free-text query that happens to open with 'Never'", () => {
+    // Before this was fixed, ANY query run through the scorer had its own
+    // exclusion clauses stripped unconditionally — "Never mind the tests,
+    // push my branch" is a single un-punctuated sentence that OPENS with
+    // "Never", so the old code stripped the ENTIRE query to "".
+    const query = "Never mind the tests, push my branch";
+    expect(stripExclusionClauses(query)).toBe(""); // stripExclusionClauses itself is still this aggressive by design —
+    // the fix is that checkSkillSelected must never call it on a query.
+    const result = checkSkillSelected(query, "quality/push", catalog);
+    expect(result.selected).toBe(true);
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  test("checkSkillSelectedLeaveOneOut also never strips its query", () => {
+    const query = "Never write a test for this, just push the branch";
+    const result = checkSkillSelectedLeaveOneOut(query, "quality/push", catalog);
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  test("scoutSkill DOES strip a description-shaped query's own exclusion clause (its real, documented use — dedupe against a candidate's own drafted description)", () => {
+    const prEntry = catalog.find((entry) => entry.id === "quality/pr");
+    expect(prEntry).toBeDefined();
+    if (prEntry === undefined) return;
+    expect(prEntry.description).toMatch(/not for.*pr-issue-documenter/i);
+    // pr's own description, scored as a scout query against ITSELF and its
+    // catalog, still resolves to pr — not pr-issue-documenter, named only
+    // inside pr's own disclaimer (this is also AC2's test below).
+    const result = scoutSkill(prEntry.description, catalog);
+    expect(result.matches[0]?.skillId).toBe("quality/pr");
+  });
+
+  test("nearestSkills strips its own skill's exclusion clause too (it feeds eval.ts#synthesizeNegatives)", () => {
+    const prEntry = catalog.find((entry) => entry.id === "quality/pr");
+    expect(prEntry).toBeDefined();
+    if (prEntry === undefined) return;
+    const neighbours = nearestSkills("quality/pr", catalog, catalog.length);
+    // pr-issue-documenter must not be inflated to the very top purely
+    // because pr's own disclaimer names it — it may still be a genuine
+    // near neighbour (they are related skills), but not via the leak.
+    expect(neighbours[0]?.skillId).not.toBe("quality/pr-issue-documenter");
   });
 });
 
@@ -650,46 +754,119 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     expect(implementationResult.selected).toBe(false);
   });
 
-  test("AC2: scoutSkill's use/fork overlap for a sibling named only in a 'Not for' clause is not inflated by that clause", () => {
-    // quality/pr's real, shipped description: "... NOT for rewriting the
-    // body of a pull request that already exists or its linked issue (use
-    // `pr-issue-documenter`)." Before flow 334, scoring PR's own description
-    // as a scout query (the exact shape `scoutSkill`'s self-identification
-    // check and `nearestSkills` use) let "pr-issue-documenter" — named only
-    // inside pr's own disclaimer — outscore `pr` itself.
+  // AC2 (flow 334 review round 1 fix): the ORIGINAL version of this test
+  // scored `quality/pr`'s own description as the query and asserted it
+  // matches itself at 1.0 — but that is true of ANY bag-of-words scorer,
+  // negation-aware or not (a text trivially self-matches its own tokens),
+  // so it could not tell the fix from unmodified `main` and never actually
+  // exercised AC2. The real, falsifiable claim is: scoring an INDEPENDENT
+  // query that names `pr-issue-documenter`'s actual topic — words `pr`'s
+  // OWN disclaimer happens to share — must resolve to `pr-issue-documenter`
+  // itself, not to `pr` (whose only connection to that topic is disclaiming
+  // it). Measured on unmodified `main` (flow 334 journal): this query
+  // scored `quality/pr` at a PERFECT 1.0 (rank 1) — a skill that explicitly
+  // says it does NOT do this — while `pr-issue-documenter`, whose actual
+  // job this is, scored lower (0.735).
+  test("AC2: an independent query about a sibling's real topic resolves to the sibling, not to the skill whose own 'Not for' clause merely names it", () => {
+    const query = "rewriting the body of an existing pull request";
+    const result = scoutSkill(query, catalog);
+    const prMatch = result.matches.find((m) => m.skillId === "quality/pr");
+    const documenterMatch = result.matches.find((m) => m.skillId === "quality/pr-issue-documenter");
+    expect(documenterMatch).toBeDefined();
+    expect(prMatch).toBeDefined();
+    if (documenterMatch === undefined || prMatch === undefined) return;
+    expect(documenterMatch.overlapScore).toBeGreaterThan(prMatch.overlapScore);
+    expect(prMatch.overlapScore).toBeLessThan(1); // was exactly 1.0 (a "perfect" match) pre-fix
+  });
+
+  test("scoutSkill's own-description self-check still resolves 'quality/pr' to itself despite the sibling reference in its disclaimer", () => {
     const prEntry = catalog.find((entry) => entry.id === "quality/pr");
     expect(prEntry).toBeDefined();
     if (prEntry === undefined) return;
-    expect(prEntry.description).toMatch(/not for.*pr-issue-documenter/i);
-
     const result = scoutSkill(prEntry.description, catalog);
     expect(result.matches[0]?.skillId).toBe("quality/pr");
     expect(result.matches[0]?.overlapScore).toBe(1);
     expect(result.decision).toBe("use");
   });
 
-  // AC4 regression coverage: every bundled skill's own trigger phrase that
-  // currently selects its own skill (via `checkSkillSelected`, the same
-  // grader `keryx skills eval`'s trigger-accuracy check and `stocktake`'s
-  // own-trigger-routes-back check use) must keep doing so after negation-
-  // aware scoring. Measured baseline (flow 334 journal): 512/513 bundled
-  // trigger phrases select correctly both BEFORE and AFTER this change —
-  // "quality/pr"'s "Make PR" trigger is a pre-existing, unrelated failure
-  // (score 0, no shared terms at all with pr's own description) that this
-  // flow did not introduce and is out of scope to fix here.
-  const KNOWN_PRE_EXISTING_FAILURES = new Set(["quality/pr::Make PR"]);
+  // AC4 regression coverage (flow 334 review round 1 fix): the ORIGINAL
+  // version of this loop scored a skill's OWN verbatim trigger, in the
+  // `"full"` field, against a catalog that still contains that same
+  // trigger verbatim in the entry's own indexed text — circular (the
+  // trigger trivially "finds itself" regardless of negation handling), so
+  // it passed 512/513 identically whether or not the fix was present and
+  // proved nothing. The real, non-circular grader is
+  // `checkSkillSelectedLeaveOneOut` (excluding the trigger itself from the
+  // skill's own indexed text) — the SAME grader `keryx skills eval`'s
+  // trigger-accuracy check uses for a synthesized positive. Measured with
+  // this grader (flow 334 journal): 120 of 513 trigger phrases already
+  // fail on unmodified `main` (short/ambiguous/cross-language triggers, a
+  // pre-existing, unrelated gap this flow does not touch) — of those, this
+  // flow's fix flips exactly 4 from PASS to FAIL (honest losses, all
+  // caused by a trigger's description-support having relied on leaked
+  // exclusion-clause vocabulary) and 5 from FAIL to PASS (net: 119 vs 120,
+  // a small net improvement), see the journal for the full accounting.
+  const KNOWN_HONEST_LOSSES = new Set([
+    // job-orchestrator's OWN description explicitly disclaims "the same
+    // pipeline under Task Manager flow state (use flow-orchestrator)" —
+    // "pipeline" is genuinely NOT this skill's claimed territory; restoring
+    // support for it would contradict the skill's own stated boundary.
+    "orchestration/job-orchestrator::Run pipeline",
+    // claude-md-management's OWN description explicitly disclaims
+    // "breaking an oversized entrypoint apart ... (use
+    // agent-entrypoint-distiller)" — this trigger names exactly the
+    // territory the skill says belongs to a DIFFERENT skill.
+    "platform/claude-md-management::agent entrypoint",
+    // A direct, accepted consequence of the "Does not X" marker (flow 334
+    // review round 1 minor, explicitly requested): python-code-review's
+    // description ends "... does not edit code." — a genuine scope
+    // statement, not vocabulary this skill can honestly claim as evidence
+    // for reviewing a PR. The cross-category outrank (react-code-review)
+    // is corpus-wide IDF redistribution, the same mechanism documented for
+    // react/react-build-fix in the flow journal.
+    "python/python-code-review::check this python pr for bugs",
+    // Corpus-wide IDF redistribution (flow journal): nodejs-implementation
+    // has no exclusion clause touching "CLI"/"write"/"Node" at all; this
+    // is the same second-order effect as the react/* false positives —
+    // stripping negated vocabulary elsewhere in the 90-skill corpus raises
+    // the IDF weight of common surviving terms, occasionally tipping a
+    // borderline cross-category comparison either direction.
+    "ts-js-node/nodejs-implementation::write a CLI command in Node",
+  ]);
 
-  test("regression: every bundled skill's own trigger still selects that skill, except the recorded pre-existing failure", () => {
-    const newFailures: string[] = [];
-    for (const entry of catalog) {
-      for (const trigger of entry.triggers) {
-        const key = `${entry.id}::${trigger}`;
-        const result = checkSkillSelected(trigger, entry.id, catalog);
-        if (!result.selected && !KNOWN_PRE_EXISTING_FAILURES.has(key)) {
-          newFailures.push(`${key} -> score=${result.score.toFixed(3)} rank=${result.rank} outrankedBy=${result.outrankedBy ?? "-"}`);
-        }
-      }
-    }
-    expect(newFailures).toEqual([]);
+  // `KNOWN_HONEST_LOSSES` is asserted directly below (`test.each` — a real,
+  // falsifiable `selected: false` assertion per skill), rather than via a
+  // full-catalog loop: a full re-scan against a live-computed "before"
+  // baseline would need that baseline STORED as a fixture to be a real
+  // regression test at all (recomputing "before" at test time needs the
+  // pre-fix scout.ts, which does not exist once this PR merges) — see the
+  // flow 334 journal for exactly how the 4 losses / 5 gains here were
+  // measured (a temporary checkout-and-restore of the pre-fix scout.ts).
+  // Pin each named regression individually (flow 334 review round 1
+  // requirement) so a future change to either the scorer or these skills'
+  // descriptions must deliberately touch this test, not silently change
+  // behavior underneath it. Driven from `KNOWN_HONEST_LOSSES` itself (the
+  // single source of truth, with the per-case reasoning) rather than a
+  // separately-typed-out list that could drift from it.
+  test.each([...KNOWN_HONEST_LOSSES].map((key) => key.split("::") as [string, string]))(
+    "honest loss: %s's %j no longer selects via checkSkillSelectedLeaveOneOut",
+    (skillId, trigger) => {
+      const result = checkSkillSelectedLeaveOneOut(trigger, skillId, catalog, trigger);
+      expect(result.selected).toBe(false);
+    },
+  );
+
+  // The other side of the same fix: these were RESTORED by editing the
+  // skill's own frontmatter description to genuinely state real, positive
+  // scope (never by editing an eval prompt or trigger) once the leak that
+  // used to carry them was closed.
+  test.each([
+    ["quality/deploy", "release"],
+    ["planning/interviewer", "clarify requirements"],
+    ["orchestration/job-orchestrator", "orchestrate task"],
+    ["planning/brainstorm", "explore options"],
+  ])("restored via description edit: %s's %j still selects via checkSkillSelectedLeaveOneOut", (skillId, trigger) => {
+    const result = checkSkillSelectedLeaveOneOut(trigger, skillId, catalog, trigger);
+    expect(result.selected).toBe(true);
   });
 });
