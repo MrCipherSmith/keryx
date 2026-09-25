@@ -152,3 +152,12 @@
 - 2026-09-25T18:47:35.311Z - ac-confirmed: AC8: diff vs origin/main confirmed clean: only flow package, 4 pack dirs, install-manifest.json, authoring-lint.ts, stack-pack-eval-integrity.test.ts, judge-recordings, W1/W2 docs; no package.json/CHANGELOG.md release-section edit (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-25T18:47:35.598Z - ac-confirmed: AC9: 16 skills each ran skills eval once, HEAD unchanged start to end; all 4 packs stability stays experimental, agent-refs.json agents:[] with real per-skill numbers (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-25T18:47:35.891Z - ac-confirmed: AC10: W1-stack-catalog.md Implementation notes section and W2-agent-catalog.md 0.1.12 changelog entry both committed (46382387) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- AC9/AC10/AC11's original lines had a parenthetical before the colon (e.g.
+  "AC9 (Phase B, ...):"), which the freeze parser's `- ACn:` pattern never
+  matched — they silently dropped from the frozen set at 8 criteria. Fixed
+  via `flow ac update --criterion ACn --text ... --reason ...` (voids/redid
+  confirmations); AC1-AC10 now confirmed with evidence above, AC11 (PR +
+  review + CI) pending those steps.
+- Pushed the rebased branch (`git push origin flow/336-w4b4
+  --force-with-lease`, since Phase A's original push predates the rebase)
+  and opened draft PR #738 into `main`.
