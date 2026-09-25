@@ -2,6 +2,9 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+// Through the security facade, not `security/redact` directly — same
+// discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
+import { redactSensitiveText } from "../security/service";
 import { learnProjectSkill } from "../gdskills/learn";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
@@ -151,7 +154,46 @@ import {
   type CiRunHistoryEntry,
   type CiRunInfo,
 } from "../review/ci-port";
-import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKeyResolution, type JevUsage } from "../harness/decision/jev-client";
+import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey, resolveJevApiKeyResolution, type JevUsage } from "../harness/decision/jev-client";
+import {
+  applyClauseTags,
+  buildClauseTagQuestions,
+  clauseTagFromChoice,
+  extractReferenceClauses,
+  type ReferenceClause,
+} from "../review/conform-clauses";
+import { cachedTagsFor, hashConformDocContent, readClauseTagCache, writeClauseTagCache } from "../review/conform-tag-cache";
+import {
+  computePrConformFacts,
+  computeReportConformFacts,
+  hunkClauseFacts,
+  hunkRedactedStateText,
+  hunkRegionsFromDiff,
+  prClauseFacts,
+  prRedactedStateText,
+  reportClauseFacts,
+  reportRedactedStateText,
+  type ReportFindingLike,
+} from "../review/conform-state";
+import {
+  batchConformItems,
+  DEFAULT_CONFORM_THRESHOLD,
+  evaluatedVerdict,
+  notCheckableVerdict,
+  notEvaluatedVerdict,
+  type ConformBatchItem,
+  type ConformVerdict,
+} from "../review/conform-jev";
+import { createFixtureConformPrPort, createGhConformPrPort } from "../review/conform-pr-port";
+import {
+  conformResultToJson,
+  readConformEnabled,
+  renderConformMarkdown,
+  withRecentDoc,
+  CONFORM_RECENTS_PATH,
+  type ConformTarget,
+} from "../review/conform-report";
+import { runModelTurn } from "../harness/provider/single-turn";
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -257,6 +299,28 @@ const LOOP_FLAGS = ["--flow", "--task"] as const;
  * replays it against the real `gh`/Jev instead of each case's fixtures.
  */
 const CI_TRIAGE_FLAGS = ["--run", "--job", "--test", "--repo", "--model", "--fixtures", "--json", "--eval", "--live"] as const;
+
+/**
+ * Flow 308: `keryx review conform`. `--pr` runs `pr`-kind AND `hunk`-kind
+ * clauses (the PR's own diff supplies the hunk regions); `--report` runs
+ * `report`-kind clauses; `--diff` alone runs `hunk`-kind clauses only —
+ * mutually exclusive, matching the frozen AC6 usage line exactly.
+ * `--fixtures <dir>` answers the pr-kind port, the tagging/scoring Jev calls,
+ * and (with `--explain`) the explanation pass, all from files on disk — no
+ * real `gh` call, no real network, same discipline as `ci-triage`.
+ */
+const CONFORM_FLAGS = [
+  "--ref",
+  "--pr",
+  "--report",
+  "--diff",
+  "--repo",
+  "--explain",
+  "--threshold",
+  "--model",
+  "--fixtures",
+  "--json",
+] as const;
 
 /**
  * No `--authors` and no `--skill`.
@@ -457,6 +521,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "ci-triage") {
       await runCiTriage(args.slice(1));
+      return;
+    }
+    if (command === "conform") {
+      await runConform(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -1487,7 +1555,17 @@ async function runCiTriage(args: string[]): Promise<void> {
     info.headSha === "" ? Promise.resolve([] as readonly string[]) : ciPort.changedFiles(info.headSha).catch(() => [] as readonly string[]),
     ciPort.runsForHeadSha(info.headSha, info.workflowName).catch(() => [] as readonly CiRunHistoryEntry[]),
   ]);
-  const precomputed: CiSignalsPrecomputed = { priorAttempts, changedFiles, runsForHeadSha };
+  // Flow 307 followups, item 4: one `runInfo` cache, shared across every job
+  // below (via `precomputed`) — the same "read once, reuse per job" already
+  // applied to `priorAttempts`/`changedFiles`/`runsForHeadSha` above, extended
+  // to `computeCiSignals`'s OWN `runInfo` reads of other runs (cross-branch
+  // history, same-head verification), which this precomputed object could not
+  // cover before: those reads are not values that answer identically for
+  // every job, they are lookups keyed on a DIFFERENT run id discovered while
+  // computing each job's signals, so only a shared cache — not a shared value
+  // — can de-duplicate them.
+  const runInfoCache = new Map<string, Promise<CiRunInfo>>();
+  const precomputed: CiSignalsPrecomputed = { priorAttempts, changedFiles, runsForHeadSha, runInfoCache };
 
   const results: CiTriageJobResult[] = [];
   for (const job of jobsToTriage) {
@@ -1645,6 +1723,347 @@ async function runCiTriageEval(cwd: string, args: string[], evalFile: string): P
     const beforeMark = r.correctBefore ? "OK" : "X ";
     const afterMark = r.correctAfter ? "OK" : "X ";
     console.log(`  ${r.id}: truth=${r.truth}  before=${r.predictedBefore} [${beforeMark}]  after=${r.predictedAfter} [${afterMark}]`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review conform` — flow 308, reference-document conformance mode
+// (PRD.md Requirements 24-29 / PLAN.md Phase 2). Core logic lives in
+// `src/review/conform-*.ts`; this is the ADAPTER that reads the reference
+// document and the target off disk/`gh`, calls the client-zone Jev client,
+// and (with `--explain`) a single-turn model call — the one place all three
+// may legally meet, same shape as `ci-triage` above.
+// ---------------------------------------------------------------------------
+
+/** `--fixtures <dir>`: every Jev call in this command reads the SAME canned response, like `ci-triage`'s own `--fixtures`. */
+async function fixtureConformJevFetch(dir: string): Promise<typeof fetch> {
+  const body = await readFile(join(dir, "jev-response.json"), "utf8");
+  const fn = async (): Promise<Response> => new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+  return fn as unknown as typeof fetch;
+}
+
+/** `--fixtures <dir>`: the pr-kind port answered from `pr.json` (`{number,title,body,diff}`). */
+async function fixtureConformPrPortFrom(dir: string): Promise<ReturnType<typeof createFixtureConformPrPort>> {
+  const pr = JSON.parse(await readFile(join(dir, "pr.json"), "utf8")) as { number: number; title: string; body: string; diff: string };
+  return createFixtureConformPrPort({ pr });
+}
+
+interface ConformUsageAccumulator {
+  jevCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  sawUsage: boolean;
+}
+
+function accumulateJevUsage(acc: ConformUsageAccumulator, usage: { input_tokens?: number; output_tokens?: number; cost?: number }): void {
+  acc.jevCalls += 1;
+  if (usage.input_tokens !== undefined) {
+    acc.inputTokens += usage.input_tokens;
+    acc.sawUsage = true;
+  }
+  if (usage.output_tokens !== undefined) {
+    acc.outputTokens += usage.output_tokens;
+    acc.sawUsage = true;
+  }
+  if (usage.cost !== undefined) {
+    acc.costUsd += usage.cost;
+    acc.sawUsage = true;
+  }
+}
+
+/**
+ * AC2: resolve every raw clause's tag — explicit markers first (no Jev call),
+ * then the project's cache, then one `choice` question per remaining clause,
+ * batched into a single request (clause classification needs no per-clause
+ * state beyond the clause text itself, so it is never split by the 64k
+ * budget in practice — the questions alone would have to exceed it).
+ */
+async function resolveConformClauseTags(
+  cwd: string,
+  refPath: string,
+  docText: string,
+  rawClauses: ReturnType<typeof extractReferenceClauses>,
+  fetchFn: typeof fetch,
+  model: string,
+  acc: ConformUsageAccumulator,
+): Promise<ReferenceClause[]> {
+  const contentHash = hashConformDocContent(docText);
+  const cache = await readClauseTagCache(cwd);
+  const cachedTags = cachedTagsFor(cache, refPath, contentHash) ?? {};
+  const resolved = new Map<string, { source: "jev" | "cache"; tag: ReturnType<typeof clauseTagFromChoice> }>();
+  for (const [id, tag] of Object.entries(cachedTags)) {
+    resolved.set(id, { source: "cache", tag });
+  }
+  const needsTagging = rawClauses.filter((c) => c.explicit === undefined && cachedTags[c.clause_id] === undefined);
+  const tagQuestions = buildClauseTagQuestions(needsTagging);
+  if (Object.keys(tagQuestions).length > 0) {
+    const result = await callJevSystemOne(fetchFn, {
+      model,
+      state: "Reference-document clause classification — no additional state beyond each clause's own text.",
+      questions: tagQuestions,
+    });
+    accumulateJevUsage(acc, result.usage);
+    const freshTags: Record<string, ReturnType<typeof clauseTagFromChoice>> = {};
+    for (const [id, answer] of Object.entries(result.answers)) {
+      if (answer.type !== "choice") continue;
+      const tag = clauseTagFromChoice(answer.choice);
+      resolved.set(id, { source: "jev", tag });
+      freshTags[id] = tag;
+    }
+    if (Object.keys(freshTags).length > 0) {
+      await writeClauseTagCache(cwd, refPath, contentHash, freshTags);
+    }
+  }
+  return applyClauseTags(rawClauses, resolved);
+}
+
+/** AC5: score every checkable clause of one kind against its shared redacted state, batched under budget. */
+async function scoreConformClauses(
+  items: readonly ConformBatchItem[],
+  sharedRedactedText: string,
+  fetchFn: typeof fetch,
+  model: string,
+  threshold: number,
+  acc: ConformUsageAccumulator,
+): Promise<ConformVerdict[]> {
+  const verdicts: ConformVerdict[] = [];
+  for (const batch of batchConformItems(items, sharedRedactedText)) {
+    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions });
+    accumulateJevUsage(acc, result.usage);
+    for (const item of batch.items) {
+      const answer = result.answers[item.clause.clause_id];
+      const probability = answer?.type === "noul" ? answer.noul : 0;
+      verdicts.push(evaluatedVerdict(item.clause, item.facts, probability, threshold));
+    }
+  }
+  return verdicts;
+}
+
+/** AC7: the `review`-category model (the session model when unset), same resolution `applyReviewRoutingCategory` uses, without the live provider-catalog probe a text explanation does not need. */
+async function resolveConformExplainModel(cwd: string): Promise<{ provider?: string; model?: string }> {
+  const location = { cwd };
+  const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
+  const { assignment } = resolveCategoryDetailed("review", { project: project.table, user: user.table });
+  if (assignment.kind === "model") return { provider: assignment.providerId, model: assignment.modelId };
+  if (assignment.kind === "provider-default") {
+    const modelId = resolveProviderDefaultModelId(assignment.providerId);
+    if (modelId !== undefined) return { provider: assignment.providerId, model: modelId };
+  }
+  return {};
+}
+
+/**
+ * AC7: explain every clause scored below `threshold` — citing the clause id
+ * and its evidence, labelled advisory, never written to `findings.json` or
+ * the PR (this function only returns text; nothing here has a write path).
+ * `--fixtures <dir>` answers from `explain-response.json`
+ * (`{[clause_id]: text}`) instead of calling a model at all — the wiring
+ * under test is "the text ends up in the report, labelled advisory", not
+ * `runModelTurn` itself, which has its own tests.
+ *
+ * `runTurn` is injectable (defaults to the real `runModelTurn`) so a test can
+ * assert on the exact `user` prompt sent — including that it never carries
+ * the full `refPath` — without `mock.module`-ing a shared provider module
+ * for the whole `bun test` process (see `health-truthful-gate.test.ts`'s
+ * comment on why that pattern was tried and rejected here).
+ */
+export async function explainConformVerdicts(
+  cwd: string,
+  refPath: string,
+  verdicts: readonly ConformVerdict[],
+  threshold: number,
+  fixturesDir: string | undefined,
+  runTurn: typeof runModelTurn = runModelTurn,
+): Promise<Record<string, string>> {
+  const toExplain = verdicts.filter((v) => v.status === "likely-violated" && v.probability !== undefined && v.probability < threshold);
+  if (toExplain.length === 0) return {};
+  if (fixturesDir !== undefined) {
+    try {
+      return JSON.parse(await readFile(join(fixturesDir, "explain-response.json"), "utf8")) as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
+  const { provider, model } = await resolveConformExplainModel(cwd);
+  const explanations: Record<string, string> = {};
+  for (const verdict of toExplain) {
+    const result = await runTurn({
+      ...(provider !== undefined ? { provider } : {}),
+      ...(model !== undefined ? { model } : {}),
+      system:
+        "You explain, in 2-4 sentences, why a reference-document clause looks violated, citing the clause id and the " +
+        "evidence given. This is ADVISORY analysis only — you are not writing a finding, not editing any file, and " +
+        "nothing you say is posted anywhere automatically.",
+      user: [
+        // The full path is never sent — it can name a private project, a
+        // username, or other local filesystem detail with no bearing on the
+        // clause itself. Only the document's own filename, redacted like
+        // every other piece of state this command sends to Jev.
+        `Reference document: ${redactSensitiveText(path.basename(refPath))}`,
+        `Clause ${verdict.clause_id} (kind: ${verdict.state_kind})`,
+        `Jev's probability the state satisfies this clause: ${verdict.probability}`,
+        "Deterministic evidence:",
+        ...verdict.factLines.map((line) => `- ${line}`),
+      ].join("\n"),
+    });
+    if (result.text.length > 0) explanations[verdict.clause_id] = result.text;
+  }
+  return explanations;
+}
+
+function parseThresholdFlag(args: string[]): number {
+  const raw = optionValue(args, "--threshold");
+  if (raw === undefined) return DEFAULT_CONFORM_THRESHOLD;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`--threshold must be a number between 0 and 1, got "${raw}".`);
+  }
+  return value;
+}
+
+async function readReportFindings(reportDir: string): Promise<readonly ReportFindingLike[]> {
+  try {
+    const raw = JSON.parse(await readFile(join(reportDir, "findings.json"), "utf8")) as unknown;
+    return Array.isArray(raw) ? (raw as ReportFindingLike[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function runConform(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CONFORM_FLAGS, "conform");
+  const cwd = process.cwd();
+  const refPath = requiredOption(args, "--ref", "conform");
+  const prArg = optionValue(args, "--pr");
+  const reportDir = optionValue(args, "--report");
+  const diffRef = optionValue(args, "--diff");
+  if ([prArg, reportDir, diffRef].filter((v) => v !== undefined).length !== 1) {
+    throw new Error("Usage: keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>) [--explain] [--json]");
+  }
+  const threshold = parseThresholdFlag(args);
+  const fixturesDir = optionValue(args, "--fixtures");
+  const explain = args.includes("--explain");
+
+  // AC9: opt-in per project, and refused before any network call.
+  if (!(await readConformEnabled(cwd))) {
+    console.error(
+      "`review.jev.conform` is not enabled for this project (.metaproject/tasks.config.json: " +
+        '`{"review":{"jev":{"conform":true}}}`). Conformance checking sends redacted PR/report/hunk text to ' +
+        "OpenRouter/TypeSafe, so it is opt-in — nothing was read and no network call was made.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const apiKey = resolveJevApiKey(process.env);
+  if (apiKey === undefined || apiKey.length === 0) {
+    console.error(
+      "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config: conformance checking " +
+        "needs a Jev/OpenRouter credential and made no network call.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const docText = await readFile(refPath, "utf8");
+  const rawClauses = extractReferenceClauses(docText);
+  const model = optionValue(args, "--model") ?? DEFAULT_JEV_MODEL;
+  const fetchFn: typeof fetch = fixturesDir === undefined ? globalThis.fetch : await fixtureConformJevFetch(fixturesDir);
+  const acc: ConformUsageAccumulator = { jevCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, sawUsage: false };
+
+  const clauses = await resolveConformClauseTags(cwd, refPath, docText, rawClauses, fetchFn, model, acc);
+  // AC8 support: remember this reference document for the TUI picker's recents list.
+  // 0o600: this file names reference documents the operator has been reading —
+  // local filesystem paths other users on the same machine should not see.
+  await writeFileAtomic(
+    join(cwd, CONFORM_RECENTS_PATH),
+    `${JSON.stringify(withRecentDoc(await readRecentConformDocs(cwd), refPath), null, 2)}\n`,
+    { mode: 0o600 },
+  ).catch(() => {});
+
+  const notCheckable = clauses.filter((c) => !c.checkable);
+  const checkable = clauses.filter((c) => c.checkable);
+
+  let target: ConformTarget;
+  let evaluated: ConformVerdict[] = [];
+  // AC6: a checkable clause whose kind has no state supplied this run is
+  // "not evaluated" — tracked per CLAUSE, not per kind, so a kind that DOES
+  // have a target this run but happens to produce zero regions (an empty
+  // diff, an empty report) still reports its clauses as not-evaluated rather
+  // than silently vanishing them.
+  const supplied = new Set<string>();
+
+  if (prArg !== undefined) {
+    const number = Number(prArg);
+    if (!Number.isInteger(number) || number <= 0) throw new Error(`--pr must be a positive integer, got "${prArg}".`);
+    const port = fixturesDir === undefined ? createGhConformPrPort(undefined, optionValue(args, "--repo")) : await fixtureConformPrPortFrom(fixturesDir);
+    const info = await port.pr(number);
+    target = { kind: "pr", label: `PR #${info.number} — ${info.title}` };
+    const facts = computePrConformFacts(info);
+    const redacted = prRedactedStateText(info);
+    const prClauses = checkable.filter((c) => c.state_kind === "pr");
+    for (const clause of prClauses) supplied.add(clause.clause_id);
+    const prItems: ConformBatchItem[] = prClauses.map((clause) => ({ clause, facts: prClauseFacts(clause, facts) }));
+    evaluated = evaluated.concat(await scoreConformClauses(prItems, redacted, fetchFn, model, threshold, acc));
+
+    const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
+    const regions = hunkRegionsFromDiff(info.diff);
+    if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
+    for (const region of regions) {
+      const hunkItems: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
+      evaluated = evaluated.concat(await scoreConformClauses(hunkItems, hunkRedactedStateText(region), fetchFn, model, threshold, acc));
+    }
+  } else if (reportDir !== undefined) {
+    target = { kind: "report", label: reportDir };
+    const reportMarkdown = await readFile(join(reportDir, "report.md"), "utf8").catch(() => "");
+    const findings = await readReportFindings(reportDir);
+    const facts = computeReportConformFacts(reportMarkdown, findings);
+    const redacted = reportRedactedStateText(reportMarkdown);
+    const reportClauses = checkable.filter((c) => c.state_kind === "report");
+    for (const clause of reportClauses) supplied.add(clause.clause_id);
+    const items: ConformBatchItem[] = reportClauses.map((clause) => ({ clause, facts: reportClauseFacts(clause, facts) }));
+    evaluated = await scoreConformClauses(items, redacted, fetchFn, model, threshold, acc);
+  } else {
+    const diff = await gitDiff(diffRef, DEFAULT_CONTEXT_LINES);
+    target = { kind: "diff", label: diffRef ?? "working diff" };
+    const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
+    const regions = hunkRegionsFromDiff(diff);
+    if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
+    for (const region of regions) {
+      const items: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
+      evaluated = evaluated.concat(await scoreConformClauses(items, hunkRedactedStateText(region), fetchFn, model, threshold, acc));
+    }
+  }
+
+  const notEvaluated = checkable.filter((c) => !supplied.has(c.clause_id)).map((c) => notEvaluatedVerdict(c));
+  const verdicts: ConformVerdict[] = [...evaluated, ...notEvaluated, ...notCheckable.map((c) => notCheckableVerdict(c))];
+
+  const explanations = explain ? await explainConformVerdicts(cwd, refPath, verdicts, threshold, fixturesDir) : undefined;
+
+  const result = {
+    refPath,
+    target,
+    threshold,
+    verdicts,
+    ...(explanations !== undefined && Object.keys(explanations).length > 0 ? { explanations } : {}),
+    usage: acc.sawUsage
+      ? { jevCalls: acc.jevCalls, inputTokens: acc.inputTokens, outputTokens: acc.outputTokens, costUsd: acc.costUsd }
+      : { jevCalls: acc.jevCalls },
+  };
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(conformResultToJson(result), null, 2));
+    return;
+  }
+  console.log(renderConformMarkdown(result));
+}
+
+async function readRecentConformDocs(cwd: string): Promise<readonly string[]> {
+  try {
+    const raw = JSON.parse(await readFile(join(cwd, CONFORM_RECENTS_PATH), "utf8")) as unknown;
+    return Array.isArray(raw) ? (raw as string[]) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -2912,6 +3331,9 @@ Usage:
                               [--flow-link <url>] [--fixtures <dir>]
   keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+  keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                       [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                       [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
@@ -3002,6 +3424,44 @@ ci-triage:
   Vendor-reported accuracy only: this classifier ships with no measured
   precision/recall on this repository's own history (PLAN.md's Phase 7
   evaluation is where that gets measured).
+
+conform:
+  Reference-document conformance mode (flow 308): a rules file, a skill, or a
+  project skill is split deterministically into clauses (no model call), each
+  tagged \`state_kind: pr|report|hunk\` and \`checkable\`. Every checkable clause
+  is scored by Jev against DETERMINISTIC FACTS keryx computes first (PR body
+  sections present/non-empty and hand-written size for \`pr\`; a report's
+  section order and whether every finding carries a severity/evidence/location
+  class for \`report\`; the hunk itself for \`hunk\`) placed above the redacted
+  state — this is what makes the answers useful, not raw text alone.
+  \`--pr <n>\` scores \`pr\`-kind clauses against that pull request's title/body,
+  AND \`hunk\`-kind clauses against its diff. \`--report <dir>\` scores
+  \`report\`-kind clauses against an existing review package's own
+  \`report.md\`/\`findings.json\` — no new artifact format. \`--diff <ref>\` scores
+  \`hunk\`-kind clauses against \`git diff <ref>\`. Exactly one of the three is
+  required. A clause whose kind has no matching target this run is reported
+  \`not evaluated\`; a \`not-checkable\` clause (a live/manual step, or a
+  reviewer-process obligation no artefact records) is ALWAYS listed, never
+  dropped, and never sent to Jev.
+  \`--explain\` sends every clause scored below \`--threshold\` (default 0.5) to
+  the model the routing table assigns the \`review\` category (the session
+  model when the table is empty), citing the clause id and the evidence. The
+  explanation is labelled ADVISORY and is never written to the PR or to
+  \`findings.json\` — this command has no write path to either.
+  Opt-in per project, and named as a privacy decision: PR text, report content
+  and code hunks leave the machine to OpenRouter/TypeSafe. Enable with
+  \`.metaproject/tasks.config.json\`'s \`review.jev.conform: true\`, absent by
+  default. With it off, or with no OpenRouter credential, the command refuses
+  before any read and makes no network call; every redacted state is passed
+  through \`redactSensitiveText\` before it is sent.
+  \`--fixtures <dir>\` answers the pr-kind read (\`pr.json\`), every Jev call
+  (\`jev-response.json\`), and (with \`--explain\`) the explanation pass
+  (\`explain-response.json\`) — no real \`gh\` call, no real network.
+  Honest limits: this mode is the least mechanical use of Jev in this
+  repository — deciding whether a PR body names an out-of-scope list is closer
+  to judgement than a styling checklist bullet. See flow 308's own journal
+  (.metaproject/flows/308-*/journal.md) for the measured usefulness and
+  limits of a live run against real pull requests and a real review package.
 
 complete:
   --finding/--disposition/--evidence record what became of a named finding, and

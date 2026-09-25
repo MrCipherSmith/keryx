@@ -3191,6 +3191,9 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
 keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                     [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                     [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
@@ -3235,6 +3238,7 @@ left off and the gate reports it as unobserved.
 | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
+| `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
 | `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
@@ -3770,6 +3774,61 @@ run-level signals (`priorAttempts`/`changedFiles`/`runsForHeadSha`) are each
 read once per run and reused across every job triaged, rather than
 re-fetched per job.
 
+### `review conform`
+
+Reference-document conformance mode (flow 308): a rules file, a skill, or a
+project skill is split deterministically into clauses (no model call), each
+tagged `state_kind: pr|report|hunk` and `checkable`. Every checkable clause is
+scored by Jev against DETERMINISTIC FACTS keryx computes first — PR body
+sections present/non-empty and hand-written size (via `src/review/scope.ts`)
+for `pr`; a report's section order and whether every finding records the
+fields the document requires (e.g. severity, evidence, a file anchor) for `report`; the hunk itself for `hunk` —
+placed above the redacted state. A `not-checkable` clause (a live/manual step,
+or a reviewer-process obligation no artefact records) is always listed, never
+sent to Jev.
+
+```bash
+keryx review conform --ref docs/pipeline-contribution-policy.md --pr 999 --json
+```
+
+| Flag | Description |
+|---|---|
+| `--ref <doc>` | Required. Path to the reference document (a rules file, a skill, or a project skill). |
+| `--pr <n>` | Score `pr`-kind clauses against that pull request's title/body, and `hunk`-kind clauses against its diff. Exactly one of `--pr`/`--report`/`--diff` is required. |
+| `--report <dir>` | Score `report`-kind clauses against an existing review package's own `report.md`/`findings.json` — no new artifact format. |
+| `--diff <ref>` | Score `hunk`-kind clauses against `git diff <ref>`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`; omitted, `gh` resolves the repository from the current checkout. |
+| `--explain` | Sends every clause scored below `--threshold` to the model the routing table assigns the `review` category (the session model when unset), citing the clause id and the evidence. Labelled ADVISORY; never written to the PR or to `findings.json`. |
+| `--threshold <0..1>` | Below this Jev probability a clause is `likely-violated` (and, with `--explain`, explained). Default `0.5`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), every Jev call (`jev-response.json`), and (with `--explain`) the explanation pass (`explain-response.json`) — no real `gh` call, no real network. |
+| `--json` | Prints `{ref, target, threshold, clauses, usage}` instead of the human-readable report. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. The
+document's clauses, PR text, report and diff are sent to Jev after secret
+redaction, and nothing leaves the machine unless `review.jev.conform` is on.
+A project turns it on with `review.jev.conform: true` in
+`.metaproject/tasks.config.json`. Sending the reference document's own clause
+text to Jev is the feature, not a leak — checking a clause requires the model
+to read it — and it is opt-in the same way the rest of this command is: only
+SECRETS inside that text (and inside the PR/report/diff state) are stripped
+first, by the same `redactSensitiveText` pass every other piece of state sent
+to Jev already gets. With the setting off, or with no OpenRouter credential,
+the command refuses before any read and makes no network call.
+
+**A checkable clause whose kind has no target this run is `not evaluated`**,
+never silently dropped — the same discipline `not-checkable` clauses get.
+
+**Honest limits.** This mode is the least mechanical use of Jev in this
+repository: deciding whether a PR body names an out-of-scope list is closer
+to judgement than a styling checklist bullet. Measured against real pull
+requests and a real review package: Jev's `noul` scores hedge low rather than
+confidently discriminating (no score reached 0.8+ probability across a
+115-question live check, and only a handful crossed the 0.5 default
+threshold on ordinary small maintenance PRs) — read `likely-violated` as
+"worth a human glance," not a confirmed finding. See flow 308's own journal
+(`.metaproject/flows/308-*/journal.md`) for the full measurement.
+
 **Opt-in, and named as a privacy decision.** Disabled by default. A project
 enables it with `review.jev.ci_triage: true` in
 `.metaproject/tasks.config.json` — the log excerpt leaves the machine to
@@ -3836,6 +3895,14 @@ flake did exactly this across two of this evaluation set's cases) is not
 picked up by that signal today. Diff proximity is also a heuristic that can
 point the wrong way on a PR whose OWN diff is the flakiness fix landing in
 the same commit as the failure (also observed in the evaluation set).
+
+**Another known signal gap, found in post-merge review:** the same-head
+job-level check above matches the later run's job by NAME too, and a later
+run can have more than one job sharing that name (a matrix leg, a reused
+workflow). When that happens the deterministic override is withheld — which
+one of them is "this job" cannot be told apart from the name alone — and the
+run is only mentioned as an advisory-only evidence line, the same degrade
+path a missing, skipped, or unreadable job already gets.
 
 **Measured accuracy (flow 307, AC6) — honestly, whatever it is.** A live run
 of `--eval` against the real runs of the eight cases in

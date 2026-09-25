@@ -46,6 +46,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/schedules",
     "/integrations",
     "/ci",
+    "/conform",
     "/mcp",
     "/compact",
     "/theme",
@@ -140,6 +141,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/schedules",
     "/integrations",
     "/ci",
+    "/conform",
     "/mcp",
     "/compact",
     "/theme",
@@ -266,6 +268,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/schedules",
     "/integrations",
     "/ci",
+    "/conform",
     "/mcp",
     "/compact",
     "/theme",
@@ -304,6 +307,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/connect",
     "/copy",
     "/ci",
+    "/conform",
     "/compact",
     "/clear",
   ]);
@@ -311,6 +315,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
   expect(filterCommands("/co", "agent").map((c) => c.name)).toEqual([
     "/connect",
     "/copy",
+    "/conform",
     "/compact",
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
