@@ -5,7 +5,6 @@
 // No classifier anywhere in this file (PLAN.md Flow A). `explain`/`profile`
 // (PRD §8) are Flow A2/B — not implemented here; `list`/`set`/`unset`/`trust`
 // (the last two flow 305 review findings, AC10/AC11) are.
-import { detectProviders } from "./select";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import {
   loadRoutingConfig,
@@ -33,7 +32,7 @@ export interface RoutingCommandDeps {
   readonly cwd?: string;
   /** Per-user config dir override — the SAME test seam `shell-config.ts` takes. Default: the real global config dir. */
   readonly userConfigDir?: string;
-  /** AC10: connected-provider list. Default: a real (network-free for compat providers; one `detectProviders()` call) probe, same shape `/routing`'s picker already fetches. */
+  /** AC10: connected-provider list. Default: the live provider catalog (flow 309, `../harness/provider-catalog.ts`) — same source `/routing`'s picker reads, a fresh cache answered immediately, a stale/missing one refreshed once. */
   providers?: () => Promise<readonly { name: string; models?: readonly string[] }[]>;
 }
 
@@ -70,8 +69,14 @@ function parseCategory(raw: string | undefined): RoutingCategory | undefined {
 }
 
 async function defaultProviders(): Promise<readonly { name: string; models?: readonly string[] }[]> {
-  const detected = await detectProviders({ fetch, env: envWithSavedApiKeys() });
-  return detected.map((p) => ({ name: p.name, models: p.models }));
+  // Dynamic import: `../harness/provider-catalog.ts` imports `./providers`
+  // (this module's sibling, for the live `/models`/balance fetch), so a
+  // static import here — `./routing.ts` -> `../harness/provider-catalog.ts`
+  // — is fine directionally but is deferred anyway to match the same
+  // lazy-load idiom `/routing`'s own `defaultProviders` uses.
+  const { loadOrRefreshProviderCatalog, catalogToFlatPickerProviders } = await import("../harness/provider-catalog");
+  const catalog = await loadOrRefreshProviderCatalog({ fetch, env: envWithSavedApiKeys() });
+  return catalogToFlatPickerProviders(catalog);
 }
 
 async function runList(args: string[], location: RoutingConfigLocation, deps: RoutingCommandDeps): Promise<void> {

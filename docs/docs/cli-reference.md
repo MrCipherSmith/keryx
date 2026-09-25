@@ -1171,10 +1171,12 @@ registry plus the operator-defined entries in `llm-providers.json` — plus, sin
 flow 304, `test` and `remove`: the CLI form of the `/connect` row buttons
 ("Test connection" and "Disconnect"). `list` and `cross-family` stay read-only
 and network-free, exactly as before; `test` makes ONE network call (the live
-`/models` probe) and `remove` writes to disk only after confirmation.
+`/models` probe), `status` (flow 309) reads or refreshes the live model
+catalog, and `remove` writes to disk only after confirmation.
 
 ```
 keryx providers list [--json]
+keryx providers status [--json] [--refresh]
 keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
 keryx providers test <name> [--json]
 keryx providers remove <name> [--yes]
@@ -1183,9 +1185,20 @@ keryx providers remove <name> [--yes]
 | Subcommand | Flags | Description |
 |---|---|---|
 | `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. Read-only, network-free. |
+| `status` | `--json`, `--refresh` | The **live provider catalog** (flow 309): per connected provider, its status (`ok` / `auth-failed` / `unreachable` / `timeout` / `not-supported`), its live model count (or the curated offline count, clearly marked, when the live fetch failed), its balance when the provider exposes one (OpenRouter, DeepSeek — never a guessed number), and how old that reading is. An unconnected provider is never probed and never listed. A fresh cache (already refreshed by `keryx shell` starting up, `/connect`, or `providers test`) answers immediately; `--refresh` forces a fresh probe of every connected provider now. |
 | `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--from-shell-config`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. The authoring session comes from the flags, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; the selection `keryx shell` persisted only with `--from-shell-config`. |
-| `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. |
+| `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. Also updates that provider's entry in the `status` catalog. |
 | `remove` | `<name>`, `--yes` | **Disconnect** that provider: remove its saved API key, its OAuth grant, or its `llm-providers.json` entry (together with any saved base-URL/model-param override) — whichever one it actually has. Asks for confirmation on a terminal; refuses without one unless `--yes`. A provider whose only credential is an environment variable you exported yourself is refused outright — the command names the exact variable to `unset`. Disconnecting removes only keryx's LOCAL copy of the credential: an OAuth grant is deleted from `auth.json` with no vendor revoke call, and a removed API key simply stops being read (the key itself stays valid at the vendor until you revoke it there yourself). |
+
+### Live provider catalog
+
+`keryx shell` refreshes this catalog during startup loading (a "checking
+providers…" step that never blocks the first prompt — a hung provider just
+never fills in), and `/routing`'s flat model picker and `/connect` read the
+same cache instead of a stale, hardcoded model list. The cache lives at
+`provider-catalog.json` in the per-user keryx config directory, mode `0600`,
+and never carries a credential — only `name`/`status`/`models`/`balance`/
+`fetchedAt`.
 
 ### Cross-family review
 

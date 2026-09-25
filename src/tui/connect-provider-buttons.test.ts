@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import type { DetectedProvider } from "../commands/select";
 import { loadShellConfig, saveApiKey } from "../lib/shell-config";
+import { saveProviderCatalogCache, type ProviderCatalogEntry } from "../harness/provider-catalog-cache";
 import { themeColorToHex } from "./shell-chrome";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
 import { selectProviderModelInTui } from "./tui-shell";
@@ -93,6 +94,65 @@ describe("AC1 — /connect's row list draws Test and Disconnect on every connect
       h.mockInput.pressEnter(); // model step
       const result = await pending;
       expect(result?.provider).toBe("deepseek");
+    } finally {
+      h.renderer.destroy();
+    }
+  });
+});
+
+describe("flow 309 AC6 — the /connect row note shows the CACHED catalog's status, balance and reading age", () => {
+  otuiTest("a row with a catalog entry shows status, balance and age alongside its plain note", async () => {
+    const otui = requireOtui();
+    const configDir = tempConfigDir();
+    const entry: ProviderCatalogEntry = {
+      name: "deepseek",
+      label: "DeepSeek",
+      status: "ok",
+      models: ["deepseek-chat"],
+      fallbackModels: ["deepseek-chat"],
+      fetchedAt: new Date().toISOString(),
+      balance: { currency: "USD", total: 6.19, exact: true },
+    };
+    await saveProviderCatalogCache({ fetchedAt: entry.fetchedAt, providers: { deepseek: entry } }, configDir);
+
+    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    try {
+      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], {
+        onlyConnected: true,
+        fetch: alwaysLive,
+        env: ENV,
+        configDir,
+      });
+      const frame = await h.waitForFrame((f) => f.includes("DeepSeek"));
+      expect(frame).toContain("ok");
+      expect(frame).toContain("$6.19");
+      expect(frame).toContain("just now");
+
+      await pressEscapeAndSettle(h);
+      expect(await pending).toBeUndefined();
+    } finally {
+      h.renderer.destroy();
+    }
+  });
+
+  otuiTest("a row with NO catalog entry yet renders its plain note, unchanged", async () => {
+    const otui = requireOtui();
+    const configDir = tempConfigDir(); // never seeded — no provider-catalog.json at all
+    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    try {
+      const pending = selectProviderModelInTui(otui.core, h.renderer, [GROQ], {
+        onlyConnected: true,
+        fetch: alwaysLive,
+        env: ENV,
+        configDir,
+      });
+      const frame = await h.waitForFrame((f) => f.includes("Groq"));
+      // The row's own note (model count) still renders; nothing from an
+      // absent cache leaks in as "undefined" or throws.
+      expect(frame).toMatch(/Groq\s+\d+ model\(s\)/);
+
+      await pressEscapeAndSettle(h);
+      expect(await pending).toBeUndefined();
     } finally {
       h.renderer.destroy();
     }

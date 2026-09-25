@@ -93,6 +93,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  help      Grouped command help by task: every verb, in nine onboarding-ordered groups\n",
     "  keryx providers test <name> [--json]\n",
     "  keryx providers remove <name> [--yes] [--json]\n",
+    // Flow 309: `keryx providers status` — the live provider catalog (model
+    // list + balance per connected provider, `/routing`'s picker and
+    // `/connect` now read the same cache). A subcommand of an existing verb,
+    // so USAGE_BODY only — same shape as flow 304's `test`/`remove` above.
+    "  keryx providers status [--json] [--refresh]\n",
     // Flow 305: the routing table (category -> model), `keryx routing`, plus
     // its summary row — a brand-new verb, so both a USAGE_BODY block and a
     // Commands: summary row were added (mirrors flow 303's `help`, not flow

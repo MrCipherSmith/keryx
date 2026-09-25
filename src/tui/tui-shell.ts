@@ -150,7 +150,7 @@ import {
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
-import { mountBalancePanel } from "./balance-panel";
+import { formatBalance, mountBalancePanel } from "./balance-panel";
 import type { DetectedProvider } from "../commands/select";
 import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
 import {
@@ -165,6 +165,13 @@ import {
   testProviderConnection,
 } from "../commands/providers";
 import { loadSessionLimits } from "../commands/model-limits";
+import {
+  describeCatalogStatus,
+  formatCatalogAge,
+  loadOrRefreshProviderCatalogFromDetected,
+  loadProviderCatalogCache,
+  type ProviderCatalog,
+} from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
@@ -173,7 +180,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -2577,7 +2584,21 @@ function pickConnectedProviderStep(
     let rowBlocks: RowBlock[] = [];
 
     const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
-    const noteOf = (d: DetectedProvider): string => d.note ?? `${d.models.length} model(s)`;
+    // Flow 309 (AC6): decorate each row with the CACHED catalog's status,
+    // balance (when known) and reading age — read once, synchronously, when
+    // this step opens. Additive only: it never changes which providers are
+    // listed (that stays `filterConnectedDetectedProviders`'s live probe,
+    // called by this step's caller) or what `[Test]` does — a provider with
+    // no cache entry yet (never refreshed) just shows its plain note,
+    // unchanged from before this flow.
+    const catalogCache = loadProviderCatalogCache(opts.configDir);
+    const noteOf = (d: DetectedProvider): string => {
+      const base = d.note ?? `${d.models.length} model(s)`;
+      const entry = catalogCache?.providers[d.name];
+      if (entry === undefined) return base;
+      const balanceNote = entry.balance !== undefined ? ` · ${formatBalance(entry.balance)}` : "";
+      return `${base} · ${describeCatalogStatus(entry.status)}${balanceNote} · ${formatCatalogAge(entry.fetchedAt)}`;
+    };
 
     // flow 304 review finding #4: Esc while a Disconnect is armed used to
     // close the WHOLE step, even though the hint says "Esc to cancel" (of
@@ -3700,7 +3721,21 @@ export async function launchTuiAgentShell(opts: {
     // for the rest of this very long function) and assigned inside it.
     let deps: AgentDeps;
     let chrome: ShellChrome;
+    // Flow 309 (AC2): the live provider catalog refresh — starts during THIS
+    // startup loading phase (the spinner names it below) and is never
+    // `await`ed inline, so a hung provider cannot delay the composer taking
+    // input (same non-blocking shape as `resolveFirstRunHelp` further down).
+    // `.catch` turns a genuinely unexpected throw into an empty catalog
+    // rather than an unhandled rejection outliving this function.
+    const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {
+      fetch: globalThis.fetch,
+      env: envWithSavedApiKeys(process.env),
+    }).catch((error: unknown) => {
+      debugEvent("provider-catalog.refresh-failed", { error: error instanceof Error ? error.message : String(error) });
+      return { fetchedAt: new Date().toISOString(), providers: {} } satisfies ProviderCatalog;
+    });
     try {
+      startupIndicator.setStep("checking providers…");
       startupIndicator.setStep("Loading agent tools and MCP servers…");
       deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
       liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
@@ -5244,6 +5279,28 @@ export async function launchTuiAgentShell(opts: {
       // The wordmark would sit under the read-only view it just rendered.
       splash.removeIfShown();
     }
+    // Flow 309 (AC6): a provider that fails at startup is surfaced ONCE, as a
+    // non-blocking notice — never a modal, never something the operator must
+    // dismiss before the composer is usable. `providerCatalogReady` was
+    // already dispatched (background, non-blocking) during the earlier
+    // loading phase; this only reacts once it resolves, whenever that is —
+    // attached here (after `announceStartupNotice` exists) rather than at the
+    // dispatch site, since a fresh cache can resolve on the very next
+    // microtask and `announceStartupNotice` is not safe to reference before
+    // this point in the function.
+    void providerCatalogReady.then((catalog) => {
+      // Same guard as the bus-join callbacks below (`isDestroyed: () =>
+      // destroyed`): this shell may already be torn down by the time the
+      // catalog refresh resolves — a slow/timed-out provider probe racing
+      // Esc/exit — and painting into a destroyed surface is a use-after-free
+      // of whatever `announceStartupNotice`/`splash`/`io` now point at.
+      if (destroyed) return;
+      for (const entry of Object.values(catalog.providers)) {
+        if (entry.status === "auth-failed" || entry.status === "unreachable" || entry.status === "timeout") {
+          announceStartupNotice(`${entry.label ?? entry.name}: ${describeCatalogStatus(entry.status)} — /connect to fix`);
+        }
+      }
+    });
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
 
