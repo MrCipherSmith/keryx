@@ -3,29 +3,29 @@
     "query": "Use when cargo build/cargo clippy fails, or Cargo.toml/Cargo.lock are out of sync -- resolves dependency/edition/MSRV mismatches, borrow-checker and lifetime errors, trait-bound errors, clippy failures, and a failing cargo test, with the smallest root-cause fix.",
     "decision": "fork",
     "topMatch": "go/go-build-fix",
-    "recordedAt": "2026-09-25T15:36:15.829Z",
+    "recordedAt": "2026-09-25T18:06:22.209Z",
     "skillName": "rust-build-fix",
     "justification": "top match go/go-build-fix is the same build-fix category but for a different language's own toolchain (go build/vet vs. cargo build/clippy/borrow-checker errors), not a substitute; a Rust-scoped fork is warranted since Go's build-fix has no visibility into Rust's own trait-bound/borrow-checker/cargo failure modes."
   },
   {
     "query": "Use when reviewing a Rust change for ownership, panic, and safety risks -- unwrap/expect on fallible input, unnecessary clone as a borrow-checker workaround, unjustified or oversized unsafe blocks, blocking calls in async fn, unchecked arithmetic/indexing on untrusted data, and error types that lose their source. Read-only, no edits.",
     "decision": "create",
-    "topMatch": "fastapi/fastapi-code-review",
-    "recordedAt": "2026-09-25T15:36:16.145Z",
+    "topMatch": "angular/angular-code-review",
+    "recordedAt": "2026-09-25T18:06:22.532Z",
     "skillName": "rust-code-review"
   },
   {
     "query": "Use when implementing or extending a feature in a Rust crate -- Cargo.toml/edition/workspace layout, ownership and borrowing, Result/Option error handling with the ? operator, thiserror/anyhow conventions, trait and generic design, and avoiding blocking calls in async fn.",
     "decision": "create",
     "topMatch": "rust/rust-build-fix",
-    "recordedAt": "2026-09-25T15:36:16.455Z",
+    "recordedAt": "2026-09-25T18:06:22.848Z",
     "skillName": "rust-implementation"
   },
   {
-    "query": "Use when a Rust crate's test suite needs writing, extending, or fixing -- #[cfg(test)] unit tests, tests/ integration tests, table-style cases, #[tokio::test] async tests joined properly, proptest/quickcheck, cargo fuzz, and criterion benchmarks.",
-    "decision": "fork",
-    "topMatch": "go/go-testing",
-    "recordedAt": "2026-09-25T15:36:16.781Z",
+    "query": "Use when a Rust crate's own test suite needs writing, extending, or fixing with cargo test -- #[cfg(test)] unit tests, tests/ integration tests, multi-case assertions built as a Vec of structs, #[tokio::test] async tests joined properly, proptest/quickcheck property-based checks on a Rust struct or enum, and criterion benchmarks.",
+    "decision": "create",
+    "topMatch": "rust/rust-implementation",
+    "recordedAt": "2026-09-25T18:06:23.160Z",
     "skillName": "rust-testing",
     "justification": "top match go/go-testing is the same test-authoring category but for a different language's own idiom (table-driven Go subtests vs. Rust's #[cfg(test)] modules, proptest, criterion benchmarks), not a substitute; a Rust-scoped fork is warranted since Go's testing skill has no Rust-specific guidance."
   }

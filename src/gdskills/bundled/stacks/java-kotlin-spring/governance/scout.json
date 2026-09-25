@@ -3,36 +3,36 @@
     "query": "Use when a Gradle or Maven build for a Java/Kotlin Spring Boot project fails -- compile errors, dependency/version conflicts, Spring context startup failures (missing bean, ambiguous bean, circular dependency), Kotlin/Java interop issues, checkstyle/ktlint/detekt findings, and a failing test run.",
     "decision": "create",
     "topMatch": "django/django-build-fix",
-    "recordedAt": "2026-09-25T15:36:17.081Z",
+    "recordedAt": "2026-09-25T18:06:23.531Z",
     "skillName": "java-kotlin-spring-build-fix"
   },
   {
     "query": "Use when reviewing a Java or Kotlin Spring Boot change for framework-specific risks -- field injection, @Transactional self-invocation, entities leaked across the API boundary, N+1 query patterns, missing Bean Validation, and overly permissive Spring Security configuration. Read-only, no edits.",
     "decision": "fork",
     "topMatch": "java-kotlin-spring/java-kotlin-spring-implementation",
-    "recordedAt": "2026-09-25T15:36:17.387Z",
+    "recordedAt": "2026-09-25T18:06:23.850Z",
     "skillName": "java-kotlin-spring-code-review",
     "justification": "top match java-kotlin-spring/java-kotlin-spring-implementation is this same pack's implementation skill, sharing Spring-specific domain vocabulary (constructor injection, @Transactional, Spring Data JPA, Bean Validation) because review necessarily checks for the same pitfalls implementation should avoid, not because the two are redundant; decision is fork since they cover disjoint workflows (writing new code vs. read-only review of an existing diff)."
   },
   {
-    "query": "Use when writing new endpoint, service, or repository code in a Java or Kotlin backend built on Spring Boot -- wiring dependencies through a class's own constructor, splitting request handling across layers, marshaling a request payload into a validated object, deciding where a transaction boundary starts, and authoring a new Spring Data repository method. Covers new/extended code, not an existing diff's risks (that's the pack's own review skill) or fixing a broken build (that's its own build-fix skill).",
+    "query": "Use when writing a controller, service, or repository class in a Java or Kotlin backend built on Spring Boot -- wiring dependencies through a class's own constructor, splitting request handling across layers, marshaling a request payload into a validated object, deciding where a transaction boundary starts, and authoring a Spring Data repository method. Covers writing/extending production code, not an existing diff's risks (that's the pack's own review skill) or fixing a broken build (that's its own build-fix skill).",
     "decision": "create",
     "topMatch": "java-kotlin-spring/java-kotlin-spring-code-review",
-    "recordedAt": "2026-09-25T15:36:17.680Z",
+    "recordedAt": "2026-09-25T18:06:24.162Z",
     "skillName": "java-kotlin-spring-implementation"
   },
   {
     "query": "Use when writing or reviewing a versioned database schema migration for a Spring Boot project using Flyway or Liquibase -- new migration file naming/ordering, never editing an already-applied migration, and verifying with flywayMigrate/flywayValidate or the project's configured equivalent.",
     "decision": "create",
     "topMatch": "quality/deprecation-path",
-    "recordedAt": "2026-09-25T15:36:17.967Z",
+    "recordedAt": "2026-09-25T18:06:24.476Z",
     "skillName": "java-kotlin-spring-migrate"
   },
   {
     "query": "Use when a Java or Kotlin Spring Boot test suite needs writing, extending, or fixing -- JUnit 5, Mockito/MockK, the narrowest Spring test slice (@WebMvcTest/@DataJpaTest/@SpringBootTest), MockMvc, Awaitility instead of Thread.sleep, and Testcontainers for repository tests.",
     "decision": "fork",
     "topMatch": "java-kotlin-spring/java-kotlin-spring-implementation",
-    "recordedAt": "2026-09-25T15:36:18.258Z",
+    "recordedAt": "2026-09-25T18:06:24.794Z",
     "skillName": "java-kotlin-spring-testing",
     "justification": "top match java-kotlin-spring/java-kotlin-spring-implementation is this same pack's implementation skill, sharing Spring-specific domain vocabulary (Spring Boot, JPA repository, service layer) because tests necessarily exercise the same layered architecture implementation builds, not because the two are redundant; decision is fork since they cover disjoint workflows (writing production code vs. writing JUnit5/MockMvc/Testcontainers tests for it)."
   }

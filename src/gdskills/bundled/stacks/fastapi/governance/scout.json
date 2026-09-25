@@ -1,33 +1,33 @@
 [
   {
-    "query": "Use when a FastAPI app fails to start, import, type-check, or lint -- resolves app-startup/router-registration failures, dependency-injection wiring errors (Depends() on the wrong callable, a missing sub-dependency), Pydantic v1/v2 model errors, mypy/pyright errors on path operations and schemas, and ruff failures, with the smallest root-cause fix. For a generic Python ModuleNotFoundError/packaging/dependency-resolver failure not specific to FastAPI's own app wiring, use python-build-fix.",
+    "query": "Use when a FastAPI app itself fails to start, import, or register a router -- app-startup failures, dependency-injection wiring errors (Depends() on the wrong callable, a missing sub-dependency), Pydantic v1/v2 model/validation errors, and a checker flagging a path-operation signature or response_model specifically, with the smallest root-cause fix. For a generic Python ModuleNotFoundError/packaging/dependency-resolver failure not specific to FastAPI's own app wiring, use python-build-fix.",
     "decision": "fork",
-    "topMatch": "python/python-build-fix",
-    "recordedAt": "2026-09-25T15:36:14.530Z",
+    "topMatch": "nestjs/nestjs-build-fix",
+    "recordedAt": "2026-09-25T18:06:20.873Z",
     "skillName": "fastapi-build-fix",
     "justification": "top match python/python-build-fix is the same build-fix category for generic Python tooling (mypy/ruff/pip), not FastAPI's own Depends resolution, router registration, and Pydantic validation-error failure modes; a FastAPI-scoped fork is warranted since python-build-fix has no visibility into FastAPI's own dependency-injection wiring."
   },
   {
-    "query": "Use when reviewing FastAPI changes for correctness and safety risks -- checks blocking calls inside async def path operations/dependencies, request bodies accepted as dict/Any instead of Pydantic models, missing response_model filtering, missing or misplaced auth dependencies, unsafe CORS configuration, and hard-coded secrets. Read-only: reports findings, does not edit code. For generic Python-level review (mutable defaults, broad except, resource leaks) not specific to FastAPI's own request lifecycle, use python-code-review.",
-    "decision": "fork",
-    "topMatch": "python/python-code-review",
-    "recordedAt": "2026-09-25T15:36:14.863Z",
+    "query": "Use when reviewing FastAPI changes for correctness and safety risks -- checks a synchronous driver or library call left in a route handler's coroutine, request bodies accepted as dict/Any instead of Pydantic models, missing response_model filtering, missing or misplaced auth dependencies, unsafe CORS configuration, and hard-coded secrets. Read-only: reports findings, does not edit code, and is scoped to FastAPI's own request lifecycle rather than general-purpose backend correctness.",
+    "decision": "create",
+    "topMatch": "fastapi/fastapi-testing",
+    "recordedAt": "2026-09-25T18:06:21.226Z",
     "skillName": "fastapi-code-review",
     "justification": "top match python/python-code-review is the same review category for generic Python risks, not FastAPI's own async/blocking-call, response_model, and auth-dependency concerns; a FastAPI-scoped fork covers concerns python-code-review cannot see."
   },
   {
-    "query": "Use when implementing or extending a FastAPI path operation, dependency, or Pydantic schema -- covers async vs. sync path operations and FastAPI's threadpool behavior, Depends()-based dependency injection, Pydantic v2 request/response models, response_model filtering, background tasks, and OpenAPI/router conventions. FastAPI projects are Python projects; for generic Python idiom (typing, resource management, asyncio.TaskGroup) not specific to FastAPI's own request lifecycle, use python-implementation.",
+    "query": "Use when implementing or extending a FastAPI path operation, dependency, or Pydantic schema -- covers async vs. sync path operations and FastAPI's threadpool behavior, Depends()-based dependency injection, Pydantic v2 request/response models, response_model filtering, background tasks, and OpenAPI/router conventions. Scoped to FastAPI's own request-handling surface, not general-purpose Python application code with no HTTP layer.",
     "decision": "fork",
-    "topMatch": "fastapi/fastapi-code-review",
-    "recordedAt": "2026-09-25T15:36:15.186Z",
+    "topMatch": "fastapi/fastapi-testing",
+    "recordedAt": "2026-09-25T18:06:21.577Z",
     "skillName": "fastapi-implementation",
     "justification": "top match fastapi/fastapi-code-review is this same pack's read-only review skill, sharing only generic FastAPI-project vocabulary from its own audit scope, not implementation guidance; decision is fork since both are legitimately FastAPI-scoped but cover disjoint workflows (writing new code vs. auditing an existing diff without editing it)."
   },
   {
-    "query": "Use when you write, extend, or fix a FastAPI project's test suite -- covers TestClient/httpx.AsyncClient requests against the real app, app.dependency_overrides for auth/DB fixtures, asserting response status codes and response_model filtering, and mocking external HTTP calls. Not for testing plain Python functions with no HTTP layer (see python-testing) or auditing test conventions without changing files (see review-testing-practices).",
+    "query": "Use when you write, extend, or fix a FastAPI project's test suite -- driving synchronous or async HTTP requests against the running app in-process, app.dependency_overrides for auth/DB fixtures, asserting response status codes and response_model filtering, and mocking an external HTTP call. Scoped to a project that actually has a FastAPI HTTP layer under test, not a generic Python test suite with none.",
     "decision": "fork",
-    "topMatch": "python/python-testing",
-    "recordedAt": "2026-09-25T15:36:15.514Z",
+    "topMatch": "fastapi/fastapi-implementation",
+    "recordedAt": "2026-09-25T18:06:21.899Z",
     "skillName": "fastapi-testing",
     "justification": "top match python/python-testing is the same test-authoring category for generic pytest suites, not FastAPI's own TestClient/dependency_overrides/response-model-assertion idiom; a FastAPI-scoped fork is warranted since python-testing has no FastAPI-specific HTTP-layer guidance."
   }
