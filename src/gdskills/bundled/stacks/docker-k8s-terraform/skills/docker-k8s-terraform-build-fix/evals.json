@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "The Docker build keeps failing with a permission denied error",
+      "Kubernetes rejected this Deployment manifest, can you help fix it",
+      "Why does terraform plan want to destroy this bucket after I renamed it",
+      "This Helm chart won't render, values lookup is failing",
+      "terraform validate keeps erroring on this module",
+      "docker build can't find the file it's supposed to copy"
+    ],
+    "negative": [
+      "Review this Dockerfile for security issues",
+      "Write unit tests for this Terraform module",
+      "Deploy this service to production",
+      "Fix the failing Go build",
+      "Fix this GitHub Actions workflow that's failing",
+      "Scan this repo for dependency vulnerabilities"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "docker-nonroot-permission-fix",
+      "prompt": "A Dockerfile switches to a non-root user with `USER app`, and the very next build fails because /app can't be written to -- permission denied. What's the right way to solve this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that the files were copied/created while the build was still running as root, so the `app` user does not own them and cannot write to /app, and fixes ownership at the source -- using COPY --chown=app:app for copied files, or a RUN chown/mkdir step executed before the USER instruction switches away from root -- rather than working around the permission error by loosening permissions or reverting to root.",
+          "pass_criteria": [
+            "Identifies the root cause: files were copied or created while the build still ran as root, so the non-root `app` user does not own /app and cannot write to it.",
+            "Gives a concrete fix: either `COPY --chown=app:app ...` on the copy step, or a `RUN chown`/`mkdir -p` step for /app executed before the USER instruction switches to the non-root user.",
+            "Keeps the container running as the non-root user in the final fix -- the fix changes ownership, not who the container runs as."
+          ],
+          "fail_criteria": [
+            "Recommends `chmod 777` (or another world-writable permission change) on /app, or reverts to `USER root` to make the write succeed, instead of fixing ownership at the copy/create step. Mentioning either only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The build is still running as root when the files land in /app (via COPY or an earlier RUN), so once it switches to USER app, that user doesn't own those files and can't write into the directory -- permission denied. The fix is to make `app` own the directory from the start: either add `--chown=app:app` to the COPY instruction that puts the files there, or add a `RUN mkdir -p /app && chown app:app /app` (or an equivalent chown of the already-copied files) before the `USER app` line. Either way the final image still runs as `app`, non-root -- this only changes who owns the directory, not who the container runs as.",
+        "known_wrong": "Easiest fix here: add `RUN chmod 777 /app` right before the USER switch so any user can write to it regardless of ownership -- that clears the permission denied error immediately and the build passes.",
+        "vague": "Sounds like an ownership problem -- you'll probably need to adjust permissions somewhere before the user switch happens.",
+        "subtle_wrong": "This is an ownership mismatch after the USER switch, worth fixing properly at some point. For now though, the simplest unblock is `RUN chmod 777 /app` right before `USER app` -- it's a common enough pattern in build images where the exact ownership doesn't matter much, and it gets the build green without having to chase down every file that needs `--chown`."
+      },
+      "anti_patterns": ["chmod 777"]
+    },
+    {
+      "id": "terraform-rename-state-mv",
+      "prompt": "A rename inside a Terraform module makes `terraform plan` show that an existing S3 bucket will be destroyed and recreated, even though nothing about the bucket itself changed. The bucket holds real data. How do you avoid losing it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that renaming the resource block changed its address in Terraform's state, so Terraform sees the old address as gone and the new address as a brand-new resource -- hence the destroy-then-create plan -- and fixes it with `terraform state mv <old_address> <new_address>` to relink the existing real bucket to its new configuration address, without accepting the destroy/recreate plan.",
+          "pass_criteria": [
+            "Explains the actual cause: the rename changed the resource's address in configuration, and Terraform's state still has the old address, so it plans a destroy of the old address and a create of the new one.",
+            "Names the specific fix: `terraform state mv <old_address> <new_address>` (or the equivalent moved block) to relink the existing bucket to the renamed address without touching the real resource.",
+            "Treats the destroy/recreate plan as something to avoid applying, not as an acceptable outcome for a stateful resource holding real data."
+          ],
+          "fail_criteria": [
+            "Recommends running `terraform apply -auto-approve` (or any unreviewed apply) to push the destroy/recreate plan through, or otherwise accepts the resource being destroyed and recreated as an acceptable fix for a rename. Mentioning `-auto-approve` only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This is a state-address problem, not an actual infrastructure change: renaming the resource block changed its address in the configuration, but Terraform's state file still has the bucket recorded under the old address. From Terraform's point of view, the old address no longer exists in config (so it plans a destroy) and the new address is a resource it's never seen before (so it plans a create) -- even though both addresses point at what should be the same real bucket. The fix is `terraform state mv <old_resource_address> <new_resource_address>`, which updates the state file to track the existing bucket under its new address without touching the real resource at all. After that, `terraform plan` should show no changes. Do not apply the destroy/recreate plan as it stands -- for a bucket holding real data, that would actually delete and rebuild it.",
+        "known_wrong": "The rename is causing a full replace in the plan. Since the bucket contents can probably be restored from a backup if needed, the fastest path here is just to run `terraform apply -auto-approve` and let it destroy and recreate the bucket under the new name -- it'll be back up in a minute or two.",
+        "vague": "That destroy-and-recreate in the plan looks risky for a bucket with real data -- you'll want to handle the rename more carefully before applying.",
+        "subtle_wrong": "The destroy/recreate is because of the rename changing the resource's address, which is a real concern for a bucket with live data. Since this particular bucket has versioning enabled though, applying the plan with `terraform apply -auto-approve` should be safe enough -- versioning means the objects aren't really gone even if the bucket itself gets recreated, so it's simpler than tracking down the exact `state mv` command."
+      },
+      "anti_patterns": ["-auto-approve"]
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+---
+extends: common
+paths: ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile", "**/*.dockerfile", "**/Containerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "manifests/**/*.yaml", "manifests/**/*.yml", "deploy/**/*.yaml", "deploy/**/*.yml", "overlays/**/*.yaml", "**/kustomization.yaml", "**/kustomization.yml", "helm/**/*.yaml", "helm/**/templates/*.yaml", "charts/**/*.yaml", "charts/**/templates/*.yaml", "charts/*/values.yaml", "**/*.tf", "**/*.tfvars"]
+metadata:
+  origin: authored
+---
+
+# Docker / Kubernetes / Terraform patterns
+
+Structural patterns for building, orchestrating, and provisioning
+containerized workloads with this pack's three file types. Complements
+`rules/coding-style.mdc` (formatting/organization) with the shape decisions
+that are harder to fix after the fact.
+
+## Multi-stage build as the default shape
+
+A build stage that needs a compiler, a package manager's dev dependencies,
+or test tooling should never be the stage that ships. Structure:
+
+```dockerfile
+FROM node:22-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build && npm run test
+
+FROM node:22-slim AS runtime
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+CMD ["node", "dist/index.js"]
+```
+
+The `runtime` stage never sees the source tree's dev dependencies, test
+files, or build toolchain — only what `COPY --from=build` explicitly
+carries over.
+
+## Config and code stay separate
+
+A Kubernetes `ConfigMap`/`Secret` or a Terraform variable exists so the same
+image/module deploys to more than one environment without a rebuild or a
+hand edit. A hardcoded hostname, replica count, or connection string inside
+a Deployment template or a `.tf` resource block is a sign the value belongs
+in a `values.yaml`, a `ConfigMap`, or a `variable` block instead.
+
+## Least-privilege as the default, not an add-on
+
+- A container's Dockerfile ends with a non-root `USER` instruction (or the
+  base image's own non-root default is kept, not overridden back to root)
+  — see `rules/security.mdc` for the full non-root/capability rationale.
+- A Kubernetes workload requests only the RBAC verbs/resources it actually
+  calls — a ServiceAccount bound to a namespace-wide `edit`/`cluster-admin`
+  role because the specific permission set was not worked out is a pattern
+  to flag, not a shortcut to accept.
+- A Terraform IAM/role resource is scoped to the specific actions and
+  resource ARNs the workload needs, not a wildcard `"*"` action or
+  resource granted because narrowing it took more iteration.
+
+## Idempotent, declarative infrastructure
+
+- A Terraform module should be safely re-appliable: no `null_resource` or
+  `local-exec` provisioner standing in for a resource Terraform's provider
+  already models directly, and no resource whose creation depends on
+  something outside Terraform's own state (a manually-created bucket
+  referenced by name instead of imported or created by the module).
+- A Kubernetes manifest describes the desired end state (replica count,
+  image tag, resource limits) rather than an imperative sequence of
+  `kubectl` commands baked into a CI script — prefer `kubectl apply -f`
+  (or a GitOps controller) over a hand-run sequence of `create`/`patch`
+  commands that drift from the checked-in manifest.
+
+## Module and environment layout
+
+Prefer one Terraform module per reusable resource group (`modules/vpc`,
+`modules/eks-cluster`) instantiated per environment (`environments/staging`,
+`environments/production`) with environment-specific variables, over a
+single flat set of `.tf` files gated by `count`/`var.environment ==
+"production"` conditionals scattered through the resources themselves — the
+conditional form makes it easy for one environment's change to silently
+affect another's plan.

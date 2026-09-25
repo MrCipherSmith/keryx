@@ -1,0 +1,430 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "ci-github-gitlab/ci-pipeline-implementation",
+  "strictness": "high",
+  "trials": 10,
+  "triggerAccuracy": {
+    "truePositive": 6,
+    "falsePositive": 0,
+    "positives": 6,
+    "negatives": 6
+  },
+  "evidence": "authored",
+  "scenarios": [
+    {
+      "id": "trigger-positive-1",
+      "kind": "trigger-positive",
+      "prompt": "Set up a workflow so our test suite runs automatically on incoming pull requests",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-2",
+      "kind": "trigger-positive",
+      "prompt": "I need pipeline stages in .gitlab-ci.yml for building, testing, and shipping the app",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-3",
+      "kind": "trigger-positive",
+      "prompt": "This CI job reinstalls dependencies every run -- can we speed it up with caching?",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-4",
+      "kind": "trigger-positive",
+      "prompt": "Multiple repos need the same build steps -- can we share one workflow definition?",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-5",
+      "kind": "trigger-positive",
+      "prompt": "The GITHUB_TOKEN in this workflow currently has no explicit scope -- lock it down",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-6",
+      "kind": "trigger-positive",
+      "prompt": "How do I keep our production deploy credentials from leaking to feature-branch pipelines?",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-1",
+      "kind": "trigger-negative",
+      "prompt": "Review this Dockerfile for insecure base image usage",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-2",
+      "kind": "trigger-negative",
+      "prompt": "Add a Kubernetes deployment manifest with resource limits",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-3",
+      "kind": "trigger-negative",
+      "prompt": "Run a general OWASP security review across this codebase",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-4",
+      "kind": "trigger-negative",
+      "prompt": "Edit this YAML config file to add a new logging field",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-5",
+      "kind": "trigger-negative",
+      "prompt": "Write unit tests for this Python function",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-6",
+      "kind": "trigger-negative",
+      "prompt": "Review this TypeScript diff for missing null checks",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "least-privilege-permissions",
+      "kind": "behavior",
+      "prompt": "I'm adding a new job to this GitHub Actions workflow that needs to comment on the pull request. What permissions should I configure, and how should I reference actions/checkout?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "For a job that comments on the pull request, scope `permissions:` at the job level rather than the workflow level:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read        # needed to check out the repo\n      pull-requests: write  # needed to post the comment\n    steps:\n      - uses: actions/checkout@<full-commit-sha>\n      - run: gh pr comment ${{ github.event.pull_request.number }} --body \"...\"\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n```\n\nKey points:\n\n**Permissions**\n- If the workflow already has a top-level `permissions:` block, leave it (or set it to `{}`) and add this job's scopes only on this job. Do not set `write-all` at the workflow level just to satisfy this one job — that would hand write access to every other job in the file too.\n- `pull-requests: write` is the one that actually lets you comment. `contents: read` is what checkout needs. Nothing else is required for this job.\n- Verify your repo's default `GITHUB_TOKEN` permissions — if the org/repo sets the default to read-only, a job-level `permissions:` block is required (the default won't grant write on its own), which is what the block above does.\n- If this job only runs on `pull_request` from forks, be aware the token is read-only there regardless of what you declare, so it can't post comments on fork PRs — comment-posting jobs usually need `pull_request_target` or a separate `workflow_run` trigger. If you go the `pull_request_target` route, do **not** check out and execute the PR's head SHA in that job, or you hand untrusted code your base-repo token.\n\n**actions/checkout reference**\n- Pin to a full commit SHA, not a tag:\n  ```yaml\n  - uses: actions/checkout@<40-char-sha>  # v4.x.x\n  ```\n  A tag is mutable and can be moved; a SHA can't. You can keep a trailing comment naming the version for readability, as above.\n- If the job doesn't actually need the repo contents (e.g. it only calls the API to comment), drop the checkout step entirely — fewer steps, less surface.\n\n**One more thing for the comment body itself**\nIf any part of the comment text comes from the PR (title, body, branch name), pass it through `env:` and reference the env var in the script, never interpolate `${{ github.event.pull_request.title }}` directly into the `run:` string — a title containing a backtick or `$()` would break out of the generated shell. Also add `timeout-minutes` to the job and consider a `concurrency:` group if the job can race with itself.",
+          "outputSha256": "90830a97360907e82cdeb872f5020dd1d03422ff7a636cd804a44a4d5cbdeb6f",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level permissions with pull-requests: write and contents: read shown in YAML (criterion 1). Explicitly rejects workflow-level write-all: 'Do not set write-all at the workflow level just to satisfy this one job' (criterion 2). States checkout should be pinned to a full commit SHA, not a tag: 'Pin to a full commit SHA, not a tag' with @<40-char-sha> (criterion 3). No fail criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Give the job `permissions:` scoped to exactly what commenting needs — not a workflow-level block granting everything.\n\n**Permissions for a PR-commenting job:**\n\nAt the job level, grant the one scope that matters:\n\n```yaml\njobs:\n  comment:\n    permissions:\n      pull-requests: write   # required to create/update a PR comment\n      contents: read         # required so actions/checkout can read the repo\n```\n\nNotes:\n\n- If the workflow's top level already sets `permissions: {}` (or `read-all`), this job-level block overrides it for just this job — that's the point. If the top level instead says `write-all`, change that to `{}` and put the write scope on this job only.\n- `contents: read` is what `actions/checkout` needs. If the repo's default token permissions are already trimmed, you must state it explicitly at the job level or checkout will fail.\n- Don't add `id-token: write`, `actions: write`, etc., unless this job actually uses them. Commenting needs only `pull-requests: write`.\n- If the job also needs to read the PR's metadata via the API, `pull-requests: read` is implied by `write`; don't list both redundantly.\n\n**Referencing actions/checkout:**\n\nPin to a **full commit SHA**, not a moving tag:\n\n```yaml\n    steps:\n      - uses: actions/checkout@<full-40-char-commit-sha>  # v4.x.x\n```\n\nPut the human-readable tag in a trailing comment for readability, but the reference itself must be the immutable SHA — a tag is exactly the reference a compromised maintainer account can silently move.\n\n**Trigger caveat:** if this job comments on PRs, make sure the workflow runs on `pull_request`, not `pull_request_target`. `pull_request_target` runs with base-repo secrets and write access, so if you combine it with checking out and executing the PR's own head SHA you've handed an attacker-controlled PR your token. Only reach for `pull_request_target` if the job genuinely needs base-repo secrets, and never pair it with an untrusted checkout.\n\n**Passing the PR number / title into the comment step:** route `${{ github.event.pull_request.number }}` (and any title/body) through `env:` first — never interpolate `${{ github.event.* }}` directly into a `run:` shell string, since a title containing backticks or `$(...)` breaks out of the generated script:\n\n```yaml\n      - name: Comment on PR\n        env:\n          PR_NUMBER: ${{ github.event.pull_request.number }}\n          PR_TITLE: ${{ github.event.pull_request.title }}\n        run: |\n          gh pr comment \"$PR_NUMBER\" --body \"Checked: $PR_TITLE\"\n```\n\nUse `$PR_NUMBER`/`$PR_TITLE` as shell variables, not inline `${{ }}`.\n\n**Also worth adding to this job:** a `timeout-minutes` and, since commenting mutates PR state, a `concurrency:` group so overlapping runs don't race on the same PR.",
+          "outputSha256": "304a4aa48b062a1b36241e262fbbc24bd1e85dece6042d373866b37f18d4ae6e",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level permissions with pull-requests: write and contents: read shown in YAML (criterion 1). Explicitly says change top-level write-all to {} and put write scope on job only (criterion 2). Pins actions/checkout to full 40-char commit SHA, not a moving tag (criterion 3). No broad grant recommended."
+          },
+          "passed": true
+        },
+        {
+          "output": "For a job that comments on the pull request:\n\n**Permissions** — scope at the job level, not workflow level:\n\n```yaml\njobs:\n  comment:\n    permissions:\n      contents: read          # needed if the job checks out the repo\n      pull-requests: write    # needed to post a PR comment\n```\n\nSet `permissions: {}` at the workflow level and grant only these two scopes on the commenting job. Do not use `permissions: write-all`, and do not put `pull-requests: write` at the workflow level — that hands write access to every job in the file, including ones that only build or test. `contents: read` is only required if the job actually checks out code; drop it if the job only comments. `issues: write` is not needed for a normal PR conversation comment on `pull_request`/`pull_request_target` events — `pull-requests: write` covers it.\n\n**Checking out** — pin to a full commit SHA, never a tag:\n\n```yaml\n    steps:\n      - uses: actions/checkout@<full-40-char-commit-sha>  # v4.x.x\n```\n\nReplace `<full-40-char-commit-sha>` with the actual SHA for the version you want, optionally leaving the tag as a trailing comment for readability. A tag is a mutable reference an attacker can silently move; a commit SHA cannot be moved.\n\nA few things to watch given this job comments on a PR:\n\n- If the job runs on `pull_request_target` so it can write to the base repo, do **not** check out and execute the PR's own head SHA/ref in the same job — that combination hands an attacker-controlled PR your base-repo secrets and write token. If you only need to comment, you often don't need a checkout at all.\n- If the PR title, branch name, or other `${{ github.event.* }}` value ends up in a `run:` shell string, pass it through an `env:` entry first and reference the env var in the script — never interpolate `github.event.*` directly into the script text.\n- Add a `concurrency:` group if the job posts to the PR repeatedly (e.g. on every push), so overlapping runs don't race each other's comments.\n- If `actions/checkout` isn't actually needed to read the PR metadata you're commenting with, drop it entirely — a smaller step list is a smaller attack surface.",
+          "outputSha256": "2ad0a78e6115d0c929b44c73d833a217ce7d687197764c04b0dc75123c0aa82f",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level permissions with pull-requests: write and contents: read shown in YAML (criterion 1). Explicitly rejects write-all and workflow-level pull-requests: write (criterion 2). Pins actions/checkout to a full 40-char commit SHA, explaining tags are mutable (criterion 3). No fail criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "For a job that comments on a PR:\n\n**Permissions** — set the workflow-level default to empty and grant only what the commenting job needs at the job level:\n\n```yaml\npermissions: {}          # workflow level: deny by default\n\njobs:\n  comment:\n    permissions:\n      contents: read            # needed to check out the repo\n      pull-requests: write      # needed to post the comment\n```\n\n`pull-requests: write` is the one that actually lets the job post the comment via the API. Add `contents: read` only if that job also checks the repository out; a job that just comments doesn't need it. Don't use `permissions: write-all`.\n\n**actions/checkout** — pin it to a full commit SHA, not a tag, with the tag left as a trailing comment for readability:\n\n```yaml\n- uses: actions/checkout@<full-40-char-commit-sha>  # v4.x.x\n```\n\nA version tag is mutable: if the action's maintainer account or its upstream supply chain is compromised, the tag can be silently repointed at malicious code that then runs with this job's token. A commit SHA cannot be moved. Resolve the SHA from the action's releases page.\n\n**Two things that bite specifically on a commenting job:**\n\n1. If the trigger is `pull_request`, the token is read-only for pull requests from forks, so the comment will fail for outside contributors. That's the *reason* people reach for `pull_request_target` — but `pull_request_target` runs with base-repo secrets and write access, so never check out and execute the PR's own head SHA/ref inside that job. If the job only comments (doesn't run untrusted code), `pull_request_target` with just checkout of the base ref is the safe shape; if it also builds/tests the contribution, keep that in a separate `pull_request` job.\n\n2. If any part of the comment body comes from PR-controlled input (PR title, branch name, a label), don't interpolate `${{ github.event.pull_request.title }}` directly into a `run:` shell string — a title containing `\"`, a backtick, or `$(...)` breaks out of the generated script. Pass it through `env:` and reference `\"$PR_TITLE\"` in the script instead.\n\nAlso give the job a `timeout-minutes` and a `concurrency:` group so back-to-back pushes to the same PR don't stack up comment jobs.",
+          "outputSha256": "c7be3192ca95148290f79bc2d062b2b70fb1b84c922ae15c6ae62e34b5a6e402",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer grants permissions at job level with pull-requests: write (\"needed to post the comment\") and contents: read only if checkout occurs. It sets workflow-level permissions: {} and explicitly says \"Don't use permissions: write-all.\" It pins actions/checkout to a full commit SHA (\"actions/checkout@<full-40-char-commit-sha>\"), explaining tags are mutable. All pass criteria met; no fail criterion."
+          },
+          "passed": true
+        },
+        {
+          "output": "For a job that comments on the pull request, configure a scoped `permissions:` block at the job level — not the workflow level, and never `write-all`:\n\n```yaml\njobs:\n  comment:\n    permissions:\n      contents: read          # only if the job actually reads repo files\n      pull-requests: write    # the scope needed to post/update a PR comment\n```\n\nTwo things worth flagging:\n\n- `pull-requests: write` is the scope that lets the job create or update a PR comment through the API. If the job only reads repo contents for context, add `contents: read`; if it does not touch the repo files at all (just posts a comment), drop `contents` entirely. Do not carry over any other scope \"just in case.\"\n- Set `permissions: {}` at the workflow level so every job starts with nothing, and each job grants only its own needs. That way the commenting job's `pull-requests: write` does not leak write access to jobs that only build or test.\n\nOn the trigger: a job that posts a comment can run under `pull_request` when its token has `pull-requests: write` — that is fine, because `pull_request` from a fork still gets a token scoped to this job's `permissions:` block for commenting purposes, without exposing base-repo secrets. Reach for `pull_request_target` only if the job genuinely needs base-repo secrets. If you do use `pull_request_target`, never check out and execute the pull request's own head SHA/ref in that job — that combination hands an attacker-controlled PR your secrets.\n\nFor `actions/checkout`, pin it to a full commit SHA, not a tag:\n\n```yaml\n    steps:\n      - uses: actions/checkout@<full-40-char-commit-sha>  # v4.x.y\n      - name: Comment on PR\n        ...\n```\n\nA tag is a reference a compromised maintainer account (or upstream supply-chain compromise) can silently move to point at different code; a commit SHA cannot be moved. Keep a comment noting which tag the SHA corresponds to so it stays readable and updatable.\n\nIf this job runs on `pull_request_target` and only needs to comment (not build the PR's code), you typically only need to check out the base branch or not check out at all — do not check out the PR head. And if the comment body includes anything derived from PR input (title, body, branch name), pass it through an `env:` entry and reference it as `${{ env.X }}` inside the `run:` block rather than interpolating `${{ github.event.pull_request.title }}` directly into the shell string, since a crafted title can break out of the generated script.",
+          "outputSha256": "cbd5916ce47e7157c282b43856b736c0a1e1870a64642e7464d912cadb45c217",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level permissions with pull-requests: write shown in YAML (contents: read only if reading files). Explicitly rejects workflow-level write-all ('never write-all') and recommends permissions: {} at workflow level. Pins actions/checkout to full 40-char commit SHA, not a tag, with rationale. No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "For a job that comments on the pull request, here's what to configure:\n\n**Permissions** — scope at the job level, not the workflow level. The job needs:\n\n```yaml\npermissions:\n  contents: read        # to check out the repo\n  pull-requests: write  # to post the comment\n```\n\nDo not reach for `permissions: write-all` or leave the workflow-level default unscoped. Set `permissions: {}` at the workflow level and grant only `contents: read` + `pull-requests: write` on this one job, so every other job in the file stays read-only.\n\nAlso think about the trigger this job runs on. If it reacts to `pull_request` from forks, `pull-requests: write` on the fork's token is downgraded to read-only by GitHub, so the comment will silently fail. If the job genuinely needs to comment on fork PRs, the usual pattern is a `pull_request_target` job — but then **never check out and execute the pull request's own head SHA/ref inside it**. Do the commenting work against base-repo context only, and if you need the PR's diff, fetch it as data (e.g. via the API) rather than checking out and running its code.\n\n**Action pinning** — pin to a full commit SHA, not a tag:\n\n```yaml\n- uses: actions/checkout@<full-40-char-commit-sha>  # v4.x.x\n```\n\nA tag is a mutable reference an attacker (or a compromised maintainer account) can silently move; a commit SHA cannot be moved.\n\n**Additional hardening for this job:**\n\n- Add `timeout-minutes:` to the job — a stuck comment-posting step should not run indefinitely.\n- Add a `concurrency:` group if this job can be triggered repeatedly on the same PR (e.g. on every push), so runs cancel/serialize rather than piling up.\n- If you feed any PR-controlled data into the comment body, route it through an `env:` entry and reference `${{ env.X }}` in the step, rather than interpolating `${{ github.event.pull_request.title }}` (or similar) directly into a `run:` shell string — a title containing `\"`, backticks, or `$(...)` breaks out of the generated script. Better still, pass it to `gh pr comment --body-file` or the API as a structured value, not as shell text.\n\nSo in short: job-level `permissions: { contents: read, pull-requests: write }`, workflow-level `permissions: {}`, `actions/checkout` pinned to a full commit SHA, and if the trigger is `pull_request_target`, do not check out the PR head ref.",
+          "outputSha256": "00fe540591606d0960350807f0a40949cd7797ad26a721f2117506266a26570b",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer grants job-level permissions with pull-requests: write and contents: read (YAML block), explicitly rejects write-all/unscoped default ('Do not reach for permissions: write-all or leave the workflow-level default unscoped'), and pins actions/checkout to a full commit SHA ('actions/checkout@<full-40-char-commit-sha>', 'pin to a full commit SHA, not a tag')."
+          },
+          "passed": true
+        },
+        {
+          "output": "For a job that comments on a pull request, configure permissions at the **job level**, scoped to exactly what that job needs — don't touch the workflow-level default:\n\n```yaml\njobs:\n  comment-on-pr:\n    permissions:\n      pull-requests: write   # needed to create/update the comment\n      contents: read         # needed to check out the repo\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@<full-commit-sha>\n      - name: Comment on PR\n        uses: <some-action>@<full-commit-sha>\n```\n\nKey points:\n\n- **`pull-requests: write`** is the scope that lets a job post or edit an issue/PR comment. If your job only reads PR metadata, use `pull-requests: read` instead.\n- **`contents: read`** is what `actions/checkout` needs to fetch the repo. Only add `contents: write` if the job actually pushes commits.\n- Keep the workflow-level block at `permissions: {}` (or at least omit `write-all`) and grant only this job the write scope, so a read-only job elsewhere in the same file can't inherit it.\n- If you also need to label, close, or merge the PR, that's still under `pull-requests: write` for most cases; `issues: write` is only needed if you're commenting on a plain issue rather than a PR.\n\n**Referencing `actions/checkout`: pin it to a full commit SHA, not a tag:**\n\n```yaml\n- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2\n```\n\nA tag (even `@v4`) is a mutable reference an attacker can silently move; a commit SHA can't be. The trailing comment documenting which release the SHA corresponds to is the convention for keeping it readable.\n\nOne thing to double-check: if this job runs on `pull_request_target` (common when you need `pull-requests: write` from a fork PR), make sure you are **not** also checking out the PR's head ref/SHA — that combination lets an untrusted PR execute code with your write token. Check out the base ref, or use `pull_request` if you don't actually need write access.",
+          "outputSha256": "b27adacb4fbf020e5ace6ec3679e9f89c8b3f97702e0642fae6738afd048915b",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level permissions with pull-requests: write and contents: read shown in YAML (criterion 1). Explicitly says keep workflow-level at permissions: {} or omit write-all, granting only this job the write scope (criterion 2). Pins actions/checkout to full SHA 11bd71901bbe5b1630ceea73d27597364c9af683, noting @v4 tag is mutable (criterion 3). No fail criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Permissions for a job that comments on the PR**\n\nScope it at the job level — not the workflow level — and grant only the token scopes that job actually needs. A job that only reads the repo and posts a comment needs:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read           # to read the repo\n      pull-requests: write      # to post/update the PR comment\n```\n\nIf the comment code needs to write anything else — e.g. `issues: write` for an issue comment, `issues: write` **and** `pull-requests: write` if the same code path may touch either, or `id-token: write` if it requests an OIDC token — add only that specific scope. Do **not** use `permissions: write-all`, and do not rely on the repo's default. Set it on the *job*, not the whole workflow, so the other jobs in the file don't inherit the comment job's write access.\n\nA couple of traps specific to this job:\n\n- If the job reacts to a PR *from a fork* and you're on `pull_request`, the token is read-only for forked contributions **regardless** of what you write in `permissions:` — GitHub clamps it. So a `pull_request`-triggered comment job will work for same-repo branches but not for fork PRs. If you genuinely need to comment on fork PRs, that's the one case where `pull_request_target` is the correct trigger — and then you must **not** check out and execute the PR's head SHA/ref, because that combination hands an attacker-controlled PR your base-repo token. Just comment from the base-repo context, or check out `refs/heads/<base>` only if you need repo files.\n- Route anything attacker-influenced (PR title, body, author login) through `env:` before it reaches the shell — never interpolate `${{ github.event.pull_request.title }}` (or similar) directly into a `run:` string; a title containing `\"`, backtick, or `$(...)` breaks out of the generated script.\n\n**Referencing actions/checkout**\n\nPin it to a full commit SHA, not a mutable tag like `@v4`, and comment the human-readable tag for readability:\n\n```yaml\n- uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0\n```\n\n(the SHA above is the current `v4` line — substitute the exact SHA the project already pins to if it pins one; stay consistent with the other `uses:` lines in the file).\n\nNotes specific to this job:\n\n- If the comment job doesn't actually need the repository's files, **omit the checkout step entirely** — it's the single most common unnecessary step, and skipping it removes a whole class of risk (no PR-head ref ever lands in the workspace).\n- If you do need files, `actions/checkout` with the default `ref` on a `pull_request` trigger checks out the merge commit and is fine. On `pull_request_target`, checkout defaults to the *base* branch and never the PR head — leave it that way unless you have a specific, sandboxed reason to pull the head, and never pipe a head checkout into a `run:` step in that case.\n- Add `persist-credentials: false` if the job doesn't need the token left in the git config, and set a `timeout-minutes` on the job.",
+          "outputSha256": "d2b32ee069c0de1467b3d04c6218efcb1dce8fc6882df21d00210acd92ecfc94",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level permissions with pull-requests: write and contents: read shown in YAML (criterion 1). Explicitly says 'Do not use permissions: write-all, and do not rely on the repo's default' (criterion 2). Pins checkout to full SHA: 'actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0', rejecting mutable @v4 (criterion 3). No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "For a job that comments on the pull request, scope permissions at the job level, not the workflow level. The job needs:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read          # to check out the repo (if the job needs it)\n      pull-requests: write    # to post/update the comment\n    steps:\n      - uses: actions/checkout@<full-commit-sha>\n      # ...\n```\n\nKey points:\n\n**Permissions**\n- Set `permissions: {}` (or `contents: read`) at the workflow level so nothing gets write access by default, then grant `pull-requests: write` only on this one job. Do not use `permissions: write-all` at the workflow level.\n- `pull-requests: write` is the scope that lets the job create/update a PR comment via the API or `gh pr comment`. If you also need to edit the PR body or add labels, that same scope covers it.\n- `contents: read` is only needed if this job also checks out the repo. If the job just posts a comment, you can drop it and keep only `pull-requests: write`.\n- If the job needs to authenticate as the `GITHUB_TOKEN`, it inherits from these permissions automatically — no extra secret needed.\n\n**actions/checkout reference**\n- Pin it to a full commit SHA, not a mutable tag: `uses: actions/checkout@<sha>` (optionally with a `# v4.x.x` comment for readability). A tag can be silently moved; a SHA cannot.\n- Whether you need checkout at all depends on the job: a pure \"comment on PR\" job usually does not need to check out code, so you can skip the checkout step entirely and avoid needing `contents: read`.\n\n**Untrusted input warning**\n- If the comment text includes anything from the PR (title, body, branch name), do not interpolate `${{ github.event.pull_request.title }}` directly into a `run:` shell string. Pass it through `env:` first:\n\n```yaml\n      - name: Comment on PR\n        env:\n          PR_TITLE: ${{ github.event.pull_request.title }}\n        run: gh pr comment ${{ github.event.pull_request.number }} --body \"$PR_TITLE\"\n```\n\nThis applies whether the trigger is `pull_request` or `pull_request_target`. Stay on `pull_request` for this job unless it genuinely needs base-repo secrets or write access beyond the PR itself — and never combine `pull_request_target` with checking out the PR's own head SHA.",
+          "outputSha256": "43e0a7a4e7f22d170c147aa2b19d759e2ae0c14ae962009a0cdde0034d9b47f4",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level scoping with pull-requests: write shown in YAML (criterion 1). Explicitly says 'Do not use permissions: write-all at the workflow level' and sets permissions: {} at workflow level (criterion 2). States checkout should be pinned to a full commit SHA, not a mutable tag, shown as actions/checkout@<full-commit-sha> (criterion 3). No fail criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Set `permissions:` at the job level to the two scopes that job actually needs, and pin the action to a commit SHA.\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read          # checkout needs to read the repo\n      pull-requests: write    # required to post a comment on the PR\n    steps:\n      - uses: actions/checkout@<full-40-char-commit-sha>  # v4.x.y\n      - run: ...\n```\n\nSpecifics, following the skill's rules:\n\n- **Workflow-level `permissions: {}`** (or omit and let each job scope its own), then grant `pull-requests: write` only on this one job. Do **not** reach for `permissions: write-all` or leave the default unscoped token — every other job in the file shouldn't inherit comment-write access it doesn't use. `contents: read` is what `actions/checkout` needs to clone; if this job doesn't check anything out, drop it and keep only `pull-requests: write`.\n\n- **Trigger matters here.** `pull-requests: write` on a `pull_request` (non-`target`) job works for PRs from the same repo. For fork PRs the `GITHUB_TOKEN` is read-only regardless of the `permissions:` block, so a comment job that must run on fork PRs is a case where you'd need `pull_request_target` — but then **do not** check out and execute the PR's own head SHA/ref in that job (the skill's hard rule; that combination leaks base-repo secrets and write access to attacker-controlled code). If you go that route, checkout the base ref or nothing at all, and don't run the contributor's code in the same job.\n\n- **`actions/checkout` reference:** pin to a full commit SHA, not a tag — `uses: actions/checkout@<sha>`, with the tag it corresponds to left as a trailing comment for readability. A tag like `@v4` is a mutable reference an attacker with a compromised maintainer account can move; a commit SHA can't be.\n\n- If the PR title/body/branch name ever flows into a `run:` step (e.g., building the comment text), pass it through `env:` first and reference `\"$PR_TITLE\"` in the script — never interpolate `${{ github.event.pull_request.title }}` directly into the shell string, since a title containing `\"`, `` ` ``, or `$(...)` breaks out of the generated script.\n\nAdd `timeout-minutes:` to the job, and if this touches anything shared/mutating, a `concurrency:` group as well.",
+          "outputSha256": "03b8690f0ce98b3dadb58608f93ccf81f86b76be417fc45da34db694ea583f6a",
+          "promptSha256": "13e5d5343f11f3cbcfb52f46eb20e2f5083d91fde86a196f1bb8754deb73bd73",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Job-level permissions with pull-requests: write and contents: read shown in YAML (criterion 1). Explicitly rejects write-all/unscoped default: 'Do not reach for permissions: write-all or leave the default unscoped token' (criterion 2). States checkout must be pinned to full commit SHA, not tag @v4: 'pin to a full commit SHA, not a tag... A tag like @v4 is a mutable reference' (criterion 3). No fail criteria."
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "safe-pr-trigger-choice",
+      "kind": "behavior",
+      "prompt": "This job builds and runs the test suite for incoming pull requests from any contributor, including forks. Which trigger should it use, and why?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "Use `pull_request` — not `pull_request_target`.\n\nWhy: for a job that only builds and tests an incoming contribution, `pull_request` is the correct trigger because it runs in the context of the merge commit/PR head with a token scoped per Step 2 of the workflow — read-only by default once you also set `permissions: {}` at the workflow level and grant only `contents: read` at the job level. It does not receive the base repository's secrets, so a malicious PR from a fork has nothing to exfiltrate even if the build executes contributor-controlled code (which a build/test job necessarily does — it compiles and runs the PR's own code).\n\n`pull_request_target` is the wrong choice here specifically because it runs in the context of the base repository, with the base repo's token and access to its secrets, and it checks out the base branch by default. It is only appropriate when a job genuinely needs base-repo secrets or write access (e.g., labeling, commenting, or deploying from a trusted context) — and even then it must never be combined with checking out and executing the pull request's own head SHA/ref. That combination is exactly the escalation path in this skill's rules: an attacker opens a PR whose code, when the `pull_request_target` job checks out the PR head and runs it, executes with the base repo's secrets in scope.\n\nSo: trigger `pull_request`, scope `permissions:` down (`{}` at workflow level, `contents: read` at job level), pin third-party actions to full commit SHAs, and pass any `${{ github.event.* }}` values (like the PR title) through `env:` before they reach a `run:` shell string rather than interpolating them directly.",
+          "outputSha256": "a81cfcc8504b1af5ed20561354d836a02d571cd5081dfd0bd0e443c3f1910323",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request not pull_request_target (\"Use `pull_request` — not `pull_request_target`\"). It explains pull_request_target runs in base repo context with base token/secrets and write access, wrong for fork code. It states pull_request gets no base-repo secrets, so a fork PR has nothing to exfiltrate."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request`, not `pull_request_target`.\n\nThe reason is that a fork-originated PR is untrusted code. `pull_request` runs the job in the context of the fork's merge/head, using the contributor's own token, which is read-only by default and has no access to the base repository's secrets. That is exactly the isolation you want for \"build and run the test suite on an incoming contribution\": the contribution gets executed, but it executes without secrets and without write access to the base repo, so a malicious PR cannot exfiltrate credentials or push to the repository.\n\n`pull_request_target` runs in the context of the base repository, with a token that can have write access and with access to base-repo secrets. That is only appropriate when the job genuinely needs base-repo secrets or write access — and it must never be combined with checking out and executing the pull request's own head SHA/ref, because that hands attacker-controlled code your base-repo secrets and token. Since this job just builds and tests the contribution, it needs none of that, so `pull_request` is both the correct and the safer trigger.\n\nTwo things to get right alongside the trigger:\n\n- Scope `permissions:` down (e.g. `permissions: {}` at the workflow level, `contents: read` at the job level) so the default token has no write scope it doesn't need.\n- Never interpolate `${{ github.event.* }}` values (PR title, branch name, etc.) directly into a `run:` shell string — route them through `env:` first, since a crafted PR title or ref can break out of the generated script.",
+          "outputSha256": "720e434f8b0af02b5f99540e8860027bc5db2d844144ed21e0f3a26680c0cc4a",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request over pull_request_target (criterion 1). It states pull_request_target runs in base-repo context with write-capable token and base-repo secrets, and that this job needs none of that (criterion 2). It states pull_request uses the contributor's own read-only token with no access to base-repo secrets even for untrusted forks (criterion 3). No fail criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request`, not `pull_request_target`.\n\nThe reason comes down to which token and which secrets the job runs with:\n\n- **`pull_request`** — for a PR opened from a fork, the job runs in the base repository's context but with a **read-only `GITHUB_TOKEN`** and **no access to repository secrets**. That is exactly the right blast radius for \"build and run the test suite\": the job only needs to read the code, fetch dependencies, and run tests. A contributor's PR cannot reach base-repo credentials because there are none exposed to it.\n- **`pull_request_target`** — runs in the context of the base repository with a **read-write `GITHUB_TOKEN` and access to repository secrets**. It exists for jobs that genuinely need to act on the base repo (labeling PRs, posting comments with a token, deploying a preview that needs a secret). If such a job then checks out and executes the PR's own head SHA (`actions/checkout` with `ref: ${{ github.event.pull_request.head.sha }}`), that is the classic privilege-escalation hole: attacker-controlled code from the fork runs with the base repo's secrets and write token.\n\nA build-and-test job does not need any privilege that `pull_request` withholds, so there is no upside to `pull_request_target` — only the escalation risk. Use `pull_request`, and if the job later needs to do something privileged (e.g. compute a coverage comment back onto the PR), split that into a separate, narrowly-scoped job rather than widening this one's trigger.\n\nTwo supporting points that go with this choice:\n\n1. Scope the token down anyway. Even under `pull_request`, set `permissions: {}` at the workflow level and grant only what each job needs — e.g. `contents: read` for a checkout-and-test job. This keeps behavior identical if someone later changes the trigger, and follows least privilege regardless.\n2. Handle the trigger's event payload safely. A test job often reads `github.event.pull_request.title` or a branch name; route anything like that through an intermediate `env:` entry before it reaches a `run:` shell string, never interpolate `${{ github.event.* }}` directly into the script text, and pin third-party actions to a full commit SHA.\n\nSo: **`pull_request`**, because it gives the job the read-only, secret-less context that building and testing an untrusted contribution actually requires, and `pull_request_target`'s extra privileges would be unused at best and a credential-leak vector at worst.",
+          "outputSha256": "aea89a5e9e2fcbd4203d007e41ae6dffd2bf0301fcc4492b0a2d8811cfc67d25",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request over pull_request_target (opening line, closing). It states pull_request runs with read-only GITHUB_TOKEN and no repository secrets for fork PRs, so contributor code cannot reach base-repo credentials. It explains pull_request_target runs in base repo context with read-write GITHUB_TOKEN and secrets, calling it a privilege-escalation hole. All three pass criteria concretely met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request`. For a job that only builds and runs tests against an incoming contribution, `pull_request` is the correct trigger because it runs with the contributor's own — typically read-only — token and has no access to the base repository's secrets or write token. That is exactly the security posture you want for code you have not yet reviewed or merged: a malicious PR from a fork can do nothing worse than run its own untrusted code in a sandbox with no base-repo privileges.\n\nDo *not* reach for `pull_request_target` for this job. `pull_request_target` runs in the context of the base repository's default branch and *does* get the base repo's secrets and a write-capable `GITHUB_TOKEN` — precisely so that maintainers can do things like label or comment on fork PRs. That elevated context is the whole reason it is dangerous: if a `pull_request_target` job also checks out and executes the pull request's own head SHA/ref, the attacker-controlled code from the fork now runs with the base repo's secrets and write access. That is the classic \"pwn request\" privilege-escalation bug.\n\nSo the rule for this build-and-test job is:\n\n- Trigger: `on: pull_request` — safe by construction for untrusted fork input.\n- Do not combine it with a checkout-and-execute of the PR head, and do not switch to `pull_request_target` merely to make the job \"have more access.\" If you ever genuinely need base-repo secrets or write access in a PR-context job, that is a separate, carefully designed job (e.g. a comment/label step), and it must never check out and run the PR's own code.\n\nSupporting details that go with this choice:\n\n- Scope the token down: set `permissions: {}` at the workflow level and grant only what each job needs (for a pure build/test job, usually just `contents: read`).\n- Pin every third-party `uses:` action to a full commit SHA, not a mutable tag.\n- Pass any untrusted input (e.g. `${{ github.event.pull_request.title }}`) through an intermediate `env:` entry before it reaches a `run:` shell string; never interpolate it directly into the script text.\n\nNet: `pull_request` for building and testing fork contributions, because it runs without base-repo secrets or write access, and it must never be paired with executing the PR's own head SHA.",
+          "outputSha256": "b4e9591f1547d1498ec9f78022a485830c61bf73e111ff01d3b7967ef1223083",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends `pull_request` for the build/test job (\"Use `pull_request`\"). It explains pull_request_target \"does get the base repo's secrets and a write-capable `GITHUB_TOKEN`\" and that this job doesn't need it. It states pull_request \"runs with the contributor's own — typically read-only — token and has no access to the base repository's secrets or write token.\" All criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request`, not `pull_request_target`.\n\nWhy:\n\n- `pull_request` runs in the context of the fork/contributor's own branch. The workflow gets a read-only `GITHUB_TOKEN` by default, and — critically — repository secrets are **not** passed to it when the PR comes from a fork. So even though you check out and execute the contributor's code (which is the entire point of building and testing their PR), that code never has access to your base-repo secrets or write credentials. That is exactly the risk profile you want for \"run an untrusted contribution's test suite.\"\n\n- `pull_request_target` is the opposite: it runs in the context of the base repository, so it *does* get your secrets and a `GITHUB_TOKEN` with whatever write permissions you grant it. That is why the well-known dangerous pattern is combining `pull_request_target` with `actions/checkout` of the PR's head ref/SHA — it checks out and executes attacker-controlled code while holding your base-repo credentials, which is a direct path to secret exfiltration.\n\nFor a job that only needs to build and test — no base-repo secrets, no write access to the repository or PR — `pull_request` is the correct and sufficient trigger, and `pull_request_target` would be a strictly worse choice that buys you nothing here while opening the untrusted-checkout hole.\n\nTwo supporting notes if this pipeline grows:\n\n- Keep `permissions:` scoped down (`permissions: {}` at workflow level, `contents: read` at the job level) so the fork-run token can do nothing but read the code it needs.\n- The usual reason people reach for `pull_request_target` here is to post a comment or status back onto the PR. If you later need that, do it as a *separate* job — never add secret-requiring or write steps to the job that checks out and runs the contributor's code, and never pass untrusted values into that second job's shell directly; route them through `env:` first.",
+          "outputSha256": "59ee4dc4eb87eb154bdeca73851f6bf57bd2435384b3ababeadd38ef42afb4a0",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request not pull_request_target (opening line). Explains pull_request_target runs in base repo context with secrets and write GITHUB_TOKEN, dangerous with checkout of PR head. States pull_request gets read-only GITHUB_TOKEN and repo secrets not passed for forks, so untrusted code can't reach base secrets."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use the `pull_request` trigger, not `pull_request_target`.\n\nWhy: a `pull_request` job runs in the context of the fork's PR and receives a read-only `GITHUB_TOKEN` with no access to the base repository's secrets. It can still check out the PR's head commit, run the build and test suite against that contributor's code, and report results back — which is exactly what a build/test job needs. Fork contributions from untrusted contributors therefore can't reach anything sensitive.\n\n`pull_request_target` runs in the context of the base repository instead: it gets the base repo's secrets and can be granted write permissions. That's the reason it's dangerous here — the moment a job with `pull_request_target` checks out and executes the PR's own head SHA, contributor-controlled code (a build hook, a test script, a postinstall step) executes with the base repo's tokens and secrets in scope, and the contributor can exfiltrate them. A build/test job doesn't need base-repo secrets or write access, so it has no reason to take on that risk.\n\nSo: trigger with `on: pull_request` for the build/test job. If a separate job genuinely needs base-repo secrets or write access (e.g. to post a comment or attach a status), give it `pull_request_target` but keep it to trusted operations only — scope its `permissions:` down to exactly what it needs (e.g. `contents: read`, `pull-requests: write`) and never check out or execute the PR's head ref/SHA inside that job.\n\nOne caveat: if the check needs to be a required status gate on the protected branch, a plain `pull_request` workflow still reports its status fine for that purpose; you don't need `pull_request_target` to get a check to show up. Reserve the target variant strictly for the trusted-context job that can't run in the fork context.",
+          "outputSha256": "8ed8ee44bc1b4a249823b79ca2e9a0d26a403c11c7883a43caeb8cacad98238e",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends `on: pull_request` for the build/test job (criterion 1). It states pull_request runs with a read-only GITHUB_TOKEN and no access to base-repo secrets even for untrusted forks (criterion 3: 'read-only GITHUB_TOKEN with no access to the base repository's secrets'). It explains pull_request_target runs in base repo context with base secrets and write permissions, dangerous for fork code (criterion 2). No fail criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request`, not `pull_request_target`.\n\nThe reason is exactly the threat model a fork PR creates: the contributor controls the code being tested, and typically has no relationship to the repository maintainers. The `pull_request` trigger runs the workflow in the context of the *merge commit from the fork*, using the contributor's own token, which for a fork PR is read-only by default and has no access to the base repository's secrets. So even if the contributor's PR code is malicious, it executes in a sandbox that holds nothing worth stealing — the worst it can do is fail the build or print to its own logs.\n\n`pull_request_target`, by contrast, runs in the context of the *base repository*, with the base repo's `GITHUB_TOKEN` (potentially write-scoped) and access to the base repo's secrets. That privilege exists so a job can label a PR, comment on it, or otherwise act on the PR *without* touching the contributor's code. It is only safe as long as the job never checks out and executes the PR's own head SHA — because the moment it does, you have handed an attacker-controlled commit your base-repo secrets and write token. A build-and-test job is the textbook case of a job that *must* execute the contributed code, so `pull_request_target` is the wrong tool for it by definition.\n\nAlongside the correct trigger, this job should scope its permissions down at the job level (`permissions: {}` at the workflow level, then `contents: read` only if it needs to check out the repo) and should route any untrusted `${{ github.event.* }}` value through an `env:` entry before it reaches a shell `run:` string, since a fork PR author controls the title, branch name, and other event fields just as much as the diff.",
+          "outputSha256": "5718987136d1085ef136f24478e942b3af4d678637407ab249d5146a8fc3f22f",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request not pull_request_target (\"Use `pull_request`, not `pull_request_target`\"). It explains pull_request_target runs in base repo context with base GITHUB_TOKEN (potentially write-scoped) and base secrets, unsafe for jobs executing PR code. It states pull_request uses contributor's own token, read-only by default for forks, with no access to base secrets."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request` for this job, not `pull_request_target`.\n\nThe reason is secret and token exposure. A `pull_request` trigger runs the workflow with the token and secrets of the contributor's fork context, which for a fork is effectively read-only and has no access to the base repository's secrets. That is exactly the right posture for a job whose whole purpose is to build and test untrusted code from anyone: even if a contributor's PR contains malicious build scripts, there is nothing valuable in that run for the script to reach.\n\n`pull_request_target` exists for the different case where a job genuinely needs the base repository's secrets or write access — for example, posting a comment back, or labeling. It runs in the context of the base repo with its secrets available. If you were to use it here and then check out and execute the pull request's own head SHA/ref (which is what \"builds and runs the test suite for the incoming PR\" implies), you would be handing an attacker-controlled PR your base-repo secrets. That combination — `pull_request_target` plus checking out and running the contributor's code — is the exact anti-pattern this skill forbids.\n\nBecause this job only builds and tests the contribution and does not need base-repo secrets or write access, `pull_request` is both sufficient and the safe choice. Pair it with `permissions: {}` at the workflow level and only the read scopes each job needs (typically `contents: read`) at the job level, so the run's own token is also minimally scoped.\n\nIf you later find you need to do something privileged that a fork PR cannot do — report results back, apply a label — split that into a separate job or workflow rather than upgrading this one's trigger. That separate job can use `pull_request_target`, but it must not check out or execute the pull request's head ref/SHA, and it should treat any PR-provided data (title, body, filenames) as untrusted input routed through `env:` rather than interpolated directly into a shell string.",
+          "outputSha256": "71e150632123a7b92774d9d17a4f93843ef22aa9b25117fd6994f06d28a1fcf6",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request not pull_request_target (\"Use `pull_request` for this job, not `pull_request_target`\"). It states pull_request runs with the contributor's fork token, effectively read-only, with no access to base-repo secrets. It explains pull_request_target runs in base repo context with its secrets available, and that using it with checkout of the PR head would hand secrets to attacker-controlled code."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request`, not `pull_request_target`.\n\nThe job only builds and runs the test suite — it does not need base-repo secrets or write access to the base repo. The `pull_request` trigger runs with the contributor's own token, which for a fork PR is automatically read-only (no `contents: write`, no access to the base repo's secrets). That is exactly the blast radius you want for untrusted fork code: a malicious contribution can at worst fail its own build.\n\n`pull_request_target` runs in the context of the *base* repository, so it gets a read/write `GITHUB_TOKEN` and access to the base repo's secrets — but it is designed to do so *without* the pull request's code being checked out or executed. If you combined `pull_request_target` with a checkout of the PR's head SHA/ref, you would be handing arbitrary attacker-controlled code from a fork a token with write access and your secrets. That is the classic pwn-request vulnerability, and it is the specific reason Step 2 of this workflow says to reach for `pull_request_target` only when the job genuinely needs base-repo secrets or write access, and never alongside an untrusted-PR checkout.\n\nSince neither condition applies here, `pull_request` is correct. Pair it with:\n\n- `permissions: {}` at the workflow level, granting only `contents: read` at the job level (tests usually need nothing more).\n- Third-party `uses:` actions pinned to full commit SHAs.\n- Any `${{ github.event.* }}` value (PR title, branch name, etc.) routed through an intermediate `env:` entry before it reaches a `run:` script, never interpolated directly.\n\nThat gives a test job that can react to any fork's pull request without ever letting the fork's code or metadata reach a privileged token.",
+          "outputSha256": "0a696ac30f30360e9e324fb95663f24e033ba2e1152ad9440beecea168ba0a50",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request over pull_request_target (\"Use `pull_request`, not `pull_request_target`\"). It states pull_request runs with the contributor's own token, read-only for forks, with no access to base-repo secrets. It explains pull_request_target runs in the base repo context with read/write GITHUB_TOKEN and base-repo secrets, and warns that checking out fork code there is a pwn-request. All criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Use `pull_request` (GitLab's equivalent: a merge-request pipeline), not `pull_request_target`.\n\nWhy: a `pull_request` job runs in the context of the fork/contributor's own token, which is read-only by default and has no access to base-repo secrets — exactly right for a job whose only output is \"did it build and pass tests.\" Anything that runs untrusted contributor code should stay on this side of the fence.\n\n`pull_request_target` exists for the opposite case — when a job genuinely needs base-repo secrets or write access, such as labeling or commenting on the PR. It runs with a base-repo token and base-repo secrets, so it must never check out and execute the pull request's own head SHA/ref; that combination is the classic privilege-escalation hole where a malicious PR gets to run arbitrary code with the base repo's credentials. A build-and-test job has no reason to need those credentials, so it should not be on `pull_request_target` at all.\n\nIf the job ever does need a `pull_request_target` sibling (for example, posting a comment with the test result), keep it as a separate job: the untrusted build/test runs under `pull_request` with an empty workflow-level `permissions:` and only `contents: read` at the job level, while the privileged job runs under `pull_request_target` without ever checking out the PR head, and receives the result as an artifact or similar — never as executed code.",
+          "outputSha256": "55a6d1819c06068c3f45ada0f42faf4b5a1f371665ef3a885495795517122d72",
+          "promptSha256": "2578a3d9f820e02e9596443736044b61293e68733568fb957af1e4b1d61e4c02",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer recommends pull_request over pull_request_target (\"Use `pull_request` ... not `pull_request_target`\"). It states pull_request runs with the contributor's own read-only token with no base-repo secret access (\"read-only by default and has no access to base-repo secrets\"). It explains pull_request_target runs with base-repo token/secrets and write access, unsuitable for untrusted build/test code."
+          },
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "verdict": "pass",
+  "scope": "bundled",
+  "skillDigest": "16ebd085e5ce3b9f162580a0a70141c8a934ac0c019f59b6a225eef77f12cbc3",
+  "catalogDigest": "0cdcf6c10ab68b2f0f133eadcae9b3830e7a303cbee5b88bcdf9ca11646f38ee",
+  "judgePromptVersion": "2026-09-25.1",
+  "runner": "deepseek",
+  "model": "deepseek-chat",
+  "runnerPromptVersion": "2026-09-25.1",
+  "recordedAt": "2026-09-25T18:05:23.910Z",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat"
+}
