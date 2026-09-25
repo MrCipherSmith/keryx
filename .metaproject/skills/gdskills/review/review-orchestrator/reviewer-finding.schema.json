@@ -121,6 +121,16 @@
             "type": "boolean",
             "default": false
           },
+          "location_class": {
+            "type": "string",
+            "enum": ["in-diff", "pre-existing", "pr-process"],
+            "description": "Where the finding sits, for rendering only. in-diff counts toward the merge verdict. pre-existing does not block. pr-process renders under Scope, not as a code finding. Absent means in-diff."
+          },
+          "publication": {
+            "type": "string",
+            "enum": ["finding", "question", "omit"],
+            "description": "How an info finding is shown. question renders under Questions. omit stays in the keryx:findings block and is not published as a finding. Absent means finding. Never changes severity."
+          },
           "class_scope": {
             "title": "Every site of this shape, and how the set was derived",
             "description": "A finding anchored to one file:line is a claim about one site. Repeatedly, a fix repaired that site and left its siblings — one writer of five, one operator instruction of four, six readers of eight — and the next review round found them. Required for blocker and major; optional below, because enumerating the class for every info finding is theatre. Kept identical to src/gdskills/contracts/review-finding.schema.json, which is stricter (additionalProperties: false) and would reject this property if it were declared only here.",

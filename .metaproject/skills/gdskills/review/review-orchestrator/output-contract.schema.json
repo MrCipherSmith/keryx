@@ -65,6 +65,25 @@
         "reviewed_at": {
           "type": "string"
         },
+        "publication": {
+          "type": "object",
+          "description": "How the prose report was rendered. Does not replace verdict or status.",
+          "properties": {
+            "template": {
+              "type": "string",
+              "enum": ["frontend", "backend"]
+            },
+            "visible_verdict": {
+              "type": "string",
+              "enum": ["changes-requested", "merge-ready"]
+            },
+            "questions": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
         "token_policy": {
           "type": "object",
           "additionalProperties": true
