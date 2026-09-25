@@ -366,6 +366,182 @@ describe("AC-follow-up 2: rule-source category filter, applied before clause ext
     expect(parsed.ruleSources.map((s) => s.path).sort()).toEqual([".metaproject/rules/code-style.mdc", ".metaproject/rules/commit-message-formatting.mdc"]);
     expect(parsed.excludedSources).toEqual([]);
   });
+
+  // Live re-measurement finding (a): every source under a `--rules`
+  // DIRECTORY used to bypass the category filter unconditionally — passing
+  // `--rules .metaproject/rules` (the WHOLE 41-doc corpus) skipped the
+  // filter entirely, the opposite of a caller naming one document. The fix:
+  // only a `--rules` entry naming ONE FILE bypasses the filter; a directory
+  // is walked and filtered exactly like auto-discovery.
+  test("--rules names a DIRECTORY: the category filter still applies to its discovered files — only a literal file bypasses it", async () => {
+    ROOT = await projectRoot(true);
+    await mkdir(path.join(ROOT, "extra-rules"), { recursive: true });
+    await writeFile(
+      path.join(ROOT, "extra-rules", "commit-message-formatting.mdc"),
+      ["# Commit Message Formatting", "", "## Clauses", "", "- Commit subjects must be imperative mood. [state:hunk]", ""].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(ROOT, "extra-rules", "code-style.mdc"),
+      ["# Code Style", "", "## Clauses", "", "- Every widget must be documented. [state:hunk]", ""].join("\n"),
+      "utf8",
+    );
+    const scopePath = await writeScope(ROOT);
+    const fixturesDir = await writeFixtures(ROOT, { "extra-rules/code-style.mdc::clauses-1": { type: "noul", noul: 0.7 } });
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["jev-rules", "--scope", scopePath, "--rules", "extra-rules", "--fixtures", fixturesDir, "--json"]);
+    const parsed = JSON.parse(output()) as {
+      ruleSources: Array<{ path: string; kind: string }>;
+      excludedSources: Array<{ path: string; reason: string }>;
+      findings: Array<{ problem: string }>;
+    };
+    // The process-named doc is excluded even though it was named via `--rules` — it came from a DIRECTORY, not a literal file.
+    expect(parsed.ruleSources.map((s) => s.path)).toEqual(["extra-rules/code-style.mdc"]);
+    expect(parsed.excludedSources).toHaveLength(1);
+    expect(parsed.excludedSources[0]?.path).toBe("extra-rules/commit-message-formatting.mdc");
+    expect(parsed.excludedSources[0]?.reason).toContain("commit");
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]?.problem).toContain("code-style.mdc");
+  });
+
+  test("--rules names one FILE inside that same directory explicitly: that one file bypasses the filter, its sibling does not", async () => {
+    ROOT = await projectRoot(true);
+    await mkdir(path.join(ROOT, "extra-rules"), { recursive: true });
+    await writeFile(
+      path.join(ROOT, "extra-rules", "commit-message-formatting.mdc"),
+      ["# Commit Message Formatting", "", "## Clauses", "", "- Commit subjects must be imperative mood. [state:hunk]", ""].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(ROOT, "extra-rules", "code-style.mdc"),
+      ["# Code Style", "", "## Clauses", "", "- Every widget must be documented. [state:hunk]", ""].join("\n"),
+      "utf8",
+    );
+    const scopePath = await writeScope(ROOT);
+    const fixturesDir = await writeFixtures(ROOT, {
+      "extra-rules/code-style.mdc::clauses-1": { type: "noul", noul: 0.2 },
+      "extra-rules/commit-message-formatting.mdc::clauses-1": { type: "noul", noul: 0.2 },
+    });
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand([
+      "jev-rules",
+      "--scope",
+      scopePath,
+      "--rules",
+      "extra-rules/commit-message-formatting.mdc",
+      "--fixtures",
+      fixturesDir,
+      "--json",
+    ]);
+    const parsed = JSON.parse(output()) as { ruleSources: Array<{ path: string }>; excludedSources: unknown[] };
+    // Only the explicitly-named FILE is included — its sibling was never discovered (not under `.metaproject/rules`/`rules`, and not the named file).
+    expect(parsed.ruleSources.map((s) => s.path)).toEqual(["extra-rules/commit-message-formatting.mdc"]);
+    expect(parsed.excludedSources).toEqual([]);
+  });
+});
+
+describe("item 3: placeholder/template clauses are dropped before tagging or pairing", () => {
+  test("a checklist template clause with unfilled <...> placeholders is dropped; the real clause is still checked", async () => {
+    ROOT = await projectRoot(true);
+    await mkdir(path.join(ROOT, ".metaproject", "rules"), { recursive: true });
+    await writeFile(
+      path.join(ROOT, ".metaproject", "rules", "template-rule.mdc"),
+      ["# Template Rule", "", "## Clauses", "", "- [x] <criterion 1> — verified by <test>", "- Every widget must be documented. [state:hunk]", ""].join("\n"),
+      "utf8",
+    );
+    const scopePath = await writeScope(ROOT);
+    const fixturesDir = await writeFixtures(ROOT, { ".metaproject/rules/template-rule.mdc::clauses-2": { type: "noul", noul: 0.7 } });
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["jev-rules", "--scope", scopePath, "--fixtures", fixturesDir, "--json"]);
+    const parsed = JSON.parse(output()) as {
+      droppedPlaceholderClauses: Array<{ ruleId: string; clauseId: string; reason: string }>;
+      tokens: { taggingCalls: number; violationCalls: number };
+      findings: Array<{ problem: string }>;
+      summary: string;
+    };
+    expect(parsed.droppedPlaceholderClauses).toEqual([
+      {
+        ruleId: ".metaproject/rules/template-rule.mdc",
+        clauseId: "clauses-1",
+        reason: "placeholder/template text (unfilled `<...>` or checklist scaffolding), never a real rule clause",
+      },
+    ]);
+    // Proof, not assertion alone: the placeholder never reached tagging — a
+    // tagging call for it would have thrown (`writeFixtures` supplies only
+    // one response, for the violation call below).
+    expect(parsed.tokens.taggingCalls).toBe(0);
+    expect(parsed.tokens.violationCalls).toBe(1);
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]?.problem).toContain("clauses-2");
+    expect(parsed.summary).toContain("1 clause(s) dropped as placeholder/template text");
+  });
+});
+
+describe("item 2: per-hunk coverage is reported in --json, and never-reached hunks are named in the summary", () => {
+  async function writeTwoRegionScope(root: string): Promise<string> {
+    const scopePath = path.join(root, "scope-two.json");
+    await writeFile(
+      scopePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: "diff",
+        contextLines: 20,
+        files: ["src/one.ts", "src/two.ts"],
+        regions: [
+          { path: "src/one.ts", startLine: 1, endLine: 3, changedLines: 1, contextTruncated: false, text: "+export function one() {}" },
+          { path: "src/two.ts", startLine: 1, endLine: 3, changedLines: 1, contextTruncated: false, text: "+export function two() {}" },
+        ],
+        drops: [],
+        counts: {
+          filesSeen: 2,
+          filesRetained: 2,
+          filesDropped: 0,
+          blocksSeen: 2,
+          blocksRetained: 2,
+          blocksDropped: 0,
+          changedLinesRetained: 2,
+          changedLinesDropped: 0,
+          droppedByReason: { lockfile: 0, generated: 0, vendored: 0, snapshot: 0, minified: 0, binary: 0, "whitespace-only": 0, "comment-only": 0 },
+        },
+      }),
+      "utf8",
+    );
+    return scopePath;
+  }
+
+  test("a budget too small for every hunk reaches the first hunk (priority order) and names the rest never-reached", async () => {
+    ROOT = await projectRoot(true);
+    await writeTestRule(ROOT);
+    const scopePath = await writeTwoRegionScope(ROOT);
+    const fixturesDir = await writeFixtures(ROOT, { ".metaproject/rules/test-rule.mdc::clauses-1": { type: "noul", noul: 0.6 } });
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["jev-rules", "--scope", scopePath, "--fixtures", fixturesDir, "--max-calls", "1", "--json"]);
+    const parsed = JSON.parse(output()) as {
+      selection: {
+        hunkCoverage: Array<{ path: string; startLine: number; endLine: number; applicablePairs: number; selectedPairs: number }>;
+        hunksWithPairs: number;
+        hunksReached: number;
+        hunksNeverReached: number;
+      };
+      summary: string;
+    };
+    expect(parsed.selection.hunkCoverage).toEqual([
+      { path: "src/one.ts", startLine: 1, endLine: 3, applicablePairs: 2, selectedPairs: 1 },
+      { path: "src/two.ts", startLine: 1, endLine: 3, applicablePairs: 2, selectedPairs: 0 },
+    ]);
+    expect(parsed.selection.hunksWithPairs).toBe(2);
+    expect(parsed.selection.hunksReached).toBe(1);
+    expect(parsed.selection.hunksNeverReached).toBe(1);
+    expect(parsed.summary).toContain("2 of 2 hunk(s) had an applicable pair; 1 reached by the budget, 1 never reached");
+  });
 });
 
 describe("AC6: opt-in and credential gating — both refuse before any read", () => {

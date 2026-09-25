@@ -47,20 +47,31 @@ keryx already had.
    module header names the exact scope): every file under
    `.metaproject/rules/**` and `rules/**`, every project-skill or installed
    gdskill whose name or `metadata.category` marks it a coding convention, and
-   anything named by `--rules <paths>`.
-2. **Category filter, before clause extraction.** Each discovered (never an
-   explicit `--rules`) source is classified `code`/`process`/`docs` —
-   explicit frontmatter first (`applies_to: code|process|docs`, or
-   `metadata.category`), else a documented filename/title heuristic
-   (`PROCESS_RULE_HEURISTIC_TERMS`: `commit`, `git`, `tdd`, `workflow`,
-   `definition-of-done`, `documentation`, `requirements`, `plan`,
-   `prompting`, `subagent`, `skill`, `jobs`, `orchestrat`, `review-process`,
-   `release`). A `process`/`docs` source never reaches clause extraction at
-   all — excluded, and reported with its reason under `excludedSources`.
+   anything named by `--rules <paths>`. **`--rules` bypass is scoped to ONE
+   FILE**: an entry naming a single document bypasses the category filter
+   below outright; an entry naming a DIRECTORY is walked and its files are
+   filtered exactly like auto-discovery — asking for a whole directory is not
+   the same as naming one document, and the whole point of the filter is lost
+   if it is.
+2. **Category filter, before clause extraction.** Each discovered source
+   (auto-discovered, or a file found by walking a `--rules` DIRECTORY — never
+   a `--rules` entry naming that ONE file explicitly) is classified
+   `code`/`process`/`docs` — explicit frontmatter first (`applies_to:
+   code|process|docs`, or `metadata.category`), else a documented
+   filename/title heuristic (`PROCESS_RULE_HEURISTIC_TERMS`: `commit`, `git`,
+   `tdd`, `workflow`, `definition-of-done`, `documentation`, `requirements`,
+   `plan`, `prompting`, `subagent`, `skill`, `jobs`, `orchestrat`,
+   `review-process`, `release`). A `process`/`docs` source never reaches
+   clause extraction at all — excluded, and reported with its reason under
+   `excludedSources`.
 3. Splits each remaining rule document into clauses with
    `extractReferenceClauses` (the same deterministic splitter `review
-   conform` uses), then TAGS each clause `state_kind: "pr"|"report"|"hunk"` +
-   `checkable` by REUSING `review conform`'s own
+   conform` uses), drops authoring-template scaffolding
+   (`isPlaceholderClauseText`: an unfilled `[x] <criterion> — verified by
+   <test>` checklist line, text dominated by `<...>` placeholders, or a bare
+   code-fence line — never a real clause, dropped BEFORE tagging so it costs
+   nothing), then TAGS every remaining clause `state_kind:
+   "pr"|"report"|"hunk"` + `checkable` by REUSING `review conform`'s own
    `applyClauseTags`/`buildClauseTagQuestions`/`clauseTagFromChoice` — an
    explicit `[state:hunk]`/`[not-checkable: ...]` marker on the clause text
    when the rule author wrote one, else one Jev `choice` call per doc's
@@ -73,12 +84,19 @@ keryx already had.
 4. Decides, per `(rule, changed file)` pair, whether an applicable clause
    applies — by declared path globs (`metadata.paths`) and/or
    `metadata.stack_requires`, failing toward inclusion exactly like `keryx
-   review stack`/`scope.ts` already do.
+   review stack`/`scope.ts` already do, THEN by file kind: a docs hunk
+   (`.md`/`.mdx`/`.txt`) pairs only with a `docs`-categorised source or a
+   clause explicitly tagged `[docs-applicable]`; a code source never pairs
+   with a docs hunk, and vice versa (`clauseFileKindApplicability`).
 5. Takes every changed hunk from `keryx review scope` (mechanical bulk
    already dropped) and asks Jev, per applicable `(hunk, hunk-checkable
    clause)` pair, **one question**: "does this hunk VIOLATE this clause?" —
    batched under the vendor's 64k token budget, capped at `--max-calls`
-   (default 150), with the selection and every drop reported, never silent.
+   (default 150). The budget is spread FAIRLY: hunks are ranked code, then
+   tests, then docs, and pairs are allocated round-robin across hunks rather
+   than draining the cap on the first hunk in diff order — every selection,
+   every drop, and per-hunk coverage (`selection.hunkCoverage`, how many
+   hunks were reached vs. never reached) is reported, never silent.
 6. Synthesizes findings deterministically: `problem` quotes the clause,
    `impact` is the rule's own stated rationale (if it has a `## Rationale`/
    `## Why` section) or a fixed template, `suggested_fix` names the clause to
@@ -87,16 +105,20 @@ keryx already had.
    a higher one (`[severity: major]` on the clause). One finding per
    `(clause, file)`, deduped across every hunk of that file with a hunk list.
 
-**Why steps 2 and 3 exist:** a live check of this repository's own 41-doc
-`.metaproject/rules/**` corpus against a merged PR hand-labelled ~1/10
-findings correct — several false positives were a process/agent-behaviour
-rule (commit-message formatting, TDD workflow, an agent's own prompting
-standard) paired against a code hunk it was never meant to describe, because
-the corpus declares no `metadata.paths`/`stack_requires` and applicability
-therefore fails open to "applies everywhere". These two filters are cheap,
-deterministic, and applied BEFORE any violation-scoring Jev call, so they cut
-cost as well as noise. See `.metaproject/flows/330-*/journal.md` for the
-full before/after numbers.
+**Why steps 2-5's filters exist:** a live check of this repository's own
+41-doc `.metaproject/rules/**` corpus against a merged PR hand-labelled ~1/10
+findings correct. Two causes, both fixed here: (a) process/agent-behaviour
+rules (commit-message formatting, TDD workflow, an agent's own prompting
+standard) paired against a code hunk they were never meant to describe,
+because the corpus declares no `metadata.paths`/`stack_requires` and
+applicability fails open to "applies everywhere" — the category and
+file-kind filters (steps 2 and 4); (b) a re-measurement then found the
+`--rules` bypass defeating the category filter for an entire directory, and
+the whole `--max-calls` budget landing on a single docs hunk while no code
+hunk was ever scored — the scoped bypass and fair round-robin budget (steps
+1 and 5). All four are cheap, deterministic, and applied BEFORE any
+violation-scoring Jev call, so they cut cost as well as noise. See
+`.metaproject/flows/330-*/journal.md` for the full before/after numbers.
 
 ---
 
@@ -151,12 +173,16 @@ Emits a `REVIEW_RESULT`-shaped object matching
 `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`
 — `status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats`,
 plus `tokens` (with `taggingCalls`/`violationCalls` counted separately),
-`selection` (including `droppedClauses`'s count), `ruleSources`,
-`excludedSources` (category-filtered sources with their reason), and
-`droppedClauses` (tag-filtered `(ruleId, clauseId)` pairs with their reason)
-— under `--json`. Its findings merge into the consolidated array exactly like
-any other reviewer's: same Quality Gate, same dedup, same Wave C
-verification.
+`selection` (`droppedClauses`'s count, and `hunkCoverage` — one
+`{path, applicablePairs, selectedPairs}` per hunk with something to check,
+plus `hunksWithPairs`/`hunksReached`/`hunksNeverReached`), `ruleSources`
+(each with its `category`), `excludedSources` (category-filtered sources
+with their reason), `droppedClauses` (tag-filtered `(ruleId, clauseId)`
+pairs with their reason), and `droppedPlaceholderClauses`
+(authoring-template clauses dropped before tagging, with their reason) —
+under `--json`. `summary` names how many hunks the budget never reached in
+plain text. Its findings merge into the consolidated array exactly like any
+other reviewer's: same Quality Gate, same dedup, same Wave C verification.
 
 ---
 
@@ -202,9 +228,10 @@ theoretical pattern), and `synthesizeFindingsFromViolations` dedupes by
 | Rationalization | Why it is wrong |
 |---|---|
 | "Jev said 0.9, so this is definitely a violation" | A `noul` score is a probability, not a verdict — severity stays capped at `minor` unless the rule itself declares higher, precisely because Jev alone is not authoritative |
-| "This rule clause doesn't really describe code, but the pair matched anyway" | Applicability defaults to "applies everywhere" when a rule declares no path/stack restriction — the clause-kind filter (step 3) and the category filter (step 2) catch most of this before scoring, but a `state_kind: "hunk"` clause on an off-topic rule can still pass through; that is a property of the rule corpus, not a defect in this reviewer |
-| "No findings means the diff is clean" | `--max-calls` bounds how many pairs are checked; a capped run reports `selection.droppedPairs` for exactly this reason — read the selection stats before treating silence as clean |
-| "A rule wasn't checked and I don't know why" | Read `excludedSources` (category filter, at discovery) and `droppedClauses` (tag filter, per clause) before assuming a rule was silently skipped — both name the exact reason |
+| "This rule clause doesn't really describe code, but the pair matched anyway" | Applicability defaults to "applies everywhere" when a rule declares no path/stack restriction — the clause-kind filter (step 3), the category filter (step 2), and the file-kind gate (step 4) catch most of this before scoring, but a `state_kind: "hunk"` clause on an off-topic rule can still pass through; that is a property of the rule corpus, not a defect in this reviewer |
+| "No findings means the diff is clean" | `--max-calls` bounds how many pairs are checked; a capped run reports `selection.droppedPairs`/`hunksNeverReached` for exactly this reason — read the selection stats before treating silence as clean |
+| "A rule wasn't checked and I don't know why" | Read `excludedSources` (category filter, at discovery), `droppedClauses` (tag filter, per clause), and `droppedPlaceholderClauses` (template scaffolding, per clause) before assuming a rule was silently skipped — each names the exact reason |
+| "I passed `--rules` at a whole rule directory, so every file in it was checked" | Only a `--rules` entry naming ONE file bypasses the category filter; a directory's files are filtered exactly like auto-discovery — check `excludedSources` |
 | "I'll skip the opt-in check since I trust this project" | The opt-in and credential gates exist because hunk and rule-clause text leaves the machine; skipping them is skipping consent, not a shortcut |
 
 ---
@@ -214,9 +241,10 @@ theoretical pattern), and `synthesizeFindingsFromViolations` dedupes by
 Before trusting a run's findings:
 
 1. Read `selection.droppedPairs`/`selection.notApplicable`/
-   `selection.droppedClauses` in the `--json` output — a capped, narrowly-
-   applicable, or tag-filtered run covered less than "every changed hunk
-   against every applicable clause" and the report should say so.
+   `selection.droppedClauses`/`selection.hunkCoverage` in the `--json`
+   output — a capped, narrowly-applicable, or tag-filtered run covered less
+   than "every changed hunk against every applicable clause", and
+   `hunksNeverReached` says exactly how many hunks the budget never got to.
 2. Read `excludedSources` — a process/meta rule doc excluded by the category
    filter is reported by name and reason, never silently absent from
    `ruleSources`.

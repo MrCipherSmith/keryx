@@ -92,10 +92,21 @@ describe("renderJevRulesForShell", () => {
       ],
       stats: { blocker: 0, major: 1, minor: 1, info: 0 },
       tokens: { jevCalls: 1, taggingCalls: 0, violationCalls: 1 },
-      selection: { maxCalls: 150, selectedPairs: 2, droppedPairs: 0, notApplicable: 0, droppedClauses: 0 },
+      selection: {
+        maxCalls: 150,
+        selectedPairs: 2,
+        droppedPairs: 0,
+        notApplicable: 0,
+        droppedClauses: 0,
+        hunkCoverage: [{ path: "src/a.ts", startLine: 10, endLine: 12, applicablePairs: 1, selectedPairs: 1 }],
+        hunksWithPairs: 1,
+        hunksReached: 1,
+        hunksNeverReached: 0,
+      },
       ruleSources: [{ path: "rules/a.mdc", kind: "project-rule" }, { path: "rules/b.mdc", kind: "project-rule" }],
       excludedSources: [],
       droppedClauses: [],
+      droppedPlaceholderClauses: [],
     };
     const text = renderJevRulesForShell(result);
     expect(text).toContain("review-jev-rules: DONE_WITH_CONCERNS");
@@ -116,10 +127,21 @@ describe("renderJevRulesForShell", () => {
       findings: [],
       stats: { blocker: 0, major: 0, minor: 0, info: 0 },
       tokens: { jevCalls: 0, taggingCalls: 0, violationCalls: 0 },
-      selection: { maxCalls: 150, selectedPairs: 0, droppedPairs: 0, notApplicable: 0, droppedClauses: 0 },
+      selection: {
+        maxCalls: 150,
+        selectedPairs: 0,
+        droppedPairs: 0,
+        notApplicable: 0,
+        droppedClauses: 0,
+        hunkCoverage: [],
+        hunksWithPairs: 0,
+        hunksReached: 0,
+        hunksNeverReached: 0,
+      },
       ruleSources: [],
       excludedSources: [],
       droppedClauses: [],
+      droppedPlaceholderClauses: [],
     };
     expect(renderJevRulesForShell(result)).toContain("No findings at or above threshold.");
   });

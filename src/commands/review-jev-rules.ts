@@ -28,12 +28,14 @@ import {
   extractRuleRationale,
   findingStats,
   isCodingConventionSkill,
+  isPlaceholderClauseText,
   metadataScalar,
   renderJevRulesMarkdown,
   ruleQuestionKey,
   selectRuleHunkPairs,
   synthesizeFindingsFromViolations,
   type RuleNoulQuestion,
+  type RuleSourceCategoryDecision,
   type RuleSourceFile,
   type RuleViolationCandidate,
   type TaggedRuleSource,
@@ -147,26 +149,44 @@ export interface ExcludedRuleSource {
 
 export interface RuleSourceDiscovery {
   readonly sources: readonly RuleSourceFile[];
-  /** Category-filtered out (AC-follow-up 2) — reported, never silently absent. Explicit `--rules` paths are never excluded here (see the merge below). */
+  /** Category-filtered out (AC-follow-up 2) — reported, never silently absent. A `--rules` entry naming ONE FILE explicitly is never excluded here; a `--rules` DIRECTORY's discovered files can be (see the merge below). */
   readonly excluded: readonly ExcludedRuleSource[];
+}
+
+/** One rule source together with `classifyRuleSourceCategory`'s decision for it — carried alongside the `RuleSourceFile` (which only keeps the `category` enum) so the filter below can report the human-readable reason without reclassifying. */
+interface ClassifiedSource {
+  readonly file: RuleSourceFile;
+  readonly decision: RuleSourceCategoryDecision;
+}
+
+function classify(file: Omit<RuleSourceFile, "category">): ClassifiedSource {
+  const decision = classifyRuleSourceCategory(file.path, file.text);
+  return { file: { ...file, category: decision.category }, decision };
 }
 
 /**
  * AC2: discover every rule source this run will check hunks against — see
  * `src/review/jev-rules.ts`'s module header for the documented, deliberately
- * narrow discovery scope and why it is narrow. `explicitPaths` (`--rules`)
- * always wins a path collision, since it is the caller's explicit override —
- * including the category filter below: a source named explicitly is checked
- * even when its filename/title would otherwise mark it `process`/`docs`.
+ * narrow discovery scope and why it is narrow.
+ *
+ * `--rules` bypass, precisely scoped (fix for the live re-measurement's
+ * finding (a) — every source under a `--rules` DIRECTORY used to bypass the
+ * category filter below unconditionally, so an entire 41-doc process/docs
+ * corpus passed via `--rules .metaproject/rules` skipped filtering outright):
+ * only a `--rules` entry that names ONE FILE explicitly bypasses the filter
+ * — the operator picked that exact document, full stop. A `--rules`
+ * DIRECTORY is walked and its files are filtered exactly like
+ * `.metaproject/rules/**`/`rules/**` auto-discovery — asking for a whole
+ * directory is not the same as naming one document.
  */
 async function discoverRuleSources(cwd: string, explicitPaths: readonly string[]): Promise<RuleSourceDiscovery> {
-  const discovered: RuleSourceFile[] = [];
+  const discovered: ClassifiedSource[] = [];
 
   for (const root of [join(cwd, ".metaproject", "rules"), join(cwd, "rules")]) {
     for (const file of await walkMatching(root, [".md", ".mdc"])) {
       const text = await readIfExists(file);
       if (text === undefined) continue;
-      discovered.push({ path: relative(cwd, file), kind: "project-rule", text });
+      discovered.push(classify({ path: relative(cwd, file), kind: "project-rule", text }));
     }
   }
 
@@ -184,57 +204,69 @@ async function discoverRuleSources(cwd: string, explicitPaths: readonly string[]
       const name = basename(dirname(skillMd));
       const decision = isCodingConventionSkill(name, text);
       if (!decision.matches) continue;
-      discovered.push({
-        path: relative(cwd, skillMd),
-        kind,
-        text,
-        declaredPaths: declaredPathsFromContent(text),
-        stackRequires: parseStackRequires(extractStackRequiresField(text)),
-      });
+      discovered.push(
+        classify({
+          path: relative(cwd, skillMd),
+          kind,
+          text,
+          declaredPaths: declaredPathsFromContent(text),
+          stackRequires: parseStackRequires(extractStackRequiresField(text)),
+        }),
+      );
     }
   }
 
-  const explicit: RuleSourceFile[] = [];
+  // `explicitFiles`: a `--rules` entry naming ONE file — always bypasses the
+  // category filter below. `explicitDirSources`: files WALKED from a
+  // `--rules` DIRECTORY — subject to the same filter as any other discovered
+  // source (the fix).
+  const explicitFiles: ClassifiedSource[] = [];
+  const explicitDirSources: ClassifiedSource[] = [];
   for (const raw of explicitPaths) {
     const resolved = isAbsolute(raw) ? raw : join(cwd, raw);
     const stats = await stat(resolved).catch(() => undefined);
     if (stats === undefined) {
       throw new Error(`--rules path does not exist: ${raw}`);
     }
-    const files = stats.isDirectory() ? await walkMatching(resolved, [".md", ".mdc"]) : [resolved];
-    for (const file of files) {
-      const text = await readIfExists(file);
-      if (text === undefined) continue;
-      explicit.push({ path: relative(cwd, file), kind: "explicit", text });
+    if (stats.isDirectory()) {
+      for (const file of await walkMatching(resolved, [".md", ".mdc"])) {
+        const text = await readIfExists(file);
+        if (text === undefined) continue;
+        explicitDirSources.push(classify({ path: relative(cwd, file), kind: "explicit", text }));
+      }
+      continue;
     }
+    const text = await readIfExists(resolved);
+    if (text === undefined) continue;
+    explicitFiles.push(classify({ path: relative(cwd, resolved), kind: "explicit", text }));
   }
 
-  // AC-follow-up 2: the cheap category filter, applied BEFORE clause
-  // extraction — a `discovered` (never an explicit `--rules`) source
-  // classified `process`/`docs` is excluded from pairing here, so it never
-  // reaches tagging or violation scoring at all. `--rules` bypasses this
-  // outright: it is added to `byPath` afterwards regardless, so an explicit
-  // path always wins even when it would otherwise be filtered.
-  const explicitPathSet = new Set(explicit.map((source) => source.path));
+  // AC-follow-up 2 (scoped by the fix above): a `discovered` OR
+  // `explicitDirSources` entry classified `process`/`docs` is excluded from
+  // pairing here, so it never reaches tagging or violation scoring at all. A
+  // literal `explicitFiles` entry bypasses this outright — added to `byPath`
+  // unconditionally below, so it always wins even when it would otherwise be
+  // filtered, and even when a directory walk also discovered it (the
+  // explicit single-file naming wins the collision).
+  const explicitFilePathSet = new Set(explicitFiles.map((entry) => entry.file.path));
   const excluded: ExcludedRuleSource[] = [];
   const filteredDiscovered: RuleSourceFile[] = [];
-  for (const source of discovered) {
-    if (explicitPathSet.has(source.path)) {
-      filteredDiscovered.push(source);
+  for (const { file, decision } of [...discovered, ...explicitDirSources]) {
+    if (explicitFilePathSet.has(file.path)) {
+      filteredDiscovered.push(file);
       continue;
     }
-    const decision = classifyRuleSourceCategory(source.path, source.text);
     if (decision.category !== "code") {
-      excluded.push({ path: source.path, kind: source.kind, reason: decision.reason });
+      excluded.push({ path: file.path, kind: file.kind, reason: decision.reason });
       continue;
     }
-    filteredDiscovered.push(source);
+    filteredDiscovered.push(file);
   }
 
   const byPath = new Map<string, RuleSourceFile>();
   for (const source of filteredDiscovered) byPath.set(source.path, source);
-  // Explicit wins: written last, so it overwrites a discovered entry at the same path.
-  for (const source of explicit) byPath.set(source.path, source);
+  // Explicit file wins: written last, so it overwrites any collision.
+  for (const { file } of explicitFiles) byPath.set(file.path, file);
   return { sources: [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path)), excluded: excluded.sort((a, b) => a.path.localeCompare(b.path)) };
 }
 
@@ -288,12 +320,22 @@ export interface JevRulesComputedResult {
     readonly notApplicable: number;
     /** Count of (ruleId, clauseId) pairs excluded because the clause is not tagged `state_kind: "hunk"` and `checkable` — full ids in `droppedClauses` below. */
     readonly droppedClauses: number;
+    /** Item 2: one entry per hunk with at least one applicable pair, `{path, startLine, endLine, applicablePairs, selectedPairs}` each, in the round-robin allocator's own priority order (code, then tests, then docs). */
+    readonly hunkCoverage: ReturnType<typeof selectRuleHunkPairs>["hunkCoverage"];
+    /** `hunkCoverage.length` — how many hunks had at least one applicable pair to check. */
+    readonly hunksWithPairs: number;
+    /** How many of `hunkCoverage`'s hunks actually got at least one pair scored. */
+    readonly hunksReached: number;
+    /** `hunksWithPairs - hunksReached` — hunks the `--max-calls` budget never reached, named directly rather than left for a reader to compute. */
+    readonly hunksNeverReached: number;
   };
-  readonly ruleSources: readonly { readonly path: string; readonly kind: string }[];
+  readonly ruleSources: readonly { readonly path: string; readonly kind: string; readonly category?: string }[];
   /** AC-follow-up 2: rule sources classified `process`/`docs` by the category filter and excluded before clause extraction — reported with the reason, never silently. */
   readonly excludedSources: readonly ExcludedRuleSource[];
   /** AC-follow-up 1: every (ruleId, clauseId) dropped by the tag-based filter, with why — the full detail behind `selection.droppedClauses`'s count. */
   readonly droppedClauses: readonly { readonly ruleId: string; readonly clauseId: string; readonly reason: string }[];
+  /** Item 3: every (ruleId, clauseId) dropped as authoring-template scaffolding (`isPlaceholderClauseText`) before it ever reached tagging or pairing. */
+  readonly droppedPlaceholderClauses: readonly { readonly ruleId: string; readonly clauseId: string; readonly reason: string }[];
 }
 
 export interface JevRulesRunOptions {
@@ -332,6 +374,12 @@ function accumulateUsage(acc: JevUsageAccumulator, usage: { input_tokens?: numbe
   }
 }
 
+interface ClauseTagResolution {
+  readonly clauses: readonly ReferenceClause[];
+  /** Item 3: every clause dropped as authoring-template scaffolding, BEFORE tagging — a placeholder clause never costs a tagging call either. */
+  readonly droppedPlaceholders: readonly { readonly clauseId: string; readonly reason: string }[];
+}
+
 /**
  * AC-follow-up 1: resolve one rule source's clauses to their FULL tags —
  * `state_kind`/`checkable` — by REUSING `../review/conform-clauses.ts`'s
@@ -344,9 +392,18 @@ function accumulateUsage(acc: JevUsageAccumulator, usage: { input_tokens?: numbe
  * per clause), and only when neither an explicit `[state:...]` marker nor a
  * cached tag already answers it — the "tagging calls are one-time per doc
  * content, cached next run" guarantee.
+ *
+ * Item 3: `isPlaceholderClauseText` (core, pure) drops authoring-template
+ * scaffolding — `[x] <criterion 1> — verified by <test>` and the like — right
+ * after extraction, BEFORE it is ever offered a tagging call.
  */
-async function resolveRuleSourceClauseTags(cwd: string, source: RuleSourceFile, fetchFn: typeof fetch, model: string, usage: JevUsageAccumulator): Promise<readonly ReferenceClause[]> {
-  const rawClauses = extractReferenceClauses(source.text);
+async function resolveRuleSourceClauseTags(cwd: string, source: RuleSourceFile, fetchFn: typeof fetch, model: string, usage: JevUsageAccumulator): Promise<ClauseTagResolution> {
+  const extracted = extractReferenceClauses(source.text);
+  const rawClauses = extracted.filter((clause) => !isPlaceholderClauseText(clause.text));
+  const droppedPlaceholders = extracted
+    .filter((clause) => isPlaceholderClauseText(clause.text))
+    .map((clause) => ({ clauseId: clause.clause_id, reason: "placeholder/template text (unfilled `<...>` or checklist scaffolding), never a real rule clause" }));
+
   const contentHash = hashConformDocContent(source.text);
   const cache = await readClauseTagCache(cwd, JEV_RULES_TAG_CACHE_PATH);
   const cachedTags = cachedTagsFor(cache, source.path, contentHash) ?? {};
@@ -374,7 +431,7 @@ async function resolveRuleSourceClauseTags(cwd: string, source: RuleSourceFile, 
       await writeClauseTagCache(cwd, source.path, contentHash, freshTags, JEV_RULES_TAG_CACHE_PATH);
     }
   }
-  return applyClauseTags(rawClauses, resolved);
+  return { clauses: applyClauseTags(rawClauses, resolved), droppedPlaceholders };
 }
 
 /**
@@ -402,9 +459,13 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
 
   const usage: JevUsageAccumulator = { taggingCalls: 0, violationCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, sawUsage: false };
   const taggedSources: TaggedRuleSource[] = [];
+  const droppedPlaceholderClauses: { ruleId: string; clauseId: string; reason: string }[] = [];
   for (const source of sources) {
-    const clauses = await resolveRuleSourceClauseTags(cwd, source, fetchFn, model, usage);
+    const { clauses, droppedPlaceholders } = await resolveRuleSourceClauseTags(cwd, source, fetchFn, model, usage);
     taggedSources.push({ source, clauses });
+    for (const dropped of droppedPlaceholders) {
+      droppedPlaceholderClauses.push({ ruleId: source.path, clauseId: dropped.clauseId, reason: dropped.reason });
+    }
   }
 
   const selection = selectRuleHunkPairs(regions, taggedSources, detectedStack, maxCalls);
@@ -458,10 +519,13 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
   const stats = findingStats(findings);
   const status = stats.blocker > 0 || stats.major > 0 ? "DONE_WITH_CONCERNS" : "DONE";
   const jevCalls = usage.taggingCalls + usage.violationCalls;
+  const hunksNeverReached = selection.hunkCoverage.length - selection.hunksReached;
   const summary =
     `Checked ${selection.selected.length} (hunk, rule-clause) pair(s) across ${regions.length} hunk(s) and ${sources.length} rule source(s) ` +
     `(${excluded.length} source(s) excluded by category filter) against ${targetLabel}; ${findings.length} finding(s) at/above threshold ${threshold}. ` +
-    `${selection.dropped.length} pair(s) dropped by --max-calls ${selection.maxCalls}; ${selection.droppedClauses.length} clause(s) dropped as not hunk-checkable. ` +
+    `${selection.dropped.length} pair(s) dropped by --max-calls ${selection.maxCalls}; ${selection.droppedClauses.length} clause(s) dropped as not hunk-checkable; ` +
+    `${droppedPlaceholderClauses.length} clause(s) dropped as placeholder/template text. ` +
+    `${selection.hunkCoverage.length} of ${regions.length} hunk(s) had an applicable pair; ${selection.hunksReached} reached by the budget, ${hunksNeverReached} never reached. ` +
     `tagging: ${usage.taggingCalls} call(s) (cached next run); violation: ${usage.violationCalls} call(s).`;
 
   return {
@@ -479,10 +543,15 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
       droppedPairs: selection.dropped.length,
       notApplicable: selection.notApplicable.length,
       droppedClauses: selection.droppedClauses.length,
+      hunkCoverage: selection.hunkCoverage,
+      hunksWithPairs: selection.hunkCoverage.length,
+      hunksReached: selection.hunksReached,
+      hunksNeverReached,
     },
-    ruleSources: sources.map((source) => ({ path: source.path, kind: source.kind })),
+    ruleSources: sources.map((source) => ({ path: source.path, kind: source.kind, ...(source.category !== undefined ? { category: source.category } : {}) })),
     excludedSources: excluded,
     droppedClauses: selection.droppedClauses,
+    droppedPlaceholderClauses,
   };
 }
 

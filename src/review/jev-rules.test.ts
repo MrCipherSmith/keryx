@@ -9,6 +9,7 @@ import {
   cappedSeverity,
   classifyRuleSourceCategory,
   clauseApplicability,
+  clauseFileKindApplicability,
   DEFAULT_JEV_RULES_THRESHOLD,
   declaredSeverityAndCleanText,
   extractRuleRationale,
@@ -16,9 +17,12 @@ import {
   firstChangedLineQuote,
   frontmatterScalar,
   globToRegExp,
+  hunkFileKind,
   inferLanguage,
   isCodingConventionSkill,
+  isDocsApplicableClauseText,
   isHunkCheckableClause,
+  isPlaceholderClauseText,
   matchesAnyGlob,
   metadataScalar,
   PROCESS_RULE_HEURISTIC_TERMS,
@@ -147,6 +151,64 @@ describe("clauseApplicability", () => {
   });
 });
 
+describe("item 4: hunkFileKind / isDocsApplicableClauseText / clauseFileKindApplicability", () => {
+  test("hunkFileKind: .md/.mdx/.txt are docs; everything else, including test files, is code", () => {
+    expect(hunkFileKind("docs/readme.md")).toBe("docs");
+    expect(hunkFileKind("docs/guide.mdx")).toBe("docs");
+    expect(hunkFileKind("NOTES.txt")).toBe("docs");
+    expect(hunkFileKind("src/a.ts")).toBe("code");
+    expect(hunkFileKind("src/a.test.ts")).toBe("code");
+    expect(hunkFileKind("README.MD")).toBe("docs");
+  });
+
+  test("isDocsApplicableClauseText: the [docs-applicable] marker, case-insensitive, anywhere in the text", () => {
+    expect(isDocsApplicableClauseText("Update the README when a public API changes. [docs-applicable]")).toBe(true);
+    expect(isDocsApplicableClauseText("[DOCS-APPLICABLE] update the docs")).toBe(true);
+    expect(isDocsApplicableClauseText("an ordinary clause with no marker")).toBe(false);
+  });
+
+  test("clauseFileKindApplicability: a docs hunk pairs only with a docs-categorised source, or a clause explicitly marked [docs-applicable]", () => {
+    expect(clauseFileKindApplicability("docs", "some clause", "docs").applicable).toBe(true);
+    expect(clauseFileKindApplicability("code", "some clause", "docs").applicable).toBe(false);
+    expect(clauseFileKindApplicability(undefined, "some clause", "docs").applicable).toBe(false);
+    expect(clauseFileKindApplicability("code", "update the README [docs-applicable]", "docs").applicable).toBe(true);
+  });
+
+  test("clauseFileKindApplicability: a code hunk never pairs with a docs-categorised source", () => {
+    expect(clauseFileKindApplicability("code", "some clause", "code").applicable).toBe(true);
+    expect(clauseFileKindApplicability(undefined, "some clause", "code").applicable).toBe(true);
+    expect(clauseFileKindApplicability("docs", "some clause", "code").applicable).toBe(false);
+    // The [docs-applicable] marker only widens applicability TOWARD docs hunks — it does not exclude a code hunk.
+    expect(clauseFileKindApplicability("docs", "some clause [docs-applicable]", "code").applicable).toBe(false);
+  });
+});
+
+describe("item 3: isPlaceholderClauseText", () => {
+  test("a checklist item with an unfilled <...> placeholder is a template, not a real clause (the PR bug)", () => {
+    expect(isPlaceholderClauseText("[x] <criterion 1> — verified by <test>")).toBe(true);
+    expect(isPlaceholderClauseText("[ ] <criterion> — verified by <test>")).toBe(true);
+  });
+
+  test("text dominated by <...> placeholders is a template even without a checklist marker", () => {
+    expect(isPlaceholderClauseText("<placeholder>")).toBe(true);
+    expect(isPlaceholderClauseText("<one> <two>")).toBe(true);
+  });
+
+  test("a code-fence-only line is a template", () => {
+    expect(isPlaceholderClauseText("```")).toBe(true);
+    expect(isPlaceholderClauseText("```typescript")).toBe(true);
+  });
+
+  test("a real clause that merely mentions a generic term in angle brackets stays real when it is not dominated by placeholders", () => {
+    expect(isPlaceholderClauseText("Every exported function must have a docstring naming its <ReturnType> explicitly in the body of the comment")).toBe(false);
+  });
+
+  test("an ordinary clause, and a checklist item with real (non-placeholder) content, are never dropped", () => {
+    expect(isPlaceholderClauseText("Every widget must be documented.")).toBe(false);
+    expect(isPlaceholderClauseText("[x] Every widget must be documented and tested.")).toBe(false);
+  });
+});
+
 describe("selectRuleHunkPairs", () => {
   const sourceB: RuleSourceFile = { path: "rules/b.mdc", kind: "project-rule", text: "# B\n- clause one\n- clause two\n" };
   const sourceA: RuleSourceFile = { path: "rules/a.mdc", kind: "project-rule", text: "# A\n- only clause\n" };
@@ -203,6 +265,84 @@ describe("selectRuleHunkPairs", () => {
       { ruleId: "rules/a.mdc", clauseId: "a-2", reason: "descriptive rationale, not itself checkable" },
       { ruleId: "rules/a.mdc", clauseId: "a-3", reason: 'tagged state_kind: "pr", not "hunk" — not a hunk-checkable clause' },
     ]);
+  });
+
+  describe("item 2: fair budget allocation (round-robin), never draining the first hunk", () => {
+    /** One source, five hunk-checkable clauses, no path/stack restriction — applies identically to every region so every hunk offers the SAME five pairs. */
+    const bigSource: RuleSourceFile = { path: "rules/big.mdc", kind: "project-rule", text: "# Big\n" };
+    const fiveClauses = [1, 2, 3, 4, 5].map((n) => clause(`c-${n}`, `clause ${n}`, ["Big"]));
+    const bigSources: TaggedRuleSource[] = [taggedSource(bigSource, fiveClauses)];
+
+    test("the PR #712 bug: a budget smaller than one hunk's pairs used to drain entirely into the first hunk — now it spreads across hunks", () => {
+      const r1 = region({ path: "src/one.ts" });
+      const r2 = region({ path: "src/two.ts" });
+      const r3 = region({ path: "src/three.ts" });
+      const result = selectRuleHunkPairs([r1, r2, r3], bigSources, CERTAIN_STACK, 3);
+      // The bug: `all.slice(0, 3)` would have put all 3 pairs on r1 (the
+      // first hunk in diff order) and left r2/r3 with zero. The fix: one
+      // pair per hunk, all three hunks reached.
+      expect(result.selected.filter((p) => p.region === r1)).toHaveLength(1);
+      expect(result.selected.filter((p) => p.region === r2)).toHaveLength(1);
+      expect(result.selected.filter((p) => p.region === r3)).toHaveLength(1);
+      expect(result.hunksReached).toBe(3);
+      expect(result.hunkCoverage.every((h) => h.applicablePairs === 5)).toBe(true);
+    });
+
+    test("a budget that covers every hunk's full share (cap / hunks >= pairs per hunk) selects identically to the un-round-robined order", () => {
+      const r1 = region({ path: "src/one.ts" });
+      const r2 = region({ path: "src/two.ts" });
+      const result = selectRuleHunkPairs([r1, r2], bigSources, CERTAIN_STACK, 100);
+      expect(result.selected).toHaveLength(10);
+      expect(result.hunksReached).toBe(2);
+      expect(result.hunkCoverage).toEqual([
+        { path: "src/one.ts", startLine: 10, endLine: 12, applicablePairs: 5, selectedPairs: 5 },
+        { path: "src/two.ts", startLine: 10, endLine: 12, applicablePairs: 5, selectedPairs: 5 },
+      ]);
+    });
+
+    test("a budget smaller than the hunk count reaches only as many hunks as it can, and reports the rest as never reached — never silently", () => {
+      const regions = [1, 2, 3, 4].map((n) => region({ path: `src/${n}.ts` }));
+      const result = selectRuleHunkPairs(regions, bigSources, CERTAIN_STACK, 2);
+      // Round size = max(1, floor(2 / 4)) = 1 — the first two hunks (in
+      // priority/diff order) each get one pair; the last two get none.
+      expect(result.hunkCoverage.map((h) => h.selectedPairs)).toEqual([1, 1, 0, 0]);
+      expect(result.hunksReached).toBe(2);
+      expect(result.hunkCoverage.length - result.hunksReached).toBe(2);
+      expect(result.selected).toHaveLength(2);
+    });
+
+    test("deterministic: the same inputs produce byte-identical selection and coverage on a re-run", () => {
+      const regions = [1, 2, 3].map((n) => region({ path: `src/${n}.ts` }));
+      const first = selectRuleHunkPairs(regions, bigSources, CERTAIN_STACK, 7);
+      const second = selectRuleHunkPairs(regions, bigSources, CERTAIN_STACK, 7);
+      expect(second).toEqual(first);
+    });
+  });
+
+  describe("item 2: hunk priority order — code, then tests, then docs — combined with item 4's file-kind gate", () => {
+    test("regions are reordered code-first/tests-second/docs-last for the allocator, and each hunk pairs only with its own file-kind category", () => {
+      const codeSource: RuleSourceFile = { path: "rules/code.mdc", kind: "project-rule", text: "# Code\n", category: "code" };
+      const docsSource: RuleSourceFile = { path: "rules/docs.mdc", kind: "project-rule", text: "# Docs\n", category: "docs" };
+      const sources: TaggedRuleSource[] = [
+        taggedSource(codeSource, [clause("code-1", "code convention clause", ["Code"])]),
+        taggedSource(docsSource, [clause("docs-1", "docs convention clause", ["Docs"])]),
+      ];
+      // Deliberately out of priority order: docs first, test second, code third.
+      const docsRegion = region({ path: "docs/readme.md" });
+      const testRegion = region({ path: "src/widget.test.ts" });
+      const codeRegion = region({ path: "src/widget.ts" });
+      const result = selectRuleHunkPairs([docsRegion, testRegion, codeRegion], sources, CERTAIN_STACK, 100);
+
+      expect(result.hunkCoverage.map((h) => h.path)).toEqual(["src/widget.ts", "src/widget.test.ts", "docs/readme.md"]);
+      // Each hunk pairs only with the source of its own file kind.
+      expect(result.selected).toHaveLength(3);
+      const byRegion = new Map(result.selected.map((p) => [p.region, p.ruleId]));
+      expect(byRegion.get(codeRegion)).toBe("rules/code.mdc");
+      expect(byRegion.get(testRegion)).toBe("rules/code.mdc");
+      expect(byRegion.get(docsRegion)).toBe("rules/docs.mdc");
+      // The cross-category pairing is reported in notApplicable, not silently dropped.
+      expect(result.notApplicable.some((n) => n.reason.includes("file-kind gate"))).toBe(true);
+    });
   });
 });
 

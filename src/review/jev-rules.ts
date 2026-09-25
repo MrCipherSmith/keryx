@@ -85,6 +85,7 @@ import { estimateTokens } from "./cost";
 import type { ScopedRegion } from "./scope";
 import { scopeReviewerByStack, type DetectedStack, type StackTag } from "./stack";
 import { redactSensitiveText } from "../security/service";
+import { TEST_FILE_RE } from "../testing/selection";
 
 // ---------------------------------------------------------------------------
 // Rule source discovery (AC2) — classification helpers only; walking the
@@ -104,6 +105,16 @@ export interface RuleSourceFile {
   readonly declaredPaths?: readonly string[];
   /** `metadata.stack_requires`, parsed with `./stack`'s own parser. */
   readonly stackRequires?: readonly StackTag[];
+  /**
+   * `classifyRuleSourceCategory(path, text)`'s own decision — attached by the
+   * adapter to EVERY source it constructs (discovered, skill-based, or
+   * `--rules`), whether or not that source survived the category filter
+   * (AC-follow-up 2). Used downstream by the file-kind gate (item 4,
+   * `clauseFileKindApplicability`) so a `docs`-categorised source only pairs
+   * against a docs hunk and vice versa. `undefined` reads as `"code"` — the
+   * same default the classifier itself falls back to.
+   */
+  readonly category?: RuleSourceCategory;
 }
 
 /** Read one `metadata.<key>: value` scalar out of a `SKILL.md`-shaped frontmatter block. Never throws. */
@@ -255,6 +266,46 @@ export function extractRuleRationale(ruleText: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// Placeholder/template clause filter (precision fix, item 3) — a live
+// re-measurement of PR #712 found clauses like `[x] <criterion 1> —
+// verified by <test>`: authoring-template scaffolding from a checklist a
+// rule author never filled in, extracted as a real clause and checked
+// against every hunk anyway. Applied by the adapter right after
+// `extractReferenceClauses`, before a clause ever reaches tagging or
+// pairing — pure, deterministic, no I/O.
+// ---------------------------------------------------------------------------
+
+const PLACEHOLDER_TOKEN_RE = /<[^<>\n]{1,100}>/g;
+const CHECKLIST_MARKER_RE = /^\[[ xX]\]\s*/;
+const CODE_FENCE_ONLY_RE = /^`{3,}[\w-]*$/;
+
+/**
+ * True for a clause whose text is authoring scaffolding rather than a real,
+ * fillable rule — three independent shapes, each sufficient on its own:
+ *
+ *   1. A checklist item (`[ ]`/`[x]`) whose text still carries a `<...>`
+ *      placeholder token — `[x] <criterion 1> — verified by <test>` was
+ *      never filled in.
+ *   2. Text dominated by `<...>` placeholders: once every placeholder token
+ *      is stripped, fewer than 8 non-space/punctuation characters remain.
+ *   3. The whole clause is only a code-fence marker (`` ``` `` / `` ```ts ``)
+ *      that slipped through list-item extraction.
+ *
+ * Empty text (already unreachable — `extractReferenceClauses` never emits an
+ * empty clause) is treated as a placeholder too, defensively.
+ */
+export function isPlaceholderClauseText(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return true;
+  if (CODE_FENCE_ONLY_RE.test(trimmed)) return true;
+  const placeholders = trimmed.match(PLACEHOLDER_TOKEN_RE) ?? [];
+  if (placeholders.length === 0) return false;
+  if (CHECKLIST_MARKER_RE.test(trimmed)) return true;
+  const withoutPlaceholders = trimmed.replace(PLACEHOLDER_TOKEN_RE, "").replace(/[\s\-–—:.,;]+/g, "");
+  return withoutPlaceholders.length < 8;
+}
+
+// ---------------------------------------------------------------------------
 // Applicability (AC2): which clauses of a rule source apply to which changed
 // file, by declared path globs and/or stack_requires — pure, deterministic.
 // ---------------------------------------------------------------------------
@@ -321,6 +372,64 @@ export function clauseApplicability(source: RuleSourceFile, changedFile: string,
 }
 
 // ---------------------------------------------------------------------------
+// File-kind gating (precision fix, item 4) — a live re-measurement found a
+// code-convention clause (no declared path restriction, so `clauseApplicability`
+// above waves it through everywhere) paired against a `docs/docs/cli-reference.md`
+// hunk. `clauseApplicability` stays untouched (the existing language/path/stack
+// gate); this is an ADDITIONAL gate, keyed on the rule source's own category
+// (`classifyRuleSourceCategory`, AC-follow-up 2) versus the changed file's
+// kind — `docs` only pairs with `docs`, `code` (the default for every other
+// category, including `undefined`/unclassified) only pairs with non-docs
+// files. A single clause can opt out of its source's own category with an
+// explicit `[docs-applicable]` marker, the same trailing-bracket family as
+// `[severity: ...]` below — a `code`-categorised source can still carry one
+// clause about documentation (e.g. "update the README when a public API
+// changes") that should be checked against a docs hunk too.
+// ---------------------------------------------------------------------------
+
+const DOCS_FILE_RE = /\.(md|mdx|txt)$/i;
+
+export type HunkFileKind = "docs" | "code";
+
+/** A changed file's kind for the file-kind gate — `.md`/`.mdx`/`.txt` are `"docs"`; everything else, including test files, is `"code"` (item 2's separate test/docs ordering does not change this binary split). */
+export function hunkFileKind(filePath: string): HunkFileKind {
+  return DOCS_FILE_RE.test(filePath) ? "docs" : "code";
+}
+
+const DOCS_APPLICABLE_MARKER_RE = /\[docs-applicable\]/i;
+
+/** A clause's own opt-in, independent of its source's category — `[docs-applicable]` anywhere in the clause text. */
+export function isDocsApplicableClauseText(clauseText: string): boolean {
+  return DOCS_APPLICABLE_MARKER_RE.test(clauseText);
+}
+
+export interface FileKindApplicabilityDecision {
+  readonly applicable: boolean;
+  readonly reason: string;
+}
+
+/** May `clauseText` (from a source categorised `sourceCategory`) be checked against a hunk of `changedFileKind`? `sourceCategory` of `undefined` reads as `"code"`, the same default the classifier itself falls back to. */
+export function clauseFileKindApplicability(
+  sourceCategory: RuleSourceCategory | undefined,
+  clauseText: string,
+  changedFileKind: HunkFileKind,
+): FileKindApplicabilityDecision {
+  const category = sourceCategory ?? "code";
+  if (changedFileKind === "docs") {
+    if (category === "docs") return { applicable: true, reason: "rule source categorised docs; hunk is a docs file" };
+    if (isDocsApplicableClauseText(clauseText)) return { applicable: true, reason: "clause explicitly tagged [docs-applicable]" };
+    return {
+      applicable: false,
+      reason: `hunk is a docs file but the rule source is categorised "${category}" and the clause carries no [docs-applicable] marker`,
+    };
+  }
+  if (category === "docs") {
+    return { applicable: false, reason: "rule source categorised docs; hunk is a code file" };
+  }
+  return { applicable: true, reason: "hunk is a code file; rule source is not categorised docs" };
+}
+
+// ---------------------------------------------------------------------------
 // Pair selection (AC3): every (region, rule clause) pair the applicability
 // decision admits, capped at `--max-calls`, deterministic order, nothing
 // dropped silently.
@@ -359,6 +468,16 @@ export interface DroppedClause {
   readonly reason: string;
 }
 
+export interface HunkCoverage {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  /** Pairs this hunk had after every gate (path/stack, hunk-checkable clause, file-kind) — the denominator "how much was there to check". */
+  readonly applicablePairs: number;
+  /** Pairs this hunk actually got scored, after the `--max-calls` round-robin allocation below. */
+  readonly selectedPairs: number;
+}
+
 export interface PairSelectionResult {
   readonly selected: readonly RuleHunkPair[];
   readonly dropped: readonly RuleHunkPair[];
@@ -366,6 +485,16 @@ export interface PairSelectionResult {
   /** Every (ruleId, clauseId) excluded from pairing because it is not `state_kind: "hunk"` and `checkable` — reported once per clause, never silently. */
   readonly droppedClauses: readonly DroppedClause[];
   readonly maxCalls: number;
+  /**
+   * Item 2: one entry per hunk that had at least one applicable pair, in the
+   * priority order the round-robin allocator used below (code first, then
+   * tests, then docs; original diff order breaks ties within a rank) — so a
+   * caller can see exactly which hunks the budget reached and which it
+   * never got to, never only a raw pair count.
+   */
+  readonly hunkCoverage: readonly HunkCoverage[];
+  /** `hunkCoverage.length` minus this is how many hunks with something to check were never reached by the budget — `hunkCoverage.length - hunksReached`. */
+  readonly hunksReached: number;
 }
 
 function droppedClauseReason(clause: ReferenceClause): string {
@@ -374,14 +503,40 @@ function droppedClauseReason(clause: ReferenceClause): string {
 }
 
 /**
- * AC3, plus the precision-fix follow-up: build every applicable (hunk,
- * clause) pair, from clauses already filtered to `state_kind: "hunk"` and
- * `checkable`, and cap it at `maxCalls`. Order is deterministic — regions in
- * input order (already the diff's own order), rule sources sorted by path,
- * clauses in each source's own order — so the SAME diff and SAME rule set
- * always select the SAME pairs, and a caller re-running with a smaller
- * `--max-calls` sees a stable prefix drop from the tail, not a different
- * sample.
+ * Item 2's hunk ordering: code (non-docs, non-test) first, then test files,
+ * then docs — so a fixed-size round-robin slice (below) reaches a code hunk
+ * before it reaches a docs hunk, deterministically, regardless of which one
+ * happens to sit first in the diff. Reuses `hunkFileKind` (docs vs
+ * everything else) and `../testing/selection.ts`'s own `TEST_FILE_RE` — the
+ * SAME test-file regex `review floor`/`review scope`/`keryx test related`
+ * already share — rather than inventing a second test-path heuristic.
+ */
+function hunkPriorityRank(filePath: string): 0 | 1 | 2 {
+  if (hunkFileKind(filePath) === "docs") return 2;
+  if (TEST_FILE_RE.test(filePath)) return 1;
+  return 0;
+}
+
+/**
+ * AC3, plus the precision-fix follow-ups: build every applicable (hunk,
+ * clause) pair — clauses already filtered to `state_kind: "hunk"` and
+ * `checkable` (the tag-based filter), sources gated by file-kind (item 4) —
+ * then spend `maxCalls` FAIRLY across hunks instead of draining it on the
+ * first hunk in diff order. That was the PR #712 live-check bug this fixes:
+ * the whole default 150-call budget landed on a single docs hunk in
+ * `cli-reference.md`, and not one code hunk was ever scored.
+ *
+ * Hunk order: `hunkPriorityRank` above — code, then tests, then docs;
+ * original diff order breaks ties within a rank, so a re-run over the SAME
+ * diff and SAME rules ranks hunks identically every time.
+ *
+ * Allocation: round-robin, `K` clauses per hunk per round, where
+ * `K = max(1, floor(maxCalls / hunks-with-at-least-one-applicable-pair))` —
+ * computed ONCE, so every hunk in the rotation gets at least one round when
+ * the budget allows one K-sized slice per hunk. A hunk whose queue empties
+ * before a later round simply drops out of the rotation; the freed capacity
+ * keeps circulating among the hunks still holding pairs. Deterministic: same
+ * inputs, same `K`, same rotation order, same result every run.
  */
 export function selectRuleHunkPairs(
   regions: readonly ScopedRegion[],
@@ -405,23 +560,86 @@ export function selectRuleHunkPairs(
     }
   }
 
-  const all: RuleHunkPair[] = [];
+  const orderedRegions = regions
+    .map((region, index) => ({ region, index, rank: hunkPriorityRank(region.path) }))
+    .sort((a, b) => (a.rank !== b.rank ? a.rank - b.rank : a.index - b.index))
+    .map((entry) => entry.region);
+
+  const pairsByRegion = new Map<ScopedRegion, RuleHunkPair[]>();
   const notApplicable: { readonly region: ScopedRegion; readonly ruleId: string; readonly reason: string }[] = [];
-  for (const region of regions) {
+  for (const region of orderedRegions) {
+    const changedFileKind = hunkFileKind(region.path);
+    const regionPairs: RuleHunkPair[] = [];
     for (const { source, clauses } of sorted) {
       const decision = clauseApplicability(source, region.path, detectedStack);
       if (!decision.applicable) {
         notApplicable.push({ region, ruleId: source.path, reason: decision.reason });
         continue;
       }
+      let sawHunkCheckable = false;
+      let anyFileKindApplicable = false;
       for (const clause of clauses) {
         if (!isHunkCheckableClause(clause)) continue;
-        all.push({ region, ruleId: source.path, clause, reason: decision.reason });
+        sawHunkCheckable = true;
+        const fileKindDecision = clauseFileKindApplicability(source.category, clause.text, changedFileKind);
+        if (!fileKindDecision.applicable) continue;
+        anyFileKindApplicable = true;
+        regionPairs.push({ region, ruleId: source.path, clause, reason: decision.reason });
+      }
+      if (sawHunkCheckable && !anyFileKindApplicable) {
+        notApplicable.push({
+          region,
+          ruleId: source.path,
+          reason: `file-kind gate: every hunk-checkable clause of this source excluded for a ${changedFileKind} hunk (source category "${source.category ?? "code"}")`,
+        });
       }
     }
+    pairsByRegion.set(region, regionPairs);
   }
+
+  const all: RuleHunkPair[] = orderedRegions.flatMap((region) => pairsByRegion.get(region) ?? []);
   const cap = Number.isFinite(maxCalls) && maxCalls >= 0 ? Math.trunc(maxCalls) : DEFAULT_MAX_JEV_RULE_CALLS;
-  return { selected: all.slice(0, cap), dropped: all.slice(cap), notApplicable, droppedClauses, maxCalls: cap };
+
+  const candidateRegions = orderedRegions.filter((region) => (pairsByRegion.get(region) ?? []).length > 0);
+  const roundSize = candidateRegions.length > 0 ? Math.max(1, Math.floor(cap / candidateRegions.length)) : 0;
+
+  const queues = candidateRegions.map((region) => ({ region, queue: [...(pairsByRegion.get(region) ?? [])] }));
+  const selectedCountByRegion = new Map<ScopedRegion, number>();
+  const selected: RuleHunkPair[] = [];
+  let remaining = cap;
+  let active = queues.filter((entry) => entry.queue.length > 0);
+  while (remaining > 0 && active.length > 0) {
+    const next: typeof active = [];
+    for (const entry of active) {
+      if (remaining <= 0) {
+        next.push(entry);
+        continue;
+      }
+      const take = Math.min(roundSize, entry.queue.length, remaining);
+      if (take > 0) {
+        const items = entry.queue.splice(0, take);
+        selected.push(...items);
+        selectedCountByRegion.set(entry.region, (selectedCountByRegion.get(entry.region) ?? 0) + items.length);
+        remaining -= take;
+      }
+      if (entry.queue.length > 0) next.push(entry);
+    }
+    active = next;
+  }
+
+  const selectedSet = new Set(selected);
+  const dropped = all.filter((pair) => !selectedSet.has(pair));
+
+  const hunkCoverage: HunkCoverage[] = candidateRegions.map((region) => ({
+    path: region.path,
+    startLine: region.startLine,
+    endLine: region.endLine,
+    applicablePairs: (pairsByRegion.get(region) ?? []).length,
+    selectedPairs: selectedCountByRegion.get(region) ?? 0,
+  }));
+  const hunksReached = hunkCoverage.filter((coverage) => coverage.selectedPairs > 0).length;
+
+  return { selected, dropped, notApplicable, droppedClauses, maxCalls: cap, hunkCoverage, hunksReached };
 }
 
 // ---------------------------------------------------------------------------
