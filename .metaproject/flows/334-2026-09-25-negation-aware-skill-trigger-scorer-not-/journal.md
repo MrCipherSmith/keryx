@@ -169,6 +169,23 @@ real caller of `scoutSkill` (the CLI's own pre-creation dedupe query,
 self-identification query) passes a skill-description-shaped string, never
 a live routing prompt.
 
+**Clarification (round 2 review, info 4 — the two paragraphs above and the
+Major 3 section below could read as contradictory about WHEN
+`nearestSkills` started stripping its query):** `nearestSkills`'s query
+(`skill.description`) was ALREADY being stripped before this round-1 fix
+existed — just via the round-1 implementation's OWN unconditional/blanket
+version of `stripExclusions` (the bug this section fixes), which applied to
+every caller including `nearestSkills`. What this round-1 fix changed for
+`nearestSkills` specifically is NOTHING OBSERVABLE — it went from
+"stripped by accident, as one instance of an unconditional rule" to
+"stripped on purpose, as an explicit, deliberate per-caller choice". The
+only function whose OBSERVABLE behavior changed here is
+`checkSkillSelected`/`checkSkillSelectedLeaveOneOut`, which went from
+`true` (the bug) to `false` (the fix). This matters for Major 3 below: the
+negatives-drift methodology bug it describes was present from
+`nearestSkills`'s VERY FIRST flow-334 commit (T8, before round 1 existed),
+not introduced or changed by this round-1 fix.
+
 ### Major 1: the regression loop was circular
 
 The original `scout.test.ts` regression loop scored a skill's own VERBATIM
@@ -251,22 +268,30 @@ queries both times:
 - All 4 BEFORE false positives are correctly rejected AFTER (including `planning/brainstorm`'s `"document PR"` — so despite the methodology bug, that specific directional claim happens to hold up under the correct method too). 3 NEW false positives appear, all `react/*`, all same-category co-selection alongside `react-code-review`/`react-implementation` on generic-vocabulary queries.
 - Net: **4 → 3, a real, same-query-set improvement of 1.**
 
-Root cause of the 3 new `react/*` FPs (investigated directly via
-`checkSkillSelected`/`scoutSkill` against both catalogs): corpus-wide IDF
-redistribution — `entryLexicalTokens`'s IDF is recomputed from document
-frequency across the WHOLE 90-skill catalog every call. Stripping negated
-tokens from many entries at once lowers the document frequency of common
-surviving words (e.g. "component", "hook"), which RAISES the IDF weight of
-every remaining (legitimate) occurrence of those words everywhere in the
-corpus — occasionally tipping an already-borderline same-category
-comparison (which `checkSkillSelected`'s cross-CATEGORY-only outrank rule
-does not block) across the fork threshold. Not a clause-detection defect —
-verified the shared terms causing the new selections are each skill's own
-genuine trigger vocabulary, not leaked exclusion-clause text. Not fixed
-here: an inherent property of a corpus-relative IDF scorer reacting to ANY
-change in corpus text, in scope for a possible follow-up (recalibrating
-`SCOUT_FORK_THRESHOLD` or adding IDF smoothing), not this flow's negation
-fix specifically.
+**Root cause of the 3 new `react/*` FPs, CORRECTED (round 2 review, info
+4 — the original "corpus-wide IDF redistribution" explanation below was
+imprecise and is superseded by this direct measurement):**
+
+Investigated by comparing `checkSkillSelected`'s full result (score AND
+`outrankedBy`) for `react/react-build-fix`/`react/react-upgrade-migration`
+against both catalogs, not just the final score:
+
+- `react/react-build-fix` on `"Review this component for Rules of Hooks violations"`: BEFORE score 0.4284 (rank 3, **outrankedBy: `review/review-flow-graph`**) → AFTER score 0.4244 (rank 2, selected). The skill's OWN score barely moved (0.4284→0.4244, and even went DOWN slightly) — the flip from unselected to selected is NOT because react-build-fix scored higher. It is because the DIFFERENT-category entry that used to block it, `review/review-flow-graph`, scored LOWER after the fix: BEFORE 0.5432 (rank 2) → AFTER 0.1233 (rank 28). `review-flow-graph`'s own description reads "... NOT for: React and MobX component structure outside the graph surface (review-frontend), render cost elsewhere in the app (review-performance), or the domain rules a graph happens to display (review-logic)." — "component" (and, for the second case below, "performance"/"render") was LEAKING from review-flow-graph's OWN exclusion clause, artificially inflating IT past the cross-category outrank threshold and blocking react-build-fix. Fixing review-flow-graph's leak (the intended effect of this flow) removed a false blocker for a skill it was never actually competing with.
+- `react/react-upgrade-migration` on `"Fix a re-render performance issue in this list component"`: the identical mechanism — BEFORE `outrankedBy: review/review-flow-graph` at score 0.4547 ("shared terms: component, performance, render", the SAME leaked clause) → AFTER react-upgrade-migration itself unblocked (BEFORE score 0.4354 → AFTER 0.4383, again barely moved).
+
+So the precise, verified cause is: fixing `review/review-flow-graph`'s OWN
+exclusion-clause leak (this flow's intended effect, applied uniformly
+across the whole catalog) removed a false CROSS-CATEGORY blocker that used
+to prevent two unrelated `react/*` skills from co-selecting alongside
+`react-code-review`/`react-implementation` on ambiguous, generic-vocabulary
+queries. Once unblocked, `checkSkillSelected`'s cross-category-only outrank
+rule (same-category near-duplicates are ALLOWED to co-select, by design —
+see that function's own doc comment) no longer has anything stopping the
+co-selection. This is a direct, mostly-neutral side effect of the fix
+correctly doing its job elsewhere in the corpus — not a new defect, not
+"IDF redistribution" in the vague sense originally written (no meaningful
+IDF weight shift was involved for react-build-fix's/react-upgrade-
+migration's OWN scores at all), and not something to fix in this flow.
 
 ### Minors addressed
 
@@ -299,4 +324,81 @@ original T8 entry (369→365 TP, 4→3 FP across all 90 skills) are UNCHANGED
 in direction and remain accurate for that specific measurement (they do not
 depend on `nearestSkills`/circularity) — only the PER-SKILL breakdown and
 the FP methodology needed correction, both superseded above.
+
+## 2026-09-25 — PR #725 review round 2 (opus, narrow re-verification): 0 blocker, 0 major, 3 minor, 3 info
+
+Blocker and Majors 1-3 confirmed FIXED against deliberately-broken
+variants. Three minors, cheap, fixed immediately (each with a test); the
+three infos corrected in place above (the `nearestSkills` clarification,
+the react/* root-cause correction, and a CI failure this round's own
+diff surfaced independently — see below).
+
+**Minor 1 — `USE_INSTEAD_PHRASE` still over-matched:** round 1's fix
+still allowed up to 3 filler words between the token and "instead", and
+accepted any bare word as the token — so "Use git bisect instead of a
+manual search" and "Use when fixing this instead of guessing" were still
+being stripped despite naming no other skill. Tightened: the token after
+"use" must now be EITHER backtick/quote-wrapped OR bare-hyphenated (the
+shape every real bundled skill id has), with nothing between the token and
+"instead". Verified both adversarial phrasings above are now left
+untouched, and the real "use `pr-issue-documenter` instead"/"use
+nodejs-testing instead" shapes still strip correctly. Docs corrected
+("never touches" language) to describe the tightened rule.
+
+**Minor 2 — the timing test's crafted input was the cheap case:** `"use "
++ "x ".repeat(20000) + "instead"` has ONE "use" and ONE "instead" at the
+very end — a lazy `[^.!?()]*?` scan finds it in one linear pass, so this
+input was never actually slow even against the pre-fix regex. The real
+adversarial shape is `"use ".repeat(20000)` (many "use" starts, no
+"instead" anywhere — a `/g` search must scan from EACH start to end of
+string before giving up). Measured directly: pre-fix pattern on this input
+— 1000 reps ~3ms, 2000 ~14ms, 4000 ~55ms, 8000 ~243ms (clean O(n²)
+scaling), 200000 reps did not complete within 120s. The permanent test now
+uses this exact input and asserts BOTH that the current (fixed) regex
+stays under 500ms AND that the reconstructed pre-fix pattern exceeds it on
+the same input — so the test is provably adversarial, not just an
+arbitrary bound.
+
+**Minor 3 — `bundle/external.ts:507` had its own unguarded join:** used a
+bare `` `${candidate.name} ${candidate.description}` `` template join
+instead of the `joinAsSentences` sentence-boundary guard
+`entryLexicalTokens` uses — the exact same class of bug (an unterminated
+exclusion clause in one field bleeding into the next) `joinAsSentences`
+exists to prevent, just not applied to this external-candidate-vetting
+caller. Exported `joinAsSentences` from `scout.ts` and switched
+`external.ts` to use it.
+
+**Ratchet (round 2 requirement, not a numbered finding):** added a test
+asserting no more than 119 of the 513 bundled triggers fail
+`checkSkillSelectedLeaveOneOut` — the pinned per-skill cases only cover
+triggers this flow's OWN diff is known to touch; without a catalog-wide
+ceiling a future scorer change could regress a DIFFERENT trigger with
+nothing to catch it.
+
+**Info 4a — the react/* FP root cause was imprecise:** corrected in place
+above (Major 3 section) with the actual verified mechanism —
+`review/review-flow-graph`'s OWN leaked exclusion-clause tokens
+("component"/"performance"/"render") were previously inflating IT past
+the fork threshold and blocking `react-build-fix`/`react-upgrade-migration`
+via the cross-category outrank rule; fixing review-flow-graph's leak (this
+flow's intended effect) removed that false blocker. Not "corpus-wide IDF
+redistribution" in the vague sense originally written — the react/* skills'
+OWN scores barely moved at all.
+
+**Info 4b — the `nearestSkills` sentence read as contradictory:**
+clarified in place above (query-side stripping section) — `nearestSkills`
+always stripped its query in SOME form since its first flow-334 commit
+(originally via the round-1-era unconditional bug, now via the deliberate
+per-caller rule); round 1 changed nothing OBSERVABLE for `nearestSkills`
+itself, only for `checkSkillSelected`/`checkSkillSelectedLeaveOneOut`.
+
+**Info 4c (found independently, while fixing the above, not from the
+round-2 report) — CI `typecheck-and-tests` failed** on the round-1 push:
+`round-bound.test.ts`'s AC14 checks that `job-orchestrator`'s bundled
+`SKILL.md` is byte-identical to its `.metaproject/skills/gdskills/`
+mirror. The round-1 description edit updated only the bundled copy.
+Synced the mirror (and, proactively, the other three edited skills'
+mirrors — `deploy`/`interviewer`/`brainstorm` — even though only
+`job-orchestrator` is currently gated by a test, to avoid the same drift
+resurfacing silently later).
 
