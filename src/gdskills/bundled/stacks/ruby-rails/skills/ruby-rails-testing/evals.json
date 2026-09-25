@@ -2,10 +2,10 @@
   "triggers": {
     "positive": [
       "Write specs for this ActiveRecord model's validations",
-      "Add a request spec covering the auth failure case for this controller action",
+      "Write a test asserting that hitting PATCH /orders/:id without a signed-in user returns 401 instead of raising",
       "Test that this job gets enqueued when the order is placed",
       "Fix this failing spec that's flaking in CI",
-      "Stub the external payment API call in this test",
+      "Our checkout spec is actually hitting Stripe's charges endpoint when it runs, how do I keep that out of the test",
       "Write Minitest coverage for this model's scopes"
     ],
     "negative": [

@@ -1,8 +1,8 @@
 {
   "triggers": {
     "positive": [
-      "bundle install keeps failing with a version conflict",
-      "This migration is marked pending and I can't run the test suite",
+      "After merging main, bundle exec rspec won't even start because Gemfile.lock pins pg to an older version than what's installed",
+      "I pulled a teammate's branch and now rails db:test:prepare errors out because the schema doesn't include their new migration",
       "rubocop is flagging Metrics/MethodLength on this file, how do I fix it",
       "Zeitwerk can't find the constant for this file, what's wrong",
       "The test suite errors before any example runs",
