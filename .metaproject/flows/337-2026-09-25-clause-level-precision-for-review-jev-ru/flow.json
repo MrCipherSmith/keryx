@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "337",
+  "slug": "clause-level-precision-for-review-jev-ru",
+  "title": "Clause-level precision for review-jev-rules: a process step inside a code rule is not checked against code",
+  "status": "implemented",
+  "createdAt": "2026-09-25T17:51:18.810Z",
+  "updatedAt": "2026-09-25T18:07:45.437Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T18:05:14.261Z",
+      "note": "preClassifyProcessClause (src/review/conform-clauses.ts) wired into extractReferenceClauses; test 'PR #712's own false positive ... is pre-classified process, no Jev question built' (conform-clauses.test.ts) proves api-contracts.mdc's 'Review the contract for breaking changes' clause gets explicit.not_checkable_reason and buildClauseTagQuestions returns {} for the whole fenced block."
+    },
+    "AC2": {
+      "at": "2026-09-25T18:05:19.841Z",
+      "note": "test.each 'code-property clause stays a Jev candidate' (6 cases: must+function/handler/import/class/query/type) all assert preClassifyProcessClause returns undefined, i.e. buildClauseTagQuestions still produces a question for them."
+    },
+    "AC3": {
+      "at": "2026-09-25T18:05:25.082Z",
+      "note": "PROCESS_VERB_LEAD_TERMS/CODE_PROPERTY_NOUNS exported and documented with comments in conform-clauses.ts; 9 process-verb-lead true positives + 6 code-property true negatives + 4 isWorkflowListStep cases + 1 fenced-workflow full-doc test + 1 explicit-marker-wins test = 21 tests total for the pre-classifier."
+    },
+    "AC4": {
+      "at": "2026-09-25T18:05:29.573Z",
+      "note": "buildClauseTagQuestions instructions rewritten (conform-clauses.ts) to say 'a property you can see in a code hunk' for hunk and 'an action someone performs' for not-checkable. Test 'the choice question distinguishes a code-hunk property from a human action' asserts both phrases appear verbatim."
+    },
+    "AC5": {
+      "at": "2026-09-25T18:05:34.319Z",
+      "note": "conform-tag-cache.ts: hashConformDocContent now folds 'clause-tag-schema:v2' into hashOriginContent's input instead of re-exporting it directly. Two new tests in conform-tag-cache.test.ts: hashConformDocContent(x) !== hashOriginContent(x), and a raw hashOriginContent(x) (simulated pre-bump hash) misses cachedTagsFor while hashConformDocContent(x) hits."
+    },
+    "AC6": {
+      "at": "2026-09-25T18:05:41.642Z",
+      "note": "review conform's full existing suite (conform-clauses.test.ts, conform-jev.test.ts, conform-state.test.ts, conform-report.test.ts, conform-pr-port.test.ts, conform-tag-cache.test.ts, review-conform-cli.test.ts) passes with ZERO expectation changes — checked every conform fixture (invented-doctrine.md and CLI-inline docs) against the new verb/code-noun lists beforehand; all existing conform clauses already carry explicit [state:...]/[not-checkable:...] markers, so the pre-classifier never fires on them (explicit always wins first) and conform's own tagging is byte-for-byte unchanged. Documented in conform-clauses.ts's file header comment."
+    },
+    "AC7": {
+      "at": "2026-09-25T18:05:47.157Z",
+      "note": "bun test src/review/conform-* src/review/jev-rules* src/commands/review-jev-rules* src/commands/review-conform*: 196 pass, 0 fail, 516 expect() calls (9 files). bun run typecheck (tsc --noEmit): clean. bun run lint (eslint .): clean."
+    },
+    "AC8": {
+      "at": "2026-09-25T18:05:53.584Z",
+      "note": "Live run (bun ./src/cli.ts review jev-rules --pr 712 --rules .metaproject/rules --max-calls 60 --json, fresh .metaproject/data/review-jev-rules/ cache, env -u OPENROUTER_API_KEY): droppedClauses lists core-principle-contract-before-code-2 ('Review the contract for breaking changes') with reason 'Pre-classified process: clause opens with the imperative verb \"review\"...' — never reaches a tagging or violation call. tokens: {jevCalls:57, taggingCalls:19, violationCalls:38}. findings: 0 (down from 2 FP before this fix)."
+    },
+    "AC9": {
+      "at": "2026-09-25T18:05:59.475Z",
+      "note": "PR #712 live re-measure: before 2 findings/0 TP -> after 0 findings/0 TP (nothing to hand-label; the 2 prior FPs are the pre-classified clause). PR #717 live re-measure (same setup, fresh cache): before 0 findings -> after 0 findings (unchanged, no regression). tokens PR712 {jevCalls:57,taggingCalls:19,violationCalls:38}; PR717 {jevCalls:74,taggingCalls:19,violationCalls:55}; combined 131 jevCalls (38 tagging + 93 violation), cost ~$0.011 total. Recorded in journal.md."
+    },
+    "AC10": {
+      "at": "2026-09-25T18:07:45.437Z",
+      "note": "PR #732 opened (https://github.com/MrCipherSmith/keryx/pull/732) from feat/clause-tag-precision to main, not merged, CI pending. Commit a7e375ee contains only src/review/conform-clauses.ts, conform-clauses.test.ts, conform-tag-cache.ts, conform-tag-cache.test.ts, and this flow's own .metaproject/flows/337-*/ files — .metaproject/data/ regeneration from the post-commit hook (gdgraph/wiki artifacts) was reverted with git checkout before push, working tree clean."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/732"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read jev-rules.ts/conform-clauses.ts/conform-tag-cache.ts/jev-rules-cache.ts; confirmed the api-contracts.mdc fenced numbered workflow (steps 1-5) is the source of the PR #712 false positives; checked existing test fixtures for collision risk with the new verb list."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added preClassifyProcessClause/isWorkflowListStep to conform-clauses.ts (wired into extractReferenceClauses before Jev question building), rewrote buildClauseTagQuestions instructions to distinguish 'a property you can see in a code hunk' from 'an action someone performs', and bumped the clause-tag cache schema version (v2) in conform-tag-cache.ts's hashConformDocContent."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added 17 new unit tests (pre-classifier true/false positives, workflow-step detection, question wording, cache schema-version invalidation). bun test src/review/conform-* src/review/jev-rules* src/commands/review-jev-rules* src/commands/review-conform*: 196 pass, 0 fail. bun run typecheck and bun run lint both clean."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-reviewed diff (conform-clauses.ts/.test.ts, conform-tag-cache.ts/.test.ts), pushed feat/clause-tag-precision, opened PR #732 (not merged, CI pending) with before/after measurement table."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T17:51:18.810Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T17:51:52.317Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T17:51:55.743Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T18:04:56.543Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T18:05:02.905Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T18:05:08.656Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T18:05:14.261Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: preClassifyProcessClause (src/review/conform-clauses.ts) wired into extractReferenceClauses; test 'PR #712's own false positive ... is pre-classified process, no Jev question built' (conform-clauses.test.ts) proves api-contracts.mdc's 'Review the contract for breaking changes' clause gets explicit.not_checkable_reason and buildClauseTagQuestions returns {} for the whole fenced block. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:19.841Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: test.each 'code-property clause stays a Jev candidate' (6 cases: must+function/handler/import/class/query/type) all assert preClassifyProcessClause returns undefined, i.e. buildClauseTagQuestions still produces a question for them. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:25.082Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: PROCESS_VERB_LEAD_TERMS/CODE_PROPERTY_NOUNS exported and documented with comments in conform-clauses.ts; 9 process-verb-lead true positives + 6 code-property true negatives + 4 isWorkflowListStep cases + 1 fenced-workflow full-doc test + 1 explicit-marker-wins test = 21 tests total for the pre-classifier. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:29.574Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: buildClauseTagQuestions instructions rewritten (conform-clauses.ts) to say 'a property you can see in a code hunk' for hunk and 'an action someone performs' for not-checkable. Test 'the choice question distinguishes a code-hunk property from a human action' asserts both phrases appear verbatim. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:34.319Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: conform-tag-cache.ts: hashConformDocContent now folds 'clause-tag-schema:v2' into hashOriginContent's input instead of re-exporting it directly. Two new tests in conform-tag-cache.test.ts: hashConformDocContent(x) !== hashOriginContent(x), and a raw hashOriginContent(x) (simulated pre-bump hash) misses cachedTagsFor while hashConformDocContent(x) hits. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:41.643Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: review conform's full existing suite (conform-clauses.test.ts, conform-jev.test.ts, conform-state.test.ts, conform-report.test.ts, conform-pr-port.test.ts, conform-tag-cache.test.ts, review-conform-cli.test.ts) passes with ZERO expectation changes — checked every conform fixture (invented-doctrine.md and CLI-inline docs) against the new verb/code-noun lists beforehand; all existing conform clauses already carry explicit [state:...]/[not-checkable:...] markers, so the pre-classifier never fires on them (explicit always wins first) and conform's own tagging is byte-for-byte unchanged. Documented in conform-clauses.ts's file header comment. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:47.157Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun test src/review/conform-* src/review/jev-rules* src/commands/review-jev-rules* src/commands/review-conform*: 196 pass, 0 fail, 516 expect() calls (9 files). bun run typecheck (tsc --noEmit): clean. bun run lint (eslint .): clean. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:53.584Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Live run (bun ./src/cli.ts review jev-rules --pr 712 --rules .metaproject/rules --max-calls 60 --json, fresh .metaproject/data/review-jev-rules/ cache, env -u OPENROUTER_API_KEY): droppedClauses lists core-principle-contract-before-code-2 ('Review the contract for breaking changes') with reason 'Pre-classified process: clause opens with the imperative verb \"review\"...' — never reaches a tagging or violation call. tokens: {jevCalls:57, taggingCalls:19, violationCalls:38}. findings: 0 (down from 2 FP before this fix). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:05:59.475Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: PR #712 live re-measure: before 2 findings/0 TP -> after 0 findings/0 TP (nothing to hand-label; the 2 prior FPs are the pre-classified clause). PR #717 live re-measure (same setup, fresh cache): before 0 findings -> after 0 findings (unchanged, no regression). tokens PR712 {jevCalls:57,taggingCalls:19,violationCalls:38}; PR717 {jevCalls:74,taggingCalls:19,violationCalls:55}; combined 131 jevCalls (38 tagging + 93 violation), cost ~$0.011 total. Recorded in journal.md. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:07:37.691Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/732 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T18:07:38.044Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T18:07:45.437Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: PR #732 opened (https://github.com/MrCipherSmith/keryx/pull/732) from feat/clause-tag-precision to main, not merged, CI pending. Commit a7e375ee contains only src/review/conform-clauses.ts, conform-clauses.test.ts, conform-tag-cache.ts, conform-tag-cache.test.ts, and this flow's own .metaproject/flows/337-*/ files — .metaproject/data/ regeneration from the post-commit hook (gdgraph/wiki artifacts) was reverted with git checkout before push, working tree clean. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T18:05:14.261Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:19.841Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:25.082Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:29.573Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:34.319Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:41.642Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:47.157Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:53.584Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:05:59.475Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:07:45.437Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    }
+  ],
+  "baseBranch": "main"
+}

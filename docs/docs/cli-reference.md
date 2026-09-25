@@ -3349,6 +3349,39 @@ keryx rules distill
 Only `sync` and `distill` are accepted; the only recognized flag is `--help`/`-h`.
 An unknown subcommand prints an error and exits `1`.
 
+### Model choice
+
+`keryx init`, `keryx update`, and `keryx rules sync` all render one more policy
+line into the managed `<!-- keryx:index -->` block: **Model choice**, guiding
+Claude Code and Codex CLI toward which model tier to run interactive work, a
+subagent dispatch, or a scheduled/unattended run on. It is generated from
+keryx's own model tiers (`light`/`standard`/`deep`,
+`src/gdskills/model-tier.ts`) and this project's routing table
+(`routing.config.json`, `keryx routing`):
+
+- **the flagship tier** (deep) for planning and review;
+- **one tier down** (standard) for subagents, docs, and unattended work;
+- **the smallest tier** (light) only for trivial, mechanical work.
+
+The text always states tiers by word — never a hard-coded model id. A concrete
+provider/model id is added for a category only when this project's
+`routing.config.json` resolves one for it **and** the operator has approved
+that file's current content (`keryx routing trust`); an unset, unapproved, or
+absent routing table leaves every category on tier words alone. Both
+`AGENTS.md` (Codex CLI's entrypoint) and `CLAUDE.md` (Claude Code's) carry the
+same block — nothing is written outside the project (no
+`~/.codex/config.toml` edit).
+
+Disable it per project with `.metaproject/tasks.config.json`:
+
+```json
+{ "modelGuidance": { "enabled": false } }
+```
+
+`keryx rules sync` and `keryx update` each print a `model_choice: …` status
+line after regenerating the block, reporting whether it is enabled and how
+many of the addressed routing categories resolved to a concrete id.
+
 ---
 
 ## job

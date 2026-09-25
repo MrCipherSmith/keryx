@@ -133,6 +133,8 @@ export interface ConformVerdict {
   readonly reason?: string;
   /** Flow 326, AC1/AC2: the hunk this verdict was judged against, when it is one of possibly many for the same clause_id. */
   readonly location?: ConformHunkLocation;
+  /** Flow 337, item 5: how the clause got its tag — carried straight through from {@link ReferenceClause.tag_source} into the report/JSON output, `"pre-classified"` included. */
+  readonly tag_source: ReferenceClause["tag_source"];
 }
 
 /** Below this Jev `noul` score (AC7's default), a clause is treated as likely violated / explained under `--explain`. */
@@ -145,6 +147,7 @@ export function notCheckableVerdict(clause: ReferenceClause): ConformVerdict {
     state_kind: clause.state_kind,
     status: "not-checkable",
     factLines: [],
+    tag_source: clause.tag_source,
     ...(clause.reason !== undefined ? { reason: clause.reason } : {}),
   };
 }
@@ -163,6 +166,7 @@ export function notEvaluatedVerdict(clause: ReferenceClause, reason?: string): C
     state_kind: clause.state_kind,
     status: "not-evaluated",
     factLines: [],
+    tag_source: clause.tag_source,
     ...(reason !== undefined ? { reason } : {}),
   };
 }
@@ -181,6 +185,7 @@ export function evaluatedVerdict(
     status: probability >= threshold ? "satisfied" : "likely-violated",
     probability,
     factLines: facts.factLines,
+    tag_source: clause.tag_source,
     ...(facts.decisive !== undefined ? { decisive: facts.decisive } : {}),
     ...(location !== undefined ? { location } : {}),
   };
@@ -279,6 +284,8 @@ export interface ConformClauseAggregate {
   readonly clause_id: string;
   readonly state_kind: ReferenceClause["state_kind"];
   readonly status: ConformClauseStatus;
+  /** Flow 337, item 5: the clause's own {@link ReferenceClause.tag_source} — the same across every hunk verdict for this clause_id, so the first is representative. */
+  readonly tag_source: ReferenceClause["tag_source"];
   /** 0 for a not-checkable/not-evaluated clause, or a pr/report-kind clause (which is never scored per-hunk). */
   readonly hunksJudged: number;
   readonly hunksBelowThreshold: number;
@@ -340,6 +347,7 @@ export function aggregateConformVerdicts(verdicts: readonly ConformVerdict[], ma
         clause_id: first.clause_id,
         state_kind: first.state_kind,
         status: first.status,
+        tag_source: first.tag_source,
         hunksJudged: 0,
         hunksBelowThreshold: 0,
         furtherViolations: [],
@@ -356,6 +364,7 @@ export function aggregateConformVerdicts(verdicts: readonly ConformVerdict[], ma
         clause_id: first.clause_id,
         state_kind: first.state_kind,
         status: first.status,
+        tag_source: first.tag_source,
         hunksJudged: 0,
         hunksBelowThreshold: 0,
         furtherViolations: [],
@@ -382,6 +391,7 @@ export function aggregateConformVerdicts(verdicts: readonly ConformVerdict[], ma
       clause_id: first.clause_id,
       state_kind: first.state_kind,
       status,
+      tag_source: first.tag_source,
       hunksJudged: withLocation.length,
       hunksBelowThreshold: belowThreshold,
       worst: { location: worstVerdict.location!, probability: worstVerdict.probability ?? 0 },
