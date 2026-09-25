@@ -201,6 +201,37 @@ describe("flow 307 AC7: a rejected credential names its source and checks the sk
     expect(caught).toBeInstanceOf(JevRequestError);
     expect(caught).not.toBeInstanceOf(JevAuthRejectedError);
   });
+
+  test("flow 307 review item 4: a 401 body that echoes the submitted key never carries it into the error message", async () => {
+    const submittedKey = "sk-or-v1-abcdef1234567890abcdef1234567890";
+    // Some gateways echo the offending credential back in an "invalid key" body.
+    const fetchFn = fakeFetch({ error: "invalid api key", key: submittedKey }, 401);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: { OPENROUTER_API_KEY: submittedKey } });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevAuthRejectedError);
+    const err = caught as JevAuthRejectedError;
+    expect(err.message).not.toContain(submittedKey);
+    expect(err.message).toContain("[REDACTED:secret]");
+  });
+
+  test("flow 307 review item 4: a non-401 error body that echoes a key is also redacted", async () => {
+    const submittedKey = "sk-or-v1-abcdef1234567890abcdef1234567890";
+    const fetchFn = fakeFetch({ error: "server error", echoedKey: submittedKey }, 500);
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevRequestError);
+    const err = caught as JevRequestError;
+    expect(err.message).not.toContain(submittedKey);
+    expect(err.message).toContain("[REDACTED:secret]");
+  });
 });
 
 describe("AC5: one test per fixture shape", () => {

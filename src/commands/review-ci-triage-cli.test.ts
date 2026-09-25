@@ -64,7 +64,7 @@ afterEach(async () => {
 });
 
 describe("AC8/AC3: keryx review ci-triage --run <id> prints the triage for a failed run", () => {
-  test("--json prints an array (one verdict per failed job — here, one), with job/test/verdict/usage", async () => {
+  test("--json prints {results, notTriaged} (one verdict per failed job — here, one), with job/test/verdict/usage", async () => {
     ROOT = await projectRoot(true);
     process.chdir(ROOT);
     process.env.OPENROUTER_API_KEY = "sk-or-test";
@@ -72,19 +72,23 @@ describe("AC8/AC3: keryx review ci-triage --run <id> prints the triage for a fai
     await reviewCommand(["ci-triage", "--run", "36095133327", "--fixtures", FIXTURES_DIR, "--json"]);
 
     const parsed = JSON.parse(output()) as {
-      runId: string;
-      job: string;
-      testName: string;
-      verdict: { top: string; topProbability: number; probabilities: Record<string, number> };
-      usage: { input_tokens?: number };
-    }[];
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]?.runId).toBe("36095133327");
-    expect(parsed[0]?.job).toBe("typecheck-and-tests");
-    expect(parsed[0]?.testName).toContain("e2e.test.ts:115");
-    expect(parsed[0]?.verdict.top).toBe("flaky");
-    expect(parsed[0]?.verdict.probabilities.flaky).toBe(0.74);
-    expect(parsed[0]?.usage.input_tokens).toBe(612);
+      results: {
+        runId: string;
+        job: string;
+        testName: string;
+        verdict: { top: string; topProbability: number; probabilities: Record<string, number> };
+        usage: { input_tokens?: number };
+      }[];
+      notTriaged: string[];
+    };
+    expect(parsed.results).toHaveLength(1);
+    expect(parsed.results[0]?.runId).toBe("36095133327");
+    expect(parsed.results[0]?.job).toBe("typecheck-and-tests");
+    expect(parsed.results[0]?.testName).toContain("e2e.test.ts:115");
+    expect(parsed.results[0]?.verdict.top).toBe("flaky");
+    expect(parsed.results[0]?.verdict.probabilities.flaky).toBe(0.74);
+    expect(parsed.results[0]?.usage.input_tokens).toBe(612);
+    expect(parsed.notTriaged).toEqual([]);
     expect(process.exitCode ?? 0).toBe(0);
   });
 
@@ -105,9 +109,9 @@ describe("AC8/AC3: keryx review ci-triage --run <id> prints the triage for a fai
     process.env.OPENROUTER_API_KEY = "sk-or-test";
 
     await reviewCommand(["ci-triage", "--run", "36095133327", "--job", "typecheck-and-tests", "--fixtures", FIXTURES_DIR, "--json"]);
-    const parsed = JSON.parse(output()) as { job: string }[];
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]?.job).toBe("typecheck-and-tests");
+    const parsed = JSON.parse(output()) as { results: { job: string }[]; notTriaged: string[] };
+    expect(parsed.results).toHaveLength(1);
+    expect(parsed.results[0]?.job).toBe("typecheck-and-tests");
   });
 
   test("a job name that does not exist on the run is refused, naming the jobs that do", async () => {
@@ -147,6 +151,82 @@ describe("AC10: opt-in per project, and credential gating — both refuse before
 
     expect(output()).toContain("OPENROUTER_API_KEY");
     expect(process.exitCode).toBe(1);
+  });
+});
+
+describe("flow 307 review item 2: MAX_JOBS_TRIAGED caps how many failed jobs are triaged", () => {
+  /** A fixtures dir with `failedCount` failed jobs, all named `job-N`, sharing one canned Jev response. */
+  async function fixturesWithManyFailedJobs(failedCount: number): Promise<string> {
+    const dir = await mkdtemp(path.join(tmpdir(), "keryx-ci-triage-cap-"));
+    const jobs = Array.from({ length: failedCount }, (_, i) => ({ name: `job-${i + 1}`, conclusion: "failure", status: "completed" }));
+    await writeFile(
+      path.join(dir, "ci-run-info.json"),
+      JSON.stringify({ runId: "1", workflowName: "CI", headBranch: "b", headSha: "deadbeef", conclusion: "failure", jobs }),
+      "utf8",
+    );
+    await writeFile(dir + "/ci-failed-log.txt", "job-1\tTest\tboom\n", "utf8");
+    await writeFile(
+      path.join(dir, "jev-response.json"),
+      JSON.stringify({ answers: { flaky: { type: "noul", noul: 0.6 }, infra: { type: "noul", noul: 0.1 }, "real-regression": { type: "noul", noul: 0.3 } }, usage: {} }),
+      "utf8",
+    );
+    return dir;
+  }
+
+  test("--json: results has at most MAX_JOBS_TRIAGED entries, and notTriaged names the rest", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    const fixturesDir = await fixturesWithManyFailedJobs(12);
+
+    await reviewCommand(["ci-triage", "--run", "1", "--fixtures", fixturesDir, "--json"]);
+
+    const parsed = JSON.parse(output()) as { results: { job: string }[]; notTriaged: string[] };
+    expect(parsed.results).toHaveLength(10);
+    expect(parsed.results.map((r) => r.job)).toEqual(Array.from({ length: 10 }, (_, i) => `job-${i + 1}`));
+    expect(parsed.notTriaged).toEqual(["job-11", "job-12"]);
+    await rm(fixturesDir, { recursive: true, force: true });
+  });
+
+  test("text output: prints a 'not triaged (cap N; use --job)' line naming the remaining jobs", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    const fixturesDir = await fixturesWithManyFailedJobs(11);
+
+    await reviewCommand(["ci-triage", "--run", "1", "--fixtures", fixturesDir]);
+
+    expect(output()).toContain("not triaged (cap 10; use --job): job-11");
+    await rm(fixturesDir, { recursive: true, force: true });
+  });
+
+  test("at or under the cap, notTriaged is empty and no 'not triaged' line is printed", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    const fixturesDir = await fixturesWithManyFailedJobs(10);
+
+    await reviewCommand(["ci-triage", "--run", "1", "--fixtures", fixturesDir, "--json"]);
+    const parsed = JSON.parse(output()) as { results: { job: string }[]; notTriaged: string[] };
+    expect(parsed.results).toHaveLength(10);
+    expect(parsed.notTriaged).toEqual([]);
+
+    await reviewCommand(["ci-triage", "--run", "1", "--fixtures", fixturesDir]);
+    expect(output()).not.toContain("not triaged");
+    await rm(fixturesDir, { recursive: true, force: true });
+  });
+
+  test("--job still reaches a job beyond the cap directly", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    const fixturesDir = await fixturesWithManyFailedJobs(12);
+
+    await reviewCommand(["ci-triage", "--run", "1", "--job", "job-12", "--fixtures", fixturesDir, "--json"]);
+    const parsed = JSON.parse(output()) as { results: { job: string }[]; notTriaged: string[] };
+    expect(parsed.results).toHaveLength(1);
+    expect(parsed.results[0]?.job).toBe("job-12");
+    await rm(fixturesDir, { recursive: true, force: true });
   });
 });
 

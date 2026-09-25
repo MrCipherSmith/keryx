@@ -138,6 +138,7 @@ import {
   extractFailingTestName,
   readCiTriageEnabled,
   renderCiTriageAdvisory,
+  type CiSignalsPrecomputed,
   type CiTriageCriterion,
   type CiTriageVerdict,
 } from "../review/ci-triage";
@@ -1341,30 +1342,51 @@ interface CiTriageJobResult {
 }
 
 /**
- * Flow 307: the shared pipeline — read the log, compute signals (AC1) when
- * `useSignals`, build `state`/`questions` accordingly (AC2), ask Jev, apply
- * the deterministic override (AC8). `useSignals: false` reproduces the flow
- * 306 pipeline byte-for-byte, which is exactly what `--eval`'s "before"
- * column needs to stay an honest comparison.
+ * Flow 307: the shared pipeline — compute signals (AC1) when `useSignals`,
+ * build `state`/`questions` accordingly (AC2), ask Jev, apply the
+ * deterministic override (AC8). `useSignals: false` reproduces the flow 306
+ * pipeline byte-for-byte, which is exactly what `--eval`'s "before" column
+ * needs to stay an honest comparison.
+ *
+ * `rawLog` is a REQUIRED input, not read here (flow 307 review, item 2): the
+ * failed-step log is a property of the RUN, not of the job, so a caller
+ * triaging several jobs of the same run reads it once and passes the same
+ * string to every call — `runCiTriage` below does exactly that. `precomputed`
+ * is the matching run-level `computeCiSignals` input (`priorAttempts`/
+ * `changedFiles`/`runsForHeadSha`), optional and only consulted when
+ * `useSignals` is true; omitted, `computeCiSignals` reads them itself
+ * exactly as it always did.
  */
 async function triageOneJob(
   ciPort: CiPort,
   fetchFn: typeof fetch,
   info: CiRunInfo,
   job: CiJobSummary,
-  opts: { readonly runId: string; readonly testNameOverride?: string | undefined; readonly model?: string | undefined; readonly useSignals: boolean },
+  opts: {
+    readonly runId: string;
+    readonly rawLog: string;
+    readonly testNameOverride?: string | undefined;
+    readonly model?: string | undefined;
+    readonly useSignals: boolean;
+    readonly precomputed?: CiSignalsPrecomputed;
+  },
 ): Promise<CiTriageJobResult> {
-  const rawLog = await ciPort.failedLog(opts.runId);
+  const rawLog = opts.rawLog;
   const testName = opts.testNameOverride ?? extractFailingTestName(rawLog, job.name) ?? "(unknown test)";
   const signals = opts.useSignals
-    ? await computeCiSignals(ciPort, {
-        runId: opts.runId,
-        jobName: job.name,
-        testName: testName === "(unknown test)" ? undefined : testName,
-        rawLog,
-        headSha: info.headSha,
-        workflowName: info.workflowName,
-      })
+    ? await computeCiSignals(
+        ciPort,
+        {
+          runId: opts.runId,
+          jobName: job.name,
+          testName: testName === "(unknown test)" ? undefined : testName,
+          rawLog,
+          headSha: info.headSha,
+          workflowName: info.workflowName,
+        },
+        undefined,
+        opts.precomputed,
+      )
     : undefined;
   const signalLines = signals?.lines ?? [];
   const state = buildCiTriageState({ testName, jobName: job.name, rawLog, ...(signalLines.length > 0 ? { signalLines } : {}) });
@@ -1402,6 +1424,17 @@ async function refuseWithoutCiTriageGate(cwd: string): Promise<boolean> {
   return false;
 }
 
+/**
+ * How many failed jobs of one run `runCiTriage` will actually triage
+ * (flow 307 review, item 2). A run with an unbounded number of failed jobs
+ * previously triaged every one of them — one Jev call, and (with signals) up
+ * to `HISTORY_RUNINFO_CAP` extra `gh` reads, PER JOB, with no ceiling. Beyond
+ * this cap the remaining failed jobs are listed, in both the text and the
+ * `--json` output, as not triaged rather than silently triaged anyway or
+ * silently dropped — `--job <name>` still triages any one of them directly.
+ */
+export const MAX_JOBS_TRIAGED = 10;
+
 async function runCiTriage(args: string[]): Promise<void> {
   rejectUnknownFlags(args, CI_TRIAGE_FLAGS, "ci-triage");
   const cwd = process.cwd();
@@ -1433,19 +1466,47 @@ async function runCiTriage(args: string[]): Promise<void> {
         `(jobs: ${info.jobs.map((j) => `${j.name} [${j.conclusion ?? "unknown"}]`).join(", ") || "none"}).`,
     );
   }
+  const jobsToTriage = failedJobs.slice(0, MAX_JOBS_TRIAGED);
+  const notTriaged = failedJobs.slice(MAX_JOBS_TRIAGED).map((j) => j.name);
   // `--test` only makes sense pinned to exactly one job; with several failed
   // jobs in scope it is ignored rather than silently mislabeling every job
   // with the same test name.
   const testOverride = failedJobs.length === 1 ? optionValue(args, "--test") : undefined;
   const model = optionValue(args, "--model");
 
+  // Flow 307 review, item 2: the failed-step log is a property of the RUN,
+  // not of the job — read it ONCE and reuse it for every job below, instead
+  // of re-fetching the same text per job. `priorAttempts`/`changedFiles`/
+  // `runsForHeadSha` likewise key on `runId`/`headSha`, never `jobName` — read
+  // once here and handed to every `triageOneJob` call as `precomputed`, each
+  // degrading to its own empty default on failure exactly as
+  // `computeCiSignals`'s own internal reads already did.
+  const rawLog = await ciPort.failedLog(runId);
+  const [priorAttempts, changedFiles, runsForHeadSha] = await Promise.all([
+    ciPort.priorAttempts(runId).catch(() => [] as readonly CiAttemptJobs[]),
+    info.headSha === "" ? Promise.resolve([] as readonly string[]) : ciPort.changedFiles(info.headSha).catch(() => [] as readonly string[]),
+    ciPort.runsForHeadSha(info.headSha, info.workflowName).catch(() => [] as readonly CiRunHistoryEntry[]),
+  ]);
+  const precomputed: CiSignalsPrecomputed = { priorAttempts, changedFiles, runsForHeadSha };
+
   const results: CiTriageJobResult[] = [];
-  for (const job of failedJobs) {
-    results.push(await triageOneJob(ciPort, fetchFn, info, job, { runId, testNameOverride: testOverride, model, useSignals: true }));
+  for (const job of jobsToTriage) {
+    results.push(
+      await triageOneJob(ciPort, fetchFn, info, job, { runId, rawLog, testNameOverride: testOverride, model, useSignals: true, precomputed }),
+    );
   }
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify(results.map((r) => ({ runId: r.runId, job: r.job, testName: r.testName, verdict: r.verdict, usage: r.usage })), null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          results: results.map((r) => ({ runId: r.runId, job: r.job, testName: r.testName, verdict: r.verdict, usage: r.usage })),
+          notTriaged,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
   console.log(
@@ -1453,6 +1514,10 @@ async function runCiTriage(args: string[]): Promise<void> {
       .map((r) => renderCiTriageAdvisory({ runId: r.runId, jobName: r.job, testName: r.testName, verdict: r.verdict, signalLines: r.signalLines }))
       .join("\n\n"),
   );
+  if (notTriaged.length > 0) {
+    console.log("");
+    console.log(`not triaged (cap ${MAX_JOBS_TRIAGED}; use --job): ${notTriaged.join(", ")}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1533,8 +1598,12 @@ async function runCiTriageEval(cwd: string, args: string[], evalFile: string): P
     if (job === undefined) {
       throw new Error(`case "${c.id}": run ${c.runId} has no job named "${c.job}".`);
     }
-    const before = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, model, useSignals: false });
-    const after = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, model, useSignals: true });
+    // One job per case, so one `failedLog` read is already the minimum — read
+    // once and share it between the "before"/"after" passes rather than
+    // fetching it twice for the same run (flow 307 review, item 2).
+    const rawLog = await ciPort.failedLog(c.runId);
+    const before = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, rawLog, model, useSignals: false });
+    const after = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, rawLog, model, useSignals: true });
     results.push({
       id: c.id,
       runId: c.runId,

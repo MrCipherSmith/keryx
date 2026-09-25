@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createFixtureCiPort } from "./ci-port";
+import { createFixtureCiPort, CI_SPAWN_OUTPUT_CAP_BYTES, type CiBunSpawnFn, type CiBunSubprocess } from "./ci-port";
 import {
   applyDeterministicOverride,
   buildCiTriageQuestions,
@@ -14,12 +14,63 @@ import {
   CI_TRIAGE_LOG_CHARS,
   computeCiSignals,
   computeCiTriageVerdict,
+  DEFAULT_GIT_SHOW_TIMEOUT_MS,
   extractFailingTestName,
+  makeDefaultGitShow,
   normalizeRepoRelativePath,
   readCiTriageEnabled,
   renderCiTriageAdvisory,
   type GitShow,
 } from "./ci-triage";
+
+describe("flow 307 review item 1: makeDefaultGitShow adds a timeout + output cap, never hangs (injected fake Bun.spawn)", () => {
+  function fakeSubprocess(opts: { signalCode: string | null; exitedValue: number; stdoutText?: string }): CiBunSubprocess {
+    return {
+      stdout: new Response(opts.stdoutText ?? "").body,
+      stderr: new Response("").body,
+      exited: Promise.resolve(opts.exitedValue),
+      signalCode: opts.signalCode,
+    };
+  }
+
+  test("a process killed by our own timeout/cap degrades to undefined ('not checked'), never throws or hangs", async () => {
+    const bunSpawn: CiBunSpawnFn = () => fakeSubprocess({ signalCode: "SIGKILL", exitedValue: 137 });
+    const gitShow = makeDefaultGitShow(bunSpawn);
+    await expect(gitShow("deadbeef", "src/x.ts")).resolves.toBeUndefined();
+  });
+
+  test("git is asked to spawn with the documented timeout, killSignal SIGKILL, and maxBuffer", async () => {
+    let seenOpts: unknown;
+    const bunSpawn: CiBunSpawnFn = (argv, opts) => {
+      seenOpts = opts;
+      return fakeSubprocess({ signalCode: null, exitedValue: 0, stdoutText: "content" });
+    };
+    const gitShow = makeDefaultGitShow(bunSpawn);
+    await gitShow("deadbeef", "src/x.ts");
+    expect(seenOpts).toEqual({
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: DEFAULT_GIT_SHOW_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+      maxBuffer: CI_SPAWN_OUTPUT_CAP_BYTES,
+    });
+  });
+
+  test("a clean exit returns the captured content", async () => {
+    const bunSpawn: CiBunSpawnFn = () => fakeSubprocess({ signalCode: null, exitedValue: 0, stdoutText: 'import { x } from "./y";' });
+    const gitShow = makeDefaultGitShow(bunSpawn);
+    expect(await gitShow("deadbeef", "src/x.ts")).toBe('import { x } from "./y";');
+  });
+
+  test("a spawn that throws synchronously (e.g. `git` missing) also degrades to undefined", async () => {
+    const bunSpawn: CiBunSpawnFn = () => {
+      throw new Error("spawn git ENOENT");
+    };
+    const gitShow = makeDefaultGitShow(bunSpawn);
+    await expect(gitShow("deadbeef", "src/x.ts")).resolves.toBeUndefined();
+  });
+});
 
 describe("AC7: one noul question per criterion, not one choice question", () => {
   test("buildCiTriageQuestions returns exactly the three criteria, each type noul", () => {
@@ -361,13 +412,19 @@ describe("flow 307 AC1: deterministic signals, computed before Jev is asked", ()
     expect(signals.logMarkers.timeout).toBe(false);
   });
 
-  test("AC8: a later run of the exact same commit passing is deterministic evidence (same-head)", async () => {
+  test("AC8: a later run of the exact same commit passing is deterministic evidence (same-head), ONLY once this specific job is verified to have passed in it", async () => {
     const port = createFixtureCiPort({
       runsByHeadSha: {
         "CI:deadbeef": [
           { runId: "9", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "b" },
           { runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" },
         ],
+      },
+      // Flow 307 review, item 3: a run-level "success" alone is not enough —
+      // the later run's own job list must show THIS job ("j") itself
+      // concluded success, read through the existing read-only `runInfo`.
+      runs: {
+        "11": { runId: "11", workflowName: "CI", headBranch: "b", headSha: "deadbeef", conclusion: "success", jobs: [{ name: "j", conclusion: "success" }] },
       },
     });
     const signals = await computeCiSignals(
@@ -376,7 +433,61 @@ describe("flow 307 AC1: deterministic signals, computed before Jev is asked", ()
       fakeGitShow(),
     );
     expect(signals.sameHeadLaterPassed).toBe(true);
-    expect(signals.deterministic).toEqual({ verdict: "flaky", reason: expect.stringContaining("later run of the exact same commit") });
+    expect(signals.deterministic).toEqual({ verdict: "flaky", reason: expect.stringContaining("itself conclude success") });
+    expect(signals.lines.some((l) => l.startsWith("same head:") && l.includes('job "j" itself concluded success'))).toBe(true);
+  });
+
+  test("flow 307 review item 3: a later run green AT RUN LEVEL, but this job is MISSING from it — no override, advisory only", async () => {
+    const port = createFixtureCiPort({
+      runsByHeadSha: {
+        "CI:deadbeef": [
+          { runId: "9", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "b" },
+          { runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" },
+        ],
+      },
+      // The later run's own job list does not even contain "j" (imagine a
+      // matrix job that was dropped, or a workflow edit) — a run-level green
+      // that says nothing about THIS job.
+      runs: {
+        "11": {
+          runId: "11",
+          workflowName: "CI",
+          headBranch: "b",
+          headSha: "deadbeef",
+          conclusion: "success",
+          jobs: [{ name: "some-other-job", conclusion: "success" }],
+        },
+      },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.sameHeadLaterPassed).toBe(false);
+    expect(signals.deterministic).toBeUndefined();
+    expect(signals.lines.some((l) => l.startsWith("same head:") && l.includes("could not be") && l.includes("no override applied"))).toBe(true);
+  });
+
+  test("flow 307 review item 3: a later run green AT RUN LEVEL, but this job is SKIPPED in it — no override, advisory only", async () => {
+    const port = createFixtureCiPort({
+      runsByHeadSha: {
+        "CI:deadbeef": [
+          { runId: "9", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "b" },
+          { runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" },
+        ],
+      },
+      runs: {
+        "11": { runId: "11", workflowName: "CI", headBranch: "b", headSha: "deadbeef", conclusion: "success", jobs: [{ name: "j", conclusion: "skipped" }] },
+      },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.sameHeadLaterPassed).toBe(false);
+    expect(signals.deterministic).toBeUndefined();
   });
 
   test("AC8: rerun evidence takes priority over same-head evidence when both are present", async () => {
@@ -401,6 +512,55 @@ describe("flow 307 AC1: deterministic signals, computed before Jev is asked", ()
     expect(signals.diff.changedFileCount).toBe(0);
     expect(signals.sameHeadLaterPassed).toBe(false);
     expect(signals.lines.length).toBeGreaterThan(0);
+  });
+
+  test("flow 307 review, minor: headSha === '' skips changedFiles/git-show entirely — diff stays at its default", async () => {
+    const port = createFixtureCiPort({ changedFiles: { "": ["src/x.test.ts"] } });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: "src/x.test.ts:1", rawLog: "", headSha: "", workflowName: "CI" },
+      fakeGitShow("import { x } from \"./y\";"),
+    );
+    expect(signals.diff).toEqual({ changedFileCount: 0, touchesFailingFile: false, touchesFailingDir: false, touchesImportedFile: false });
+    // Neither `changedFiles` nor `gitShow` (via `runsForHeadSha`'s sibling
+    // reads) was ever asked about the empty sha — `port.calls` records every
+    // request this fixture answered, in order.
+    expect(port.calls.some((c) => c.op === "changedFiles")).toBe(false);
+  });
+
+  describe("flow 307 review, item 2: `precomputed` lets a caller supply the run-level reads once, for several jobs", () => {
+    test("priorAttempts/changedFiles/runsForHeadSha are never read through the port when precomputed is supplied", async () => {
+      const port = createFixtureCiPort({});
+      const signals = await computeCiSignals(
+        port,
+        { runId: "9", jobName: "j", testName: "src/x.test.ts:1", rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+        fakeGitShow(),
+        {
+          priorAttempts: [{ attempt: 1, jobs: [{ name: "j", conclusion: "success" }] }],
+          changedFiles: ["src/x.test.ts"],
+          runsForHeadSha: [],
+        },
+      );
+      // The precomputed data was actually used (not silently ignored)...
+      expect(signals.rerun).toEqual({ attemptsChecked: 1, samePassedOnPriorAttempt: true });
+      expect(signals.diff.touchesFailingFile).toBe(true);
+      // ...and none of the three run-level reads this precomputed data
+      // covers were repeated through the port (an empty fixture port would
+      // otherwise have thrown or answered empty, producing different
+      // numbers above).
+      expect(port.calls.filter((c) => c.op === "priorAttempts")).toHaveLength(0);
+      expect(port.calls.filter((c) => c.op === "changedFiles")).toHaveLength(0);
+      expect(port.calls.filter((c) => c.op === "runsForHeadSha")).toHaveLength(0);
+    });
+
+    test("omitting precomputed falls back to reading the port directly, unchanged from before this field existed", async () => {
+      const port = createFixtureCiPort({
+        attempts: { "9": [{ attempt: 1, jobs: [{ name: "j", conclusion: "success" }] }] },
+      });
+      const signals = await computeCiSignals(port, { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" }, fakeGitShow());
+      expect(signals.rerun.samePassedOnPriorAttempt).toBe(true);
+      expect(port.calls.some((c) => c.op === "priorAttempts")).toBe(true);
+    });
   });
 
   test("normalizeRepoRelativePath strips a runner-absolute prefix and leaves a repo-relative path alone", () => {
@@ -498,5 +658,18 @@ describe("flow 307 AC3/AC4/AC8: renderCiTriageAdvisory prints evidence lines and
     const before = renderCiTriageAdvisory({ runId: "42", jobName: "typecheck-and-tests", testName: "src/x.test.ts:1", verdict });
     expect(before).not.toContain("evidence (computed signals");
     expect(before).not.toContain("DETERMINISTIC");
+  });
+
+  test("flow 307 review, minor: a planted secret in a signal line is redacted before printing", () => {
+    const planted = "sk-ant-api03-PLANTED-SECRET-TOKEN-abcdefghijklmnopqrstuvwxyz0123456789";
+    const verdict = computeCiTriageVerdict({ flaky: { noul: 0.6 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.3 } });
+    const text = renderCiTriageAdvisory({
+      runId: "42",
+      jobName: "typecheck-and-tests",
+      verdict,
+      signalLines: [`same head: a later run of this exact commit passed, and job "job ${planted}" itself concluded success in it.`],
+    });
+    expect(text).not.toContain(planted);
+    expect(text).toContain("[REDACTED:secret]");
   });
 });

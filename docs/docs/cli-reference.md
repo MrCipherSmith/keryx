@@ -3736,14 +3736,26 @@ keryx review ci-triage --run 36095133327 --json
 | Flag | Description |
 |---|---|
 | `--run <id>` | Required (unless `--eval`). The CI run id (e.g. a GitHub Actions run id). |
-| `--job <name>` | Narrows to one of the run's jobs. Omitted, **every job whose conclusion is `failure` is triaged** (flow 307, AC3) — one verdict each. |
+| `--job <name>` | Narrows to one of the run's jobs (reaches it directly even when it is beyond the `MAX_JOBS_TRIAGED` cap below). Omitted, **every job whose conclusion is `failure` is triaged** (flow 307, AC3), up to the cap — one verdict each. |
 | `--test <name>` | Override the failing test name instead of the best-effort extraction from the log excerpt. Only applied when exactly one job is in scope. |
 | `--repo <owner/repo>` | Passed to the live `gh` adapter; omitted, `gh` resolves the repository from the current checkout. |
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
 | `--fixtures <dir>` | Answers BOTH the CI read and the Jev call from files on disk (`ci-run-info.json`, `ci-failed-log.txt`, optional `ci-history.json`, `ci-attempts.json`, `ci-changed-files.json`, `ci-runs-by-head-sha.json`, `ci-related-runs.json`, `jev-response.json`) — no real `gh` call, no real network call. |
-| `--json` | Prints an array, one entry per triaged job, each `{runId, job, testName, verdict, usage}`. |
+| `--json` | Prints `{results, notTriaged}`: `results` is an array, one entry per triaged job, each `{runId, job, testName, verdict, usage}`; `notTriaged` names any failed jobs beyond the `MAX_JOBS_TRIAGED` cap (empty when nothing was skipped). |
 | `--eval <file>` | Flow 307 (AC5/AC6). Replays a labelled evaluation manifest (JSON, `{cases: [{id, runId, job, truth, fixturesDir}]}`) and reports **before** (flow 306: log only) and **after** (flow 307: log + signals) accuracy and cost, plus a per-case line. Offline (fixtures) by default. See below. |
 | `--live` | Only with `--eval`: replay against the real `gh`/Jev instead of each case's `fixturesDir` — the opt-in gate and credential check both apply, same as a plain `--run`. |
+
+**A bounded number of jobs per run (flow 307 review, `MAX_JOBS_TRIAGED = 10`).**
+Without `--job`, at most 10 failed jobs of one run are triaged — each job costs
+one Jev call and (with signals) a bounded number of extra `gh` reads, so an
+unbounded number of failed jobs no longer means an unbounded number of calls.
+Jobs beyond the cap are listed rather than silently triaged or silently
+dropped: `notTriaged` in the `--json` output, and a
+`not triaged (cap 10; use --job)` line in the text output. `--job <name>`
+still reaches any one of them directly. The failed-step log and the
+run-level signals (`priorAttempts`/`changedFiles`/`runsForHeadSha`) are each
+read once per run and reused across every job triaged, rather than
+re-fetched per job.
 
 **Opt-in, and named as a privacy decision.** Disabled by default. A project
 enables it with `review.jev.ci_triage: true` in
@@ -3782,7 +3794,15 @@ For every failed job, through `CiPort` and `git show` only — never a write:
 - **log markers** — timeout/runner-lost/network/OOM/dependency-install-
   corruption phrases in the log text itself.
 - **same head, later** — did a LATER run of the exact same commit (a manual
-  re-trigger, not a new push) pass?
+  re-trigger, not a new push) have THIS SAME JOB conclude success? A later
+  run that is merely green AT RUN LEVEL does not prove this specific job
+  passed (the run could have skipped, dropped, or renamed it, or another job
+  in it could be the one still failing) — this is verified by reading that
+  later run's own job list through `CiPort.runInfo` and requiring a job of
+  the same name to have concluded `success`. When a later run is green at
+  run level but this job cannot be confirmed there, no deterministic
+  override is applied; the run is still mentioned as an advisory-only
+  evidence line.
 
 These are placed in Jev's `state` as a labelled block above the log excerpt
 (redacted the same as everything else, and counted against the same 64k

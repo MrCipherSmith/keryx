@@ -37,7 +37,7 @@ import path from "node:path";
 import { estimateTokens } from "./cost";
 import { redactSensitiveText } from "../security/redact";
 import { REVIEW_GATE_CONFIG_PATH } from "../flow/review-gate";
-import type { CiPort } from "./ci-port";
+import { CI_SPAWN_OUTPUT_CAP_BYTES, type CiAttemptJobs, type CiBunSpawnFn, type CiPort, type CiRunHistoryEntry } from "./ci-port";
 
 /** The three verdict buckets AC7 asks about, in a stable, printed order. */
 export const CI_TRIAGE_CRITERIA = ["flaky", "infra", "real-regression"] as const;
@@ -219,8 +219,16 @@ export function renderCiTriageAdvisory(input: {
           "",
         ]
       : [];
+  // Defence in depth (same reasoning `buildCiTriageState` already applies to
+  // `jobName`/`testName`, flow 306 review LOW): these lines are built from
+  // computed facts, not free-form user text, but several of them embed
+  // `jobName` verbatim (e.g. the same-head evidence line) — "not expected to
+  // carry a secret" is exactly the gap a redaction boundary exists to close,
+  // and printing this block is the one place these lines leave the process.
   const evidenceBlock =
-    signalLines !== undefined && signalLines.length > 0 ? ["", "evidence (computed signals, before Jev):", ...signalLines.map((line) => `  - ${line}`)] : [];
+    signalLines !== undefined && signalLines.length > 0
+      ? ["", "evidence (computed signals, before Jev):", ...signalLines.map((line) => `  - ${redactSensitiveText(line)}`)]
+      : [];
   return [
     `# CI triage (advisory) — run ${runId}, job ${jobName}${testName !== undefined ? `, test ${testName}` : ""}`,
     "",
@@ -335,16 +343,57 @@ export interface CiTriageSignals {
 
 export type GitShow = (sha: string, filePath: string) => Promise<string | undefined>;
 
-/** `git show <sha>:<path>` — read-only, defaults to a real `git` subprocess; injectable for hermetic tests. */
-export async function defaultGitShow(sha: string, filePath: string): Promise<string | undefined> {
-  try {
-    const proc = Bun.spawn(["git", "show", `${sha}:${filePath}`], { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    return exitCode === 0 ? stdout : undefined;
-  } catch {
-    return undefined;
-  }
+/**
+ * Wall-clock ceiling for one `git show` call (flow 307 review, item 1) —
+ * shorter than `./ci-port.ts`'s `DEFAULT_GH_SPAWN_TIMEOUT_MS` (30s) because
+ * this is a local, offline read (no network round trip), so a hang here is
+ * either a huge object or a genuinely broken worktree, not a slow remote.
+ */
+export const DEFAULT_GIT_SHOW_TIMEOUT_MS = 10_000;
+
+/**
+ * The same fake-able shape `./ci-port.ts`'s `CiBunSubprocess`/`CiBunSpawnFn`
+ * give `defaultCiSpawn` — reused here so `defaultGitShow`'s timeout/cap
+ * degrade path also has a hermetic unit test that spawns nothing real.
+ */
+export type GitShowBunSpawnFn = CiBunSpawnFn;
+
+/**
+ * Builds the real `GitShow` adapter around whatever spawns a process —
+ * `Bun.spawn` by default, or an injected fake in a test.
+ */
+export function makeDefaultGitShow(bunSpawn: GitShowBunSpawnFn = Bun.spawn.bind(Bun) as unknown as GitShowBunSpawnFn): GitShow {
+  return async (sha: string, filePath: string): Promise<string | undefined> => {
+    try {
+      const proc = bunSpawn(["git", "show", `${sha}:${filePath}`], {
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: DEFAULT_GIT_SHOW_TIMEOUT_MS,
+        killSignal: "SIGKILL",
+        maxBuffer: CI_SPAWN_OUTPUT_CAP_BYTES,
+      });
+      const [stdout, exitCode] = await Promise.all([proc.stdout === null ? Promise.resolve("") : new Response(proc.stdout).text(), proc.exited]);
+      // Killed by our own timeout/output cap (`proc.signalCode` set) never
+      // reports `exitCode === 0`, so it already falls through to `undefined`
+      // here — no separate branch needed, but named in the doc comment above
+      // so the degrade path is not accidental.
+      return exitCode === 0 ? stdout : undefined;
+    } catch {
+      return undefined;
+    }
+  };
 }
+
+/**
+ * `git show <sha>:<path>` — read-only, defaults to a real `git` subprocess;
+ * injectable for hermetic tests. Diff proximity is one signal among several
+ * (see the file header), never a hard dependency, so this degrades to
+ * `undefined` ("not checked") on ANY failure — a timeout, an output-cap kill,
+ * a missing path, a spawn error — rather than raising: never hangs, and
+ * never fails the whole triage over one signal.
+ */
+export const defaultGitShow: GitShow = makeDefaultGitShow();
 
 /**
  * Runner-path prefixes (`/home/runner/work/<repo>/<repo>/…`,
@@ -383,6 +432,23 @@ function isLaterTimestamp(candidate: string | null, than: string | null): boolea
   return Number.isFinite(a) && Number.isFinite(b) && a > b;
 }
 
+/**
+ * The three run-level reads `computeCiSignals` would otherwise make ONCE PER
+ * FAILED JOB even though every one of them answers identically for every job
+ * of the same run (flow 307 review, item 2): `priorAttempts`/`changedFiles`/
+ * `runsForHeadSha` all key on `runId`/`headSha`, never on `jobName`. A caller
+ * triaging several failed jobs from one run (`src/commands/review.ts`'s
+ * `runCiTriage`) reads each of these exactly once and passes the same object
+ * to every `computeCiSignals` call; a caller triaging a single job (the
+ * `--eval` harness) can omit this entirely and let `computeCiSignals` read
+ * them itself, unchanged from before this field existed.
+ */
+export interface CiSignalsPrecomputed {
+  readonly priorAttempts?: readonly CiAttemptJobs[];
+  readonly changedFiles?: readonly string[];
+  readonly runsForHeadSha?: readonly CiRunHistoryEntry[];
+}
+
 /** AC1: compute every signal for one failed job, through `port` and `gitShow` only — never a write. */
 export async function computeCiSignals(
   port: CiPort,
@@ -395,12 +461,13 @@ export async function computeCiSignals(
     readonly workflowName: string;
   },
   gitShow: GitShow = defaultGitShow,
+  precomputed?: CiSignalsPrecomputed,
 ): Promise<CiTriageSignals> {
   // (a) same run, another attempt.
   let attemptsChecked = 0;
   let samePassedOnPriorAttempt = false;
   try {
-    const attempts = await port.priorAttempts(input.runId);
+    const attempts = precomputed?.priorAttempts ?? (await port.priorAttempts(input.runId));
     attemptsChecked = attempts.length;
     for (const attempt of attempts) {
       if (attempt.jobs.some((j) => j.name === input.jobName && j.conclusion === "success")) {
@@ -450,24 +517,30 @@ export async function computeCiSignals(
     // Best-effort: no history evidence rather than a failed triage.
   }
 
-  // (c) diff proximity: this commit's changed files vs. the failing test's file/dir/imports.
+  // (c) diff proximity: this commit's changed files vs. the failing test's
+  // file/dir/imports. An empty `headSha` names no commit at all — `gh api
+  // repos/.../commits/` and `git show <sha>:<path>` both need a real sha, so
+  // this step is skipped outright rather than spent on a read that could
+  // only ever answer empty/undefined (flow 307 review, minor).
   let changedFileCount = 0;
   let touchesFailingFile = false;
   let touchesFailingDir = false;
   let touchesImportedFile = false;
   try {
-    const changed = await port.changedFiles(input.headSha);
-    changedFileCount = changed.length;
-    if (input.testName !== undefined) {
-      const testPath = normalizeRepoRelativePath(stripTestLineSuffix(input.testName));
-      touchesFailingFile = changed.includes(testPath);
-      const dir = path.posix.dirname(testPath);
-      touchesFailingDir = !touchesFailingFile && changed.some((f) => path.posix.dirname(f) === dir);
-      if (!touchesFailingFile && !touchesFailingDir) {
-        const content = await gitShow(input.headSha, testPath);
-        if (content !== undefined) {
-          const imports = extractRelativeImportTargets(content, dir);
-          touchesImportedFile = changed.some((f) => imports.has(f));
+    if (input.headSha !== "") {
+      const changed = precomputed?.changedFiles ?? (await port.changedFiles(input.headSha));
+      changedFileCount = changed.length;
+      if (input.testName !== undefined) {
+        const testPath = normalizeRepoRelativePath(stripTestLineSuffix(input.testName));
+        touchesFailingFile = changed.includes(testPath);
+        const dir = path.posix.dirname(testPath);
+        touchesFailingDir = !touchesFailingFile && changed.some((f) => path.posix.dirname(f) === dir);
+        if (!touchesFailingFile && !touchesFailingDir) {
+          const content = await gitShow(input.headSha, testPath);
+          if (content !== undefined) {
+            const imports = extractRelativeImportTargets(content, dir);
+            touchesImportedFile = changed.some((f) => imports.has(f));
+          }
         }
       }
     }
@@ -479,14 +552,43 @@ export async function computeCiSignals(
   const infra = INFRA_LOG_MARKERS.filter((m) => m.re.test(input.rawLog)).map((m) => m.label);
   const timeout = infra.includes(TIMEOUT_LABEL);
 
-  // AC8: the same head commit, run again later (a manual re-trigger, not a new push), passing.
+  // AC8: the same head commit, run again later (a manual re-trigger, not a
+  // new push), passing — at the JOB LEVEL (flow 307 review, item 3). A later
+  // run that is green AT THE RUN LEVEL does not prove THIS job passed: the
+  // run could have skipped it, dropped it, or it could be the one job still
+  // failing while everything else went green. Only a same-named job that
+  // itself concluded "success" in that later run counts as verified evidence
+  // — read through the existing read-only `runInfo`, never a new API shape.
+  // When a later run is green at run level but the job cannot be confirmed
+  // (missing/skipped in it, or its own `runInfo` read fails), the
+  // deterministic override is withheld; an advisory-only evidence line is
+  // still added, printed by `renderCiTriageAdvisory` but never promoted to a
+  // forced "flaky" verdict.
   let sameHeadLaterPassed = false;
+  let sameHeadLaterPassedRunId: string | undefined;
+  let sameHeadRunLevelGreenUnverified = false;
   try {
-    const runs = await port.runsForHeadSha(input.headSha, input.workflowName);
+    const runs = precomputed?.runsForHeadSha ?? (await port.runsForHeadSha(input.headSha, input.workflowName));
     const current = runs.find((r) => r.runId === input.runId);
-    sameHeadLaterPassed = runs.some(
+    const laterGreenRuns = runs.filter(
       (r) => r.runId !== input.runId && r.conclusion === "success" && (current === undefined || isLaterTimestamp(r.createdAt, current.createdAt)),
     );
+    for (const laterRun of laterGreenRuns) {
+      try {
+        const laterInfo = await port.runInfo(laterRun.runId);
+        const job = laterInfo.jobs.find((j) => j.name === input.jobName);
+        if (job !== undefined && job.conclusion === "success") {
+          sameHeadLaterPassed = true;
+          sameHeadLaterPassedRunId = laterRun.runId;
+          break;
+        }
+      } catch {
+        // This later run's own job list could not be read; keep checking the others.
+      }
+    }
+    if (!sameHeadLaterPassed && laterGreenRuns.length > 0) {
+      sameHeadRunLevelGreenUnverified = true;
+    }
   } catch {
     // Best-effort: no same-head evidence rather than a failed triage.
   }
@@ -494,7 +596,12 @@ export async function computeCiSignals(
   const deterministic: CiTriageSignals["deterministic"] = samePassedOnPriorAttempt
     ? { verdict: "flaky", reason: `job "${input.jobName}" passed on an earlier attempt of this same run (run ${input.runId}).` }
     : sameHeadLaterPassed
-      ? { verdict: "flaky", reason: `a later run of the exact same commit (head ${input.headSha.slice(0, 7)}) passed.` }
+      ? {
+          verdict: "flaky",
+          reason:
+            `a later run of the exact same commit (head ${input.headSha.slice(0, 7)}, run ${sameHeadLaterPassedRunId}) had job ` +
+            `"${input.jobName}" itself conclude success.`,
+        }
       : undefined;
 
   const lines = [
@@ -512,7 +619,14 @@ export async function computeCiSignals(
             ? "the commit changes a file the failing test imports."
             : "the commit does not touch the failing test file, its directory, or (best-effort) anything it imports."),
     `log markers: ${infra.length > 0 ? infra.join(", ") : "none detected"}.`,
-    ...(sameHeadLaterPassed ? ["same head: a later run of this exact commit passed."] : []),
+    ...(sameHeadLaterPassed
+      ? [`same head: a later run of this exact commit passed, and job "${input.jobName}" itself concluded success in it.`]
+      : sameHeadRunLevelGreenUnverified
+        ? [
+            `same head: a later run of this exact commit was green at run level, but job "${input.jobName}" could not be ` +
+              "confirmed to have passed in it (missing, skipped, or unreadable) — no override applied.",
+          ]
+        : []),
   ];
 
   return {

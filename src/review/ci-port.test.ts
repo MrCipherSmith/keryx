@@ -3,7 +3,16 @@
 // function that records every argv it was asked to run.
 
 import { describe, expect, test } from "bun:test";
-import { createFixtureCiPort, createGhCiPort, type CiSpawn } from "./ci-port";
+import {
+  createFixtureCiPort,
+  createGhCiPort,
+  CI_SPAWN_OUTPUT_CAP_BYTES,
+  DEFAULT_GH_SPAWN_TIMEOUT_MS,
+  makeDefaultCiSpawn,
+  type CiBunSpawnFn,
+  type CiBunSubprocess,
+  type CiSpawn,
+} from "./ci-port";
 
 function spawnReturning(stdout: string, exitCode = 0): CiSpawn {
   const fn = async (argv: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
@@ -126,6 +135,55 @@ describe("createGhCiPort (live adapter)", () => {
     });
     const port = createGhCiPort(spawn as CiSpawn);
     await expect(port.runInfo("1")).rejects.toThrow(/gh run view 1/);
+  });
+});
+
+describe("flow 307 review item 1: makeDefaultCiSpawn adds a timeout + output cap, never hangs (injected fake Bun.spawn)", () => {
+  function fakeSubprocess(opts: { signalCode: string | null; exitedValue: number; stdoutText?: string }): CiBunSubprocess {
+    return {
+      stdout: new Response(opts.stdoutText ?? "").body,
+      stderr: new Response("").body,
+      exited: Promise.resolve(opts.exitedValue),
+      signalCode: opts.signalCode,
+    };
+  }
+
+  test("a process killed by our own timeout/cap (signalCode set) raises a clear error, not a hang or a silent bad exit", async () => {
+    const bunSpawn: CiBunSpawnFn = () => fakeSubprocess({ signalCode: "SIGKILL", exitedValue: 137 });
+    const spawn = makeDefaultCiSpawn(bunSpawn);
+    await expect(spawn(["gh", "run", "view", "123"])).rejects.toThrow(/killed/i);
+    await expect(spawn(["gh", "run", "view", "123"])).rejects.toThrow(new RegExp(`${DEFAULT_GH_SPAWN_TIMEOUT_MS}ms timeout`));
+    await expect(spawn(["gh", "run", "view", "123"])).rejects.toThrow(new RegExp(`${CI_SPAWN_OUTPUT_CAP_BYTES}-byte cap`));
+  });
+
+  test("Bun is asked to spawn with the documented timeout, killSignal SIGKILL, and maxBuffer", async () => {
+    let seenOpts: unknown;
+    const bunSpawn: CiBunSpawnFn = (argv, opts) => {
+      seenOpts = opts;
+      return fakeSubprocess({ signalCode: null, exitedValue: 0, stdoutText: "ok" });
+    };
+    const spawn = makeDefaultCiSpawn(bunSpawn);
+    await spawn(["gh", "run", "view", "123"]);
+    expect(seenOpts).toEqual({
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: DEFAULT_GH_SPAWN_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+      maxBuffer: CI_SPAWN_OUTPUT_CAP_BYTES,
+    });
+  });
+
+  test("a clean exit (no signalCode) is unaffected by the timeout/cap wiring", async () => {
+    const bunSpawn: CiBunSpawnFn = () => fakeSubprocess({ signalCode: null, exitedValue: 0, stdoutText: "hello" });
+    const spawn = makeDefaultCiSpawn(bunSpawn);
+    expect(await spawn(["gh", "run", "view", "123"])).toEqual({ stdout: "hello", stderr: "", exitCode: 0 });
+  });
+
+  test("a normal non-zero exit (no signalCode) is returned as-is, not treated as a kill", async () => {
+    const bunSpawn: CiBunSpawnFn = () => fakeSubprocess({ signalCode: null, exitedValue: 1 });
+    const spawn = makeDefaultCiSpawn(bunSpawn);
+    expect(await spawn(["gh", "run", "view", "123"])).toEqual({ stdout: "", stderr: "", exitCode: 1 });
   });
 });
 

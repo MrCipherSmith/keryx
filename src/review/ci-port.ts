@@ -85,15 +85,91 @@ export interface CiPort {
 
 export type CiSpawn = (argv: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
-async function defaultCiSpawn(argv: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const proc = Bun.spawn(argv, { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return { stdout, stderr, exitCode };
+/**
+ * Wall-clock ceiling for one `gh` subprocess call (flow 307 review, item 1).
+ * Without this a hung `gh` (a network stall, a credential prompt nobody is
+ * watching) hung the whole triage pipeline forever — same "never hang"
+ * reason `jev-client.ts`'s `DEFAULT_JEV_TIMEOUT_MS` exists for, and the same
+ * order of magnitude (30s), since both are one outbound read this CLI
+ * invocation is waiting on synchronously.
+ */
+export const DEFAULT_GH_SPAWN_TIMEOUT_MS = 30_000;
+
+/**
+ * Output cap for one subprocess this module (or `./ci-triage.ts`'s
+ * `defaultGitShow`, which imports this same constant rather than defining
+ * its own) spawns. A CI log or `git show` blob has no contractual size
+ * ceiling; `Bun.spawn`'s own `maxBuffer` kills the child once captured
+ * output crosses it, the same "abort rather than silently keep buffering"
+ * contract `real-process-adapter.ts`'s `ENOBUFS`/`maxBuffer` handling
+ * already establishes elsewhere in this codebase.
+ */
+export const CI_SPAWN_OUTPUT_CAP_BYTES = 8 * 1024 * 1024;
+
+/**
+ * The subset of a `Bun.spawn` subprocess `defaultCiSpawn`'s timeout/cap
+ * detection actually reads — injectable so the detection logic below has a
+ * hermetic unit test (`ci-port.test.ts`) that spawns nothing real, the same
+ * "injected fake" shape `CiSpawn` itself already gives the rest of this
+ * module's tests, and the pure-classifier split `real-process-adapter.ts`
+ * uses for the same reason.
+ */
+export interface CiBunSubprocess {
+  readonly stdout: ReadableStream<Uint8Array> | null;
+  readonly stderr: ReadableStream<Uint8Array> | null;
+  readonly exited: Promise<number>;
+  readonly signalCode: string | null;
 }
+
+/** What `defaultCiSpawn` asks to be spawned with — `Bun.spawn` matches this shape; a test substitutes a fake. */
+export type CiBunSpawnFn = (
+  argv: string[],
+  opts: { stdin: "ignore"; stdout: "pipe"; stderr: "pipe"; timeout: number; killSignal: string; maxBuffer: number },
+) => CiBunSubprocess;
+
+/**
+ * Builds the real `CiSpawn` adapter around whatever spawns a process —
+ * `Bun.spawn` by default, or an injected fake in a test. Exported so
+ * `ci-port.test.ts` can drive the timeout/output-cap detection logic below
+ * with a fake `Bun.spawn`-shaped result (a killed-by-signal subprocess, a
+ * clean one) without spawning anything real.
+ */
+export function makeDefaultCiSpawn(
+  bunSpawn: CiBunSpawnFn = Bun.spawn.bind(Bun) as unknown as CiBunSpawnFn,
+): CiSpawn {
+  return async (argv: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+    const proc = bunSpawn(argv, {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: DEFAULT_GH_SPAWN_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+      maxBuffer: CI_SPAWN_OUTPUT_CAP_BYTES,
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      proc.stdout === null ? Promise.resolve("") : new Response(proc.stdout).text(),
+      proc.stderr === null ? Promise.resolve("") : new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    // `proc.signalCode` is set (e.g. "SIGKILL") whenever OUR timeout or
+    // output cap killed the child — never a normal exit, and
+    // `exitCode`/`stderr` at that point describe a truncated capture, not a
+    // real `gh` failure. Named explicitly here rather than left to fall
+    // through to the generic non-zero-exit message each `CiPort` method
+    // raises, which would print a confusing "exited 137: no stderr" instead
+    // of naming what actually happened.
+    if (proc.signalCode !== null) {
+      throw new Error(
+        `${argv.join(" ")} did not complete and was killed (signal ${proc.signalCode}): either it exceeded the ` +
+          `${DEFAULT_GH_SPAWN_TIMEOUT_MS}ms timeout, or its output exceeded the ${CI_SPAWN_OUTPUT_CAP_BYTES}-byte cap. ` +
+          "Never hung: aborted rather than waited out.",
+      );
+    }
+    return { stdout, stderr, exitCode };
+  };
+}
+
+const defaultCiSpawn: CiSpawn = makeDefaultCiSpawn();
 
 function repoArgs(repo: string | undefined): string[] {
   return repo === undefined ? [] : ["--repo", repo];

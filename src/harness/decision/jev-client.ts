@@ -34,6 +34,13 @@
 
 import { estimateTokens } from "../../review/cost";
 import { envWithSavedApiKeys } from "../../lib/shell-config";
+// `security` is a CORE zone; `harness` (this module) is CLIENT — a client
+// importing a core, deterministic redactor is the allowed direction
+// (`src/lib/import-zones.ts`'s directional table; only core->client is
+// forbidden). The same helper `../../review/ci-triage.ts` uses over its log
+// excerpt, reused here so a vendor error body gets the identical redaction
+// floor before it is embedded in an Error message (flow 307 review, item 4).
+import { redactSensitiveText } from "../../security/redact";
 
 /** `POST` target for every Jev/System-One call this client makes. */
 export const JEV_ENDPOINT = "https://openrouter.ai/api/v1/systemone";
@@ -124,13 +131,23 @@ export class JevBudgetError extends Error {
   }
 }
 
-/** A non-2xx response. */
+/**
+ * A non-2xx response. `body` is redacted (`redactSensitiveText`) BEFORE it is
+ * embedded — same order `buildCiTriageState` uses for its own log excerpt:
+ * redact first, then slice, so truncation can never cut a secret in half and
+ * leave the redactor unable to see the half that remained (flow 307 review,
+ * item 4). An error body can legitimately echo back the very credential that
+ * was rejected (some gateways do this for "invalid key" responses); without
+ * this, that credential would land verbatim in an Error message a CLI
+ * printer or a TUI panel could show, or that could be logged.
+ */
 export class JevRequestError extends Error {
   constructor(
     readonly status: number,
     body: string,
   ) {
-    super(`Jev request to ${JEV_ENDPOINT} failed: HTTP ${status}${body.length > 0 ? ` — ${body.slice(0, 500)}` : ""}`);
+    const redactedBody = redactSensitiveText(body);
+    super(`Jev request to ${JEV_ENDPOINT} failed: HTTP ${status}${redactedBody.length > 0 ? ` — ${redactedBody.slice(0, 500)}` : ""}`);
     this.name = "JevRequestError";
   }
 }
@@ -167,7 +184,12 @@ export class JevAuthRejectedError extends JevRequestError {
     const prefixNote = keyLooksValid
       ? ""
       : ` That key does not look like an OpenRouter key — an OpenRouter key starts with "sk-or-".`;
-    super(status, `credential from ${from} was rejected.${prefixNote}${body.length > 0 ? ` (${body.slice(0, 300)})` : ""}`);
+    // Redacted here too (not only inherited from `JevRequestError`'s own
+    // redaction of the composed message): a 401 body is the shape most
+    // likely to echo the rejected credential back verbatim, which is exactly
+    // the case this fix targets.
+    const redactedBody = redactSensitiveText(body);
+    super(status, `credential from ${from} was rejected.${prefixNote}${redactedBody.length > 0 ? ` (${redactedBody.slice(0, 300)})` : ""}`);
     this.name = "JevAuthRejectedError";
   }
 }
