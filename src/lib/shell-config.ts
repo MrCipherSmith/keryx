@@ -113,6 +113,15 @@ export interface ShellConfig {
    * loader.
    */
   routing?: Record<string, unknown>;
+  /**
+   * Flow 329 — the turn guard's per-user, opt-in setting: `enabled: true`
+   * turns it on for every future `keryx shell` session until turned off
+   * again, persisted by the `/guard on|off` command. Default off (absent or
+   * `enabled !== true`) until the live check (AC8) has measured it — a
+   * session-only override (`keryx shell --guard`) does NOT write here, same
+   * as `--permission-mode` never persists `permissionMode`.
+   */
+  turnGuard?: { enabled?: boolean };
 }
 
 /**
