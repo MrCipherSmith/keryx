@@ -215,6 +215,14 @@ function mentionsIdentifier(text: string, identifier: string): boolean {
  * candidates actually count.
  */
 export function testHunkEvidence(testFileText: string, symbols: readonly string[], moduleStem: string): boolean {
+  // A mention in a comment ("// still need to cover boundedJsonBody") is not
+  // evidence the test exercises the symbol: comment text is stripped first,
+  // line (`//`) and block (`/* */`, `*`-continued) alike.
+  testFileText = testFileText
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((line) => line.replace(/\/\/.*$/, "").replace(/^([+\- ]?)\s*\*.*$/, "$1"))
+    .join("\n");
   if (symbols.some((symbol) => mentionsIdentifier(testFileText, symbol))) return true;
   const importRe = new RegExp(`from\\s*["'][^"']*/${escapeForIdentifierRegex(moduleStem)}(\\.[jt]sx?)?["']`);
   return importRe.test(testFileText);
@@ -391,6 +399,9 @@ const NON_CODE_HUNK_RE = /\.(md|txt)$/i;
 
 /** A `.md`/`.txt` path — prose, never itself the code a risk dimension is asking about. */
 export function isNonCodeHunk(path: string): boolean {
+  // A `.txt` under a fixtures/testdata/snapshots directory is test data whose
+  // change can carry real behavioural risk — it stays scored.
+  if (/(^|\/)(__fixtures__|fixtures|testdata|__snapshots__|snapshots)\//.test(path)) return false;
   return NON_CODE_HUNK_RE.test(path);
 }
 

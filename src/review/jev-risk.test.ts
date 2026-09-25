@@ -279,3 +279,11 @@ describe("computeRiskRoutingHints", () => {
     expect(computeRiskRoutingHints([hunk], 0.7)).toEqual([]);
   });
 });
+
+test("review round 2 of PR #726: a comment-only mention is not test evidence; a fixture .txt stays scored", () => {
+  expect(testHunkEvidence("+  // still need to cover boundedJsonBody\n", ["boundedJsonBody"], "providers")).toBe(false);
+  expect(testHunkEvidence("+  /* boundedJsonBody */\n", ["boundedJsonBody"], "providers")).toBe(false);
+  expect(testHunkEvidence("+  expect(boundedJsonBody(res)).toBe(1);\n", ["boundedJsonBody"], "providers")).toBe(true);
+  expect(isNonCodeHunk("src/foo/__fixtures__/expected.txt")).toBe(false);
+  expect(isNonCodeHunk("docs/notes.txt")).toBe(true);
+});
