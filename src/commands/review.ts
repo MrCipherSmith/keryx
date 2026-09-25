@@ -1487,7 +1487,17 @@ async function runCiTriage(args: string[]): Promise<void> {
     info.headSha === "" ? Promise.resolve([] as readonly string[]) : ciPort.changedFiles(info.headSha).catch(() => [] as readonly string[]),
     ciPort.runsForHeadSha(info.headSha, info.workflowName).catch(() => [] as readonly CiRunHistoryEntry[]),
   ]);
-  const precomputed: CiSignalsPrecomputed = { priorAttempts, changedFiles, runsForHeadSha };
+  // Flow 307 followups, item 4: one `runInfo` cache, shared across every job
+  // below (via `precomputed`) — the same "read once, reuse per job" already
+  // applied to `priorAttempts`/`changedFiles`/`runsForHeadSha` above, extended
+  // to `computeCiSignals`'s OWN `runInfo` reads of other runs (cross-branch
+  // history, same-head verification), which this precomputed object could not
+  // cover before: those reads are not values that answer identically for
+  // every job, they are lookups keyed on a DIFFERENT run id discovered while
+  // computing each job's signals, so only a shared cache — not a shared value
+  // — can de-duplicate them.
+  const runInfoCache = new Map<string, Promise<CiRunInfo>>();
+  const precomputed: CiSignalsPrecomputed = { priorAttempts, changedFiles, runsForHeadSha, runInfoCache };
 
   const results: CiTriageJobResult[] = [];
   for (const job of jobsToTriage) {

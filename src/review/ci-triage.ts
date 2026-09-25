@@ -35,9 +35,21 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { estimateTokens } from "./cost";
-import { redactSensitiveText } from "../security/redact";
+// Through the security facade, not `security/redact` directly: reaching past
+// a facade is exactly what the import-policy ratchet in `src/lib/import-
+// policy.ts` (`client-imports-core-internal`, capped not zero-tolerant) exists
+// to catch, and it is already at its measured cap — `security/service.ts`
+// re-exports `redactSensitiveText` for precisely this reason.
+import { redactSensitiveText } from "../security/service";
 import { REVIEW_GATE_CONFIG_PATH } from "../flow/review-gate";
-import { CI_SPAWN_OUTPUT_CAP_BYTES, type CiAttemptJobs, type CiBunSpawnFn, type CiPort, type CiRunHistoryEntry } from "./ci-port";
+import {
+  CI_SPAWN_OUTPUT_CAP_BYTES,
+  type CiAttemptJobs,
+  type CiBunSpawnFn,
+  type CiPort,
+  type CiRunHistoryEntry,
+  type CiRunInfo,
+} from "./ci-port";
 
 /** The three verdict buckets AC7 asks about, in a stable, printed order. */
 export const CI_TRIAGE_CRITERIA = ["flaky", "infra", "real-regression"] as const;
@@ -211,10 +223,16 @@ export function renderCiTriageAdvisory(input: {
 }): string {
   const { runId, jobName, testName, verdict, signalLines } = input;
   const pct = (n: number): string => `${Math.round(n * 100)}%`;
+  // Post-merge review gap (flow 307 followups, item 1): `verdict.deterministic.reason`
+  // embeds `jobName` verbatim (see `computeCiSignals`'s `deterministic` builder),
+  // exactly the same shape `evidenceBlock` below already redacts on the same
+  // "not expected to carry a secret is not the same as cannot" reasoning — this
+  // line left it un-redacted, the one place `jobName` could still leave the
+  // process un-scrubbed.
   const deterministicLine =
     verdict.deterministic !== undefined
       ? [
-          `DETERMINISTIC: ${verdict.deterministic.reason} — the signals alone decide "${verdict.top}" here; Jev's ` +
+          `DETERMINISTIC: ${redactSensitiveText(verdict.deterministic.reason)} — the signals alone decide "${verdict.top}" here; Jev's ` +
             "probabilities below are shown beside that decision, not in place of it.",
           "",
         ]
@@ -447,6 +465,20 @@ export interface CiSignalsPrecomputed {
   readonly priorAttempts?: readonly CiAttemptJobs[];
   readonly changedFiles?: readonly string[];
   readonly runsForHeadSha?: readonly CiRunHistoryEntry[];
+  /**
+   * Flow 307 followups (item 4): a cache for `port.runInfo` reads of OTHER
+   * runs — both the cross-branch-history loop (AC1(b), below) and the
+   * same-head loop (AC8, below) call `runInfo` keyed only by that OTHER run's
+   * id, which has nothing to do with the job under triage. Without this,
+   * triaging several failed jobs of the SAME run repeated every one of those
+   * reads once PER JOB. A caller triaging several jobs from one run
+   * (`src/commands/review.ts`'s `runCiTriage`) constructs one `Map` and
+   * passes the same object — and therefore the same cache — to every
+   * `computeCiSignals` call; omitted, each call reads the port directly and
+   * caches nothing beyond its own lifetime, unchanged from before this field
+   * existed.
+   */
+  readonly runInfoCache?: Map<string, Promise<CiRunInfo>>;
 }
 
 /** AC1: compute every signal for one failed job, through `port` and `gitShow` only — never a write. */
@@ -463,6 +495,28 @@ export async function computeCiSignals(
   gitShow: GitShow = defaultGitShow,
   precomputed?: CiSignalsPrecomputed,
 ): Promise<CiTriageSignals> {
+  // Flow 307 followups (item 4): every OTHER-run `runInfo` read below goes
+  // through this instead of `port.runInfo` directly, so a shared
+  // `precomputed.runInfoCache` (when the caller gave one) is consulted and
+  // filled exactly once per run id, no matter how many of THIS run's jobs ask
+  // for it. A rejected read is cached too — a run whose job list could not be
+  // read stays unreadable for every job asking about it in the same triage,
+  // which is the same answer a fresh, uncached read would have given each of
+  // them anyway.
+  function getRunInfo(runId: string): Promise<CiRunInfo> {
+    const cache = precomputed?.runInfoCache;
+    if (cache === undefined) {
+      return port.runInfo(runId);
+    }
+    const cached = cache.get(runId);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const promise = port.runInfo(runId);
+    cache.set(runId, promise);
+    return promise;
+  }
+
   // (a) same run, another attempt.
   let attemptsChecked = 0;
   let samePassedOnPriorAttempt = false;
@@ -491,7 +545,7 @@ export async function computeCiSignals(
       runsInspected += 1;
       let candidateInfo;
       try {
-        candidateInfo = await port.runInfo(candidate.runId);
+        candidateInfo = await getRunInfo(candidate.runId);
       } catch {
         continue;
       }
@@ -567,16 +621,39 @@ export async function computeCiSignals(
   let sameHeadLaterPassed = false;
   let sameHeadLaterPassedRunId: string | undefined;
   let sameHeadRunLevelGreenUnverified = false;
+  // Post-merge review gap (flow 307 followups, item 2): several jobs can
+  // share one `name` in the same run (a matrix leg, a reused workflow) —
+  // `.find()` used to pick whichever one happened to come first and treat ITS
+  // conclusion as authoritative, which could credit a rerun as "passed" off a
+  // DIFFERENT job of the same name than the one that actually failed. Ambiguous
+  // is treated the same as unreadable: no override, advisory line only.
+  let sameHeadJobNameAmbiguous = false;
+  let sameHeadPaginationGapLine: string | undefined;
   try {
     const runs = precomputed?.runsForHeadSha ?? (await port.runsForHeadSha(input.headSha, input.workflowName));
     const current = runs.find((r) => r.runId === input.runId);
-    const laterGreenRuns = runs.filter(
-      (r) => r.runId !== input.runId && r.conclusion === "success" && (current === undefined || isLaterTimestamp(r.createdAt, current.createdAt)),
-    );
+    // Post-merge review gap (flow 307 followups, item 3): `runsForHeadSha` is
+    // capped/paginated (`-L 10` in the live `gh run list` adapter) and can
+    // come back without the triaged run's OWN entry in it at all. The old
+    // filter's `current === undefined || isLaterTimestamp(...)` short-
+    // circuited to "every success in the list counts as later" whenever that
+    // happened — which could credit a run that actually ran BEFORE this one
+    // (just missing from this particular page) as same-head rerun evidence.
+    // With no baseline timestamp for THIS run, "later" cannot be answered, so
+    // the whole signal is skipped rather than guessed; `sameHeadCurrentRunMissing`
+    // below still surfaces this as an advisory line when there was evidence to skip.
+    const sameHeadCurrentRunMissing = current === undefined && runs.length > 0;
+    const laterGreenRuns =
+      current === undefined ? [] : runs.filter((r) => r.runId !== input.runId && r.conclusion === "success" && isLaterTimestamp(r.createdAt, current.createdAt));
     for (const laterRun of laterGreenRuns) {
       try {
-        const laterInfo = await port.runInfo(laterRun.runId);
-        const job = laterInfo.jobs.find((j) => j.name === input.jobName);
+        const laterInfo = await getRunInfo(laterRun.runId);
+        const matchingJobs = laterInfo.jobs.filter((j) => j.name === input.jobName);
+        if (matchingJobs.length > 1) {
+          sameHeadJobNameAmbiguous = true;
+          continue;
+        }
+        const job = matchingJobs[0];
         if (job !== undefined && job.conclusion === "success") {
           sameHeadLaterPassed = true;
           sameHeadLaterPassedRunId = laterRun.runId;
@@ -586,8 +663,13 @@ export async function computeCiSignals(
         // This later run's own job list could not be read; keep checking the others.
       }
     }
-    if (!sameHeadLaterPassed && laterGreenRuns.length > 0) {
+    if (!sameHeadLaterPassed && !sameHeadJobNameAmbiguous && laterGreenRuns.length > 0) {
       sameHeadRunLevelGreenUnverified = true;
+    }
+    if (sameHeadCurrentRunMissing) {
+      sameHeadPaginationGapLine =
+        "same head: other run(s) of this exact commit were found, but this run's own entry was not among them " +
+        "(pagination) — cannot tell whether they are later, so no override applied.";
     }
   } catch {
     // Best-effort: no same-head evidence rather than a failed triage.
@@ -621,12 +703,19 @@ export async function computeCiSignals(
     `log markers: ${infra.length > 0 ? infra.join(", ") : "none detected"}.`,
     ...(sameHeadLaterPassed
       ? [`same head: a later run of this exact commit passed, and job "${input.jobName}" itself concluded success in it.`]
-      : sameHeadRunLevelGreenUnverified
+      : sameHeadJobNameAmbiguous
         ? [
-            `same head: a later run of this exact commit was green at run level, but job "${input.jobName}" could not be ` +
-              "confirmed to have passed in it (missing, skipped, or unreadable) — no override applied.",
+            `same head: a later run of this exact commit was green at run level, but more than one job was named ` +
+              `"${input.jobName}" in it — which one is authoritative cannot be told apart, so no override applied.`,
           ]
-        : []),
+        : sameHeadRunLevelGreenUnverified
+          ? [
+              `same head: a later run of this exact commit was green at run level, but job "${input.jobName}" could not be ` +
+                "confirmed to have passed in it (missing, skipped, or unreadable) — no override applied.",
+            ]
+          : sameHeadPaginationGapLine !== undefined
+            ? [sameHeadPaginationGapLine]
+            : []),
   ];
 
   return {

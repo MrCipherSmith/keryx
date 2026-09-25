@@ -499,6 +499,137 @@ describe("flow 307 AC1: deterministic signals, computed before Jev is asked", ()
     expect(signals.deterministic?.reason).toContain("earlier attempt");
   });
 
+  test("post-merge review gap, item 2: a later run with TWO jobs sharing this job's name is ambiguous — no override, advisory only", async () => {
+    const port = createFixtureCiPort({
+      runsByHeadSha: {
+        "CI:deadbeef": [
+          { runId: "9", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "b" },
+          { runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" },
+        ],
+      },
+      // A matrix leg (or a reused workflow) can leave two jobs sharing the
+      // same name in one run — one of them succeeded, but `.find()` used to
+      // treat whichever came first as authoritative regardless of the other.
+      runs: {
+        "11": {
+          runId: "11",
+          workflowName: "CI",
+          headBranch: "b",
+          headSha: "deadbeef",
+          conclusion: "success",
+          jobs: [
+            { name: "j", conclusion: "success" },
+            { name: "j", conclusion: "failure" },
+          ],
+        },
+      },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.sameHeadLaterPassed).toBe(false);
+    expect(signals.deterministic).toBeUndefined();
+    expect(
+      signals.lines.some((l) => l.startsWith("same head:") && l.includes("more than one job was named") && l.includes("no override applied")),
+    ).toBe(true);
+  });
+
+  test("post-merge review gap, item 3: the triaged run's own entry is missing from runsForHeadSha (pagination) — no override, advisory only", async () => {
+    const port = createFixtureCiPort({
+      runsByHeadSha: {
+        // Run "9" (the run under triage) is NOT in this list at all — as if
+        // the live `-L 10` cap on `gh run list --commit <sha>` pushed it off
+        // the page. The old `current === undefined || isLaterTimestamp(...)`
+        // short-circuit treated every success here as "later" regardless —
+        // which could credit a run that actually ran BEFORE "9" as same-head
+        // rerun evidence, with no baseline to check that against.
+        "CI:deadbeef": [{ runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" }],
+      },
+      runs: {
+        "11": { runId: "11", workflowName: "CI", headBranch: "b", headSha: "deadbeef", conclusion: "success", jobs: [{ name: "j", conclusion: "success" }] },
+      },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.sameHeadLaterPassed).toBe(false);
+    expect(signals.deterministic).toBeUndefined();
+    // Skipped outright, not "checked and found unverified" — run 11's own job list is never even read.
+    expect(port.calls.some((c) => c.op === "runInfo" && c.runId === "11")).toBe(false);
+    expect(
+      signals.lines.some(
+        (l) => l.startsWith("same head:") && l.includes("this run's own entry was not among them") && l.includes("no override applied"),
+      ),
+    ).toBe(true);
+  });
+
+  test("post-merge review gap, item 3: runsForHeadSha empty entirely -> no same-head line at all (unchanged from before)", async () => {
+    const port = createFixtureCiPort({});
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.lines.some((l) => l.startsWith("same head:"))).toBe(false);
+  });
+
+  describe("post-merge review gap, item 4: runInfo lookups for OTHER runs are cached per run, not per job", () => {
+    function threeJobFixture() {
+      return createFixtureCiPort({
+        runsByHeadSha: {
+          "CI:deadbeef": [
+            { runId: "9", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "b" },
+            { runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" },
+          ],
+        },
+        runs: {
+          "11": {
+            runId: "11",
+            workflowName: "CI",
+            headBranch: "b",
+            headSha: "deadbeef",
+            conclusion: "success",
+            jobs: [
+              { name: "job-a", conclusion: "success" },
+              { name: "job-b", conclusion: "success" },
+              { name: "job-c", conclusion: "success" },
+            ],
+          },
+        },
+      });
+    }
+
+    test("a shared runInfoCache in precomputed de-duplicates the same-head runInfo(11) read across 3 jobs of the same run", async () => {
+      const port = threeJobFixture();
+      const runInfoCache = new Map();
+      for (const jobName of ["job-a", "job-b", "job-c"]) {
+        await computeCiSignals(
+          port,
+          { runId: "9", jobName, testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+          fakeGitShow(),
+          { runInfoCache },
+        );
+      }
+      expect(port.calls.filter((c) => c.op === "runInfo").length).toBe(1);
+    });
+
+    test("without a shared runInfoCache, the same read is repeated once per job (the bug this fixes)", async () => {
+      const port = threeJobFixture();
+      for (const jobName of ["job-a", "job-b", "job-c"]) {
+        await computeCiSignals(
+          port,
+          { runId: "9", jobName, testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+          fakeGitShow(),
+        );
+      }
+      expect(port.calls.filter((c) => c.op === "runInfo").length).toBe(3);
+    });
+  });
+
   test("a port that throws on every read degrades every signal to 'not checked' rather than failing the triage", async () => {
     const throwingPort = createFixtureCiPort({});
     // No fixtures registered for anything: runInfo/failedLog throw for unknown ids, priorAttempts/changedFiles/runsForHeadSha answer empty.
@@ -671,5 +802,20 @@ describe("flow 307 AC3/AC4/AC8: renderCiTriageAdvisory prints evidence lines and
     });
     expect(text).not.toContain(planted);
     expect(text).toContain("[REDACTED:secret]");
+  });
+
+  test("post-merge review gap, item 1: a planted secret in verdict.deterministic.reason is redacted before printing", () => {
+    const planted = "sk-ant-api03-PLANTED-SECRET-TOKEN-abcdefghijklmnopqrstuvwxyz0123456789";
+    const verdict = applyDeterministicOverride(computeCiTriageVerdict({ flaky: { noul: 0.2 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.7 } }), {
+      // `computeCiSignals`'s real `deterministic.reason` embeds `jobName` verbatim
+      // (see the same-head/rerun builders) — this plants a secret in the same spot,
+      // in the reason only (not the header's own `jobName`, which is a separate,
+      // pre-existing surface this item does not touch).
+      deterministic: { verdict: "flaky", reason: `job "j" passed on an earlier attempt of this same run — token ${planted}.` },
+    } as unknown as Parameters<typeof applyDeterministicOverride>[1]);
+    const text = renderCiTriageAdvisory({ runId: "9", jobName: "j", verdict });
+    expect(text).not.toContain(planted);
+    expect(text).toContain("[REDACTED:secret]");
+    expect(text).toContain("DETERMINISTIC:");
   });
 });
