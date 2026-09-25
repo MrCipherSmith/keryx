@@ -55,4 +55,50 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+- W1-stack-catalog.md target-stack table (line ~247): `csharp-dotnet` language
+  full pack; `swift-ios`/`kotlin-android`/`flutter-dart` framework full packs
+  each "extends `lang:X`" where X has no authored pack anywhere in the repo —
+  treated as standalone (see description.md "Problem").
+- Pack fixed shape (W1 §"Stack pack directory shape"): `pack.json`, `rules/`
+  (4 files, each `paths:` + `extends: common`), `skills/{implement,test,
+  review,build-fix,migrate}/SKILL.md`+`evals.json`, `agent-refs.json`.
+- Templates on `main`: `src/gdskills/bundled/stacks/{python,go}/` — both
+  standalone "full pack" language packs, `stability: stable`, no `extends`
+  key in `pack.json`. `react` (extends `ts-js-node`) is `stability:
+  experimental` with `agent-refs.json` `{"agents":[],"note":"..."}` — the
+  Phase A shape to copy for these 4 new packs.
+- Templates on `origin/flow/318-w4b2` (PR #719, unmerged; read via `git show
+  origin/flow/318-w4b2:<path>`): `angular`/`vue`/`nestjs`/`mobx`. `angular`
+  extends `ts-js-node` via `pack.json` `"extends": "ts-js-node"` (a single
+  string, not an array on this branch) and its `install-manifest.json`
+  modules (`angular-rules`/`angular-skills`) carry `"dependencies":
+  ["ts-js-node-rules"]`/`["ts-js-node-skills"]`.
+- `STACK_EXTENSIONS` lives in `src/gdskills/governance/authoring-lint.ts`
+  (not `src/gdskills/authoring-lint.ts`) — current entries: `python: [py,
+  pyi]`, `ts-js-node: [ts,tsx,js,jsx,mjs,cjs]`, `react: [tsx,jsx]`,
+  `go: [go]`, `rust: [rs]`. Batch 2 (unmerged) adds `nestjs: [ts]`,
+  `vue: [vue]`, `angular: [ts,html]`, `nextjs-nuxt: [tsx,jsx,vue]`,
+  `mobx: [ts,tsx]`.
+- `install-manifest.json` wiring pattern confirmed from `python`/`go`
+  (standalone) and `angular` (extends-existing-base): module `kind: rule|
+  skill`, `paths`, `targets: [claude, keryx-shell]`, `dependencies`,
+  `defaultInstall: true`, `cost: light|medium`, `stability`; component
+  `family`, `modules`, `detectionMarkers`, `provenance.origin: authored`;
+  profile `modules: [core-common-rules, skill-lifecycle]`, `components:
+  [...]`, `stackDetectionAware: true`; `full` profile lists every module and
+  component.
+- Judge-format eval rules (docs/docs/guides/write-a-rubric-scenario.md): I1-I10
+  integrity rules, mandatory `calibration` 4-way (known_right/known_wrong/
+  vague/subtle_wrong), 8-answer anti-gaming set, `PACK_MIN_TRIALS=10`,
+  `PACK_BEHAVIOR_PASS_FLOOR=0.8`, `STACK_PACK_GATE_POLICY` pins deepseek:
+  deepseek-chat for both runner and judge roles — none of this runs in
+  Phase A, but skills must be authored to satisfy the integrity checks so
+  Phase B's honest gate is a real signal, not a rewrite.
+- Batch 1 (flow 314/316/317) and batch 2 (flow 318) journal in W1 doc:
+  `nodejs-build-fix`/`react-build-fix`/`python-build-fix` suppression
+  scenarios were initially mis-graded by string-matching, fixed by moving to
+  judge grading; multiple scenarios failed for being under-specified
+  (no-code prompts demanding code-level specifics) — batch 4's build-fix/
+  testing scenarios should supply enough prompt detail to avoid the same
+  trap, or accept a concrete illustrative example per the guide's final
+  section.
