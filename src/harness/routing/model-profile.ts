@@ -25,6 +25,14 @@
 // `auth.json` field in-memory so a caller sees the complete picture even
 // before the next write physically migrates it.
 //
+// Round 2 item 2: the migration's own `auth.json` rewrite
+// (`stripModelProfilesFromAuthJsonUnlocked`) additionally takes
+// `auth.json`'s OWN lock (`withAuthFileLockSync`, `../../lib/shell-config.ts`)
+// — the same lock `saveShellConfig` now takes for its read-modify-write of
+// that file — nested INSIDE the already-held profiles lock, never the
+// reverse. See that function's own doc for why the auth lock is a separate,
+// smaller sync primitive rather than `withFileLock` itself.
+//
 // No TUI/CLI import here — pure data + pure functions, mirroring
 // `./table.ts`'s own "no rendering deps" posture. Every function that
 // touches disk takes the same `dir?: string` test seam every other writer in
@@ -37,7 +45,7 @@ import {
 } from "../../commands/curated-model-lists";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
 import { withFileLock } from "../../lib/fs";
-import { loadShellConfig, shellConfigPath } from "../../lib/shell-config";
+import { loadShellConfig, shellConfigPath, withAuthFileLockSync } from "../../lib/shell-config";
 import { MODEL_RANK_HINTS, rankModelId } from "../../gdskills/model-tier";
 import type { AvailablePredicate } from "./table";
 
@@ -95,16 +103,28 @@ export interface ModelProfile {
 
 /**
  * Id-pattern signal (word-boundary, case-insensitive): embedding, image,
- * text-to-speech/speech-to-text, moderation and rerank endpoints are not
- * chat/completion models and must never be auto-derived into a routing
- * category. `audio` is included deliberately even though some real
- * multimodal CHAT models carry it in their id (e.g. an audio-preview
- * variant) — the operator's instruction names `audio` explicitly as one of
- * the excluded patterns, and a false exclusion there only means the picker's
- * "marked, still selectable" fallback applies (AC10's non-goal list), never
- * a broken selection.
+ * text-to-speech/speech-to-text, moderation, rerank and image-GENERATION
+ * (`imagen`, `flux`, `stable-diffusion`, `sdxl`, `midjourney`, round 2 item
+ * 3) endpoints are not chat/completion models and must never be
+ * auto-derived into a routing category. Every alternative is wrapped in its
+ * OWN `\b`...`\b` pair as a whole (not per-word) so a hyphenated multi-word
+ * pattern (`stable-diffusion`) only matches at its own boundaries, and a
+ * short one (`sdxl`) never matches as a substring of a longer, unrelated
+ * token.
+ *
+ * `audio` is kept DELIBERATELY CONSERVATIVE even though some real
+ * multimodal CHAT models carry it in their id (e.g. `gpt-4o-audio-preview`,
+ * an audio-preview variant that still does chat, not an audio-only
+ * endpoint) — the operator's instruction names `audio` explicitly as one of
+ * the excluded patterns, and this function does NOT special-case an
+ * otherwise-chat id back to `true` just because `audio` is the only hit; a
+ * false exclusion there only means the picker's "marked, still selectable"
+ * fallback applies (AC10's non-goal list), never a broken selection. `image`
+ * is the same conservative shape for a vision-input chat model whose id
+ * happens to carry that word.
  */
-const NON_CHAT_ID_PATTERN = /\b(embed(?:ding)?|image|dall-?e|tts|text-to-speech|speech-to-text|whisper|audio|moderation|rerank)\b/i;
+const NON_CHAT_ID_PATTERN =
+  /\b(embed(?:ding)?|image|imagen|dall-?e|tts|text-to-speech|speech-to-text|whisper|audio|moderation|rerank|flux|stable-diffusion|sdxl|midjourney)\b/i;
 
 /** True when `modelId` names a non-chat model by its id alone (no metadata needed). */
 export function isNonChatModelId(modelId: string): boolean {
@@ -463,20 +483,34 @@ function writeModelProfilesFileUnlocked(profiles: Record<string, ModelProfile>, 
  * formatting `saveShellConfig` uses, so an untouched field round-trips
  * identically). A no-op when the field is already absent. Best-effort —
  * caught by `migrateFromAuthJsonUnlocked`, never throws on its own.
+ *
+ * Round 2 item 2 (review of PR #718): this function's own read-modify-write
+ * of `auth.json` now runs under `withAuthFileLockSync` (`../../lib/
+ * shell-config.ts`) — the SAME lock `saveShellConfig` takes for its own
+ * read-modify-write of the same file, so a `saveShellConfig` call landing
+ * between this function's read and write (or vice versa) can no longer
+ * clobber the other's change. This function itself is always called from
+ * inside `migrateFromAuthJsonUnlocked`, which runs under
+ * `withModelProfilesLock` — so the acquisition order here is fixed as
+ * documented on `withAuthFileLockSync`: the profiles lock (already held by
+ * the caller) THEN this auth lock, nested, never the reverse anywhere in the
+ * codebase.
  */
 function stripModelProfilesFromAuthJsonUnlocked(dir?: string): void {
-  const file = shellConfigPath(dir);
-  const read = readConfigFile(file);
-  if (!read.ok) return;
-  let raw: Record<string, unknown>;
-  try {
-    raw = JSON.parse(read.text) as Record<string, unknown>;
-  } catch {
-    return;
-  }
-  if (!("modelProfiles" in raw)) return;
-  const { modelProfiles: _removed, ...rest } = raw;
-  writeOwnerOnlyFileAtomic(file, `${JSON.stringify(rest, null, 2)}\n`);
+  withAuthFileLockSync(dir, () => {
+    const file = shellConfigPath(dir);
+    const read = readConfigFile(file);
+    if (!read.ok) return;
+    let raw: Record<string, unknown>;
+    try {
+      raw = JSON.parse(read.text) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    if (!("modelProfiles" in raw)) return;
+    const { modelProfiles: _removed, ...rest } = raw;
+    writeOwnerOnlyFileAtomic(file, `${JSON.stringify(rest, null, 2)}\n`);
+  });
 }
 
 /**

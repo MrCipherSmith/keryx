@@ -32,6 +32,16 @@ test("familyKey: strips version tokens, keeps size/vendor words, same family acr
   expect(familyKey("claude-opus-5.5")).not.toBe(familyKey("claude-sonnet-5"));
 });
 
+test("familyKey: a hyphenated version (claude-opus-4-8) strips to the SAME family as its dotted spelling", () => {
+  expect(familyKey("claude-opus-4-8")).toBe(familyKey("claude-opus-5.5"));
+  expect(familyKey("claude-haiku-4-5")).toBe("claude-haiku");
+});
+
+test("familyKey: gpt-4o and gpt-4.1 land in the same family", () => {
+  expect(familyKey("gpt-4o")).toBe(familyKey("gpt-4.1"));
+  expect(familyKey("gpt-4o")).toBe("gpt");
+});
+
 test("parseModelVersion: a single dotted-or-bare numeric token is the version", () => {
   expect(parseModelVersion("claude-opus-5.5")).toBe(5.5);
   expect(parseModelVersion("claude-opus-4.7")).toBe(4.7);
@@ -39,9 +49,28 @@ test("parseModelVersion: a single dotted-or-bare numeric token is the version", 
   expect(parseModelVersion("gemini-3.8-flash")).toBe(3.8);
 });
 
-test("parseModelVersion: conservative — no numeric token or more than one (ambiguous) yields undefined, never a guess", () => {
+test("parseModelVersion: real hyphenated Anthropic ids (claude-opus-4-8, claude-haiku-4-5, claude-sonnet-5) parse as dotted versions", () => {
+  expect(parseModelVersion("claude-opus-4-8")).toBe(4.8);
+  expect(parseModelVersion("claude-haiku-4-5")).toBe(4.5);
+  expect(parseModelVersion("claude-sonnet-5")).toBe(5);
+});
+
+test("parseModelVersion: conservative — no numeric token, more than one version group, a too-long run, or a date-like token all yield undefined, never a guess", () => {
   expect(parseModelVersion("claude-sonnet")).toBeUndefined(); // no version at all
-  expect(parseModelVersion("claude-opus-4-8")).toBeUndefined(); // two numeric tokens (hyphenated), ambiguous
+  expect(parseModelVersion("claude-opus-4-8-2-1")).toBeUndefined(); // four adjacent short tokens — too long a run
+  expect(parseModelVersion("claude-opus-4-8-20250514")).toBeUndefined(); // a short run followed immediately by a date — the whole run is invalid (mixed shape)
+  expect(parseModelVersion("claude-opus-20250514")).toBeUndefined(); // date-like (8 digits), still refused
+  expect(parseModelVersion("model-4-5-and-6-7")).toBeUndefined(); // two SEPARATE version groups — ambiguous
+});
+
+test("parseModelVersion: gpt-4o parses as version 4 (the trailing letter is a variant tag, never part of the number)", () => {
+  expect(parseModelVersion("gpt-4o")).toBe(4);
+  expect(parseModelVersion("gpt-4.1")).toBe(4.1);
+  // Deliberate non-goal, documented and locked in: gpt-4.1 (a real dotted
+  // minor version) outranks gpt-4o (the bare "4" the variant tag is stripped
+  // to) within the SAME family — an older-looking bare number never beats a
+  // genuinely newer dotted one.
+  expect(parseModelVersion("gpt-4.1")).toBeGreaterThan(parseModelVersion("gpt-4o")!);
 });
 
 // ---------------------------------------------------------------------------
@@ -106,6 +135,88 @@ test("deriveDefaultTable: within the same family, the newer version outranks the
     providerId: "anthropic",
     modelId: "claude-opus-5.5",
   });
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 — real hyphenated Anthropic ids and gpt-4o/gpt-4.1 at the
+// deriveDefaultTable level (item 1), not just the parseModelVersion unit.
+// ---------------------------------------------------------------------------
+
+test("deriveDefaultTable: claude-opus-5-1 vs claude-opus-4-8 (hyphenated ids), unknown prices, neither being the session model — 5-1 wins for planning/review", () => {
+  const models = ["claude-opus-5-1", "claude-opus-4-8"];
+  const profiles: Record<string, ModelProfile> = Object.fromEntries(
+    models.map((modelId) => [profileKey("anthropic", modelId), profile("anthropic", modelId)]), // unknown price, ranked via the "opus" size word alone
+  );
+  const table = deriveDefaultTable("anthropic", models, profiles, "claude-sonnet-5");
+  expect(table.review).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-opus-5-1" });
+  expect(table.planning).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-opus-5-1" });
+});
+
+test("deriveDefaultTable: claude-haiku-4-5 (newer, hyphenated) beats an older hyphenated haiku for quick", () => {
+  const models = ["claude-haiku-4-5", "claude-haiku-3-1"];
+  const profiles: Record<string, ModelProfile> = Object.fromEntries(
+    models.map((modelId) => [profileKey("anthropic", modelId), profile("anthropic", modelId)]),
+  );
+  const table = deriveDefaultTable("anthropic", models, profiles, "claude-opus-5-1");
+  expect(table.quick).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-haiku-4-5" });
+});
+
+test("deriveDefaultTable: a date-like id segment is never mistaken for a version — no crash, just an undecided tie", () => {
+  const models = ["claude-opus-20250514", "claude-opus-20240601"];
+  const profiles: Record<string, ModelProfile> = Object.fromEntries(
+    models.map((modelId) => [profileKey("anthropic", modelId), profile("anthropic", modelId)]),
+  );
+  // Both stamps refuse to parse as a version, so neither outranks the other —
+  // this must resolve deterministically (session-first / priority / id
+  // fallback), never throw or NaN.
+  const table = deriveDefaultTable("anthropic", models, profiles, "claude-opus-20250514");
+  expect(table.quick).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-opus-20250514" }); // session model wins the tie
+});
+
+test("deriveDefaultTable: gpt-4.1 outranks gpt-4o for review — the deliberate non-goal is a real (if approximate) comparison, not an opaque refusal", () => {
+  const models = ["gpt-4o", "gpt-4.1"];
+  const profiles: Record<string, ModelProfile> = {
+    [profileKey("openai", "gpt-4o")]: profile("openai", "gpt-4o", { priceInputPerMillion: { value: 1, source: "reported" } }),
+    [profileKey("openai", "gpt-4.1")]: profile("openai", "gpt-4.1", { priceInputPerMillion: { value: 1, source: "reported" } }),
+  };
+  const table = deriveDefaultTable("openai", models, profiles, "gpt-3.5");
+  expect(table.review).toEqual({ kind: "model", providerId: "openai", modelId: "gpt-4.1" });
+});
+
+// ---------------------------------------------------------------------------
+// The alphabetical `localeCompare` fallback (`compareForSelection`'s last
+// resort) must never be what decides between two versions of the SAME
+// family — version parsing, when available, always wins first. Documented
+// here as a deliberate contrast with the next test, where alphabetical order
+// IS the (only remaining) tie-break because no version is parseable at all.
+// ---------------------------------------------------------------------------
+
+test("deriveDefaultTable: with a parseable version, alphabetical order is NEVER consulted — 'aaa-opus-99' still beats 'aaa-opus-9', which a naive string sort (prefix rule: '9' < '99') would get backwards", () => {
+  const models = ["aaa-opus-9", "aaa-opus-99"];
+  const profiles: Record<string, ModelProfile> = Object.fromEntries(
+    models.map((modelId) => [profileKey("prov", modelId), profile("prov", modelId, { priceInputPerMillion: { value: 1, source: "reported" } })]),
+  );
+  const table = deriveDefaultTable("prov", models, profiles, "aaa-opus-9");
+  // Numerically 99 > 9, so "aaa-opus-99" must win — even though
+  // "aaa-opus-9".localeCompare("aaa-opus-99") sorts "aaa-opus-9" FIRST (a
+  // shorter string that is a prefix of the longer one sorts first), which
+  // would make the WRONG (older) model win if the fallback ever ran here.
+  expect(table.review).toEqual({ kind: "model", providerId: "prov", modelId: "aaa-opus-99" });
+});
+
+test("deriveDefaultTable: when versions are genuinely unknown (no parseable version on either side), the id-string fallback IS alphabetical — documented, not a version decision", () => {
+  // Different, unranked, unrelated families — never merged by familyKey — so
+  // no version comparison ever applies and the ONLY thing left to decide the
+  // tie is `compareForSelection`'s final `a.modelId.localeCompare(b.modelId)`.
+  const models = ["zzz-vendor-model", "aaa-vendor-model"];
+  const profiles: Record<string, ModelProfile> = Object.fromEntries(
+    models.map((modelId) => [profileKey("prov", modelId), profile("prov", modelId, { priceInputPerMillion: { value: 1, source: "reported" } })]),
+  );
+  const table = deriveDefaultTable("prov", models, profiles, "session-not-among-candidates");
+  // "aaa-vendor-model" sorts first alphabetically and wins the tie — this
+  // documents the fallback's existence, not a claim that it is a good
+  // ranking signal.
+  expect(table.quick).toEqual({ kind: "model", providerId: "prov", modelId: "aaa-vendor-model" });
 });
 
 test("deriveDefaultTable: a genuinely newer version than the session ranks strongest for review/planning", () => {

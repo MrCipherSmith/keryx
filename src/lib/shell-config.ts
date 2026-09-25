@@ -7,7 +7,7 @@
 // owner-only, never logged, and only read to populate the process env at startup.
 // All functions are best-effort and never throw; the `dir` override keeps them
 // unit-testable against a temp directory.
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "./config-dir";
 
@@ -151,6 +151,112 @@ export function shellConfigPath(dir?: string): string {
   return path.join(keryxConfigDir(dir), "auth.json");
 }
 
+// ---------------------------------------------------------------------------
+// `auth.json`'s own lock (flow 327, round 2 item 2 — review of PR #718:
+// `saveShellConfig`'s read-merge-write and `model-profile.ts`'s one-time
+// `modelProfiles` migration strip both touch this file, and neither excluded
+// the other — two `saveShellConfig` callers racing, or a save landing
+// between the strip's own read and write, could each silently lose the
+// other's change).
+//
+// `withFileLock` (`./fs.ts`) is the codebase's one general-purpose file
+// lock, but it is `Promise`-returning (mkdir + heartbeat + pid-liveness
+// stale reclaim) — there is no sync variant. `saveShellConfig` is called
+// synchronously from a large number of hot, non-async call sites
+// (`saveApiKey`, `saveProviderBaseUrl`, `/reasoning`, `/think`, every
+// routing-config save, ...); converting all of them to async to adopt
+// `withFileLock` is a change far larger than this lock fix, so it is out of
+// scope here — the smallest safe change is a SEPARATE, smaller sync
+// primitive for `auth.json` alone, not a rewrite of every caller.
+//
+// `withAuthFileLockSync` is that primitive: the same directory-mutex trick
+// `withFileLock` uses (`mkdirSync` is atomic — the first caller to create
+// the directory holds the lock), WITHOUT its heartbeat or pid-liveness
+// reclaim — just an mtime-age stale check and a bounded busy-retry
+// (`Atomics.wait`, the one way a sync function can actually block).
+// RESIDUAL RISK, stated rather than hidden: a process that crashes mid-write
+// leaves the lock directory behind, and a waiter only reclaims it once its
+// mtime exceeds `AUTH_LOCK_STALE_MS` — there is no pid-liveness check (a
+// sync function cannot `await` one). Accepted because the critical section
+// here is always a microseconds-scale read + `JSON.stringify` + atomic
+// rename, never a long-running operation, so a stale lock is a rare crash
+// artifact, not a normal occurrence — and a lock that cannot be acquired
+// within `AUTH_LOCK_TIMEOUT_MS` is skipped rather than hung on forever,
+// matching every other writer in this module's best-effort contract.
+//
+// Acquisition order (fixed, documented once here rather than at each call
+// site): `model-profile.ts`'s OWN `model-profiles.json` lock first, THEN
+// this auth lock — never the reverse, to rule out a lock-ordering deadlock.
+// `saveShellConfig` itself only ever takes this lock alone, never nested
+// with the profiles lock; the ONE nesting that exists anywhere is
+// `model-profile.ts`'s migration strip, which is already inside the
+// profiles lock when it takes this one — see that module's own comment.
+const AUTH_LOCK_TIMEOUT_MS = 2_000;
+const AUTH_LOCK_RETRY_MS = 10;
+const AUTH_LOCK_STALE_MS = 5_000;
+
+function authLockPath(dir?: string): string {
+  return `${shellConfigPath(dir)}.lock`;
+}
+
+function isEexistError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as NodeJS.ErrnoException).code === "EEXIST";
+}
+
+/** Block the current thread for `ms` — the one way a SYNC function can actually wait, unlike a `setTimeout` promise. */
+function sleepSyncMs(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Best-effort sync mutual exclusion around `fn` for `auth.json`'s own
+ * read-modify-write — see the block comment above for what this is (and is
+ * not) a substitute for. Never throws: a lock that cannot be acquired within
+ * `AUTH_LOCK_TIMEOUT_MS` is skipped and `fn` still runs, unlocked, the same
+ * best-effort posture `saveShellConfig` already had before this existed,
+ * rather than hanging a caller forever.
+ */
+export function withAuthFileLockSync<T>(dir: string | undefined, fn: () => T): T {
+  const lockPath = authLockPath(dir);
+  const deadline = Date.now() + AUTH_LOCK_TIMEOUT_MS;
+  let acquired = false;
+  while (!acquired && Date.now() < deadline) {
+    try {
+      mkdirSync(lockPath);
+      acquired = true;
+    } catch (error) {
+      if (!isEexistError(error)) break; // unexpected error — proceed unlocked rather than throw from a best-effort primitive
+      let stale = false;
+      try {
+        stale = Date.now() - statSync(lockPath).mtimeMs > AUTH_LOCK_STALE_MS;
+      } catch {
+        // The lock vanished between the EEXIST and the stat (the holder
+        // released it) — `stale` stays `false`, the loop just retries mkdir.
+      }
+      if (stale) {
+        try {
+          rmSync(lockPath, { recursive: true, force: true });
+        } catch {
+          // A rival waiter may have reclaimed it first — fine, the loop retries mkdir either way.
+        }
+      } else {
+        sleepSyncMs(AUTH_LOCK_RETRY_MS);
+      }
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    if (acquired) {
+      try {
+        rmSync(lockPath, { recursive: true, force: true });
+      } catch {
+        // Best-effort release, like every other write in this module.
+      }
+    }
+  }
+}
+
 /** Read the persisted config; `{}` when absent/unreadable/malformed. Never throws. */
 export function loadShellConfig(dir?: string): ShellConfig {
   try {
@@ -171,7 +277,15 @@ export function loadShellConfig(dir?: string): ShellConfig {
   }
 }
 
-/** Merge `patch` into the persisted config (0600). Best-effort; never throws. */
+/**
+ * Merge `patch` into the persisted config (0600). Best-effort; never throws.
+ *
+ * The read-modify-write runs under `withAuthFileLockSync` (round 2 item 2 —
+ * see that function's own doc): two callers racing this same function, or
+ * one landing between `model-profile.ts`'s migration strip's own read and
+ * write, now serialize on `auth.json`'s lock rather than one silently
+ * clobbering the other's change.
+ */
 export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void {
   try {
     // `ensureKeryxConfigDir`, not `mkdirSync`: this is usually the first writer
@@ -180,15 +294,17 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
     // credential store beside it were unlinkable and replaceable by any member
     // of the operator's primary group. See `config-dir.permissions.test.ts`.
     ensureKeryxConfigDir(dir);
-    const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
-    // Atomic (temp file + rename), not a direct overwrite (flow 304 review
-    // finding #6): a crash or a second concurrent write mid-write must never
-    // leave `auth.json` half-written — this file holds plaintext provider API
-    // keys and OAuth grants, and a reader that gets a truncated/corrupt parse
-    // has no recovery. Rename also sidesteps the "existing file keeps its old
-    // mode" trap `writeOwnerOnlyFile` had to `chmodSync` around: the renamed-in
-    // temp file's 0600 mode becomes the destination's mode outright.
-    writeOwnerOnlyFileAtomic(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    withAuthFileLockSync(dir, () => {
+      const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
+      // Atomic (temp file + rename), not a direct overwrite (flow 304 review
+      // finding #6): a crash or a second concurrent write mid-write must never
+      // leave `auth.json` half-written — this file holds plaintext provider API
+      // keys and OAuth grants, and a reader that gets a truncated/corrupt parse
+      // has no recovery. Rename also sidesteps the "existing file keeps its old
+      // mode" trap `writeOwnerOnlyFile` had to `chmodSync` around: the renamed-in
+      // temp file's 0600 mode becomes the destination's mode outright.
+      writeOwnerOnlyFileAtomic(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    });
   } catch {
     // best-effort persistence — a failure just means the user re-enters next time
   }

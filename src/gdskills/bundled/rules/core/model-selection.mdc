@@ -105,6 +105,19 @@ to order generations within it. That table reuses
 own separate, conservative version parse on top of it — nothing above
 changes for this module's own tier resolution.
 
+That version parse (`parseModelVersion`/`familyKey`, round 2) reads BOTH a
+dotted id (`claude-opus-5.5`, `gemini-3.8-flash`) and a real
+Anthropic-style HYPHENATED one, where a run of 2-3 adjacent short (1-2
+digit) numeric tokens reads as a dotted version (`claude-opus-4-8` → `4.8`).
+It still refuses a date/snapshot-shaped token (6-8 bare digits) and more
+than one numeric group in the same id — no version rather than a guess. A
+`gpt-4o`-style id (a short number plus one trailing letter) parses the
+number alone as the version, the letter kept only as an ignored variant
+tag, so `gpt-4o` and `gpt-4.1` compare within the same family instead of
+never comparing at all. Two versions of the same family are never decided
+by alphabetical order — the id-string fallback only applies when neither
+side has a parseable version.
+
 ## Falling back
 
 Ranking is **refused**, and every tier keeps the session's provider and model,

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { uniqueTestRoot } from "./test-tmp";
@@ -15,6 +15,7 @@ import {
   saveProviderModelParams,
   saveShellConfig,
   shellConfigPath,
+  withAuthFileLockSync,
 } from "./shell-config";
 
 function tempDir(): string {
@@ -56,6 +57,72 @@ test("saveShellConfig writes atomically: same content and mode as before, and no
   expect(statSync(file).mode & 0o777).toBe(0o600);
   const entries = readdirSync(dir);
   expect(entries).toEqual(["auth.json"]); // no `*.tmp` sibling left behind
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 item 2 — `withAuthFileLockSync`, the sync mutex `saveShellConfig`
+// and `model-profile.ts`'s migration strip now share for `auth.json`.
+//
+// A genuinely torn interleaving between `saveShellConfig` and the migration
+// strip cannot be forced from a single-process unit test: both are wholly
+// synchronous critical sections (no internal `await`), so whichever one a
+// test schedules always runs to completion before the other can start —
+// Node drains the microtask queue before any I/O callback fires. That is
+// exactly what makes the *within-process* ordering deterministic regardless
+// of this lock; the lock's real job is excluding a SECOND OS PROCESS (two
+// separate `keryx` invocations) from the same read-modify-write, which a
+// unit test cannot simulate either. So these tests exercise the PRIMITIVE
+// itself — acquire/release around `fn`, and stale-lock reclaim — rather than
+// asserting a forced interleaving that this process model cannot produce.
+// ---------------------------------------------------------------------------
+
+test("withAuthFileLockSync: creates the lock directory around fn and removes it afterward", () => {
+  const dir = tempDir();
+  const lockPath = `${shellConfigPath(dir)}.lock`;
+  let existedDuring = false;
+  const result = withAuthFileLockSync(dir, () => {
+    existedDuring = existsSync(lockPath);
+    return 42;
+  });
+  expect(result).toBe(42);
+  expect(existedDuring).toBe(true);
+  expect(existsSync(lockPath)).toBe(false); // released
+});
+
+test("withAuthFileLockSync: a STALE lock directory (older than the staleness threshold) is reclaimed, not waited out", () => {
+  const dir = tempDir();
+  const lockPath = `${shellConfigPath(dir)}.lock`;
+  mkdirSync(lockPath, { recursive: true });
+  // Back-date the lock well past the staleness threshold so the very first
+  // retry iteration reclaims it immediately, rather than this test spending
+  // the full lock timeout waiting.
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(lockPath, old, old);
+
+  const start = Date.now();
+  const result = withAuthFileLockSync(dir, () => "ran");
+  const elapsedMs = Date.now() - start;
+
+  expect(result).toBe("ran");
+  expect(existsSync(lockPath)).toBe(false); // reclaimed then released, not left behind
+  expect(elapsedMs).toBeLessThan(1_000); // reclaimed on the first retry, not waited out to the 2s timeout
+});
+
+test("withAuthFileLockSync: NOT reentrant — a caller already holding the lock that calls it again on the SAME path proceeds unlocked (best-effort) rather than deadlocking, exactly like saveShellConfig calling it a second time from inside its own critical section would", () => {
+  const dir = tempDir();
+  let innerRan = false;
+  const outerResult = withAuthFileLockSync(dir, () => {
+    // A nested call on the SAME lock path cannot acquire it (this function
+    // is not reentrant, unlike `withFileLock`'s own single-owner-per-token
+    // design would allow for a DIFFERENT holder) — it must give up after its
+    // own timeout and still run `fn`, best-effort, rather than hang forever.
+    return withAuthFileLockSync(dir, () => {
+      innerRan = true;
+      return "inner";
+    });
+  });
+  expect(innerRan).toBe(true);
+  expect(outerResult).toBe("inner");
 });
 
 test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)", () => {

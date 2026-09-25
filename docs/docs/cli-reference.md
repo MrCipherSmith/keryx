@@ -1384,10 +1384,21 @@ profiles:
 - With several models, ranked first by **family size class**
   (`opus`/`sonnet`/`haiku`-style hints — flagship > mini/flash/lite — the
   same size-word table `keryx review tier` uses) and, WITHIN the same family
-  and vendor, by the **version number** parsed from the id (`opus-5.5` >
-  `opus-4.7`, `gpt-6` > `gpt-5`, `gemini-3.8-flash` > `gemini-3.1-flash` —
-  parsed conservatively; an id with no single parseable version number is
-  never guessed at):
+  and vendor, by the **version number** parsed from the id — both a dotted
+  spelling (`opus-5.5` > `opus-4.7`, `gemini-3.8-flash` > `gemini-3.1-flash`)
+  and a real Anthropic-style HYPHENATED one, where a run of 2-3 adjacent
+  short (1-2 digit) numeric tokens reads as a dotted version
+  (`claude-opus-4-8` → `4.8`, so `claude-opus-5-1` > `claude-opus-4-8`).
+  Parsed conservatively: a date/snapshot-shaped token (6-8 bare digits, e.g.
+  a `-20250514` suffix) and more than one such numeric group in the same id
+  both still yield no version rather than a guess. `gpt-4o`-style ids (a
+  short number plus one trailing letter) parse the number alone as the
+  version, with the letter kept only as an ignored variant tag — so `gpt-4o`
+  and `gpt-4.1` land in the same family and `gpt-4.1` correctly outranks
+  `gpt-4o`, a deliberate, documented choice rather than refusing that pair's
+  comparison outright. Two versions of the same family are NEVER decided by
+  alphabetical order — the id-string fallback only ever applies when a
+  version is unparseable on both sides:
   - `planning`/`review` get the strongest model not weaker than the session
     model — the session model itself when nothing is stronger.
   - `subagents`/`docs`/`unattended` get the next size step DOWN from the

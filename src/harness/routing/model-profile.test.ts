@@ -28,7 +28,7 @@ import {
   setModelProfileField,
   type ModelProfile,
 } from "./model-profile";
-import { shellConfigPath } from "../../lib/shell-config";
+import { saveShellConfig, shellConfigPath } from "../../lib/shell-config";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -154,7 +154,7 @@ test("refreshModelProfiles: two profiles with known, different prices auto-rank 
 test("refreshModelProfiles: an operator-set priority survives a refresh that changes that model's price", async () => {
   const dir = await tempDir("keryx-model-profile-priority-survives-");
   await refreshModelProfiles("openrouter", ["m"], { m: { priceInputPerMillion: 5 } }, { dir, now: () => 1000 });
-  setModelProfileField("openrouter", "m", { field: "priority", value: 42 }, dir, () => 2000);
+  await setModelProfileField("openrouter", "m", { field: "priority", value: 42 }, dir, () => 2000);
   await refreshModelProfiles("openrouter", ["m"], { m: { priceInputPerMillion: 500 } }, { dir, now: () => 3000 });
   const stored = loadStoredModelProfiles(dir);
   expect(stored[profileKey("openrouter", "m")]!.priority).toEqual({ value: 42, source: "operator" });
@@ -285,11 +285,35 @@ test("isNonChatModelId: id-pattern detection of embedding/image/tts/whisper/audi
   expect(isNonChatModelId("dall-e-3")).toBe(true);
   expect(isNonChatModelId("tts-1")).toBe(true);
   expect(isNonChatModelId("whisper-1")).toBe(true);
-  expect(isNonChatModelId("gpt-4o-audio-preview")).toBe(true);
+  expect(isNonChatModelId("gpt-4o-audio-preview")).toBe(true); // conservative: excluded on `audio` alone, even though this id is a real chat model
   expect(isNonChatModelId("omni-moderation-latest")).toBe(true);
   expect(isNonChatModelId("cohere-rerank-3")).toBe(true);
   expect(isNonChatModelId("claude-sonnet-5")).toBe(false);
   expect(isNonChatModelId("gpt-6")).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 item 3 — image-GENERATION id patterns (imagen/flux/
+// stable-diffusion/sdxl/midjourney), boundary-safe.
+// ---------------------------------------------------------------------------
+
+test("isNonChatModelId: image-generation patterns (imagen/flux/stable-diffusion/sdxl/midjourney)", () => {
+  expect(isNonChatModelId("imagen-3")).toBe(true);
+  expect(isNonChatModelId("imagen-4-ultra")).toBe(true);
+  expect(isNonChatModelId("black-forest-labs/flux-schnell")).toBe(true);
+  expect(isNonChatModelId("flux-1-pro")).toBe(true);
+  expect(isNonChatModelId("stabilityai/stable-diffusion-xl-base-1.0")).toBe(true);
+  expect(isNonChatModelId("stabilityai/sdxl-turbo")).toBe(true);
+  expect(isNonChatModelId("midjourney-v6")).toBe(true);
+});
+
+test("isNonChatModelId: the new patterns are boundary-safe — never a false positive on an unrelated chat id that merely contains the substring", () => {
+  // "imagen" must not fire on the pre-existing "image" alternative reaching
+  // past its own word, and vice versa — the regex requires the FULL word.
+  expect(isNonChatModelId("claude-sonnet-5")).toBe(false);
+  expect(isNonChatModelId("some-fluxcapacitor-model")).toBe(false); // "flux" is a substring, not a whole word
+  expect(isNonChatModelId("sdxlite-chat-model")).toBe(false); // "sdxl" is a substring, not a whole word
+  expect(isNonChatModelId("imagenette-classifier")).toBe(false); // "imagen" is a substring, not a whole word
 });
 
 test("isFreeVariantModelId: OpenRouter's :free suffix only", () => {
@@ -424,6 +448,66 @@ test("migration: an existing auth.json.modelProfiles is moved into model-profile
   const fileProfiles = JSON.parse(await readFile(modelProfilesFilePath(dir), "utf8")) as Record<string, unknown>;
   expect(fileProfiles[profileKey("legacy", "old-model")]).toEqual(legacyProfile);
   expect(fileProfiles[profileKey("newprov", "new-model")]).toBeDefined();
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 item 2 — `auth.json`'s own lock: `saveShellConfig`'s read-modify-
+// write and the migration strip's read-modify-write of the SAME file must
+// not clobber each other.
+// ---------------------------------------------------------------------------
+
+// `withAuthFileLockSync.test.ts` (`src/lib/shell-config.test.ts`) exercises the
+// lock PRIMITIVE itself (acquire/release, stale reclaim, non-reentrancy).
+// This test instead exercises the INTEGRATION: `saveShellConfig` running
+// concurrently with `refreshModelProfiles` (which performs the migration
+// strip internally). Both operations here are wholly synchronous critical
+// sections, so Node's microtask-before-I/O-callback ordering makes
+// `saveShellConfig` deterministically complete before the migration's own
+// profiles-lock `mkdir` resolves — there is no TORN write to observe either
+// way. What this test still guards against is a REGRESSION in the merge
+// logic itself: that `saveShellConfig`'s patch and the migration's own
+// `auth.json` rewrite (stripping `modelProfiles`) both end up reflected in
+// the final file, not one silently overwriting the other's already-applied
+// change.
+test("concurrency: saveShellConfig racing the modelProfiles migration strip — neither change is lost", async () => {
+  const dir = await tempDir("keryx-model-profile-auth-lock-race-");
+  await mkdir(dir, { recursive: true });
+  const legacyProfile: ModelProfile = {
+    providerId: "legacy",
+    modelId: "old-model",
+    strengthTier: { value: "standard", source: "guessed" },
+    priceInputPerMillion: { value: 2, source: "reported" },
+    priceOutputPerMillion: { value: 10, source: "reported" },
+    contextLength: { value: 32000, source: "reported" },
+    priority: { value: -2, source: "auto" },
+    available: true,
+    chatCapable: true,
+    lastSeenAt: "2026-01-01T00:00:00.000Z",
+    refreshedAt: "2026-01-01T00:00:00.000Z",
+  };
+  await writeFile(
+    shellConfigPath(dir),
+    `${JSON.stringify(
+      { provider: "anthropic", model: "claude-sonnet-5", modelProfiles: { [profileKey("legacy", "old-model")]: legacyProfile } },
+      null,
+      2,
+    )}\n`,
+    { mode: 0o600 },
+  );
+
+  await Promise.all([
+    Promise.resolve().then(() => saveShellConfig({ model: "claude-opus-4-8" }, dir)),
+    refreshModelProfiles("newprov", ["new-model"], {}, { dir, now: () => 2000 }),
+  ]);
+
+  const authAfter = JSON.parse(await readFile(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
+  expect(authAfter.model).toBe("claude-opus-4-8"); // saveShellConfig's patch landed...
+  expect(authAfter.provider).toBe("anthropic"); // ...an untouched field survives...
+  expect("modelProfiles" in authAfter).toBe(false); // ...and the migration's strip ALSO landed, not lost
+
+  const fileProfiles = JSON.parse(await readFile(modelProfilesFilePath(dir), "utf8")) as Record<string, unknown>;
+  expect(fileProfiles[profileKey("legacy", "old-model")]).toBeDefined(); // migrated
+  expect(fileProfiles[profileKey("newprov", "new-model")]).toBeDefined(); // the live refresh's own entry
 });
 
 test("concurrency: two providers refreshing at the same time both persist their entries — neither clobbers the other", async () => {

@@ -19,13 +19,18 @@
 // deliberately stops at size words and never parses a version number — see
 // its header comment. WITHIN the same family and vendor (same size word(s)
 // stripped of any version token — `familyKey`, below), a newer VERSION
-// ranks higher (`claude-opus-5.5` > `claude-opus-4.7`, `gpt-6` > `gpt-5`,
-// `gemini-3.8-flash` > `gemini-3.1-flash`) — the operator's decision,
-// 2026-09-25: the family word already carries size, so version is free to
-// order generations within it. `parseModelVersion` is conservative: an id
-// with zero or more than one numeric-only token yields no version rather
-// than a guess, and a family/version mismatch never crashes the ranking —
-// it just does not distinguish the tie.
+// ranks higher (`claude-opus-5.5` > `claude-opus-4.7`, `claude-opus-4-8`
+// hyphenated -> `4.8` same as dotted, `gpt-6` > `gpt-5`, `gemini-3.8-flash` >
+// `gemini-3.1-flash`) — the operator's decision, 2026-09-25: the family word
+// already carries size, so version is free to order generations within it.
+// `parseModelVersion` is conservative (rewritten round 2 — real Anthropic
+// ids are hyphenated, not dotted, and the original parser refused every one
+// of them): a run of 2-3 adjacent SHORT (1-2 digit) hyphen-separated tokens
+// merges into one dotted version (`4-8` -> `4.8`); a lone date/snapshot
+// stamp (6-8 bare digits) and more than one such run in the same id both
+// still yield no version rather than a guess — see `findVersionGroups`/
+// `parseVersionGroup`, below. A family/version mismatch never crashes the
+// ranking — it just does not distinguish the tie.
 import { isNonChatModelId, isFreeVariantModelId, isProfileComparable, profileKey, type ModelProfile } from "./model-profile";
 import { MODEL_RANK_HINTS, rankModelId } from "../../gdskills/model-tier";
 import { ROUTING_CATEGORIES, type CategoryAssignment, type RoutingCategory, type RoutingTable } from "./table";
@@ -64,13 +69,49 @@ const SESSION_UNCHANGED_CATEGORIES: ReadonlySet<RoutingCategory> = new Set(["def
 }
 
 // ---------------------------------------------------------------------------
-// Family / version parsing — conservative by construction (item 2).
+// Family / version parsing — conservative by construction (item 2, rewritten
+// round 2: real Anthropic ids are HYPHENATED — `claude-opus-4-8`,
+// `claude-haiku-4-5` — never dotted. The v1 parser treated every hyphen as a
+// token boundary and then refused any id with more than one bare numeric
+// token, which made every curated Anthropic id's version unparseable. Fixed
+// by recognising a short RUN of adjacent hyphenated digit tokens as one
+// dotted version group, while still refusing what it always refused: a
+// date/snapshot stamp, and more than one such group in the same id.
 // ---------------------------------------------------------------------------
 
-/** A token that is PURELY a (possibly dotted) number — `5`, `5.5`, never `5.5.2`-with-letters or `4o`. */
-const VERSION_TOKEN = /^\d+(?:\.\d+)*$/;
+/** A token that already carries its own dot(s) — a complete, self-contained decimal version by itself (`5.5`, `3.8`), never merged with a neighbouring token. */
+const DOTTED_VERSION_TOKEN = /^\d+\.\d+(?:\.\d+)*$/;
 
-/** Split a model id into lower-cased tokens on any run of characters that are not `[a-z0-9.]` — a dotted version stays ONE token (`5.5`), a hyphen/slash/underscore/colon is a boundary. */
+/** A token that is purely digits, no dot — either a whole version by itself (`6` in `gpt-6`) or one segment of a hyphenated multi-segment version (`4`, `8` in `claude-opus-4-8`); which one depends on what is adjacent to it (see `findVersionGroup`). */
+const BARE_DIGITS_TOKEN = /^\d+$/;
+
+/** 1-2 digits — the shape every real hyphenated version SEGMENT takes (`4`, `8`, `5`, `1`). A run of adjacent tokens only merges into a dotted version when every token in it is this shape. */
+const SHORT_DIGITS_TOKEN = /^\d{1,2}$/;
+
+/** 6-8 bare digits — a date/snapshot stamp (`20250514`), not a version, even though it also matches `BARE_DIGITS_TOKEN`. Always refused, whether it stands alone or (already impossible, since it is never "short") inside a run. */
+const DATE_LIKE_TOKEN = /^\d{6,8}$/;
+
+/**
+ * A short numeric token immediately followed by one lowercase letter (`4o`
+ * in `gpt-4o`) — a vendor "numbered variant" id shape distinct from a dotted
+ * version (`gpt-4.1`). The digits parse as the version; the trailing letter
+ * is a variant TAG, deliberately excluded from the comparison (operator
+ * decision, round 2: `gpt-4o` and `gpt-4.1` land in the same family —
+ * `familyKey` strips this token too — with `gpt-4o` comparing as version
+ * `4`, so `gpt-4.1` correctly outranks it and, symmetrically, `gpt-4o` can
+ * never look newer than a real `gpt-5`-family id than it should). Chosen
+ * over refusing the comparison outright because a real, if approximate,
+ * ordering is more useful than "these two can never be compared" for ids
+ * that differ only in this suffix.
+ */
+const LETTER_VARIANT_TOKEN = /^(\d{1,2})([a-z])$/;
+
+/** True for any token `familyKey` must strip to compare two ids' non-version parts — every shape `findVersionGroup` recognises as "numeric-ish", regardless of whether the id AS A WHOLE ends up with a parseable version (family grouping only needs "is this a number", not "which number is the version" — same rule the original comment stated). */
+function looksLikeVersionPiece(token: string): boolean {
+  return DOTTED_VERSION_TOKEN.test(token) || BARE_DIGITS_TOKEN.test(token) || LETTER_VARIANT_TOKEN.test(token);
+}
+
+/** Split a model id into lower-cased tokens on any run of characters that are not `[a-z0-9.]` — a dotted version stays ONE token (`5.5`), a hyphen/slash/underscore/colon is a boundary (so `claude-opus-4-8` yields the two ADJACENT tokens `4`, `8`, not one). */
 function tokenize(modelId: string): string[] {
   return modelId
     .trim()
@@ -83,29 +124,103 @@ function tokenize(modelId: string): string[] {
  * The id with its version token(s) removed, joined back — "same family and
  * vendor" for the version tie-break. `claude-opus-5.5` and `claude-opus-4.7`
  * both key to `claude-opus`; `gemini-3.8-flash` and `gemini-3.1-flash` both
- * key to `gemini-flash`. Two numeric tokens (`claude-opus-4-8`, a
- * hyphenated curated id) still strip to the same family even though the
- * VERSION itself is then ambiguous (see `parseModelVersion`) — family
- * grouping only needs "is this a number", not "which number is the version".
+ * key to `gemini-flash`; `claude-opus-4-8` (hyphenated) ALSO keys to
+ * `claude-opus` now, and `gpt-4o`/`gpt-4.1` both key to `gpt`.
  */
 export function familyKey(modelId: string): string {
   return tokenize(modelId)
-    .filter((t) => !VERSION_TOKEN.test(t))
+    .filter((t) => !looksLikeVersionPiece(t))
     .join("-");
+}
+
+/** One maximal run of adjacent tokens this parser treats as belonging to a single version, plus the token(s) it comprises. */
+interface VersionGroup {
+  readonly startIndex: number;
+  readonly tokens: readonly string[];
+}
+
+/**
+ * Every maximal run of adjacent "numeric-ish" tokens in `tokens`, in order —
+ * NOT yet validated/parsed, just grouped. A dotted token (`5.5`) or a
+ * letter-variant token (`4o`) is always its own one-token group (it never
+ * merges with a numeric neighbour — that combination does not occur in any
+ * real id this parser targets). Adjacent BARE digit tokens (`4`, `8`) merge
+ * into one group, which is what makes a hyphenated version parseable at all.
+ */
+function findVersionGroups(tokens: readonly string[]): VersionGroup[] {
+  const groups: VersionGroup[] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i]!;
+    if (DOTTED_VERSION_TOKEN.test(token) || LETTER_VARIANT_TOKEN.test(token)) {
+      groups.push({ startIndex: i, tokens: [token] });
+      i += 1;
+      continue;
+    }
+    if (BARE_DIGITS_TOKEN.test(token)) {
+      let end = i + 1;
+      while (end < tokens.length && BARE_DIGITS_TOKEN.test(tokens[end]!) && !DOTTED_VERSION_TOKEN.test(tokens[end]!)) {
+        end += 1;
+      }
+      groups.push({ startIndex: i, tokens: tokens.slice(i, end) });
+      i = end;
+      continue;
+    }
+    i += 1;
+  }
+  return groups;
+}
+
+/**
+ * The version number a single (already-isolated) group parses to, or
+ * `undefined` when its shape is not one this parser trusts — conservative by
+ * construction (item 2: "if an id has no parseable version, do not guess").
+ *
+ *  - One token, dotted (`5.5`) or bare (`6`) — `Number(token)`, refused if
+ *    somehow not finite (e.g. a `5.5.2`-shaped single token — `Number`
+ *    rejects the extra dot).
+ *  - One token, bare AND date-like (`20250514`, 6-8 digits) — refused
+ *    outright; a date is not a version even though it is also all digits.
+ *  - One token, letter-variant (`4o`) — the digits alone (`4`); the letter
+ *    is a variant tag, never part of the number (see `LETTER_VARIANT_TOKEN`).
+ *  - Two or three tokens, EVERY one of them short (1-2 digits, no dot) — a
+ *    hyphenated version (`4-8` -> `4.8`, `4-8-2` -> `4.8`, the third segment
+ *    contributing no further precision this comparator needs). Joined with
+ *    `.` and read with `parseFloat` rather than `Number` for exactly this
+ *    reason: `Number("4.8.2")` is `NaN`, `parseFloat("4.8.2")` is `4.8`.
+ *  - Anything else (more than 3 tokens in the run, or a run mixing a
+ *    long/date-like token with short ones) — refused; not a recognised
+ *    version shape.
+ */
+function parseVersionGroup(group: VersionGroup): number | undefined {
+  const { tokens } = group;
+  if (tokens.length === 1) {
+    const [token] = tokens;
+    if (DATE_LIKE_TOKEN.test(token!)) return undefined;
+    const letterVariant = LETTER_VARIANT_TOKEN.exec(token!);
+    const numeric = letterVariant !== null ? letterVariant[1]! : token!;
+    const value = Number(numeric);
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (tokens.length === 2 || tokens.length === 3) {
+    if (!tokens.every((t) => SHORT_DIGITS_TOKEN.test(t))) return undefined;
+    const value = Number.parseFloat(tokens.join("."));
+    return Number.isFinite(value) ? value : undefined;
+  }
+  return undefined;
 }
 
 /**
  * The id's version number, or `undefined` when none is parseable — zero
- * numeric-only tokens (no version present) or MORE than one (ambiguous,
- * e.g. a hyphenated `4-8` id) both yield `undefined` rather than a guess
- * (item 2: "parse numeric version segments conservatively; if an id has no
- * parseable version, do not guess").
+ * version groups (no version present) or MORE than one (ambiguous — two
+ * separate numeric runs elsewhere in the id) both yield `undefined` rather
+ * than a guess, same as a single group whose own shape `parseVersionGroup`
+ * does not trust (a date-like token, or a run longer than 3).
  */
 export function parseModelVersion(modelId: string): number | undefined {
-  const versionTokens = tokenize(modelId).filter((t) => VERSION_TOKEN.test(t));
-  if (versionTokens.length !== 1) return undefined;
-  const value = Number(versionTokens[0]);
-  return Number.isFinite(value) ? value : undefined;
+  const groups = findVersionGroups(tokenize(modelId));
+  if (groups.length !== 1) return undefined;
+  return parseVersionGroup(groups[0]!);
 }
 
 /** Family size class (rewritten AC10): `rankModelId`'s raw ordinal, `undefined` (no hint matched) treated as `0` — the same "unranked -> standard/middle" convention `guessStrengthTier` (AC5) already uses. */
