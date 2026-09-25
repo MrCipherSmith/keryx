@@ -1161,6 +1161,30 @@ describe("R1-3/R1-4/R1-5 (flow 314 review round 1): pack-level gate fixtures", (
     }
   });
 
+  // Flow 317 (FU4): PACK_MIN_TRIALS was raised 5 -> 10. A report recorded at
+  // the OLD minimum (5 trials, `validateEvalReport`-valid on its own and
+  // clearing the pre-317 gate) must fail the CURRENT gate — there is no
+  // grandfathering for a pack that has not re-recorded at the new floor.
+  test("PACK_MIN_TRIALS regression: a report recorded at the OLD minimum (5 trials) still fails the gate after the bump to 10", () => {
+    expect(PACK_MIN_TRIALS).toBe(10); // pins the bumped value itself, so this test fails loudly if it regresses back down
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      const behaviorScenario = doc.reports[0].scenarios.find((s: any) => s.kind === "behavior");
+      doc.reports[0].trials = 5;
+      behaviorScenario.trials = 5;
+      behaviorScenario.trialRecords = Array.from({ length: 5 }, () => behaviorScenario.trialRecords[0]);
+      behaviorScenario.passes = 5;
+      behaviorScenario.passRate = 1;
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("below the pack minimum 10");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
   test("pack.json id != directory name: fails naming the mismatch, never silently trusts the id", () => {
     const fx = buildPassingFixture();
     try {
@@ -2085,7 +2109,7 @@ describe("flow 316: the judge grader", () => {
     test("a behavior scenario's OWN trials below PACK_MIN_TRIALS fails the gate, even with a healthy top-level trials", () => {
       const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
       try {
-        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 5, PACK_MIN_TRIALS); // report.trials: 5 (>= PACK_MIN_TRIALS)
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", PACK_MIN_TRIALS, PACK_MIN_TRIALS); // report.trials: PACK_MIN_TRIALS, all passing (honestly clears the floor)
         const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
         const truncatedRecords = (behaviorScenario.trialRecords ?? []).slice(0, 4); // internally consistent among themselves: 4 records, 4 passes
         const forgedScenario: EvalScenarioResult = { ...behaviorScenario, trials: 4, trialRecords: truncatedRecords, passes: 4, passRate: 1, passAtK: 1 };
@@ -2102,7 +2126,7 @@ describe("flow 316: the judge grader", () => {
     test("passAtK disagreeing with (passes > 0 ? 1 : 0) fails the gate", () => {
       const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
       try {
-        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 4, PACK_MIN_TRIALS); // 4/5, honestly clears the pack floor (0.8)
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 8, PACK_MIN_TRIALS); // 8/10, honestly clears the pack floor (0.8)
         const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
         const forgedScenario: EvalScenarioResult = { ...behaviorScenario, passAtK: 0 }; // passes (4) > 0, so the honest passAtK is 1
         const forged: EvalReport = { ...honest, scenarios: honest.scenarios.map((scenario) => (scenario.id === forgedScenario.id ? forgedScenario : scenario)) };

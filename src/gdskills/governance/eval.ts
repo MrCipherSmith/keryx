@@ -1058,9 +1058,23 @@ export const PACK_BEHAVIOR_PASS_FLOOR = 0.8;
 /**
  * Flow 314 review round 1 (R1-3): the minimum `trials` a pack-level report
  * must carry — named so the gate's requirement reads as one number, not a
- * magic `5` repeated at every call site.
+ * magic literal repeated at every call site.
+ *
+ * Flow 317 (FU4): raised from 5 to 10. The honest gate run recorded in flow
+ * 316's journal (T13) landed several scenarios exactly ON the
+ * `PACK_BEHAVIOR_PASS_FLOOR` (0.8) at 5 trials — `no-ts-ignore-suppression`
+ * and `dirname-replacement` both at 4/5, `no-disable-hooks-lint` and
+ * `no-mobx-scope` both at 4/5. At 5 trials, 0.8 is exactly one flipped trial
+ * away from failing (4/5 -> 3/5) in either direction; a scenario sitting
+ * exactly on the floor tells you almost nothing about whether it clears 0.8
+ * as a genuine rate versus by which side of a single coin flip it landed on.
+ * 10 trials halves that single-flip swing (0.8 at 8/10 moves to 0.7 or 0.9
+ * on one flip, not to 0.6 or 1.0), giving the floor room to mean something.
+ * A report recorded at the old minimum (5, or anywhere below 10) still fails
+ * this gate — there is no grandfathering; every pack must re-record at the
+ * new floor (see the `PACK_MIN_TRIALS` regression test in `eval.test.ts`).
  */
-export const PACK_MIN_TRIALS = 5;
+export const PACK_MIN_TRIALS = 10;
 
 /**
  * Flow 314 review round 1 (R1-3, R1-15): `sha256(SKILL.md bytes + "\n\u0000\n"

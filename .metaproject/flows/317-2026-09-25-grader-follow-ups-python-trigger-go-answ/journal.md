@@ -125,3 +125,41 @@ and one end-to-end success path against a real on-disk fixture pack via the
 97 + 52 pass, 0 fail. `bun run typecheck`: exit 0. `bunx eslint` on all
 changed files: 0 problems (docs/*.md gets an expected "no matching config"
 warning, not an error).
+- 2026-09-25T04:56:40.822Z - task-done: T7: FU3: live re-judge sampler (skills eval --reverify)
+- 2026-09-25T04:56:46.214Z - task-attempt: T8: started (attempt 1) — PACK_MIN_TRIALS 5->10
+
+## FU4 (T8): PACK_MIN_TRIALS 5 -> 10
+
+Flow 316's own honest gate run (journal T13) landed several scenarios
+exactly at the `PACK_BEHAVIOR_PASS_FLOOR` (0.8) with only 5 trials:
+`no-ts-ignore-suppression` and `dirname-replacement` both 4/5,
+`no-disable-hooks-lint` and `no-mobx-scope` both 4/5. At 5 trials, 0.8 sits
+one flipped trial away from failing either direction — reasoning documented
+in `eval.ts`'s `PACK_MIN_TRIALS` doc comment. Bumped 5 -> 10; no
+grandfathering (`checkSkillReportForPackGate`'s existing `trials <
+PACK_MIN_TRIALS` check already covers this unconditionally, so this is a
+one-line constant change plus a new regression test).
+
+Added `eval.test.ts`: "PACK_MIN_TRIALS regression: a report recorded at the
+OLD minimum (5 trials) still fails the gate after the bump to 10" — pins
+`PACK_MIN_TRIALS === 10` and proves a 5-trial report (valid, gate-clearing
+under the old constant) now fails naming "below the pack minimum 10".
+
+Fixed two PRE-EXISTING tests whose honest fixtures hardcoded a `passes`
+count tuned to the OLD `PACK_MIN_TRIALS=5` denominator (`mixedTrialsReport`
+computes `verdict` from `passes/trials` against the 0.8 floor, so scaling
+the denominator without scaling the numerator silently flipped their
+"honest, floor-clearing" premise to a genuine failure): "a behavior
+scenario's OWN trials below PACK_MIN_TRIALS..." (5/5 -> now PACK_MIN_TRIALS/
+PACK_MIN_TRIALS, still 100%) and "passAtK disagreeing with (passes > 0 ? 1 :
+0)..." (4/5=0.8 -> now 8/10=0.8, same floor-clearing rate). Both are fixture
+math corrections to preserve the ORIGINAL test intent under the new
+denominator, not a weakening of what either test proves.
+
+`bun test src/gdskills/governance`: 233 pass, 0 fail. `bun run typecheck`:
+exit 0. `bunx eslint`: 0 problems. Five REAL bundled-tree tests
+(`stack-packs.test.ts`, `src/agents`, `agents-catalog-commands.test.ts` —
+same set FU2 already found stale, plus now also below the trials floor)
+remain red until FU7's honest re-run rebuilds the committed
+`governance/eval.json` files at trials=10 with the current runner/judge
+prompt versions — expected, not worked around here.
