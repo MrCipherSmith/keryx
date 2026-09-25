@@ -1295,6 +1295,77 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   keeping it. `ts-js-node`/`react`/`nextjs-nuxt`/`vue` remain
   `experimental` for their own, unrelated reasons.
 
+## Implementation notes: Wave 4 batch 3 (flow 335)
+
+Four new packs authored against the batch-3 list: `django` (framework,
+extends `python`), `fastapi` (framework, extends `python`), `rust`
+(language, standalone), and `java-kotlin-spring` (framework, standalone —
+the spec's `lang:java-kotlin` base does not exist, so authored
+self-contained rather than inventing a phantom dependency). Rules,
+skills, and judge-format `evals.json` per the authoring standard;
+`install-manifest.json` and `authoring-lint.ts`'s `STACK_EXTENSIONS`
+wired for all four. Real, deterministic `keryx skills scout --record`
+for every skill: two false-`"use"` collisions found pre-gate (generic
+"pytest tests" wording overlapping siblings) and fixed by rewording
+descriptions to state real scope, never by touching evals.
+
+**Stable-pack protection (rebase onto main, #719 + flow 334's negation-
+aware scorer merged).** Adding the four packs shifted corpus-wide IDF
+weight enough to knock `go` and `python`'s `checkStablePackGate` over the
+fork threshold on several of their own trigger-positive prompts. Fixed
+entirely inside the four new packs' own SKILL.md content (never touched
+go, python, or any pre-existing skill) — removed literal shared tokens
+duplicated across a skill's own description and triggers. Verified
+`checkStablePackGate` passing for both before proceeding.
+
+**I11 enforcement.** Added all four packs to `I11_ENFORCED_PACKS`. 63 of
+252 eval `triggers.positive` prompts were near-copies (Jaccard >=0.5) of
+their own frontmatter triggers — inherited from authoring both lists off
+the same template. Rewritten as genuinely independent, realistic
+phrasings (never a synonym swap, never touching `triggers.negative`,
+`scenarios`, or `calibration`).
+
+**AG calibration and the honest 10-trial DeepSeek gate.** `judge-check
+--samples 3 --record` green for all 18 skills. One honest
+`skills eval --strictness high --trials 10 --runner deepseek:deepseek-
+chat --judge deepseek:deepseek-chat` call per skill, HEAD unchanged start
+to end, `governance/eval.json` rebuilt verbatim from the raw outputs.
+Trigger accuracy came back weak to very weak across nearly every skill of
+all four packs (several near zero true positives) and two skills
+(django-testing, rust-build-fix) each have one behavior scenario below
+the 0.8 floor. Working hypothesis, unproven and not acted on: the I11
+rewrite (which reduces a prompt's overlap with its own frontmatter
+triggers) directly works against the lexical router needing that same
+overlap to outrank sibling packs — the fix for one integrity rule
+plausibly undermining trigger accuracy. No content was tuned to chase
+this result; all four packs stay `stability: experimental`, no generated
+agent pair, derived from the gate alone.
+
+**python demoted to `experimental` (post-merge with batches 4/5/6, owner
+decision).** Merging origin/main (which by then carried Wave 4 batches
+4/5/6) into flow 335's branch grew the catalog to 170 skills/1006
+triggers and broke `python`'s own `checkStablePackGate`:
+`python-testing`'s trigger-positive-1 ("Write pytest tests for the new
+widgets module") is outranked by `flutter-dart/flutter-testing` on the
+shared "widget" token (score 0.4736 vs 0.4848). Rigorously verified this
+is caused by the merge (excluding flow 335's four packs from the catalog
+restores python's win) but NOT fixable by editing any single pack's
+content: `checkSkillSelected`/`checkSkillSelectedLeaveOneOut` weight
+tokens by binary per-skill document frequency, not per-occurrence, so as
+long as `django-testing`/`fastapi-testing` (or any other testing skill)
+merely CONTAIN the word "test" anywhere in their indexed text, the
+corpus-wide weight for "test"/"pytest"/"write" is lowered regardless of
+exact wording — tested directly (rewrote every generic trigger in both
+skills, zero score movement) before concluding this. No grandfathering,
+per the same rule flow 317 applied to `ts-js-node`: `python/pack.json`
+and its `python-rules`/`python-skills` install-manifest entries moved to
+`stability: "experimental"`; the generated `python-code-auditor`/
+`python-build-fixer` pair removed (`python/agent-refs.json` records the
+reason). Owner decision: MrCipherSmith (owner, in chat), 2026-09-26.
+Follow-up recorded for a future flow: route and gate only among packs of
+the detected/installed stacks for a given project, rather than the whole
+bundled catalog, then re-gate python under that narrower scope.
+
 ## Implementation notes: Wave 4 batch 4 (flow 336)
 
 Four new packs authored against the batch-4 list: `csharp-dotnet` (language,
