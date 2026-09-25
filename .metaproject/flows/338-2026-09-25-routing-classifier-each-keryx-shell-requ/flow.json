@@ -1,0 +1,371 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "338",
+  "slug": "routing-classifier-each-keryx-shell-requ",
+  "title": "Routing classifier: each keryx shell request is sorted into a routing category (Jev when connected, else the main model) and sent to that category's model",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T17:54:16.364Z",
+  "updatedAt": "2026-09-25T18:37:01.617Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T18:36:14.775Z",
+      "note": "src/harness/decision/classifier.ts: TaskClassifier interface + NullClassifier, always {ok:false,reason:\"no classifier configured\"}. Test: classifier.test.ts (1 test, pass)."
+    },
+    "AC2": {
+      "at": "2026-09-25T18:36:15.095Z",
+      "note": "src/harness/decision/deterministic-shortcuts.ts: classifyDeterministic — slash bypass, chit-chat->quick, review-naming->review. Tests: deterministic-shortcuts.test.ts (9 tests incl. negative cases for 'overview' substring and long greeting-prefixed messages, pass)."
+    },
+    "AC3": {
+      "at": "2026-09-25T18:36:15.422Z",
+      "note": "src/harness/decision/main-model-classifier.ts: MainModelTaskClassifier on runModelTurn, strict one-token prompt, unparseable/out-of-vocab/empty -> ok:false. Tests: main-model-classifier.test.ts (6 tests: exact match, whitespace/casing noise, out-of-vocab, empty, no-categories, provider error, pass)."
+    },
+    "AC4": {
+      "at": "2026-09-25T18:36:15.744Z",
+      "note": "src/harness/decision/jev-classifier.ts: JevTaskClassifier built on existing callJevSystemOne (flow 306), one choice+one noul question, credential+opt-in gated, threshold refusal. Tests: jev-classifier.test.ts (6 tests, fake fetch, zero real network, pass). Threshold tuned 0.6->0.45 from live-check evidence (AC11)."
+    },
+    "AC5": {
+      "at": "2026-09-25T18:36:27.676Z",
+      "note": "src/harness/decision/classify-turn.ts: classifyTurn chain (deterministic->jev->main-model->null), each stage wrapped in withTimeout (default 3000ms, AbortController-based real cancellation). Tests: classify-turn.test.ts (9 tests incl. per-stage transitions and a hanging-fetch timeout case asserting <2s wall time, pass)."
+    },
+    "AC6": {
+      "at": "2026-09-25T18:36:28.006Z",
+      "note": "src/tui/routing-classifier-source.ts: runRoutingClassifierForTurn resolves via resolveCategoryDetailed({project,user}, connected) matching review/subagents' existing call-site pattern. sessionModelExplicit flag (set in tui-shell.ts's switchTo) skips classification entirely once /model is used this session. Tests: routing-classifier-source.test.ts (5 tests) + classify-turn.test.ts's slash-command/empty-category short-circuit tests."
+    },
+    "AC7": {
+      "at": "2026-09-25T18:36:28.369Z",
+      "note": "tui-shell.ts: /route on|off registered in agent-commands.ts AGENT_SLASH_COMMANDS, dispatched via isRouteCommand, ShellConfig.routingClassifier.enabled persisted (shell-config.ts), routingEnabled local binding gates classification per turn. Tests: route-command.test.ts (5 tests); turn-guard-shell-wiring.test.ts and tui-shell.test.ts source-audits still pass unmodified/updated for the new call site."
+    },
+    "AC8": {
+      "at": "2026-09-25T18:36:28.727Z",
+      "note": "renderRoutingTagLine (e.g. '[quick -> anthropic/claude-x] (jev 92%)') printed via io.onSystem when a turn routes; sb-route sidebar row (renderRoutingSidebarValue: 'on · N routed (last: cat)' / 'off') mounted after sb-guard. Tests: routing-classifier-source.test.ts asserts exact tag text and sidebar value strings for on/off/with-count states."
+    },
+    "AC9": {
+      "at": "2026-09-25T18:36:38.256Z",
+      "note": "TaskClassifierUsage (inputTokens/outputTokens/cost/latencyMs) threaded from JevTaskClassifier (result.usage) and MainModelTaskClassifier (runModelTurn's NormalizedUsage+latencyMs) into TaskClassifierResult; renderRoutingUsageLine formats it. Tests: routing-classifier-source.test.ts asserts 'usage: ↑40 ↓0 $0.0012' for a Jev-routed turn; jev-classifier.test.ts asserts usage passthrough on both ok:true and refused results."
+    },
+    "AC10": {
+      "at": "2026-09-25T18:36:38.625Z",
+      "note": "All 73 new tests use injected fetch/providerFactory stubs (fakeFetch mirroring jev-client.test.ts's own pattern; stubProvider mirroring single-turn.test.ts's own pattern) — zero real network calls. No OS-specific paths/shell assumptions (pure TS + tmpdir()/mkdtempSync for the one fs-touching test file). Revert-check: reverting src/harness/decision/*.ts and src/tui/routing-classifier-source.ts while keeping the *.test.ts files makes every new test fail red (module-not-found / missing export)."
+    },
+    "AC11": {
+      "at": "2026-09-25T18:37:01.280Z",
+      "note": "scripts/routing-classifier-live-check.ts run with env -u OPENROUTER_API_KEY (saved key resolved, key never printed): 20 hand-labeled requests across all 7 wired categories, 14 real Jev/systemone calls (well under ~40), final accuracy 20/20 (100%) after tuning DEFAULT_JEV_CLASSIFIER_CONFIDENCE_THRESHOLD 0.6->0.45 based on measured evidence (first run at 0.6: 9/20=45%, every refused low-confidence pick's underlying choice was actually correct). Cost $0.000351 total, avg latency 412ms (well under the 3s bound). Findings documented in jev-classifier.ts's threshold constant comment."
+    },
+    "AC12": {
+      "at": "2026-09-25T18:37:01.616Z",
+      "note": "docs/docs/cli-reference.md: new 'Routing classifier' paragraph (categories, fallback chain, /route on|off, ShellConfig.routingClassifier.enabled, per-turn tag + sidebar). check-doc-links: 1628 links checked, 0 broken. keryx health run: PASS (score 94). keryx flow check: consistent."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read PRD/PLAN Flow B/C, existing routing table (flow 305/327), Jev client (flow 306), turn-guard wiring (flow 329) as the shell-integration precedent."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented TaskClassifier/NullClassifier, deterministic shortcuts, MainModelTaskClassifier, JevTaskClassifier (on existing jev-client.ts), classifyTurn fallback chain, and keryx shell wiring (/route on|off, sb-route sidebar, per-turn tag, routed deps via makeAgentDeps)."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "73 new hermetic unit/render tests across src/harness/decision and src/tui (classifier, shortcuts, main-model, jev, classify-turn, routing-classifier-source, route-command); full repo bun test and opentui-tests-no-skips green; fixed pre-existing source-text-audit tests (agent-commands.test.ts, tui-shell.test.ts) for the new /route entry and 4th busClientRef call site."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "typecheck, lint, keryx health run, keryx flow check all green; live check run twice (env -u OPENROUTER_API_KEY), second run after tuning confidence threshold from measured evidence: 20/20 (100%) accuracy, 14 Jev calls, /usr/bin/zsh.000351 cost, ~412ms avg latency."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T17:54:16.364Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T17:55:05.664Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T17:55:08.936Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T18:36:03.803Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T18:36:03.942Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T18:36:04.083Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T18:36:04.229Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T18:36:14.775Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/decision/classifier.ts: TaskClassifier interface + NullClassifier, always {ok:false,reason:\"no classifier configured\"}. Test: classifier.test.ts (1 test, pass). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:15.096Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/harness/decision/deterministic-shortcuts.ts: classifyDeterministic — slash bypass, chit-chat->quick, review-naming->review. Tests: deterministic-shortcuts.test.ts (9 tests incl. negative cases for 'overview' substring and long greeting-prefixed messages, pass). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:15.423Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/harness/decision/main-model-classifier.ts: MainModelTaskClassifier on runModelTurn, strict one-token prompt, unparseable/out-of-vocab/empty -> ok:false. Tests: main-model-classifier.test.ts (6 tests: exact match, whitespace/casing noise, out-of-vocab, empty, no-categories, provider error, pass). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:15.744Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/harness/decision/jev-classifier.ts: JevTaskClassifier built on existing callJevSystemOne (flow 306), one choice+one noul question, credential+opt-in gated, threshold refusal. Tests: jev-classifier.test.ts (6 tests, fake fetch, zero real network, pass). Threshold tuned 0.6->0.45 from live-check evidence (AC11). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:27.677Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/harness/decision/classify-turn.ts: classifyTurn chain (deterministic->jev->main-model->null), each stage wrapped in withTimeout (default 3000ms, AbortController-based real cancellation). Tests: classify-turn.test.ts (9 tests incl. per-stage transitions and a hanging-fetch timeout case asserting <2s wall time, pass). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:28.006Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/tui/routing-classifier-source.ts: runRoutingClassifierForTurn resolves via resolveCategoryDetailed({project,user}, connected) matching review/subagents' existing call-site pattern. sessionModelExplicit flag (set in tui-shell.ts's switchTo) skips classification entirely once /model is used this session. Tests: routing-classifier-source.test.ts (5 tests) + classify-turn.test.ts's slash-command/empty-category short-circuit tests. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:28.370Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: tui-shell.ts: /route on|off registered in agent-commands.ts AGENT_SLASH_COMMANDS, dispatched via isRouteCommand, ShellConfig.routingClassifier.enabled persisted (shell-config.ts), routingEnabled local binding gates classification per turn. Tests: route-command.test.ts (5 tests); turn-guard-shell-wiring.test.ts and tui-shell.test.ts source-audits still pass unmodified/updated for the new call site. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:28.727Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: renderRoutingTagLine (e.g. '[quick -> anthropic/claude-x] (jev 92%)') printed via io.onSystem when a turn routes; sb-route sidebar row (renderRoutingSidebarValue: 'on · N routed (last: cat)' / 'off') mounted after sb-guard. Tests: routing-classifier-source.test.ts asserts exact tag text and sidebar value strings for on/off/with-count states. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:38.256Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: TaskClassifierUsage (inputTokens/outputTokens/cost/latencyMs) threaded from JevTaskClassifier (result.usage) and MainModelTaskClassifier (runModelTurn's NormalizedUsage+latencyMs) into TaskClassifierResult; renderRoutingUsageLine formats it. Tests: routing-classifier-source.test.ts asserts 'usage: ↑40 ↓0 $0.0012' for a Jev-routed turn; jev-classifier.test.ts asserts usage passthrough on both ok:true and refused results. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:36:38.625Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: All 73 new tests use injected fetch/providerFactory stubs (fakeFetch mirroring jev-client.test.ts's own pattern; stubProvider mirroring single-turn.test.ts's own pattern) — zero real network calls. No OS-specific paths/shell assumptions (pure TS + tmpdir()/mkdtempSync for the one fs-touching test file). Revert-check: reverting src/harness/decision/*.ts and src/tui/routing-classifier-source.ts while keeping the *.test.ts files makes every new test fail red (module-not-found / missing export). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:37:01.280Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: scripts/routing-classifier-live-check.ts run with env -u OPENROUTER_API_KEY (saved key resolved, key never printed): 20 hand-labeled requests across all 7 wired categories, 14 real Jev/systemone calls (well under ~40), final accuracy 20/20 (100%) after tuning DEFAULT_JEV_CLASSIFIER_CONFIDENCE_THRESHOLD 0.6->0.45 based on measured evidence (first run at 0.6: 9/20=45%, every refused low-confidence pick's underlying choice was actually correct). Cost $0.000351 total, avg latency 412ms (well under the 3s bound). Findings documented in jev-classifier.ts's threshold constant comment. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:37:01.617Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: docs/docs/cli-reference.md: new 'Routing classifier' paragraph (categories, fallback chain, /route on|off, ShellConfig.routingClassifier.enabled, per-turn tag + sidebar). check-doc-links: 1628 links checked, 0 broken. keryx health run: PASS (score 94). keryx flow check: consistent. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T18:36:14.775Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:15.095Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:15.422Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:15.744Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:27.676Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:28.006Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:28.369Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:28.727Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:38.256Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:36:38.625Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:37:01.280Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    },
+    {
+      "at": "2026-09-25T18:37:01.616Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:759b1c43fae203503e5a74f1605a90a29373dcb5d53bed28a2ee4306a7bf0d77"
+    }
+  ]
+}

@@ -115,6 +115,14 @@ import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
 import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
 import { renderTurnGuardNoticeLine } from "../review/turn-guard";
+import {
+  renderRoutingSidebarValue,
+  renderRoutingTagLine,
+  runRoutingClassifierForTurn,
+  type RoutingClassifierTurnResult,
+} from "./routing-classifier-source";
+import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
+import type { RoutingCategory } from "../harness/routing/table";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -4063,6 +4071,11 @@ export async function launchTuiAgentShell(opts: {
     // defined below once `guardEnabled`/`guardHistory` exist.
     const sbGuard = new otui.BoxRenderable(r, { id: "sb-guard", flexDirection: "column", flexShrink: 0 });
     sidebar.add(sbGuard);
+    // Flow 338 (AC8): "Route" row — same zero-rows-while-off idiom as `sbGuard`
+    // above. Created here (sidebar position); filled by `refreshRoutingSidebar`,
+    // defined below once `routingEnabled`/`routingRoutedCount` exist.
+    const sbRoute = new otui.BoxRenderable(r, { id: "sb-route", flexDirection: "column", flexShrink: 0 });
+    sidebar.add(sbRoute);
     // Multi-agent / page-worker fleet (enrich swarm + future harness subagents).
     // Live activity: main agent phase + optional enrich/subagent fleet.
     // Yellow when blocked (user must act), red on failure — not cryptic glyphs only.
@@ -4571,6 +4584,58 @@ export async function launchTuiAgentShell(opts: {
       saveShellConfig({ turnGuard: { enabled: next } });
       refreshGuardSidebar();
       io.onSystem?.(`Guard: ${next ? "on" : "off"}\n`);
+    };
+
+    // --- flow 338: routing classifier ----------------------------------------
+    // Opt-in (default off, mirrors the guard above exactly): `/route on|off`
+    // toggles + persists `ShellConfig.routingClassifier.enabled`. When on, a
+    // Jev credential (if one resolves) is tried first, else the session's own
+    // model classifies, else the turn runs unrouted — PRD §9.4's fail-closed
+    // chain, `classify-turn.ts`.
+    let routingEnabled = loadShellConfig().routingClassifier?.enabled === true;
+    let routingRoutedCount = 0;
+    let routingLastCategory: RoutingCategory | undefined;
+    /**
+     * PRD §9.5: an explicit `/model`/`/connect` switch always wins over
+     * classification. Scoped to THIS session's own live choices (the
+     * session's INITIAL model — auto-detected or read from a prior saved
+     * choice — is not itself a deliberate in-session pick) — `switchTo`
+     * below sets this the moment the operator actually picks a model.
+     */
+    let sessionModelExplicit = false;
+    const refreshRoutingSidebar = (): void => {
+      clearTranscriptChildren(sbRoute);
+      if (!routingEnabled) return;
+      sbRoute.add(new otui.TextRenderable(r, { id: "sb-route-k", content: otui.t`${dimChunk(otui, "Route")}`, marginTop: 1 }));
+      sbRoute.add(
+        new otui.TextRenderable(r, {
+          id: "sb-route-v",
+          content: otui.t`${dimChunk(otui, renderRoutingSidebarValue(routingEnabled, routingRoutedCount, routingLastCategory))}`,
+        }),
+      );
+    };
+    refreshRoutingSidebar();
+    /**
+     * `/route on|off`: live toggle + persistence (same shape as
+     * `setGuardEnabled`) — but NOT byte-identical to it: `saveShellConfig`
+     * merges its `patch` at the TOP level only (`{ ...loadShellConfig(dir),
+     * ...patch }`, `shell-config.ts`) — a nested object under a key is
+     * REPLACED whole, not merged. `setGuardEnabled`'s own
+     * `saveShellConfig({ turnGuard: { enabled: next } })` gets away with that
+     * because `ShellConfig.turnGuard` carries only `enabled`. `routingClassifier`
+     * is NOT that case: its type already declares a second field —
+     * `classifier?: "jev"` (PRD §9.2's future opt-in-to-Jev-specifically
+     * knob) — so a bare `{ enabled: next }` write here would silently drop
+     * it the moment anything starts setting it. Read-and-spread the existing
+     * value first, the same way `saveProviderBaseUrl`/`saveProviderModelParams`
+     * (`src/lib/shell-config.ts`) already merge their own nested objects.
+     */
+    const setRoutingEnabled = (next: boolean): void => {
+      routingEnabled = next;
+      const existing = loadShellConfig().routingClassifier ?? {};
+      saveShellConfig({ routingClassifier: { ...existing, enabled: next } });
+      refreshRoutingSidebar();
+      io.onSystem?.(`Route: ${next ? "on" : "off"}\n`);
     };
 
     // Approval gate: `shell_exec` (remembered patterns) + `spawn_subagent` (MAE).
@@ -6372,6 +6437,9 @@ export async function launchTuiAgentShell(opts: {
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
       currentSel = ns;
+      // Flow 338 (PRD §9.5): an explicit `/model`/`/connect` pick always wins
+      // over automatic routing for the rest of this session.
+      sessionModelExplicit = true;
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
       deps = {
@@ -7563,6 +7631,22 @@ export async function launchTuiAgentShell(opts: {
           showTurnGuard();
           return;
         }
+        if (isRouteCommand(command.name)) {
+          // flow 338 (AC7): `/route on|off` toggles + persists; bare `/route`
+          // prints the current state (no modal — see `route-command.ts`'s
+          // header for why).
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+          if (arg === "on" || arg === "off") {
+            setRoutingEnabled(arg === "on");
+            return;
+          }
+          if (arg.length > 0) {
+            io.onSystem?.(`Unknown /route argument '${arg}'. Usage: ${ROUTE_COMMAND} [on|off]\n`);
+            return;
+          }
+          io.onSystem?.(`Route: ${renderRoutingSidebarValue(routingEnabled, routingRoutedCount, routingLastCategory)}\n`);
+          return;
+        }
         if (command.name === "/bus") {
           runBusCommand(line);
           return;
@@ -8056,17 +8140,89 @@ export async function launchTuiAgentShell(opts: {
           // (including an aborted request — AbortError lands here too)
         }
       };
-      // flow 329: starts collecting THIS turn's tool calls/final text fresh —
-      // must run before `runAgentTurn` so no early tool call is missed.
-      guardCollector.reset(line);
-      const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
-      // Captured now, while `operation` is still the active one — `.signal`
-      // throws once `foregroundOperation.settle(operation)` below clears it,
-      // and by the time the guard's own deferred continuation (further down)
-      // wakes up from its `await`, a NEW turn may already be active, whose
-      // signal would say nothing about whether THIS turn was cancelled.
-      const turnSignal = foregroundOperation.signal;
-      void runAgentTurn(foregroundIo, deps, history, line, {
+      // Flow 338: resolve routing BEFORE the turn starts — bounded, so this
+      // never hangs the shell, but necessarily sequential with dispatch
+      // since the routed provider/model must be known before `runAgentTurn`
+      // is called. Wrapped in its own async IIFE so `runLine` itself stays
+      // synchronous (its existing contract — every other call site awaits
+      // nothing from it).
+      //
+      // The bound is NOT a flat `CLASSIFY_TURN_TIMEOUT_MS` (3s): `classifyTurn`
+      // (`../harness/decision/classify-turn.ts`) tries Jev, then — on ANY Jev
+      // failure/timeout — the main-model classifier, each stage independently
+      // raced against its own `CLASSIFY_TURN_TIMEOUT_MS` timer
+      // (`withTimeout`). Worst case (Jev hangs to its own timeout, THEN the
+      // main-model stage also hangs to its own timeout) is ~2x
+      // `CLASSIFY_TURN_TIMEOUT_MS` (~6s) before this IIFE falls back to the
+      // session's own model — deliberate: a slow/hanging Jev call should not
+      // starve the main-model fallback of its own full timeout budget. Still
+      // strictly bounded (never hangs indefinitely), just not by the single
+      // constant this comment used to claim.
+      //
+      // `sessionDeps` captures the OUTER (session) `deps` here, before the
+      // IIFE's own block-scoped `deps` shadows the name below — a `const`
+      // declared INSIDE that block would see its own (uninitialized) `deps`
+      // due to hoisting, not the outer one.
+      const sessionDeps = deps;
+      void (async () => {
+        // Shadows the outer `deps` for the lifetime of this one turn only —
+        // `sessionDeps` (above) keeps a stable handle on the session's own
+        // deps for the bus-field carry-forward below, while the shadowed
+        // `deps` is what actually reaches `runAgentTurn`, keeping that
+        // dispatch call's own text identical to every pre-flow-338 turn
+        // (source-text audits in `turn-guard-shell-wiring.test.ts` key off
+        // it).
+        let deps = sessionDeps;
+        if (routingEnabled && !sessionModelExplicit && origin === "operator" && line.trim().length > 0) {
+          let routingOutcome: RoutingClassifierTurnResult | undefined;
+          try {
+            routingOutcome = await runRoutingClassifierForTurn(line, {
+              enabled: routingEnabled,
+              // Flow 338 scoping note (routing-classifier-source.ts's own
+              // header): Jev is tried whenever a credential resolves AND
+              // routing itself is on — `/route on` IS the opt-in (PRD §9.2's
+              // "opted in" clause), there is no separate Jev-only toggle in
+              // this flow.
+              jevEnabled: routingEnabled,
+              cwd: opts.session?.cwd ?? process.cwd(),
+              detected: opts.detected ?? [],
+              sessionProvider: currentSel.provider,
+              sessionModel: currentSel.model,
+            });
+          } catch {
+            // fail-closed: classification must never block or fail the turn.
+          }
+          if (routingOutcome?.routed !== undefined) {
+            try {
+              deps = {
+                ...(await opts.makeAgentDeps({ provider: routingOutcome.routed.providerId, model: routingOutcome.routed.modelId }, liveSlateSession, busClientRef)),
+                onContextCompaction,
+                ...(sessionDeps.busInbox !== undefined ? { busInbox: sessionDeps.busInbox } : {}),
+                ...(sessionDeps.busAck !== undefined ? { busAck: sessionDeps.busAck } : {}),
+                ...(sessionDeps.busLeases !== undefined ? { busLeases: sessionDeps.busLeases } : {}),
+              };
+              routingRoutedCount += 1;
+              routingLastCategory = routingOutcome.category;
+              refreshRoutingSidebar();
+              const tag = renderRoutingTagLine(routingOutcome);
+              if (tag !== undefined) io.onSystem?.(`${tag}\n`);
+            } catch {
+              // fail-closed: a routed-deps build failure runs on the session's own model instead.
+              deps = sessionDeps;
+            }
+          }
+        }
+        // flow 329: starts collecting THIS turn's tool calls/final text fresh —
+        // must run before `runAgentTurn` so no early tool call is missed.
+        guardCollector.reset(line);
+        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
+        // Captured now, while `operation` is still the active one — `.signal`
+        // throws once `foregroundOperation.settle(operation)` below clears it,
+        // and by the time the guard's own deferred continuation (further down)
+        // wakes up from its `await`, a NEW turn may already be active, whose
+        // signal would say nothing about whether THIS turn was cancelled.
+        const turnSignal = foregroundOperation.signal;
+        void runAgentTurn(foregroundIo, deps, history, line, {
         signal: turnSignal,
         ...(origin === "operator" ? {} : { origin }),
         ...(slateSession !== undefined ? { slateSession } : {}),
@@ -8160,6 +8316,7 @@ export async function launchTuiAgentShell(opts: {
           }
         }
       });
+      })();
     };
 
     // --- flow 265 (AC7/AC8): wake on a finished task, only when idle ---------
