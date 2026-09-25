@@ -296,10 +296,16 @@ export interface ConfirmedRunner {
  * True for every argv shape `invocationArgv` (`./schedule.ts`) actually
  * produces: `[binary]` (a compiled keryx), `[interpreter, script]` (the
  * pre-R2-02 shape, still accepted so an entry stored before that fix keeps
- * validating), or `[interpreter, ...SAFE_BUN_SPAWN_ARGS, script]` (the
- * current shape — R2-02 inserts the two safe re-exec flags BETWEEN the
- * interpreter and the script for every script-based invocation, so this
- * argv is 2 longer than it used to be for that case).
+ * validating — and, since flow 319's fix, also the current shape for a
+ * NODE interpreter, which never gets the flags inserted), or `[interpreter,
+ * ...SAFE_BUN_SPAWN_ARGS, script]` (the current shape for a BUN interpreter
+ * — R2-02 inserts the two safe re-exec flags BETWEEN the interpreter and the
+ * script for a bun-based invocation, so this argv is 2 longer than the
+ * 2-element shape for that case). This validator is deliberately shape-only
+ * and does not itself decide which interpreter gets which shape — that
+ * decision lives in `invocationArgv`/`isBunExecPath` (`./schedule.ts`); both
+ * shapes are always accepted here so a stored entry from either interpreter,
+ * or from before/after either fix, keeps validating.
  */
 function isValidRunnerArgv(argv: readonly unknown[]): boolean {
   const isAbsString = (a: unknown): a is string => typeof a === "string" && path.isAbsolute(a);

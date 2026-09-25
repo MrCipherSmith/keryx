@@ -78,6 +78,40 @@ export function resolveKeryxInvocation(
 }
 
 /**
+ * True when `execPath` is a Bun interpreter, as opposed to Node (or anything
+ * else) — decided WITHOUT running `execPath`, which a schedule line only
+ * gets to run later, on whatever host installed it:
+ *
+ *   1. Basename: `bun`/`bunx` (and the `.exe` forms on Windows) are Bun's own
+ *      published binary names — nvm/asdf/homebrew installs, the standalone
+ *      installer, and `bunx` shims all keep one of these basenames even
+ *      though the directory varies.
+ *   2. Failing that, THIS process's own interpreter: when keryx itself is
+ *      currently running under Bun (`process.versions.bun` is set — Node
+ *      never sets it) and `execPath` is exactly this process's own
+ *      `process.execPath`, it is Bun by construction — the common case,
+ *      since `resolveKeryxInvocation`'s default `execPath` IS
+ *      `process.execPath`, so a schedule drafted from a bun-run keryx needs
+ *      no basename guess at all, however the binary happens to be named.
+ *
+ * Node does not understand `--no-env-file`/`--config=/dev/null` (they are
+ * Bun-only flags) and refuses to start with them — see `invocationArgv`.
+ */
+export function isBunExecPath(execPath: string): boolean {
+  // `path.basename` alone only splits on THIS platform's own separator — a
+  // Windows-style `C:\bun\bun.exe` path evaluated on POSIX (or vice versa)
+  // would not be split at all. Splitting on both slash kinds first, then
+  // taking the last segment, works for either path style regardless of the
+  // host platform actually running this code (this decision has to hold for
+  // a printed line installed on a DIFFERENT host than the one that drafted
+  // it — see this file's top-of-file doc comment).
+  const segments = execPath.split(/[\\/]/);
+  const base = (segments[segments.length - 1] ?? "").toLowerCase().replace(/\.exe$/, "");
+  if (base === "bun" || base === "bunx") return true;
+  return typeof process.versions.bun === "string" && execPath === process.execPath;
+}
+
+/**
  * The argv prefix that runs keryx the way this process runs: `[interpreter,
  * script]` or `[binary]`.
  *
@@ -94,11 +128,24 @@ export function resolveKeryxInvocation(
  * hand them to but keryx's own arg parser — see `ensureSafeBunExec`'s same
  * reasoning) and its `invocation.scriptPath` is `undefined`, so the array
  * stays `[binary]` unchanged.
+ *
+ * R1 regression (flow 319 CI): the flags were being inserted for EVERY
+ * script-based interpreter, Node included. `SAFE_BUN_SPAWN_ARGS` are Bun CLI
+ * flags (`--no-env-file`, `--config=/dev/null`); Node has no such flags and
+ * refuses to start at all when handed them (`node --no-env-file …` fails
+ * before it even resolves the script argument) — a schedule installed under
+ * Node (`keryx` run via a Node-based version manager, or a `node
+ * dist/cli.js`-style invocation) would break outright. Node does not
+ * auto-load a cwd `.env`/`bunfig.toml` the way a shebang-bypassing Bun
+ * invocation does (see docs/docs/onboarding.md's "Environment isolation"),
+ * so it needs none of this in the first place — `isBunExecPath` gates the
+ * insertion on the interpreter actually being Bun.
  */
 export function invocationArgv(invocation: KeryxInvocation): string[] {
-  return invocation.scriptPath === undefined
-    ? [invocation.execPath]
-    : [invocation.execPath, ...SAFE_BUN_SPAWN_ARGS, invocation.scriptPath];
+  if (invocation.scriptPath === undefined) return [invocation.execPath];
+  return isBunExecPath(invocation.execPath)
+    ? [invocation.execPath, ...SAFE_BUN_SPAWN_ARGS, invocation.scriptPath]
+    : [invocation.execPath, invocation.scriptPath];
 }
 
 export type ScheduleResolution =

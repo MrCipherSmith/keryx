@@ -58,7 +58,11 @@ function deps(extra: Partial<ScheduleCommandDeps> = {}): ScheduleCommandDeps {
     backend: "systemd",
     unitDir,
     user: "someone",
-    invocation: { execPath: "/bin/true", scriptPath: "/bin/true" },
+    // flow 319: a bun-named interpreter, so the safe re-exec flags this
+    // card is meant to show (below) are actually inserted — see
+    // `isBunExecPath`/`invocationArgv` in src/trigger/schedule.ts, which
+    // insert SAFE_BUN_SPAWN_ARGS only for Bun, never for Node.
+    invocation: { execPath: "/opt/bin/bun", scriptPath: "/bin/true" },
     run: async (command, args): Promise<CommandResult> => {
       calls.push([command, ...args].join(" "));
       return command === "loginctl" ? { code: 0, stdout: "Linger=no\n", stderr: "" } : { code: 0, stdout: "", stderr: "" };
@@ -136,7 +140,7 @@ describe("keryx schedule add", () => {
     // safe re-exec flags between the interpreter and the script path for
     // every script-based invocation — this card is meant to show the timer's
     // ACTUAL command, so it must show them too, not the pre-R2-02 shape.
-    expect(text).toContain("runs: /bin/true --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github");
+    expect(text).toContain("runs: /opt/bin/bun --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github");
     expect(text).toContain("linger: off");
     expect(text).toContain("not confirmed — nothing was written or installed");
     expect(existsSync(scheduleStorePath(root))).toBe(false);

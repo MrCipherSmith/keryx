@@ -18,6 +18,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { readTriggerRuns } from "../trigger/record";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
@@ -57,7 +58,12 @@ interface Proc {
 }
 
 function spawnCli(root: string, args: string[], env: Record<string, string> = {}): Proc {
-  const proc = Bun.spawn(["bun", CLI, ...args], {
+  // R3 (flow 319 CI): the shipped-form safe flags BETWEEN "bun" and CLI, same
+  // fix as the shell-lease/pause/bus process tests (767d0b8f) — without them
+  // this bypasses the shebang, `ensureSafeBunExec` re-execs into a wrapper +
+  // child pair, and `proc.pid` here is the WRAPPER's pid, not the real keryx
+  // process the maintenance lock actually reports as the holder.
+  const proc = Bun.spawn(["bun", ...SAFE_BUN_SPAWN_ARGS, CLI, ...args], {
     cwd: root,
     env: { ...process.env, ...env },
     stdout: "pipe",
