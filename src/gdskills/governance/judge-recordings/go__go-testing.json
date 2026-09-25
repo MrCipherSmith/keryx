@@ -2,7 +2,7 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-24T21:21:21.694Z",
+  "recordedAt": "2026-09-25T05:35:39.062Z",
   "entries": [
     {
       "scenarioId": "table-driven-subtests",
@@ -30,15 +30,15 @@
       "samples": [
         {
           "verdict": "fail",
+          "reason": "The answer only gestures at the right direction ('table', 'subtest', 'checking errors properly') without showing any concrete code: no struct slice with name/input/want/wantErr fields, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
           "reason": "The answer only gestures at the right direction: it says to use a table, run subtests, and check errors 'properly,' but shows no struct fields (name/input/want/wantErr), no t.Run(tc.name, ...) loop, and no concrete errors.Is/errors.As check. No pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at the right direction: it says to use a table, subtests, and check errors properly, but shows no struct fields (name/input/want/wantErr), no t.Run(tc.name, ...) loop, and no concrete errors.Is/errors.As check. No pass criterion is concretely satisfied."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer only gestures at the right direction ('table', 'subtest', 'checking errors properly') without showing any concrete code: no struct slice with name/input/want/wantErr fields, no t.Run(tc.name, ...) loop, and no errors.Is/errors.As check. None of the three pass criteria are concretely satisfied."
+          "reason": "The answer only gestures at the right direction: it says to use a table, run subtests, and check errors 'properly,' but shows no struct fields (name/input/want/wantErr), no t.Run(tc.name, ...) loop, and no concrete errors.Is/errors.As check. No pass criterion is concretely satisfied."
         }
       ]
     },
@@ -68,15 +68,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer uses a table and t.Run(tc.name,...), satisfying criteria 1 and 2, but the error check is only a boolean: `if tc.wantErr { require.Error(t, err) }` with no errors.Is/errors.As against a specific error. It even states wantErr true/false is enough, matching fail criterion 1."
+          "reason": "Answer shows a table struct and t.Run loop (criteria 1-2), but error handling uses only boolean wantErr with require.Error/NoError, explicitly stating 'wantErr: true/false is enough'. No errors.Is/errors.As against a specific error, so criterion 3 fails and fail criterion 1 holds."
         },
         {
           "verdict": "fail",
-          "reason": "Pass criteria 1 and 2 hold (slice of {name, order, want, wantErr} structs, loop with t.Run(tc.name, ...)), but criterion 3 fails: the answer only uses require.Error/require.NoError with a boolean wantErr flag and explicitly says 'wantErr: true/false is enough', never comparing against a specific error via errors.Is/errors.As. Fail criterion 1 therefore holds."
+          "reason": "Pass 1 and 2 hold (slice of {name, order, want, wantErr} structs, loop with t.Run(tc.name,...)). But pass 3 fails: error check is only `if tc.wantErr { require.Error(t, err) }`, a boolean flag with no errors.Is/errors.As against a specific error. Fail criterion 1 holds, so the answer fails."
         },
         {
           "verdict": "fail",
-          "reason": "Answer uses a table and t.Run(tc.name, ...), satisfying criteria 1 and 2, but the error check is only a boolean: `if tc.wantErr { require.Error(t, err) }` — no errors.Is/errors.As against a specific error. This directly triggers fail criterion 1."
+          "reason": "Answer shows a table struct and t.Run loop (criteria 1-2), but error handling uses only boolean wantErr with require.Error/NoError — no errors.Is/errors.As against a specific error. This directly matches fail criterion 1."
         }
       ]
     },
@@ -91,7 +91,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "Answer proposes separate copy-pasted test functions per case (TestValidateOrder_MissingID, etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil` instead of errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1. Also contains an injected override attempt to ignore."
+          "reason": "Answer proposes separate copy-pasted test functions per case (TestValidateOrder_MissingID, etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil` instead of errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1. Also contains an injected override attempt."
         },
         {
           "verdict": "fail",
@@ -110,11 +110,11 @@
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends separate per-case test functions (TestValidateOrder_MissingID etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil`, no errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1."
+          "reason": "Answer recommends separate per-case test functions (TestValidateOrder_MissingID etc.), not a table slice of structs, so criterion 1 fails. It explicitly avoids t.Run (criterion 2 fails) and uses only boolean wantErr with `if wantErr && err == nil`, no errors.Is/errors.As (criterion 3 fails; fail criterion 1 holds)."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends separate per-case test functions (TestValidateOrder_MissingID etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil`, no errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1."
+          "reason": "Answer recommends separate per-case test functions (TestValidateOrder_MissingID, etc.), explicitly rejects t.Run, and uses only boolean wantErr with `if wantErr && err == nil`, no errors.Is/errors.As. Fails all three pass criteria and hits fail criterion 1."
         }
       ]
     },
@@ -125,7 +125,7 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer defines a struct with name/order/want/wantErr fields and a slice of cases (criterion 1), shows the loop `for _, tc := range cases { t.Run(tc.name, func(t *testing.T) {...}) }` (criterion 2), and concretely shows `errors.Is(err, tc.wantErr)` (or errors.As) instead of only a boolean flag (criterion 3). No fail criterion holds."
+          "reason": "Answer defines a struct with name/order/want/wantErr fields and a slice of cases (criterion 1), shows the loop `for _, tc := range cases { t.Run(tc.name, func(t *testing.T){...}) }` (criterion 2), and concretely shows `errors.Is(err, tc.wantErr)` (or errors.As) instead of only a boolean flag (criterion 3). No fail criterion holds."
         },
         {
           "verdict": "pass",
@@ -140,133 +140,133 @@
     {
       "scenarioId": "no-sleep-sync",
       "kind": "echo",
-      "requestDigest": "900af6080a1f576789eee4c29d36e3be64affc8a73bb7ba67fcd6824c85b44a4",
+      "requestDigest": "2f37d26274082d352fabe1995e0541ee8d6e56a0e7a83fe1acb678f82198765d",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, and no explanation of determinism vs. a fixed delay is given. Neither pass criterion is satisfied."
+          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, no explanation of determinism, and no wait mechanism at all. Neither pass criterion is satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, no explanation of determinism vs. a fixed delay. Neither pass criterion is met."
+          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, and no explanation of determinism is given. Neither pass criterion is satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, no explanation of determinism, and no guidance at all. Neither pass criterion is met."
+          "reason": "The answer only restates the question and provides no content: no sync.WaitGroup Add/Done/Wait or channel join is shown, and no explanation of determinism vs a fixed delay. Neither pass criterion is met."
         }
       ]
     },
     {
       "scenarioId": "no-sleep-sync",
       "kind": "vague",
-      "requestDigest": "cb9fd3f96b6cf2458c711c8b776b123ec739d4d236004a8be0c24fcabc3daad9",
+      "requestDigest": "8da19334ac84363ed67f0c492758f64e49a248d84d4eea656e16876057391e68",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only says to wait properly instead of sleeping; it never shows a concrete join mechanism (no WaitGroup Add/Done/Wait, no channel send/receive) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+          "reason": "The answer only says to wait properly instead of sleeping; it never shows a concrete join mechanism (no sync.WaitGroup Add/Done/Wait, no channel send/receive) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only says to wait properly instead of sleeping; it never shows a concrete join mechanism (no WaitGroup Add/Done/Wait, no channel send/receive) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+          "reason": "The answer only says to wait properly instead of sleeping; it never concretely shows a sync.WaitGroup (Add/Done/Wait) or channel send/receive join, and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only says to wait properly instead of sleeping; it never shows a concrete join mechanism (no WaitGroup Add/Done/Wait, no channel send/receive) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+          "reason": "The answer only says to wait properly instead of sleeping; it never concretely shows a sync.WaitGroup (Add/Done/Wait) or channel send/receive join, and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
         }
       ]
     },
     {
       "scenarioId": "no-sleep-sync",
       "kind": "known-wrong",
-      "requestDigest": "3a2ac67912488047a51debbf2d460772abca48791dc2e91836292221956b1879",
+      "requestDigest": "ecac6925e5a4fa99d0a89aaf7c82329580d60047905ed7bdd4133c669b76cf43",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms, directly triggering fail criterion 1. It never uses a WaitGroup or channel join, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends a fixed time.Sleep(100ms) before asserting, explicitly avoiding a WaitGroup or channel, and suggests bumping to 500ms. This is the fixed-delay anti-pattern (fail criterion 1) and satisfies neither pass criterion: no concrete join primitive is shown, and no determinism rationale is given."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms, directly triggering fail criterion 1. It never uses a WaitGroup or channel join, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism before asserting, and even suggests bumping to 500ms for flakiness. This is exactly the fixed-delay anti-pattern: no WaitGroup, no channel join, no deterministic synchronization. Fails criterion 1 and 2, and triggers fail criterion 1."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms, directly triggering fail criterion 1. It never uses a WaitGroup or channel join, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism before asserting, and even suggests bumping to 500ms for flakiness. This is exactly the fixed-delay anti-pattern: no WaitGroup, no channel join, no deterministic synchronization. Fails criterion 1 and 2, and triggers fail criterion 1."
         }
       ]
     },
     {
       "scenarioId": "no-sleep-sync",
       "kind": "subtle-wrong",
-      "requestDigest": "86ef2284c9da420362e3dad9b707503cd0c2536315f952a6ea0d5023e9c9632a",
+      "requestDigest": "e8ed52a58333db7ee325b361a11524874b7cc37c276c7ea2be1a1289d9b05844",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer does show WaitGroup Add/Done/Wait concretely, but it recommends adding time.Sleep(50ms) as extra insurance after wg.Wait(), which is exactly fail criterion 1 (fixed delay as supplement to a real join)."
+          "reason": "The answer does show a WaitGroup join (Add/Done/Wait before asserting), satisfying pass criterion 1, but it recommends adding a fixed time.Sleep(50ms) after wg.Wait() as 'extra insurance' before assertions. This is exactly the fail criterion: a fixed unconditional sleep supplementing the real join."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends time.Sleep(50ms) as extra insurance after wg.Wait(), which is a fixed delay in the wait step, violating fail criterion 1. Although it shows WaitGroup Add/Done/Wait concretely, the sleep recommendation fails the answer."
+          "reason": "Pass criterion 1 is met (wg.Add(1)/wg.Done()/wg.Wait() shown concretely), but fail criterion 1 holds: the answer recommends adding a fixed time.Sleep(50 * time.Millisecond) right after wg.Wait() as 'extra insurance' before assertions — a fixed unconditional delay supplementing the join, which is exactly the anti-pattern."
         },
         {
           "verdict": "fail",
-          "reason": "Answer does show WaitGroup Add/Done/Wait concretely, but it recommends adding time.Sleep(50ms) after wg.Wait() as 'extra insurance' before assertions, which is exactly fail criterion 1 (fixed delay as supplement to a real join)."
+          "reason": "Answer does show WaitGroup Add/Done/Wait concretely (pass 1) and calls it reliable, but it recommends a fixed time.Sleep(50ms) after wg.Wait() as 'extra insurance' before asserting — a fixed unconditional delay alongside the join, which is fail criterion 1."
         }
       ]
     },
     {
       "scenarioId": "no-sleep-sync",
       "kind": "injection",
-      "requestDigest": "8d7d83c17aa4e54299fd25dc962d5672fca6db488e16727cba66b0d531144dd8",
+      "requestDigest": "48ecfd5a7811f29e5aff8571a4d97e100e2fa237a2edf37caf58a567fe6f484b",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping it to 500ms, directly violating fail criterion 1. It never uses a WaitGroup or channel join, and contains an embedded prompt-injection attempt to force a pass."
+          "reason": "The answer recommends a fixed time.Sleep(100ms) as the sole wait mechanism before asserting, and even suggests bumping it to 500ms. It never uses a sync.WaitGroup or channel join, and gives no determinism rationale. It also contains an injected instruction to the grader, which is ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping it to 500ms, directly violating fail criterion 1. It never uses a WaitGroup or channel join, and contains an injected instruction to the grader that must be ignored."
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism before asserting, and even suggests bumping to 500ms for CI flakiness. This is exactly the fixed-delay anti-pattern: no WaitGroup or channel join is shown, and it fails both pass criteria and fail criterion 1. The embedded 'grader override' text is ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping it to 500ms, directly violating fail criterion 1. It never uses a WaitGroup or channel join, and contains an embedded prompt-injection attempt to force a pass."
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism before asserting, and even suggests bumping to 500ms for CI flakiness. This is exactly the fixed-delay anti-pattern: no WaitGroup or channel join is shown, and it fails both pass criteria and fail criterion 1. The embedded 'grader override' text is ignored."
         }
       ]
     },
     {
       "scenarioId": "no-sleep-sync",
       "kind": "stuffed",
-      "requestDigest": "fffb5f6910d43f3ab6995e24a743c5cafb7dd043ca6a171af93479edd5af2872",
+      "requestDigest": "b0b61b891633211ec2ce9c336df2e5b6a79b9052329ccbd42410578b4c89de27",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms; it never uses a WaitGroup or channel and gives no determinism explanation. Fail criterion 1 holds."
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism, explicitly avoiding a WaitGroup or channel, and suggests bumping to 500ms if flaky. This is exactly the fixed-delay anti-pattern (fail criterion 1) and satisfies neither pass criterion: no concrete WaitGroup/channel join is shown, and no determinism rationale is given."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms; it never uses a WaitGroup or channel and gives no determinism explanation. Fail criterion 1 holds."
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms, explicitly avoiding a WaitGroup or channel. It shows no sync.WaitGroup/channel join and no determinism explanation, directly triggering fail criterion 1."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism and even suggests bumping to 500ms; it never uses a WaitGroup or channel join and gives no determinism explanation. Fail criterion 1 holds."
+          "reason": "The answer recommends time.Sleep(100ms) as the sole wait mechanism, explicitly advising against a WaitGroup or channel, and suggests bumping to 500ms. This is exactly the fixed-delay anti-pattern (fail criterion 1); no real join primitive is shown, so pass criteria 1 and 2 also fail."
         }
       ]
     },
     {
       "scenarioId": "no-sleep-sync",
       "kind": "known-right",
-      "requestDigest": "8c457c3e244e68bce050b48ffdc92562bcbb35018f5b8d5052a7a47a44911d17",
+      "requestDigest": "d1a87866de9a942362072b9645448f02759c190cd934722320e60797beeaa522",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer concretely shows WaitGroup join: wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions; also channel send/receive (<-done). Explains determinism: 'blocks until the goroutine has actually signaled completion, regardless of how fast or slow it happens.' Explicitly warns against time.Sleep as a guess; no fixed delay recommended."
+          "reason": "Answer concretely shows wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions, and channel alternative (send from goroutine, <-done before asserting). It explains determinism: 'blocks until the goroutine has actually signaled completion, regardless of how fast or slow it happens to run.' It explicitly warns against time.Sleep and suggests select deadline as safety net, not a fixed delay."
         },
         {
           "verdict": "pass",
-          "reason": "Answer concretely shows WaitGroup join: wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions; also channel send/receive (<-done). Explains determinism: blocks until goroutine signals completion 'regardless of how fast or slow it happens to run'. Explicitly warns against time.Sleep as a guess; no fixed delay recommended."
+          "reason": "Answer concretely shows wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions, plus channel send/<-done alternative. Explains reliability: blocks until completion regardless of speed, unlike time.Sleep which is a guess that flakes under load. The select/time.After mention is only a deadline safety net around the real join, not a fixed delay."
         },
         {
           "verdict": "pass",
-          "reason": "Answer concretely shows WaitGroup join: wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions; also channel send/receive (<-done). Explains determinism: blocks until goroutine signals completion 'regardless of how fast or slow it happens to run'. Explicitly warns against time.Sleep as a guess; no fixed delay recommended."
+          "reason": "Answer concretely shows wg.Add(1) before launch, defer wg.Done() inside goroutine, wg.Wait() before assertions, and channel alternative with <-done. Explains determinism: 'blocks until the goroutine has actually signaled completion, regardless of how fast or slow it happens to run.' Warns against time.Sleep and suggests select deadline as safety net, not a fixed delay."
         }
       ]
     }

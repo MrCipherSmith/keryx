@@ -178,13 +178,16 @@ describe("keryx agents export", () => {
 });
 
 describe("keryx agents verify", () => {
-  // Flow 316: the honest DeepSeek judge gate run cleared only `ts-js-node`
-  // (now `stability: "stable"`), so it ships a generated
-  // `<id>-code-auditor` / `<id>-build-fixer` pair; `react`, `go`, and
-  // `python` stay `experimental` and ship none. The real, un-stubbed CLI
-  // path reports zero problems across the whole catalog, and exactly those
-  // two generated agent names are present.
-  test("the real bundled catalog verifies ok with zero problems (only ts-js-node is gate-cleared)", async () => {
+  // Flow 317: the trials=10 honest DeepSeek judge gate run cleared `python`
+  // and `go` (now `stability: "stable"`), each shipping a generated
+  // `<id>-code-auditor` / `<id>-build-fixer` pair. `ts-js-node` dropped out
+  // (`no-ts-ignore-suppression` passRate 0.6 < 0.8 at the higher trial
+  // count — the marginal-at-the-floor fragility flow 316 review round 1
+  // predicted) and its pair was removed; `react` stays `experimental` and
+  // ships none. The real, un-stubbed CLI path reports zero problems across
+  // the whole catalog, and exactly those four generated agent names are
+  // present.
+  test("the real bundled catalog verifies ok with zero problems (python and go are gate-cleared, flow 317)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -199,7 +202,7 @@ describe("keryx agents verify", () => {
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
   });
 
   test("narrows to one agent by name", async () => {
@@ -478,26 +481,28 @@ describe("keryx agents generate", () => {
     expect(errors.join("\n")).toContain("Unknown flag");
   });
 
-  test("a real, on-disk experimental pack (go) is refused with stack-pack-not-gate-cleared, and no generated files exist", async () => {
-    // Flow 316: go stays `experimental` (its honest DeepSeek judge gate run
-    // still fails go-testing's table-driven-subtests scenario — see
-    // go/agent-refs.json's note); this proves `generate` itself refuses to
-    // create a pair for it.
+  test("a real, on-disk experimental pack (ts-js-node) is refused with stack-pack-not-gate-cleared, and no generated files exist", async () => {
+    // Flow 317: ts-js-node dropped to `experimental` at trials=10
+    // (`no-ts-ignore-suppression` passRate 0.6 < 0.8 — see
+    // ts-js-node/agent-refs.json's note); this proves `generate` itself
+    // refuses to create a pair for it.
     const { errors, log, error } = collect();
-    await agentsCatalogCommand("generate", ["--stack", "go"], { cwd: REPO_ROOT, log, error });
+    await agentsCatalogCommand("generate", ["--stack", "ts-js-node"], { cwd: REPO_ROOT, log, error });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("stack-pack-not-gate-cleared");
-    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "go-code-auditor.md"))).toBe(false);
-    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "go-build-fixer.md"))).toBe(false);
+    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "ts-js-node-code-auditor.md"))).toBe(false);
+    expect(existsSync(path.join(REAL_BUNDLED_AGENTS_DIR, "ts-js-node-build-fixer.md"))).toBe(false);
   });
 
-  test("a real, on-disk stable/gate-cleared pack (ts-js-node) regenerates byte-identically with --check", async () => {
-    // Flow 316: ts-js-node cleared the honest DeepSeek judge gate and now
+  test("a real, on-disk stable/gate-cleared pack (go) regenerates byte-identically with --check", async () => {
+    // Flow 317: go cleared the trials=10 honest DeepSeek judge gate (the
+    // no-nolint-suppression scenario defect fix plus the answer-in-text
+    // runner note together fixed both go-build-fix and go-testing) and now
     // ships its generated pair (written by `bun ./src/cli.ts agents
-    // generate --stack ts-js-node`) — `--check` against the real tree must
-    // report no drift.
+    // generate --stack go`) — `--check` against the real tree must report
+    // no drift.
     const { lines, log, error } = collect();
-    await agentsCatalogCommand("generate", ["--stack", "ts-js-node", "--check", "--json"], { cwd: REPO_ROOT, log, error });
+    await agentsCatalogCommand("generate", ["--stack", "go", "--check", "--json"], { cwd: REPO_ROOT, log, error });
     const doc = JSON.parse(lines.join("\n")) as { files: Array<{ fileName: string; changed: boolean; existed: boolean }> };
     expect(process.exitCode).not.toBe(1);
     for (const file of doc.files) {
