@@ -1,6 +1,6 @@
 ---
 name: sql-db-code-review
-description: "Use when reviewing a migration or query diff for SQL/database-specific risk -- injection (string-built SQL, ORM raw-SQL escape hatches), missing/misordered indexes, an unsafe blocking NOT NULL or index-creation statement, N+1 query shape, and transactions left open across a slow call. Read-only, no edits."
+description: "Use when reviewing a raw .sql migration or query diff for SQL/database-specific risk -- injection (string-built SQL, ORM raw-SQL escape hatches), missing/misordered indexes, an unsafe blocking NOT NULL or index-creation statement, N+1 query shape, and transactions left open across a slow call. Not for reviewing a Rails ActiveRecord or Django ORM migration file (a .rb/.py migration -- use that stack's own code-review skill), and not for a non-SQL source file's injection risk in general application code (use that language's own code-review skill). Read-only, no edits."
 triggers:
   - "review this migration diff for safety before we merge it"
   - "check this query diff for SQL injection"

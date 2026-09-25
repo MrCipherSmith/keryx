@@ -1,6 +1,6 @@
 ---
 name: c-cpp-testing
-description: "Use when a C or C++ test suite needs writing, extending, or fixing -- GoogleTest TEST/TEST_F/TEST_P, death tests, fixture setup/teardown, and verifying a memory-safety or concurrency fix under AddressSanitizer/UndefinedBehaviorSanitizer/ThreadSanitizer."
+description: "Use when a C or C++ test suite needs writing, extending, or fixing -- GoogleTest TEST/TEST_F/TEST_P, death tests, fixture setup/teardown, and verifying a memory-safety or concurrency fix under AddressSanitizer/UndefinedBehaviorSanitizer/ThreadSanitizer. Not for another systems language's own test tooling, such as Rust's cargo test (use that language's own testing skill)."
 triggers:
   - "write GoogleTest cases for this C++ class"
   - "add a TEST_F fixture for this component"

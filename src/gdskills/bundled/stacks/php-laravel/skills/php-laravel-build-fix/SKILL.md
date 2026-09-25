@@ -1,6 +1,6 @@
 ---
 name: php-laravel-build-fix
-description: "Use when composer install/update fails, PHP fatal errors block a Laravel app from booting, phpstan/larastan reports a failing analysis, or a previously-passing test suite is now failing -- resolves dependency conflicts, autoload issues, config/service-provider errors, and static-analysis findings with the smallest root-cause fix."
+description: "Use when composer install/update fails, PHP fatal errors block a Laravel app from booting, phpstan/larastan reports a failing analysis, or a previously-passing test suite is now failing -- resolves dependency conflicts, autoload issues, config/service-provider errors, and static-analysis findings with the smallest root-cause fix. Not for an npm/frontend build failure or a Python/pytest failure (use that stack's own build-fix skill)."
 triggers:
   - "composer install is failing"
   - "this Laravel app throws a fatal error on boot"

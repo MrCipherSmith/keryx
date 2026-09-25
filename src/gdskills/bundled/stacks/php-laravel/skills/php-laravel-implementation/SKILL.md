@@ -1,6 +1,6 @@
 ---
 name: php-laravel-implementation
-description: "Use when implementing or extending a feature in a PHP 8.2+ / Laravel application -- controllers, Form Request validation, Eloquent models and relationships, migrations, route-model binding, middleware, queued jobs, and service container bindings."
+description: "Use when implementing or extending a feature in a PHP 8.2+ / Laravel application -- controllers, Form Request validation, Eloquent models and relationships, migrations, route-model binding, middleware, queued jobs, and service container bindings. Not for writing or fixing tests (use php-laravel-testing)."
 triggers:
   - "add an endpoint to this Laravel controller"
   - "implement this feature in our Laravel app"

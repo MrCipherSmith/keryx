@@ -1,6 +1,6 @@
 ---
 name: sql-db-implementation
-description: "Use when writing SQL schema, migrations, or queries for Postgres/MySQL -- safe zero-downtime schema changes (adding NOT NULL, backfills), indexing (composite column order, covering/partial indexes), transaction discipline, and parameterized query design."
+description: "Use when writing raw SQL schema, migrations, or queries for Postgres/MySQL -- safe zero-downtime schema changes (adding NOT NULL, backfills), indexing (composite column order, covering/partial indexes), transaction discipline, and parameterized query design. Not for an ORM's own schema/migration file (a Prisma schema, a Django models.py, a Rails db/migrate .rb, or a Laravel migration .php) -- those belong to that stack's own implementation skill."
 triggers:
   - "write a migration that adds a NOT NULL column to this table"
   - "design an index for this query's WHERE clause"

@@ -1,6 +1,6 @@
 ---
 name: ruby-rails-implementation
-description: "Use when implementing or extending a feature in a Ruby on Rails app -- MVC boundaries, strong parameters, ActiveRecord associations and scopes, service objects for fat controllers/models, ActiveJob, and modern Ruby 3.x idiom (pattern matching, endless methods, keyword args)."
+description: "Use when implementing or extending a feature in a Ruby on Rails app -- MVC boundaries, strong parameters, ActiveRecord associations and scopes, service objects for fat controllers/models, ActiveJob, and modern Ruby 3.x idiom (pattern matching, endless methods, keyword args). Not for writing or fixing tests (use ruby-rails-testing)."
 triggers:
   - "implement this feature in Rails"
   - "add a Rails controller action and model for this"

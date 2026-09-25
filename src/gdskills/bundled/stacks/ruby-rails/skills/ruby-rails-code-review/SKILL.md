@@ -1,6 +1,6 @@
 ---
 name: ruby-rails-code-review
-description: "Use when reviewing a Rails change for framework-specific risks -- mass assignment gaps, N+1 queries, raw SQL interpolation, raw/html_safe XSS, missing auth/authorization filters, fat controllers/models, and non-idempotent ActiveJobs. Read-only, no edits."
+description: "Use when reviewing a Rails change for framework-specific risks -- mass assignment gaps, N+1 queries, raw SQL interpolation, raw/html_safe XSS, missing auth/authorization filters, fat controllers/models, and non-idempotent ActiveJobs. Not for a Django/Python view (use python-code-review). Read-only, no edits."
 triggers:
   - "review this Rails diff for mass assignment issues"
   - "check this Rails controller for N+1 queries"

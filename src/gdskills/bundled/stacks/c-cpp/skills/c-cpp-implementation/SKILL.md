@@ -1,6 +1,6 @@
 ---
 name: c-cpp-implementation
-description: "Use when implementing or extending a feature in C or modern C++ (17/20/23) -- ownership and RAII, smart pointer choice, move semantics, std::span, manual malloc/free lifetime in C, and choosing safe standard-library APIs over unsafe ones."
+description: "Use when implementing or extending a feature in C or modern C++ (17/20/23) -- ownership and RAII, smart pointer choice, move semantics, std::span, manual malloc/free lifetime in C, and choosing safe standard-library APIs over unsafe ones. Not for Rust, Go, or another systems language (use that language's own implementation skill)."
 triggers:
   - "implement this feature in modern C++"
   - "add a function to this C module"

@@ -1,6 +1,6 @@
 ---
 name: sql-db-build-fix
-description: "Use when a migration fails to apply, a query planner regresses to a full table scan, or a constraint violation blocks a deploy -- resolves failed/broken migrations, missing-index query regressions, deadlocks, and NOT NULL/unique/foreign-key constraint violations with the smallest root-cause fix."
+description: "Use when a raw SQL migration fails to apply, a query planner regresses to a full table scan, or a constraint violation blocks a deploy -- resolves failed/broken migrations, missing-index query regressions, deadlocks, and NOT NULL/unique/foreign-key constraint violations with the smallest root-cause fix. Not for a Django/Rails/Laravel ORM's own migration file (a .py/.rb/.php migration -- use that stack's own build-fix skill)."
 triggers:
   - "this migration is failing to apply, help me fix it"
   - "this query used to use the index and now does a sequential scan"
