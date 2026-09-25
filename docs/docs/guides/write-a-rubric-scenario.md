@@ -64,11 +64,14 @@ substitute for reading it):
 - A `(see <clause>)` cross-reference parenthetical — e.g. `(see api-truth
   for version-diff checks)`.
 - A standalone `Use \`<other-skill>\` instead.` redirect with no `Not for`
-  wrapper — bounded to "use" immediately followed by ONE identifier-shaped
-  token (a bare word or a backtick-quoted skill id) then "instead" within a
-  few words, so it never touches an ordinary "Use when ..." description
-  opener that happens to also contain "instead" somewhere later in the same
-  sentence.
+  wrapper — "use" immediately followed by EITHER a backtick/quote-wrapped
+  token OR a bare HYPHENATED skill-id-shaped token (the shape every real
+  bundled skill id has, e.g. `nodejs-testing`), then "instead" with nothing
+  in between. A bare, unhyphenated, unquoted word never matches, so this
+  never touches an ordinary "Use when ..." description opener that happens
+  to also contain "instead" later in the same sentence, nor a short aside
+  like "Use git bisect instead of a manual search" that names no other
+  skill at all.
 - `e.g.`/`i.e.` abbreviations inside a NOT-for sentence do not end it early.
 - A `(not only X but also Y)` parenthetical is left untouched — it is an
   INCLUSIVE idiom, the opposite of an exclusion.
