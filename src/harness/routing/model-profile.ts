@@ -25,13 +25,16 @@
 // `auth.json` field in-memory so a caller sees the complete picture even
 // before the next write physically migrates it.
 //
-// Round 2 item 2: the migration's own `auth.json` rewrite
-// (`stripModelProfilesFromAuthJsonUnlocked`) additionally takes
-// `auth.json`'s OWN lock (`withAuthFileLockSync`, `../../lib/shell-config.ts`)
-// — the same lock `saveShellConfig` now takes for its read-modify-write of
-// that file — nested INSIDE the already-held profiles lock, never the
-// reverse. See that function's own doc for why the auth lock is a separate,
-// smaller sync primitive rather than `withFileLock` itself.
+// Round 2 item 2 introduced, then round 3 REMOVED, a shared `auth.json` sync
+// lock (`withAuthFileLockSync`): it made every `saveShellConfig` call —
+// including hot, latency-sensitive TUI paths like `/reasoning`/`/think` —
+// take an `Atomics.wait`-based mutex that could block the whole process for
+// up to 2s on contention, for a race only the migration strip
+// (`stripModelProfilesFromAuthJsonUnlocked`, below) actually needs to guard
+// against. `saveShellConfig` is back to its pre-lock, unconditional
+// read-merge-write (see that function's own doc); the migration strip now
+// protects itself with a narrow, LOCK-FREE read/verify/write instead — see
+// that function's own doc for the exact window and its residual risk.
 //
 // No TUI/CLI import here — pure data + pure functions, mirroring
 // `./table.ts`'s own "no rendering deps" posture. Every function that
@@ -45,7 +48,7 @@ import {
 } from "../../commands/curated-model-lists";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
 import { withFileLock } from "../../lib/fs";
-import { loadShellConfig, shellConfigPath, withAuthFileLockSync } from "../../lib/shell-config";
+import { loadShellConfig, shellConfigPath } from "../../lib/shell-config";
 import { MODEL_RANK_HINTS, rankModelId } from "../../gdskills/model-tier";
 import type { AvailablePredicate } from "./table";
 
@@ -477,6 +480,50 @@ function writeModelProfilesFileUnlocked(profiles: Record<string, ModelProfile>, 
   writeOwnerOnlyFileAtomic(modelProfilesFilePath(dir), `${JSON.stringify(profiles, null, 2)}\n`);
 }
 
+/** A point in {@link stripModelProfilesFromAuthJsonUnlocked}'s narrow read/verify/write window a test can interleave a concurrent `saveShellConfig` write into — see that function's own doc. */
+export type AuthStripRacePoint = "pre-write-check";
+
+/**
+ * One read/verify/write attempt: read `auth.json`, drop `modelProfiles`, and
+ * write back — but ONLY if the file is still exactly what was just read.
+ * Returns `"noop"` when there was nothing to strip (absent file/field or
+ * unparseable JSON), `"written"` on a successful strip, or `"changed"` when
+ * the pre-write check caught a concurrent modification (caller retries).
+ *
+ * The pre-write check re-reads the file's raw text and compares it EXACTLY
+ * against what was read at the top of this attempt — not mtime/size (a
+ * same-millisecond, same-length concurrent write, e.g. one JSON field
+ * swapped for another of equal length, would slip past a size/mtime check
+ * undetected; an exact content compare cannot miss it, and is cheap at this
+ * file's size).
+ */
+function stripModelProfilesFromAuthJsonOnce(dir: string | undefined, raceHook?: (point: AuthStripRacePoint) => void): "noop" | "written" | "changed" {
+  const file = shellConfigPath(dir);
+  const read = readConfigFile(file);
+  if (!read.ok) return "noop"; // absent/oversized/unreadable — nothing to strip
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(read.text) as Record<string, unknown>;
+  } catch {
+    return "noop";
+  }
+  if (!("modelProfiles" in raw)) return "noop";
+  const { modelProfiles: _removed, ...rest } = raw;
+  const payload = `${JSON.stringify(rest, null, 2)}\n`;
+
+  // TEST SEAM, never set in production: lets a test land a concurrent
+  // `saveShellConfig` write exactly here, between our own read above and the
+  // verify-before-write check below.
+  raceHook?.("pre-write-check");
+
+  const readNow = readConfigFile(file);
+  if (!readNow.ok || readNow.text !== read.text) {
+    return "changed"; // vanished, or a concurrent writer landed between our read and this check — abort, do not clobber it
+  }
+  writeOwnerOnlyFileAtomic(file, payload);
+  return "written";
+}
+
 /**
  * Rewrite `auth.json` with its `modelProfiles` field removed, preserving
  * every other key/grant byte-for-byte (same `JSON.stringify(_, null, 2)`
@@ -484,33 +531,46 @@ function writeModelProfilesFileUnlocked(profiles: Record<string, ModelProfile>, 
  * identically). A no-op when the field is already absent. Best-effort —
  * caught by `migrateFromAuthJsonUnlocked`, never throws on its own.
  *
- * Round 2 item 2 (review of PR #718): this function's own read-modify-write
- * of `auth.json` now runs under `withAuthFileLockSync` (`../../lib/
- * shell-config.ts`) — the SAME lock `saveShellConfig` takes for its own
- * read-modify-write of the same file, so a `saveShellConfig` call landing
- * between this function's read and write (or vice versa) can no longer
- * clobber the other's change. This function itself is always called from
- * inside `migrateFromAuthJsonUnlocked`, which runs under
- * `withModelProfilesLock` — so the acquisition order here is fixed as
- * documented on `withAuthFileLockSync`: the profiles lock (already held by
- * the caller) THEN this auth lock, nested, never the reverse anywhere in the
- * codebase.
+ * Round 3 (review of PR #718: `withAuthFileLockSync` — the sync mutex this
+ * function and `saveShellConfig` used to share for `auth.json` — could block
+ * `saveShellConfig`'s hot TUI callers for up to its full 2s timeout on
+ * contention, for a race only THIS migration strip actually needs guarding
+ * against; `saveShellConfig` no longer takes any lock at all, restoring its
+ * pre-lock behaviour). This function instead protects itself with a MINIMAL,
+ * lock-free window: read `auth.json`, build the stripped object, then —
+ * immediately before the atomic write — re-read the file's raw text and
+ * compare it EXACTLY against what was just read (`stripModelProfilesFromAuthJsonOnce`;
+ * an exact content compare, not mtime/size — a same-millisecond concurrent
+ * write of equal byte length would slip past a size/mtime check undetected).
+ * A mismatch means a concurrent `saveShellConfig` write landed in between;
+ * this function retries the whole read/verify/write ONCE against the
+ * now-current file, and if THAT also collides, gives up silently, leaving
+ * `modelProfiles` in `auth.json` — harmless, since it is still read in
+ * memory by `loadStoredModelProfiles`/`migrateFromAuthJsonUnlocked` and the
+ * next locked write (`withModelProfilesLock`) re-attempts the same strip.
+ *
+ * RESIDUAL RACE WINDOW (stated, not hidden): the content compare only
+ * proves the file is byte-identical to what was read at the START of THIS
+ * attempt — a `saveShellConfig` write landing in the few microseconds
+ * between that check and the rename below it is not detected, and this
+ * function's write would then silently undo that concurrent patch's
+ * persistence (though never corrupt the file — the rename itself stays
+ * atomic). Accepted: this function runs at most once per process lifetime
+ * per operator (the migration is one-time, gated on `modelProfiles` still
+ * being present), so the exposure is a single, narrow, rare window rather
+ * than the "every `saveShellConfig` call" cost the removed lock imposed.
+ * This function is always called from inside `migrateFromAuthJsonUnlocked`,
+ * itself under `withModelProfilesLock` — that lock excludes a second
+ * migration racing this one, never a plain `saveShellConfig` call.
+ *
+ * Exported for direct unit testing of the retry/verify window itself
+ * (`model-profile.test.ts`) — every production call still goes through
+ * `migrateFromAuthJsonUnlocked`, which never passes `raceHook`.
  */
-function stripModelProfilesFromAuthJsonUnlocked(dir?: string): void {
-  withAuthFileLockSync(dir, () => {
-    const file = shellConfigPath(dir);
-    const read = readConfigFile(file);
-    if (!read.ok) return;
-    let raw: Record<string, unknown>;
-    try {
-      raw = JSON.parse(read.text) as Record<string, unknown>;
-    } catch {
-      return;
-    }
-    if (!("modelProfiles" in raw)) return;
-    const { modelProfiles: _removed, ...rest } = raw;
-    writeOwnerOnlyFileAtomic(file, `${JSON.stringify(rest, null, 2)}\n`);
-  });
+export function stripModelProfilesFromAuthJsonUnlocked(dir?: string, raceHook?: (point: AuthStripRacePoint) => void): void {
+  const first = stripModelProfilesFromAuthJsonOnce(dir, raceHook);
+  if (first !== "changed") return;
+  stripModelProfilesFromAuthJsonOnce(dir, raceHook); // one retry against the now-current file; a second collision gives up (see doc above)
 }
 
 /**

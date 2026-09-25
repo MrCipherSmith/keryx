@@ -5,6 +5,7 @@
 // corrections surviving a refresh (AC8/AC18). Hermetic: every store-touching
 // test uses a fresh `mkdtemp` dir, never the real `~/.local/share/keryx`.
 import { afterEach, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -26,6 +27,8 @@ import {
   refreshModelProfiles,
   resolveChatCapable,
   setModelProfileField,
+  stripModelProfilesFromAuthJsonUnlocked,
+  type AuthStripRacePoint,
   type ModelProfile,
 } from "./model-profile";
 import { saveShellConfig, shellConfigPath } from "../../lib/shell-config";
@@ -451,24 +454,29 @@ test("migration: an existing auth.json.modelProfiles is moved into model-profile
 });
 
 // ---------------------------------------------------------------------------
-// Round 2 item 2 — `auth.json`'s own lock: `saveShellConfig`'s read-modify-
-// write and the migration strip's read-modify-write of the SAME file must
-// not clobber each other.
+// Round 2 item 2 added, then round 3 removed, a shared `auth.json` sync lock
+// between `saveShellConfig` and the migration strip. `saveShellConfig`'s
+// read-modify-write and the migration strip's own read-modify-write of the
+// same file must still not clobber each other — round 3 achieves that with
+// a narrow, lock-free read/verify/write in the strip alone (see
+// `stripModelProfilesFromAuthJsonUnlocked`'s own doc), not a shared mutex.
 // ---------------------------------------------------------------------------
 
-// `withAuthFileLockSync.test.ts` (`src/lib/shell-config.test.ts`) exercises the
-// lock PRIMITIVE itself (acquire/release, stale reclaim, non-reentrancy).
-// This test instead exercises the INTEGRATION: `saveShellConfig` running
+// This test exercises the INTEGRATION: `saveShellConfig` running
 // concurrently with `refreshModelProfiles` (which performs the migration
 // strip internally). Both operations here are wholly synchronous critical
 // sections, so Node's microtask-before-I/O-callback ordering makes
 // `saveShellConfig` deterministically complete before the migration's own
 // profiles-lock `mkdir` resolves — there is no TORN write to observe either
-// way. What this test still guards against is a REGRESSION in the merge
-// logic itself: that `saveShellConfig`'s patch and the migration's own
-// `auth.json` rewrite (stripping `modelProfiles`) both end up reflected in
-// the final file, not one silently overwriting the other's already-applied
-// change.
+// way, and the strip's own single read/verify/write attempt sees the
+// already-patched file with nothing left to collide with. What this test
+// still guards against is a REGRESSION in the merge logic itself: that
+// `saveShellConfig`'s patch and the migration's own `auth.json` rewrite
+// (stripping `modelProfiles`) both end up reflected in the final file, not
+// one silently overwriting the other's already-applied change. The
+// retry-on-collision path itself (a GENUINE interleaving, forced via
+// `stripModelProfilesFromAuthJsonUnlocked`'s test-only `raceHook`) is
+// covered separately, below.
 test("concurrency: saveShellConfig racing the modelProfiles migration strip — neither change is lost", async () => {
   const dir = await tempDir("keryx-model-profile-auth-lock-race-");
   await mkdir(dir, { recursive: true });
@@ -508,6 +516,88 @@ test("concurrency: saveShellConfig racing the modelProfiles migration strip — 
   const fileProfiles = JSON.parse(await readFile(modelProfilesFilePath(dir), "utf8")) as Record<string, unknown>;
   expect(fileProfiles[profileKey("legacy", "old-model")]).toBeDefined(); // migrated
   expect(fileProfiles[profileKey("newprov", "new-model")]).toBeDefined(); // the live refresh's own entry
+});
+
+// ---------------------------------------------------------------------------
+// Round 3 — `stripModelProfilesFromAuthJsonUnlocked`'s own retry/verify
+// window, exercised directly via its test-only `raceHook` (the codebase's
+// established pattern for forcing a genuine interleaving in a
+// single-process test — see `src/lib/fs.ts`'s `raceHook`).
+// ---------------------------------------------------------------------------
+
+function legacyProfileFixture(): ModelProfile {
+  return {
+    providerId: "legacy",
+    modelId: "old-model",
+    strengthTier: { value: "standard", source: "guessed" },
+    priceInputPerMillion: { value: 2, source: "reported" },
+    priceOutputPerMillion: { value: 10, source: "reported" },
+    contextLength: { value: 32000, source: "reported" },
+    priority: { value: -2, source: "auto" },
+    available: true,
+    chatCapable: true,
+    lastSeenAt: "2026-01-01T00:00:00.000Z",
+    refreshedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+test("stripModelProfilesFromAuthJsonUnlocked: a concurrent write caught by the pre-write check is retried once and then succeeds — every other original key survives byte-for-byte, plus the concurrent write's own change", async () => {
+  const dir = await tempDir("keryx-strip-retry-");
+  const before = {
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    apiKeys: { DEEPSEEK_API_KEY: "shh" },
+    oauthGrants: { grok: { method: "device-code", access: "tok", obtainedAt: "2026-01-01T00:00:00.000Z" } },
+    modelProfiles: { [profileKey("legacy", "old-model")]: legacyProfileFixture() },
+  };
+  await writeFile(shellConfigPath(dir), `${JSON.stringify(before, null, 2)}\n`, { mode: 0o600 });
+
+  let hookCalls = 0;
+  const raceHook = (point: AuthStripRacePoint) => {
+    if (point !== "pre-write-check") return;
+    hookCalls += 1;
+    if (hookCalls === 1) {
+      // Simulate a concurrent `saveShellConfig` write landing between the
+      // strip's own read and this pre-write check — different content the
+      // first attempt must detect (by an exact re-read compare) and abort
+      // on, rather than clobber.
+      const concurrent = { ...before, model: "claude-opus-4-8" };
+      writeFileSync(shellConfigPath(dir), `${JSON.stringify(concurrent, null, 2)}\n`, { mode: 0o600 });
+    }
+    // The retry (2nd call): no further interference, so it succeeds.
+  };
+
+  stripModelProfilesFromAuthJsonUnlocked(dir, raceHook);
+
+  expect(hookCalls).toBe(2); // first attempt aborted on the collision, one retry ran
+  const after = JSON.parse(await readFile(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
+  expect("modelProfiles" in after).toBe(false); // the retry's strip landed
+  expect(after.model).toBe("claude-opus-4-8"); // ...on top of the concurrent write, never clobbering it
+  expect(after.provider).toBe("anthropic"); // every other original key survives byte-for-byte
+  expect(after.apiKeys).toEqual({ DEEPSEEK_API_KEY: "shh" });
+  expect(after.oauthGrants).toEqual({ grok: { method: "device-code", access: "tok", obtainedAt: "2026-01-01T00:00:00.000Z" } });
+});
+
+test("stripModelProfilesFromAuthJsonUnlocked: a collision on BOTH the attempt and the retry gives up — modelProfiles stays in auth.json (harmless; the next locked write re-migrates it), and the last writer's content is never clobbered", async () => {
+  const dir = await tempDir("keryx-strip-giveup-");
+  const before = { provider: "anthropic", modelProfiles: { [profileKey("legacy", "old-model")]: legacyProfileFixture() } };
+  await writeFile(shellConfigPath(dir), `${JSON.stringify(before, null, 2)}\n`, { mode: 0o600 });
+
+  let hookCalls = 0;
+  const raceHook = (point: AuthStripRacePoint) => {
+    if (point !== "pre-write-check") return;
+    hookCalls += 1;
+    // Persistent contention: every attempt collides.
+    const concurrent = { ...before, model: `race-${hookCalls}` };
+    writeFileSync(shellConfigPath(dir), `${JSON.stringify(concurrent, null, 2)}\n`, { mode: 0o600 });
+  };
+
+  stripModelProfilesFromAuthJsonUnlocked(dir, raceHook);
+
+  expect(hookCalls).toBe(2); // one attempt, one retry — never more than one retry
+  const after = JSON.parse(await readFile(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
+  expect("modelProfiles" in after).toBe(true); // gave up — never wrote, left in place
+  expect(after.model).toBe("race-2"); // the last concurrent write is exactly what's on disk, untouched by the strip
 });
 
 test("concurrency: two providers refreshing at the same time both persist their entries — neither clobbers the other", async () => {

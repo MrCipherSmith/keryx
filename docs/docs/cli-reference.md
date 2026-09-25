@@ -1396,7 +1396,17 @@ profiles:
   version, with the letter kept only as an ignored variant tag — so `gpt-4o`
   and `gpt-4.1` land in the same family and `gpt-4.1` correctly outranks
   `gpt-4o`, a deliberate, documented choice rather than refusing that pair's
-  comparison outright. Two versions of the same family are NEVER decided by
+  comparison outright. A **parameter-size token** (`7b`, `32b`, `70b`,
+  `1.5b`, `8x7b` — a total or MoE "N experts x M billion" param count) is
+  NEVER a version — it always stays in the family key instead, so
+  `qwen2.5-coder-7b`/`qwen2.5-coder-32b` and `llama-3.3-70b`/`llama-3.3-8b`
+  key to different families and are never version-compared against each
+  other (only the one real vendor shape that needs it, `4o`'s trailing `o`,
+  is ever read as a version-plus-variant-tag; every other trailing letter
+  after a short digit run is a size suffix). A trailing `-latest`/`-preview`
+  alias word is also dropped from the family key alone (never from the id
+  itself), so `claude-3-7-sonnet-latest` joins the same family as
+  `claude-sonnet-5`. Two versions of the same family are NEVER decided by
   alphabetical order — the id-string fallback only ever applies when a
   version is unparseable on both sides:
   - `planning`/`review` get the strongest model not weaker than the session

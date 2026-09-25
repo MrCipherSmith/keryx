@@ -118,6 +118,22 @@ never comparing at all. Two versions of the same family are never decided
 by alphabetical order — the id-string fallback only applies when neither
 side has a parseable version.
 
+**A parameter-size token is never a version (round 3, review of PR #718).**
+`7b`, `32b`, `70b`, `1.5b`, `8x7b` — a total or MoE "N experts x M billion"
+param count — always stay in `familyKey` and are never fed to
+`parseModelVersion`. Before this fix, the letter-variant shape meant for
+`gpt-4o` (`/^(\d{1,2})([a-z])$/`, any trailing lowercase letter) also
+matched a size token, so `qwen2.5-coder-7b` and `qwen2.5-coder-32b` were
+misread as the SAME family at "version" 7 vs. 32 — merging two genuinely
+different-sized models and ranking the smaller one "newer". The letter
+variant is now restricted to the one real vendor shape that needs it
+(`4o`'s trailing `o`); every other trailing letter after a short digit run
+is a size suffix, so `qwen2.5-coder-7b`/`qwen2.5-coder-32b` and
+`llama-3.3-70b`/`llama-3.3-8b` key to different families and are never
+version-compared against each other. A trailing `-latest`/`-preview` alias
+word is also stripped from `familyKey` only (never from the id itself), so
+`claude-3-7-sonnet-latest` joins the same family as `claude-sonnet-5`.
+
 ## Falling back
 
 Ranking is **refused**, and every tier keeps the session's provider and model,

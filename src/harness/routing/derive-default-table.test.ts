@@ -74,6 +74,126 @@ test("parseModelVersion: gpt-4o parses as version 4 (the trailing letter is a va
 });
 
 // ---------------------------------------------------------------------------
+// Round 3 — parameter-size tokens (`7b`, `32b`, `70b`, `34b`, `8x7b`) were
+// misread as versions by the old, unrestricted `LETTER_VARIANT_TOKEN`
+// (`/^(\d{1,2})([a-z])$/`, any trailing lowercase letter). Fixed by
+// restricting it to the letter `o` only and adding an explicit `SIZE_TOKEN`
+// exclusion. Reviewer's exact ids.
+// ---------------------------------------------------------------------------
+
+test("familyKey: parameter-size tokens (7b/32b/70b/34b) are KEPT, not stripped as a version — same-model-family/different-size ids key to different families", () => {
+  expect(familyKey("qwen2.5-coder-7b")).not.toBe(familyKey("qwen2.5-coder-32b"));
+  expect(familyKey("llama-3.3-70b")).not.toBe(familyKey("llama-3.3-8b"));
+  // The size token itself survives in the key.
+  expect(familyKey("mistral-7b")).toBe("mistral-7b");
+  expect(familyKey("llama-70b")).toBe("llama-70b");
+  expect(familyKey("codellama-34b")).toBe("codellama-34b");
+  expect(familyKey("mixtral-8x7b")).toBe("mixtral-8x7b");
+});
+
+test("parseModelVersion: a bare size-only id never yields a version from the size token (7b/32b/70b/1.5b/8x7b are not version numbers)", () => {
+  expect(parseModelVersion("mistral-7b")).toBeUndefined();
+  expect(parseModelVersion("llama-70b")).toBeUndefined();
+  expect(parseModelVersion("codellama-34b")).toBeUndefined();
+  expect(parseModelVersion("mixtral-8x7b")).toBeUndefined();
+});
+
+test("deriveDefaultTable: qwen2.5-coder-7b and qwen2.5-coder-32b are never version-compared — different families, so the tie is undecided (session-first / priority / id fallback), never a wrong 7-beats-32 'version' pick", () => {
+  const models = ["qwen2.5-coder-7b", "qwen2.5-coder-32b"];
+  const profiles: Record<string, ModelProfile> = Object.fromEntries(
+    models.map((modelId) => [profileKey("prov", modelId), profile("prov", modelId, { priceInputPerMillion: { value: 1, source: "reported" } })]),
+  );
+  // Session on the 7B: since the two ids are different families (never
+  // version-compared), the session model wins the strength tie exactly as
+  // documented for any two undecided-strength candidates.
+  const table = deriveDefaultTable("prov", models, profiles, "qwen2.5-coder-7b");
+  expect(table.quick).toEqual({ kind: "model", providerId: "prov", modelId: "qwen2.5-coder-7b" });
+});
+
+test("deriveDefaultTable: llama-3.3-70b vs llama-3.3-8b — the size token, not a bogus version compare, keeps them distinct families", () => {
+  const models = ["llama-3.3-70b", "llama-3.3-8b"];
+  const profiles: Record<string, ModelProfile> = Object.fromEntries(
+    models.map((modelId) => [profileKey("prov", modelId), profile("prov", modelId, { priceInputPerMillion: { value: 1, source: "reported" } })]),
+  );
+  expect(familyKey("llama-3.3-70b")).not.toBe(familyKey("llama-3.3-8b"));
+  const table = deriveDefaultTable("prov", models, profiles, "llama-3.3-8b");
+  expect(table.quick).toEqual({ kind: "model", providerId: "prov", modelId: "llama-3.3-8b" });
+});
+
+test("familyKey/parseModelVersion: gpt-4o (the ONE real letter-variant id) is unaffected by restricting LETTER_VARIANT_TOKEN to 'o' — still a version-4 variant, same family as gpt-4.1", () => {
+  expect(familyKey("gpt-4o")).toBe(familyKey("gpt-4.1"));
+  expect(parseModelVersion("gpt-4o")).toBe(4);
+});
+
+test("familyKey/parseModelVersion: the reviewer's full re-run table (claude-*, gpt-*, o3, gemini-*, deepseek-v4-*, grok-4.7, MiniMax-M2) never throws and keeps its pre-fix family/version shape", () => {
+  const ids = [
+    "claude-opus-5.5",
+    "claude-opus-4-8",
+    "claude-haiku-4-5",
+    "claude-sonnet-5",
+    "claude-3-7-sonnet-latest",
+    "gpt-6",
+    "gpt-5.6",
+    "gpt-4o",
+    "gpt-4.1",
+    "gpt-4o-audio-preview",
+    "o3",
+    "gemini-3.8-flash",
+    "gemini-3.1-flash",
+    "gemini-2.5-pro",
+    "deepseek-v4-flash",
+    "deepseek-v4",
+    "grok-4.7",
+    "minimax-m2",
+  ];
+  for (const id of ids) {
+    expect(() => familyKey(id)).not.toThrow();
+    expect(() => parseModelVersion(id)).not.toThrow();
+  }
+  // Spot checks that pre-existing behaviour did not regress.
+  expect(parseModelVersion("gpt-6")).toBe(6);
+  expect(parseModelVersion("grok-4.7")).toBe(4.7);
+  expect(parseModelVersion("gemini-3.8-flash")).toBe(3.8);
+  expect(parseModelVersion("deepseek-v4-flash")).toBeUndefined(); // "v4" is letter-then-digit, never a recognised version shape
+  expect(parseModelVersion("o3")).toBeUndefined(); // letter-then-digit, not digit-then-'o'
+  expect(parseModelVersion("minimax-m2")).toBeUndefined(); // "m2" is letter-then-digit, not a size or version token
+  expect(familyKey("claude-opus-5.5")).toBe(familyKey("claude-opus-4-8"));
+  expect(familyKey("gpt-4o-audio-preview")).not.toBe(familyKey("gpt-4o")); // "audio" keeps it a distinct family, not merged with the plain chat model
+});
+
+// ---------------------------------------------------------------------------
+// Round 3 (optional, item 1) — a trailing `-latest`/`-preview` alias word is
+// stripped from `familyKey` ONLY, never from the id itself.
+// ---------------------------------------------------------------------------
+
+test("familyKey: a trailing -latest/-preview alias word joins the base family, but the id itself is untouched", () => {
+  expect(familyKey("claude-3-7-sonnet-latest")).toBe(familyKey("claude-sonnet-5"));
+  expect(familyKey("claude-3-7-sonnet-latest")).toBe("claude-sonnet");
+  expect(familyKey("gpt-4o-audio-preview")).toBe("gpt-audio");
+});
+
+test("deriveDefaultTable: claude-3-7-sonnet-latest and claude-sonnet-5 are version-compared as the SAME family (latest stripped only from the key) — the newer version wins even though the older one has the higher priority", () => {
+  const models = ["claude-3-7-sonnet-latest", "claude-sonnet-5"];
+  const profiles: Record<string, ModelProfile> = {
+    [profileKey("anthropic", "claude-3-7-sonnet-latest")]: profile("anthropic", "claude-3-7-sonnet-latest", { priority: { value: 100, source: "operator" } }),
+    [profileKey("anthropic", "claude-sonnet-5")]: profile("anthropic", "claude-sonnet-5", { priority: { value: 1, source: "auto" } }),
+  };
+  // Session is neither candidate, so "session model first" cannot decide
+  // this tie either — isolating the family-merge/version-compare behaviour
+  // from every other tie-break. Without the `-latest` word being stripped
+  // from the family key, these would read as two different, unrelated
+  // families, and the tie-break would fall straight to `priority.value` —
+  // picking the OLDER `-latest` id purely because it was given the higher
+  // priority. With the merge, the version comparison decides FIRST (as
+  // `compareStrengthById` always tries before any tie-break), so the newer
+  // `claude-sonnet-5` wins regardless of priority.
+  const table = deriveDefaultTable("anthropic", models, profiles, "session-not-among-candidates");
+  // The assignment also carries the exact, untouched id — never a
+  // stripped/rewritten one.
+  expect(table.quick).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-sonnet-5" });
+});
+
+// ---------------------------------------------------------------------------
 // Zero / one model.
 // ---------------------------------------------------------------------------
 
