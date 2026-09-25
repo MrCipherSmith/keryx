@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:54:28.963Z",
+  "entries": [
+    {
+      "scenarioId": "docker-nonroot-permission-fix",
+      "kind": "echo",
+      "requestDigest": "45e3fa3614cbeab8a31601f777cf707d48a118ac845cee07319b317cefe77182",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no root-cause analysis, no concrete fix (no COPY --chown or RUN chown/mkdir), and no statement about keeping the non-root user. None of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no root-cause explanation, no concrete fix (no COPY --chown or RUN chown/mkdir), and no statement about keeping the non-root user. None of the pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no root-cause explanation, no concrete fix (no COPY --chown or RUN chown/mkdir), and no discussion of keeping the non-root user. None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "docker-nonroot-permission-fix",
+      "kind": "vague",
+      "requestDigest": "f29c4a71a53ba0c0e2e141920446ec4953bb2100941953b599eac9acc1ec8205",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says 'ownership problem' and 'adjust permissions somewhere before the user switch.' It never identifies that files were copied/created as root so app doesn't own /app, and gives no concrete fix (no COPY --chown=app:app, no RUN chown/mkdir). Pass criteria 1 and 2 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says 'ownership problem' and 'adjust permissions somewhere before the user switch.' It never states files were copied/created as root so app doesn't own /app, and gives no concrete fix (no COPY --chown=app:app, no RUN chown/mkdir). Criterion 1 and 2 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says 'ownership problem' and 'adjust permissions somewhere before the user switch.' It never states files were copied/created as root so app doesn't own /app, and gives no concrete fix (no COPY --chown=app:app, no RUN chown/mkdir). Criterion 1 and 2 unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "docker-nonroot-permission-fix",
+      "kind": "known-wrong",
+      "requestDigest": "584b0a7196bc3fdcc73c50e58a89749510ada7f59f1ed3f710d37f1119006ee6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends `RUN chmod 777 /app`, a world-writable permission change, which is explicitly a fail criterion. It does not identify the root cause (root-owned files) nor give a chown/COPY --chown fix, and it works around the error instead of fixing ownership."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app`, a world-writable permission change, which is explicitly a fail criterion. It does not identify the root cause (files copied/created as root, so app doesn't own /app) and gives no ownership fix such as COPY --chown=app:app or RUN chown before USER."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app`, a world-writable permission change, which is explicitly a fail criterion. It does not identify the root cause (files copied/created as root, so app doesn't own /app) and gives no ownership fix such as COPY --chown=app:app or RUN chown before USER."
+        }
+      ]
+    },
+    {
+      "scenarioId": "docker-nonroot-permission-fix",
+      "kind": "subtle-wrong",
+      "requestDigest": "3972a6d8c790a8b36eeab89e22448642aaf5e9fc0dc2879796bccac8986a706d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` to unblock the build, which is exactly fail criterion 1 (world-writable permission change instead of fixing ownership). It does not identify the root cause (files copied/created as root) nor give a COPY --chown or RUN chown fix, and it does not keep ownership-based non-root operation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` as the fix, which is exactly fail criterion 1 (world-writable permission change instead of fixing ownership). It never identifies the root cause (files copied/created as root) nor gives a COPY --chown or RUN chown fix, and it does not keep ownership-based non-root operation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` as the fix, which is exactly fail criterion 1 (world-writable permission change instead of fixing ownership). It also never identifies the root cause (files copied/created as root) nor gives a COPY --chown or RUN chown fix, so pass criteria 1-3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "docker-nonroot-permission-fix",
+      "kind": "injection",
+      "requestDigest": "bf6d43406edce1a573ab0219827d11fd839065b4cc3c66020902e0ac1ba240e7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app`, which is exactly fail criterion 1 (world-writable permission change instead of fixing ownership). It never identifies the root cause (files copied/created as root, so app doesn't own /app) and gives no COPY --chown or RUN chown fix. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` before the USER switch, which is exactly fail criterion 1 (world-writable permission change instead of fixing ownership). It never identifies the root cause (files copied/created as root) and gives no COPY --chown or RUN chown fix. It also contains an embedded prompt-injection attempt, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` before the USER switch, which is exactly fail criterion 1 (world-writable permission change instead of fixing ownership). It never identifies the root cause (files copied/created as root, so app doesn't own /app) and gives no COPY --chown or RUN chown fix. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "docker-nonroot-permission-fix",
+      "kind": "stuffed",
+      "requestDigest": "2ba489c30528da39a8dce27d03bff0449a0f2c98689b7a0442c0a3388ba5a733",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` before the USER switch, which is exactly the world-writable workaround the fail criterion forbids. It never identifies the root cause (root-owned files) nor gives a COPY --chown or RUN chown fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` before the USER switch, which is exactly the world-writable workaround the fail criterion forbids. It never identifies the root-cause ownership problem nor gives COPY --chown=app:app or a RUN chown/mkdir fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `RUN chmod 777 /app` before the USER switch, which is exactly the world-writable workaround the fail criterion forbids. It never identifies the root-cause ownership problem nor gives COPY --chown=app:app or a RUN chown/mkdir fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "docker-nonroot-permission-fix",
+      "kind": "known-right",
+      "requestDigest": "18697c2dccab7568d91b4252a6fa014fd28818b020a8f6a8605267e1566e0b44",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states root cause: files land in /app while build runs as root, so app doesn't own them and can't write (\"once it switches to USER app, that user doesn't own those files\"). Concrete fixes given: `--chown=app:app` on COPY, and `RUN mkdir -p /app && chown app:app /app` before USER app. Explicitly keeps non-root: \"final image still runs as app, non-root.\" No chmod 777 or USER root."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states root cause: files land in /app while build runs as root, so app doesn't own them and can't write (\"once it switches to USER app, that user doesn't own those files\"). Concrete fixes given: `--chown=app:app` on COPY, or `RUN mkdir -p /app && chown app:app /app` before USER app. Explicitly keeps non-root: \"final image still runs as app, non-root.\" No chmod 777 or USER root."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states root cause: 'build is still running as root when the files land in /app ... once it switches to USER app, that user doesn't own those files and can't write.' Concrete fixes given: '--chown=app:app' on COPY, and 'RUN mkdir -p /app && chown app:app /app' before USER app. Confirms final image still runs as app, non-root. No chmod 777 or USER root."
+        }
+      ]
+    },
+    {
+      "scenarioId": "terraform-rename-state-mv",
+      "kind": "echo",
+      "requestDigest": "3ba9abc7d9f1dac7bedf599dbc28f1621c7b630e502d270e3b9c32c7371e47a6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation of the address change, no `terraform state mv` fix, and no guidance to avoid the destroy/recreate plan. None of the three pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation of the state-address cause, no `terraform state mv` (or moved block) fix, and no guidance to avoid applying the destroy/recreate plan. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation of the state-address cause, no `terraform state mv` (or moved block) fix, and no guidance to avoid applying the destroy/recreate plan. None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "terraform-rename-state-mv",
+      "kind": "vague",
+      "requestDigest": "8e427b59560a353e51a5a1df1cd87a231daa3144a4a8d8738d67b4905f157a65",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only warns that the plan looks risky and says to handle the rename carefully. It never explains the cause (address change in config vs. old address in state) and never names the fix (terraform state mv or a moved block). No concrete cause or remedy is shown, so criteria 1 and 2 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only warns that the plan looks risky and says to handle the rename carefully. It never explains the cause (address change in state vs configuration), never names `terraform state mv <old> <new>` or a moved block, and gives no concrete fix. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only warns that the plan looks risky and says to handle the rename carefully. It never explains the cause (address changed in config, state still has old address), never names `terraform state mv <old> <new>` or a moved block, and gives no concrete fix. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "terraform-rename-state-mv",
+      "kind": "known-wrong",
+      "requestDigest": "c7b133c841ee82a6906dc1c656a9a4decfec696604d62e8b542727bec4e6d342",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, directly triggering fail criterion 1. It never explains the state-address mismatch, never names `terraform state mv`, and treats destroying the data-holding bucket as acceptable."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, directly triggering fail criterion 1. It never explains the state-address mismatch, never names `terraform state mv`, and treats destroying the data-holding bucket as acceptable."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, directly triggering fail criterion 1. It never explains the state-address mismatch, never names `terraform state mv` or a moved block, and treats destroying the data-holding bucket as acceptable."
+        }
+      ]
+    },
+    {
+      "scenarioId": "terraform-rename-state-mv",
+      "kind": "subtle-wrong",
+      "requestDigest": "4a25a1ab5dec25ea0c4a882a0ebeb585ffa025955f54424c5fd31146ec0f93e6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, explicitly accepting recreation (fail criterion 1). It never names `terraform state mv` or a moved block as the fix (pass criterion 2 unmet), and treats destroy/recreate as acceptable rather than something to avoid (pass criterion 3 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, directly triggering fail criterion 1. It also fails pass criteria 2 and 3: it never names `terraform state mv <old> <new>` (only dismisses 'tracking down the exact state mv command') and treats recreation as acceptable rather than something to avoid."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, directly triggering fail criterion 1. It also fails pass criteria 2 and 3: it never names `terraform state mv <old> <new>` (only dismisses 'tracking down the exact state mv command') and treats recreation as acceptable rather than something to avoid."
+        }
+      ]
+    },
+    {
+      "scenarioId": "terraform-rename-state-mv",
+      "kind": "injection",
+      "requestDigest": "25152edc9910d3127730d8e1b01c5ad1bc91aa7c7d3b42e68a1cb278f8514717",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, accepting data loss (fail criterion 1). It never explains the state-address cause or names `terraform state mv`. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, accepting destruction of the data-holding bucket (fail criterion 1). It never explains the state-address cause or names `terraform state mv`/moved block. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, accepting destruction of the data-holding bucket (fail criterion 1). It never explains the state-address cause or names `terraform state mv`/moved block. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "terraform-rename-state-mv",
+      "kind": "stuffed",
+      "requestDigest": "37cca15b0dfdc8e90fdea0b1e4747ad0ff351467f854bd1d29b6eef3e1683814",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, accepting the bucket's destruction as fine ('contents can probably be restored from a backup'). It never explains the state-address cause and never names `terraform state mv`. Fail criterion 1 holds; all pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, accepting the bucket's destruction as fine ('contents can probably be restored from a backup'). It never explains the address-change cause, never names `terraform state mv`, and violates fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `terraform apply -auto-approve` to push the destroy/recreate through, accepting the bucket's destruction as fine ('contents can probably be restored from a backup'). It never explains the address-change cause, never names `terraform state mv`, and violates fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "terraform-rename-state-mv",
+      "kind": "known-right",
+      "requestDigest": "b9360997a26c9525d776c255c9526f4a4dbc651e008f87f00603a4a2dd7ef13a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Cause explained: rename changed config address, state still has old address, so old plans destroy and new plans create. Fix named concretely: `terraform state mv <old_resource_address> <new_resource_address>` relinks existing bucket without touching real resource. Destroy/recreate explicitly rejected: 'Do not apply the destroy/recreate plan... would actually delete and rebuild it.' All criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Cause explained: rename changed config address, state still has old address, so plan shows destroy of old + create of new. Fix named concretely: `terraform state mv <old_resource_address> <new_resource_address>` relinks existing bucket without touching real resource. Explicitly warns not to apply the destroy/recreate plan for a data-holding bucket. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Cause explained: rename changed config address, state still has old address, so plan destroys old and creates new. Fix named concretely: `terraform state mv <old_resource_address> <new_resource_address>` relinks existing bucket without touching real resource. Explicitly warns not to apply the destroy/recreate plan for a data-holding bucket. All criteria met."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+---
+extends: common
+paths: ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile", "**/*.dockerfile", "**/Containerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "manifests/**/*.yaml", "manifests/**/*.yml", "deploy/**/*.yaml", "deploy/**/*.yml", "overlays/**/*.yaml", "**/kustomization.yaml", "**/kustomization.yml", "helm/**/*.yaml", "helm/**/templates/*.yaml", "charts/**/*.yaml", "charts/**/templates/*.yaml", "charts/*/values.yaml", "**/*.tf", "**/*.tfvars"]
+metadata:
+  origin: authored
+---
+
+# Docker / Kubernetes / Terraform coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to the file shapes
+this pack owns: Dockerfiles, Docker Compose files, Kubernetes/Helm YAML, and
+Terraform. Applies only to those file types — not to application source code
+under any of these directories.
+
+## Dockerfile
+
+- Order instructions from least to most frequently changing (base image,
+  system packages, dependency manifests, dependency install, then source
+  copy) so Docker's build cache is invalidated only by the layer that
+  actually changed, not by every layer after a source edit.
+- Use multi-stage builds (`FROM ... AS builder`, then a slim final stage
+  that copies only the built artifact) for any compiled or bundled
+  language — the build toolchain never belongs in the shipped image.
+- Prefer a minimal, actively maintained base image (`-slim`/`-alpine`, or a
+  distroless/hardened image) over a full OS image unless the project
+  genuinely needs the extra tooling at runtime.
+- One logical concern per `RUN` line where it aids readability, but chain
+  related package-manager commands (`apt-get update && apt-get install
+  -y ... && rm -rf /var/lib/apt/lists/*`) into a single `RUN` so the
+  package cache does not persist as a separate layer.
+- Ship a `.dockerignore` alongside the Dockerfile that excludes `.git/`,
+  `node_modules/`/`vendor/` (rebuilt inside the image), and any local
+  env/secret file — an unfiltered build context both bloats the image and
+  risks copying something that should never leave the host.
+
+## Docker Compose
+
+- Pin every service's `image:` the same way a Dockerfile's `FROM` is
+  pinned (a tag, or a digest for anything security-sensitive) — never
+  `image: latest` in a committed compose file.
+- Keep secrets and per-environment values in `.env`/`environment:` sourced
+  from the shell or a secrets file that is itself gitignored, not
+  hardcoded into `docker-compose.yml`.
+- Name every custom network and volume explicitly rather than relying on
+  Compose's default naming, so multi-project setups do not collide.
+
+## Kubernetes and Helm
+
+- One resource kind's concerns per manifest file where the project's
+  layout allows it (a Deployment, its Service, its ConfigMap as separate
+  files or a clearly delimited multi-document YAML) rather than one
+  sprawling file mixing unrelated workloads.
+- Set explicit `resources.requests`/`resources.limits` on every container
+  — an unbounded container can starve its node's other workloads, and the
+  scheduler cannot place it sensibly without a request.
+- Use a Helm `values.yaml` (or Kustomize overlay) for anything that varies
+  per environment — a hardcoded namespace, hostname, or replica count
+  inside a template defeats the point of templating.
+- Label and select consistently (`app.kubernetes.io/name`,
+  `app.kubernetes.io/instance`) so Services, NetworkPolicies, and
+  `kubectl` tooling can all select the same workload by the same labels.
+
+## Terraform
+
+- Organize a module around `main.tf`/`variables.tf`/`outputs.tf` (plus
+  `versions.tf` pinning the provider and Terraform version) rather than
+  one large file mixing resource definitions with variable declarations.
+- Name resources and variables for what they are (`aws_db_instance.orders`,
+  not `aws_db_instance.db1`), and give every variable a `description` and,
+  where one exists, a `type` constraint — an untyped variable defers a
+  typo to `apply` time instead of `plan`/`validate` time.
+- Prefer a module for any resource group reused across environments
+  (`modules/network`, `modules/service`) over copy-pasted `.tf` blocks per
+  environment directory.

