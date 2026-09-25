@@ -1,0 +1,904 @@
+{
+  "schemaVersion": "1.0.0",
+  "reports": [
+    {
+      "schemaVersion": "1.0.0",
+      "skillId": "mobx/mobx-store-implementation",
+      "strictness": "high",
+      "trials": 10,
+      "triggerAccuracy": {
+        "truePositive": 8,
+        "falsePositive": 0,
+        "positives": 8,
+        "negatives": 6
+      },
+      "evidence": "authored",
+      "scenarios": [
+        {
+          "id": "trigger-positive-1",
+          "kind": "trigger-positive",
+          "prompt": "I need this MobX store to keep track of which item is currently selected, and have it update automatically wherever it is shown",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-2",
+          "kind": "trigger-positive",
+          "prompt": "I have an async method on this MobX store that hits an API and then updates a few fields -- what's the right way to write that so the state updates correctly?",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-3",
+          "kind": "trigger-positive",
+          "prompt": "I've got a new MobX store -- what's the right way to make it available to my React components so they can read from it and re-render when it changes?",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-4",
+          "kind": "trigger-positive",
+          "prompt": "This component isn't re-rendering when the store's items array changes, help me fix the wiring",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-5",
+          "kind": "trigger-positive",
+          "prompt": "Add a computed getter to this store that derives the order total from line items",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-6",
+          "kind": "trigger-positive",
+          "prompt": "I want this MobX store to automatically do something whenever a value changes, and make sure that stops once the store isn't needed anymore",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-7",
+          "kind": "trigger-positive",
+          "prompt": "Create a new MobX store for the settings panel with loading/error state",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-8",
+          "kind": "trigger-positive",
+          "prompt": "Convert this async store method so the post-await mutations are wrapped correctly",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-1",
+          "kind": "trigger-negative",
+          "prompt": "Review this MobX store for accessibility-modifier and method-ordering issues",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-2",
+          "kind": "trigger-negative",
+          "prompt": "Write a test that waits for this store's async fetchItems action to resolve before asserting",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-3",
+          "kind": "trigger-negative",
+          "prompt": "Add client-side form validation and inline error messages to this plain React form, no state library involved",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-4",
+          "kind": "trigger-negative",
+          "prompt": "Fix this tsc error: Property 'total' does not exist on type 'OrderDraft'",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-5",
+          "kind": "trigger-negative",
+          "prompt": "Add a new Pinia store action for saving user preferences",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-6",
+          "kind": "trigger-negative",
+          "prompt": "Run the project's lint and type-check scripts and report every failure",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "wrap-post-await-mutation",
+          "kind": "behavior",
+          "prompt": "I have this MobX action:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  this.items = items;\n  this.loading = false;\n}\n```\n\nWhat needs to change so it works correctly under MobX's enforceActions?",
+          "strictness": "high",
+          "trials": 10,
+          "passes": 10,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "Under `enforceActions`, only the mutations that happen **after an `await`** are the problem — they're outside the action's synchronous execution window, so MobX no longer knows they belong to the action and will throw `[MobX] Since strict-mode is enabled, changing (observed) observable values without using an action is not allowed`.\n\nSo `this.loading = true` before the `await` is fine as-is; `this.items = items` and `this.loading = false` after it need wrapping.\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  runInAction(() => {\n    this.items = items;\n    this.loading = false;\n  });\n}\n```\n\nWith `runInAction` imported from `mobx`.\n\nA few notes on getting this fully \"correct\" rather than just \"not throwing\":\n\n- **Don't forget the failure path.** As written, if `getAll()` rejects, `loading` stays `true` forever. Wrap the await in `try/finally` (or `try/catch/finally`) and clear `loading` in the `finally`, still inside `runInAction`. Also set the error state there if the store has one.\n- **Keep the public action thin.** If this is a UI-invoked public action, the project's convention (`rules/patterns.mdc`) is to make `fetchItems` do the guard check and delegate to a `private async` method that owns the real work and the `runInAction` block. Match whatever the sibling stores do.\n- **`flow` is the alternative**, not a requirement. If the store has many sequential-await actions where repeated `runInAction` blocks are the dominant noise, `flow` (with `this.fetchItems = flow(function* (this: XyzStore) { ... })` in the constructor, since decorators don't apply to generators) collapses all the post-await mutations into the generator's own action context. For a store with one or two such actions, `runInAction` is the simpler and preferred shape.\n- **`@action.bound` vs `@action`**: if React calls `fetchItems` directly (e.g. from an `onClick`), it needs `.bound` or it loses `this` — that's a separate bug from the `enforceActions` one but commonly found in the same method.\n- **You can't use `@action` on the `await` boundary itself.** The decorator only covers the synchronous portion up to the first `await`; everything after is on you.\n\nSo the minimal fix is the `runInAction` wrapper above; the complete fix also handles the rejected-await path so `loading` isn't left stuck.",
+              "outputSha256": "23ba806cd90d862e0dc4d4b9a32e411303867cadc6d06c24868c35fe0115fbed",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Shows corrected code wrapping both post-await assignments (this.items = items; this.loading = false) inside runInAction(() => {...}), and states post-await code is outside the action's synchronous execution window so MobX no longer knows it belongs to the action. No enforceActions loosening; no bare unwrapped post-await assignments remain."
+              },
+              "passed": true
+            },
+            {
+              "output": "Under `enforceActions: \"always\"` (or `\"observed\"` with observers attached), the mutations after the `await` happen outside the action context, so `this.items = items` and `this.loading = false` will throw. The `this.loading = true` before the `await` is fine — it still runs synchronously inside the action.\n\nThe fix is to wrap the post-`await` mutations in `runInAction`:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  runInAction(() => {\n    this.items = items;\n    this.loading = false;\n  });\n}\n```\n\nIf the project also wants the error path handled (recommended — otherwise `loading` stays stuck on failure), extend the same pattern:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n      this.loading = false;\n    });\n  } catch (error) {\n    runInAction(() => {\n      this.error = error;\n      this.loading = false;\n    });\n  }\n}\n```\n\nThat said, this store's own convention (per the skill's async-action pattern) routes a public `fetchItems` declared as `@action.bound` through a `private async` method that does the real work, with every post-`await` mutation wrapped in `runInAction`. If you're matching that existing pattern, keep `fetchItems` thin and move the body into the private method rather than inlining `runInAction` into the public entry point.\n\nTwo alternatives worth knowing, but not the default here:\n\n- `flow` — a generator-based async action from `mobx` where mutations on `yield` resume inside the action context automatically, so no `runInAction` is needed:\n\n  ```ts\n  fetchItems = flow(function* (this: ItemStore) {\n    this.loading = true;\n    try {\n      const items = yield this.service.getAll();\n      this.items = items;\n      this.loading = false;\n    } catch (error) {\n      this.error = error;\n      this.loading = false;\n    }\n  });\n  ```\n\n  Only reach for this if the store has many sequential-`await` actions and the repeated `runInAction` blocks are genuinely the dominant noise — not for a one-off like this.\n\n- Turning off `enforceActions` — not a fix. It silences the error but leaves the mutations untracked in a way that's fragile against future config changes and breaks the store's action boundary.\n\nWhichever shape you pick, verify with the project's type-check and a test that exercises the success and failure paths, and if `fetchItems` is bound and called from the UI, confirm the calling component is wrapped in `observer` so `loading`/`items` changes actually re-render.",
+              "outputSha256": "fd495b28b4df06f93256dfbb5ed93db5cb864d5879dfc54f53f0e5fe8ddf6c2a",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Shows corrected code wrapping this.items = items and this.loading = false in runInAction(() => {...}) after the await, and states post-await mutations happen outside the action context. Also offers flow generator alternative. Disabling enforceActions is explicitly called 'not a fix', so no fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "Under `enforceActions` (the default in most MobX setups is `\"observed\"`, so mutations of observed state must happen inside an action), the two assignments after the `await` — `this.items = items` and `this.loading = false` — are not running inside an action anymore. When you `await`, the rest of the function continues in a new microtask, outside the action context that `@action` established for the synchronous prefix. That's exactly what `enforceActions` flags.\n\n`this.loading = true` before the first `await` is fine — it's still synchronous within the action.\n\nThe fix is to wrap the post-`await` mutations in `runInAction`:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n      this.loading = false;\n    });\n  } catch (error) {\n    runInAction(() => {\n      this.loading = false;\n    });\n    throw error;\n  }\n}\n```\n\nTwo points beyond the minimal wrap:\n\n- I added the `try/catch`. The original leaves `loading` stuck at `true` if `getAll()` rejects, since the line that resets it never runs. Reset it in the catch (also inside `runInAction`) and rethrow so callers still see the failure.\n- If this action is public/UI-invoked, keep it `@action.bound`. The store's `rules/patterns.mdc` async-action shape also suggests this public method stay thin and delegate to a `private async` worker that does the real work — worth aligning with if the file follows that convention, but the `runInAction` wrap is the part that makes it correct under `enforceActions`.\n\nAlternative, if the store has many sequential-await actions and the repeated `runInAction` blocks become the dominant noise: convert it to a `flow` generator, which keeps mutations inside action context across awaits automatically. For a single action like this, `runInAction` is simpler and I'd stick with it.",
+              "outputSha256": "fbdca1e0e161632346698b140487632d2a640ad3085f4f8a00d69bfc82bce438",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Shows corrected code wrapping both post-await assignments (this.items = items, this.loading = false) inside runInAction(() => {...}), and states the await continues in a new microtask outside the action context. Also mentions flow as alternative. No enforceActions loosening; no bare unwrapped post-await assignments."
+              },
+              "passed": true
+            },
+            {
+              "output": "Under `enforceActions`, the mutations that happen *after* the `await` (`this.items = items; this.loading = false;`) run outside the synchronous extent of the action, so MobX no longer considers them part of `fetchItems` and will throw (or at minimum warn, depending on whether it's set to `\"always\"` or `\"observed\"`). The `this.loading = true` at the top is fine — it's synchronous and still inside the action — but the two lines after the `await` need to be wrapped in `runInAction`.\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  runInAction(() => {\n    this.items = items;\n    this.loading = false;\n  });\n}\n```\n\nOr, if you prefer not to leave `loading` stuck `true` when the request rejects, put the whole post-await section in a `try/finally` with the `runInAction` covering the assignment and the `loading = false`:\n\n```ts\nimport { runInAction } from \"mobx\";\n\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n    });\n  } finally {\n    runInAction(() => {\n      this.loading = false;\n    });\n  }\n}\n```\n\nBoth mutations could also share a single `runInAction` if you clear `loading` only on success.\n\nA few things worth checking alongside this:\n\n- **The project's convention for async actions.** If this codebase follows the pattern in `rules/patterns.mdc`, the public action stays thin — a guard check, then a delegate to a `private async` method that does the real work and holds the `runInAction`. Match whatever the other stores in the repo do rather than mixing styles.\n- **`flow` as an alternative.** If the store has several sequential-`await` actions and the repeated `runInAction` blocks are the dominant noise, `flow` generators are the intended MobX tool. For one or two actions, `runInAction` is simpler and clearer.\n- **An equality guard.** If `this.items` can be re-assigned to a value that's `===` to the current one and that assignment feeds a reaction feeding back into the store, add `if (items !== this.items)` before the assignment.\n\nAnd confirm the component(s) reading `items`/`loading` are wrapped in `observer` — the `enforceActions` fix makes the mutation legal, but a missing `observer` wrapper is a separate and common reason a component still won't re-render afterward.",
+              "outputSha256": "0d3c52883c8aa925af67c661c847a0d485d8d8c6a41f6fea49cad105a9d74fc2",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Shows corrected code wrapping this.items = items and this.loading = false inside runInAction(() => {...}) (both the simple version and try/finally version). States post-await mutations 'run outside the synchronous extent of the action' so they need runInAction. No enforceActions loosening; no bare unwrapped post-await assignments."
+              },
+              "passed": true
+            },
+            {
+              "output": "The two mutations right after the `await` (`this.items = items` and `this.loading = false`) run outside the action, because `@action` only wraps the synchronous portion of the method. Under `enforceActions: \"always\"` (or `\"observed\"` when the observable is observed), those assignments throw; under the default `\"observed\"` in some setups they can also fail to notify observers correctly.\n\nThere are two correct ways to fix it.\n\n## Option 1: wrap the post-await mutations in `runInAction`\n\n```ts\nimport { action, makeObservable, observable, runInAction } from \"mobx\";\n\nclass ItemStore {\n  loading = false;\n  items: Item[] = [];\n\n  constructor(private readonly service: ItemService) {\n    makeObservable(this, {\n      loading: observable,\n      items: observable,\n      fetchItems: action,\n    });\n  }\n\n  async fetchItems() {\n    this.loading = true;                 // still sync, still inside the action\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;                // post-await mutations now inside an action\n      this.loading = false;\n    });\n  }\n}\n```\n\nThis is the standard fix and the one `rules/patterns.mdc` prescribes. Note that `this.loading = true` before the `await` is fine as-is — it's synchronous, so it's still covered by the `@action` decorator.\n\n## Option 2: use `flow` (only if the store is dominated by this pattern)\n\n```ts\nimport { flow, makeObservable, observable } from \"mobx\";\n\nclass ItemStore {\n  loading = false;\n  items: Item[] = [];\n\n  constructor(private readonly service: ItemService) {\n    makeObservable(this, {\n      loading: observable,\n      items: observable,\n      fetchItems: flow,\n    });\n  }\n\n  fetchItems = flow(function* (this: ItemStore) {\n    this.loading = true;\n    const items = yield this.service.getAll();\n    this.items = items;                  // mutations after a yield are fine inside flow\n    this.loading = false;\n  });\n}\n```\n\n`flow` turns the generator into an action that resumes its mutations inside actions automatically, so you don't need `runInAction` blocks. Reach for this only when a store has many sequential-`await` actions and the repeated `runInAction` wrappers are genuinely the dominant noise — for a single action like yours, `runInAction` is the simpler and more conventional choice.\n\n## Don't do this\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  this.items = items;      // throws / silently fails under enforceActions\n  this.loading = false;\n}\n```\n\nJust removing the `await` or switching the observable to a non-observed one would \"fix\" the symptom by defeating the point of the store, not the cause.\n\nOne more thing worth adding while you're in here: if `this.loading = false` should also run when `getAll()` rejects, wrap the body in `try/finally` (with `runInAction` still around the post-`await` writes), otherwise a rejected fetch leaves `loading` stuck at `true`.",
+              "outputSha256": "fd2d3cb4bd909e0b94f163c96efaf7eb01d3938bdf9ec01900d76f519ec32c8a",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Option 1 shows corrected code wrapping both post-await assignments (this.items = items; this.loading = false) inside runInAction(() => {...}). It states '@action only wraps the synchronous portion' so post-await mutations 'run outside the action.' Option 2 shows flow restructuring. No enforceActions loosening recommended; the bare-assignment version is shown only as 'Don't do this.'"
+              },
+              "passed": true
+            },
+            {
+              "output": "The problem: `this.items = items` and `this.loading = false` both run *after* the `await`, so they execute outside the `@action`'s synchronous body. Once the first `await` yields, control returns to the caller, and the continuation runs in a fresh microtask that is no longer inside the action. Under `enforceActions: 'observed'` (or `'always'`) that throws (`Uncaught Error: [MobX] Since strict-mode is enabled, changing (observed) observable values without using an action is not allowed`). Even with `enforceActions: 'never'`, mutations outside actions each produce their own reaction run and can't be batched.\n\nTwo fixes, both acceptable:\n\n**Option A — `runInAction` (the default for a one- or two-await action):**\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  runInAction(() => {\n    this.items = items;\n    this.loading = false;\n  });\n}\n```\n\nThe `this.loading = true` before the await is fine as-is: it's still in the synchronous part of the action. Only post-`await` mutations need wrapping. If there's also a failure path, wrap the `catch` mutations the same way (or restructure — see below), so you don't leave `loading` stuck true:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n    });\n  } finally {\n    runInAction(() => {\n      this.loading = false;\n    });\n  }\n}\n```\n\n**Option B — `flow` (only if this store has many sequential-await actions and repeated `runInAction` blocks dominate the file):**\n\n```ts\nfetchItems = flow(function* (this: ItemStore) {\n  this.loading = true;\n  try {\n    const items = yield this.service.getAll();\n    this.items = items;\n  } finally {\n    this.loading = false;\n  }\n});\n```\n\n`flow` wraps the whole generator so every resume point is automatically an action — no manual `runInAction` needed at each step. Note it's a field arrow function (`fetchItems = flow(...)`), not an `async` method, and the generator needs its `this` typed explicitly. If this action is called from the UI and needs bound `this`, use `fetchItems = flow(...)` + `@action.bound` is not applicable here — `flow` already returns a bound-compatible arrow field, so prefer that shape and wrap any remaining public `async` orchestrator with `@action.bound` per the project's async-action pattern.\n\n**What does *not* need to change:** the `@action` decorator stays (it's what covers the synchronous prefix, i.e. `this.loading = true`), and the method signature/call sites are unchanged.\n\nPick Option A unless the store already has several `flow`-style actions — don't mix both styles in one store without reason. After the change, confirm the store's `enforceActions` config value (it's in the `configure(...)` call at app entry or test setup) so you know whether a missed mutation would throw or only warn, and re-run type-check plus the store's tests.",
+              "outputSha256": "5e5fc761dc97d5b28be5be07d8c2468d06523980334b0a8ac41ee7d7176d70f4",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Option A shows runInAction(() => { this.items = items; this.loading = false; }) wrapping both post-await assignments, and Option B shows a flow generator. It states post-await code runs in a fresh microtask outside the action's synchronous body. No enforceActions loosening recommended."
+              },
+              "passed": true
+            },
+            {
+              "output": "Under `enforceActions` (or with `makeObservable` + strict mode), the two assignments **after** the `await` (`this.items = items` and `this.loading = false`) run outside the action's synchronous window — by the time the promise resolves, you're no longer inside the action, so those mutations will throw (or warn, depending on config). The `this.loading = true` before the await is fine because it's synchronous within the action.\n\n## The fix\n\nWrap the post-await mutations in `runInAction`:\n\n```ts\nimport { action, runInAction } from 'mobx';\n\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  runInAction(() => {\n    this.items = items;\n    this.loading = false;\n  });\n}\n```\n\nThat's the minimal, correct change. The single `runInAction` block covers both post-await assignments.\n\n## Things to also consider\n\n**Error handling** — as written, if `this.service.getAll()` rejects, `this.loading` is stuck `true` forever. Add a `try/finally` (or `catch`) and put the flag reset in `runInAction` too:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n      this.loading = false;\n    });\n  } catch (err) {\n    runInAction(() => {\n      this.loading = false;\n      this.error = err;\n    });\n  }\n}\n```\n\n**`@action.bound` on the method** — if this is invoked from a UI handler and passed as a callback, make sure it's `@action.bound` (or an arrow property) so `this` stays the store. The wrapper itself still needs to be an action.\n\n**The `flow` alternative** — if this store has many actions with the same sequential-await shape and the repeated `runInAction` blocks become the dominant noise in the file, `flow` (a generator-based async action) is the idiomatic MobX replacement:\n\n```ts\nfetchItems = flow(function* (this: MyStore) {\n  this.loading = true;\n  try {\n    const items = yield this.service.getAll();\n    this.items = items;\n  } finally {\n    this.loading = false;\n  }\n});\n```\n\nWith `flow`, mutations after a `yield` are automatically treated as action mutations, so no `runInAction` is needed. But for a single action like yours, `runInAction` is the simpler and preferred fix — only reach for `flow` when the repetition is genuinely widespread.\n\n## Why not just do this?\n\n- **Not** mutating directly after the await and hoping `enforceActions` is off — that's exactly the fragility `enforceActions` is meant to catch, and it fails silently (no observer notification) in other configs.\n- **Not** wrapping the *whole* method body in `runInAction` — `runInAction` doesn't await, so an outer `runInAction(async () => { ... await ... })` doesn't keep the awaited continuations inside the action; the async boundary still breaks it.\n\n## Verification bar\n\nBefore calling it done: type-check passes, the post-await mutations are inside `runInAction` (or the method is a `flow` generator), and a test asserting `loading` toggles correctly on both the success and rejection paths still passes.",
+              "outputSha256": "1b17d52966aac7cf1f68ef7bb55332dccd0434ac1eb6ff0e56ded538898ea062",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Shows corrected code wrapping both post-await assignments in runInAction(() => { this.items = items; this.loading = false; }), and states post-await code runs outside the action's synchronous window. Also offers flow alternative. No fail criteria: it warns against relying on enforceActions being off rather than recommending it."
+              },
+              "passed": true
+            },
+            {
+              "output": "Under `enforceActions`, the two assignments *after* the `await` are the problem. Everything before an `await` runs synchronously within the action, so `this.loading = true` is fine — it still executes inside the action's transaction. But once you `await`, you've returned control to the caller, the action has already completed, and the subsequent `this.items = items` and `this.loading = false` are now **bare mutations outside any action**. Depending on configuration that either throws (`enforceActions: \"always\"`) or warns (`\"observed\"`).\n\nWrap the post-await mutations in `runInAction`, and make sure the whole method is still marked as an action:\n\n```ts\n@action.bound\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n      this.loading = false;\n    });\n  } catch (error) {\n    runInAction(() => {\n      this.loading = false;\n    });\n    throw error;\n  }\n}\n```\n\nKey points:\n\n1. **`runInAction` around post-await mutations** — this is the required change. Both `this.items = items` and `this.loading = false` must move inside it. You can group them into a single `runInAction` block.\n\n2. **Error path** — your original code has no `try/catch`, so if `getAll()` rejects, `this.loading` stays `true` forever. Handle the failure case (reset `loading`, and either rethrow or set an error field). Put that reset in its own `runInAction`.\n\n3. **Keep the `@action` decorator** — it still matters for the synchronous prefix (`this.loading = true`) and to signal intent, even though `runInAction` covers the async tail.\n\nAn alternative if the repeated `try/catch` + `runInAction` noise becomes dominant across many sequential-await actions is to convert the method to a `flow` generator:\n\n```ts\nfetchItems = flow(function* (this: XyzStore) {\n  this.loading = true;\n  try {\n    const items = yield this.service.getAll();\n    this.items = items;\n  } finally {\n    this.loading = false;\n  }\n});\n```\n\nWith `flow`, every `yield` boundary resumes inside an implicit action, so no `runInAction` is needed and the `finally` gives you the error-safe reset for free. Only reach for `flow` when the project's many async actions genuinely justify it — for a single method, `runInAction` is the simpler, more explicit fix.\n\nOne note against the \"just move the assignments before the await\" temptation: you can't, since `items` isn't available until the promise resolves. The mutation is inherently post-await, so it inherently needs `runInAction` (or `flow`).",
+              "outputSha256": "dccbbe20b140de2205282619d5a6b5bdb128c127e7d1586c79e18367eac5dc91",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Shows corrected code with runInAction(() => { this.items = items; this.loading = false; }) after the await, plus a flow generator alternative. States post-await code runs outside the action's transaction ('the action has already completed... bare mutations outside any action'). No enforceActions loosening; no bare post-await assignments remain."
+              },
+              "passed": true
+            },
+            {
+              "output": "The two assignments that happen **after** the `await` — `this.items = items` and `this.loading = false` — are the problem. Under `enforceActions: \"always\"` (or `\"observed\"` with an observer reading those fields), any observable mutation outside an action throws. When `fetchItems()` resumes after `await this.service.getAll()`, it is no longer synchronously inside the action's execution, so those two assignments are outside action context.\n\n`this.loading = true` is fine as-is: it runs synchronously in the same tick the action was invoked, so it's still inside the action.\n\nTwo fixes.\n\n**Fix 1 — wrap the post-await mutations in `runInAction`:**\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  const items = await this.service.getAll();\n  runInAction(() => {\n    this.items = items;\n    this.loading = false;\n  });\n}\n```\n\nNote `runInAction` needs importing from `mobx`. This is the fix to default to.\n\n**Fix 2 — convert to `flow`** (if this store has many sequential-await actions and repeating `runInAction` blocks is becoming the dominant noise):\n\n```ts\nfetchItems = flow(function* (this: ItemsStore) {\n  this.loading = true;\n  const items = yield this.service.getAll();\n  this.items = items;\n  this.loading = false;\n});\n```\n\nInside a `flow` generator, `yield` points are automatically treated as action boundaries, so no wrapping is needed. It also gives you cancellation via `.cancel()`. The cost is the generator syntax and the `this` typing annotation.\n\n**Also worth adding, regardless of which fix you use** — an error path. Right now if `getAll()` rejects, `loading` stays `true` forever. Either add a `try/finally`:\n\n```ts\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n    });\n  } finally {\n    runInAction(() => {\n      this.loading = false;\n    });\n  }\n}\n```\n\n...or catch the rejection and set an error field in the same `runInAction` block as clearing `loading`.\n\nOne more thing to check: if `getAll()` returns an array you assign to an `@observable` array field, and the field is typed as a plain `Item[]`, you may hit the array-typing friction covered by the project's observable-collection convention — but that's separate from the `enforceActions` issue above.",
+              "outputSha256": "60cdc5600fa3cdf0970cf249de6ab1ff1ab6ff73104a35a1b39f64e97e6ede20",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Fix 1 shows runInAction(() => { this.items = items; this.loading = false; }) wrapping both post-await assignments, and Fix 2 shows a flow generator achieving the same. It states code after await is 'no longer synchronously inside the action's execution, so those two assignments are outside action context.' No enforceActions loosening; no bare post-await assignments remain."
+              },
+              "passed": true
+            },
+            {
+              "output": "Under `enforceActions` (`configure({ enforceActions: 'observed' })` or `'always'`), the two mutations after the `await` — `this.items = items` and `this.loading = false` — run outside any action, so they'll throw. Only `this.loading = true` on the first line is fine, since it runs synchronously inside the action before the first `await`.\n\n## What to change\n\nWrap every state mutation that happens after an `await` in `runInAction`:\n\n```ts\n@action\nasync fetchItems() {\n  this.loading = true;\n  try {\n    const items = await this.service.getAll();\n    runInAction(() => {\n      this.items = items;\n      this.loading = false;\n    });\n  } catch (e) {\n    runInAction(() => {\n      this.loading = false;\n    });\n    throw e;\n  }\n}\n```\n\nThree things are happening here:\n\n1. **`runInAction` around the post-`await` mutations.** After `await`, the synchronous action context is gone, so `this.items = ...` and `this.loading = false` are no longer in an action. `runInAction` re-establishes one for the synchronous block.\n\n2. **`try`/`catch` so `loading` resets on failure.** In the original, if `getAll()` rejects, the `await` throws out of the action and `this.loading = false` never runs — the store is stuck loading forever. The catch block resets it inside its own `runInAction` (it's a separate action context) and rethrows so the caller still sees the error.\n\n3. **`@action` on the method.** Keep the annotation on the public async method — it covers the synchronous prefix (`this.loading = true`) and declares intent. The public method staying thin and delegating to a `private async` worker is the pattern `rules/patterns.mdc` describes; for a method this small, inlining is fine, but if the body grows, split it.\n\n## The `flow` alternative\n\nIf the store has several sequential-await actions and the repeated `runInAction` blocks get noisy, reach for `flow` instead:\n\n```ts\nfetchItems = flow(function* (this: ItemsStore) {\n  this.loading = true;\n  try {\n    const items = yield this.service.getAll();\n    this.items = items;\n    this.loading = false;\n  } catch (e) {\n    this.loading = false;\n    throw e;\n  }\n});\n```\n\n`flow` wraps the generator so every `yield` resumes inside an action — no manual `runInAction` needed. Note that within a single generator, mutations after a `yield` are already in the action context, so the `catch` block there doesn't need its own wrapper. Use `flow` only when it genuinely reduces noise; don't mix both styles in one store.\n\n## What *not* to do\n\n- Don't just disable `enforceActions` to make it pass — that's the exact failure mode the setting exists to catch (untracked mutations that observers silently miss).\n- Don't leave the bare `this.loading = false` in the `catch` outside any action; it has the same problem as the main body.\n\nAfter the change, confirm the type-check passes, the action's mutations all sit in `runInAction` (or the method is a `flow`), and there's a test covering both the success path and the rejection path resetting `loading`.",
+              "outputSha256": "9b4213ba3baf09dad6fdc6ca36c2ac46256be25e1eeb1faa4b762cc2397aa509",
+              "promptSha256": "6da40c974db51856202177d839563926568dc12999a71d5ebf3c4d02315b4e66",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Shows corrected code wrapping this.items = items and this.loading = false in runInAction(() => {...}) after the await, plus a flow generator alternative. States post-await mutations 'run outside any action' / 'the synchronous action context is gone.' Warns against disabling enforceActions rather than recommending it. No bare unwrapped post-await assignments remain."
+              },
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "component-not-rerendering",
+          "kind": "behavior",
+          "prompt": "This component reads `store.items.length` in its JSX but never updates when items change:\n\n```tsx\nfunction ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n}\n```\n\nWhat's wrong and how do I fix it?",
+          "strictness": "high",
+          "trials": 10,
+          "passes": 10,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "The component is missing the `observer` wrapper. MobX only re-renders a component when the component itself is tracked as an observer; a plain function component receives the store as a prop and will render once, then never again when `store.items` changes — React has no idea an observable mutation happened.\n\nFix: wrap the component in `observer` from `mobx-react-lite`.\n\n```tsx\nimport { observer } from 'mobx-react-lite';\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\nThat alone is the fix for this specific snippet: reading `store.items.length` inside an `observer` component establishes a dependency on both `items` and its `length`, so a change to either re-renders this component.\n\nA few related things to check while you're in here, since they produce the same \"doesn't re-render\" symptom and often get mistaken for a missing `observer`:\n\n- **Reading the value too early / breaking tracking.** If you later destructure or pull the observable out before the JSX (e.g. `const { items } = store` or `const items = store.items` at the top), you may read the value outside a tracked render context, or track the wrong thing. Read observables as late as possible, inside JSX or inside the `observer` body.\n- **Missing `observer` on a child, not the parent.** If `ItemList` is fine but a component *it* renders reads the store, that child needs its own `observer` too — tracking is per-component.\n- **State kept in `useState` instead of the store.** If `items` was mirrored into local `useState`, an `observer` wrapper won't help; the component is reading React state, not the observable.\n\nIf your store also exposes `items` via a `@computed get items()` getter, no change is needed — `observer` tracks computed values the same way.\n\nOne note on the \"why won't it re-render\" instinct: don't reach for a `key` prop or force a remount to chase this. Add the `observer` wrapper (and check the read-late/child-observer causes above) rather than papering over it — a forced remount will re-read the current value but still won't subscribe to future changes.",
+              "outputSha256": "04798824494b7dbad6cb401318bd9471bfbe493f64afaa180f3077e844461041",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states ItemList is missing the observer wrapper from mobx-react-lite, explaining it renders once then never again when store.items changes. It shows corrected code: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) { return <div>{store.items.length} items</div>; });`. It warns against key prop/force remount rather than recommending it, so no fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "The component is missing the `observer` wrapper. Without it, React has no way to know that `store.items.length` is an observable it depends on, so it never subscribes to that observable and never re-renders when `items` changes. The component just renders once with whatever value it happened to read at mount.\n\nFix: wrap the component in `observer` from `mobx-react-lite`.\n\n```tsx\nimport { observer } from \"mobx-react-lite\";\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\nThat alone makes the read of `store.items.length` tracked, and MobX will re-render this component whenever `items` changes (an `@observable` collection) or `items.length` otherwise changes.\n\nA couple of related notes, since this is the most common cause but not the only one:\n\n- Read the observable as late as possible. `store.items.length` inline in JSX is fine — the tracking happens during render at that point. It breaks the reactivity if you pull a non-observable snapshot out early (e.g. `const count = store.items.length` at the top of the component is fine too, since it's still read during render; what breaks is copying `items` into a plain array outside the tracking context, or reading it in a parent without `observer` and passing `items.length` down as a prop — then the parent needs the `observer`).\n\n- If a *parent* also renders store-derived values, that parent needs `observer` too. Recursing up the tree to find the nearest missing `observer` is the usual way to chase a \"child doesn't update\" report.\n\n- Don't reach for a `key` prop or a forced remount to work around this — that masks the missing `observer` rather than fixing the reactivity.\n\nVerification before calling it done: type-check passes, the component is wrapped in `observer`, and a test that mutates `store.items` and asserts the rendered length updates passes (or a manual check in the running app). If it still doesn't update after adding `observer`, the next thing to check is whether `items` is actually observable (declared `@observable` / annotated in `makeObservable`) rather than a plain field — a plain array field is not tracked no matter how many `observer` wrappers you add.",
+              "outputSha256": "f38313954b2ce8001bcc6b924a831b01a12f03b98061bd6034ea2503cad3927b",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states ItemList is missing the observer wrapper from mobx-react-lite, explaining it renders once and never subscribes to store.items (\"never subscribes to that observable and never re-renders\"). It shows corrected code wrapping ItemList itself: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) {...})`. It also warns against key/forced remount, which is not a fail."
+              },
+              "passed": true
+            },
+            {
+              "output": "The component is a plain function component — MobX has no way to observe which observable values it read during render, so it never subscribes to `store.items` and never re-renders when that array changes. This is the most common cause of \"component doesn't update\" in MobX: the missing `observer` wrapper.\n\nFix: wrap the component in `observer` from `mobx-react-lite`.\n\n```tsx\nimport { observer } from 'mobx-react-lite';\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\n`observer` turns the render into a reactive tracking pass: it records that the render read `store.items` (and its `length`), then re-runs the component automatically whenever that observable changes. No `key` prop, forced remount, or manual subscription is needed.\n\nA few notes on making the fix stick:\n\n- **Read the observable close to where it's rendered.** Reading `store.items` inside the JSX (as here) is exactly right — tracking sees the read at render time. Problems arise when a value is read and destructured far from the render (e.g. pulled into a variable in a parent that isn't itself `observer`), which can break fine-grained tracking.\n- **Don't reach for `useState`/`useEffect` to mirror the store.** Mirroring `store.items.length` into local state defeats the store's reactivity and drifts out of sync; let `observer` handle it.\n- **If it still doesn't update after adding `observer`**, check that the mutation path actually notifies observers — every action that mutates `items`, including anything after an `await`, must be an `@action` or run inside `runInAction`.\n- **Wrap every component that reads store state**, not just this one; a nested child reading the same store needs its own `observer` wrapper.\n\nBefore reporting done: type-check passes, this component is wrapped in `observer`, and any component that mutates `store.items` does so through an action (post-`await` mutations inside `runInAction`).",
+              "outputSha256": "b39544f6615dcd11d7fa0741594add13de67e1f1935d0c62aba81fbacc0ce059",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the plain function component never subscribes to store.items and names the missing observer wrapper as the cause of no re-render. It shows corrected code: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) { return <div>{store.items.length} items</div>; });`. It explicitly warns against key prop/forced remount and useState/useEffect mirroring, not recommending them."
+              },
+              "passed": true
+            },
+            {
+              "output": "The component is a plain function component. MobX only tracks observable reads and schedules re-renders for components wrapped in `observer` from `mobx-react-lite`. Without it, `ItemList` renders once, reads `store.items.length`, and React never learns that this read should be treated as a subscription — so a change to `store.items` notifies no one and the component never re-renders. This is the single most common cause of \"the store changed but the UI didn't.\"\n\nThe fix is to wrap the component in `observer`:\n\n```tsx\nimport { observer } from \"mobx-react-lite\";\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\nWith `observer`, the render is wrapped in a tracking reaction; `store.items.length` is recorded as a dependency, and mutating `items` (in an action) re-runs the render.\n\nTwo things to check while you're in here, because they produce the same symptom even after adding `observer`:\n\n- **Reading the value too early / breaking the tracked read.** If the observable is destructured or evaluated outside the JSX where it's rendered — e.g. `const { items } = store;` at the top of the component, or passing `store.items.length` into a child that isn't itself an `observer` — the read can happen outside the tracked render. Keep the observable access (`store.items.length`) inline in the returned JSX, and make sure any child that receives an observable and renders from it is also wrapped in `observer`.\n- **The mutation isn't an action.** If whatever mutates `items` does so outside an action (a bare assignment after an `await`, a callback from a non-MobX library), then depending on the `enforceActions` setting it either throws/warns or doesn't notify the reaction graph. That's a store-side problem, not a component-side one, but it looks identical from the UI: nothing updates. Confirm the write happens inside `@action`/`action` or inside `runInAction`.\n\nGiven the snippet, the fix is the `observer` wrapper; the other two are worth a quick look so you don't chase the same symptom twice. (Keeping `store.items.length` inline is also why a `@computed` on `ItemStore` for the derived count is a good idea if other components need it — but it's not required to fix this specific bug.)",
+              "outputSha256": "708ecc9d391ead2c28a5ab37cb5e6347a0cc1d3497194630013e46702341cccf",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states ItemList is a plain function component missing observer from mobx-react-lite, so it renders once and never re-renders on store.items change. It shows corrected code wrapping ItemList itself: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) {...})`. No key/forceUpdate/useState workaround recommended."
+              },
+              "passed": true
+            },
+            {
+              "output": "The component isn't wrapped in `observer`, so MobX isn't tracking `store.items.length` as a dependency of its render. Without `observer`, it's just a plain function component — it only re-renders when its own props or parent-driven state change, not when an observable it reads changes.\n\nFix it by wrapping the component in `observer` from `mobx-react-lite`:\n\n```tsx\nimport { observer } from \"mobx-react-lite\";\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\nNow MobX tracks the `store.items.length` read during render, and the component re-renders when `items` changes.\n\nTwo things to check while you're in there:\n\n- **Read it in the render body, not earlier.** `observer` only tracks observable reads that happen during render. If you had written `const count = store.items.length;` outside the component (at module scope) or destructured the array into a local before returning it, the tracking would break or become coarser. Reading `store.items` directly in JSX is fine.\n- **`items` must actually be observable and mutated through an action.** If `ItemStore.items` isn't an `@observable` field, or code assigns to it outside an action where `enforceActions` is on, the change either won't notify or will throw. Confirm the field is declared `@observable` and that wherever items are added/removed, that mutation runs inside an `@action` (wrapping it in `runInAction` if it happens after an `await`).\n\nIf the list is derived from other observable state — e.g. filtered or sorted — and you find yourself recomputing it in more than one component, promote it to a `@computed get` on the store rather than recomputing in each render.",
+              "outputSha256": "7a40d05dae8f32f946735d3b0590b0d854c2fcc85589432c8d48c892433d045a",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the component isn't wrapped in observer so MobX doesn't track store.items.length, explaining it only re-renders on props/parent changes (criterion 1). It shows corrected code wrapping ItemList itself: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) {...})` (criterion 2). No key/forceUpdate/useState workaround; no parent-only wrapping."
+              },
+              "passed": true
+            },
+            {
+              "output": "# The problem: no `observer` wrapper\n\n`ItemList` reads `store.items.length` but is a plain function component. MobX's reactivity doesn't reach React on its own — nothing tells this component to re-render when `items` changes. Reading an observable in a non-`observer` component gives you a snapshot at render time and then goes stale.\n\nThis is the #1 cause of \"component doesn't update\" in MobX, so it's worth checking first before anything else (a forced remount with a `key` prop, etc., just hides it).\n\n## The fix\n\nWrap the component in `observer` from `mobx-react-lite`:\n\n```tsx\nimport { observer } from 'mobx-react-lite';\n\nfunction ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n}\n\nexport default observer(ItemList);\n```\n\nThat's the whole fix for this case. `observer` subscribes the component to exactly the observables read during its render — here just `store.items` — and re-renders when they change.\n\n## Two things to watch out for\n\n1. **Don't destructure the observable early.** This defeats fine-grained tracking by reading the value outside the tracked render scope:\n\n   ```tsx\n   // Bad — reads items once, never re-subscribes\n   const { items } = store;\n   return <div>{items.length} items</div>;\n\n   // Good — read the observable inside the rendered expression\n   return <div>{store.items.length} items</div>;\n   ```\n\n   If you need a derived value, prefer a `@computed` on the store (e.g. `get itemCount()`) over computing it in the component — it keeps a single source of truth and avoids drift when another component needs the same value.\n\n2. **Make sure the store is actually reachable and properly observed.** If `ItemStore` is passed down by props (as here) you're fine; if it comes from context, expose it through a typed `useItemStore()` hook rather than a bare module-level instance, and wrap every component that reads it in `observer` — not just this one.\n\n## After the fix, verify\n\n- Every component reading `store.items` (or anything derived from it) is wrapped in `observer`.\n- Any in-flight action that populates `items` after an `await` does so inside `runInAction` (or is a `flow` generator) — otherwise the store may not notify even with `observer` in place.\n- Type-check and lint pass, and a test that mutates `items` in an action observes the re-render.\n\nIf the component still doesn't update after adding `observer`, the next suspect is exactly that second point: the mutation that changes `items` isn't running inside an action, so no notification is ever fired.",
+              "outputSha256": "1d536c682abbca6b77032629fa60be4c40a31f9e4932cbce7abbb240d0c5f480",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states ItemList is a plain function component with no observer wrapper, so reading store.items gives a stale snapshot and never re-renders (\"no observer wrapper\", \"goes stale\"). It shows the fix wrapping ItemList itself: `export default observer(ItemList);` with import from mobx-react-lite. It warns against key-prop remount rather than recommending it, so no fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "Your component is a plain function component. MobX only re-renders a component when it has been wrapped in `observer` — that wrapper is what subscribes the component's render to the observables it reads.\n\n```tsx\nimport { observer } from 'mobx-react-lite';\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\n`mobx-react-lite` is the correct import in a function-component codebase (the full `mobx-react` is only needed if you have class components). Wrap at the `export`/definition site — `export default observer(ItemList)` or the `const ... = observer(function ...)` form above both work.\n\n## Why the missing wrapper is the real cause here\n\nYour read is `store.items.length`. Without `observer`, React only re-renders on a state change of the component itself, so a store mutation never triggers a render, no matter how the observable is annotated on the store side. This is the most common cause of \"the store changed but the component didn't\" and is the first thing to check.\n\nTwo related things it's worth confirming while you're here:\n\n**Reading the value too early also breaks tracking.** Fine-grained tracking works when the observable is read *during the render* the `observer` wraps. If you destructure up front in the component body or in a parent, you can read it too far from where it's rendered and lose the dependency:\n\n```tsx\n// fragile: `.length` is read once, before render, outside the tracked read\nfunction ItemList({ store }: { store: ItemStore }) {\n  const { items } = store;         // reading `items` here is fine, but...\n  return <div>{items.length} items</div>;\n}\n```\n\nDestructuring a single observable reference is fine; the pattern to avoid is pulling a *primitive derived from* an observable into a local outside the tracked read. Reading `store.items.length` directly in JSX (as you do) is the safe shape — keep it.\n\n**`observer` doesn't fix the store side.** If you mutate `store.items` outside an action and after an `await`, the mutation either throws under `enforceActions` or fails to notify. That's a separate problem from this one, but it produces the same \"nothing updates\" symptom. Make sure every mutating path on `ItemStore` is an `@action` / `@action.bound`, and any post-`await` mutation is wrapped in `runInAction`.\n\n## Verify\n\n- `ItemList` (and any other component reading `store.items` / `store.items.length`) is wrapped in `observer`.\n- The observable is read in the render body / JSX, not captured into a local primitive beforehand.\n- The store's mutations are actions; post-`await` mutations are inside `runInAction`.\n- Type-check and the project's tests pass.\n\nThe single change that fixes your reported symptom is adding `observer`; the last two bullets are the usual co-conspirators if it still doesn't update after that.",
+              "outputSha256": "94acd8105aef5661efa230e8524fba83492f6a610bce494b159bd191805203c5",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the component is a plain function component and MobX only re-renders when wrapped in observer, explaining the store mutation never triggers a render. It shows corrected code: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) { return <div>{store.items.length} items</div>; });` — ItemList itself wrapped. No key/forceUpdate/useState workaround; no parent-only wrapping."
+              },
+              "passed": true
+            },
+            {
+              "output": "**What's wrong:** `ItemList` is a plain function component, not wrapped in `observer`. MobX only tracks observable reads and schedules re-renders for components marked as observers. Since this component has no `observer` wrapper, MobX has no reaction to subscribe to the `store.items.length` read — the component renders once and never re-renders when `items` changes. This is the most common \"store changed but UI didn't\" cause, and it's the first thing to check per Step 5 of the MobX store implementation workflow.\n\n**The fix:** wrap the component in `observer` from `mobx-react-lite`:\n\n```tsx\nimport { observer } from 'mobx-react-lite';\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\nTwo details worth being precise about:\n\n1. **`store.items.length` itself is fine as written.** The read happens inside the component's render, and `items` (an observable array per `rules/coding-style.mdc`) is tracked at the point of `.length` access. Once `observer` is in place, the fine-grained tracking will pick this up. The trap to avoid is *moving the read earlier and out of the tracked render* — e.g. destructuring `const { items } = store;` or computing `const count = store.items.length;` in a parent and passing `count` down as a plain number prop. If `count` is computed in a non-observer parent, the observable read happens outside any tracking context and the child will again never update. Keep the observable read, or at least the property access on the observable, within an `observer` component's render.\n\n2. **Don't \"fix\" it with a `key` prop, a forced remount, or a `useState`/`useEffect` mirror.** Those paper over the missing reaction; per the Red Flags table, a forced remount hides the real cause and will drift the moment the derived value is needed in two places. Check `observer` first.\n\n**Verification before calling it done:** confirm the project's `mobx-react-lite` is the React binding in use (some projects use `mobx-react`; the `observer` import path differs), then run the type-check and the component tests. If a test renders `ItemList`, assert that mutating `store.items` causes a re-render — that's the regression test that proves the `observer` wrapper is doing its job.\n\nOne adjacent check while you're here: if the outer component that *passes* `store` down also reads any observable state, it too needs `observer`. The `observer` wrapper must be on every component that dereferences observable store state, not just the leaf.",
+              "outputSha256": "ce4acb53c502f0ca8753a88ad62f2f7a9544831e44992171c1e25096d809f6ed",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states ItemList is a plain component not wrapped in observer, so MobX has no reaction and it 'renders once and never re-renders when items changes' (criterion 1). It shows corrected code: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) { return <div>{store.items.length} items</div>; });` (criterion 2). It warns against key/forceUpdate/useState mirror rather than recommending them, so no fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "The component isn't wrapped in `observer`. MobX only tracks which observable values a component actually read during render if that component is an `observer` — a plain function component just serializes whatever `store.items.length` happens to be at that render and never subscribes to anything, so it never re-renders when `items` changes.\n\nFix:\n\n```tsx\nimport { observer } from \"mobx-react-lite\";\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\n(or plain `export default observer(ItemList)` if you keep the named function).\n\nTwo things to watch once you've added `observer`:\n\n- Read the observable as close to the JSX as possible. Here you're already doing the right thing by reading `store.items.length` inline in the returned JSX rather than destructuring values at the top of the component — keep it that way. If you had done `const { items } = store;` up top, the fine-grained tracking still happens (MobX tracks the `.length` access on the array), but pulling values out far from where they render tends to break tracking when someone later passes a plain array down, so read dereferences late.\n- Don't be tempted to fix a still-not-updating component by adding a `key` or forcing a remount. If it still doesn't re-render after adding `observer`, the next things to check are (a) whether `store.items` is actually observable (declared with `@observable` / an annotation in `makeObservable`, not a plain `readonly items` field), and (b) whether the mutation that changed it is happening inside an action — a mutation outside an action under `enforceActions` either throws or doesn't notify, and that looks identical to \"observer is missing.\"\n\nAssuming `items` is a real `@observable` and its mutations happen in actions, adding `observer` is the whole fix.",
+              "outputSha256": "c4fb5da089da8afeb342ad3485f7776f4b339c91cac1fa4bfbc1f5e6eda64881",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the component isn't wrapped in observer and explains MobX only tracks reads for observer components, so it never re-renders when items changes (criterion 1). It shows corrected code: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) => ...)` wrapping ItemList itself (criterion 2). It warns against key/remount rather than recommending it, so no fail criterion holds."
+              },
+              "passed": true
+            },
+            {
+              "output": "The component isn't wrapped in `observer`, so MobX never subscribes it to the observable it reads. `store.items.length` is read during render as a plain property access — without `observer`, React has no idea the value can change, and the component only re-renders when its parent re-renders or its props change. Reading `.length` also means you're tracking the array observable itself rather than a derived value, which is fine, but it does nothing for you until `observer` is in place.\n\nThe fix:\n\n```tsx\nimport { observer } from \"mobx-react-lite\";\n\nconst ItemList = observer(function ItemList({ store }: { store: ItemStore }) {\n  return <div>{store.items.length} items</div>;\n});\n```\n\nWrap the component in `observer` — either with the `observer(fn)` call form (what I used above, which keeps the function name for better stack traces and devtools) or the `observer` decorator if the project uses legacy decorators, but match whatever the other components in the codebase already do.\n\nA couple of things to check while you're in there:\n\n- **Read the observable where it's rendered.** `store.items.length` inline in the JSX is correct and keeps fine-grained tracking intact. If you instead did `const { items } = store;` at the top and rendered `items.length`, you'd still be reading the observable during render and it would still work — but if you ever pulled the value out even earlier (a parent passing `items.length` down as a prop), the parent would need `observer` instead of this component. Keeping the read local to the render is the safe default.\n- **Read `items.length`, not the whole array, if that's all you need.** `observer` tracks exactly what you dereference, so reading `.length` avoids re-rendering when individual items mutate in place without changing the array's length. If later you iterate the items, that's fine too — MobX will track each item you touch.\n\nTo confirm the fix, add a quick test (or manual check) that mutates the store inside an action — e.g. `store.addItem(...)` — and asserts the rendered count updates. If it still doesn't update after adding `observer`, the next suspects in order are: the mutation happening outside an action and silently not notifying (check `enforceActions` in the store's `configure` call), or a second stale reference to an item being held somewhere instead of read fresh from the store.",
+              "outputSha256": "eb91722eb4fc0599b36cedbe4429756169d9859f337bf043fd03996ad78586bf",
+              "promptSha256": "1aaf3617fa24c9a51593696c18acd0291e399675f1c323b03ca4f825bc57de62",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the component isn't wrapped in observer so MobX never subscribes it, explaining it only re-renders on parent/prop changes (criterion 1). It shows corrected code: `const ItemList = observer(function ItemList({ store }: { store: ItemStore }) { return <div>{store.items.length} items</div>; });` (criterion 2). No key/forceUpdate/useState workaround recommended; no parent-only wrapping claimed sufficient."
+              },
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "9c80e77f32113ba8c27c0d45db78eb327f69118a37effd139eb213b384b6ec2d",
+      "catalogDigest": "d0f0ab450eff5aed9a70b51072f37d2b1efa569355f6f73fd3ff1a78d7a8a0b0",
+      "judgePromptVersion": "2026-09-25.1",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "runnerPromptVersion": "2026-09-25.1",
+      "recordedAt": "2026-09-25T13:38:05.817Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "skillId": "mobx/mobx-observable-testing",
+      "strictness": "high",
+      "trials": 10,
+      "triggerAccuracy": {
+        "truePositive": 7,
+        "falsePositive": 0,
+        "positives": 7,
+        "negatives": 6
+      },
+      "evidence": "authored",
+      "scenarios": [
+        {
+          "id": "trigger-positive-1",
+          "kind": "trigger-positive",
+          "prompt": "I need a test for this MobX store's async method that fetches data from the API -- how do I make sure it actually waits for the result before I assert?",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-2",
+          "kind": "trigger-positive",
+          "prompt": "My store test asserts on this.items right after calling the async action and it's flaky",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-3",
+          "kind": "trigger-positive",
+          "prompt": "How do I test that this MobX store actually does something automatically when a value changes?",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-4",
+          "kind": "trigger-positive",
+          "prompt": "Write a test proving dispose() stops this store's reaction from running again",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-5",
+          "kind": "trigger-positive",
+          "prompt": "Should enforceActions be relaxed in my MobX store test setup?",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-6",
+          "kind": "trigger-positive",
+          "prompt": "How do I test that a derived value on this MobX store updates correctly when the thing it depends on changes?",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-positive-7",
+          "kind": "trigger-positive",
+          "prompt": "This store test sometimes reads stale state before the reaction has run, fix the wait",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-1",
+          "kind": "trigger-negative",
+          "prompt": "Add a new @action.bound method to this stores constructor that fetches items from the API and wraps the loading/error update in runInAction",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-2",
+          "kind": "trigger-negative",
+          "prompt": "Write a React Testing Library test that clicks this button and checks the handler prop was called",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-3",
+          "kind": "trigger-negative",
+          "prompt": "Add a @computed get totalPrice getter to this store class that sums the items array",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-4",
+          "kind": "trigger-negative",
+          "prompt": "Write a Vitest test for this plain utility function that formats a currency string",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-5",
+          "kind": "trigger-negative",
+          "prompt": "Fix this tsc error: Property 'total' does not exist on type 'OrderDraft'",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "trigger-negative-6",
+          "kind": "trigger-negative",
+          "prompt": "Review this MobX store for accessibility-modifier and method-ordering issues",
+          "strictness": "high",
+          "trials": 1,
+          "passes": 1,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "trigger-rank-fork-family",
+          "status": "ran",
+          "deterministic": true
+        },
+        {
+          "id": "assert-after-async-action",
+          "kind": "behavior",
+          "prompt": "This test is flaky:\n\n```ts\nit(\"loads items\", () => {\n  store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\n`fetchItems` is an async action. Why is this flaky and how do I fix it?",
+          "strictness": "high",
+          "trials": 10,
+          "passes": 10,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "This is flaky because it asserts on `store.items` synchronously, immediately after calling `fetchItems()` — but `fetchItems` is an `async` action, so everything it does *after* its first `await` has not run yet when the `expect` executes. The action returns a promise that resolves later, once the mocked API call settles and the action body continues to the line that sets `store.items`. At the moment the assertion runs, that line hasn't executed, so `store.items` is still whatever it was before the call (typically `[]`, length 0).\n\nWhy it's *flaky* specifically rather than always failing: whether the mock resolves fast enough to beat the synchronous assertion depends on microtask/timer scheduling, how the mock service is implemented (a resolved promise vs. a `setTimeout`-backed fake), and machine load. Under a fast local run the pending continuation sometimes lands before Jest evaluates the next statement in the test body's own task; in CI or under load it doesn't. Same test, different outcome. That nondeterminism is the smell that the wait is missing, not that the assertion is wrong.\n\nThe fix is to wait for the thing you are actually testing to finish — the action's own promise — before asserting. Don't add a `setTimeout`/sleep: that's slower and still not deterministic.\n\nTwo correct shapes, depending on how `fetchItems` is written:\n\nIf `fetchItems` is a plain `async` method that returns its own completion promise — the usual `mobx-store-implementation` shape — await it directly:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nIf it doesn't return a useful promise (e.g. it kicks off work internally and returns `void`), wait on the observable condition the action is supposed to reach, using MobX's own `when`, which polls the predicate and resolves as soon as it becomes true:\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length === 3);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nPrefer the first form when the action returns its promise; reach for `when` only when it doesn't. Either way the test body must be `async` and must `await` the wait before the assertion — that is the whole fix.\n\nThree things to check while you're in here, since this bug class tends to come in clusters:\n\n- Every other assertion that depends on an `await`-ed step inside an async action has the same problem and needs the same treatment. Grep the file for other `store.<action>()` calls followed immediately by `expect`.\n- If the store also has `reaction`/`autorun`/`when` wired to `items`, those fire after the mutation, not synchronously with it — any assertion on their side effects needs its own wait, and a store owning disposable reactions should have a separate test proving `dispose()` actually stops them (trigger the would-fire mutation afterward and assert the effect did *not* run), not just that `dispose()` doesn't throw.\n- Don't reach for `enforceActions: 'never'` to make fixture setup easier while you're touching this file; seed precondition state through `runInAction` instead, so the test still exercises the real action semantics.\n\nVerify by running the suite, then re-running the changed test two or three times in a row locally — a correctly-awaited test gives the same result every time; the flake is gone only when the missing wait is gone, not when the timing happens to line up.",
+              "outputSha256": "70031134009888c8cfd28b319e71197a4c6b8046f5a490198816225b0c3a0499",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the assertion runs synchronously right after fetchItems(), before the async action's post-await continuation sets store.items, so it sees stale/empty state (\"that line hasn't executed, so store.items is still whatever it was before\"). It shows corrected code: `await store.fetchItems();` before expect, and a `when(() => store.items.length === 3)` alternative. It explicitly warns against setTimeout/sleep. No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "This is flaky because `fetchItems()` is an async action, but the test never waits for it. It calls the action, then immediately asserts on `store.items` on the very next line. `fetchItems` has at least one `await` inside it (the API call before it sets items), so control returns to the test synchronously at that first `await`, before `store.items` is ever assigned. The assertion runs against the store's initial/empty state.\n\nWhy it's flaky rather than always failing: the mock API stub sometimes resolves fast enough that the microtask queue drains between the action call and the assertion, or the mock returns a resolved promise that MobX's reaction happens to flush before the `expect` line executes. Under a slow/loaded machine or a differently-timed mock, it doesn't. That timing dependence is exactly what makes it intermittent — you never want a test whose pass/fail depends on how quickly a promise settles.\n\nThe fix is to wait for the action's own completion before asserting. Two options, depending on how `fetchItems` is written:\n\n**If `fetchItems` returns a promise** (it's a plain `async` method, or returns the promise from the underlying request), await it directly:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nThis is the preferred fix — you're waiting on the exact thing that signals \"the action is done,\" not a guess.\n\n**If `fetchItems` doesn't return a awaitable handle** (e.g. it's `@action async fetchItems() { ... }` but you don't have its return value, or it's fire-and-forget), wait on a predicate for the state the action should reach:\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length > 0);\n  expect(store.items).toHaveLength(3);\n});\n```\n\n`when` polls the predicate on MobX's reaction cycle and resolves as soon as it becomes true, so it settles as fast as the action does and won't pass early.\n\nWhat **not** to do: do not \"fix\" it with a fixed sleep like `await new Promise(r => setTimeout(r, 100))`. That's slower than necessary and still not deterministic under CI load — you've just moved the flake, not removed it. And if you find you're tempted to loosen `enforceActions` in the test setup to mutate state around this, don't — seed fixture state through `runInAction` instead, so the test still catches the same class of bug the real app would.\n\nVerify by running the test 2-3 times in a row after the fix — a properly awaited version gives the same result every run.",
+              "outputSha256": "e76930e8e4c122037b42dae7b3813abf57f36a906bab7bb3647f9f0d2cdb90d3",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explains the assertion runs synchronously right after fetchItems, before the await resolves and store.items is assigned, seeing initial/empty state (\"control returns to the test synchronously at that first await, before store.items is ever assigned\"). Shows corrected code with `await store.fetchItems();` and a `when(() => store.items.length > 0)` alternative. Warns against setTimeout rather than recommending it."
+              },
+              "passed": true
+            },
+            {
+              "output": "It's flaky because `fetchItems()` is async — calling it kicks off the action, but its `await` points haven't resolved by the time the next line runs. So `store.items` is whatever it was before the action's `await`s completed. Whether that happens to be `[]`, partially populated, or fully populated depends on microtask/IO timing, so the assertion can pass or fail run to run with no code change.\n\nFix: wait for the action to finish before asserting.\n\nIf `fetchItems` returns a promise (a plain `async` method — the usual shape), just await it:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nIf it doesn't return a usable promise, wait on the condition it should reach:\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length > 0);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nTwo things not to do here:\n\n- Don't add `setTimeout(resolve, 100)` or any fixed sleep. It's slower than necessary and still not deterministic under load — the action could take longer than your sleep on a busy CI box.\n- Don't set `enforceActions: 'never'` in the test file to \"fix\" setup. That hides the same bug class the real app hits; seed any precondition state through `runInAction` instead.\n\nAlso make sure the test function is `async` and the `await` is actually there — an `async` arrow with no `await` inside the body is the same flake in disguise. Once fixed, run it a few times in a row to confirm it's stable; if it still flakes, there's a missing wait somewhere else (often a reaction firing after the action resolves), not a problem with the test runner.",
+              "outputSha256": "29c88239085fb574bc7da0d50ee6501cc840de158e7fadbf3d1c5f3a326e9cde",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explains flakiness: fetchItems is async, its await points haven't resolved before the next line runs, so store.items is stale/empty (timing-dependent). Shows corrected code: `await store.fetchItems();` before expect, plus a `when(() => store.items.length > 0)` alternative. Warns against setTimeout sleep rather than recommending it, and no synchronous assertion is left."
+              },
+              "passed": true
+            },
+            {
+              "output": "The test is flaky because it asserts **synchronously** on state that `fetchItems` only sets **after an `await`**. The call to `store.fetchItems()` kicks off the action, hits its first `await`, and returns control to the test immediately — at that point `store.items` is still whatever it was before the fetch started (usually `[]`). Whether the assertion passes depends on whether the awaited work happened to already be resolved by the time the next line runs, which is a race. On a fast machine with a mocked API that's already cached, it may pass; under load, or the first time, it almost certainly fails. That non-determinism is the flake.\n\nThere are two fixes, in order of preference:\n\n**1. Await the action's own promise (best).** If `fetchItems` is a plain `async` method, it returns a promise. Await it:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nThis is deterministic and pins the assertion to the exact moment the action finishes its work.\n\n**2. Await a `when(...)` predicate.** If `fetchItems` doesn't return a usable promise (e.g. it fires and forgets internally), wait on the condition the action is supposed to reach:\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length > 0);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nThis resolves as soon as the observable condition becomes true, so there's no wasted time and no race.\n\n**What not to do:** don't add `setTimeout(resolve, 100)` or a fixed sleep before the assertion. It's slower than necessary *and* still not deterministic — under CI load 100ms may not be enough, and on a fast run you've just added dead time. It converts a flake into a slow flake. Likewise, don't loosen `enforceActions` or skip the test; the missing `await` is the actual bug.\n\nThe same reasoning applies to any reaction/autorun whose effect you're asserting on: trigger the mutation, then `await when(() => <expected effect>)` before asserting, never assert immediately after the mutation.",
+              "outputSha256": "f5310ea8f4a50ccb94507c42d4205fc30fbf43b15f2bbed90d396672279febb0",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explains the assertion runs synchronously after fetchItems hits its first await, so store.items is still stale/empty (race). It shows corrected code: `await store.fetchItems();` before expect, and an alternative `await when(() => store.items.length > 0);`. It explicitly warns against setTimeout/sleep rather than recommending it, so no fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "`fetchItems()` is an async action, so it has not finished by the time the next line runs. The test asserts on `store.items` synchronously, immediately after firing the action — at that moment the promise returned by `fetchItems` is still pending, so `store.items` is whatever it was before the fetch (usually the initial empty array, sometimes stale items from a previous test if the store instance is shared). The result is a race: on a fast machine or a mock that resolves without a real tick, the assertion might occasionally run after the microtask that populates the store; under load or with a slower mock it runs before. Hence the flake.\n\nTwo common wait patterns, and you should pick based on the store's API:\n\n**If `fetchItems` returns a plain `async` method's promise** — just await it:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nThis works because `await` on the action's own promise guarantees every mutation that happens in the action body (before and after its internal `await`s) has completed, and reactions scheduled by those mutations have run.\n\n**If `fetchItems` doesn't return a promise** (e.g. it's `fetchItems(): void` and kicks off work internally) — wait on a predicate instead of the (non-existent) return value:\n\n```ts\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length === 3);\n  expect(store.items).toHaveLength(3);\n});\n```\n\n`when` polls the observable condition and resolves once it's true, so it's deterministic regardless of how many internal awaits or microtasks the action goes through. Make the predicate as specific as you can (here, checking the actual expected length, not just \"items is non-empty\") so the wait can't pass prematurely on a partial state.\n\nWhat not to do:\n- Don't add `await new Promise(r => setTimeout(r, 100))` or any fixed sleep. It's slower than `await`/`when`, and it's still not deterministic — if the fetch mock ever takes longer than 100ms under CI load, the test flakes again.\n- Don't loosen `enforceActions` or mutate `store.items` directly to \"set up\" the expected result — seed any fixture state through `runInAction`, and let the action be the thing that populates the state under assertion.\n- Don't skip the test. A flaky test here usually means the wait strategy is wrong, not that the store is untestable.\n\nOne more thing to check while you're in this test: if the store owns any `autorun`/`reaction`, and this test (or a sibling) relies on one firing, apply the same rule — trigger the mutation, then `await when(() => <the reaction's effect>)`, then assert. And if the store has a `dispose()`, add a test that calls it, re-triggers the mutation, and asserts the reaction did *not* fire again — not just that `dispose()` didn't throw.\n\nFinally, verify by running the test command and re-running the suite 2-3 times in a row; if the result is stable across runs, the missing `await`/`when` was the whole bug.",
+              "outputSha256": "0b3cb632e181f4a296983658de609b239e84b5eaa0fe5f02c09af358f5856a3c",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explains the assertion runs synchronously right after fetchItems while the promise is still pending, so store.items is stale/empty (\"has not finished by the time the next line runs... still pending\"). Shows both fixes concretely: `await store.fetchItems();` and `await when(() => store.items.length === 3);` before the expect. Explicitly warns against fixed setTimeout sleep, which is allowed."
+              },
+              "passed": true
+            },
+            {
+              "output": "The test is flaky because it asserts synchronously, immediately after calling an async action. `store.fetchItems()` returns before its internal `await` (the network/API call inside the action) has resolved, so `store.items` is usually still its initial value (often `[]`) at the moment the `expect` runs. Whether the assertion passes depends entirely on how fast the mocked promise resolves relative to the microtask queue — which is why it's non-deterministic: fast/local mocks may occasionally win the race, slow ones won't, and CI load changes the outcome.\n\nIt also isn't a real test of anything: even when it \"passes,\" it's asserting against a race, not against the action's actual completion.\n\nThe fix is to wait for the action's own completion before asserting. Two cases:\n\n**If `fetchItems` is a plain `async` method that returns a promise**, just await it:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nThis is the preferred fix — you're awaiting the exact thing that signals the action is done.\n\n**If the action doesn't return a usable promise** (e.g. it's fire-and-forget, or the store's public API doesn't expose the promise), wait on a predicate instead:\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length > 0);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nUse a predicate that reflects the state the action is supposed to reach (e.g. `store.items.length > 0`, or an explicit `store.isLoaded` flag if the store has one) rather than just `store.items.length === 3`, so a genuine regression (loading 2 or 4 items) fails the `expect` with a useful message instead of hanging on the `when`.\n\nWhat not to do: don't add a `setTimeout(resolve, 100)` or similar sleep before the assertion. It's slower than necessary and still not deterministic under load, so it just converts a flaky failure into an occasional flaky failure. Also don't loosen `enforceActions` in the test setup to work around this — the fix here is waiting correctly, not relaxing reactivity rules.",
+              "outputSha256": "252911f558ce381a444ad7b0691e0087062c38b5e989d23e7f117a0f26ba149b",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explains the sync assertion runs before the action's internal await resolves, so store.items is still initial ([]), causing the race. It shows corrected code: `await store.fetchItems();` before expect, and a `when(() => store.items.length > 0)` predicate alternative. It explicitly warns against setTimeout/sleep rather than recommending it, so no fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "The test isn't flaky in the \"sometimes passes, sometimes fails\" sense so much as it's wrong — it asserts on `store.items` synchronously, immediately after calling `store.fetchItems()`. `fetchItems` is async, so at the moment the `expect` runs, the action has only executed up to its first `await`. Whatever sets `store.items` happens in a later microtask (or after the network/API stub resolves), so the `expect` is racing the action. On a fast mocked dependency that resolves in one microtask, the assertion may occasionally already reflect the new state; under load, or with an extra `await` in the action, it won't. That non-determinism is the flake.\n\n## Fix\n\nWait for the action's own completion before asserting. Two correct shapes:\n\n```ts\n// 1. fetchItems returns a promise — await it directly\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\n```ts\n// 2. fetchItems is fire-and-forget (void return) — wait on the\n//    condition it is supposed to reach\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length === 3);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nPrefer (1) if the action returns its promise, because it also surfaces a rejection from the action itself rather than hanging until a timeout. Reach for (2) only when the action genuinely doesn't hand back a promise (e.g. it kicks off work internally). Import `when` from `mobx`.\n\n## What not to do\n\n- Don't paper over it with `await new Promise(r => setTimeout(r, 100))`. It's slower than waiting on the real signal and still not deterministic — under a loaded CI runner the action may not have settled in 100 ms either.\n- Don't loosen `enforceActions` or poke `store.items` directly with a test-only setter to \"pre-seed\" the state. Seed fixtures through `runInAction` if you need a precondition; keep `enforceActions` at the project's real setting.\n- Don't mark the test `it.skip`. The missing wait is a real defect in the test; skipping just hides it.\n\nAlso, if `fetchItems` is meant to be consumed this way, add a regression test that the action's own rejection path works — i.e. `await expect(store.fetchItems()).rejects.toThrow(...)` with the API stub rejecting — since a fire-and-forget version would swallow that.",
+              "outputSha256": "2cfd4c06d303f7ee04ae1e2261d80607aec4a65f75189e02e1dcd51035b79a2b",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Explains the expect runs synchronously after fetchItems, before the async action's await resolves/updates store.items, racing the action (\"asserts on store.items synchronously... action has only executed up to its first await\"). Shows corrected code: `await store.fetchItems();` before expect, and a `when(() => store.items.length === 3)` predicate variant. Explicitly warns against setTimeout, not recommending it."
+              },
+              "passed": true
+            },
+            {
+              "output": "The bug is on line 2: `store.fetchItems()` is an async action, but the test calls it without `await` and asserts synchronously on the next line. At that instant, `fetchItems` has only run up to its first `await` — the request hasn't resolved, the `runInAction` that assigns `store.items` hasn't executed yet, so `store.items` is still its initial value (likely empty). It sometimes \"passes\" only because the promise occasionally resolves before the assertion runs, which depends on microtask/scheduler timing and load — that's your flake.\n\nFixes, in order of preference:\n\n**1. Await the action's own promise (if `fetchItems` is a plain `async` method).**\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nThis is the cleanest fix when the action returns a promise. If `fetchItems` is wrapped in `flow` from `mobx-state-tree` or fires-and-forgets internally, it may not return a useful promise — then use option 2.\n\n**2. Wait on a predicate with `when`.**\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length === 3);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nThis waits for the condition the action should reach, regardless of how many awaits/microtasks it takes internally. It also fails with a timeout rather than a silent stale read if the action never populates state.\n\n**Do NOT** \"fix\" it with `setTimeout(resolve, 100)` or a `sleep`. That's slower than necessary and still not deterministic under CI load — the request could take longer than 100ms, reintroducing the flake.\n\nOther things to check while you're in here:\n\n- If the test needs to seed preconditions, do it inside `runInAction(...)`, and keep `enforceActions` at the project's real setting. Don't loosen it in the test file to make setup easier.\n- Mock the injected API service so the resolution timing is fully under test control — a real network call is its own source of flake even after you await correctly.\n- Re-run the test 2–3 times locally after the fix to confirm it's stable before calling it done.",
+              "outputSha256": "2661e6ae7cfb40aebd97cb446fbef1be79df887f3d6920cd368217cb22bfba22",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explains the sync assertion runs before the action's first await resolves so store.items is still initial/empty (\"has only run up to its first await... store.items is still its initial value\"), and shows both fixes: `await store.fetchItems();` before expect, and `await when(() => store.items.length === 3);`. It explicitly warns against setTimeout/sleep rather than recommending it."
+              },
+              "passed": true
+            },
+            {
+              "output": "This test is flaky because `fetchItems` is an async action — it hits an `await` internally (the API call), so calling it just kicks off a promise and returns immediately. The line after it runs before the action has resumed from its `await` and set `store.items`. So on a fast run the microtask queue might drain before your assertion (or more likely, the mocked API resolves synchronously in some runs), and on a slow one it won't — hence intermittent failures. It's not a race in the store, it's a race in the test.\n\nThe fix is to wait for the action's own completion before asserting, not to sprinkle a timeout in.\n\nIf `fetchItems` is a plain `async` method that returns its promise, await it directly:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nIf it doesn't return a usable promise, or you specifically want to assert on the state the action should drive rather than just \"it finished,\" wait on a predicate with `when`:\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length === 3);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nBoth are deterministic: they resolve exactly when the action has done its work, regardless of how the mocked API is scheduled.\n\nA few related things to watch, per the skill's rules:\n\n- Don't \"fix\" this with `setTimeout(resolve, 100)` or a fixed sleep. It's slower than the promise wait and still not deterministic under a loaded CI runner.\n- Don't loosen `enforceActions` in the test file to sidestep this. If you need to seed fixture state before the action runs, do it through `runInAction`, not by disabling action enforcement.\n- If you later add a `dispose()`/reaction to this store, add a separate test that triggers the mutation after `dispose()` and asserts the reaction's effect did *not* fire — checking that `dispose()` merely doesn't throw misses the actual leak.\n\nVerify by running the suite and re-running this test 2–3 times in a row; if it's still flaky after the `await`/`when`, there's a missing wait somewhere else.",
+              "outputSha256": "7de076c4848357321daa5f23fcd2b9b53e1a3fd6cea17ab749f01d2c0ec4797e",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explains the assertion runs before the async action resumes from its await and sets store.items (\"runs before the action has resumed from its await and set store.items\"). It shows corrected code: `await store.fetchItems();` before expect, and a `when(() => store.items.length === 3)` predicate variant. It explicitly warns against setTimeout/sleep rather than recommending it, so no fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "This is flaky because you're asserting synchronously after calling an async action, but `fetchItems()` hasn't finished yet. When it hits its first `await`, control returns to your test, which immediately checks `store.items` — before the action has had any chance to assign the fetched items. Whether the assertion passes depends on timing (what the mocked API promise resolves to, microtask scheduling, machine load), so it can pass by luck and fail under load. That's the classic \"reads stale/empty state\" flake.\n\nFix: wait for the action to actually complete before asserting, instead of asserting immediately.\n\nIf `fetchItems` is a plain `async` method, just await it:\n\n```ts\nit(\"loads items\", async () => {\n  await store.fetchItems();\n  expect(store.items).toHaveLength(3);\n});\n```\n\nIf it doesn't return an awaitable promise (e.g. it kicks off work internally), wait on the condition you care about with MobX's `when`:\n\n```ts\nimport { when } from \"mobx\";\n\nit(\"loads items\", async () => {\n  store.fetchItems();\n  await when(() => store.items.length === 3);\n  expect(store.items).toHaveLength(3);\n});\n```\n\nA few things to keep in mind:\n\n- Do not \"fix\" this with a fixed `setTimeout(resolve, 100)` or a sleep. It's slower than necessary and still non-deterministic under load — you'd just be trading one flake for a slower one.\n- Don't disable `enforceActions` in the test to make setup easier. If you need to seed precondition state, do it through `runInAction`, not by loosening the config.\n- After fixing, run the test a few times in a row locally to confirm it's deterministic. The flake was the missing wait; if it still flickers, there's another un-awaited reaction or action in the path.\n\nIf your store owns a reaction/autorun that reacts to `items` changing, also make sure you wait for that reaction to run before asserting on its effects — same principle: wait on a `when(...)` predicate, never assert immediately after the mutation that should trigger it.",
+              "outputSha256": "6034b79fba395147a5bcf53d135d7b6c503df04c1056c11b9710c478ac859b86",
+              "promptSha256": "256c7a29d48da077583a34f8c3535e155a89832681b4cf637fdc4f6e074562e5",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer explains the assertion runs synchronously before fetchItems' first await resolves, so store.items is stale/empty (\"hasn't finished yet... before the action has had any chance to assign\"). It shows corrected code with `await store.fetchItems();` and an alternative `await when(() => store.items.length === 3);` before expect. It explicitly warns against setTimeout/sleep rather than recommending it."
+              },
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "dispose-test-effect",
+          "kind": "behavior",
+          "prompt": "I have a store with an autorun disposed in dispose(). My current test is:\n\n```ts\nit(\"disposes cleanly\", () => {\n  store.dispose();\n});\n```\n\nDoes this actually prove the autorun stops running? If not, what should the test do instead?",
+          "strictness": "high",
+          "trials": 10,
+          "passes": 10,
+          "passRate": 1,
+          "passAtK": 1,
+          "grader": "judge",
+          "status": "ran",
+          "trialRecords": [
+            {
+              "output": "No, that test proves nothing about the autorun. It only proves `dispose()` doesn't throw when called. An autorun that was never correctly torn down — or a `dispose()` that forgets to call the reaction disposer, or stores it in the wrong variable, or calls `.dispose()` on a stale reference — would still pass this test with flying colors, because nothing in the test ever triggers the reaction after disposal and checks that it stayed silent.\n\n## What the test should actually do\n\nThe point of a disposal test is to prove the reaction **fires before dispose and does not fire after**. That means you need a mutation that would normally trigger the autorun, run it once to confirm the autorun is live, dispose, run the same mutation again, and assert the effect did **not** run a second time.\n\n```ts\nit(\"dispose() stops the autorun from firing\", async () => {\n  let effectRuns = 0;\n\n  // 1. Wire up the autorun so it has something observable to count.\n  //    (If the store's own autorun is what you're testing, spy on its\n  //    effect instead — e.g. a mocked service call it makes.)\n  const disposeAutorun = autorun(() => {\n    store.someObservableField; // establish the dependency\n    effectRuns++;\n  });\n\n  // 2. Prove it's live: mutate and wait for the reaction to run.\n  runInAction(() => {\n    store.someObservableField = \"changed-1\";\n  });\n  await when(() => effectRuns === 2); // 1 initial run + 1 from the change\n\n  // 3. Dispose and mutate again with the same trigger.\n  store.dispose();\n  runInAction(() => {\n    store.someObservableField = \"changed-2\";\n  });\n\n  // 4. Give any (incorrectly) still-live reaction a chance to run,\n  //    then assert the effect did NOT run again.\n  await Promise.resolve();\n  expect(effectRuns).toBe(2);\n});\n```\n\nIf the autorun under test is the **store's own** internal autorun (the one `dispose()` is supposed to tear down), you can't count its runs directly from outside — so instead spy on the side effect it produces. For example, if the autorun calls `analytics.track(...)`, a mocked service method, or writes to a sink, count those calls:\n\n```ts\nit(\"dispose() stops the store's internal autorun\", async () => {\n  const track = jest.fn();\n  const store = new MyStore({ analytics: { track } });\n\n  runInAction(() => {\n    store.thingThatTriggersTracking = \"a\";\n  });\n  await when(() => track.mock.calls.length === 1);\n\n  store.dispose();\n\n  runInAction(() => {\n    store.thingThatTriggersTracking = \"b\";\n  });\n  await Promise.resolve();\n\n  expect(track).toHaveBeenCalledTimes(1); // still 1 — no leak\n});\n```\n\n## Three things that make or break this test\n\n1. **Trigger before dispose, assert it ran.** Without this, a store whose autorun was never wired up at all would still \"pass\" the after-dispose assertion, because the count would be zero both times. You need the pre-dispose fire to prove the reaction was live to begin with.\n\n2. **Wait for the reaction, don't sleep.** Use `await when(() => <effect happened>)` (or `await Promise.resolve()` for a synchronous microtask reaction) rather than a fixed `setTimeout`. A fixed sleep is both slower and still non-deterministic under CI load — it can pass locally and flake in a busy suite, or worse, pass because the effect happened to *not* run yet, not because it was correctly disposed.\n\n3. **Give a renegade reaction a window to fire.** After pressing the post-dispose mutation, yield to the microtask queue (`await Promise.resolve()`) before asserting the count is unchanged. This isn't a sleep-for-timing hack — it's ensuring you're not passing the test merely because an incorrectly-still-live reaction simply hasn't run *yet*.\n\n## Summary\n\nYour current test is a smoke test (\"doesn't blow up\"), not a disposal test. Rewrite it so it:\n\n- fires the triggering mutation **once before** `dispose()` and proves the effect ran,\n- calls `store.dispose()`,\n- fires the **same** mutation again,\n- waits for the reaction to have had its chance, then asserts the effect did **not** run a second time.\n\nThat's the only shape that actually catches a leaked or mis-torn-down autorun. And keep `enforceActions` at the project's real setting while you do it — seed the pre-dispose state through `runInAction`, don't loosen the config to set up the fixture.",
+              "outputSha256": "47f47dd8d88c09e0529b19965ac97207bd27781835c7c963feb66cf54514b7d8",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test only proves dispose() doesn't throw ('It only proves `dispose()` doesn't throw when called') and that nothing triggers the reaction after disposal. It shows corrected tests: mutate before dispose, call store.dispose(), mutate the same observable again, then assert effectRuns stayed 2 / track called once. No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "No — that test only proves `dispose()` doesn't throw. It says nothing about whether the autorun was actually stopped. A store can run `dispose()` \"cleanly\" while leaking reactions that keep firing after disposal, and your test would still pass.\n\nWhat the test needs to do is prove the reaction's *effect* stops happening after disposal, by comparing behavior before and after:\n\n1. Trigger the observable mutation the autorun reacts to, and assert the effect *does* run (establishes the reaction was live — otherwise a never-wired autorun would also \"pass\" the after-dispose check vacuously).\n2. Call `store.dispose()`.\n3. Trigger the same mutation again.\n4. Assert the effect does **not** run again.\n\nConcretely, assuming the autorun's effect is observable via a spy or a counter:\n\n```ts\nit(\"dispose() stops the autorun from firing\", async () => {\n  const effect = vi.fn(); // or jest.fn()\n  // ensure the autorun under test calls `effect` — either inject the\n  // spy into the store, or spy on whatever side effect it performs\n  // (e.g. a mocked API service call) before constructing/wiring.\n\n  // 1. Prove it fires while alive.\n  store.someObservable = \"one\";           // inside runInAction if enforceActions is on\n  await when(() => effect.mock.calls.length === 1);\n\n  // 2. Dispose.\n  store.dispose();\n\n  // 3. Mutate again.\n  runInAction(() => { store.someObservable = \"two\"; });\n\n  // 4. Prove it no longer fires — give the (would-be) reaction a\n  //    chance to run before concluding it didn't.\n  await Promise.resolve(); // or a microtask/tick if the reaction is async\n  expect(effect).toHaveBeenCalledTimes(1);\n});\n```\n\nKey points:\n\n- **Don't assert the \"before\" and \"after\" with a bare spy check only.** The critical part is showing count stays at 1 after the second mutation.\n- **Wait before concluding nothing happened.** If the autorun (or its effect) is async, `await Promise.resolve()` or a small `when`-style tick gives it a chance to fire; asserting synchronously could pass even if the reaction is still alive but deferred. Do not use a fixed `setTimeout` sleep — it's slower and still non-deterministic under load.\n- **If `enforceActions` is on**, wrap the setup mutations in `runInAction` rather than loosening the setting for the test.\n- **Self-check for vacuous pass:** if you comment out the `dispose()` call, the test should fail (because the effect would fire twice). If it still passes, the reaction was never live to begin with.\n\nIf the store can own more than one reaction/autorun, add one such test per disposable, or assert on distinct effects, so a single un-disposed reaction can't slip through.",
+              "outputSha256": "b8c35b95dcd998cca53ff581481c7b64a515dc9e22f484e28670770f5fbfd5fc",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test only proves dispose() doesn't throw and says nothing about whether the autorun stopped. It gives a corrected test: mutate observable, assert effect fires (count 1), call store.dispose(), mutate again, then expect(effect).toHaveBeenCalledTimes(1). No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "No — that test proves nothing about the autorun. It only proves `dispose()` doesn't throw. If `dispose()` were a no-op, or if the actions inside it silently failed while the reactions remained live, that test would still pass. The autorun could keep running forever and this assertion wouldn't notice.\n\nThe whole point of `dispose()` on a store that owns reactions is to stop those reactions from firing. So the test has to observe the reaction's *effect*, not the method's return.\n\n## What the test should do instead\n\nThree phases: establish the reaction works, dispose, then prove it stopped.\n\n```ts\nit(\"dispose() stops the autorun from firing again\", () => {\n  const spy = vi.fn();\n  const store = createStore({ api: mockApi, onSynced: spy });\n\n  // 1. Prove the reaction is actually live before disposal.\n  //    Mutate the observable the autorun depends on.\n  runInAction(() => { store.items.push({ id: \"1\" }); });\n  expect(spy).toHaveBeenCalledTimes(1);\n\n  // 2. Dispose.\n  store.dispose();\n\n  // 3. Trigger the exact same mutation that fired it the first time.\n  runInAction(() => { store.items.push({ id: \"2\" }); });\n  expect(spy).toHaveBeenCalledTimes(1); // still 1 — no new call\n});\n```\n\nThe key design points:\n\n- **The effect is observable.** Whatever the autorun does when it fires — calls an injected callback, sets an observable flag, writes to a spy — recorded so the test can see it. If the autorun body isn't reachable from outside the store, provide the seam (an injected callback or an exposed observable) rather than trying to assert on MobX internals.\n- **The trigger is repeatable.** Use a mutation that can be applied both before and after `dispose()` so the same code path is exercised both times. This is what distinguishes \"reaction ran once then stopped\" from \"reaction never ran at all\" — the first assertion is what makes the second meaningful.\n- **The assertion is on the count, not on absence of throwing.** `toHaveBeenCalledTimes(1)` after the second mutation is the actual proof.\n\n## Two variants worth considering\n\nIf the autorun's effect is setting an observable rather than calling out:\n\n```ts\nrunInAction(() => { store.filter = \"a\"; });\nawait when(() => store.visible.length === 2); // reaction ran\n\nstore.dispose();\n\nrunInAction(() => { store.filter = \"b\"; });\nawait Promise.resolve(); // give any (now-removed) microtask reaction a chance\nexpect(store.visible).toEqual(/* unchanged from after \"a\" */);\n```\n\nNote the `await Promise.resolve()` here, not a `setTimeout`. And note that you still had to wait for the *first* firing with `await when(...)` before disposing — otherwise you're not sure the reaction was ever wired up, and the post-dispose assertion passes vacuously.\n\nFor multiple disposables (autorun + reaction + when), one test per reaction is usually clearer than a single test trying to prove all three stopped — a shared failure message can't tell you which one leaked.\n\n## What not to write\n\n- `store.dispose(); expect(spy).not.toHaveBeenCalled();` — passes even if the reaction was never live, since you never triggered it.\n- A `setTimeout(resolve, 50)` after the post-dispose mutation — that's the flaky-sleep trap in the red flags; either the reaction is synchronous (use `await Promise.resolve()`) or it should be awaited through the store's own promise, not a timer.\n- Loosening `enforceActions` to set up the fixture state directly — seed through `runInAction` as above.",
+              "outputSha256": "c46293efc7e254b144b2d175c10dc66e39a03c4411b917cb340a44486fddaf5a",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test only proves dispose() doesn't throw and the autorun could keep running unnoticed (criterion 1). It shows a corrected test: spy effect, mutation before dispose asserting spy called once, then dispose(), then same mutation again asserting spy still called once (criterion 2). No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "No — that test proves nothing about the autorun. It only proves `dispose()` doesn't throw. A store can call `dispose()` and do nothing inside it, or dispose the wrong thing, and this test still passes. The autorun could keep firing on every subsequent mutation and the suite would be green.\n\nThe test needs to prove the reaction's *effect stops firing*, which means three phases: trigger the reaction once (to confirm it's live), dispose, then trigger the same mutation again and assert the effect did **not** run a second time.\n\n```ts\nit(\"stops its autorun after dispose()\", () => {\n  const effect = vi.fn();\n  const dispose = autorun(() => effect(store.someObservable));\n\n  // 1. Sanity check the reaction is actually wired up and live.\n  runInAction(() => {\n    store.someObservable = 1;\n  });\n  expect(effect).toHaveBeenCalledTimes(1);\n\n  // 2. Dispose, then re-trigger the same mutation.\n  dispose(); // or store.dispose(), if the store owns it\n\n  runInAction(() => {\n    store.someObservable = 2;\n  });\n\n  // 3. Effect must not have run again.\n  expect(effect).toHaveBeenCalledTimes(1);\n});\n```\n\nKey points:\n\n- The first mutation is not optional. Without it, a test that just disposes and re-triggers would pass even if the autorun was never wired up in the first place — you'd get a false pass for a different bug. Asserting it ran once before dispose anchors the test to a live reaction.\n- If the store owns the autorun, call `store.dispose()` rather than the raw disposer returned by `autorun`, so you're testing the store's actual disposal path, not a disposer you created in the test. Either way, re-trigger through the store's own observables.\n- Wrap the mutations in `runInAction` so `enforceActions` stays at its real setting — don't loosen it to seed the precondition.\n- No `setTimeout`/sleep needed here: `autorun` runs synchronously on mutation, so the assertion right after the second mutation is already deterministic. If the reaction is genuinely async (e.g. it awaits something internally), then you need to wait for that specific effect — but waiting for a *synchronous* effect to prove it *didn't* run is a trap: a sleep gives a false pass if the effect is just slower than your sleep. For a negative assertion, prefer a synchronous reaction so \"didn't run\" is immediate and trustworthy.\n- Run it 2–3 times locally to confirm it's not flaky.\n\nSo: your current test does not prove the autorun stops. Replace it with the before-and-after effect count above.",
+              "outputSha256": "5146fbda61bf8625c7c88ed5762e4205c5eaefa50864fd9fe23cdd15f36f694f",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test 'only proves dispose() doesn't throw' and 'proves nothing about the autorun.' It shows a corrected test: effect spy, dispose(), then mutates store.someObservable and asserts effect still toHaveBeenCalledTimes(1), i.e. did not run again. No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "No, it doesn't prove anything useful. That test only asserts that `dispose()` doesn't throw. It would pass even if `dispose()` were an empty function, and it would pass even if `dispose()` called the disposer on the wrong reaction, or never captured the disposer at all. The autorun's actual behavior after dispose is completely untested.\n\nTo actually prove the autorun stops, the test has to observe the autorun's effect before and after dispose, and show the mutation stops producing it:\n\n```ts\nit(\"stops the autorun after dispose\", async () => {\n  // 1. Prove the autorun is live: mutating the observable it watches\n  //    makes its effect run.\n  runInAction(() => { store.count = 1; });\n  await when(() => store.sideEffectValue === \"ran\"); // or whatever the autorun sets/calls\n  expect(store.sideEffectValue).toBe(\"ran\");\n\n  // 2. Dispose.\n  store.dispose();\n\n  // 3. Trigger the same mutation again and confirm the effect did NOT run.\n  runInAction(() => { store.count = 2; });\n  await Promise.resolve(); // let any would-be reaction flush, so the\n                           // negative assertion isn't just racing\n  expect(store.sideEffectValue).toBe(\"ran\"); // unchanged, not re-run\n});\n```\n\nA few notes on the mechanics:\n\n- The autorun's \"effect\" has to be something you can observe: a spy (`vi.fn()`) passed into the reaction body, a field it writes, or an injected dependency method it calls. If your autorun's body has no observable effect, add a spy or a test-only field to make it assertable — don't leave the test at \"doesn't throw.\"\n- Don't use a bare `setTimeout` to wait for the effect. Use `await when(() => ...)` for the positive case, and for the negative case `await Promise.resolve()` (or `await when` on something else that flushes the same tick) before the `expect`, so you're not just asserting faster than a reaction that *would* have fired.\n- The `runInAction` wrappers are because `enforceActions` is at the project's real setting — seed mutations through an action rather than loosening enforcement for the test.\n\nThe key point: the test must establish that the reaction *did* fire before dispose, then that the *same* triggering mutation no longer fires it after dispose. The \"before\" half is what proves your negative assertion at the end is meaningful rather than vacuously true.",
+              "outputSha256": "1eabd3a7cb889164ceb9d4310643f4fdccd90e453066ec2eff5526599e6b7685",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test only asserts dispose() doesn't throw and would pass even if dispose were empty, so autorun behavior is untested (criterion 1). It shows a corrected test: mutates store.count, asserts effect ran, calls store.dispose(), mutates again, and asserts sideEffectValue unchanged/not re-run (criterion 2). No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "No, it does not. That test only proves `dispose()` runs without throwing. It never observes the autorun's effect, so it would still pass even if the autorun were never actually stopped — or if `dispose()` were an empty function.\n\nA correct test has to make the autorun's effect observable, then prove that effect stops happening after dispose.\n\n**Why the current test is insufficient**\n\n- It never triggers the mutation the autorun reacts to, so there's nothing to compare before/after.\n- It has no assertion at all beyond \"didn't throw,\" which is the exact anti-pattern called out in the red flags: a store can dispose without its reactions being correctly torn down.\n- The bug you're guarding against is a leak: the reaction keeps firing on later mutations after disposal. That bug is invisible to a test that never mutates anything.\n\n**What the test should do instead**\n\n1. Make the auturun's effect land somewhere observable — a spy, a counter, a mock method call.\n2. Feed the autorun a change so you confirm it *does* fire while alive (this is the control; without it the \"didn't fire after dispose\" assertion is vacuous).\n3. Call `dispose()`.\n4. Mutate the same observable again.\n5. Assert the effect did **not** run again.\n\nRough shape:\n\n```ts\nit(\"stops the autorun after dispose()\", async () => {\n  const onCountChange = vi.fn();\n\n  // construct the store so its autorun calls onCountChange on each run\n  // (inject the spy, or observe whatever observable the effect touches)\n  const store = createStore({ onCountChange });\n\n  // control: the reaction runs while alive\n  runInAction(() => store.increment());\n  await when(() => onCountChange.mock.calls.length >= 1);\n  const callsBeforeDispose = onCountChange.mock.calls.length;\n\n  store.dispose();\n\n  // trigger the mutation that would normally fire the reaction\n  runInAction(() => store.increment());\n  // let any scheduled reaction have a chance to run\n  await Promise.resolve();\n\n  expect(onCountChange).toHaveBeenCalledTimes(callsBeforeDispose);\n});\n```\n\nKey points about that sketch:\n\n- The `when(...)` wait before `dispose()` is what makes the final assertion meaningful — it proves the reaction was actually wired up and firing, so \"no new call\" afterward genuinely means dispose worked rather than the reaction never having been connected.\n- The `await Promise.resolve()` after the post-dispose mutation gives any microtask-scheduled reaction a chance to run, so you're not falsely passing because the reaction simply hadn't fired yet. Do **not** replace this with a fixed `setTimeout`/sleep — that's slower and still not deterministic. If the effect is genuinely async, wait on a predicate.\n- Seed the mutation through `runInAction` rather than loosening `enforceActions` in the test file; keep `enforceActions` at the project's real setting so you catch the same bug class the app would hit.\n- If the store owns more than one disposable reaction, either cover each one's effect or use a single spy that all of them touch, so a partial teardown can't slip through.\n\n**Verification before calling it done**\n\n- The test fails if you delete the `dispose()` call (or make it a no-op) — sanity-check this once to confirm the test actually has teeth.\n- It fails if the post-dispose mutation is missing.\n- It's deterministic: run it 2–3 times in a row with the same result, and there's no bare `setTimeout`/sleep anywhere in the wait path.",
+              "outputSha256": "239476bd35162b14c5c6ab5f71923748b3968773ebe126b60ec59e3acf2082ed",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test 'only proves dispose() runs without throwing' and 'never observes the autorun's effect' (crit 1). It shows a corrected test: control mutation, store.dispose(), post-dispose runInAction(store.increment()), then expect(onCountChange).toHaveBeenCalledTimes(callsBeforeDispose) (crit 2). No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "No, it does not. That test only proves `dispose()` doesn't throw — it never checks that the autorun actually stopped. A store can call `dispose()` and still leak a live reaction (e.g. it forgot to call the disposer returned by `autorun`, or disposed the wrong one), and this test would still pass.\n\nWhat it should do instead:\n\n1. Set up the autorun's effect so its firing is observable — have the autorun increment a counter, push to an array, or call a spy/mock each time it runs.\n2. Trigger the mutation that normally fires the autorun *before* disposing, and assert the effect ran (this proves the reaction was actually wired up in the first place — otherwise the test could pass for the wrong reason).\n3. Call `store.dispose()`.\n4. Trigger that same mutation again.\n5. Assert the effect did **not** run a second time (counter unchanged, array length unchanged, spy not called again).\n\nSketch:\n\n```ts\nit(\"stops the autorun after dispose\", () => {\n  // arrange: the autorun under test must record that it ran\n  const runsBefore = spy.mock.calls.length;\n\n  // prove it fires while alive\n  runInAction(() => { store.someObservedField = \"a\" });\n  expect(spy.mock.calls.length).toBeGreaterThan(runsBefore);\n\n  // dispose, then re-trigger\n  store.dispose();\n  const runsAtDispose = spy.mock.calls.length;\n  runInAction(() => { store.someObservedField = \"b\" });\n\n  // the reaction must NOT have fired again\n  expect(spy.mock.calls.length).toBe(runsAtDispose);\n});\n```\n\nA couple of notes tied to the conventions:\n\n- Waiting: if the autorun's effect is synchronous, `await Promise.resolve()` (or `await when(() => ...)`) before each assertion is enough to let a microtask-scheduled reaction settle. Don't reach for `setTimeout`/sleep.\n- Don't seed the \"before\" mutation by loosening `enforceActions` — wrap it in `runInAction` as above.\n- A test that only checks \"`dispose()` doesn't throw\" would pass even if the reaction were never disposed at all, which is exactly the leak this test needs to catch.\n\nSo: replace it with a test that asserts the autorun's effect runs while the store is alive and stops firing after `dispose()`.",
+              "outputSha256": "e699f36b90b1b6797f61ce5defbfdabeb2648dfa451b972b08d49197615ba14b",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test only proves dispose() doesn't throw and never checks the autorun stopped ('it never checks that the autorun actually stopped'). It shows a corrected test: mutates store.someObservedField before dispose to prove firing, calls store.dispose(), re-triggers the mutation, and asserts spy.mock.calls.length unchanged. No fail criteria met."
+              },
+              "passed": true
+            },
+            {
+              "output": "No, it does not. That test only proves `dispose()` runs without throwing — it says nothing about whether the autorun actually stopped. A store can call `dispose()` that never wired up (or wrongly wired up) the reaction's disposer, or dispose the wrong reaction, and this test still passes green.\n\nTo actually prove the autorun stops, the test needs to (1) establish that the autorun *would* fire before disposal, then (2) dispose, trigger the same mutation again, and assert the effect did **not** run a second time. Something like:\n\n```ts\nit(\"dispose() stops the autorun from firing again\", async () => {\n  const spy = vi.fn();\n\n  const store = new Store();          // autorun inside writes to spy\n  // (or: construct then attach the spy via the store's own observable\n  //  that the autorun reacts to)\n\n  // 1. Sanity check: the autorun is live and fires on mutation.\n  runInAction(() => {\n    store.someObservable = \"first\";\n  });\n  await when(() => spy.mock.calls.length === 1); // wait for the reaction\n  expect(spy).toHaveBeenCalledTimes(1);\n\n  // 2. Dispose.\n  store.dispose();\n\n  // 3. Mutate again — the autorun must NOT fire.\n  runInAction(() => {\n    store.someObservable = \"second\";\n  });\n  await Promise.resolve();               // let any (wrongly) queued reaction run\n\n  expect(spy).toHaveBeenCalledTimes(1);  // still 1, not 2\n});\n```\n\nKey points, per the MobX observable testing conventions:\n\n- **Wait for the reaction before and after.** After the first mutation, wait until the reaction has actually run (`await when(() => ...)` or, for a synchronous microtask reaction, `await Promise.resolve()`) before asserting — otherwise you may assert on an effect that hasn't happened yet. After disposal, still give any queued reaction a tick to (not) run, so the test isn't passing merely because you asserted too early.\n- **Do not use a bare `setTimeout`/sleep** to \"give it time.\" A fixed sleep is slower than necessary and still flaky under load; wait on a `when(...)` predicate or a microtask.\n- **Seed precondition state through `runInAction`, not by loosening `enforceActions`.** Don't set `enforceActions: 'never'` in the test file to make the setup convenient — that hides the same class of bug the real app would hit.\n- **Assert the negative explicitly.** The whole point is `expect(spy).toHaveBeenCalledTimes(1)` after the post-dispose mutation — the count staying at 1 is what proves the reaction stopped. Asserting only that `dispose()` \"runs\" misses the actual leak.\n\nIf your store owns multiple reactions (autorun, reaction, when), consider asserting each disposer independently, or at least confirm the spy tied to the autorun is the one staying quiet — a store can dispose one reaction and leak another.",
+              "outputSha256": "004b8bea9121462023bda5e7f3eece7d71505a67c662b4953216187e21347ff8",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test only proves dispose() runs without throwing and says nothing about whether the autorun stopped ('it says nothing about whether the autorun actually stopped'). It shows a corrected test: sanity-check spy fires once, call store.dispose(), mutate store.someObservable again, then assert expect(spy).toHaveBeenCalledTimes(1) — effect did not re-run. No fail criteria hold."
+              },
+              "passed": true
+            },
+            {
+              "output": "No — that test proves almost nothing. `store.dispose()` running without throwing only shows that the method is callable and didn't throw. It says nothing about whether the autorun inside the store was actually disposed. A store can have `dispose()` that forgets to call the disposer returned by `autorun(...)` (or disposes the wrong reaction), and this test would still pass green.\n\nTo actually prove the autorun stops, the test has to observe the effect the autorun produces before and after disposal, and assert it stops firing after `dispose()`:\n\n```ts\nit(\"dispose() stops the autorun\", () => {\n  const seen: string[] = [];\n  // The autorun built into the store should push into `seen` on each run.\n  // (If the store doesn't expose the effect, spy on whatever the autorun\n  // calls — an injected dependency, a callback passed in, etc.)\n\n  // 1. Prove the autorun is live BEFORE dispose.\n  store.setName(\"a\");\n  await when(() => seen.at(-1) === \"a\"); // waits for the reaction to run\n  const runsBeforeDispose = seen.length;\n  expect(runsBeforeDispose).toBeGreaterThan(0);\n\n  // 2. Dispose.\n  store.dispose();\n\n  // 3. Trigger the same/different mutation that would normally fire it.\n  store.setName(\"b\");\n  // Give any (incorrectly) still-scheduled reaction a chance to run.\n  await Promise.resolve();\n  await new Promise((r) => setTimeout(r, 0));\n\n  // 4. Assert the autorun did NOT run again.\n  expect(seen.length).toBe(runsBeforeDispose);\n  expect(seen).not.toContain(\"b\");\n});\n```\n\nKey points:\n\n- **Assert the positive case first.** Trigger the mutation while the autorun is still live and confirm it *does* fire. Otherwise a test that just checks \"nothing happened after dispose\" passes even if the autorun was never wired up at all.\n- **Wait properly, don't sleep blindly.** Use `when(() => ...)` (or `await Promise.resolve()` for a synchronous microtask reaction) to wait for the live autorun to run before disposing. The only fixed sleep belongs *after* dispose, and even then only to give a buggy still-alive reaction a chance to misbehave — it's a negative assertion, not the thing under test.\n- **Assert on the effect, not the boilerplate.** The autorun's observable effect is what you check: a spy on an injected dependency, a value pushed into a captured array, a counter incremented — whatever the autorun actually does.\n- **Above all: don't regress the earlier conventions.** Keep `enforceActions` at its real setting (seed any fixture state through `runInAction`, not by turning enforcement off), and don't paper over timing with a bare `setTimeout` used as a substitute for `when(...)`.\n\nSo the shape you want is: mutation while live → wait → confirm it fired → `dispose()` → mutation again → confirm it did *not* fire. That is what proves `dispose()` actually unsubscribed the autorun rather than merely being callable.",
+              "outputSha256": "d75032a831640dc64d6d67be5658af6204ace33f87bc1a92b1bff3782d10e2a0",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states the test 'proves almost nothing' and only shows dispose() is callable/didn't throw, not that the autorun stopped. It gives a corrected test: setName('a') while live, dispose(), setName('b'), then asserts seen.length unchanged and not containing 'b' — mutating the dependency and checking the effect didn't re-run."
+              },
+              "passed": true
+            },
+            {
+              "output": "No, it doesn't prove anything. `store.dispose()` returning without throwing only proves the method itself doesn't blow up — it says nothing about whether the autorun was actually disposed. A store can fail to call the reaction's disposer (or call it on the wrong one, or dispose the wrong reaction), and this test would still pass green.\n\nWhat it should do instead: call `dispose()`, then trigger the mutation that would normally fire the autorun, and assert the autorun's effect did **not** run again. That's the actual leak you're testing for.\n\nConcretely, something like:\n\n```ts\nit(\"stops the autorun after dispose\", async () => {\n  const seen: number[] = [];\n\n  // spy on the autorun's effect — either via a jest.fn passed into the store,\n  // or by observing whatever the autorun writes to (a mock service call, etc.)\n  const effect = jest.fn();\n  const store = new Store({ api, onSomeChange: effect });\n\n  // 1. prove the autorun fires normally before dispose\n  runInAction(() => { store.count = 1; });\n  await when(() => effect.mock.calls.length === 1);\n  expect(effect).toHaveBeenCalledTimes(1);\n\n  // 2. dispose\n  store.dispose();\n\n  // 3. trigger the mutation that used to fire it\n  runInAction(() => { store.count = 2; });\n\n  // 4. give any (incorrectly) still-live reaction a chance to run\n  await Promise.resolve();\n  expect(effect).toHaveBeenCalledTimes(1); // still 1 — it did NOT fire again\n});\n```\n\nKey points, matching the skill's workflow:\n\n- **Assert the effect actually fired before dispose first.** Otherwise the \"did not fire again\" assertion is vacuous — it would pass even if the autorun never worked at all.\n- **Wait for the reaction** with `when(...)` before the pre-dispose assertion; don't assert synchronously right after the mutation.\n- **After dispose, still yield the microtask queue** (`await Promise.resolve()` or a short `when` under a timeout) before asserting non-firing, so a reaction that incorrectly survived dispose has a chance to run and fail the test.\n- **Don't just check `dispose()` doesn't throw** — that's the red flag the skill calls out explicitly.\n\nSo: keep a thin \"dispose doesn't throw\" check if you like, but it is not a substitute for the assertion above. The test that matters is the one proving the reaction's effect stops firing after disposal.",
+              "outputSha256": "73482a5577be494ba837cc4f49f13ed1aa436d45dbcb828affb50f35431b02b1",
+              "promptSha256": "8d25c0115b8b740b471efc9b1eb67840c8f387844415970bfe8dbd0e9fbf5a9e",
+              "deterministic": [],
+              "judge": {
+                "verdict": "pass",
+                "reason": "Answer states dispose() returning without throwing only proves the method doesn't blow up, not that the autorun was disposed. It shows a corrected test: dispose(), then runInAction mutating store.count, then expect(effect).toHaveBeenCalledTimes(1) asserting the spy effect did not fire again. No fail criteria hold."
+              },
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "verdict": "pass",
+      "scope": "bundled",
+      "skillDigest": "e6d8b6f4cfefd3fe8c378f1c10e084eeccfc9db78efc7a9bc7f71b1e8019d92c",
+      "catalogDigest": "d0f0ab450eff5aed9a70b51072f37d2b1efa569355f6f73fd3ff1a78d7a8a0b0",
+      "judgePromptVersion": "2026-09-25.1",
+      "runner": "deepseek",
+      "model": "deepseek-chat",
+      "runnerPromptVersion": "2026-09-25.1",
+      "recordedAt": "2026-09-25T13:39:37.729Z",
+      "judge": "deepseek",
+      "judgeModel": "deepseek-chat"
+    }
+  ]
+}

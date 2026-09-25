@@ -215,6 +215,32 @@ export const HARNESS_HOME_ROOTS: readonly string[] = [
 ];
 
 /**
+ * `~/` is ALSO a bundler root-alias, not a shell home-directory reference, in
+ * several frontend frameworks (Nuxt's `srcDir` alias is the shipped example —
+ * `~/pages/orders.vue` resolves to `<project>/pages/orders.vue` on every
+ * machine, same as `~/.claude` resolves to a harness's own config directory;
+ * neither names a particular person's home). Recognized only for the small,
+ * fixed set of Nuxt's own conventional top-level directories, so this stays a
+ * named exception rather than a blanket exemption for every `~/`-prefixed
+ * string (flow 318, W4 batch 2 — a DeepSeek-recorded eval trial answer using
+ * idiomatic Nuxt code tripped the guard on exactly this pattern).
+ */
+const FRAMEWORK_TILDE_ALIAS_DIRS: readonly string[] = [
+  "~/pages",
+  "~/components",
+  "~/layouts",
+  "~/composables",
+  "~/middleware",
+  "~/plugins",
+  "~/server",
+  "~/assets",
+  "~/public",
+  "~/stores",
+  "~/utils",
+  "~/app",
+];
+
+/**
  * The account names a documentation example is allowed to use.
  *
  * `/Users/dev/<PROJECT>` in a schema's `examples` is not a personal path: it
@@ -270,6 +296,7 @@ export function homePathOffenders(text: string): { line: number; why: string }[]
       // expansion is the thing being checked.
       const normalised = match.replace(/^.*:-/, "");
       if (HARNESS_HOME_ROOTS.some((root) => normalised.startsWith(root))) continue;
+      if (FRAMEWORK_TILDE_ALIAS_DIRS.some((root) => normalised.startsWith(`${root}/`))) continue;
       out.push({ line: index + 1, why: `home path outside the known harness roots — ${match}` });
     }
   });
