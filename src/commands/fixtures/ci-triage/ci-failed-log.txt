@@ -1,0 +1,23 @@
+typecheck-and-tests	Set up job	Current runner version: '2.328.0'
+typecheck-and-tests	Set up job	Runner name: 'GitHub Actions 12'
+typecheck-and-tests	Install dependencies	bun install v1.4.2
+typecheck-and-tests	Install dependencies	Checked 1042 installs across 1043 packages (no changes) [612.00ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	$ bun test src/learning
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	bun test v1.4.2
+typecheck-and-tests	Typecheck and core gate (offline, model-free)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	src/learning/e2e.test.ts:
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	(fail) e2e > withProject > records a lesson from a completed round [842.00ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	1) expect(received).toEqual(expected)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	    Expected: "recorded"
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	    Received: "pending"
+typecheck-and-tests	Typecheck and core gate (offline, model-free)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	      at async <anonymous> (/home/runner/work/keryx/keryx/src/learning/e2e.test.ts:115:37)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	      at async withProject (/home/runner/work/keryx/keryx/src/learning/e2e.test.ts:27:18)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	      at async <anonymous> (/home/runner/work/keryx/keryx/src/learning/e2e.test.ts:80:11)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 1 fail
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 0 pass
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	Ran 1 test across 1 file. [842.00ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	##[error]Process completed with exit code 1.

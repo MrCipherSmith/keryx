@@ -3106,6 +3106,8 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
+                       [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
@@ -3149,6 +3151,7 @@ left off and the gate reports it as unobserved.
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
 | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
+| `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
 | `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
@@ -3646,6 +3649,51 @@ what it already has in flight, which shrinks the effective wave; it is a
 declaration, not an observation, and nothing verifies it. The record therefore
 carries `holds_across_nesting: yes (against the declared count)` or `no`, rather
 than implying a guarantee that does not exist.
+
+### `review ci-triage`
+
+Advisory-only triage for one failed CI run's job: flaky, infra, or real
+regression, scored by Jev (TypeSafe System One) over a redacted, bounded
+excerpt of the job's own log. Flow 306.
+
+```bash
+keryx review ci-triage --run 36095133327 --job typecheck-and-tests --json
+```
+
+| Flag | Description |
+|---|---|
+| `--run <id>` | Required. The CI run id (e.g. a GitHub Actions run id). |
+| `--job <name>` | Which of the run's jobs to triage. Omitted, the first job whose conclusion is `failure` is used. |
+| `--test <name>` | Override the failing test name instead of the best-effort extraction from the log excerpt. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter; omitted, `gh` resolves the repository from the current checkout. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers BOTH the CI read and the Jev call from files on disk (`ci-run-info.json`, `ci-failed-log.txt`, optional `ci-history.json`, `jev-response.json`) — no real `gh` call, no real network call. |
+| `--json` | Prints `{runId, job, testName, verdict, usage}` instead of the human-readable advisory text. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.ci_triage: true` in
+`.metaproject/tasks.config.json` — the log excerpt leaves the machine to
+OpenRouter/TypeSafe, so the mere presence of an `OPENROUTER_API_KEY` never
+implies consent. With the setting off, or with no OpenRouter credential
+(`OPENROUTER_API_KEY`, or a saved `openrouterKey`), the command refuses and
+makes **no network call** — neither the CI read port nor the Jev client is
+ever reached in that state.
+
+**Advisory only, by construction.** The CI read port
+(`src/review/ci-port.ts`) has exactly three read methods and no write method
+at all — there is no rerun, status-check, or merge call anywhere on this
+path to call. The printed verdict is always labelled `ADVISORY ONLY`.
+
+**Per-option probability, not a single `choice` answer.** OpenRouter's own
+TypeSafe SDK guide documents no shape for a `choice` answer that carries a
+probability per option — only the chosen option. So this command asks one
+`noul` question per bucket (`flaky`, `infra`, `real-regression`) instead of
+one `choice` question, and reports the three probabilities together.
+
+**Vendor-reported accuracy only.** This classifier ships with no measured
+precision/recall on this repository's own CI history — `PLAN.md`'s Phase 7
+evaluation (`docs/requirements/keryx-jev-review/PLAN.md`) is where that gets
+measured. Treat the verdict as a hint, not a diagnosis.
 
 ### `review budget`
 

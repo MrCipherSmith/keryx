@@ -190,6 +190,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 306 (AC12): the list+detail modal over `keryx review ci-triage`'s
+    // advisory flaky/infra/real-regression pipeline. TUI-only, same reasoning
+    // as `/review`: it renders into the transcript of an OpenTUI session.
+    name: "/ci",
+    description: "Failed CI runs/jobs of the current branch's PR, each with an advisory triage",
+    modes: AGENT_ONLY,
+  },
+  {
     // P2 flipped this, as the entry it replaces said it would: `/mcp` was
     // "Deprecated alias of /integrations", kept pointing at the installer
     // only because the consumer view did not exist and a slash command
