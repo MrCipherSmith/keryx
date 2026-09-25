@@ -192,10 +192,15 @@ describe("keryx agents verify", () => {
   // Rewritten honestly and never iterated against the router across two
   // review rounds, the FINAL honest gate re-run demoted all three back to
   // `experimental` (see each pack's own `agent-refs.json` `note` for the
-  // specific failing skill/scenario). The real, un-stubbed CLI path reports
-  // zero problems across the whole catalog, and exactly those four
-  // generated agent names (go + python) are present.
-  test("the real bundled catalog verifies ok with zero problems (only python and go are gate-cleared with a generated pair; flow 318)", async () => {
+  // specific failing skill/scenario). Flow 335 (Wave 4 batch 3, post-merge
+  // with batches 4/5/6) then demoted `python` too — a corpus-wide
+  // binary-IDF collision with flutter-dart/flutter-testing on
+  // python-testing's own trigger-positive-1, not fixable by editing any
+  // single pack's content (see python/agent-refs.json's note and the flow
+  // 335 journal; owner decision: MrCipherSmith, in chat, 2026-09-26). The
+  // real, un-stubbed CLI path reports zero problems across the whole
+  // catalog, and exactly go's generated pair is present.
+  test("the real bundled catalog verifies ok with zero problems (only go is gate-cleared with a generated pair; flow 335)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -210,7 +215,7 @@ describe("keryx agents verify", () => {
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor"]);
   });
 
   test("narrows to one agent by name", async () => {

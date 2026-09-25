@@ -580,7 +580,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "python-skills": {
       "kind": "skill",
@@ -595,7 +595,7 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "ts-js-node-rules": {
       "kind": "rule",

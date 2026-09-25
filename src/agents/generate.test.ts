@@ -299,7 +299,7 @@ describe("generateStackAgentPair", () => {
       .map((entry: { name: string }) => entry.name);
     const gateCleared = stackIds.filter((id: string) => checkStackPackGateCleared(path.join(stacksRoot, id)).cleared).sort();
 
-    // Pin the shipped, honest-gate outcome explicitly: go and python clear
+    // Pin the shipped, honest-gate outcome explicitly: go and python cleared
     // the gate (flow 314/316/317, Wave 4 batch 1); react and ts-js-node
     // still fail it. angular and mobx briefly cleared it too (flow 318,
     // Wave 4 batch 2, T13) and nestjs cleared it with a build-fixer-only
@@ -315,7 +315,16 @@ describe("generateStackAgentPair", () => {
     // route the way the original (gamed) versions did. nextjs-nuxt and vue
     // still fail it for their own, unrelated reasons (see their own
     // agent-refs.json `note`).
-    expect(gateCleared).toEqual(["go", "python"]);
+    //
+    // Flow 335 (Wave 4 batch 3, post-merge with batches 4/5/6): python
+    // DROPPED back to `experimental` — python-testing's own
+    // trigger-positive-1 is outranked by flutter-dart/flutter-testing on
+    // the shared "widget" token once the fully combined catalog (170
+    // skills, 1006 triggers) is in place, a corpus-wide binary-IDF effect
+    // not fixable by editing python's or any single sibling pack's content
+    // (see python/agent-refs.json's note and the flow 335 journal). Owner
+    // decision: MrCipherSmith, in chat, 2026-09-26.
+    expect(gateCleared).toEqual(["go"]);
 
     // Direction 1: every gate-cleared pack that carries an `agentProfile`
     // regenerates to exactly what is on disk — the byte-identical
@@ -348,14 +357,14 @@ describe("generateStackAgentPair", () => {
       expect(gateCleared).toContain(origin.sourceRef);
     }
 
-    // Explicit, not implied by the loop above: exactly 4 generated files
-    // ship — go and python each get a full pair (2 packs x 2 files).
-    // angular, mobx, and nestjs all cleared the gate at some point in this
-    // flow and were all demoted again after the realism sweep (see the
-    // comment above `gateCleared`'s assertion), so none of them contribute
-    // a generated file anymore. go(2) + python(2) = 4.
-    expect(gateCleared).toEqual(["go", "python"]);
-    expect(generatedFileCount).toBe(4);
+    // Explicit, not implied by the loop above: exactly 2 generated files
+    // ship — go's own pair (2 files). angular, mobx, and nestjs all cleared
+    // the gate at some point in this flow and were all demoted again after
+    // the realism sweep (see the comment above `gateCleared`'s assertion),
+    // and python dropped out at this merge (flow 335, see above), so none
+    // of them contribute a generated file anymore. go(2) = 2.
+    expect(gateCleared).toEqual(["go"]);
+    expect(generatedFileCount).toBe(2);
   });
 
   // R2-4: the byte-identical regeneration path (Direction 1 above) has
