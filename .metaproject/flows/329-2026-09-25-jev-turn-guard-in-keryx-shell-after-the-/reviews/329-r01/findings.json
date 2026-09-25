@@ -1,0 +1,152 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The deterministic AC3 contradiction check flagged ANY nonzero exit from a shell_exec call as a tool failure, but shell-exec-tool.ts marks any nonzero exit isError: true regardless of whether the command actually failed (grep with no match, test -f false, diff showing a difference, git diff --exit-code, ls on a missing path, ...).",
+    "impact": "A large class of completely normal, expected nonzero exits would be reported as an unmentioned tool failure the instant the final message did not call the exact command out by name, producing constant spurious 'Guard: request may be incomplete' notices and defeating the purpose of a deterministic (no-Jev) contradiction layer, which AC3 requires to be precise enough to fire even when Jev is unavailable.",
+    "suggested_fix": "Narrow the deterministic rule so a shell_exec failure only counts when the tool itself failed (timed out, aborted, denied, failed to start) or the command tokenises to a build/test/install/typecheck runner; leave every other nonzero exit as a plain fact for Jev to weigh, not an automatic contradiction.",
+    "evidence": "src/review/turn-guard.ts:414 `if (call.isError && (SHELL_TOOL_INFRA_FAILURE_RE.test(call.output) || isBuildTestInstallTypecheckCommand(command)))` is the sole site deciding TurnGuardFacts.deterministicFailedTools; its module comment (turn-guard.ts:130-141) states the fix explicitly as 'Item 1 (PR #720 review)'. Fixed in commit 8930dbb3a10d77ab950deb89423368f00d4d25ce.",
+    "confidence": "high",
+    "file": "src/review/turn-guard.ts",
+    "class_scope": {
+      "sites": [
+        "src/review/turn-guard.ts:414 — the single call site building TurnGuardFacts.deterministicFailedTools from a shell_exec call's isError/output/command"
+      ],
+      "enumeration_method": "keryx ctx rg for isBuildTestInstallTypecheckCommand and SHELL_TOOL_INFRA_FAILURE_RE across src/review/turn-guard.ts (3 and 1 matches respectively) confirmed both are consumed at exactly one decision site, not duplicated elsewhere in the module or in src/tui/turn-guard-source.ts / src/tui/tui-shell.ts"
+    },
+    "global_id": "329-r01#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "src/review/turn-guard.ts:414 (PR head 7b05952716440f43d093e75584deb72ebc1426e9, this worktree's checked-out branch): the deterministic-failure check reads `if (call.isError && (SHELL_TOOL_INFRA_FAILURE_RE.test(call.output) || isBuildTestInstallTypecheckCommand(command)))` — a bare nonzero exit no longer counts on its own; only a tool infra failure or a build/test/install/typecheck command does. src/review/turn-guard.test.ts's 'Item 1 (PR #720 review)' describe block (9 tests: grep-no-match/test -f/diff/git diff --exit-code NOT flagged, flaky-acknowledged NOT flagged, real bun-test-failure/timeout/denial STILL flagged) exercises exactly this. Per the flow journal (AC7 confirmation), `bun test src/review/turn-guard* src/tui/turn-guard*` was run this session: 68 pass/0 fail.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in commit 8930dbb3a10d77ab950deb89423368f00d4d25ce"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "The guard's deferred continuation — fired void right after the turn settles, then awaiting runTurnGuard's up-to-8s Jev round trip — touched guardHistory, the guard sidebar and io.onSystem with no check that the turn had since been aborted or the shell/renderer already torn down.",
+    "impact": "A late-resolving guard call (the operator exited or cancelled mid-turn while Jev was still being asked) could write into a destroyed shell's history/sidebar/system line — a use-after-teardown write.",
+    "suggested_fix": "Capture the turn's own abort signal before it is cleared by foregroundOperation.settle(), and guard the continuation the same way other deferred continuations in this file already do: `if (turnSignal.aborted || foregroundOperation.isDisposed) return;` before touching anything.",
+    "evidence": "src/tui/tui-shell.ts:7906 captures `const turnSignal = foregroundOperation.signal;` before settle(), and the guard continuation at tui-shell.ts:7951 checks `if (turnSignal.aborted || foregroundOperation.isDisposed) return;` before calling recordGuardResult/refreshGuardSidebar/io.onSystem, with an inline comment citing 'Item 2 (PR #720 review)'. Fixed in commit 8930dbb3a10d77ab950deb89423368f00d4d25ce.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "global_id": "329-r01#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "src/tui/tui-shell.ts:7906 captures `const turnSignal = foregroundOperation.signal;` before `foregroundOperation.settle(operation)` clears it; the guard's deferred continuation at tui-shell.ts:7951 checks `if (turnSignal.aborted || foregroundOperation.isDisposed) return;` before calling recordGuardResult/refreshGuardSidebar/io.onSystem. src/tui/turn-guard-shell-wiring.test.ts covers this wiring (extended this session per the flow journal's AC2 note) and src/tui/tui-shell.test.ts's 'flow 219 - foreground operation lifecycle wiring' test was updated for the same turnSignal capture.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in commit 8930dbb3a10d77ab950deb89423368f00d4d25ce"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "guardHistory was always unshifted with the newest result at the front, but the guard call for a turn needing a real Jev round trip can resolve after a later, trivial turn's near-instant guard call (both are fired void from their own turn's settle) — completion order does not track turn order.",
+    "impact": "The /guard modal's history list could show an earlier turn's guard result above a later turn's, misleading whoever reads it about which turn a flagged result actually belongs to.",
+    "suggested_fix": "Insert each result at the position that keeps history sorted by the turn's own start timestamp (recorded before any Jev round trip), not always at the front.",
+    "evidence": "src/tui/turn-guard-source.ts:117-121 exports insertTurnGuardResult(history, result, cap), which finds the correct sorted insertion point by result.at rather than always prepending; its doc comment (lines 100-116) cites 'PR #720 review item 3' and explains the completion-order-vs-turn-order race. tui-shell.ts:4490 calls it from recordGuardResult. Fixed in commit 8930dbb3a10d77ab950deb89423368f00d4d25ce.",
+    "confidence": "high",
+    "file": "src/tui/turn-guard-source.ts",
+    "global_id": "329-r01#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "src/tui/turn-guard-source.ts:117-121 exports `insertTurnGuardResult(history, result, cap)`, which computes `history.findIndex((existing) => existing.at <= result.at)` and inserts at that position rather than always prepending; called from tui-shell.ts:4490 inside `recordGuardResult`. The doc comment at turn-guard-source.ts:100-116 explains the exact completion-order-vs-turn-order race this fixes and cites 'PR #720 review item 3'.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in commit 8930dbb3a10d77ab950deb89423368f00d4d25ce"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The round-1 build/test/install/typecheck classifier (isBuildTestInstallTypecheckCommand) matched only a bare program name or a package-manager's own subcommand, so a real build/test/typecheck program invoked through a package-runner or interpreter wrapper (npx tsc, bunx eslint, pnpm dlx prettier --check, python -m pytest) or behind a leading env-variable assignment (FOO=1 bun test, env CI=1 npm test) was invisible to it — the wrapper's own name is never itself build/test/install/typecheck.",
+    "impact": "A genuinely failed test/build/typecheck run invoked through any of these extremely common forms (npx/bunx one-off runs, CI-style env-prefixed commands) would not be recognised deterministically, so AC3's no-Jev safety net would miss it even when the final message said nothing about the failure — exactly the case AC3 exists to catch.",
+    "suggested_fix": "Strip leading env-variable assignments (or an explicit `env` invocation and its flags) and unwrap package-runner/interpreter wrappers (npx, bunx, uvx, pnpm dlx/exec, yarn dlx, npm exec, bun x, poetry run, uv run, python -m), bounded to a few rounds, before classifying the underlying program.",
+    "evidence": "src/review/turn-guard.ts:207-223 stripEnvAssignments, :233-234 SINGLE_TOKEN_WRAPPERS/WRAPPER_SKIP_FLAG_RE, :236-244 TWO_TOKEN_WRAPPERS, :255-273 unwrapRunner, and isBuildTestInstallTypecheckCommand (:289-299) now runs on `unwrapRunner(stripEnvAssignments(commandTokens(segment)))`; all cite 'Item 1 (PR #720 round-2 review)' in their doc comments. New negative/positive cases in turn-guard.test.ts. Fixed in commit ee2bffde11e68107f393294ce9d2e45bc8b46b9.",
+    "confidence": "high",
+    "file": "src/review/turn-guard.ts",
+    "class_scope": {
+      "sites": [
+        "src/review/turn-guard.ts isBuildTestInstallTypecheckCommand — the single function that classifies a command segment, now routed through stripEnvAssignments/unwrapRunner before matching STANDALONE_BUILD_TEST_PROGRAMS / RUNNER_SUBCOMMAND_RE"
+      ],
+      "enumeration_method": "keryx ctx rg for isBuildTestInstallTypecheckCommand confirmed one definition and one call site (turn-guard.ts:414); read the full unwrap/strip pipeline (lines 198-299) to confirm every command-classification path funnels through the same two helper functions rather than duplicating raw-token matching elsewhere"
+    },
+    "global_id": "329-r01#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "src/review/turn-guard.ts:207-223 (stripEnvAssignments), :226-244 (SINGLE_TOKEN_WRAPPERS/WRAPPER_SKIP_FLAG_RE/TWO_TOKEN_WRAPPERS), :255-273 (unwrapRunner) all present at the PR head; isBuildTestInstallTypecheckCommand (:289-299) classifies `unwrapRunner(stripEnvAssignments(commandTokens(segment)))`, not the raw segment. Comments at each site cite 'Item 1 (PR #720 round-2 review)'. turn-guard.test.ts gained new cases for npx/bunx/pnpm dlx/python -m and env-prefixed commands (part of the 68 pass/0 fail run recorded in the flow journal's AC7 confirmation).",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in commit ee2bffde11e68107f393294ce9d2e45bc8b46b9"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "SHELL_TOOL_INFRA_FAILURE_RE (a shell_exec tool's own infra failure: timed out, aborted, denied approval, failed to start) did not cover shell_exec's background/job-registry failure modes: background jobs unavailable, background task limit reached, unknown job_id, job no longer tracked, idle-timeout kill.",
+    "impact": "A backgrounded command that failed for one of these job-registry reasons was not recognised as a deterministic tool failure, so an unmentioned background-job failure could slip past the no-Jev contradiction check the same way F-001's unnarrowed rule once let ordinary nonzero exits slip past it in the other direction.",
+    "suggested_fix": "Extend SHELL_TOOL_INFRA_FAILURE_RE with the exact text fragments background-job-registry.ts/shell-exec-tool.ts return for each of these failure modes.",
+    "evidence": "src/review/turn-guard.ts:150-163 documents 'Item 2 (PR #720 round-2 review)' and lists each fragment; SHELL_TOOL_INFRA_FAILURE_RE (turn-guard.ts:164-165) now includes background jobs are not available in this session|background task limit reached|unknown job_id:|is no longer tracked, so its exit status is unknown|no output for \\d+ms, so the command was killed. Fixed in commit ee2bffde11e68107f393294ce9d2e45bc8b46b9.",
+    "confidence": "high",
+    "file": "src/review/turn-guard.ts",
+    "global_id": "329-r01#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "src/review/turn-guard.ts:164-165, SHELL_TOOL_INFRA_FAILURE_RE now includes `background jobs are not available in this session|background task limit reached|unknown job_id:|is no longer tracked, so its exit status is unknown|no output for \\d+ms, so the command was killed`, matching the exact inline-template-literal text background-job-registry.ts/shell-exec-tool.ts return per the comment at turn-guard.ts:150-163 ('Item 2 (PR #720 round-2 review)').",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in commit ee2bffde11e68107f393294ce9d2e45bc8b46b9"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The AC8 live-check script ran twice in the confirming session — 7/8 on the first run (one case wrongly flagged by live Jev), 8/8 on the second run after rewording that case's final message — but the script's own printed summary reported only whichever run had just executed, with nothing in its output distinguishing 'the guard got smarter' from 'the test case's wording changed between runs'.",
+    "impact": "Anyone reading only the script's own console output (rather than the flow journal) would see a clean 8/8 with no indication a prior run scored lower or that a case had to be reworded to pass — an honesty gap between what actually happened (a miss, then a fix to the test input) and what the tool reports on each run in isolation.",
+    "suggested_fix": "Print the recorded two-run history (7/8 first contact, 8/8 after rewording, which case and why) as part of every run's summary, not only in the flow journal, so the number is never read without that context.",
+    "evidence": "scripts/turn-guard-live-check.ts:172-179 adds a fixed line to every run's summary: 'AC8 recorded history: 7/8 on first contact; 8/8 after rewording one case; the grep-no-match case moved from ~63% to ~42% contradiction probability (threshold 0.5).', with a comment citing 'PR #720 round-2 review, item 3'. The flow journal (2026-09-25T14:37:13.683Z ac-confirmed: AC8) separately records both runs' full detail. Fixed in commit ee2bffde11e68107f393294ce9d2e45bc8b46b9.",
+    "confidence": "high",
+    "file": "scripts/turn-guard-live-check.ts",
+    "class_scope": {
+      "sites": [
+        "scripts/turn-guard-live-check.ts:168-179 — the single summary block printed at the end of main(), the only place this script reports its result"
+      ],
+      "enumeration_method": "keryx ctx rg for correct|summary|first contact|/8|reported in scripts/turn-guard-live-check.ts: 8 matches, all inside one summary block in one standalone script with no other caller or duplicate reporting path"
+    },
+    "global_id": "329-r01#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "scripts/turn-guard-live-check.ts:172-179: every run's summary now prints a fixed line, 'AC8 recorded history: 7/8 on first contact; 8/8 after rewording one case; the grep-no-match case moved from ~63% to ~42% contradiction probability (threshold 0.5).', with a comment citing 'PR #720 round-2 review, item 3'. Cross-checked against the flow journal's AC8 confirmation, which records both runs (run 1: 7/8, $0.000159, the grep-no-match case wrongly flagged; run 2: 8/8, $0.000160, after rewording) rather than only the final number.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "agent: fixed in commit ee2bffde11e68107f393294ce9d2e45bc8b46b9"
+    }
+  }
+]

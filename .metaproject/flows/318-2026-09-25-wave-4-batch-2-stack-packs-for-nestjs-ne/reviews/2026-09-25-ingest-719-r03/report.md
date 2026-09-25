@@ -1,0 +1,163 @@
+# Adversarial review — round 3 (PR #719, flow 318, narrow verification of review-r2 fixes; attempt 3 of 3)
+
+**Verdict: no blocker and no major. The PR is ready to merge once CI goes green and it's taken out of draft.** Both round-2 fixes landed. The demotion of angular and mobx is consistent everywhere checked, and nothing regressed. What's left is a few minors and info items that can be deferred to the owner under the standing rule.
+
+**Counts:** 0 blocker, 0 major, 4 minor, 3 info.
+
+Full narrative report preserved verbatim at `scratchpad/f318/review-r3.md` (this session's scratchpad).
+
+<!-- The machine-readable half of the same report. -->
+
+```json keryx:findings
+[
+  {
+    "status": "DONE",
+    "reviewer": "opus-adversarial-r3",
+    "summary": "Verdict: no blocker and no major. The PR is ready to merge once CI goes green and it's taken out of draft. Both round-2 fixes landed. The demotion of angular and mobx is consistent everywhere checked, and nothing regressed. What's left is a few minors and info items that can be deferred to the owner under the standing rule.",
+    "findings": [
+      {
+        "id": "R3-MIN1",
+        "severity": "minor",
+        "file": "src/gdskills/bundled/stacks/mobx/skills/mobx-store-implementation/evals.json",
+        "line": null,
+        "problem": "Two mobx positives are still near-copies of their triggers, never rewritten so both the round-1 and round-2 sweeps missed them: #4 ('This component isn't re-rendering when the store's items array changes, help me fix the wiring') is the trigger 'this component doesn't re-render when the store changes' with a tense change and a tail added, routing first at 0.545. #8 ('Convert this async store method so the post-await mutations are wrapped correctly') follows the same shape as 'make this async store method update state correctly'.",
+        "impact": "Rated minor, not major: mobx is already experimental and fails the gate, so these can only inflate a score that already fails. No stability, agent or manifest decision depends on them.",
+        "suggested_fix": "In scope for the containment-based I11 follow-up flow, alongside angular-testing #3/#5/#6, angular-implementation #4, and mobx #2.",
+        "evidence": "Reviewer measured router containment on mobx-store-implementation positives #4 and #8.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r3"
+      },
+      {
+        "id": "R3-MIN2",
+        "severity": "minor",
+        "file": "src/gdskills/bundled/stacks/nestjs/skills/nestjs-build-fix/SKILL.md",
+        "line": null,
+        "problem": "The reworded nestjs-build-fix trigger made a Go misroute worse: it adds the tokens 'two' and 'circular dependency'. 'Fix a circular dependency between two Go packages' now goes to nestjs-build-fix at 0.642, above scout's 0.55 'use' threshold, so it would recommend the NestJS skill outright. It already misrouted before this round (nestjs at 0.434) and on origin/main (python at 0.389), so the root weakness existed before; this round pushed it over the threshold.",
+        "impact": "Not in any eval set, and the go gate still passes, but a real user prompt about Go now misroutes to NestJS at the CLI's recommend threshold.",
+        "suggested_fix": "Reword the nestjs-build-fix trigger to drop the added 'two'/'circular dependency' overlap with Go's own vocabulary; re-check after the negation-aware scorer follow-up lands.",
+        "evidence": "Reviewer ran skills scout on the required probe and measured the score shift attributable to this round's wording change.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r3"
+      },
+      {
+        "id": "R3-MIN3",
+        "severity": "minor",
+        "file": "src/gdskills/bundled/stacks/angular/skills/angular-implementation/evals.json",
+        "line": null,
+        "problem": "The inject scenario's fail criterion can still be read as failing a correct answer: it fails 'calling inject() inside the setTimeout callback ... without actually injecting the service ... beforehand', which a literal judge could apply to a correct runInInjectionContext answer. The first pass criterion also still names only 'constructor/field initializer'.",
+        "impact": "Calibration recorded zero mismatches, so this is only a wording risk, not a demonstrated judge error.",
+        "suggested_fix": "Tighten the fail_criteria wording so it cannot be read as failing a correct runInInjectionContext answer.",
+        "evidence": "Direct read of the inject scenario's fail_criteria and pass_criteria wording.",
+        "confidence": "medium",
+        "reviewer": "opus-adversarial-r3"
+      },
+      {
+        "id": "R3-MIN4",
+        "severity": "minor",
+        "file": "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md",
+        "line": 1180,
+        "problem": "W1 still has bullets that read as current but aren't: in the fix-attempt-1 section, 'angular — gate PASS, stable. Ships angular-code-auditor/...' and 'mobx — gate PASS, stable.' (lines 1180-1183) aren't marked superseded inline. Only the coverage bullet at 1207 is, and the fix-attempt-2 section below does override them.",
+        "impact": "A reader stopping at the fix-attempt-1 section would come away with a stale picture.",
+        "suggested_fix": "Mark the fix-attempt-1 angular/mobx bullets as superseded inline, matching the coverage bullet's treatment.",
+        "evidence": "Direct read of W1-stack-catalog.md lines 1180-1183 and 1207.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r3"
+      },
+      {
+        "id": "R3-INFO1",
+        "severity": "info",
+        "file": "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md",
+        "line": 1248,
+        "problem": "W1 line 1248 and angular's agent-refs.json note call the restored negative 'e2e/staging', but it is now the Playwright login e2e prompt.",
+        "impact": "Minor label mismatch, no functional consequence.",
+        "suggested_fix": "Update the label for accuracy in a follow-up doc pass.",
+        "evidence": "Direct read of W1:1248 and angular/agent-refs.json's note against the actual restored prompt text.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r3"
+      },
+      {
+        "id": "R3-INFO2",
+        "severity": "info",
+        "file": "src/commands/agents-catalog-commands.test.ts",
+        "line": null,
+        "problem": "The agents-catalog-commands.test.ts comment credits the angular/mobx finding to 'review round 1's realism sweep', but it came from round 2.",
+        "impact": "Attribution-only inaccuracy in a code comment.",
+        "suggested_fix": "Correct the round attribution in the comment.",
+        "evidence": "Direct read of the comment against the journal's round-by-round record.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r3"
+      },
+      {
+        "id": "R3-INFO3",
+        "severity": "info",
+        "file": ".metaproject/flows/318-2026-09-25-wave-4-batch-2-stack-packs-for-nestjs-ne/journal.md",
+        "line": null,
+        "problem": "As the journal already records, the keryx flow complete base-branch gate is expected to fail after merging into main. The base is recorded as feat/agent-platform-expansion, and that field can't be changed after init.",
+        "impact": "None beyond what the journal already documents; a known, previously-flagged structural gap.",
+        "suggested_fix": "No new action; already tracked as flow-tooling follow-up work.",
+        "evidence": "Direct read of the journal's base-branch entry.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r3"
+      },
+      {
+        "id": "N-B1",
+        "severity": "blocker",
+        "file": "src/agents/verify.test.ts",
+        "line": 558,
+        "problem": "tsc --noEmit reports 9 TS18048 errors ('pair.auditor' is possibly 'undefined') at src/agents/verify.test.ts lines 558-604.",
+        "impact": "CI typecheck-and-tests fails.",
+        "suggested_fix": "Add a non-null assertion or a guard at those call sites, then get CI fully green.",
+        "evidence": "CI run 36154441118, tsc --noEmit output.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r2",
+        "global_id": "2026-09-25-ingest-719#N-B1",
+        "class_scope": {
+          "sites": [
+            "src/agents/verify.test.ts:558-604"
+          ],
+          "enumeration_method": "Carried forward from round 2 unchanged."
+        }
+      },
+      {
+        "id": "N-M1",
+        "severity": "major",
+        "file": "src/gdskills/bundled/stacks/angular/skills/angular-testing/evals.json",
+        "line": null,
+        "problem": "Angular's stable gate pass depends on prompt choices that don't survive natural rephrasing.",
+        "impact": "angular keeps stable status and its generated agent pair on trigger prompts an honest router would mostly not select.",
+        "suggested_fix": "Restore a natural e2e negative, de-prefix the angular-implementation positives, re-run the gate, and accept the result.",
+        "evidence": "Reviewer ran checkSkillSelected against the live router with natural rephrasings and measured router-token containment.",
+        "confidence": "high",
+        "reviewer": "opus-adversarial-r2",
+        "global_id": "2026-09-25-ingest-719#N-M1",
+        "class_scope": {
+          "sites": [
+            "src/gdskills/bundled/stacks/angular/skills/angular-testing/evals.json",
+            "src/gdskills/bundled/stacks/angular/skills/angular-implementation/evals.json"
+          ],
+          "enumeration_method": "Carried forward from round 2 unchanged."
+        }
+      },
+      {
+        "id": "R1-MIN4",
+        "severity": "minor",
+        "file": "src/gdskills/bundled/stacks/angular/skills/angular-testing/evals.json",
+        "line": null,
+        "problem": "Some prompts are phrased oddly, apparently to dodge the scorer.",
+        "impact": "Prompts read as written for the scorer rather than as realistic user requests.",
+        "suggested_fix": "Rewrite toward natural phrasing without scorer-dodging.",
+        "evidence": "Direct read of the flagged prompts.",
+        "confidence": "medium",
+        "reviewer": "opus-adversarial-r1",
+        "global_id": "2026-09-25-ingest-719-r02#R1-MIN4"
+      }
+    ],
+    "stats": {
+      "blocker": 0,
+      "major": 0,
+      "minor": 4,
+      "info": 3
+    }
+  }
+]
+```

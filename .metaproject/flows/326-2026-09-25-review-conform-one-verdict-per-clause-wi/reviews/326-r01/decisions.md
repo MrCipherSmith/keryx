@@ -1,0 +1,6 @@
+# Decisions
+
+- F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- F-004: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

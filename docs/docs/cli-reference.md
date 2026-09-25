@@ -3628,6 +3628,11 @@ keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
                      [--repo <owner/repo>] [--explain] [--threshold <0..1>]
                      [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
                      [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
+keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
+                      [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                      [--fixtures <dir>] [--include <glob>]... [--json]
+keryx review jev-comments --pr <n> --repo <owner/repo>
+                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
@@ -3674,6 +3679,8 @@ left off and the gate reports it as unobserved.
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
 | `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
+| `jev-docs` | ADDITIONAL orchestrator reviewer (`engine: jev`): find doc sections that went stale because of a diff. See below. |
+| `jev-comments` | ADDITIONAL orchestrator reviewer (`engine: jev`): check whether open PR review comments were addressed. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
 | `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
@@ -4218,6 +4225,186 @@ still reaches any one of them directly. The failed-step log and the
 run-level signals (`priorAttempts`/`changedFiles`/`runsForHeadSha`) are each
 read once per run and reused across every job triaged, rather than
 re-fetched per job.
+
+### `review jev-risk`
+
+Flow 332. An ADDITIONAL orchestrator reviewer — never replacing any other —
+that builds a RISK MAP of the diff: for every changed hunk, keryx computes
+deterministic facts first (a path class — auth/permissions, crypto,
+migrations, schema, public API, config, concurrency primitives, IO —
+exported symbols touched, lines changed, and whether a test file elsewhere
+in the diff touches the same module), then asks Jev one `noul` per risk
+dimension (security-sensitive, data/migration, public-API/contract change,
+concurrency, error-handling). Jev supplies only five probabilities per hunk;
+keryx ranks and writes every word of every finding. Dispatched by
+`review-orchestrator` itself (Wave B), as a CLI call rather than an LLM
+sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
+
+```bash
+keryx review jev-risk --scope scope.json --json
+keryx review jev-risk --pr 712 --repo MrCipherSmith/keryx --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <ref>` \| `--pr <n>` \| `--scope <scope.json>` | Exactly one is required. `--scope` takes the whole `keryx review scope --json` document (the same file every other reviewer's dispatch reads). `--diff`/`--pr` build the scope themselves via `buildReviewScope`. |
+| `--max-calls <n>` | Caps how many `(hunk, risk dimension)` pairs are scored, default 150 (five dimensions x 30 hunks). Regions are scored in diff order; anything beyond the cap is reported skipped, never silently. |
+| `--threshold <0..1>` | Below this combined-risk probability a hunk produces neither a finding nor a routing hint. Default `0.7`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`, a JSON array consumed in call order) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-risk"`, `summary`, `findings`, `stats`, plus `ranked`, `routingHints`, `tokens`/`selection`) conforming to `reviewer-finding.schema.json`. |
+
+**A finding fires only above threshold AND with no nearby test** — the same
+fail-toward-silence discipline `review conform`'s hunk-kind clauses use,
+applied to a different fact. Severity is capped at `info`/`minor`: this
+flags attention, it never asserts a defect. **`routingHints`** additionally
+lists hunks above threshold whose security or concurrency dimension crossed
+it, each naming a `suggestedReviewer`
+(`review-security-code`/`review-highload`) — the orchestrator's own signal
+to dispatch a specialist even when the hunk's path alone would not have
+triggered it (see `review-orchestrator/SKILL.md`'s "CLI-engine reviewers"
+section).
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.risk: true` in `.metaproject/tasks.config.json`.
+Every hunk sent to Jev is redacted first (`src/security/service.ts`), the
+same floor `review conform`/`review ci-triage` already apply. With the
+setting off, or with no OpenRouter credential, the command refuses before
+any read and makes no network call.
+
+The `/risk` slash command runs the same check over the working diff and
+prints the ranked map, any routing hints, and any findings into the
+transcript.
+
+### `review jev-scenarios`
+
+Flow 332. An ADDITIONAL orchestrator reviewer — never replacing any other —
+that performs a FUNCTIONAL review: which user scenarios a PR likely changes.
+Scenarios are gathered deterministically from three sources — gdwiki
+`user-scenario` pages (`.metaproject/wiki/user-scenarios/**`), PRD
+requirement/scenario sections (`docs/requirements/**`), and README/docs "how
+to" sections (`README.md`, `docs/docs/**`) — each already carrying the code
+it links to. For each scenario whose linked code the diff touches (a fact),
+Jev answers one `noul`: "does this change alter this scenario's behaviour?".
+Jev supplies only that probability; keryx writes every word of every
+finding. Dispatched by `review-orchestrator` itself (Wave B), as a CLI call
+rather than an LLM sub-agent — `keryx review reviewers --json` marks it
+`"engine": "jev"`.
+
+```bash
+keryx review jev-scenarios --scope scope.json --json
+keryx review jev-scenarios --pr 712 --repo MrCipherSmith/keryx --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <ref>` \| `--pr <n>` \| `--scope <scope.json>` | Exactly one is required. `--scope` takes the whole `keryx review scope --json` document — only its `files` array is read (the full changed-file list, for the "touched link" fact). `--diff`/`--pr` build that list themselves via `buildReviewScope`. |
+| `--max-calls <n>` | Caps how many scenarios (each with at least one touched link) are checked, default 150. Selection is a deterministic (by scenario id) prefix; anything beyond the cap is reported skipped. |
+| `--threshold <0..1>` | Below this Jev probability a scenario is neither on the manual-check list nor a finding candidate. Default `0.5`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-scenarios"`, `summary`, `findings`, `stats`, plus `checklist`, `tokens`/`selection`/`scenarioSources`) conforming to `reviewer-finding.schema.json`. |
+
+**Two separate outputs, not one.** `checklist` is every likely-affected
+scenario at/above threshold, ranked, with its touched links as evidence — a
+manual-verification list for a human to walk, regardless of whether it
+produced a finding. `findings` is the narrower `minor`-severity subset: a
+likely-affected scenario with **no test in the diff covering it** (a fact).
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.scenarios: true` in
+`.metaproject/tasks.config.json`. Every scenario's text sent to Jev is
+redacted first (`src/security/service.ts`). With the setting off, or with no
+OpenRouter credential, the command refuses before any read and makes no
+network call.
+
+The `/scenarios` slash command runs the same check over the working diff and
+prints the manual-check list and any findings into the transcript.
+
+### `review jev-docs`
+
+Flow 333. An ADDITIONAL orchestrator reviewer — never replacing any other —
+that finds documentation sections that went STALE because of a diff. The
+default doc corpus is USER-FACING documentation only: `docs/**`, the root
+`README*` (never `CHANGELOG*`), and gdwiki pages (`.metaproject/wiki/**`) —
+`.metaproject/skills/**`/`.metaproject/rules/**`/`rules/**` are excluded by
+default (`--include <glob>`, repeatable, widens the corpus back out).
+Sections are linked to code DETERMINISTICALLY (an explicit path, a
+backtick-quoted symbol that appears in one of the diff's own hunks, or a
+`keryx <verb>` invocation whose command file the diff changed); only a
+section linked to code the diff CHANGES, and that the diff does not itself
+edit, is a candidate. Candidates are RANKED by link strength — path mention
+> symbol mention > verb mention; more distinct links to changed code within
+the same kind rank higher — never alphabetically, then asked one Jev `noul`
+"is this section now inaccurate?" question per selected section, up to
+`--max-calls` (default 30) and 8 per doc file. A CLI flag renamed or removed
+in the diff but still mentioned by an untouched section is flagged with NO
+Jev call at all. Like `review jev-rules`, this is dispatched by
+`review-orchestrator` itself (Wave B), as a CLI call rather than an LLM
+sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
+
+```bash
+keryx review jev-docs --diff HEAD~1 --json
+keryx review jev-docs --pr 712 --repo MrCipherSmith/keryx --max-calls 20 --json
+keryx review jev-docs --diff HEAD~1 --include ".metaproject/skills/**" --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <ref>` \| `--pr <n>` | Exactly one is required. |
+| `--max-calls <n>` | Caps how many linked sections are scored by Jev, default 30, plus a fixed cap of 8 per doc file so one large file cannot fill the whole budget. Anything beyond either cap is reported dropped (`selection.droppedSections`), never silently. The deterministic flag check runs regardless of this cap. |
+| `--threshold <0..1>` | Below this Jev probability a section is not reported. Default `0.5`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--include <glob>` | Repeatable. Widens the default user-facing-only doc corpus (`docs/**`, `README*`, `.metaproject/wiki/**`) back out — e.g. `--include ".metaproject/skills/**"` to also score skill/rule prose. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-docs"`, `summary`, `findings`, `stats`, plus `tokens`/`selection`, including `selection.rankingBasis`) conforming to `reviewer-finding.schema.json`. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.docs: true` in `.metaproject/tasks.config.json`.
+Every doc-section excerpt and hunk sent to Jev is redacted first
+(`src/security/service.ts`). With the setting off, or with no OpenRouter
+credential, the command refuses before any doc read and makes no network
+call.
+
+### `review jev-comments`
+
+Flow 333. An ADDITIONAL orchestrator reviewer — never replacing any other,
+and never posting or resolving anything — that checks whether open PR review
+comments were ADDRESSED. Comments come from the EXISTING ledger
+(`.metaproject/reviews/pr-comments/*.json`, written by `keryx review comments
+collect`); this command never re-collects from GitHub. Per open comment it
+computes deterministic facts (commits after the comment touching its file,
+the thread's resolved flag — best-effort via one read-only GraphQL query,
+`"unknown"` on any failure — and its replies already on the ledger), then
+asks Jev exactly one `choice` question among `resolved-by-fix` /
+`still-open` / `not-actionable` / `needs-escalation`. Only `still-open`
+(severity `minor`) and `needs-escalation` (severity `major`) produce
+findings. Every comment's choice is also written to an advisory-label cache
+that `keryx review comments reply` prints, informationally, next to its own
+output — it never changes what that command sends.
+
+```bash
+keryx review jev-comments --pr 712 --repo MrCipherSmith/keryx --json
+```
+
+| Flag | Description |
+|---|---|
+| `--pr <n>` | Required. |
+| `--repo <owner/repo>` | Required — identifies both the ledger file and the live `gh` adapter. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), the commit/thread-resolution facts (`git-facts.json`), and every Jev call (`jev-responses.json`) from files on disk — no real `gh`/`git` call, no real network. The ledger itself is always read from the real project directory; fixtures never replace it. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-comments"`, `summary`, `findings`, `stats`, plus `tokens`/`openComments`) conforming to `reviewer-finding.schema.json`. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.comments: true` in
+`.metaproject/tasks.config.json`. Every comment body, reply, and hunk sent to
+Jev is redacted first (`src/security/service.ts`). With the setting off, with
+no OpenRouter credential, or with no comment ledger yet collected for
+`--repo`/`--pr`, the command refuses before any read and makes no network
+call.
 
 ### `review conform`
 

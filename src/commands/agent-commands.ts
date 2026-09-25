@@ -221,11 +221,41 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 332 (AC6): the risk-map one-shot over `keryx review jev-risk`'s
+    // working-diff run. TUI-only, same reasoning as `/conform`.
+    name: "/risk",
+    description: "Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 332 (AC6): the functional-review one-shot over `keryx review
+    // jev-scenarios`'s working-diff run. TUI-only, same reasoning as `/conform`.
+    name: "/scenarios",
+    description: "Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 330 (AC7): a one-shot check of the working diff's hunks against
     // every applicable project rule clause, with Jev, printed grouped by
     // rule. TUI-only, same reasoning as `/ci`/`/conform`.
     name: "/jevrules",
     description: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 333 (AC6): stale-doc detection — links doc sections to changed
+    // code deterministically, then asks Jev whether each linked section is
+    // now inaccurate. TUI-only, same reasoning as `/conform`.
+    name: "/staledocs",
+    description: "List doc sections that likely went stale because of the working diff, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 333 (AC6): open PR review comment triage — reads the existing
+    // comment ledger and asks Jev a resolved-by-fix/still-open/not-
+    // actionable/needs-escalation choice per open comment. TUI-only.
+    name: "/opencomments",
+    description: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>",
     modes: AGENT_ONLY,
   },
   {

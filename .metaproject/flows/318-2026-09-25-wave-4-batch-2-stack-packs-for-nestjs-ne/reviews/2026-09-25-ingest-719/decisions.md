@@ -1,0 +1,30 @@
+# Decisions
+
+- N-B1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-M1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN3: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN4: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN7: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-MIN8: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-INFO1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- N-INFO2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-B1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-M1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-M2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-M3: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-M4: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-M5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-M6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN3: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN7: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN8: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-MIN9: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- R1-INFO2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

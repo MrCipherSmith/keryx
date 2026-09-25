@@ -93,7 +93,11 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/review` | Show project-wide items needing review (proposals, blocked sessions). |
 | `/ci` | Failed CI runs/jobs of the current branch's PR, each with an advisory triage and its deterministic-signal evidence. |
 | `/conform` | Check a PR, a review report, or a diff against a reference document's clauses, with Jev. |
+| `/risk` | Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked, highest risk first. |
+| `/scenarios` | Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked. |
 | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
+| `/staledocs` | List doc sections that likely went stale because of the working diff, with Jev. |
+| `/opencomments` | List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>. |
 | `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |

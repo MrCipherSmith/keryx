@@ -1,0 +1,478 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "326",
+  "slug": "review-conform-one-verdict-per-clause-wi",
+  "title": "review conform: one verdict per clause with the worst hunks, not a row per hunk; CI triage review leftovers",
+  "status": "done",
+  "createdAt": "2026-09-25T12:23:05.146Z",
+  "updatedAt": "2026-09-25T16:31:46.238Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T13:05:44.224Z",
+      "note": "Aggregation via aggregateConformVerdicts (src/review/conform-jev.ts): one row per clause; status/hunksJudged/hunksBelowThreshold/worst/furtherViolations (default --max-hunks 3); full per-hunk detail under --json (nested 'hunks') and --detail. Verified live on PR 712: 92 rows -> 10 clause rows."
+    },
+    "AC2": {
+      "at": "2026-09-25T13:05:48.947Z",
+      "note": "aggregateConformVerdicts is pure/sync in src/review/conform-jev.ts, unit-tested in conform-jev.test.ts (AC2 describe block): likely-violated iff any retained hunk below threshold, satisfied iff every judged hunk >= threshold, ties (==threshold) read satisfied, empty/no-hunks-supplied covered via the not-evaluated pass-through."
+    },
+    "AC3": {
+      "at": "2026-09-25T13:05:53.550Z",
+      "note": "boundHunkRegions (src/review/conform-jev.ts), default DEFAULT_MAX_HUNK_CALLS=40, documented; --max-hunk-calls caps hunk x clause questions; truncation reported via ConformHunkBudget (never silent) in both text report and --json. Unit-tested (boundHunkRegions describe block) and CLI-tested (review-conform-cli.test.ts). Live on PR 712: 42 hunks -> judged 20/42, reported '22 hunk(s) skipped for clause(s): ...'."
+    },
+    "AC4": {
+      "at": "2026-09-25T13:05:58.336Z",
+      "note": "src/tui/conform-inspector.ts ConformClauseRow carries hunksJudged/hunksBelowThreshold/worst/furtherViolations; clause list shows one row per clause with N/M-below-threshold summary; detail view lists worst hunk + further violations. src/tui/conform-source.ts wired to aggregateConformVerdicts + boundHunkRegions. Tests updated/added in conform-inspector.test.ts; full opentui-tests-no-skips.ts src/tui run: 1231 pass, 0 fail, 0 skip."
+    },
+    "AC5": {
+      "at": "2026-09-25T13:06:02.869Z",
+      "note": "New invented fixture src/commands/fixtures/conform/many-hunks/ (12-file diff, 2 hunk-kind clauses = 24 hunk x clause pairs). Test-pinned in review-conform-cli.test.ts: exactly 3 clause rows (never one per hunk), report line count <=35 lines asserted (actual observed 32)."
+    },
+    "AC6": {
+      "at": "2026-09-25T13:06:08.815Z",
+      "note": "(1) ci-triage.test.ts: new test proving a rejected runInfoCache promise degrades a LATER job's lookup exactly like the uncached path (byte-for-byte signals equality, single runInfo(11) call). (2) docs/docs/cli-reference.md: new 'third known signal gap' paragraph on pagination (triaged run missing from same-head list) placed right after the job-name-ambiguity paragraph. (3) src/review/ci-triage.ts header comment on the security facade import rewritten to state the real reason (core->core consistency with the facade convention) instead of the client-imports-core-internal rule, which this core->core edge cannot trigger."
+    },
+    "AC7": {
+      "at": "2026-09-25T13:06:14.548Z",
+      "note": "docs/docs/cli-reference.md 'review conform' section: synopsis line adds --max-hunks/--max-hunk-calls/--detail; flags table documents all three; new prose block on the aggregated report with a worked example. HELP_GROUPS/commands-by-task.md unaffected (no new verb/subcommand; generator only reacts to src/standard/help-groups.ts). All fixtures used are invented (src/commands/fixtures/conform/many-hunks/*, src/review/fixtures/conform/invented-doctrine.md, both pre-existing/new invented content, no private document text)."
+    },
+    "AC8": {
+      "at": "2026-09-25T13:06:20.699Z",
+      "note": "Live check, env -u OPENROUTER_API_KEY (saved openrouterKey used), invented fixture src/review/fixtures/conform/invented-doctrine.md against MrCipherSmith/keryx PR #712 (42 raw hunks). Before (installed keryx 0.2.164): 297-line report, 92 clause rows (2 hunk clauses x 42 hunks = 84 + 8 pr/report/not-checkable), 43 Jev calls, $0.0022. After (bun src/cli.ts, this worktree, default --max-hunk-calls 40): 60-line report, 10 clause rows, 21 Jev calls (hunk budget: judged 20/42, 22 skipped, reported not silent), $0.0008. Total Jev calls spent on this live check: 107 (within the ~120 budget). No key printed."
+    },
+    "AC9": {
+      "at": "2026-09-25T13:06:31.525Z",
+      "note": "CI-relevant gates run locally and green: typecheck (tsc --noEmit clean), lint (eslint . clean), flow tests (conform-jev/conform-report/conform-clauses/conform-state/conform-pr-port/ci-triage/ci-port/review-conform-cli/conform-inspector: 173 pass, 0 fail), bun scripts/opentui-tests-no-skips.ts src/tui (1231 pass, 0 fail, 0 skip), test:core (11899 pass, 4 fail/1 error -- all four pre-existing and unrelated to this flow: src/commands/schedule-security.test.ts sandbox-scratch EEXIST, src/integrations/install-state.test.ts timestamp-resolution, src/lib/safe-exec.hostile-cwd.e2e.test.ts 30s timeout -- none touch review/conform/ci-triage/tui-conform code), check:doc-links (1624 links, 0 broken), keryx flow check (all flows consistent), keryx health run (PASS, score 94). import-policy.live.test.ts + import-policy.test.ts green (28 pass) -- import zones respected, no new facade/ratchet violations. New tests are hermetic (fixture ports/in-memory Maps, no real network/gh, no platform-specific file-mode assumptions)."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/717"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read acceptance-criteria.md and explored src/review/conform-*.ts, src/commands/review.ts (runConform/explainConformVerdicts), src/tui/conform-inspector.ts, src/tui/conform-source.ts, src/review/ci-triage.ts before implementing."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented per-clause aggregation (aggregateConformVerdicts), hunk-call budget (boundHunkRegions), CLI --max-hunks/--max-hunk-calls/--detail, TUI aggregate rendering, CI-triage rejected-cache/docs/comment fixes, and CLI reference docs."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added unit tests for aggregateConformVerdicts/boundHunkRegions (conform-jev.test.ts), CLI-level aggregation/budget/detail/json tests (review-conform-cli.test.ts, new many-hunks fixture), TUI aggregate render tests (conform-inspector.test.ts), and the rejected-runInfoCache CI-triage test (ci-triage.test.ts). All green."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-reviewed the diff (git status/diff), reran typecheck+lint+targeted tests+full suites after every change. No commit/push/PR made per the task's explicit 'do not commit/push' constraint -- handing back to the caller for review and commit."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T12:23:05.146Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T12:23:34.935Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T12:23:35.208Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T13:05:44.224Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Aggregation via aggregateConformVerdicts (src/review/conform-jev.ts): one row per clause; status/hunksJudged/hunksBelowThreshold/worst/furtherViolations (default --max-hunks 3); full per-hunk detail under --json (nested 'hunks') and --detail. Verified live on PR 712: 92 rows -> 10 clause rows. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:05:48.947Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: aggregateConformVerdicts is pure/sync in src/review/conform-jev.ts, unit-tested in conform-jev.test.ts (AC2 describe block): likely-violated iff any retained hunk below threshold, satisfied iff every judged hunk >= threshold, ties (==threshold) read satisfied, empty/no-hunks-supplied covered via the not-evaluated pass-through. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:05:53.550Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: boundHunkRegions (src/review/conform-jev.ts), default DEFAULT_MAX_HUNK_CALLS=40, documented; --max-hunk-calls caps hunk x clause questions; truncation reported via ConformHunkBudget (never silent) in both text report and --json. Unit-tested (boundHunkRegions describe block) and CLI-tested (review-conform-cli.test.ts). Live on PR 712: 42 hunks -> judged 20/42, reported '22 hunk(s) skipped for clause(s): ...'. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:05:58.337Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/tui/conform-inspector.ts ConformClauseRow carries hunksJudged/hunksBelowThreshold/worst/furtherViolations; clause list shows one row per clause with N/M-below-threshold summary; detail view lists worst hunk + further violations. src/tui/conform-source.ts wired to aggregateConformVerdicts + boundHunkRegions. Tests updated/added in conform-inspector.test.ts; full opentui-tests-no-skips.ts src/tui run: 1231 pass, 0 fail, 0 skip. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:06:02.869Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: New invented fixture src/commands/fixtures/conform/many-hunks/ (12-file diff, 2 hunk-kind clauses = 24 hunk x clause pairs). Test-pinned in review-conform-cli.test.ts: exactly 3 clause rows (never one per hunk), report line count <=35 lines asserted (actual observed 32). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:06:08.815Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: (1) ci-triage.test.ts: new test proving a rejected runInfoCache promise degrades a LATER job's lookup exactly like the uncached path (byte-for-byte signals equality, single runInfo(11) call). (2) docs/docs/cli-reference.md: new 'third known signal gap' paragraph on pagination (triaged run missing from same-head list) placed right after the job-name-ambiguity paragraph. (3) src/review/ci-triage.ts header comment on the security facade import rewritten to state the real reason (core->core consistency with the facade convention) instead of the client-imports-core-internal rule, which this core->core edge cannot trigger. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:06:14.548Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: docs/docs/cli-reference.md 'review conform' section: synopsis line adds --max-hunks/--max-hunk-calls/--detail; flags table documents all three; new prose block on the aggregated report with a worked example. HELP_GROUPS/commands-by-task.md unaffected (no new verb/subcommand; generator only reacts to src/standard/help-groups.ts). All fixtures used are invented (src/commands/fixtures/conform/many-hunks/*, src/review/fixtures/conform/invented-doctrine.md, both pre-existing/new invented content, no private document text). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:06:20.699Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Live check, env -u OPENROUTER_API_KEY (saved openrouterKey used), invented fixture src/review/fixtures/conform/invented-doctrine.md against MrCipherSmith/keryx PR #712 (42 raw hunks). Before (installed keryx 0.2.164): 297-line report, 92 clause rows (2 hunk clauses x 42 hunks = 84 + 8 pr/report/not-checkable), 43 Jev calls, $0.0022. After (bun src/cli.ts, this worktree, default --max-hunk-calls 40): 60-line report, 10 clause rows, 21 Jev calls (hunk budget: judged 20/42, 22 skipped, reported not silent), $0.0008. Total Jev calls spent on this live check: 107 (within the ~120 budget). No key printed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:06:31.526Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: CI-relevant gates run locally and green: typecheck (tsc --noEmit clean), lint (eslint . clean), flow tests (conform-jev/conform-report/conform-clauses/conform-state/conform-pr-port/ci-triage/ci-port/review-conform-cli/conform-inspector: 173 pass, 0 fail), bun scripts/opentui-tests-no-skips.ts src/tui (1231 pass, 0 fail, 0 skip), test:core (11899 pass, 4 fail/1 error -- all four pre-existing and unrelated to this flow: src/commands/schedule-security.test.ts sandbox-scratch EEXIST, src/integrations/install-state.test.ts timestamp-resolution, src/lib/safe-exec.hostile-cwd.e2e.test.ts 30s timeout -- none touch review/conform/ci-triage/tui-conform code), check:doc-links (1624 links, 0 broken), keryx flow check (all flows consistent), keryx health run (PASS, score 94). import-policy.live.test.ts + import-policy.test.ts green (28 pass) -- import zones respected, no new facade/ratchet violations. New tests are hermetic (fixture ports/in-memory Maps, no real network/gh, no platform-specific file-mode assumptions). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T13:06:39.734Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T13:06:43.698Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T13:06:47.770Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T13:07:00.146Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T16:27:30.187Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (operator)"
+    },
+    {
+      "at": "2026-09-25T16:27:35.358Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/717 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T16:30:57.897Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T16:31:01.945Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T16:31:01.946Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 3 finding(s) at or above `minor` are not terminal: 326-r01#F-002 (minor, round 326-r01): marked fixed at def2955d589832c25694932421bb2dbc52115414 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 326-r01#F-003 (minor, round 326-r01): marked fixed at def2955d589832c25694932421bb2dbc52115414 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 326-r01#F-004 (minor, round 326-r01): marked fixed at def2955d589832c25694932421bb2dbc52115414 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+    },
+    {
+      "at": "2026-09-25T16:31:41.563Z",
+      "event": "completing",
+      "detail": "merged commit: 3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6"
+    },
+    {
+      "at": "2026-09-25T16:31:46.237Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-25T16:31:46.238Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T13:05:44.224Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:05:48.947Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:05:53.550Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:05:58.336Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:06:02.869Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:06:08.815Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:06:14.548Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:06:20.699Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T13:06:31.525Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T16:31:46.238Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae",
+      "headCommit": "3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T16:31:01.945Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 3 finding(s) at or above `minor` are not terminal: 326-r01#F-002 (minor, round 326-r01): marked fixed at def2955d589832c25694932421bb2dbc52115414 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 326-r01#F-003 (minor, round 326-r01): marked fixed at def2955d589832c25694932421bb2dbc52115414 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 326-r01#F-004 (minor, round 326-r01): marked fixed at def2955d589832c25694932421bb2dbc52115414 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    },
+    {
+      "at": "2026-09-25T16:31:46.237Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:3b10f1e33fb251d2c734f08af76e08891beb2326e26cb21003f5625d85badbae"
+    }
+  ],
+  "merged": {
+    "commit": "3fddda2ebb3caab6c9dcc3ca872111afd2c87dc6",
+    "ref": "origin/main",
+    "at": "2026-09-25T16:31:46.238Z"
+  }
+}

@@ -308,9 +308,33 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/risk",
+    group: "Managed work",
+    summary: "Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked, highest risk first.",
+  },
+  {
+    kind: "slash",
+    name: "/scenarios",
+    group: "Managed work",
+    summary: "Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked.",
+  },
+  {
+    kind: "slash",
     name: "/jevrules",
     group: "Managed work",
     summary: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule.",
+  },
+  {
+    kind: "slash",
+    name: "/staledocs",
+    group: "Managed work",
+    summary: "List doc sections that likely went stale because of the working diff, with Jev.",
+  },
+  {
+    kind: "slash",
+    name: "/opencomments",
+    group: "Managed work",
+    summary: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>.",
   },
   {
     kind: "slash",

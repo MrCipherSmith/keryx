@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "331",
+  "slug": "jev-review-benchmark-the-same-labelled-p",
+  "title": "Jev review benchmark: the same labelled PRs reviewed with and without Jev, measured for recall, precision, cost and time",
+  "status": "done",
+  "createdAt": "2026-09-25T13:22:11.456Z",
+  "updatedAt": "2026-09-25T16:31:38.660Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T14:10:41.203Z",
+      "note": "bench/jev-review/build-dataset.ts builds dataset.json deterministically from .metaproject/reviews/* and .metaproject/flows/*/reviews/* (public data only); label mapping documented in types.ts/README.md; 7 passing tests in build-dataset.test.ts on fixture flows. Real run: 254 packages, 1638 findings, 104 owning flows, committed as bench/jev-review/dataset.json."
+    },
+    "AC2": {
+      "at": "2026-09-25T14:10:47.890Z",
+      "note": "bench/jev-review/adapters/{ci-triage,review-conform,not-available,registry}.ts: common ComponentAdapter interface (types.ts), without-jev/with-jev arms. ci-triage shells to keryx review ci-triage --eval (existing --eval set); review-conform shells to keryx review conform on PR metadata. flow-check-ac/review-jev-rules/severity-calibration are not-available stubs, no code dependency on flows 328/330/later. 9 passing adapter tests. Placed under bench/jev-review/ rather than scripts/ to stay coherent with AC1/AC6's bench/jev-review/ location for the dataset and results; both are explicitly-allowed alternatives per the frozen AC text."
+    },
+    "AC3": {
+      "at": "2026-09-25T14:10:55.047Z",
+      "note": "metrics.ts computes accuracy (closed-world) and precision/noise (open-world flagging) with Wilson 95% CIs (reused from src/metrics/benchmark.ts deriveRate/wilsonInterval, this repo's existing honesty primitive), addedTruePositives (honestly null unless hand-labelled; never fabricated), Jev calls/input tokens/cost/wall-clock from each adapter's usage. bootstrapMeanCi95 (seeded LCG, deterministic) added for repeat-run variance. Results written as both JSON and markdown by run.ts/report.ts. 12 passing metrics tests. Scope note documented in README.md: precision/recall against the AC1 dataset's file/region-labelled findings applies naturally to a finding-generating component (review-jev-rules, flow 330, not yet available); ci-triage/review-conform use domain-appropriate ground truth instead (see README AC3 section)."
+    },
+    "AC4": {
+      "at": "2026-09-25T14:11:02.877Z",
+      "note": "report.ts formatRate() is the only place a rate is rendered and it never prints a bare percentage (always n + 95% Wilson CI); n<10 rows are labelled **anecdotal** inline; --repeat N (live only) reruns the with-jev arm and reports mean/stddev/bootstrap 95% CI in its own report section. Revert-checked: disabling formatRate's null/CI handling made report.test.ts fail red (a null rate rendered as a bare 0.0%), confirming the guard is load-bearing; reverted after. Live run measured real variance: ci-triage with-jev accuracy 37.5% then 50.0% across 2 repeats (mean 43.8%, stddev 6.3%), reported in bench/jev-review/results-2026-09-25.md."
+    },
+    "AC5": {
+      "at": "2026-09-25T14:11:10.836Z",
+      "note": "Offline (default) replays committed fixtures under src/commands/fixtures/ci-triage-eval/ and src/commands/fixtures/conform/ via each verb's existing --fixtures/--eval mechanism; hermetic, no network, verified by tests that strip/poison OPENROUTER_API_KEY and still succeed (adapters/ci-triage.test.ts, adapters/review-conform.test.ts). --live calls the real gh+Jev endpoint for ci-triage (review-conform has no --live flag in the existing CLI, documented, not fabricated). --max-cost (default /usr/bin/zsh.10 documented in cost-cap.ts/README) plus a 300-call cap: offline replay of a component is run first as a cost estimate and a live run whose estimate already implies breaking the cap is refused before any live call (assertEstimateWithinCap); real spend crossing the cap mid-run discards that run's results (CostCapTracker). Revert-checked: disabling the cap's throw made cost-cap.test.ts fail red; reverted after."
+    },
+    "AC6": {
+      "at": "2026-09-25T14:11:18.901Z",
+      "note": "Live run: env -u OPENROUTER_API_KEY bun bench/jev-review/run.ts --live --repeat 2 (real gh+Jev calls, saved key from ~/.local/share/keryx/auth.json resolved via the existing envWithSavedApiKeys fallback). Committed bench/jev-review/results-2026-09-25.json and .md, plus docs/report/jev-review-benchmark-2026-09-25/results.md (numbers only from that JSON). Total spend: 34 Jev calls, $0.001695 (cap: $0.10/300 calls). No key ever printed (adapters never log the credential; only redacted error paths exist in jev-client.ts, unchanged). Temporary review.jev.ci_triage:true was added to this repo's own .metaproject/tasks.config.json for the live call (documented in README.md and this flow's journal) and removed immediately after; git status --porcelain confirmed no trace left."
+    },
+    "AC7": {
+      "at": "2026-09-25T14:11:26.519Z",
+      "note": "44 tests across 8 files in bench/jev-review/ (build-dataset, metrics, cost-cap, adapters/ci-triage, adapters/review-conform, adapters/registry, report, run) covering: dataset builder on fixture flows (temp dirs via mkdtemp, incl. a real throwaway git repo for the report-closed-by disposition source), metric computations (accuracy/precision/noise/anecdotal/variance), adapter registry (5 adapters, not-available stubs), offline replay (hermetic — tests explicitly poison/strip OPENROUTER_API_KEY and still pass). All pass via bun test, no OS-specific paths/commands (bun/node fs APIs only) — macOS-safe. Revert-checked labelFor (build-dataset.test.ts), CostCapTracker.record (cost-cap.test.ts), and formatRate (report.test.ts): each broke red when disabled, then was restored to green."
+    },
+    "AC8": {
+      "at": "2026-09-25T14:11:34.340Z",
+      "note": "No CLI verb added (script under bench/jev-review/, per AC2's explicit alternative), so HELP_GROUPS/commands-by-task/cli.test.ts AC5 allow-list are untouched by design. Docs: bench/jev-review/README.md (full usage, AC-by-AC evidence) and docs/report/jev-review-benchmark-2026-09-25/results.md (numbers-only summary for the article). CI green: typecheck clean, lint clean, check:doc-links 0 broken (1626 links/512 files), keryx flow check clean, keryx health run PASS (score 94). test:core: 11877 pass/4 fail/1 error — all 4 failures/1 error in src/lib/safe-exec.hostile-cwd.e2e.test.ts and src/lib/serve-listener/serve-turns (socket EEXIST + 30s timeouts), unrelated to bench/ (pre-existing, consistent with concurrent sibling-worktree test:core runs observed during this run; not touched by this flow). Import zones respected: bench/ is outside src/, added to tsconfig.json/eslint.config.mjs include lists alongside scripts/ (same ratchet reasoning already documented there)."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/721"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected: existing bench conventions (scripts/benchmark/*), review-precision-baseline.ts's disposition logic, ci-triage --eval harness, review conform --fixtures, jev-client.ts, src/metrics/benchmark.ts's Wilson CI primitives."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented per plan: bench/jev-review/{types,build-dataset,metrics,cost-cap,report,run}.ts + adapters/{ci-triage,review-conform,not-available,registry}.ts."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "44 tests added, all passing; typecheck/lint/check:doc-links/flow check/health run all clean; test:core 11877/11888 pass (4 unrelated pre-existing failures documented in AC8 confirmation)."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review done inline during implementation (revert-checks on labelFor/CostCapTracker/formatRate); no PR opened yet — leaving draft-PR step to the operator per flow gates (owner/review gates are true and require human sign-off)."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T13:22:11.456Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T13:22:49.490Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T13:22:49.716Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T14:10:41.203Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bench/jev-review/build-dataset.ts builds dataset.json deterministically from .metaproject/reviews/* and .metaproject/flows/*/reviews/* (public data only); label mapping documented in types.ts/README.md; 7 passing tests in build-dataset.test.ts on fixture flows. Real run: 254 packages, 1638 findings, 104 owning flows, committed as bench/jev-review/dataset.json. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:10:47.891Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bench/jev-review/adapters/{ci-triage,review-conform,not-available,registry}.ts: common ComponentAdapter interface (types.ts), without-jev/with-jev arms. ci-triage shells to keryx review ci-triage --eval (existing --eval set); review-conform shells to keryx review conform on PR metadata. flow-check-ac/review-jev-rules/severity-calibration are not-available stubs, no code dependency on flows 328/330/later. 9 passing adapter tests. Placed under bench/jev-review/ rather than scripts/ to stay coherent with AC1/AC6's bench/jev-review/ location for the dataset and results; both are explicitly-allowed alternatives per the frozen AC text. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:10:55.047Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: metrics.ts computes accuracy (closed-world) and precision/noise (open-world flagging) with Wilson 95% CIs (reused from src/metrics/benchmark.ts deriveRate/wilsonInterval, this repo's existing honesty primitive), addedTruePositives (honestly null unless hand-labelled; never fabricated), Jev calls/input tokens/cost/wall-clock from each adapter's usage. bootstrapMeanCi95 (seeded LCG, deterministic) added for repeat-run variance. Results written as both JSON and markdown by run.ts/report.ts. 12 passing metrics tests. Scope note documented in README.md: precision/recall against the AC1 dataset's file/region-labelled findings applies naturally to a finding-generating component (review-jev-rules, flow 330, not yet available); ci-triage/review-conform use domain-appropriate ground truth instead (see README AC3 section). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:11:02.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: report.ts formatRate() is the only place a rate is rendered and it never prints a bare percentage (always n + 95% Wilson CI); n<10 rows are labelled **anecdotal** inline; --repeat N (live only) reruns the with-jev arm and reports mean/stddev/bootstrap 95% CI in its own report section. Revert-checked: disabling formatRate's null/CI handling made report.test.ts fail red (a null rate rendered as a bare 0.0%), confirming the guard is load-bearing; reverted after. Live run measured real variance: ci-triage with-jev accuracy 37.5% then 50.0% across 2 repeats (mean 43.8%, stddev 6.3%), reported in bench/jev-review/results-2026-09-25.md. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:11:10.836Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Offline (default) replays committed fixtures under src/commands/fixtures/ci-triage-eval/ and src/commands/fixtures/conform/ via each verb's existing --fixtures/--eval mechanism; hermetic, no network, verified by tests that strip/poison OPENROUTER_API_KEY and still succeed (adapters/ci-triage.test.ts, adapters/review-conform.test.ts). --live calls the real gh+Jev endpoint for ci-triage (review-conform has no --live flag in the existing CLI, documented, not fabricated). --max-cost (default /usr/bin/zsh.10 documented in cost-cap.ts/README) plus a 300-call cap: offline replay of a component is run first as a cost estimate and a live run whose estimate already implies breaking the cap is refused before any live call (assertEstimateWithinCap); real spend crossing the cap mid-run discards that run's results (CostCapTracker). Revert-checked: disabling the cap's throw made cost-cap.test.ts fail red; reverted after. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:11:18.901Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Live run: env -u OPENROUTER_API_KEY bun bench/jev-review/run.ts --live --repeat 2 (real gh+Jev calls, saved key from ~/.local/share/keryx/auth.json resolved via the existing envWithSavedApiKeys fallback). Committed bench/jev-review/results-2026-09-25.json and .md, plus docs/report/jev-review-benchmark-2026-09-25/results.md (numbers only from that JSON). Total spend: 34 Jev calls, $0.001695 (cap: $0.10/300 calls). No key ever printed (adapters never log the credential; only redacted error paths exist in jev-client.ts, unchanged). Temporary review.jev.ci_triage:true was added to this repo's own .metaproject/tasks.config.json for the live call (documented in README.md and this flow's journal) and removed immediately after; git status --porcelain confirmed no trace left. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:11:26.519Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 44 tests across 8 files in bench/jev-review/ (build-dataset, metrics, cost-cap, adapters/ci-triage, adapters/review-conform, adapters/registry, report, run) covering: dataset builder on fixture flows (temp dirs via mkdtemp, incl. a real throwaway git repo for the report-closed-by disposition source), metric computations (accuracy/precision/noise/anecdotal/variance), adapter registry (5 adapters, not-available stubs), offline replay (hermetic — tests explicitly poison/strip OPENROUTER_API_KEY and still pass). All pass via bun test, no OS-specific paths/commands (bun/node fs APIs only) — macOS-safe. Revert-checked labelFor (build-dataset.test.ts), CostCapTracker.record (cost-cap.test.ts), and formatRate (report.test.ts): each broke red when disabled, then was restored to green. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:11:34.340Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: No CLI verb added (script under bench/jev-review/, per AC2's explicit alternative), so HELP_GROUPS/commands-by-task/cli.test.ts AC5 allow-list are untouched by design. Docs: bench/jev-review/README.md (full usage, AC-by-AC evidence) and docs/report/jev-review-benchmark-2026-09-25/results.md (numbers-only summary for the article). CI green: typecheck clean, lint clean, check:doc-links 0 broken (1626 links/512 files), keryx flow check clean, keryx health run PASS (score 94). test:core: 11877 pass/4 fail/1 error — all 4 failures/1 error in src/lib/safe-exec.hostile-cwd.e2e.test.ts and src/lib/serve-listener/serve-turns (socket EEXIST + 30s timeouts), unrelated to bench/ (pre-existing, consistent with concurrent sibling-worktree test:core runs observed during this run; not touched by this flow). Import zones respected: bench/ is outside src/, added to tsconfig.json/eslint.config.mjs include lists alongside scripts/ (same ratchet reasoning already documented there). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T14:11:47.810Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T14:11:48.168Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T14:11:48.544Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T14:11:49.006Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T16:28:40.647Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (operator)"
+    },
+    {
+      "at": "2026-09-25T16:28:45.553Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/721 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T16:31:34.283Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T16:31:38.659Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-25T16:31:38.660Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T14:10:41.203Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T14:10:47.890Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T14:10:55.047Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T14:11:02.877Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T14:11:10.836Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T14:11:18.901Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T14:11:26.519Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T14:11:34.340Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    },
+    {
+      "at": "2026-09-25T16:31:38.660Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37",
+      "headCommit": "335f730c395560cf316be1dea0d48e148f5d40cc"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T16:31:38.659Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "335f730c395560cf316be1dea0d48e148f5d40cc is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "335f730c395560cf316be1dea0d48e148f5d40cc is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:b340ab2fef38d32db1ff718aa09d6e9977947d7335b992c5db571e4c7a920e37"
+    }
+  ],
+  "merged": {
+    "commit": "335f730c395560cf316be1dea0d48e148f5d40cc",
+    "ref": "origin/main",
+    "at": "2026-09-25T16:31:38.660Z"
+  }
+}

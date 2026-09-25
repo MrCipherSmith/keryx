@@ -163,6 +163,24 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Dispatch specialized review passes conceptually or as separate skill loads.",
     "Report findings first, ordered by severity, with concrete file references.",
   ]),
+  // CLI-engine reviewers (flow 333): dispatched by review-orchestrator as a
+  // `keryx review jev-docs`/`keryx review jev-comments` command, never as an
+  // LLM sub-agent — see either SKILL.md's own header. Registered here like
+  // every other bundled skill so `keryx skills install` actually copies its
+  // directory; without an entry the directory exists in the shipped tree and
+  // is never installed for any profile.
+  skill("review-jev-docs", "review", ["recommended", "full"], "Find documentation sections that went stale because of a diff, scored by Jev.", [
+    "Split every discovered documentation source into sections by heading, deterministically.",
+    "Link a section to changed code by an explicit path/symbol/verb it mentions.",
+    "Ask Jev one noul question per linked section; keryx writes every word of the finding.",
+    "Flag a removed/renamed CLI flag still mentioned in docs with no Jev call at all.",
+  ]),
+  skill("review-jev-comments", "review", ["recommended", "full"], "Check whether open PR review comments were addressed, scored by Jev.", [
+    "Read open comments from the existing ledger, never re-collect from GitHub.",
+    "Compute commits-after-comment, thread-resolved, and reply facts deterministically.",
+    "Ask Jev one choice question per open comment; keryx writes every word of the finding.",
+    "Never post a reply or resolve a thread — the label is advisory only.",
+  ]),
   skill("review-logic", "review", ["recommended", "full"], "Review logic correctness, contracts, edge cases, nullability, and async behavior.", [
     "Trace behavior through call sites and affected context.",
     "Look for incorrect assumptions, missing branches, race conditions, and error paths.",
@@ -260,6 +278,16 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Run a command or test that fails if the finding is real; record the command and its output.",
     "Fall back to confirming the class_scope sites exist; reasoning alone is capped at unverifiable.",
     "Emit one verdict per finding checked; never add a finding, raise a severity, or edit a finding's text.",
+  ]),
+  skill("review-jev-risk", "review", ["recommended", "full"], "Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency.", [
+    "Score every retained hunk on security, data/migration, public-API, concurrency, and error-handling.",
+    "Emit a finding only above threshold and with no nearby test; severity capped at info/minor.",
+    "Feed a routing hint for review-security-code/review-highload when a hunk crosses threshold on that dimension.",
+  ]),
+  skill("review-jev-scenarios", "review", ["recommended", "full"], "Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario.", [
+    "Discover scenarios from gdwiki user-scenario pages, PRD requirement sections, and README/docs how-to sections.",
+    "Ask only scenarios whose linked code this diff touches.",
+    "Emit the ranked manual-check list, and a minor finding for a likely-affected scenario with no covering test.",
   ]),
   skill("review-frontend-conventions", "review", ["recommended", "full"], "Review frontend code against repository-local frontend conventions and agent entrypoints.", [
     "Load local AGENTS.md/CLAUDE.md and matched frontend rules.",

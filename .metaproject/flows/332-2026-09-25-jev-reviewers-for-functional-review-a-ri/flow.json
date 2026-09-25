@@ -1,0 +1,431 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "332",
+  "slug": "jev-reviewers-for-functional-review-a-ri",
+  "title": "Jev reviewers for functional review: a risk map of the diff and the user scenarios a PR likely changes",
+  "status": "done",
+  "createdAt": "2026-09-25T14:07:00.825Z",
+  "updatedAt": "2026-09-25T17:01:27.791Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T16:03:18.044Z",
+      "note": "src/review/jev-risk.ts: RISK_DIMENSIONS (5), computeHunkRiskFacts (path class/exported symbols/nearby-test facts before any Jev call), batchRiskQuestionsForHunk, selectRiskHunks (--max-calls budget, skipped reported), rankHunksByRisk. Verified by src/review/jev-risk.test.ts (unit) and src/commands/review-jev-risk-cli.test.ts (CLI, fixture diff+responses). Live-checked on PR #712 (env -u OPENROUTER_API_KEY, saved key, scratch dir): 15 hunks scored of 38 code hunks retained, 23 skipped by --max-calls, ranked output confirms combined-risk ordering (e.g. providers.ts:723-733 = 0.90)."
+    },
+    "AC2": {
+      "at": "2026-09-25T16:03:26.909Z",
+      "note": "synthesizeRiskFindings (severity capped info/minor, only above threshold AND no evidenced nearby test) and computeRiskRoutingHints (security/concurrency>=threshold -> review-security-code/review-highload) in src/review/jev-risk.ts; prose synthesized deterministically, Jev supplies only 5 probabilities. Unit tests cover threshold/nearby-test/severity/hint cases. Live PR #712 check: 0 findings (real nearby tests evidenced), 3 routing hints incl. providers.ts:1273-1301 concurrency=0.84 that a pre-fix run never scored at all (budget wasted on docs hunks) — see AC-tightening fixes in this same PR."
+    },
+    "AC3": {
+      "at": "2026-09-25T16:03:27.029Z",
+      "note": "src/review/jev-scenarios.ts: scenarioFromWikiPage/scenariosFromPrd/scenariosFromReadmeLike (3 sources), computeScenarioFacts (touched-link fact), selectScenarios (touched-link-only candidates), one noul per scenario. Unit tests + CLI fixture tests pass. Live PR #712 check: 118 real scenario sources discovered from this repo's docs/requirements + docs/docs + README, 2 with a touched link, 1 batched Jev call."
+    },
+    "AC4": {
+      "at": "2026-09-25T16:03:27.145Z",
+      "note": "buildScenarioChecklist (ranked, >=threshold) and synthesizeScenarioFindings (minor-only, no-covering-test fact) in src/review/jev-scenarios.ts; prose synthesized by keryx. Covered by jev-scenarios.test.ts and review-jev-scenarios-cli.test.ts (schema-validated finding)."
+    },
+    "AC5": {
+      "at": "2026-09-25T16:03:35.834Z",
+      "note": "Both commands opt-in via .metaproject/tasks.config.json review.jev.{risk,scenarios}; jevRiskGateRefusal/jevScenariosGateRefusal check opt-in then credential BEFORE any file read or network call (src/commands/review-jev-risk.ts, review-jev-scenarios.ts). Redaction: jev-scenarios.ts imports redactSensitiveText from ../security/service (the facade) directly; jev-risk.ts reaches redaction via conform-state.ts's hunkRedactedStateText, the same pre-existing sibling pattern ci-triage.ts/conform-jev.ts/turn-guard.ts/conform-clauses.ts already use. NOTE (Part A finding, info-severity): the frozen AC5 text says a non-opted-in run 'prints the deterministic facts only and says Jev was not asked' — actual behaviour (and its tests, titled 'both refuse before any read') is a full refusal with no facts printed, matching flow 330's review-jev-rules precedent exactly and arguably safer (no read at all vs. reading-then-not-asking). Confirmed on the stricter, precedent-matching behaviour actually shipped and tested, not the literal AC wording; flagged for the flow owner to reword AC5 via keryx flow ac update if desired."
+    },
+    "AC6": {
+      "at": "2026-09-25T16:03:49.487Z",
+      "note": "src/tui/jev-risk-command.ts (/risk) and src/tui/jev-scenarios-command.ts (/scenarios): one-shot transcript render of ranked risk map + routing hints + findings, and manual-check list + findings, English UI (asserted not to match Cyrillic in render tests). Covered by jev-risk-command.test.ts and jev-scenarios-command.test.ts, hermetic (injectable gitDiff, gate refusal never shells out). All pass under bun ./scripts/opentui-tests-no-skips.ts src/tui (1279 pass, 0 skipped)."
+    },
+    "AC7": {
+      "at": "2026-09-25T16:03:49.601Z",
+      "note": "review-orchestrator/SKILL.md Wave B line (bundled + .metaproject mirror) lists review-jev-risk/review-jev-scenarios as additional, CLI-engine dispatches, never replacing an existing reviewer. src/review/reviewers.ts's metadata.engine reading (BundledReviewer.engine, collectReviewers, renderReviewerInventoryMarkdown) verified structurally identical to flow 330 PR #722's own reviewers.ts diff (byte-for-byte except a 'flow 330' vs 'flow 332' comment word) -- a later merge of the two PRs is a trivial/no-real-conflict merge on reviewers.ts. One caveat (Part A finding, info): both PRs also edit the SAME Wave B sentence in review-orchestrator/SKILL.md, which WILL show as a textual git conflict on whichever PR merges second (trivially resolved by concatenating both reviewer mentions, but not silently auto-mergeable) -- flagged for whoever merges second. keryx review reviewers --json lists engine: jev, covered by CLI tests."
+    },
+    "AC8": {
+      "at": "2026-09-25T16:03:49.715Z",
+      "note": "Pure-function tests (jev-risk.test.ts, jev-scenarios.test.ts), CLI tests with fixture diffs/scope.json/canned Jev responses and reviewer-finding.schema.json validation (review-jev-risk-cli.test.ts, review-jev-scenarios-cli.test.ts), TUI render tests. All hermetic: mkdtemp under node:os tmpdir(), no real git/network, macOS-safe. Full run: typecheck clean, lint clean, bun test src/review/jev-risk* src/review/jev-scenarios* src/commands/review-jev-* src/tui/jev-* src/gdskills src/cli-reference-coverage.test.ts = 2246 pass/0 fail; bun scripts/opentui-tests-no-skips.ts src/tui = 1279 pass/0 skipped. Revert-checked: stashed src/review/jev-risk.ts, src/review/jev-scenarios.ts, src/commands/review-jev-risk.ts, src/commands/review-jev-scenarios.ts, src/tui/jev-scenarios-command.ts and reran the new/changed tests -- they failed (module load errors for isNonCodeHunk/SCENARIO_LINK_FANOUT_THRESHOLD, wrong finding counts for the hasNearbyTest and docs-hunk CLI tests) confirming they exercise the fix, not tautologies; then restored (stash pop) and reconfirmed green."
+    },
+    "AC9": {
+      "at": "2026-09-25T16:53:40.100Z",
+      "note": "Operator/live-check note is explicitly out of scope for the agent per AC9 text; written by the lead in the operator's article notes outside the repo (~/notes/jev-in-keryx.md), not part of this repo or flow deliverable."
+    },
+    "AC10": {
+      "at": "2026-09-25T16:53:45.511Z",
+      "note": "CI 19/19 green on PR #726 at headRefOid 6d750f3403c216dc07ac27a28f4fdfa4f71f8cb9 (18 SUCCESS + 1 SKIPPED deploy-to-Pages, no failures; gh pr view 726 --json statusCheckRollup). Docs updated in docs/docs/cli-reference.md (review jev-risk / review jev-scenarios sections) plus docs/requirements/keryx-jev-programme/PLAN.md. Merge commit 637156d3641d4524cee3d1e0dbc8198b2e4a597f."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/726"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4: context collection happened inline while reviewing/fixing (Part A/B of the dispatched task) rather than as a separate logged step"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4: implementation (docs-hunk skip, hasNearbyTest evidence tightening, scenario fan-in down-weight) is recorded as part of T4's review/fix pass, not a separate task"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4: new/updated tests (jev-risk.test.ts, jev-scenarios.test.ts, review-jev-risk-cli.test.ts, review-jev-scenarios-cli.test.ts, jev-risk-command.test.ts) were added and revert-checked as part of T4's pass"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Reviewed PR #726 (Part A) and fixed the 3 findings from the live check (Part B): docs/.md/.txt hunks excluded from all risk dimensions (isNonCodeHunk/selectRiskHunks), hasNearbyTest tightened to require symbol/import evidence not just proximity (testHunkEvidence), scenario link fan-in down-weighted above SCENARIO_LINK_FANOUT_THRESHOLD unless the scenario text names a touched symbol (computeLinkFanIn/isTouchedLinkSignificant). Typecheck/lint/targeted tests/opentui-no-skips all green; revert-checked; live-checked on PR #712 with saved OpenRouter key before/after. AC1-AC8 confirmed; AC9 intentionally left to the lead (its own text excludes the agent); AC10 pending CI."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T14:07:00.825Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T14:07:30.633Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T14:07:31.012Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T16:03:18.044Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/review/jev-risk.ts: RISK_DIMENSIONS (5), computeHunkRiskFacts (path class/exported symbols/nearby-test facts before any Jev call), batchRiskQuestionsForHunk, selectRiskHunks (--max-calls budget, skipped reported), rankHunksByRisk. Verified by src/review/jev-risk.test.ts (unit) and src/commands/review-jev-risk-cli.test.ts (CLI, fixture diff+responses). Live-checked on PR #712 (env -u OPENROUTER_API_KEY, saved key, scratch dir): 15 hunks scored of 38 code hunks retained, 23 skipped by --max-calls, ranked output confirms combined-risk ordering (e.g. providers.ts:723-733 = 0.90). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:03:26.909Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: synthesizeRiskFindings (severity capped info/minor, only above threshold AND no evidenced nearby test) and computeRiskRoutingHints (security/concurrency>=threshold -> review-security-code/review-highload) in src/review/jev-risk.ts; prose synthesized deterministically, Jev supplies only 5 probabilities. Unit tests cover threshold/nearby-test/severity/hint cases. Live PR #712 check: 0 findings (real nearby tests evidenced), 3 routing hints incl. providers.ts:1273-1301 concurrency=0.84 that a pre-fix run never scored at all (budget wasted on docs hunks) — see AC-tightening fixes in this same PR. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:03:27.029Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/review/jev-scenarios.ts: scenarioFromWikiPage/scenariosFromPrd/scenariosFromReadmeLike (3 sources), computeScenarioFacts (touched-link fact), selectScenarios (touched-link-only candidates), one noul per scenario. Unit tests + CLI fixture tests pass. Live PR #712 check: 118 real scenario sources discovered from this repo's docs/requirements + docs/docs + README, 2 with a touched link, 1 batched Jev call. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:03:27.146Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: buildScenarioChecklist (ranked, >=threshold) and synthesizeScenarioFindings (minor-only, no-covering-test fact) in src/review/jev-scenarios.ts; prose synthesized by keryx. Covered by jev-scenarios.test.ts and review-jev-scenarios-cli.test.ts (schema-validated finding). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:03:35.834Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Both commands opt-in via .metaproject/tasks.config.json review.jev.{risk,scenarios}; jevRiskGateRefusal/jevScenariosGateRefusal check opt-in then credential BEFORE any file read or network call (src/commands/review-jev-risk.ts, review-jev-scenarios.ts). Redaction: jev-scenarios.ts imports redactSensitiveText from ../security/service (the facade) directly; jev-risk.ts reaches redaction via conform-state.ts's hunkRedactedStateText, the same pre-existing sibling pattern ci-triage.ts/conform-jev.ts/turn-guard.ts/conform-clauses.ts already use. NOTE (Part A finding, info-severity): the frozen AC5 text says a non-opted-in run 'prints the deterministic facts only and says Jev was not asked' — actual behaviour (and its tests, titled 'both refuse before any read') is a full refusal with no facts printed, matching flow 330's review-jev-rules precedent exactly and arguably safer (no read at all vs. reading-then-not-asking). Confirmed on the stricter, precedent-matching behaviour actually shipped and tested, not the literal AC wording; flagged for the flow owner to reword AC5 via keryx flow ac update if desired. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:03:49.487Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/tui/jev-risk-command.ts (/risk) and src/tui/jev-scenarios-command.ts (/scenarios): one-shot transcript render of ranked risk map + routing hints + findings, and manual-check list + findings, English UI (asserted not to match Cyrillic in render tests). Covered by jev-risk-command.test.ts and jev-scenarios-command.test.ts, hermetic (injectable gitDiff, gate refusal never shells out). All pass under bun ./scripts/opentui-tests-no-skips.ts src/tui (1279 pass, 0 skipped). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:03:49.601Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: review-orchestrator/SKILL.md Wave B line (bundled + .metaproject mirror) lists review-jev-risk/review-jev-scenarios as additional, CLI-engine dispatches, never replacing an existing reviewer. src/review/reviewers.ts's metadata.engine reading (BundledReviewer.engine, collectReviewers, renderReviewerInventoryMarkdown) verified structurally identical to flow 330 PR #722's own reviewers.ts diff (byte-for-byte except a 'flow 330' vs 'flow 332' comment word) -- a later merge of the two PRs is a trivial/no-real-conflict merge on reviewers.ts. One caveat (Part A finding, info): both PRs also edit the SAME Wave B sentence in review-orchestrator/SKILL.md, which WILL show as a textual git conflict on whichever PR merges second (trivially resolved by concatenating both reviewer mentions, but not silently auto-mergeable) -- flagged for whoever merges second. keryx review reviewers --json lists engine: jev, covered by CLI tests. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:03:49.715Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Pure-function tests (jev-risk.test.ts, jev-scenarios.test.ts), CLI tests with fixture diffs/scope.json/canned Jev responses and reviewer-finding.schema.json validation (review-jev-risk-cli.test.ts, review-jev-scenarios-cli.test.ts), TUI render tests. All hermetic: mkdtemp under node:os tmpdir(), no real git/network, macOS-safe. Full run: typecheck clean, lint clean, bun test src/review/jev-risk* src/review/jev-scenarios* src/commands/review-jev-* src/tui/jev-* src/gdskills src/cli-reference-coverage.test.ts = 2246 pass/0 fail; bun scripts/opentui-tests-no-skips.ts src/tui = 1279 pass/0 skipped. Revert-checked: stashed src/review/jev-risk.ts, src/review/jev-scenarios.ts, src/commands/review-jev-risk.ts, src/commands/review-jev-scenarios.ts, src/tui/jev-scenarios-command.ts and reran the new/changed tests -- they failed (module load errors for isNonCodeHunk/SCENARIO_LINK_FANOUT_THRESHOLD, wrong finding counts for the hasNearbyTest and docs-hunk CLI tests) confirming they exercise the fix, not tautologies; then restored (stash pop) and reconfirmed green. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:04:08.108Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T16:04:08.220Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T16:04:08.332Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T16:04:14.156Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T16:53:40.100Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Operator/live-check note is explicitly out of scope for the agent per AC9 text; written by the lead in the operator's article notes outside the repo (~/notes/jev-in-keryx.md), not part of this repo or flow deliverable. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:53:45.511Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: CI 19/19 green on PR #726 at headRefOid 6d750f3403c216dc07ac27a28f4fdfa4f71f8cb9 (18 SUCCESS + 1 SKIPPED deploy-to-Pages, no failures; gh pr view 726 --json statusCheckRollup). Docs updated in docs/docs/cli-reference.md (review jev-risk / review jev-scenarios sections) plus docs/requirements/keryx-jev-programme/PLAN.md. Merge commit 637156d3641d4524cee3d1e0dbc8198b2e4a597f. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T16:53:48.762Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (operator)"
+    },
+    {
+      "at": "2026-09-25T16:53:54.175Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/726 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T17:01:23.744Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T17:01:27.790Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-25T17:01:27.791Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T16:03:18.044Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:03:26.909Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:03:27.029Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:03:27.145Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:03:35.834Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:03:49.487Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:03:49.601Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:03:49.715Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:53:40.100Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T16:53:45.511Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    },
+    {
+      "at": "2026-09-25T17:01:27.791Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff",
+      "headCommit": "637156d3641d4524cee3d1e0dbc8198b2e4a597f"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T17:01:27.790Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "637156d3641d4524cee3d1e0dbc8198b2e4a597f is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "637156d3641d4524cee3d1e0dbc8198b2e4a597f is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:a4c69b25662e4cd917aa1ba49513510bb6ed46f7867615ec1e3ff504583a33ff"
+    }
+  ],
+  "merged": {
+    "commit": "637156d3641d4524cee3d1e0dbc8198b2e4a597f",
+    "ref": "origin/main",
+    "at": "2026-09-25T17:01:27.791Z"
+  }
+}
