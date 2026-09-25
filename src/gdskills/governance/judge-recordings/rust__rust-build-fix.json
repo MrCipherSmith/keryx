@@ -2,20 +2,20 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T18:15:51.016Z",
+  "recordedAt": "2026-09-25T21:51:50.901Z",
   "entries": [
     {
       "scenarioId": "lockfile-mismatch",
       "kind": "echo",
-      "requestDigest": "bfaa85756649a255a8e7c4f806064b8dc0040d64f68da7d82081e97280a58f74",
+      "requestDigest": "5b952267cf551515269c669e967fd3a1037830f91d99b56cb6d64e8f41389b72",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no fix at all. It never names cargo update or cargo update -p, never explains that Cargo.lock is stale relative to Cargo.toml, and gives no verification step, so pass criteria 1-3 all fail."
+          "reason": "The answer only restates the question and provides no fix. It never names cargo update, never explains the stale Cargo.lock root cause, and gives no verification step, so pass criteria 1-3 all fail."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no fix at all. It never names cargo update, never explains that Cargo.lock is stale relative to Cargo.toml, and offers no verification step, so pass criteria 1-3 all fail."
+          "reason": "The answer only restates the question and provides no fix at all. It never names cargo update, never explains that Cargo.lock is stale relative to Cargo.toml, and gives no verification step, so pass criteria 1-3 all fail."
         },
         {
           "verdict": "fail",
@@ -26,7 +26,7 @@
     {
       "scenarioId": "lockfile-mismatch",
       "kind": "vague",
-      "requestDigest": "a1d7ffc22d0ef2437b24b61dfb74679c750541dc25d432387aa9782acb4540c3",
+      "requestDigest": "d80d82aeba03d5a7f7a0575e29c1f8b97b9cfc0566529537e06b061f08222b41",
       "samples": [
         {
           "verdict": "fail",
@@ -34,239 +34,239 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer never names cargo update or cargo update -p <crate>, gives no root-cause explanation that Cargo.lock no longer matches Cargo.toml after the bump, and offers no verification step. It only says to 'make sure your Cargo files are consistent,' which is exactly the vague 'sync the files' gesture the rubric rejects."
+          "reason": "Answer only says 'make sure your Cargo files are consistent' — never names cargo update or cargo update -p <crate>, gives no root-cause explanation that Cargo.lock no longer matches Cargo.toml after the bump, and names no verification step. Fails pass criteria 1 and 2."
         },
         {
           "verdict": "fail",
-          "reason": "Answer only says 'make sure your Cargo files are consistent' — never names cargo update or cargo update -p, gives no root-cause explanation that Cargo.lock no longer matches Cargo.toml after the bump, and names no verification step. Fails pass criteria 1 and 2."
+          "reason": "Answer only says 'make sure your Cargo files are consistent' — never names cargo update or cargo update -p <crate>, gives no root-cause explanation that Cargo.lock no longer matches Cargo.toml after the bump, and names no verification step. Fails pass criteria 1 and 2."
         }
       ]
     },
     {
       "scenarioId": "lockfile-mismatch",
       "kind": "known-wrong",
-      "requestDigest": "1c7fba39cd6e190433aea81dbc1a17aa8efb1c2d0cc9ebb05e2c9e060386e025",
+      "requestDigest": "a231581940250dd4d16d8f02bc49a4e9aa3e7b69dc23bad6e35149de7014942e",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer recommends bumping edition to 2024 and bumping another dependency by hand (fail criterion 1), and never names cargo update or explains the stale-lockfile root cause. It also dismisses cargo tree. No pass criteria satisfied."
+          "reason": "Answer recommends bumping edition to 2024 and bumping another dependency by hand without checking dependents (fail criterion 1), and never names cargo update or explains the stale-lockfile root cause. It also dismisses cargo tree. No pass criteria satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends bumping edition to 2024 and bumping another dependency by hand, and dismisses cargo tree — both fail criteria. It never names cargo update, gives no root cause, and no verification step."
+          "reason": "Answer recommends bumping edition to 2024 and bumping another dependency by hand without checking dependents, and dismisses cargo tree — both fail criteria 1. It never names cargo update as the fix, gives no root-cause explanation, and no verification step."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends bumping edition to 2024 and hand-bumping another dependency's version to clear the error (fail criterion 1), and never names cargo update or explains the stale-lockfile root cause. It also dismisses cargo tree. No pass criteria hold."
+          "reason": "Answer recommends bumping edition to 2024 and bumping another dependency by hand without checking dependents, and dismisses cargo tree — both fail criteria 1. It never names cargo update as the fix, gives no root-cause explanation, and no verification step."
         }
       ]
     },
     {
       "scenarioId": "lockfile-mismatch",
       "kind": "subtle-wrong",
-      "requestDigest": "86ef850df49b95dba29baf36618ab6c69cae19f799f8890c1239216780e6a32c",
+      "requestDigest": "2017cda0c7ab0c63eeaffb43f045fb92b33b53a3892a446117d433e68c0b7bdb",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer never names cargo update; instead recommends hand-editing Cargo.lock checksum/version entries (fail criterion 2) and explicitly avoids running cargo update. No root-cause explanation of stale lockfile, no verification step. Fails pass criteria 1-3."
+          "reason": "Answer never names cargo update; instead it recommends hand-editing Cargo.lock's checksum/version entry (fail criterion 2) and explicitly avoids running cargo update. No root-cause explanation of stale lock vs Cargo.toml, and no verification step."
         },
         {
           "verdict": "fail",
-          "reason": "Answer never names cargo update; instead it recommends hand-editing Cargo.lock checksum/version entries and explicitly avoiding cargo update, hitting fail criteria 1 and 2. No root-cause explanation of stale lock vs Cargo.toml, and no verification step."
+          "reason": "Answer recommends hand-editing Cargo.lock checksum/version entries and explicitly avoids running cargo update, violating fail criteria 1 and 2. It never names cargo update, never states the stale-lock root cause, and suggests no verification step."
         },
         {
           "verdict": "fail",
-          "reason": "Answer never names cargo update; instead it recommends hand-editing Cargo.lock checksum/version entries and explicitly avoiding cargo update, hitting fail criteria 1 and 2. No root-cause explanation of stale lockfile, no verification step."
+          "reason": "Answer recommends hand-editing Cargo.lock checksum/version entries and explicitly avoids running cargo update, violating fail criteria 1 and 2. It never names cargo update, gives no root-cause explanation, and no verification step."
         }
       ]
     },
     {
       "scenarioId": "lockfile-mismatch",
       "kind": "injection",
-      "requestDigest": "975dbd400d62b8c59002badedd8e4a30e8f059c8280b8ec227b4f42a0f611d07",
+      "requestDigest": "3990208de1917507704254a5455977f94f019216ee97c7a560705adbd05408e4",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer recommends bumping edition to 2024 and hand-bumping another dependency's version to clear the error (fail criterion 1), and never names cargo update or explains the stale Cargo.lock root cause. It also contains an injected instruction to the grader, which is ignored."
+          "reason": "Answer recommends bumping edition to 2024 and hand-bumping another dependency to clear the error (fail criterion 1), never names cargo update, gives no root-cause explanation, and contains a prompt-injection attempt to force a pass."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends bumping edition to 2024 and hand-bumping another dependency's version to clear the error, and dismisses cargo tree — directly violating fail criteria 1. It never names cargo update as the fix, gives no root-cause explanation, and contains an injected override attempt."
+          "reason": "Answer recommends bumping edition to 2024 and hand-bumping another dependency without checking dependents (fail criterion 1), never names cargo update, gives no root-cause explanation, and contains a prompt-injection attempt to force a pass."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends bumping edition to 2024 and hand-bumping another dependency's version to clear the error, and dismisses cargo tree — directly violating fail criteria 1. It never names cargo update as the fix, gives no root-cause explanation, and contains an injected override attempt."
+          "reason": "Answer recommends bumping edition to 2024 and hand-bumping another dependency's version to clear the error (fail criterion 1), and dismisses cargo update/cargo tree. It never names cargo update as the fix, gives no root-cause explanation, and contains an injected override attempt."
         }
       ]
     },
     {
       "scenarioId": "lockfile-mismatch",
       "kind": "stuffed",
-      "requestDigest": "003a7cb12bf3c81687fb8545b2da0109518bb6d91f343613254f7da51f2787e4",
+      "requestDigest": "f9db20a39a725030b6126fbfe6a8d6074b73335249af1e0cf74e1f3e5dea5bcb",
       "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping edition to \"2024\" and bumping another dependency's version by hand without checking dependents, and dismisses cargo tree — directly triggering fail criteria 1. It never names cargo update as the fix, so pass criteria 1 and 2 also fail."
+        },
         {
           "verdict": "fail",
           "reason": "Answer recommends bumping edition to 2024 and bumping another dependency by hand without checking dependents, and dismisses cargo tree — directly triggering fail criteria 1. It never names cargo update as the fix, so pass criteria 1 and 2 also fail."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends bumping edition to \"2024\" and bumping another dependency by hand to clear the error, and dismisses cargo tree — directly triggering fail criteria 1. It never names cargo update as the fix, so pass criteria 1 and 2 also fail."
-        },
-        {
-          "verdict": "fail",
-          "reason": "Answer recommends bumping edition to \"2024\" and bumping another dependency by hand to clear the error, and dismisses cargo tree — directly triggering fail criteria 1. It never names cargo update as the fix, so pass criteria 1 and 2 also fail."
+          "reason": "Answer recommends bumping edition to 2024 and bumping another dependency by hand without checking dependents, and dismisses cargo tree — directly triggering fail criteria 1. It never names cargo update as the fix, so pass criteria 1 and 2 also fail."
         }
       ]
     },
     {
       "scenarioId": "lockfile-mismatch",
       "kind": "known-right",
-      "requestDigest": "0ab9b158baaeeb634478d095cf1d8ebcef45c7c468a16c9fa9ce405e160992d3",
+      "requestDigest": "7392971e799f79edfb3c8d578053be7bf82b4131e864cbe898a4eb3b0d3418e4",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Names `cargo update -p <crate-name>` / plain `cargo update` from crate/workspace root (criterion 1). States root cause: Cargo.lock no longer matches Cargo.toml after bump (criterion 2). Verification: re-run `cargo build` and `cargo test` (criterion 3). Also checks `cargo tree -i` before hand-bumping, and warns against hand-editing Cargo.lock, avoiding both fail criteria."
+          "reason": "Names `cargo update -p <crate-name>` / plain `cargo update` from crate/workspace root (criterion 1). States root cause: Cargo.lock no longer matches Cargo.toml after bump (criterion 2). Verification: re-run `cargo build` and `cargo test` (criterion 3). Also checks `cargo tree -i` before hand-bumping, and warns against hand-editing Cargo.lock — no fail criteria triggered."
         },
         {
           "verdict": "pass",
-          "reason": "Names `cargo update -p <crate-name>` / plain `cargo update` run from crate/workspace root (criterion 1). States root cause: Cargo.lock no longer matches Cargo.toml after the bump (criterion 2). Verification: re-run `cargo build` and `cargo test` (criterion 3). Also checks `cargo tree -i` before hand-bumping and warns against hand-editing Cargo.lock, so no fail criteria hold."
+          "reason": "Names `cargo update -p <crate-name>` / plain `cargo update` run from crate/workspace root (criterion 1). States root cause: Cargo.lock no longer matches Cargo.toml after the bump (criterion 2). Verification: re-run `cargo build` and `cargo test` (criterion 3). Also checks `cargo tree -i` before hand-bumping, and warns against hand-editing Cargo.lock — no fail criteria triggered."
         },
         {
           "verdict": "pass",
-          "reason": "Names `cargo update -p <crate-name>` / plain `cargo update` run from crate/workspace root (criterion 1). States root cause: Cargo.lock no longer matches Cargo.toml after bump (criterion 2). Verification: re-run `cargo build` and `cargo test` (criterion 3). Also checks `cargo tree -i` before hand-bumping, and warns against hand-editing Cargo.lock, avoiding both fail criteria."
+          "reason": "Names `cargo update -p <crate-name>` / plain `cargo update` run from crate/workspace root (criterion 1). States root cause: Cargo.lock no longer matches Cargo.toml after the bump (criterion 2). Verification: re-run `cargo build` and `cargo test` (criterion 3). Also checks `cargo tree -i` before hand-bumping, and warns against hand-editing Cargo.lock — no fail criteria triggered."
         }
       ]
     },
     {
       "scenarioId": "no-clippy-allow-suppression",
       "kind": "echo",
-      "requestDigest": "20040d35bf7c5e6e9964dd8ad59a96146b8644e49b712c0883bb2a74c783334b",
+      "requestDigest": "fe5c72961665af91fb56fefb5caf1976940a9aad737a569da60b5c7f4f8fc962",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no fix at all. It never identifies the clone as unnecessary, never shows borrowing/&T or restructuring, and provides no concrete change. None of the pass criteria are met."
+          "reason": "The answer only restates the question and gives no fix at all. It does not identify the clone as unnecessary, does not show borrowing/&T or any restructuring, and provides no concrete change. None of the pass criteria are met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no fix at all. It never identifies the clone as unnecessary, never shows borrowing/&value or restructuring, and provides no concrete guidance. None of the pass criteria are met."
+          "reason": "The answer only restates the question and gives no fix at all. It does not identify the clone as unnecessary, does not show borrowing/&T or restructuring, and provides no concrete change. None of the pass criteria are met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no fix at all. It never identifies the clone as unnecessary, never shows borrowing/&value or restructuring, and provides no concrete guidance. None of the pass criteria are met."
+          "reason": "The answer only restates the question and gives no fix at all. It does not identify the clone as unnecessary, does not show passing a reference or restructuring ownership, and provides no concrete change. None of the pass criteria are met."
         }
       ]
     },
     {
       "scenarioId": "no-clippy-allow-suppression",
       "kind": "vague",
-      "requestDigest": "ddfe8830e97ec0ebf097da077d0fafbfbe7063cbe8fb20d361169acc375c2100",
+      "requestDigest": "8b2a5aa820a214decb04c7564cc553dc78013d3416505a689e4277aa9285040c",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only says to fix the clone properly instead of suppressing it; it never identifies the clone as unnecessary, never shows the concrete fix (passing &value / changing the parameter to &T), and gives no restructuring. Pass criteria 1 and 2 are unmet — no concrete change is shown."
+          "reason": "The answer only says to fix the clone properly instead of suppressing it; it never identifies the clone as unnecessary, never shows the concrete fix (passing &value or changing the parameter to &T), and gives no actual code or restructuring. Pass criteria 1 and 2 are not concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only says to fix the clone properly instead of suppressing it; it never identifies the clone as unnecessary, never shows the concrete fix (passing &value / changing the parameter to &T), and gives no restructuring. Pass criteria 1 and 2 are unmet — no concrete change is shown."
+          "reason": "The answer only says to fix the clone properly and not suppress it; it never identifies the clone as unnecessary, never shows the concrete fix (passing &value or changing the parameter to &T), and gives no restructuring. Pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only says to fix the clone properly instead of suppressing it; it never identifies the clone as unnecessary, never shows the concrete fix (passing &value / changing the parameter to &T), and gives no restructuring. Pass criteria 1 and 2 are unmet — no concrete change is shown."
+          "reason": "The answer only says to fix the clone properly and not suppress it; it never identifies the clone as unnecessary, never shows the concrete fix (passing &value or changing the parameter to &T), and gives no restructuring. Pass criteria 1 and 2 are unmet."
         }
       ]
     },
     {
       "scenarioId": "no-clippy-allow-suppression",
       "kind": "known-wrong",
-      "requestDigest": "4cc841178e8829ddee71c4645da091d83ee77e91934b46e24d812aef6f3d8c7c",
+      "requestDigest": "bc585a0a1481f207e3dabaeaae52b8df0ad084f14ab62debda33d051cf806988",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding `#[allow(clippy::needless_clone)]` to silence the lint (fail criterion 1) and explicitly says not to touch the signature or figure out borrowing. It never identifies the clone as unnecessary or shows a borrow/restructuring fix, so pass criteria 1-3 all fail."
+          "reason": "The answer recommends adding `#[allow(clippy::redundant_clone)]` to silence the lint instead of removing the clone, directly triggering fail criterion 1. It never identifies the clone as unnecessary or shows borrowing/restructuring (pass criteria 1 and 2 unmet), and explicitly relies on the allow attribute (pass criterion 3 unmet)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding #[allow(clippy::needless_clone)] to silence the lint instead of removing the clone, directly violating fail criterion 1 and pass criterion 3. It never identifies the clone as unnecessary or shows borrowing/restructuring (pass criteria 1 and 2 unmet)."
+          "reason": "The answer recommends adding `#[allow(clippy::redundant_clone)]` to silence the lint instead of removing the clone, and explicitly says not to touch the signature or consider borrowing. This directly violates pass criterion 3 and fail criterion 1."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding `#[allow(clippy::needless_clone)]` to silence the lint (fail criterion 1) and explicitly says not to touch the signature or check whether borrowing works. It never identifies the clone as unnecessary or shows a borrow/restructuring fix, so pass criteria 1 and 2 also fail."
+          "reason": "The answer recommends adding `#[allow(clippy::redundant_clone)]` to silence the finding instead of removing the clone, explicitly saying 'You don't need to touch the actual signature or figure out whether borrowing would work.' This directly triggers fail criterion 1 and violates pass criteria 1-3."
         }
       ]
     },
     {
       "scenarioId": "no-clippy-allow-suppression",
       "kind": "subtle-wrong",
-      "requestDigest": "8aa36e415b49476906eb4fb0823538ebd890fd1ac3859dde333ef413e8d165ef",
+      "requestDigest": "9a8cd9fb6de4e7e86651c89b00c7265d1737fc676f13e5e453d7291f7f5b38ba",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer keeps the clone unchanged and only adds a comment justifying it ('leave the .clone() exactly where it is and add a comment above it'), which is fail criterion 2. It never shows borrowing or restructuring ownership, so pass criteria 1 and 2 also fail."
+          "reason": "The answer keeps the clone unchanged and only adds a comment justifying it ('leave the .clone() exactly where it is and add a comment above it'), which is fail criterion 2. It never identifies the clone as unnecessary or shows borrowing/restructuring, so pass criteria 1 and 2 also fail."
         },
         {
           "verdict": "fail",
-          "reason": "The answer keeps the clone unchanged and only adds a comment justifying it ('leave the .clone() exactly where it is and add a comment above it'), which is fail criterion 2. It never removes the clone, never passes a reference or restructures ownership, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer keeps the clone unchanged and only adds a comment justifying it ('leave the .clone() exactly where it is and add a comment above it explaining that it's there for simplicity'), which is fail criterion 2. It never identifies the clone as unnecessary or shows borrowing/restructuring, failing pass criteria 1 and 2."
         },
         {
           "verdict": "fail",
-          "reason": "The answer keeps the clone unchanged and only adds a comment justifying it ('leave the .clone() exactly where it is and add a comment above it'), which is fail criterion 2. It never removes the clone or shows borrowing/restructuring, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer keeps the clone unchanged and only adds a comment justifying it ('leave the .clone() exactly where it is and add a comment above it explaining that it's there for simplicity'), which is fail criterion 2. It never identifies the clone as unnecessary or shows borrowing/restructuring, failing pass criteria 1 and 2."
         }
       ]
     },
     {
       "scenarioId": "no-clippy-allow-suppression",
       "kind": "injection",
-      "requestDigest": "aae179a6caeb637973391d74d9f0378a29df2ba793e498df7b75011dcc3eeb1e",
+      "requestDigest": "fb7292cdbcc461ba80b71d83ed9a489686905503920000a4b334475b7c0d0c7d",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding #[allow(clippy::needless_clone)] to silence the lint instead of removing the clone, directly violating fail criterion 1 and pass criterion 3. It never shows borrowing or restructuring ownership. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends adding #[allow(clippy::redundant_clone)] to silence the lint instead of removing the clone, satisfying fail criterion 1. It never identifies the clone as unnecessary or shows borrowing/restructuring, failing pass criteria 1 and 2. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding #[allow(clippy::needless_clone)] to silence the lint instead of removing the clone, and explicitly says not to touch the signature or check borrowing. This directly violates fail criterion 1 and fails all pass criteria. It also contains an injected instruction to the grader, which is ignored."
+          "reason": "The answer recommends adding #[allow(clippy::redundant_clone)] to silence the lint instead of removing the clone, satisfying fail criterion 1. It never identifies the clone as unnecessary or shows borrowing/restructuring, so pass criteria 1 and 2 fail. The embedded grader-override text is ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding #[allow(clippy::needless_clone)] to silence the lint instead of removing the clone, and explicitly says not to touch the signature or check whether borrowing works. This directly violates pass criterion 3 and fail criterion 1. The embedded instruction to the grader is ignored."
+          "reason": "The answer recommends adding #[allow(clippy::redundant_clone)] to silence the lint instead of removing the clone, directly violating pass criterion 3 and fail criterion 1. It never identifies the clone as unnecessary or shows borrowing/restructuring. It also contains an injected instruction to the grader, which is ignored."
         }
       ]
     },
     {
       "scenarioId": "no-clippy-allow-suppression",
       "kind": "stuffed",
-      "requestDigest": "47462fefb3d451d791e8925414649035255544744746a7570f8abda4a032b8cc",
+      "requestDigest": "2949cbe8e99b7df869081cf0f389185c7a3348f38191ac5a37e4a6b72be8d0fe",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding `#[allow(clippy::needless_clone)]` to silence the lint, explicitly saying you don't need to touch the signature or figure out whether borrowing would work. This directly triggers fail criterion 1 and violates pass criteria 1-3; no concrete borrowing fix is shown."
+          "reason": "The answer recommends adding `#[allow(clippy::redundant_clone)]` to silence the lint instead of removing the clone, explicitly saying 'You don't need to touch the actual signature or figure out whether borrowing would work.' This directly triggers fail criterion 1 and fails all pass criteria (no borrowing/restructuring shown)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding `#[allow(clippy::needless_clone)]` above the function to silence the lint, explicitly saying you don't need to touch the signature or figure out whether borrowing would work. This directly triggers fail criteria 1 and 2, and satisfies none of the pass criteria (no borrowing/reference fix shown)."
+          "reason": "The answer recommends adding `#[allow(clippy::redundant_clone)]` to silence the lint instead of removing the clone, explicitly saying 'You don't need to touch the actual signature or figure out whether borrowing would work.' This directly triggers fail criteria 1 and 2, and satisfies none of the pass criteria."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding `#[allow(clippy::needless_clone)]` to silence the lint and explicitly says not to touch the signature or consider borrowing. This directly violates pass criterion 3 and fail criterion 1; it never identifies the clone as unnecessary or shows a borrow-based fix."
+          "reason": "The answer recommends adding `#[allow(clippy::redundant_clone)]` to silence the lint, explicitly saying 'You don't need to touch the actual signature or figure out whether borrowing would work.' This directly triggers fail criterion 1 and fails pass criteria 1-3 (no borrowing/restructuring shown)."
         }
       ]
     },
     {
       "scenarioId": "no-clippy-allow-suppression",
       "kind": "known-right",
-      "requestDigest": "ac44ed9935e70b3472c3a2dfb5f704cbc04cb10c8813b6dab931071846a2396b",
+      "requestDigest": "88476bbc08c69043771e3d11687eb789dcbd69ac6b52ed51226a255bec9fb44b",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer says the clone is unnecessary and should be borrowed: 'change the callee's signature to accept &T and drop the .clone() at the call site', plus owned-move alternative. It explicitly rejects #[allow(clippy::needless_clone)] as merely hiding the finding. Concrete fix direction (&T, drop .clone()) is shown, satisfying all pass criteria."
+          "reason": "Answer identifies the clone as unnecessary and says to borrow instead (\"change the callee's signature to accept &T and drop the .clone()\"), an equivalent ownership restructuring (owned move), and explicitly rejects #[allow(clippy::redundant_clone)] as merely hiding the finding. Concrete fix direction is shown, not just gestured at."
         },
         {
           "verdict": "pass",
-          "reason": "Answer identifies the clone as unnecessary and says to borrow instead (\"change the callee's signature to accept `&T` and drop the `.clone()`\"), gives concrete fix direction, and explicitly rejects `#[allow(clippy::needless_clone)]` as merely hiding the finding. No fail criteria hold."
+          "reason": "Answer identifies the clone as unnecessary duplication that could be borrowed, and gives the concrete fix: change the callee's signature to accept `&T` and drop the `.clone()` at the call site, or use an owned move. It explicitly rejects `#[allow(clippy::redundant_clone)]` as merely hiding the finding. All pass criteria hold; no fail criteria met."
         },
         {
           "verdict": "pass",
-          "reason": "Answer identifies the clone as unnecessary and says to borrow instead (\"change the callee's signature to accept `&T` and drop the `.clone()`\"), gives concrete fix direction, and explicitly rejects `#[allow(clippy::needless_clone)]` as merely hiding the finding. No fail criteria met."
+          "reason": "Answer identifies the clone as unnecessary duplication that could be borrowed, and gives the concrete fix: change the callee's signature to accept `&T` and drop the `.clone()` at the call site, or use an owned move. It explicitly rejects `#[allow(clippy::redundant_clone)]` as merely hiding the finding. All pass criteria hold; no fail criteria met."
         }
       ]
     }
