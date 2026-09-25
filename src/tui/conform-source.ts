@@ -33,17 +33,25 @@ import {
   reportRedactedStateText,
   type ReportFindingLike,
 } from "../review/conform-state";
+import type { ScopedRegion } from "../review/scope";
 import {
+  activeClausesAt,
+  aggregateConformVerdicts,
   batchConformItems,
+  boundHunkRegions,
   DEFAULT_CONFORM_THRESHOLD,
+  DEFAULT_MAX_HUNK_CALLS,
+  DEFAULT_MAX_HUNKS,
   evaluatedVerdict,
   notCheckableVerdict,
   notEvaluatedVerdict,
   type ConformBatchItem,
+  type ConformClauseAggregate,
+  type ConformHunkLocation,
   type ConformVerdict,
 } from "../review/conform-jev";
 import { createGhConformPrPort } from "../review/conform-pr-port";
-import { readConformEnabled, withRecentDoc, CONFORM_RECENTS_PATH } from "../review/conform-report";
+import { readConformEnabled, withRecentDoc, CONFORM_RECENTS_PATH, type ConformHunkBudget } from "../review/conform-report";
 import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey } from "../harness/decision/jev-client";
 import type { ConformClauseRow, ConformRunOutcome, ConformSetupRead, ConformTargetOption } from "./conform-inspector";
 
@@ -131,14 +139,20 @@ async function readReportFindings(reportDir: string): Promise<readonly ReportFin
   }
 }
 
-function toRow(verdict: ConformVerdict): ConformClauseRow {
+/** Flow 326, AC4: one row per clause — the aggregate the CLI's own report reads, not one row per hunk × clause. Flow 326, AC3/item 2: carries `hunksTotal` (the "judged on K of N" marker) when the budget truncated this clause. */
+function toRow(agg: ConformClauseAggregate, hunkBudget: ConformHunkBudget | undefined): ConformClauseRow {
+  const truncatedByBudget = hunkBudget !== undefined && hunkBudget.truncatedClauses.includes(agg.clause_id);
   return {
-    clause_id: verdict.clause_id,
-    state_kind: verdict.state_kind,
-    status: verdict.status,
-    ...(verdict.probability !== undefined ? { probability: verdict.probability } : {}),
-    ...(verdict.reason !== undefined ? { reason: verdict.reason } : {}),
-    evidence: verdict.factLines,
+    clause_id: agg.clause_id,
+    state_kind: agg.state_kind,
+    status: agg.status,
+    ...(agg.probability !== undefined ? { probability: agg.probability } : {}),
+    ...(agg.reason !== undefined ? { reason: agg.reason } : {}),
+    evidence: agg.factLines,
+    ...(agg.hunksJudged > 0 ? { hunksJudged: agg.hunksJudged, hunksBelowThreshold: agg.hunksBelowThreshold } : {}),
+    ...(agg.hunksJudged > 0 && truncatedByBudget ? { hunksTotal: hunkBudget!.totalHunks } : {}),
+    ...(agg.worst !== undefined ? { worst: agg.worst } : {}),
+    ...(agg.furtherViolations.length > 0 ? { furtherViolations: agg.furtherViolations } : {}),
   };
 }
 
@@ -194,8 +208,17 @@ export async function runConformForTarget(
     const checkable = clauses.filter((c) => c.checkable);
     const supplied = new Set<string>();
     let evaluated: ConformVerdict[] = [];
+    let hunkBudget: ConformHunkBudget | undefined;
+    // Flow 326, AC3: the diff's own hunk count, so a hunk-kind clause the
+    // budget skipped entirely (0 judged) can say "0 of N" rather than reading
+    // like a diff with no hunks in it at all (N === 0 there).
+    let hunkTotalRegions = 0;
 
-    const score = async (items: readonly ConformBatchItem[], sharedRedactedText: string): Promise<ConformVerdict[]> => {
+    const score = async (
+      items: readonly ConformBatchItem[],
+      sharedRedactedText: string,
+      location?: ConformHunkLocation,
+    ): Promise<ConformVerdict[]> => {
       const out: ConformVerdict[] = [];
       for (const batch of batchConformItems(items, sharedRedactedText)) {
         const result = await callJevSystemOne(
@@ -206,10 +229,46 @@ export async function runConformForTarget(
         for (const item of batch.items) {
           const answer = result.answers[item.clause.clause_id];
           const probability = answer?.type === "noul" ? answer.noul : 0;
-          out.push(evaluatedVerdict(item.clause, item.facts, probability, DEFAULT_CONFORM_THRESHOLD));
+          out.push(evaluatedVerdict(item.clause, item.facts, probability, DEFAULT_CONFORM_THRESHOLD, location));
         }
       }
       return out;
+    };
+
+    // Flow 326, AC3: the same hunk × clause question budget the CLI applies —
+    // the TUI is a second, independent entry point into the same pipeline,
+    // including the per-clause floor (a clause whose share rounds to 0 is
+    // reported not-evaluated with a reason, never silently dropped) and the
+    // "judged on K of N" per-clause marker (via `hunkBudget`/`hunkTotalRegions`).
+    const scoreHunkRegions = async (hunkClauses: readonly ReferenceClause[], regions: readonly ScopedRegion[]): Promise<void> => {
+      const hunkClauseIds = hunkClauses.map((c) => c.clause_id);
+      const byId = new Map(hunkClauses.map((c) => [c.clause_id, c]));
+      const bounded = boundHunkRegions(regions, hunkClauseIds, DEFAULT_MAX_HUNK_CALLS);
+      for (const id of hunkClauseIds) {
+        if ((bounded.judgedPerClause.get(id) ?? 0) > 0) supplied.add(id);
+      }
+      let index = 0;
+      for (const region of bounded.regions) {
+        const activeClauses = activeClausesAt(bounded.judgedPerClause, index, hunkClauseIds).map((id) => byId.get(id)!);
+        evaluated = evaluated.concat(
+          await score(activeClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) })), hunkRedactedStateText(region), {
+            path: region.path,
+            startLine: region.startLine,
+            endLine: region.endLine,
+          }),
+        );
+        index += 1;
+      }
+      if (bounded.skippedRegions > 0) {
+        hunkBudget = {
+          maxHunkCalls: DEFAULT_MAX_HUNK_CALLS,
+          totalHunks: bounded.totalRegions,
+          hunksJudged: bounded.regions.length,
+          hunksSkipped: bounded.skippedRegions,
+          truncatedClauses: hunkClauseIds.filter((id) => (bounded.judgedPerClause.get(id) ?? 0) < bounded.totalRegions),
+        };
+      }
+      hunkTotalRegions = bounded.totalRegions;
     };
 
     if (target.kind === "pr") {
@@ -223,13 +282,7 @@ export async function runConformForTarget(
       evaluated = evaluated.concat(await score(prClauses.map((clause) => ({ clause, facts: prClauseFacts(clause, facts) })), redacted));
 
       const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
-      const regions = hunkRegionsFromDiff(info.diff);
-      if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
-      for (const region of regions) {
-        evaluated = evaluated.concat(
-          await score(hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) })), hunkRedactedStateText(region)),
-        );
-      }
+      await scoreHunkRegions(hunkClauses, hunkRegionsFromDiff(info.diff));
     } else if (target.kind === "report") {
       const reportDir = target.id.slice("report:".length);
       const reportMarkdown = await readFile(path.join(reportDir, "report.md"), "utf8").catch(() => "");
@@ -244,18 +297,22 @@ export async function runConformForTarget(
       const diff = await new Response(proc.stdout).text();
       await proc.exited;
       const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
-      const regions = hunkRegionsFromDiff(diff);
-      if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
-      for (const region of regions) {
-        evaluated = evaluated.concat(
-          await score(hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) })), hunkRedactedStateText(region)),
-        );
-      }
+      await scoreHunkRegions(hunkClauses, hunkRegionsFromDiff(diff));
     }
 
-    const notEvaluated = checkable.filter((c) => !supplied.has(c.clause_id)).map((c) => notEvaluatedVerdict(c));
+    // Flow 326, AC3: a hunk-kind clause the budget skipped entirely (0
+    // judged, but the diff DID have hunks) is not-evaluated for a specific,
+    // visible reason — distinct from a kind with no state at all this run.
+    const notEvaluated = checkable
+      .filter((c) => !supplied.has(c.clause_id))
+      .map((c) =>
+        c.state_kind === "hunk" && hunkTotalRegions > 0
+          ? notEvaluatedVerdict(c, `skipped by --max-hunk-calls (0 of ${hunkTotalRegions} hunks judged)`)
+          : notEvaluatedVerdict(c),
+      );
     const verdicts = [...evaluated, ...notEvaluated, ...notCheckable.map((c) => notCheckableVerdict(c))];
-    return { ok: true, refPath, target, clauses: verdicts.map(toRow) };
+    const aggregates = aggregateConformVerdicts(verdicts, DEFAULT_MAX_HUNKS);
+    return { ok: true, refPath, target, clauses: aggregates.map((a) => toRow(a, hunkBudget)), ...(hunkBudget !== undefined ? { hunkBudget } : {}) };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }

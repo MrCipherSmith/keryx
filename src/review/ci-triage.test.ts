@@ -628,6 +628,62 @@ describe("flow 307 AC1: deterministic signals, computed before Jev is asked", ()
       }
       expect(port.calls.filter((c) => c.op === "runInfo").length).toBe(3);
     });
+
+    // Flow 326, AC6 (CI-triage leftover from PR #713): `getRunInfo` caches a
+    // REJECTED promise exactly the same way it caches a resolved one — a run
+    // whose own job list cannot be read stays unreadable for every later job
+    // asking about it, in the same shape an uncached read would have given
+    // each of them anyway. Without this, a second job hitting the cache could
+    // in principle see different (or throw differently from) a fresh read.
+    function fixtureWithUnreadableRun11() {
+      return createFixtureCiPort({
+        runsByHeadSha: {
+          "CI:deadbeef": [
+            { runId: "9", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "b" },
+            { runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" },
+          ],
+        },
+        // No `runs["11"]` fixture: `port.runInfo("11")` rejects (see `createFixtureCiPort`).
+      });
+    }
+
+    test("a rejected runInfo(11) promise stored in runInfoCache degrades a LATER job's lookup exactly like the uncached path", async () => {
+      const cachedPort = fixtureWithUnreadableRun11();
+      const runInfoCache = new Map();
+      const jobInput = (jobName: string) => ({
+        runId: "9",
+        jobName,
+        testName: undefined,
+        rawLog: "",
+        headSha: "deadbeef",
+        workflowName: "CI",
+      });
+
+      // job-a's own read populates the cache with a REJECTED promise for run "11".
+      await computeCiSignals(cachedPort, jobInput("job-a"), fakeGitShow(), { runInfoCache });
+      // job-b hits that cached rejection rather than calling the port again.
+      const cachedJobB = await computeCiSignals(cachedPort, jobInput("job-b"), fakeGitShow(), { runInfoCache });
+
+      // The uncached path: a fresh port, no precomputed cache at all — job-b's
+      // own `port.runInfo("11")` call rejects independently.
+      const uncachedPort = fixtureWithUnreadableRun11();
+      const uncachedJobB = await computeCiSignals(uncachedPort, jobInput("job-b"), fakeGitShow());
+
+      expect(cachedJobB).toEqual(uncachedJobB);
+      // The degrade shape itself: no deterministic override, an advisory-only
+      // "could not be confirmed" line, same as an unreadable run always gets.
+      expect(cachedJobB.sameHeadLaterPassed).toBe(false);
+      expect(cachedJobB.deterministic).toBeUndefined();
+      expect(
+        cachedJobB.lines.some(
+          (l) => l.startsWith("same head:") && l.includes("could not be") && l.includes("no override applied"),
+        ),
+      ).toBe(true);
+
+      // Only ONE real `runInfo(11)` call for the whole cached run: job-b's
+      // lookup was answered from the cached (rejected) promise, never the port.
+      expect(cachedPort.calls.filter((c) => c.op === "runInfo").length).toBe(1);
+    });
   });
 
   test("a port that throws on every read degrades every signal to 'not checked' rather than failing the triage", async () => {
