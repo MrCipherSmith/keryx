@@ -178,7 +178,7 @@ export async function computeJevRiskResult(options: JevRiskRunOptions): Promise<
     `Scored ${scored.length} hunk(s) (of ${selection.selected.length + selection.skipped.length} retained) across 5 risk dimensions against ${targetLabel}; ` +
     `${findings.length} finding(s) at/above threshold ${threshold} with no nearby test. ` +
     `${selection.skipped.length} hunk(s) skipped by --max-calls ${selection.maxCalls} (${selection.pairsSkipped} pair(s)); ` +
-    `${selection.notCode.length} hunk(s) skipped as not a code hunk (docs/.md/.txt).`;
+    `${selection.notCode.length} hunk(s) skipped as not a code hunk (docs/.md/.txt, or .metaproject/{flows,data,reviews} bookkeeping).`;
 
   return {
     status,

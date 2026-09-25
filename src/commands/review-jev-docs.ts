@@ -23,6 +23,7 @@ import {
   DEFAULT_MAX_SECTIONS_PER_DOC_FILE,
   batchDocsSections,
   boundLinkedSections,
+  buildDocsBatch,
   detectRemovedFlags,
   docsFindingStats,
   extractDocSections,
@@ -30,10 +31,20 @@ import {
   linkSectionsToDiff,
   renderJevDocsMarkdown,
   synthesizeDocsFinding,
+  type DocsBatch,
   type DocSection,
   type DocsFinding,
 } from "../review/jev-docs";
-import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey, type JevQuestions } from "../harness/decision/jev-client";
+import { callJevSystemOne, DEFAULT_JEV_MODEL, JevRequestError, resolveJevApiKey, type JevQuestions } from "../harness/decision/jev-client";
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** A real vendor `HTTP 400 max_tokens_exceeded` — the specific, retryable-by-splitting failure; any other status or body is not (same rule `review-jev-contract.ts`'s `isMaxTokensExceededError` applies). */
+function isMaxTokensExceededError(error: unknown): boolean {
+  return error instanceof JevRequestError && error.status === 400 && /max_tokens/i.test(error.message);
+}
 
 export const JEV_DOCS_FLAGS = ["--diff", "--pr", "--max-calls", "--threshold", "--model", "--repo", "--fixtures", "--include", "--json"];
 
@@ -276,6 +287,8 @@ export interface JevDocsComputedResult {
   readonly findings: readonly DocsFinding[];
   readonly stats: ReturnType<typeof docsFindingStats>;
   readonly tokens: { readonly jevCalls: number; readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number };
+  /** Set when at least one batch failed (e.g. a vendor `max_tokens_exceeded`) — that batch's sections degrade to facts-only (no Jev-scored finding for them; the deterministic flag findings are unaffected) rather than aborting the whole run, same discipline `computeJevContractResult`/`computeJevTriageResult` use. Only the first failure's message is kept. */
+  readonly jevError?: string;
   readonly selection: {
     readonly maxCalls: number;
     readonly maxPerFile: number;
@@ -298,6 +311,8 @@ export interface JevDocsRunOptions {
   readonly fetchFn?: typeof fetch;
   /** `--include <glob>`, repeatable — widens `discoverDocFiles`'s default user-facing-only corpus back out (`.metaproject/skills/**`, `rules/**`, or anything project-specific). */
   readonly includeGlobs?: readonly string[];
+  /** Environment the Jev credential resolves from; defaults to `process.env`. Tests inject a fixture key — never the machine's real `OPENROUTER_API_KEY`. */
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 /**
@@ -336,28 +351,66 @@ export async function computeJevDocsResult(options: JevDocsRunOptions): Promise<
   let outputTokens = 0;
   let costUsd = 0;
   let sawUsage = false;
+  let jevError: string | undefined;
+
+  // One Jev call for `batch`; records usage/findings on success. Never
+  // throws — the caller decides what a failure means (degrade, or retry).
+  const attemptBatch = async (batch: DocsBatch): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: unknown }> => {
+    try {
+      const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: options.env ?? process.env });
+      jevCalls += 1;
+      if (result.usage.input_tokens !== undefined) {
+        inputTokens += result.usage.input_tokens;
+        sawUsage = true;
+      }
+      if (result.usage.output_tokens !== undefined) {
+        outputTokens += result.usage.output_tokens;
+        sawUsage = true;
+      }
+      if (result.usage.cost !== undefined) {
+        costUsd += result.usage.cost;
+        sawUsage = true;
+      }
+      for (const item of batch.items) {
+        const key = `${item.section.file}::${item.section.line}`;
+        const answer = result.answers[key];
+        if (answer === undefined || answer.type !== "noul") continue;
+        const finding = synthesizeDocsFinding(item, answer.noul, threshold);
+        if (finding !== undefined) jevFindings.push(finding);
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  };
 
   for (const batch of batches) {
-    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions as JevQuestions }, { env: process.env });
-    jevCalls += 1;
-    if (result.usage.input_tokens !== undefined) {
-      inputTokens += result.usage.input_tokens;
-      sawUsage = true;
+    // Each batch is caught on its own — a single oversized/failed batch (a
+    // real vendor `HTTP 400 max_tokens_exceeded`, hit live against PR #743 at
+    // default settings) degrades only ITS sections to facts-only (no
+    // Jev-scored finding for them), not the whole run; every batch after it
+    // still gets its own attempt. Same discipline `computeJevContractResult`/
+    // `computeJevTriageResult` use.
+    const attempt = await attemptBatch(batch);
+    if (attempt.ok) continue;
+    if (isMaxTokensExceededError(attempt.error) && batch.items.length > 1) {
+      // Retried ONCE, split in half — a batch this size still overshot the
+      // vendor's real ceiling, so try half of it before giving up on any of
+      // its sections. A batch of exactly one section has nothing left to
+      // split; it degrades on the first failure like any other unretryable
+      // error.
+      const mid = Math.ceil(batch.items.length / 2);
+      const halves = [buildDocsBatch(batch.items.slice(0, mid)), buildDocsBatch(batch.items.slice(mid))];
+      for (const half of halves) {
+        const halfAttempt = await attemptBatch(half);
+        if (!halfAttempt.ok && jevError === undefined) {
+          jevError = messageOf(halfAttempt.error);
+        }
+      }
+      continue;
     }
-    if (result.usage.output_tokens !== undefined) {
-      outputTokens += result.usage.output_tokens;
-      sawUsage = true;
-    }
-    if (result.usage.cost !== undefined) {
-      costUsd += result.usage.cost;
-      sawUsage = true;
-    }
-    for (const item of batch.items) {
-      const key = `${item.section.file}::${item.section.line}`;
-      const answer = result.answers[key];
-      if (answer === undefined || answer.type !== "noul") continue;
-      const finding = synthesizeDocsFinding(item, answer.noul, threshold);
-      if (finding !== undefined) jevFindings.push(finding);
+    if (jevError === undefined) {
+      jevError = messageOf(attempt.error);
     }
   }
 
@@ -377,6 +430,7 @@ export async function computeJevDocsResult(options: JevDocsRunOptions): Promise<
     findings,
     stats,
     tokens: sawUsage ? { jevCalls, inputTokens, outputTokens, costUsd } : { jevCalls },
+    ...(jevError !== undefined ? { jevError } : {}),
     selection: {
       maxCalls,
       maxPerFile,
