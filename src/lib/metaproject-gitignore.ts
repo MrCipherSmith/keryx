@@ -88,10 +88,14 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/testing/artifacts/latest.json
 .metaproject/data/tasks/runtime/
 .metaproject/data/tasks/logs/
-# Flow 313 (W4): the bundle ledger and staged/inspected bundle artifacts are
-# local runtime state (applied-state.json, temp audit copies), not something
-# a project commits.
+# The bundle ledger and staged/inspected bundle artifacts are local runtime
+# state (applied-state.json, temp audit copies), not something a project
+# commits.
 .metaproject/data/bundles/
+# Skills stocktake reports and cache are dated, regenerated-on-demand runtime
+# output, not project content. (Install-state under data/integrations/ stays
+# tracked — see install-state.ts for why.)
+.metaproject/data/skills/stocktake/
 .metaproject/flows/.flow-init.lock/
 .metaproject/flows/.flow-lock-*/
 # Memory generated views, caches, reports, and atomic staging are disposable.
@@ -112,10 +116,10 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/forgetting/
 .metaproject/data/retention/
 .metaproject/reports/
-# W3 self-learning loop: passive observation events and not-yet-reviewed
-# candidate patterns are per-machine, never meant to be shared/committed
-# (W3-AC9). ".metaproject/data/" is not blanket-ignored, so these two get
-# their own entries rather than inheriting coverage that does not exist.
+# Self-learning loop: passive observation events and not-yet-reviewed
+# candidate patterns are per-machine, never meant to be shared/committed.
+# ".metaproject/data/" is not blanket-ignored, so these two get their own
+# entries rather than inheriting coverage that does not exist.
 .metaproject/data/learning/observations/
 .metaproject/data/learning/candidates/
 `;

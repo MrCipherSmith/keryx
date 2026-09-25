@@ -22,9 +22,13 @@ import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/manage
 // lives in the shared `src/lib/managed-git-hook.ts` (R1-F3/R1-F6), which
 // runs its own containment check before writing rather than relying on
 // `resolveGitHooksRoot`'s resolution alone.
-function containFromMetaprojectPath(filePath: string): { root: string; rel: string } {
+export function containFromMetaprojectPath(filePath: string): { root: string; rel: string } {
   const marker = `${path.sep}.metaproject${path.sep}`;
-  const idx = filePath.indexOf(marker);
+  // R700-14: LAST `.metaproject` segment, per the comment above — a project
+  // nested under an ancestor `.metaproject/` directory (e.g. a worktree
+  // checked out inside another project's own `.metaproject/`) must bound
+  // containment at the innermost `.metaproject`, not the outermost one.
+  const idx = filePath.lastIndexOf(marker);
   if (idx < 0) {
     if (filePath.endsWith(`${path.sep}.metaproject`)) {
       const root = filePath.slice(0, filePath.length - ".metaproject".length - path.sep.length);

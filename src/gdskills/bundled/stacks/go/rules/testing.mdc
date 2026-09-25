@@ -9,7 +9,7 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic testing rules to the standard
 `testing` package and its modern (1.23-1.25) additions. Applies only to
-`*.go` files (W1-AC8).
+`*.go` files.
 
 ## Layout and naming
 

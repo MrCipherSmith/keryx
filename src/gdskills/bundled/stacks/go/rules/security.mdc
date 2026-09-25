@@ -9,7 +9,7 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic security rules to Go-specific,
 OWASP-relevant risks and the safe standard-library API to use instead.
-Applies only to `*.go` files (W1-AC8).
+Applies only to `*.go` files.
 
 ## Command and shell execution
 

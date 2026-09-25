@@ -7,7 +7,38 @@ import { expect, test } from "bun:test";
 import { renderGdgraphPostCommitHook } from "../lib/templates";
 import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
-import { updateCommand } from "./update";
+import { containFromMetaprojectPath, updateCommand } from "./update";
+
+// R700-14: `containFromMetaprojectPath`'s own comment says it bounds
+// containment at the LAST `.metaproject` path segment, but it used
+// `indexOf` (the FIRST occurrence) — for a path nested under an ancestor
+// project's own `.metaproject/` directory, that widened the containment
+// root to the outer boundary instead of the inner one intended.
+test("containFromMetaprojectPath uses the LAST .metaproject segment, not the first", () => {
+  const nested = path.join(
+    `${path.sep}a`,
+    ".metaproject",
+    "x",
+    "proj",
+    ".metaproject",
+    "rules",
+    "y",
+  );
+
+  const result = containFromMetaprojectPath(nested);
+
+  expect(result.root).toBe(path.join(`${path.sep}a`, ".metaproject", "x", "proj"));
+  expect(result.rel).toBe(".metaproject/rules/y");
+});
+
+test("containFromMetaprojectPath still resolves a single, non-nested .metaproject segment", () => {
+  const single = path.join(`${path.sep}project`, ".metaproject", "rules", "y");
+
+  const result = containFromMetaprojectPath(single);
+
+  expect(result.root).toBe(path.join(`${path.sep}project`));
+  expect(result.rel).toBe(".metaproject/rules/y");
+});
 
 // Round-1 finding T-001: the retired-rule warning print was tested only at
 // the `keryx skills install` call site (skills-install-warnings.test.ts).

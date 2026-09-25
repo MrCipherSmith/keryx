@@ -7,7 +7,7 @@ metadata:
 
 # React security
 
-Stack-specific risks for React component files (`*.tsx`/`*.jsx`, W1-AC8),
+Stack-specific risks for React component files (`*.tsx`/`*.jsx`),
 narrowing `ts-js-node`'s generic security rule. Not a general OWASP list —
 only the sinks React's rendering model makes reachable.
 

@@ -31,17 +31,29 @@ root:
   skills/<name>/SKILL.md              # personal skills
   agents/<name>.md                    # personal agent definitions
   memory/<folder>/*.md                # user-scope memory, same folders as project scope
-  learning/patterns/<id>.json         # user-scope learned patterns (W3)
-  learning/index.json                 # cross-project evidence index (W3; written only by `keryx learn accept`)
+  learning/patterns/<id>.json         # user-scope learned patterns
+  learning/index.json                 # cross-project evidence index (written only by `keryx learn accept`)
   bundles/                            # imported/exported bundle cache
   bundles/applied-state.json          # per-path ledger for bundle apply
-  hooks.json                          # user-scope hook config (W6)
+  hooks.json                          # user-scope hook config
   skills/external-imports.json        # referenced (not copied) external Agent-Skills catalog entries
 ```
 
 Nothing under `~/.keryx/` is created until the first command that needs it
 writes there — there is no separate `keryx init`-style step for the user
 store.
+
+**Team-scope learned patterns are currently local-only, not git-shareable.**
+`team` scope reuses the project tree, but accepted patterns for project/team
+scope are written under `.metaproject/data/learning/candidates/`, and that
+directory is gitignored by the managed `.gitignore` block (per-machine
+observation evidence, not meant to be committed as-is). So today a
+"team-scope" pattern still only lives on the machine that accepted it; a
+bundle export/import is the way to move it to another machine or teammate
+explicitly. The bundle ledger (`.metaproject/data/bundles/`, tracking what a
+project has imported) is likewise per-machine and gitignored. Making
+team-scope patterns directly git-shareable is a larger design change and is
+deferred.
 
 ## What a bundle is
 

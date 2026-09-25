@@ -297,7 +297,10 @@ export function validateKindPath(kind: BundleContentKind, scope: BundleScope, re
         if (/^learning\/patterns\/[^/]+\.json$/.test(relPath)) return { ok: true };
         return kindMismatch(kind, relPath);
       }
-      // project / team
+      // project / team — R700-12: this path is inside the gitignored
+      // .metaproject/data/learning/candidates/ tree, so "team" scope is
+      // still local-only today, not git-shareable; see the "Team-scope
+      // learned patterns" note in docs/docs/guides/portability.md.
       if (/^data\/learning\/candidates\/[^/]+\.json$/.test(relPath)) return { ok: true };
       return kindMismatch(kind, relPath);
     }

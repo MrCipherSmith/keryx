@@ -8,7 +8,7 @@ metadata:
 # Go coding style
 
 Narrows `core-common-rules`' stack-agnostic style rules to modern Go
-(1.23-1.25) idiom. Applies only to `*.go` files (W1-AC8) — everything not
+(1.23-1.25) idiom. Applies only to `*.go` files — everything not
 Go-specific still comes from the common rules this file `extends`.
 
 ## Naming and structure

@@ -8,7 +8,7 @@ metadata:
 # React patterns
 
 Idiomatic component design and anti-patterns for React 19-era code,
-narrowed to `*.tsx`/`*.jsx` (W1-AC8).
+narrowed to `*.tsx`/`*.jsx`.
 
 ## Derive, don't sync
 

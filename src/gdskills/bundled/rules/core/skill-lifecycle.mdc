@@ -53,9 +53,9 @@ a different `review tier` invocation (e.g. `--scope narrow`, which resolves
 heavier than `light`).** The flagship's only job here is to review the
 proposal before apply.
 
-### Passive observation is not mutation (W3, decision D-3)
+### Passive observation is not mutation
 
-A hook registered under the shell hook runtime (W6) may append an
+A hook registered under the shell hook runtime may append an
 **observation event** to `.metaproject/data/learning/observations/` — the
 shipped `keryx.learning-observer` hook does exactly this, on
 `tool-start`/`tool-complete`/`tool-failed`/`user-prompt`/`session-start`/

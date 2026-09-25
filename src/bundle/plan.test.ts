@@ -637,6 +637,93 @@ describe("planBundleImport learned-pattern scope rule", () => {
     expect(plan2.entries[0]?.bucket).toBe("identical");
   });
 
+  // R700-11: an imported learned pattern must never carry its source
+  // confidence/TTL straight through, and must record where it came from.
+  describe("R700-11 import hardening", () => {
+    test("confidence is capped at the model-backed seed floor (0.3), never raised", async () => {
+      const record = learnedPatternRecord("user", "accepted"); // confidence: 0.7 in the source
+      const bytes = Buffer.from(JSON.stringify(record));
+      const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
+      const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+      const now = () => new Date("2026-09-24T00:00:00.000Z");
+
+      const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {}, targetScope: "user", now });
+      expect(plan.ok).toBe(true);
+      const written = JSON.parse(plan.entries[0]?.bytes.toString("utf8") ?? "{}") as { confidence: number; confidenceLevel: string };
+      expect(written.confidence).toBe(0.3);
+      expect(written.confidenceLevel).toBe("low");
+    });
+
+    test("a source confidence already at or below the cap is left unchanged", async () => {
+      const record = { ...learnedPatternRecord("user", "accepted"), confidence: 0.1 };
+      const bytes = Buffer.from(JSON.stringify(record));
+      const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
+      const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+      const now = () => new Date("2026-09-24T00:00:00.000Z");
+
+      const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {}, targetScope: "user", now });
+      expect(plan.ok).toBe(true);
+      const written = JSON.parse(plan.entries[0]?.bytes.toString("utf8") ?? "{}") as { confidence: number };
+      expect(written.confidence).toBe(0.1);
+    });
+
+    test("the ttl is always reset on import, even when the source record already carried one that has not expired", async () => {
+      const record = { ...learnedPatternRecord("user", "accepted"), ttl: { expiresAt: "2099-01-01T00:00:00.000Z" } };
+      const bytes = Buffer.from(JSON.stringify(record));
+      const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
+      const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+      const now = () => new Date("2026-09-24T00:00:00.000Z"); // same instant as manifest.createdAt
+
+      const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {}, targetScope: "user", now });
+      expect(plan.ok).toBe(true);
+      const written = JSON.parse(plan.entries[0]?.bytes.toString("utf8") ?? "{}") as { ttl?: { expiresAt: string } };
+      // The source's far-future ttl.expiresAt must NOT survive — it is
+      // recomputed the same way a brand-new local candidate's TTL is.
+      expect(written.ttl?.expiresAt).toBe("2026-10-24T00:00:00.000Z");
+    });
+
+    test("provenance.importedFrom records the bundle id, import time, and pre-cap confidence", async () => {
+      const record = learnedPatternRecord("user", "accepted"); // confidence: 0.7, provenance.extractor: "repeated-correction"
+      const bytes = Buffer.from(JSON.stringify(record));
+      const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
+      const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+      const now = () => new Date("2026-09-24T12:00:00.000Z");
+
+      const plan = await planBundleImport({ source, manifest: manifestOf([entry]), projectRoot, homeDir, env: {}, targetScope: "user", now });
+      expect(plan.ok).toBe(true);
+      const written = JSON.parse(plan.entries[0]?.bytes.toString("utf8") ?? "{}") as {
+        provenance: { extractor: string; importedFrom?: { bundleId: string; importedAt: string; originalConfidence?: number } };
+      };
+      // Original mining provenance is preserved alongside the import record.
+      expect(written.provenance.extractor).toBe("repeated-correction");
+      expect(written.provenance.importedFrom).toEqual({
+        bundleId: "keryx-project-test",
+        importedAt: "2026-09-24T12:00:00.000Z",
+        originalConfidence: 0.7,
+      });
+    });
+
+    test("re-planning the same import a day later still reports identical despite a fresh importedAt", async () => {
+      const record = learnedPatternRecord("user", "accepted");
+      const bytes = Buffer.from(JSON.stringify(record));
+      const entry = entryFor("learning/patterns/p1.json", "learned-pattern", "user", bytes);
+      const source: BundleSource = { kind: "directory", manifestBytes: Buffer.from(""), files: new Map([[entry.path, bytes]]) };
+      const manifest = manifestOf([entry]);
+      const day1 = () => new Date("2026-09-24T00:00:00.000Z");
+      const day2 = () => new Date("2026-09-25T00:00:00.000Z");
+
+      const plan1 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user", now: day1 });
+      expect(plan1.ok).toBe(true);
+      expect(plan1.entries[0]?.bucket).toBe("new");
+      mkdirSync(path.join(homeDir, ".keryx", "learning", "patterns"), { recursive: true });
+      writeFileSync(path.join(homeDir, ".keryx", "learning", "patterns", "p1.json"), plan1.entries[0]?.bytes ?? Buffer.from(""));
+
+      const plan2 = await planBundleImport({ source, manifest, projectRoot, homeDir, env: {}, targetScope: "user", now: day2 });
+      expect(plan2.ok).toBe(true);
+      expect(plan2.entries[0]?.bucket).toBe("identical");
+    });
+  });
+
   // Orchestrator coordination note (L4's `checkPrivateDirGitignore(dir,
   // root?)` root parameter): plan.ts now passes the user store root, so a
   // symlink anywhere between it and `memory/` that escapes the store is

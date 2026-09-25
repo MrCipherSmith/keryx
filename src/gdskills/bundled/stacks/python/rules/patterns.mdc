@@ -9,7 +9,7 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
 Python 3.12/3.13 patterns and the anti-patterns they replace. Applies only to
-`*.py`/`*.pyi` files (W1-AC8).
+`*.py`/`*.pyi` files.
 
 ## Data and typing
 
