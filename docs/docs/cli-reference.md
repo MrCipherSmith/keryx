@@ -1226,6 +1226,47 @@ recorded as cross-family when both sides in fact ran the same vendor.
 
 ---
 
+## routing
+
+The **routing table** — flow 305 — maps a task category to a model, so
+different kinds of work land on different providers/models without running
+`/model` before every turn. Two config layers, same precedence pattern as
+`security.config.json`: **explicit per-call override > per-project
+`routing.config.json` > per-user entry (shell config) > session default**. A
+project entry that names a model the operator has not connected falls through
+to the operator's own entry for that category, and `/routing` says so.
+
+Categories (PRD `docs/requirements/keryx-jev-router/PRD.md` §4): `default`,
+`review`, `subagents`, `quick`, `coding`, `planning`, `docs`, `unattended`.
+Only `review` (`keryx review tier`) and `subagents` (`spawn_subagent`) are
+**wired** in this release — resolved automatically at their call site; the
+rest are catalogue entries the table/CLI/`/routing` already support, ready for
+a later flow to wire up without a second migration.
+
+```
+keryx routing list [--json]
+keryx routing set <category> <provider>/<model> [--user|--project]
+keryx routing set <category> <provider> [--user|--project]
+keryx routing unset <category> [--user|--project]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` | `--json` | Every category, its resolved assignment (`session default`, `<provider>/<model>`, or `<provider> (provider default)`), and which layer answered (`project`, `user`, or `default`). |
+| `set` | `<category> <provider>/<model>`, `--user`\|`--project` | Pin an exact model for a category. Default layer: `--user`. |
+| `set` | `<category> <provider>`, `--user`\|`--project` | Pin a provider's own default model for a category (no `/model` — the "provider default" form). |
+| `unset` | `<category>`, `--user`\|`--project` | Clear a category back to `session default`. Default layer: `--user`. |
+
+In the TUI, `/routing` opens a list+detail modal: the list side shows every
+category's current resolution; selecting one opens a **flat** searchable
+model picker — one list spanning every connected provider's models (built on
+the same type-to-filter machinery `/model` uses), never a "pick a provider
+first" step — with a "provider default" row per connected provider and a
+"session default" row. A confirmed pick writes immediately to the per-user
+layer.
+
+---
+
 ## serve
 
 An **opt-in, off-by-default** loopback-bound HTTP entry over the same agent

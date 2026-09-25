@@ -1,4 +1,7 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   createSpawnSubagentTool,
   ENV_SUBAGENT_TIMEOUT_MS,
@@ -565,4 +568,96 @@ test("AC8: a caller reading only {output, isError} sees pre-Phase-D behavior on 
     expect(legacy.isError).toBe(true);
     expect(legacy.output).toMatch(/failed: idSeq boom/);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Flow 305 (Flow A), AC6/AC7 — the `subagents` routing category, resolved
+// only when the dispatcher named no explicit model (no `model_tier`), and
+// passed through `resolveChildModel`'s UNMODIFIED gates.
+// ---------------------------------------------------------------------------
+
+const routingRoots: string[] = [];
+afterEach(async () => {
+  for (const root of routingRoots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+
+async function projectWithSubagentsRouting(assignment: unknown): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-"));
+  routingRoots.push(root);
+  await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ categories: { subagents: assignment } }), "utf8");
+  return root;
+}
+
+test("flow 305 AC6: the `subagents` category resolves to an ALLOWED provider/model, and the child actually runs on it", async () => {
+  const cwd = await projectWithSubagentsRouting({ kind: "model", providerId: "ollama", modelId: "routed-model" });
+  let usedProviderModel: { providerId: string; modelId: string } | undefined;
+  const tool = createSpawnSubagentTool({
+    cwd,
+    getParentModel: () => ({ providerId: "ollama", modelId: "parent-model" }),
+    makeProvider: (providerId, modelId) => {
+      usedProviderModel = { providerId, modelId };
+      return stubProvider("routed child ran");
+    },
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+
+  const result = await tool.invoke({ task: "investigate", mode: "read_only" });
+
+  expect(result.isError).toBe(false);
+  expect(usedProviderModel).toEqual({ providerId: "ollama", modelId: "routed-model" });
+  expect(result.output).toContain("via ollama/routed-model");
+});
+
+test("flow 305 AC7: a `subagents` category resolving to a provider OUTSIDE the allowlist is denied with the SAME reason text an explicit out-of-allowlist request produces today", async () => {
+  const cwd = await projectWithSubagentsRouting({ kind: "model", providerId: "openai", modelId: "gpt-4o" });
+  const tool = createSpawnSubagentTool({
+    cwd,
+    getParentModel: () => ({ providerId: "ollama", modelId: "parent-model" }),
+    makeProvider: () => stubProvider("should never run"),
+    // "openai" is NOT in the allowlist — only "ollama" was detected.
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+
+  const result = await tool.invoke({ task: "investigate", mode: "read_only" });
+
+  expect(result.status).toBe("Denied");
+  expect(result.isError).toBe(true);
+  // Same denial vocabulary `model.test.ts` pins for an explicit out-of-allowlist
+  // request (`resolveChildModel`'s G1 gate, untouched by this flow — AC7).
+  expect(result.output).toContain('provider "openai" is not in the parent allowlist');
+});
+
+test("flow 305 AC7: a dispatcher-supplied `model_tier` overrides the category entirely — an out-of-allowlist `subagents` routing entry never denies an explicit-tier dispatch", async () => {
+  const cwd = await projectWithSubagentsRouting({ kind: "model", providerId: "openai", modelId: "gpt-4o" });
+  const tool = createSpawnSubagentTool({
+    cwd,
+    getParentModel: () => ({ providerId: "ollama", modelId: "parent-model" }),
+    makeProvider: () => stubProvider("tier-dispatched child ran"),
+    // No models reported for "ollama" — every tier falls back to the parent's
+    // own (allowed) model, so a "light" dispatch resolves cleanly.
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+
+  const result = await tool.invoke({ task: "investigate", mode: "read_only", model_tier: "light" });
+
+  // Not denied by the routing table's out-of-allowlist entry: the explicit
+  // tier request short-circuits the category lookup outright.
+  expect(result.status).not.toBe("Denied");
+  expect(result.isError).toBe(false);
+  expect(result.output).not.toContain("openai");
 });

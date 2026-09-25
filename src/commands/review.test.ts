@@ -885,6 +885,93 @@ test("with nothing to anchor on, `review tier` says inherit and still exits 0", 
   expect(model.tier_resolution).toBe("session-fallback");
 });
 
+// ---------------------------------------------------------------------------
+// Flow 305 (Flow A), AC5 — `review tier` resolves the `review` routing
+// category ahead of its own live-detection ranking.
+// ---------------------------------------------------------------------------
+
+test("flow 305 AC5: with an EMPTY routing table, `review tier` output is byte-identical to pre-Flow-A (no routing.config.json, no per-user entry anywhere in this test project)", async () => {
+  await tier("--scope", "blast-radius", "--findings", "1", "--diff-lines", "12");
+
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  // The exact same assertions the pre-existing "floors a blast-radius round"
+  // test above makes — proving this flow changed nothing when nothing is
+  // configured.
+  expect(out).toContain("tier: deep");
+  expect(out).toContain("light:small-scope");
+  expect(out).toContain("floor:blast-radius");
+  expect(out).toContain("model: demo-large");
+  expect(out).toContain("tier_resolution: discovered");
+});
+
+test("flow 305 AC5: an explicit per-project `review` routing entry REPLACES the tier-ranked provider/model", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-routed" } } }),
+    "utf8",
+  );
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  // The tier itself is unaffected — routing decides WHICH model, not the tier
+  // arithmetic (PRD §Non-goals: this design sits one level above `assignTier`).
+  expect(model.tier).toBe("light");
+  expect(model.provider).toBe("anthropic");
+  expect(model.model).toBe("claude-routed");
+});
+
+test("flow 305 AC5: a per-user `review` routing entry also wins over the tier-ranked model (the same layer `keryx routing set` writes to by default)", async () => {
+  const dir = path.join(ROOT, "xdg", "keryx");
+  await mkdir(dir, { recursive: true });
+  // Merged, not overwritten — same shape `persistShellSelection` already uses
+  // for `provider`/`model` in this file's own auth.json.
+  await writeFile(
+    path.join(dir, "auth.json"),
+    JSON.stringify({ routing: { review: { kind: "model", providerId: "deepseek", modelId: "deepseek-routed" } } }),
+    "utf8",
+  );
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  expect(model.provider).toBe("deepseek");
+  expect(model.model).toBe("deepseek-routed");
+});
+
+test("flow 305 AC5: a per-project entry wins over a per-user entry for the same category (PRD §5 precedence)", async () => {
+  const dir = path.join(ROOT, "xdg", "keryx");
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, "auth.json"),
+    JSON.stringify({ routing: { review: { kind: "model", providerId: "deepseek", modelId: "deepseek-routed" } } }),
+    "utf8",
+  );
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-routed" } } }),
+    "utf8",
+  );
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  expect(model.provider).toBe("anthropic");
+  expect(model.model).toBe("claude-routed");
+});
+
+test("flow 305 AC5: routing an UNRELATED category (not `review`) never changes review tier's own model", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { quick: { kind: "model", providerId: "anthropic", modelId: "claude-routed" } } }),
+    "utf8",
+  );
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-mini");
+});
+
 test("`review tier` refuses an unrecognised --verifier rather than silently defaulting", async () => {
   await tier("--verifier", "exection");
 

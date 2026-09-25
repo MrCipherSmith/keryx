@@ -43,6 +43,8 @@ import {
   type ReviewScope,
 } from "../review/scope";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
+import { loadRoutingConfig } from "../harness/routing/config";
+import { resolveCategory } from "../harness/routing/table";
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
@@ -764,12 +766,45 @@ async function runBudget(args: string[]): Promise<void> {
  * own model. When the caller names nothing, the block is adaptive: the tier
  * plus `inherit: true`, and the host picks its own model for that tier.
  */
+/**
+ * Flow 305 (Flow A), AC5 — resolve the `review` category (`src/harness/routing`)
+ * ahead of / alongside `assignTier`'s own live-detection ranking. When the
+ * category resolves to an explicit `{kind:"model"}` (per-project or per-user
+ * `routing.config.json`/shell config — `cwd` is both the project-config
+ * directory and the per-user config dir override, i.e. the caller's real cwd
+ * in production), that provider/model REPLACES the decision's own. When
+ * nothing is configured for `review` (`session-default`, the state with an
+ * empty routing table) the decision is returned completely UNCHANGED — same
+ * object identity is not required, but every field is byte-identical, which
+ * is what the regression test pins (AC5's "byte-identical to pre-Flow-A").
+ *
+ * Reuses `tier_resolution: "discovered"` for the override rather than adding a
+ * new `TierResolutionSource` member: both mean the same thing to a reader of
+ * the printed block — "a specific model, not the adaptive tier" — and adding a
+ * fourth enum value would touch `model-tier.ts`'s public contract for a
+ * cosmetic distinction the dispatch schema does not need.
+ */
+async function applyReviewRoutingCategory(decision: DispatchModelDecision, cwd: string): Promise<DispatchModelDecision> {
+  const location = { cwd };
+  const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
+  const assignment = resolveCategory("review", { project: project.table, user: user.table });
+  if (assignment.kind !== "model") {
+    return decision;
+  }
+  return {
+    ...decision,
+    provider: assignment.providerId,
+    model: assignment.modelId,
+    tier_resolution: "discovered",
+  };
+}
+
 async function runTier(args: string[]): Promise<void> {
   rejectUnknownFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
-  const decision = decideDispatchModel(session, signals, catalog);
+  const decision = await applyReviewRoutingCategory(decideDispatchModel(session, signals, catalog), process.cwd());
   const block = dispatchModelBlock(decision);
 
   if (args.includes("--json")) {

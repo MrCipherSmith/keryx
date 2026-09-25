@@ -89,6 +89,7 @@ import {
 } from "./inspector-sources";
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
+import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -221,6 +222,7 @@ import {
 import { setAskUserHost } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
   buildSideWorkerPrompt,
@@ -3170,91 +3172,9 @@ export type PickModelOptions = {
   escLabel?: string;
 };
 
-/** What {@link mountFilterList} renders: `items`, narrowed by a typed filter. */
-interface FilterListSpec<T> {
-  idPrefix: string;
-  items: readonly T[];
-  toOption: (item: T) => { name: string; description: string };
-  /** `query` is already trimmed and lower-cased. */
-  matches: (item: T, query: string) => boolean;
-  /** The placeholder row when `items` itself is empty. */
-  emptyLabel: string;
-  /** Filter-line text while no filter is typed. */
-  idleHint: string;
-  filterHint: (filter: string, shown: number, total: number) => string;
-  showDescription: boolean;
-  width: number | "100%";
-  height: number;
-  /** Enter on a row: the item, or `undefined` on a placeholder row. */
-  onPick: (item: T | undefined) => void;
-}
-
-/**
- * The type-to-filter list both pickers share, in either host (the full-screen
- * overlay or a ModalHost tab body): a filter line over a focused
- * `SelectRenderable`. ↑/↓/Enter stay native to the select; the returned `onKey`
- * edits the filter on printable keys and Backspace. Esc belongs to the host.
- */
-function mountFilterList<T>(
-  otui: OpenTui,
-  r: Renderer,
-  parent: Box,
-  spec: FilterListSpec<T>,
-): { onKey: (key: KeypressEvent) => void } {
-  const filterLine = new otui.TextRenderable(r, { id: `${spec.idPrefix}-filter`, content: "" });
-  parent.add(filterLine);
-  const sel = new otui.SelectRenderable(r, {
-    id: `${spec.idPrefix}-sel`,
-    width: spec.width,
-    showDescription: spec.showDescription,
-    height: spec.height,
-    showScrollIndicator: true,
-    wrapSelection: true,
-    options: [],
-    ...selectThemeColors(getTheme()),
-  });
-  parent.add(sel);
-  sel.focus();
-
-  let filter = "";
-  let shown: readonly T[] = spec.items;
-  const apply = (): void => {
-    const q = filter.trim().toLowerCase();
-    shown = q.length > 0 ? spec.items.filter((item) => spec.matches(item, q)) : spec.items;
-    sel.options =
-      shown.length > 0
-        ? shown.map(spec.toOption)
-        : [{ name: spec.items.length === 0 ? spec.emptyLabel : "(no match)", description: "" }];
-    sel.selectedIndex = 0;
-    filterLine.content = otui.t`${dimChunk(otui, 
-      q.length > 0 ? spec.filterHint(filter, shown.length, spec.items.length) : spec.idleHint,
-    )}`;
-  };
-  apply();
-
-  sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
-    spec.onPick(shown[sel.getSelectedIndex()]);
-  });
-
-  return {
-    onKey: (key) => {
-      if (key.name === "backspace") {
-        filter = filter.slice(0, -1);
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      const ch = key.sequence;
-      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
-        filter += ch;
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-      }
-    },
-  };
-}
+// `FilterListSpec`/`mountFilterList` moved to `./filter-list` (flow 305, see
+// that file's header) — imported at the top of this file now, alongside the
+// rest of this module's imports.
 
 interface SessionPickerOption {
   value: string;
@@ -5619,7 +5539,13 @@ export async function launchTuiAgentShell(opts: {
 
     paintSessionHeader();
 
-    const inspectorKeys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+    // Widened to the full `KeypressEvent` shape (flow 305): `/routing`'s flat
+    // model picker needs `ctrl`/`meta`/`preventDefault`/`stopPropagation` to
+    // drive `mountFilterList`'s type-to-filter key handling, the same way
+    // `pickModelInTui` already does when given a raw renderer/chrome. Every
+    // existing consumer's narrower `{name, sequence}` handler still type-checks
+    // against this (a handler that reads fewer fields than it is given).
+    const inspectorKeys = { onKeypress: (handler: (key: KeypressEvent) => void) => onKeypress(r, (key) => handler(key)) };
     const inspectorCwd = (): string => opts.session?.cwd ?? liveSession.summary.projectPath;
     const showSessionInfo = (): void => {
       void (async () => {
@@ -5713,6 +5639,14 @@ export async function launchTuiAgentShell(opts: {
           ...inspectorKeys,
         });
       })();
+    };
+    /** Flow 305 (AC4): `/routing` — the category -> model routing table modal. */
+    const showRouting = (): void => {
+      openRouting(otui, chrome, {
+        cwd: inspectorCwd(),
+        renderer: r,
+        ...inspectorKeys,
+      });
     };
     /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
     const showBus = (): void => {
@@ -7084,6 +7018,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isReviewCommand(command.name)) {
           showReview();
+          return;
+        }
+        if (command.name === ROUTING_COMMAND) {
+          showRouting();
           return;
         }
         if (routeOpsCommand(line, false, ops)) {

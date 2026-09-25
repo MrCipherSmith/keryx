@@ -127,7 +127,19 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Connect a model provider",
     summary: "Providers this operator has configured, and cross-family review eligibility.",
   },
+  {
+    kind: "cli",
+    name: "routing",
+    group: "Connect a model provider",
+    summary: "Category -> model routing table: list, set, unset (per-user default; --project for the project layer).",
+  },
   { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
+  {
+    kind: "slash",
+    name: "/routing",
+    group: "Connect a model provider",
+    summary: "Route task categories to models — a flat, searchable list across every connected provider.",
+  },
   {
     kind: "slash",
     name: "/search-provider",
