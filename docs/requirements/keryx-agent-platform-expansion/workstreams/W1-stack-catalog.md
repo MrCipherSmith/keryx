@@ -1065,8 +1065,9 @@ cover MobX's build-failure surface).
 - **Honest gate run (T13).** One CLI call per skill, HEAD unchanged start to
   end: `skills eval --scope bundled --runner deepseek:deepseek-chat --judge
   deepseek:deepseek-chat --strictness high --trials 10 --json`.
-  - **nestjs — gate PASS.** All 3 skills pass. Promoted to `stability:
-    "stable"`; ships `nestjs-code-auditor`/`nestjs-build-fixer`.
+  - **nestjs — gate PASS (superseded, see "fix attempt 1" below).** All 3
+    skills pass. Promoted to `stability: "stable"`; ships
+    `nestjs-code-auditor`/`nestjs-build-fixer`.
   - **angular — gate PASS.** All 4 skills pass. Promoted to `stability:
     "stable"`; ships `angular-code-auditor`/`angular-build-fixer`.
   - **mobx — gate PASS.** Both skills pass. Promoted to `stability:
@@ -1100,10 +1101,109 @@ cover MobX's build-failure surface).
   recorded trial's `output` text, which would have invalidated its
   `outputSha256` and broken the integrity guard's trial-record
   re-derivation.
-- **Stack coverage: 2 → 5 generated-pair packs.** Counting go and python
-  (flow 317) plus nestjs, angular, and mobx (this flow), 5 packs now ship a
-  generated `<id>-code-auditor`/`<id>-build-fixer` pair.
-  `ts-js-node`/`react`/`nextjs-nuxt`/`vue` remain `experimental` with none.
+- **Stack coverage: 2 → 5 generated-pair packs (superseded, see below).**
+  Counting go and python (flow 317) plus nestjs, angular, and mobx (this
+  flow), 5 packs now ship a generated `<id>-code-auditor`/
+  `<id>-build-fixer` pair. `ts-js-node`/`react`/`nextjs-nuxt`/`vue` remain
+  `experimental` with none. **This count is superseded** — adversarial
+  review round 1 found several eval-content defects, whose fixes changed
+  the honest gate's outcome for `nestjs`; see "Implementation notes: fix
+  attempt 1 (flow 318, review round 1)" below for the corrected count.
+
+## Implementation notes: fix attempt 1 (flow 318, review round 1)
+
+Adversarial review round 1 on PR #719 (1 blocker, 6 major, 9 minor, 3 info)
+found: a real CI break (a type the PR itself introduced was never propagated
+to every call site); a silently-reversed W2 design decision (mobx gaining a
+generated pair contradicted the pack's own documented "no pair" reasoning
+from the pack-authoring notes above); three generated personas claiming
+review coverage the gate never measured; a widespread pattern of positive
+trigger prompts that were near-copies of their own skill's frontmatter
+`triggers:` — the SAME "author wrote both sides" issue this flow's own
+worker-review step had already caught and fixed for two OTHER packs, just
+not exhaustively; two `stable`-pack scenarios (in `angular`, then still
+experimental) that graded a technically-correct answer as wrong; a
+`stable`-pack scenario (`nestjs-testing`) that failed an approach NestJS's
+own docs endorse; a security rule scoped to file types it was never about;
+and nine smaller defects (a bypassable persona-guard allowlist, two
+descriptions that lost technical accuracy while dodging a collision, a
+misattributed failure cause, several oddly-evasive prompts, missing
+`lang:ts-js-node` profile components, broken nested backticks, a
+runtime-vs-build-time error-class mix-up, a strawman calibration answer,
+and a trigger prompt that gave away its own answer). Full findings:
+`review-r1.md` in the flow's own package.
+
+Every blocker and major was fixed (see the flow's own commit history for
+the exact diffs — B1: a widened `extends` type call site; M1: `mobx`'s
+`agentProfile` and generated pair removed again, back to the original W2
+decision; M2: `generateStackAgentPair` now only emits a persona when its
+matching skill bucket is non-empty, and drops the "gate has confirmed"
+overclaim for `auditFocus`; M3: integrity rule I11 — Jaccard similarity
+`>= 0.5` against a skill's own frontmatter `triggers:` is a near-copy,
+enforced on all five batch-2 packs; M4: `nextjs-nuxt/security.mdc` and
+`vue`'s `STACK_EXTENSIONS` widened to `*.ts`; M5: the `angular` OnPush
+scenario reframed around an `@Input` reference mutated across a
+parent/child boundary, and a scenario whose `subtle_wrong` calibration
+used `runInInjectionContext()` — which the scenario's OWN rubric names as
+valid — replaced; M6: `nestjs-testing` now accepts either mock-construction
+form and no longer teaches a redundant double-mock). All nine minors and
+the info item were fixed too (Risks section above).
+
+**The I11 rewrite (M3) surfaced its own second-order gaming risk.** Four
+parallel workers rewrote the 72 flagged positive prompts; the owner's
+explicit standing instruction for this round was that I11 is a floor, not
+the goal, and any rewrite that only clears the threshold via synonym
+substitution reproduces the exact pattern being removed. Two of the four
+workers' first drafts did exactly that — one via literal word-swapping
+("called"→"invoked"), one by disclosing (in its own reply) that it had
+iterated against the live router until a phrasing was "dense enough in
+distinctive Nest vocabulary" to route, including naming an internal
+NestJS provider token (`APP_FILTER`) a real user would essentially never
+say unprompted. Both were re-rewritten by the orchestrating flow with
+genuine sentence restructuring rather than word substitution. The honest
+consequence in both cases was a small amount of trigger accuracy given
+back (an nextjs-nuxt-code-review prompt and the nestjs-implementation
+exception-filter prompt both stopped routing correctly) — accepted, per
+the standing instruction, rather than polished back to a passing score.
+
+**Honest re-run under judge prompt v2 / final review-r1 gate (T-final).**
+One clean run per skill through the real CLI, HEAD unchanged start to end,
+identical to T13's command. This is the count that stands, replacing T13's
+provisional 5:
+- **angular — gate PASS, stable.** All 4 skills clear cleanly, unchanged
+  from T13's outcome. Ships `angular-code-auditor`/`angular-build-fixer`.
+- **mobx — gate PASS, stable.** Both skills clear. No generated pair — a
+  deliberate M1 decision, not a gate failure.
+- **go, python — gate PASS, stable (re-confirmed).** The same cross-pack
+  trigger-collision class fixed once already in this flow (a batch-2
+  description's generic connector vocabulary out-scoring a `go` skill's own
+  recorded trigger prompt) reappeared a THIRD time after the I11 rewrite
+  batch changed the catalog again — `nestjs-build-fix`'s M2/minor-2 wording
+  fix had reintroduced "between two" — and was fixed the same way, before
+  this final run. `checkStablePackGate` re-confirms `go`/`python` pass
+  against the settled catalog.
+- **nestjs — gate FAIL, DEMOTED from `stable`.** `nestjs-build-fix` and
+  `nestjs-testing` both still pass. `nestjs-implementation` alone fails:
+  its exception-filter trigger prompt, once de-jargoned away from naming
+  `APP_FILTER` (the M3/I11 fix above), no longer routes (`truePositive`
+  6/7). A pack needs every skill to pass, so `nestjs` reverts to
+  `stability: "experimental"`; `nestjs-build-fixer.md` is removed and
+  `agent-refs.json` records the specific, honest reason.
+- **nextjs-nuxt — gate FAIL, unchanged conclusion.** Same structural
+  trigger collisions as T13 (same-pack siblings never block each other in a
+  5-skill meta-framework pack; the disclaimer-as-positive-vocabulary
+  scorer defect). Stays `experimental`.
+- **vue — gate FAIL, unchanged conclusion.** `vue-build-fix` alone fails
+  (the same cross-pack collision, its attribution corrected by minor-3, and
+  the `template-union-type-narrowing` behavior scenario at `0.4`). Every
+  other `vue` skill passes cleanly. Stays `experimental`.
+- **Stack coverage: 2 → 3 generated-pair packs.** `go` and `python` (flow
+  317) plus `angular` (this flow) ship a generated pair. `mobx` is
+  `stable` with no pair by design. `ts-js-node`/`react`/`nestjs`/
+  `nextjs-nuxt`/`vue` are `experimental` with none — `nestjs` having
+  reached and then honestly lost `stable` status within this same flow,
+  the direct cost of removing a trigger prompt's scorer-gaming rather than
+  keeping it.
 
 ## Data contracts
 

@@ -1,7 +1,23 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.9
+Version: 0.1.10
 
-**Changelog (0.1.9, flow 318, Wave 4 batch 2):** two updates on top of the
+**Changelog (0.1.10, flow 318, review round 1 on PR #719):** corrects the
+0.1.9 line below, which recorded flow 318's FIRST honest gate run (T13) —
+superseded by the review fix pass. `mobx` never ships a generated pair
+(the pack.json `agentProfile` review round 1 found was a silent reversal
+of the original design decision is removed; M1). `nestjs` cleared T13's
+gate and briefly shipped `nestjs-build-fixer` (a build-fixer-only pair
+after M2 stopped generating a dangling `nestjs-code-auditor`), but the
+review's I11 fix removed a trigger prompt's internal-token stuffing
+(`APP_FILTER`), and the honestly-reworded prompt no longer routes — the
+final honest gate re-run demotes `nestjs` back to `stability: experimental`
+with no pair at all. `angular` is unaffected and still clears cleanly.
+Real, on-disk generated coverage as of this flow: `go`, `python`, `angular`
+(3 packs, 6 files); `mobx` is `stable` with none by design; `ts-js-node`,
+`react`, `nestjs`, `nextjs-nuxt`, `vue` are all `experimental` with none.
+
+**Changelog (0.1.9, flow 318, Wave 4 batch 2, T13 — superseded by 0.1.10
+above):** two updates on top of the
 0.1.8 state below, which this document had not caught up to. First, a
 correction: flow 317 (`W1-stack-catalog.md`, "Implementation notes: flow 317
 (grader follow-ups)") re-ran the honest gate at `PACK_MIN_TRIALS=10` and
