@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "no pair until the docker-k8s-terraform pack clears the eval gate (flow 338, Wave 4 batch 6 authored the pack but did not run `keryx skills eval`/`keryx skills judge-check` -- that is a later, separately-gated phase)"
+}
