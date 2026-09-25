@@ -5,6 +5,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createSession } from "../session/store";
 import { writeSlate } from "../session/slate";
+import { createFlowService } from "../flow/service";
+import type { FlowServiceDeps } from "../flow/types";
+import { acCheckCachePath, writeAcCheckCache } from "../flow/check-ac";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "../sac/workspace-service";
 import type { CatchUpBlockedItem, CatchUpProposalItem, CatchUpReport } from "../sac/catch-up";
 import {
@@ -13,6 +16,7 @@ import {
   formatSessionFlowLines,
   formatWorkspaceLines,
   loadInspectorCatchUp,
+  loadInspectorFlows,
   loadInspectorSlates,
   loadInspectorWorkspace,
   sortFlowsNewestFirst,
@@ -196,6 +200,53 @@ test("loadInspectorCatchUp: an ordinary project with no proposals/sessions retur
     if (originalDataDir !== undefined) process.env.KERYX_DATA_DIR = originalDataDir;
     else delete process.env.KERYX_DATA_DIR;
     await rm(dataDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+// Flow 328, AC7: `loadInspectorFlows` reads a flow's CACHED check-ac result
+// (never triggers a Jev call itself) and exposes it as `acMarkers`.
+test("loadInspectorFlows: no cache -> acMarkers absent (not run); a cache -> markers, and staleness detection", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-inspector-ac-"));
+  try {
+    const deps: FlowServiceDeps = { tracker: null, healthGate: async () => ({ status: "pass", reasons: [] }), now: () => new Date("2026-09-25T00:00:00Z") };
+    const service = createFlowService(deps);
+    const created = await service.init({ cwd, title: "AC markers fixture" });
+    const dir = path.basename(created.dir);
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(
+      path.join(cwd, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+      "# Acceptance Criteria\n\n## Criteria\n\n- AC1: the fixture criterion holds\n",
+      "utf8",
+    );
+    const frozen = await service.freeze({ cwd, id: dir });
+
+    const noCache = await loadInspectorFlows(cwd);
+    expect(noCache[0]?.acMarkers).toBeUndefined();
+
+    await writeAcCheckCache(acCheckCachePath(cwd, dir), {
+      key: `${frozen.acChecksum}:deadbeef`,
+      at: "2026-09-25T01:00:00.000Z",
+      jevAsked: true,
+      verdicts: [{ id: "AC1", text: "the fixture criterion holds", status: "likely-met", probability: 0.9, factLines: [], evidencePaths: [] }],
+    });
+    const cached = await loadInspectorFlows(cwd);
+    expect(cached[0]?.acMarkers).toEqual([{ id: "AC1", status: "likely-met", label: "likely met" }]);
+    expect(cached[0]?.acCheckedAt).toBe("2026-09-25T01:00:00.000Z");
+    expect(cached[0]?.acCheckStale).toBe(false);
+
+    // Re-freeze over changed criteria text -> checksum changes -> the cached
+    // result (keyed to the OLD checksum) is now stale.
+    await writeFile(
+      path.join(cwd, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+      "# Acceptance Criteria\n\n## Criteria\n\n- AC1: a DIFFERENT criterion text\n",
+      "utf8",
+    );
+    await service.acUpdate({ cwd, id: dir, reason: "criterion changed for the stale-detection test" });
+    const stale = await loadInspectorFlows(cwd);
+    expect(stale[0]?.acMarkers).toBeDefined();
+    expect(stale[0]?.acCheckStale).toBe(true);
+  } finally {
     await rm(cwd, { recursive: true, force: true });
   }
 });

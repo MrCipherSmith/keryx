@@ -4,6 +4,12 @@
 import { randomUUID } from "node:crypto";
 import { interruptedCompletionLine, isCompletionInterrupted, listFlowDirs, readFlow } from "../flow/store";
 import type { FlowState } from "../flow/types";
+// Flow 328, AC7: reading a flow's CACHED check-ac result is a pure core read
+// — the TUI never triggers a Jev call itself here, only shows what `keryx
+// flow check-ac`/the advisory notices already cached. Through the flow
+// facade (`../flow/service`), not `../flow/check-ac` directly — import
+// policy rule 2 only excuses an edge whose target is a `service.ts`.
+import { acCheckCachePath, readAcCheckCache, statusLabel, type AcCheckStatus } from "../flow/service";
 import {
   localWorkspaceAuthorizationServer,
   WorkspaceService,
@@ -40,7 +46,16 @@ export type FlowInspectorItem = {
    * Absent otherwise.
    */
   interrupted?: string | undefined;
+  /** Flow 328, AC7: the flow's last CACHED check-ac markers, or absent when nothing has been cached yet ("not run"). */
+  acMarkers?: readonly AcMarker[];
+  /** When the cached markers were computed. */
+  acCheckedAt?: string;
+  /** True when the cached markers were computed against a DIFFERENT (now superseded) criteria checksum — shown as stale, never as current. */
+  acCheckStale?: boolean;
 };
+
+/** Flow 328, AC7: one criterion's cached status, for the /flows sidebar and detail tab. */
+export type AcMarker = { readonly id: string; readonly status: AcCheckStatus; readonly label: string };
 
 export function workspaceFromManifest(manifest: WorkspaceManifest): WorkspaceInfo {
   return {
@@ -182,6 +197,18 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
         const item = flowItemFromState(flow, dir);
         if (await isCompletionInterrupted(cwd, flow, dir)) {
           item.interrupted = interruptedCompletionLine(flow.id);
+        }
+        // Flow 328, AC7: never triggers a Jev call — shows the last cached
+        // check-ac result, or nothing ("not run" is the marker-less default).
+        try {
+          const cache = await readAcCheckCache(acCheckCachePath(cwd, dir));
+          if (cache !== undefined) {
+            item.acMarkers = cache.verdicts.map((v) => ({ id: v.id, status: v.status, label: statusLabel(v.status) }));
+            item.acCheckedAt = cache.at;
+            item.acCheckStale = flow.acChecksum === null || !cache.key.startsWith(`${flow.acChecksum}:`);
+          }
+        } catch {
+          // Cache unreadable — same as "not run"; never blocks the flow list.
         }
         items.push(item);
       } catch {

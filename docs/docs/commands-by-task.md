@@ -89,6 +89,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | Shell command | Summary |
 |---|---|
 | `/flows` | Browse project flows and inspect one. |
+| `/ac` | Check the active flow's frozen acceptance criteria (advisory, cached) — same modal as /flows, AC tab. |
 | `/review` | Show project-wide items needing review (proposals, blocked sessions). |
 | `/ci` | Failed CI runs/jobs of the current branch's PR, each with an advisory triage and its deterministic-signal evidence. |
 | `/conform` | Check a PR, a review report, or a diff against a reference document's clauses, with Jev. |

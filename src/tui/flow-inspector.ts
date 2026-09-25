@@ -2,16 +2,60 @@
 // Newest flow first. `[`/`]` switch flows; ↑/↓ scroll the active tab body.
 
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
-import { sortFlowsNewestFirst, type FlowInspectorItem } from "./inspector-sources";
+import { sortFlowsNewestFirst, type AcMarker, type FlowInspectorItem } from "./inspector-sources";
 
 export const FLOWS_COMMAND = "/flows";
+/** Flow 328, AC7: `/ac` opens the same modal straight to the AC tab of the current flow. */
+export const AC_COMMAND = "/ac";
 
 export const FLOWS_FOOTER = [
   { key: "[/]", label: "flow" },
   { key: "↑/↓", label: "scroll" },
   { key: "←/→", label: "tabs" },
+  { key: "c", label: "check AC" },
   { key: "esc", label: "close" },
 ] as const;
+
+/** Flow 328, AC7: one line per criterion — English, fixed marker glyphs so a screen reader/log reads the same word every time. */
+const MARKER_GLYPH: Readonly<Record<AcMarker["status"], string>> = {
+  "likely-met": "[met]",
+  "not-evident": "[not evident]",
+  "not-checkable": "[not checkable]",
+};
+
+/** The compact per-criterion summary the list row and the AC tab both use. */
+export function formatAcMarkersSummary(item: FlowInspectorItem): string {
+  if (item.acMarkers === undefined || item.acMarkers.length === 0) {
+    return "AC: not run";
+  }
+  const counts = item.acMarkers.reduce(
+    (acc, marker) => {
+      if (marker.status === "likely-met") acc.met += 1;
+      else if (marker.status === "not-evident") acc.notEvident += 1;
+      else acc.notCheckable += 1;
+      return acc;
+    },
+    { met: 0, notEvident: 0, notCheckable: 0 },
+  );
+  const staleNote = item.acCheckStale === true ? " (stale — criteria changed since this check)" : "";
+  return `AC: ${counts.met} met, ${counts.notEvident} not evident, ${counts.notCheckable} not checkable${staleNote}`;
+}
+
+/** Flow 328, AC7: the AC tab's detail lines — per criterion, with evidence when a Jev call produced a probability. */
+export function formatAcCheckLines(item: FlowInspectorItem): string[] {
+  if (item.acMarkers === undefined || item.acMarkers.length === 0) {
+    return ["No acceptance-criteria check has been run for this flow yet.", "Press `c` to run `keryx flow check-ac` now."];
+  }
+  const lines: string[] = [
+    `Last checked: ${item.acCheckedAt ?? "unknown"}${item.acCheckStale === true ? "  (STALE — criteria changed since this check; press `c` to re-check)" : ""}`,
+    "",
+  ];
+  for (const marker of item.acMarkers) {
+    lines.push(`${marker.id}  ${MARKER_GLYPH[marker.status]}`);
+  }
+  lines.push("", "Press `c` to re-check now.");
+  return lines;
+}
 
 export type ModalTab = { id: string; label: string };
 
@@ -35,6 +79,12 @@ export type OpenModalFn = (otui: unknown, chrome: unknown, input: OpenModalInput
 export function isFlowsCommand(line: string): boolean {
   const token = line.trim().split(/\s+/)[0] ?? "";
   return token === FLOWS_COMMAND;
+}
+
+/** Flow 328, AC7: `/ac` — an entry point straight to the AC tab of the currently active flow. */
+export function isAcCommand(line: string): boolean {
+  const token = line.trim().split(/\s+/)[0] ?? "";
+  return token === AC_COMMAND;
 }
 
 export function findFlowItem(
@@ -132,6 +182,16 @@ export type PresentFlowsOptions = {
   renderer?: { width?: number; height?: number; copyToClipboardOSC52?: (text: string) => void };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
+  /** Flow 328, AC7: opens straight to the AC tab, for `/ac`. */
+  initialTab?: "list" | "detail" | "ac";
+  /**
+   * Flow 328, AC7's "a key to run the check": pressing `c` calls this with
+   * the currently selected flow. The check itself (git diff, Jev, cache
+   * write) is entirely the caller's concern — this modal only asks and
+   * displays whatever fresh `items` it is next opened with; it never runs a
+   * check itself.
+   */
+  onRunCheck?: (item: FlowInspectorItem) => void;
 };
 
 // Review finding: session-info.ts's tabs wrap to ctx.width (added in this
@@ -190,6 +250,7 @@ export function presentFlows(
   let detailScroll = 0;
   let listNode: { content: string } | undefined;
   let detailNode: { content: string } | undefined;
+  let acNode: { content: string } | undefined;
   let unsubscribeKey: (() => void) | undefined;
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const bodyRows =
@@ -213,6 +274,11 @@ export function presentFlows(
     const raw = item !== undefined ? formatFlowDetailLines(item) : ["No flow selected."];
     return wrapLines(raw.join("\n"), tabWidth).split("\n");
   };
+  const acLines = (): string[] => {
+    const item = items[selected];
+    const raw = item !== undefined ? formatAcCheckLines(item) : ["No flow selected."];
+    return wrapLines(raw.join("\n"), tabWidth).split("\n");
+  };
 
   const paintSelection = (): void => {
     listScroll = scrollToReveal(selected, listScroll, bodyRows);
@@ -223,6 +289,9 @@ export function presentFlows(
     }
     if (detailNode !== undefined) {
       detailNode.content = windowLines(detailLines(), detailScroll, bodyRows).join("\n");
+    }
+    if (acNode !== undefined) {
+      acNode.content = windowLines(acLines(), 0, bodyRows).join("\n");
     }
   };
 
@@ -244,8 +313,9 @@ export function presentFlows(
     tabs: [
       { id: "list", label: "Flows" },
       { id: "detail", label: "Detail" },
+      { id: "ac", label: "AC" },
     ],
-    initialTab: "list",
+    initialTab: options.initialTab ?? "list",
     footer: FLOWS_FOOTER,
     renderTab: (tabId, body, ctx) => {
       const renderer = options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
@@ -253,6 +323,10 @@ export function presentFlows(
       if (tabId === "list") {
         listScroll = scrollToReveal(selected, listScroll, bodyRows);
         listNode = paintLines(otui, renderer, body, windowLines(listLines(), listScroll, bodyRows));
+        return;
+      }
+      if (tabId === "ac") {
+        acNode = paintLines(otui, renderer, body, windowLines(acLines(), 0, bodyRows));
         return;
       }
       detailScroll = clampScroll(detailScroll, detailLines().length, bodyRows);
@@ -281,6 +355,13 @@ export function presentFlows(
       }
       if (token === "return" || token === "enter") {
         handle.setTab("detail");
+        return;
+      }
+      if (token === "c") {
+        const item = items[selected];
+        if (item !== undefined) {
+          options.onRunCheck?.(item);
+        }
         return;
       }
       const onDetail = handle.activeTab() === "detail";

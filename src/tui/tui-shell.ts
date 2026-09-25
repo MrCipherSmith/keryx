@@ -64,7 +64,11 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
-import { isFlowsCommand, openFlows } from "./flow-inspector";
+import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
+// Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
+// CLI does — no separate TUI-only Jev path. Never triggered automatically;
+// only on an explicit key press.
+import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
@@ -5781,12 +5785,28 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
-    const showFlows = (): void => {
+    const showFlows = (initialTab?: "list" | "detail" | "ac"): void => {
       void (async () => {
-        const items = await loadInspectorFlows(inspectorCwd());
+        const cwd = inspectorCwd();
+        const items = await loadInspectorFlows(cwd);
         openFlows(otui, chrome, {
           items,
           renderer: r,
+          ...(initialTab !== undefined ? { initialTab } : {}),
+          // Flow 328, AC7: `c` runs `keryx flow check-ac` for the selected
+          // flow (advisory, never blocking) and reopens the modal on the AC
+          // tab with the freshly cached markers.
+          onRunCheck: (item) => {
+            void (async () => {
+              io.onSystem?.(`Checking flow ${item.id} against its frozen acceptance criteria…\n`);
+              try {
+                await runCheckAc(cwd, item.id, {});
+              } catch (error) {
+                io.onSystem?.(`acceptance-criteria check failed: ${error instanceof Error ? error.message : String(error)}\n`);
+              }
+              showFlows("ac");
+            })();
+          },
           ...inspectorKeys,
         });
       })();
@@ -7242,6 +7262,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isFlowsCommand(command.name)) {
           showFlows();
+          return;
+        }
+        if (isAcCommand(command.name)) {
+          showFlows("ac");
           return;
         }
         if (isWorkspaceCommand(command.name)) {

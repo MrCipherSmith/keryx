@@ -38,6 +38,14 @@ import {
 } from "../review/cross-family";
 import type { CrossFamilyReviewDecision } from "../lib/provider-config";
 import { githubAdapter } from "../flow/tracker/github";
+// Flow 328, AC6: attach the latest CACHED check-ac result to a review
+// package. Minimal, additive — this hook never triggers a fresh Jev call
+// (that spend only happens via `keryx flow check-ac`/the advisory notices in
+// `src/commands/flow.ts`) and never fails `review ingest` over it. Through
+// the flow facade (`../flow/service`), not `../flow/store`/`../flow/check-ac`
+// directly — import policy rule 2 only excuses a `service.ts` target.
+import { readAcCheckEnabled, renderAcCheckReport, resolveFlowDir } from "../flow/service";
+import { acCheckCachePath, readAcCheckCache } from "./flow-check-ac";
 import {
   buildPathScope,
   buildReviewScope,
@@ -748,6 +756,29 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
         `STOP: spend ${spend.spent} ${spend.currency} has reached the ${spend.ceiling} ${spend.currency} ceiling (over by ${spend.overBy}). Ask the operator before another round. The package was written; it is the record of the stop.`,
       );
       process.exitCode = 1;
+    }
+  }
+
+  // Flow 328, AC6: reviewers see which criteria are in doubt. Silent no-op
+  // when the opt-in is off, no flow is attached, or nothing has been cached
+  // yet (`keryx flow check-ac` populates the cache; this never populates it).
+  if (mode === "ingest" && result.manifest.flow?.id !== undefined && (await readAcCheckEnabled(cwd))) {
+    try {
+      const flowId = result.manifest.flow.id;
+      const flowDir = await resolveFlowDir(cwd, flowId);
+      const cached = await readAcCheckCache(acCheckCachePath(cwd, flowDir));
+      if (cached !== undefined) {
+        const markdown = renderAcCheckReport({
+          flowId,
+          verdicts: cached.verdicts,
+          jevAsked: cached.jevAsked,
+          ...(cached.usage !== undefined ? { usage: cached.usage } : {}),
+        });
+        await writeFileAtomic(path.join(result.path, "ac-check.md"), `${markdown}\n`);
+        console.log(`ac-check: attached (${result.path}/ac-check.md)`);
+      }
+    } catch {
+      // Best-effort attachment; never fails `review ingest` over it.
     }
   }
 }
