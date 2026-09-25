@@ -101,6 +101,18 @@ export interface ShellConfig {
    * validated here, like every other field above.
    */
   bus?: { enabled?: boolean; name?: string };
+  /**
+   * Flow 305 — the operator's PER-USER routing table (category -> model,
+   * `src/harness/routing/table.ts`'s `RoutingTable`). A personal override, not
+   * shared with the project (`routing.config.json` at the project root is the
+   * per-project layer, which wins over this one — PRD §5). Read/written
+   * through `src/harness/routing/config.ts`'s `loadRoutingConfig`/
+   * `saveRoutingConfig`, never raw here, like every other structured field
+   * above. Not validated at this layer (a raw best-effort reader/writer); an
+   * invalid hand-edited entry is simply ignored by `resolveCategory`'s own
+   * loader.
+   */
+  routing?: Record<string, unknown>;
 }
 
 /**

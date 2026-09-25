@@ -40,6 +40,10 @@ import {
   resolveTierModel,
   type DiscoveredProvider,
 } from "../../../gdskills/model-tier";
+import type { ChildModelRequest } from "../../child/model";
+import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
+import { loadRoutingConfig } from "../../routing/config";
+import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../../routing/table";
 
 export type SubagentMode = "read_only" | "general";
 
@@ -513,6 +517,57 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // `parseModelTier` cannot read (including a model NAME, which is the point)
       // is `undefined` too: an unreadable tier inherits rather than guessing.
       const requestedTier = parseModelTier(typeof input.model_tier === "string" ? input.model_tier : undefined);
+      // Flow 305 (AC6/AC7): when the dispatcher named no explicit model (no
+      // `model_tier`), resolve the `subagents` category from the routing
+      // table and construct an explicit `ChildModelRequest` from it, BEFORE
+      // `resolveChildModel`'s G1/G2/G3 gates ever see it — those gates are
+      // applied to this request exactly as to any other (model.ts is not
+      // touched by this flow). A dispatcher-supplied `model_tier` short-
+      // circuits this branch entirely, so the category is never even looked
+      // up when the dispatcher named its own tier (AC7).
+      let categoryModelRequest: ChildModelRequest | undefined;
+      if (requestedTier === undefined) {
+        // `{cwd: deps.cwd}` — the project layer's `routing.config.json` lives at
+        // the project root; the user layer ignores `cwd` entirely and reads the
+        // operator's real global config (no `userConfigDir` override here, same
+        // as every other production call site — see `RoutingConfigLocation`'s
+        // doc in `routing/config.ts`). AC11's project-trust gate applies
+        // automatically here too — `loadRoutingConfig("project", …)` already
+        // returns an EMPTY table for an unapproved/changed
+        // `routing.config.json`, so an untrusted project entry never reaches
+        // this branch at all; no additional gate is needed for AC11(e).
+        const routingLocation = { cwd: deps.cwd };
+        const [projectRouting, userRouting] = await Promise.all([
+          loadRoutingConfig("project", routingLocation),
+          loadRoutingConfig("user", routingLocation),
+        ]);
+        // Flow 305 review finding 3 — a malformed routing.config.json (or
+        // per-user entry) used to be silently swallowed here: the category
+        // just fell back to `default` with no trace. Surfaced as a
+        // non-fatal system-log diagnostic (never blocks the spawn) rather
+        // than an error.
+        for (const layer of [projectRouting, userRouting]) {
+          if (layer.error !== undefined) {
+            emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "system", text: `routing: ${layer.error}` } });
+          }
+        }
+        // AC10 — an assignment naming a provider/model the parent has not
+        // actually detected is unresolved at that layer; `catalog` (above) is
+        // the SAME detection result already computed for tier resolution, so
+        // this adds no new network call.
+        const connected = connectedPredicateFrom(catalog);
+        const resolved = resolveCategoryDetailed("subagents", { project: projectRouting.table, user: userRouting.table }, connected);
+        if (resolved.rejected !== undefined) {
+          emitFleetEvent({
+            kind: "log",
+            id: workerId,
+            entry: { kind: "system", text: `routing: ${describeFallbackNotice(resolved.rejected.assignment, resolved.assignment)}` },
+          });
+        }
+        categoryModelRequest = categoryAssignmentToChildModelRequest(resolved.assignment);
+      }
+      const dispatchModelRequest: ChildModelRequest | undefined =
+        requestedTier !== undefined ? { kind: "tier", tier: requestedTier } : categoryModelRequest;
       const ctx: SubagentContext = {
         parentRunId,
         parentSessionId,
@@ -560,12 +615,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             kind: "final-report",
             hash: artifactHash,
           },
-          // Omitted when no tier was asked for, so the child inherits the parent
-          // through `resolveChildModel`'s terminal rung — unchanged behaviour for
-          // every dispatch that does not use the field.
-          ...(requestedTier !== undefined
-            ? { modelRequest: { kind: "tier" as const, tier: requestedTier } }
-            : {}),
+          // Explicit tier wins outright (AC7: the category is never looked up
+          // when the dispatcher named its own tier); otherwise the routing
+          // table's `subagents` category resolution (constructed above), which
+          // is `undefined` — omitted, so the child inherits the parent through
+          // `resolveChildModel`'s terminal rung — when nothing is configured
+          // for the category either. Unchanged behaviour for every dispatch
+          // that uses neither.
+          ...(dispatchModelRequest !== undefined ? { modelRequest: dispatchModelRequest } : {}),
         },
         ctx,
         { idSeq, clock },

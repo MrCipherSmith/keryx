@@ -169,6 +169,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 305: the routing table (category -> model). TUI-only, same
+    // reasoning as /governance/ /triggers — the list+detail modal and its
+    // flat searchable model picker need the OpenTUI surface.
+    name: "/routing",
+    description: "Route task categories to models — a flat, searchable list across every connected provider",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 295 (AC6): create a scheduled background task. TUI-only: the
     // confirmation card and its yes/no dialog need the OpenTUI surface.
     name: "/schedule",

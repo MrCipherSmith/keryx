@@ -13,6 +13,26 @@
 
 import { SCHEDULE_DESCRIPTORS } from "./schedule-descriptors";
 
+/**
+ * `src/harness/routing/table.ts`'s `ROUTING_CATEGORIES`, restated as a
+ * literal — NOT imported. `src/standard/` is a CORE zone module
+ * (`src/lib/import-zones.ts`) and `src/harness/` is CLIENT; core never
+ * imports client, no exception (`src/lib/import-policy.ts`), the same reason
+ * `help-groups.ts` in this same directory restates its own summaries by hand
+ * rather than importing `CLI_ROUTES`/`AGENT_SLASH_COMMANDS`. Kept in sync by
+ * `command-registry.routing-categories.test.ts`.
+ */
+const ROUTING_CATEGORIES_LITERAL = [
+  "default",
+  "review",
+  "subagents",
+  "quick",
+  "coding",
+  "planning",
+  "docs",
+  "unattended",
+] as const;
+
 /** One argument (positional or flag) of a command. */
 export interface CommandArg {
   /** Flag name without dashes (`page`) or `<positional>` for a positional arg. */
@@ -1208,6 +1228,53 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     args: [{ name: "json", type: "bool", required: false, desc: "structured provider/family list" }],
     json: true,
     read: true,
+  },
+  // ---- routing (flow 305) --------------------------------------------------
+  // Category -> model routing table. `list` is read-only; `set`/`unset` write
+  // to the per-user layer by default (shell config), or the project layer
+  // with `--project` — never the network, never a model call.
+  {
+    module: "routing",
+    command: "routing list",
+    summary: "Every routing category, its resolved model, and which layer (project/user/default) answered.",
+    intent: ["какая модель для ревью", "routing table", "keryx routing list", "категория модель"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured category -> assignment/source map" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "routing",
+    command: "routing set",
+    summary: "Pin a category to an exact model, or to a provider's own default model (no `/model`).",
+    intent: ["маршрутизация ревью на модель", "route category to model", "set routing category"],
+    args: [
+      { name: "<category>", type: "enum", required: true, values: [...ROUTING_CATEGORIES_LITERAL], desc: "routing category" },
+      { name: "<provider>/<model>|<provider>", type: "string", required: true, desc: "an exact model, or a bare provider for its default" },
+      { name: "user", type: "bool", required: false, desc: "write layer: per-user (default)" },
+      { name: "project", type: "bool", required: false, desc: "write layer: per-project routing.config.json" },
+    ],
+    sideEffects: ["writes the chosen category's assignment to the selected layer's routing config"],
+  },
+  {
+    module: "routing",
+    command: "routing unset",
+    summary: "Clear a category back to session default.",
+    intent: ["сбросить маршрутизацию категории", "unset routing category", "clear routing category"],
+    args: [
+      { name: "<category>", type: "enum", required: true, values: [...ROUTING_CATEGORIES_LITERAL], desc: "routing category" },
+      { name: "user", type: "bool", required: false, desc: "write layer: per-user (default)" },
+      { name: "project", type: "bool", required: false, desc: "write layer: per-project routing.config.json" },
+    ],
+    sideEffects: ["removes the chosen category's assignment from the selected layer's routing config"],
+  },
+  {
+    module: "routing",
+    command: "routing trust",
+    summary:
+      "Print routing.config.json's entries and approve its current content — required before the project layer applies (AC11).",
+    intent: ["одобрить routing.config.json", "approve project routing", "trust routing config", "keryx routing trust"],
+    args: [],
+    sideEffects: ["records the project's routing.config.json content fingerprint as approved, in the operator's own config dir"],
   },
   // ---- retention ----------------------------------------------------------
   {

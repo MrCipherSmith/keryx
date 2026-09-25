@@ -23,10 +23,12 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `keryx auth` | Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status. |
 | `keryx providers` | Providers this operator has configured, and cross-family review eligibility. |
+| `keryx routing` | Category -> model routing table: list, set, unset (per-user default; --project for the project layer). |
 
 | Shell command | Summary |
 |---|---|
 | `/connect` | Switch provider; row buttons test/disconnect it. |
+| `/routing` | Route task categories to models — a flat, searchable list across every connected provider. |
 | `/search-provider` | Configure and test a web search provider. |
 | `/search-connect` | Select a connected web search provider. |
 | `/provider` | Switch provider — /provider <name>, or no arg to re-select. |

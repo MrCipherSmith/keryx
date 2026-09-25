@@ -93,6 +93,19 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  help      Grouped command help by task: every verb, in nine onboarding-ordered groups\n",
     "  keryx providers test <name> [--json]\n",
     "  keryx providers remove <name> [--yes] [--json]\n",
+    // Flow 305: the routing table (category -> model), `keryx routing`, plus
+    // its summary row — a brand-new verb, so both a USAGE_BODY block and a
+    // Commands: summary row were added (mirrors flow 303's `help`, not flow
+    // 304's `providers test`/`remove`, which were subcommands of an existing
+    // verb and needed only the USAGE_BODY lines).
+    "  keryx routing list [--json]\n",
+    "  keryx routing set <category> <provider>/<model> [--user|--project]\n",
+    "  keryx routing set <category> <provider> [--user|--project]\n",
+    "  keryx routing unset <category> [--user|--project]\n",
+    // Flow 305 review finding (AC11): `keryx routing trust` — approve a
+    // project routing.config.json's current content.
+    "  keryx routing trust\n",
+    "  routing   Category -> model routing table: list, set, unset (per-user default; --project for the project layer)\n",
   ];
 
   test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {

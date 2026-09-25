@@ -1226,6 +1226,76 @@ recorded as cross-family when both sides in fact ran the same vendor.
 
 ---
 
+## routing
+
+The **routing table** — flow 305 — maps a task category to a model, so
+different kinds of work land on different providers/models without running
+`/model` before every turn. Two config layers, same precedence pattern as
+`security.config.json`: **explicit per-call override > per-project
+`routing.config.json` > per-user entry (shell config) > session default**.
+
+Categories (PRD `docs/requirements/keryx-jev-router/PRD.md` §4): `default`,
+`review`, `subagents`, `quick`, `coding`, `planning`, `docs`, `unattended`.
+Only `review` (`keryx review tier`) and `subagents` (`spawn_subagent`) are
+**wired** in this release — resolved automatically at their call site; the
+rest are catalogue entries the table/CLI/`/routing` already support, ready for
+a later flow to wire up without a second migration.
+
+**Not connected falls through.** An assignment naming a provider the operator
+has not connected — or a model that provider does not list — is treated as
+unresolved at its layer and falls through to the next one (project -> user ->
+session default), at every call site (`review tier`, `spawn_subagent`,
+`keryx routing list`, `/routing`). "Connected" is the same notion `/connect`
+uses (configured/detected providers and their reported models) — never an
+extra live network probe on every resolution. `keryx routing list` and
+`/routing` show the rejected entry:
+
+```
+<provider>/<model> - not connected, falling back to <resolved>
+```
+
+**A project `routing.config.json` requires approval.** Because it is a
+COMMITTED file, a repository could otherwise silently steer which model
+reviews its own diff. A project entry takes effect only after the operator
+has approved its CURRENT content once — a content fingerprint recorded per
+user, keyed by project root (the same "approve the exact thing that will run"
+shape `.keryx/mcp-servers.json` project-scope trust already uses). Until then,
+and whenever the file changes afterward (a pure reformat does not count — the
+fingerprint is over the validated category table, not the raw bytes), its
+entries are ignored, with a visible notice in `keryx routing list`, `/routing`
+and `keryx review tier`'s output. `keryx routing trust` shows the file's
+entries and then approves it; a routed review model is printed with
+`routed: true`, never folded into `tier_resolution: "discovered"` (which
+means the TIER, not routing, picked the model).
+
+```
+keryx routing list [--json]
+keryx routing set <category> <provider>/<model> [--user|--project]
+keryx routing set <category> <provider> [--user|--project]
+keryx routing unset <category> [--user|--project]
+keryx routing trust
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` | `--json` | Every category, its resolved assignment (`session default`, `<provider>/<model>`, or `<provider> (provider default)`), which layer answered (`project`, `user`, or `default`), and — when applicable — the not-connected entry it fell back from. |
+| `set` | `<category> <provider>/<model>`, `--user`\|`--project` | Pin an exact model for a category. Default layer: `--user`. A `--project` write is not auto-approved — run `keryx routing trust` afterward. |
+| `set` | `<category> <provider>`, `--user`\|`--project` | Pin a provider's own default model for a category (no `/model` — the "provider default" form). |
+| `unset` | `<category>`, `--user`\|`--project` | Clear a category back to `session default`. Default layer: `--user`. |
+| `trust` | — | Print `routing.config.json`'s entries and approve its current content, so the project layer starts applying. |
+
+In the TUI, `/routing` opens a list+detail modal: the list side shows every
+category's current resolution (with a not-connected fallback notice inline,
+and an unapproved-project notice when relevant); selecting one opens a
+**flat** searchable model picker — one list spanning every connected
+provider's models (built on the same type-to-filter machinery `/model` uses),
+never a "pick a provider first" step — with a "provider default" row per
+connected provider and a "session default" row. A confirmed pick writes
+immediately to the per-user layer. `t` on the list side shows the project
+file's entries and arms an approval; `y` confirms, any other key cancels.
+
+---
+
 ## serve
 
 An **opt-in, off-by-default** loopback-bound HTTP entry over the same agent
