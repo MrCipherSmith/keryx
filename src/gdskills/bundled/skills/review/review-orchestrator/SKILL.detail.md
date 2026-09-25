@@ -43,3 +43,35 @@ suppressing it would trade real coverage for tidiness. Record the drift in
 `review_context` and name it once in the report, so the next person knows the
 profile is due a re-read. Never file it as a finding against the code under
 review: it is a fact about the review, not about the diff.
+
+## CLI-engine reviewers — dispatched as a command, not a sub-agent
+
+`review-jev-rules` (flow 330), `review-jev-risk` and `review-jev-scenarios`
+(both flow 332) are ADDITIONAL reviewers, never replacing any other, and
+their dispatch mechanism differs from every reviewer named in SKILL.md's
+Routing Table: there is no platform-native agent to invoke, because each is a
+deterministic **keryx program**. Run them with `keryx review jev-rules
+--scope <scope.json> --json`, `keryx review jev-risk --scope <scope.json>
+--json`, and `keryx review jev-scenarios --scope <scope.json> --json` — the
+SAME `scope.json` every other Wave A/B reviewer's dispatch already reads, so
+each checks exactly the same hunks. Read each `--json` output as a
+`REVIEW_RESULT` and merge its `findings` into the consolidated array exactly
+like a sub-agent reviewer's: same Sub-Agent Report Quality Gate, same dedup,
+same Wave C verification. `review-jev-risk` additionally emits `ranked` and
+`routingHints`; `review-jev-scenarios` additionally emits `checklist` — see
+each reviewer's own SKILL.md for what to do with its extra.
+
+Gate each BEFORE running its command, not after: skip it — recorded in
+`Skipped reviewers` with the reason, never silently absent — when its own
+opt-in (`review.jev.rules` / `review.jev.risk` / `review.jev.scenarios`) is
+not `true` in `.metaproject/tasks.config.json`, or when no Jev/OpenRouter
+credential is resolvable. Either gate failing means the command itself would
+refuse before any read or network call, so checking first saves a doomed
+dispatch. The three opt-ins are independent: any subset may be on.
+
+`keryx review reviewers --json` marks a CLI-engine reviewer with
+`"engine": "jev"` on its `bundled` entry — the field's presence, not its
+absence, is what distinguishes it from the default (an LLM sub-agent
+dispatch). A future engine-backed reviewer follows the same pattern: gate on
+its own opt-in and reachability, dispatch as a command, merge its `--json`
+output the same way.

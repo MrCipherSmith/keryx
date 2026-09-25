@@ -97,6 +97,7 @@ Resolution order:
 | review-frontend-conventions | review | Review frontend code against repository-local frontend conventions and agent entrypoints. | gdskills/review/review-frontend-conventions/SKILL.md |
 | review-highload | review | Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks. | gdskills/review/review-highload/SKILL.md |
 | review-jev-risk | review | Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency. | gdskills/review/review-jev-risk/SKILL.md |
+| review-jev-rules | review | Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx. | gdskills/review/review-jev-rules/SKILL.md |
 | review-jev-scenarios | review | Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario. | gdskills/review/review-jev-scenarios/SKILL.md |
 | review-layout | review | Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry. | gdskills/review/review-layout/SKILL.md |
 | review-logic | review | Review logic correctness, contracts, edge cases, nullability, and async behavior. | gdskills/review/review-logic/SKILL.md |

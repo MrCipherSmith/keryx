@@ -214,8 +214,8 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 316;
-export const RANK1_TOTAL = 318;
+export const RANK1_FIRST = 320;
+export const RANK1_TOTAL = 322;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -648,6 +648,19 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "write tests", owner: "test-gen" },
       { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-jev-rules",
+    positives: [
+      "jev rules check on this diff",
+      "check my changes against our project's documented rule clauses with jev",
+      "run the jev rules reviewer over this pull request",
+      "does this hunk violate any of our written-down rules, score it with jev",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "style review, naming and readability only", owner: "review-style" },
     ],
   },
   {

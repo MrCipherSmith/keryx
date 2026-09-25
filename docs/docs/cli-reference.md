@@ -4573,6 +4573,141 @@ accordingly regardless of `--top`. See the flow 307 journal
 (`.metaproject/flows/307-*/journal.md`) for the full per-case breakdown and
 the evidence behind each of the eight labels.
 
+### `review jev-rules`
+
+Flow 330. An ADDITIONAL orchestrator reviewer — never replacing any other —
+that checks every changed hunk against every applicable clause of every
+discovered project rule, scored by Jev's `noul` "does this hunk VIOLATE this
+clause?" and written up entirely by keryx: Jev supplies only a probability,
+never prose. Unlike `review conform`, this is dispatched by
+`review-orchestrator` itself (Wave B), as a CLI call rather than an LLM
+sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
+
+```bash
+keryx review jev-rules --scope scope.json --json
+keryx review jev-rules --pr 712 --repo MrCipherSmith/keryx --rules rules/core --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <ref>` \| `--pr <n>` \| `--scope <scope.json>` | Exactly one is required. `--scope` takes the whole `keryx review scope --json` document (the same file every other reviewer's dispatch reads) — the orchestrator's own path. `--diff`/`--pr` build the scope themselves via `hunkRegionsFromDiff`. |
+| `--rules <paths>` | Comma-separated extra rule files/directories, checked in addition to auto-discovery (`.metaproject/rules/**`, `rules/**`, and any project-skill/installed gdskill whose name or `metadata.category` marks it a coding convention). The category filter below is bypassed only for an entry naming ONE FILE explicitly; an entry naming a DIRECTORY is walked and its files are filtered exactly like auto-discovery — naming a whole directory is not the same as naming one document. |
+| `--max-calls <n>` | Caps how many `(hunk, rule clause)` pairs are scored, default 150. Hunks are ranked code, then tests, then docs, and the budget is allocated round-robin across hunks (see "Fair budget allocation" below) rather than draining on the first hunk in diff order; anything beyond the cap is reported dropped, never silently, and per-hunk coverage is reported under `selection.hunkCoverage`. |
+| `--threshold <0..1>` | Below this Jev probability a pair is not reported. Default `0.5`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model — used for both clause tagging and violation scoring. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`, a JSON array consumed in call order — tagging calls first, then violation calls) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats`, plus `tokens`/`selection` (including `hunkCoverage`)/`ruleSources` (with `category`)/`excludedSources`/`droppedClauses`/`droppedPlaceholderClauses`) conforming to `reviewer-finding.schema.json`. |
+
+**Finding synthesis is deterministic.** `problem` quotes the violated clause;
+`impact` is the rule's own stated rationale (its first clause under a
+heading naming rationale/why/purpose/reason) or a fixed template when the
+rule states none; `suggested_fix` names the clause to bring the hunk in line
+with; `evidence` carries every hunk location and Jev's probability. Severity
+is capped at `minor` unless the clause itself declares a higher one
+(`[severity: major]`, trailing on the clause text) — the same marker syntax
+`review conform`'s `[state:pr]` already uses. One finding per `(rule clause,
+file)`, deduped across every hunk of that file with a hunk list, never one
+finding per hunk.
+
+**Four precision/cost filters run before any hunk is scored:**
+
+1. **`--rules` bypass, scoped to one file.** `discoverRuleSources`
+   (`src/commands/review-jev-rules.ts`) only lets a `--rules` entry that
+   names ONE FILE explicitly skip the category filter below. A `--rules`
+   DIRECTORY is walked and every file it contains is filtered exactly like
+   `.metaproject/rules/**` auto-discovery — a live re-measurement found the
+   opposite bug: passing `--rules .metaproject/rules` (the whole 41-doc
+   corpus, as a directory) bypassed the category filter for every file in
+   it, unconditionally.
+2. **Rule-source category filter.** Before clause extraction runs at all,
+   each discovered source (auto-discovered, or found by walking a `--rules`
+   directory — never a `--rules` entry naming that one file explicitly) is
+   classified `code`/`process`/`docs` — explicit frontmatter first
+   (`applies_to: code|process|docs` at the frontmatter's top level, or
+   `metadata.category`), else a documented filename/title heuristic
+   (`PROCESS_RULE_HEURISTIC_TERMS` in `src/review/jev-rules.ts`: `commit`,
+   `git`, `tdd`, `workflow`, `definition-of-done`, `documentation`,
+   `requirements`, `plan`, `prompting`, `subagent`, `skill`, `jobs`,
+   `orchestrat`, `review-process`, `release`). A `process`/`docs` source is
+   excluded before it ever reaches tagging or scoring — reported with its
+   reason under `excludedSources` in `--json` (and counted in the summary
+   line).
+3. **Placeholder/template clause drop.** `isPlaceholderClauseText`
+   (`src/review/jev-rules.ts`, a pure function) drops a clause extracted
+   from authoring scaffolding a rule author never filled in — a checklist
+   item still carrying a `<...>` placeholder (`[x] <criterion 1> — verified
+   by <test>`), text dominated by `<...>` placeholders, or a bare code-fence
+   line — BEFORE it is offered a tagging call. Dropped clauses are reported
+   under `droppedPlaceholderClauses` in `--json` and counted in the summary
+   line.
+4. **Clause-kind AND file-kind gating.** Every rule doc's remaining clauses
+   are tagged `state_kind: "pr" | "report" | "hunk"` and `checkable` —
+   REUSING `review conform`'s own tagging
+   (`applyClauseTags`/`buildClauseTagQuestions`/`clauseTagFromChoice`), an
+   explicit `[state:hunk]`/`[not-checkable: ...]` marker on the clause text
+   when the rule author wrote one, else a single Jev `choice` call per doc's
+   untagged clauses, cached by the doc's content hash at
+   `.metaproject/data/review-jev-rules/clause-tags.json` (a jev-rules-
+   specific cache file, so a `review conform` run and a `review-jev-rules`
+   run never race on the same one). Only a clause tagged `state_kind:
+   "hunk"` and `checkable` is ever paired against a hunk — a
+   `"pr"`/`"report"`-kind or not-checkable clause is dropped and reported
+   (count in the summary line, full `(ruleId, clauseId, reason)` list under
+   `droppedClauses` in `--json`). On top of that, `clauseFileKindApplicability`
+   gates by file kind: a docs hunk (`.md`/`.mdx`/`.txt`) pairs only with a
+   `docs`-categorised source or a clause explicitly tagged
+   `[docs-applicable]`; a code source never pairs with a docs hunk, and
+   vice versa — the fix for a code-convention clause matching a
+   `cli-reference.md` hunk with no declared path restriction. Tagging is
+   one-time per doc content: the usage summary counts it separately,
+   `tagging: N call(s) (cached next run)`, from `violation: N call(s)` (the
+   `noul` scoring calls).
+
+**Fair budget allocation.** Hunks are ranked code (non-docs, non-test) first,
+then test files, then docs files — `hunkPriorityRank` in
+`src/review/jev-rules.ts` — with the diff's own order breaking ties within a
+rank. `selectRuleHunkPairs` then spends `--max-calls` round-robin across
+hunks: `K = max(1, floor(maxCalls / hunks-with-a-pair))` pairs per hunk per
+round, computed once, so every hunk in the rotation gets at least one round
+while the budget allows one K-sized slice per hunk; a hunk whose pairs run
+out simply drops from the rotation and the freed capacity keeps circulating.
+This is the direct fix for a measured bug: on a live PR, the entire default
+150-call budget landed on a single docs hunk in `cli-reference.md`
+(processed first in diff order under the old first-come allocation), and not
+one code hunk was ever scored. `selection.hunkCoverage` in `--json` reports
+one `{path, startLine, endLine, applicablePairs, selectedPairs}` per hunk
+that had something to check, and `selection.hunksReached`/
+`hunksNeverReached` (also named in plain text in `summary`) say how many of
+those hunks the budget actually reached.
+
+These fixes are the answer to a measured problem: a live check of this
+reviewer against a merged PR of this repository, using this repository's own
+41-doc `.metaproject/rules/**` corpus (none of which declares
+`metadata.paths`/`stack_requires`), hand-labelled ~1/10 findings correct —
+several of the false positives were exactly a process/agent-behaviour rule
+(commit-message formatting, TDD workflow, an agent's own prompting standard)
+paired against a code hunk it was never meant to describe. A follow-up
+re-measurement then found the `--rules` directory bypass and the
+first-hunk-drains-the-budget allocation described above. See
+`.metaproject/flows/330-*/journal.md` for the full before/after numbers.
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.rules: true` in `.metaproject/tasks.config.json`.
+Every hunk, every rule-clause, and every clause sent to a tagging call is
+redacted first (`src/security/service.ts`), the same floor `review
+conform`/`review ci-triage` already apply. With the setting off, or with no
+OpenRouter credential, the command refuses before any read and makes no
+network call.
+
+**Two caches**, both gitignored and mode `0600` under
+`.metaproject/data/review-jev-rules/`: `violation-cache.json`, keyed on the
+clause text and hunk location (a re-run over unchanged hunks and unchanged
+rules costs zero additional Jev calls), and `clause-tags.json`, keyed on the
+rule doc's own content hash (a re-run against a DIFFERENT diff but the SAME
+rule corpus costs zero additional tagging calls, even though the hunks —
+and so the violation cache — miss).
+
 ### `review ci-triage --eval`
 
 ```bash

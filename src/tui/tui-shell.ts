@@ -98,9 +98,10 @@ import type { ProfileRefreshSummary } from "../harness/routing/model-profile";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
 import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
-// flow 332: registration only — everything else lives in
-// jev-risk-command.ts/jev-scenarios-command.ts, mirroring flow 330's own
-// jev-rules-command.ts note, so no other flow's concurrent work collides.
+// flow 330/332: registration only — everything else lives in
+// jev-rules-command.ts/jev-risk-command.ts/jev-scenarios-command.ts, so no
+// other flow's concurrent work collides with any of them.
+import { isJevRulesCommand, runJevRulesForShell } from "./jev-rules-command";
 import { isJevRiskCommand, runJevRiskForShell } from "./jev-risk-command";
 import { isJevScenariosCommand, runJevScenariosForShell } from "./jev-scenarios-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
@@ -7458,6 +7459,20 @@ export async function launchTuiAgentShell(opts: {
               io.onSystem?.(`${await runJevScenariosForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-scenarios: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
+          return;
+        }
+        if (isJevRulesCommand(command.name)) {
+          // flow 330: a one-shot check on the working diff, not a modal —
+          // see `jev-rules-command.ts`'s own header for why.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-rules: checking the working diff against project rules…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevRulesForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-rules: ${error instanceof Error ? error.message : String(error)}\n`);
             }
           })();
           return;
