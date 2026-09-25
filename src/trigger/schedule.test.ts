@@ -66,7 +66,7 @@ describe("renderScheduleLines", () => {
 
   test("the systemd service ExecStart uses the same absolute-path invocation, no bare `keryx`", () => {
     const lines = renderScheduleLines({ projectRoot: "/srv/project", name: "nightly", cron: "0 2 * * *", invocation: FAKE_INVOCATION });
-    expect(lines.systemdService).toContain("ExecStart=/opt/node/bin/node /opt/keryx/dist/cli.js trigger run nightly");
+    expect(lines.systemdService).toContain("ExecStart=/opt/node/bin/node --no-env-file --config=/dev/null /opt/keryx/dist/cli.js trigger run nightly");
     expect(lines.systemdService).toContain("WorkingDirectory=/srv/project");
     // Flow 295 (AC8): a REAL OnCalendar= (flow 286 printed only a commented
     // placeholder, which never fired), and a project-unique unit name.
@@ -156,7 +156,9 @@ describe("renderScheduleLines", () => {
         cron: "0 2 * * *",
         invocation: { execPath: "/opt/my node/bin/node", scriptPath: "/opt/keryx dist/cli.js" },
       });
-      expect(spaced.systemdService).toContain('ExecStart="/opt/my node/bin/node" "/opt/keryx dist/cli.js" trigger run nightly');
+      expect(spaced.systemdService).toContain(
+        'ExecStart="/opt/my node/bin/node" --no-env-file --config=/dev/null "/opt/keryx dist/cli.js" trigger run nightly',
+      );
     });
 
     test("cron line is unaffected by shell quoting alone: the cronCommand itself already single-quotes the space", () => {
@@ -284,9 +286,11 @@ describe("resolveKeryxInvocation on a compiled binary", () => {
     expect(invocationArgv(resolveKeryxInvocation("B:\\~BUN\\root\\keryx.exe", "C:\\keryx\\keryx.exe"))).toEqual(["C:\\keryx\\keryx.exe"]);
   });
 
-  test("a real script entry keeps [interpreter, absolute script]", () => {
+  test("a real script entry keeps [interpreter, ...safe flags, absolute script] — R2-02: every self-spawn carries SAFE_BUN_SPAWN_ARGS", () => {
     expect(invocationArgv(resolveKeryxInvocation("dist/cli.js", "/opt/bun/bin/bun"))).toEqual([
       "/opt/bun/bin/bun",
+      "--no-env-file",
+      "--config=/dev/null",
       path.resolve("dist/cli.js"),
     ]);
   });

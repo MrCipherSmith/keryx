@@ -58,6 +58,54 @@ at all: `keryx auth` (and the shell's `/connect`, below) save a key to an
 owner-only file in your keryx config directory, which every session reads
 regardless of `cwd`.
 
+### What "protected" actually covers
+
+The globally installed `keryx` (npm, the standalone binary, or a `keryx`
+resolved via `PATH`) always launches through the safe shebang above, so
+this is the normal case and needs no thought. Two invocation shapes bypass a
+shebang entirely — `bun src/cli.ts …` (running from a source checkout) and
+`bun dist/cli.js`/`bunx keryx` (running the built bundle directly instead of
+through its shebang) — and for those, a second, weaker layer applies
+instead: a startup guard that re-execs itself once, under the same two safe
+flags, the moment it notices `--no-env-file`/`--config` are missing.
+
+That guard cannot undo everything. Two limits, so the boundary is stated
+rather than assumed:
+
+- **A `bunfig.toml` `preload` script in the bypassing invocation's cwd still
+  runs, once, before the guard gets a chance to act.** Bun runs `preload`
+  before any user code, full stop — there is no "undo" for code that has
+  already executed. Only the shebang (the normal, shipped path) actually
+  prevents `preload` from running at all. Treat `bun src/cli.ts` in an
+  untrusted checkout as unsafe for this reason alone.
+- **Every ES module `import` in `src/cli.ts` is evaluated before the guard's
+  own code runs**, including ones written textually below it — JavaScript
+  hoists imports ahead of a file's top-level statements, so import order in
+  the source does not change this. A top-level side effect in an imported
+  module that reads `process.env` before the guard has had a chance to
+  re-exec can still observe a cwd-`.env`-poisoned value.
+
+What the guard DOES do, once it runs: it strips every environment variable
+whose NAME appears in any `.env*` file in the bypassing invocation's cwd
+(regardless of that file's exact syntax, and regardless of the variable's
+current value — a real shell export sharing that name is dropped too, a
+deliberate fail-safe trade-off), plus `BUN_OPTIONS`, `NODE_OPTIONS` and every
+`BUN_CONFIG_*`/`BUN_INSTALL_*` variable unconditionally (Bun honours
+`BUN_OPTIONS`, e.g. `--preload=…`, even under `--no-env-file
+--config=/dev/null` — it is not one of the two things those flags stop). If
+you export one of these in your own shell (not through a project `.env`) and
+need it to reach a bypassing invocation, use the `bun --env-file=…` form
+above, or export it as part of the safe re-exec's OWN environment rather than
+relying on it surviving the strip.
+
+Two platform gaps, so they are documented rather than silently unhandled:
+BusyBox `env` (Alpine, some minimal containers) does not implement the `-S`
+shebang-splitting flag the shipped `bin` relies on — on that platform the
+guard above is what actually protects the invocation, not the shebang.
+Windows has no shebang mechanism at all — an npm install's generated
+`.cmd`/`.ps1` shim decides how `dist/cli.js` is launched, and the guard is,
+again, what actually protects it there.
+
 ## Install
 
 There are four ways in. They install the same CLI; they differ in what has to be

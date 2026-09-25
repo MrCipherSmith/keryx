@@ -52,6 +52,7 @@
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import path from "node:path";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { isCompiledBinaryEntry } from "../lib/self-invocation";
 import { loadTriggersConfig, type TriggerEntry } from "./config";
 import { cronToOnCalendar } from "./cron";
@@ -76,9 +77,28 @@ export function resolveKeryxInvocation(
   return { execPath, scriptPath: path.resolve(entry) };
 }
 
-/** The argv prefix that runs keryx the way this process runs: `[interpreter, script]` or `[binary]`. */
+/**
+ * The argv prefix that runs keryx the way this process runs: `[interpreter,
+ * script]` or `[binary]`.
+ *
+ * R2-02 (review round 2, major): this is the ONE place every self-spawning
+ * caller (the TUI's run-now, `keryx trigger install`'s systemd/launchd/cron
+ * units, the cron/systemd `ExecStart` lines `renderScheduleLines`/`install.ts`
+ * print) gets `[interpreter, script]` from — so it is also the one place that
+ * inserts `SAFE_BUN_SPAWN_ARGS` between them. A scheduler invoking `bun
+ * <script>` directly (bypassing the shebang the same way `bun dist/cli.js`
+ * does) would otherwise let the SPAWNED keryx auto-load whatever
+ * `.env`/`bunfig.toml` sits in the project root it runs from — every caller
+ * of this function inherits the fix for free, and a future caller gets it
+ * automatically too. A compiled binary needs no flags (there is nothing to
+ * hand them to but keryx's own arg parser — see `ensureSafeBunExec`'s same
+ * reasoning) and its `invocation.scriptPath` is `undefined`, so the array
+ * stays `[binary]` unchanged.
+ */
 export function invocationArgv(invocation: KeryxInvocation): string[] {
-  return invocation.scriptPath === undefined ? [invocation.execPath] : [invocation.execPath, invocation.scriptPath];
+  return invocation.scriptPath === undefined
+    ? [invocation.execPath]
+    : [invocation.execPath, ...SAFE_BUN_SPAWN_ARGS, invocation.scriptPath];
 }
 
 export type ScheduleResolution =

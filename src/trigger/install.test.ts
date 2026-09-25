@@ -82,7 +82,7 @@ describe("systemd --user", () => {
     const timer = await readFile(path.join(unitDir, `${base}.timer`), "utf8");
     expect(service.startsWith(`# keryx-managed ${projectScheduleHash(root)} check-github\n`)).toBe(true);
     expect(service).toContain(`WorkingDirectory=${root}`);
-    expect(service).toContain("ExecStart=/bin/true /bin/true trigger run --schedule check-github");
+    expect(service).toContain("ExecStart=/bin/true --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github");
     expect(timer).toContain("\nOnCalendar=*-*-* 00,04,08,12,16,20:00:00\n");
     expect(timer).toContain("\nPersistent=true\n");
     expect(host.calls).toEqual(["systemctl --user daemon-reload", `systemctl --user enable --now ${base}.timer`]);
@@ -90,11 +90,34 @@ describe("systemd --user", () => {
 
   test("installing twice leaves exactly one unit pair and does not rewrite it", async () => {
     const host = fakeHost("systemd");
-    await installSchedule(root, "check-github", CRON, host);
+    const first = await installSchedule(root, "check-github", CRON, host);
+    expect(first.upgradedSafeFlags).toBe(false); // a fresh install, nothing to "upgrade" from
     const second = await installSchedule(root, "check-github", CRON, host);
     expect(second.wrote).toEqual([]);
+    expect(second.upgradedSafeFlags).toBe(false);
     expect((await readdir(unitDir)).length).toBe(2);
     expect(await isScheduleInstalled(root, "check-github", CRON, host)).toBe(true);
+  });
+
+  // R2-02: a unit installed before SAFE_BUN_SPAWN_ARGS was added to
+  // invocationArgv (a pre-existing on-disk file with the old, flag-less
+  // ExecStart=) is rewritten — not left stale — the next time this project's
+  // schedule is confirmed or resumed, and the result says so.
+  test("R2-02: a pre-existing unit missing the safe flags is rewritten on the next install, and upgradedSafeFlags says so", async () => {
+    const host = fakeHost("systemd");
+    const base = `keryx-${projectScheduleHash(root)}-check-github`;
+    await mkdir(unitDir, { recursive: true });
+    await writeFile(
+      path.join(unitDir, `${base}.service`),
+      `# keryx-managed ${projectScheduleHash(root)} check-github\n[Service]\nExecStart=/bin/true /bin/true trigger run --schedule check-github\n`,
+      "utf8",
+    );
+    await writeFile(path.join(unitDir, `${base}.timer`), `# keryx-managed ${projectScheduleHash(root)} check-github\n[Timer]\nOnCalendar=*-*-* 00,04,08,12,16,20:00:00\n`, "utf8");
+    const result = await installSchedule(root, "check-github", CRON, host);
+    expect(result.upgradedSafeFlags).toBe(true);
+    expect(result.wrote).toContain(path.join(unitDir, `${base}.service`));
+    const rewritten = await readFile(path.join(unitDir, `${base}.service`), "utf8");
+    expect(rewritten).toContain("ExecStart=/bin/true --no-env-file --config=/dev/null /bin/true trigger run --schedule check-github");
   });
 
   test("two projects with the same schedule name get different units", async () => {

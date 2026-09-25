@@ -36,25 +36,46 @@
 // retired-spellings-ok: file — help text still lists the retired usage lines because those invocations still work; removing them would hide a working command
 
 import { ensureSafeBunExec } from "./lib/safe-exec";
-import { runModelTurn } from "./harness/provider/single-turn";
-import { setModelTurnPort } from "./sac/model-turn-port";
 
-// R1-01: run as early as this module can — before `main()`'s own body, and
-// before any command handler this file dispatches to. Note the real limit:
-// ES module imports above this line have ALREADY executed by the time this
-// runs (import evaluation order, not something this guard can change without
-// switching every import here to a deferred `await import(...)`), so a
-// top-level side effect in an imported module that reads `process.env`
-// before this point can still observe a cwd-`.env`-poisoned value. The
-// shebang (top of this file) is what actually prevents that; this re-execs
-// once under the safe flags for a `bunx`/`bun dist/cli.js`/`bun src/cli.ts`
-// invocation that bypassed it, so the REST of startup (`main()` onward) runs
-// clean. A normal shebang-launched process (already safe) returns here after
-// two cheap `existsSync` checks. See `./lib/safe-exec.ts`.
+// R1-01 / R2-01 / R2-07 (info): run as early as this module can — before
+// `main()`'s own body, and before any command handler this file dispatches
+// to. The real limit, stated rather than hidden: ES MODULE IMPORTS ARE
+// HOISTED. Every `import` declaration in this file — including every one
+// BELOW this line, textually — is evaluated before a single statement in
+// this file's own top-level body runs, this `if` included. So a top-level
+// side effect in an imported module (or in a module IT imports) that reads
+// `process.env` before this guard has a chance to run can still observe a
+// cwd-`.env`-poisoned value, and (dev/bypass forms only — R2-07) a cwd
+// `bunfig.toml` `preload` script runs before ANY of this file's own code,
+// guard included; Bun preloads before user code, full stop.
+//
+// This file deliberately imports NOTHING above this point (R2-07 follow-up:
+// the two imports that used to sit here, `runModelTurn`/`setModelTurnPort`,
+// were moved below with the rest — keeping them above bought nothing, since
+// hoisting already runs every import in the file first regardless of source
+// order; the previous placement implied a protection import order cannot
+// provide). Moving command imports behind a dynamic `await import(...)`
+// after the guard WOULD close the "static imports evaluated before the
+// guard" gap for command modules specifically, at the cost of losing
+// synchronous, statically-checkable imports for every command in this file;
+// not done here — the shebang (top of this file) is the actual fix for the
+// shipped binary, and is unaffected by import hoisting (a different process
+// entirely never runs the unsafe autoload in the first place). See
+// `./lib/safe-exec.ts` and docs/docs/onboarding.md's "Environment isolation"
+// for the platforms (BusyBox `env`, Windows) where the shebang does not
+// apply and this guard is what actually protects the invocation.
+//
+// A normal shebang-launched process (already safe) returns from
+// `ensureSafeBunExec` after one synchronous `execArgv` check — no re-exec, no
+// filesystem access. `await` here is a top-level `await` (valid ESM,
+// supported by Bun): it only actually suspends this module's own further
+// evaluation when a real re-exec happens.
 if (import.meta.main) {
-  ensureSafeBunExec();
+  await ensureSafeBunExec();
 }
 
+import { runModelTurn } from "./harness/provider/single-turn";
+import { setModelTurnPort } from "./sac/model-turn-port";
 import { initCommand } from "./commands/init";
 import { ctxCommand } from "./commands/ctx";
 import { gdgraphCommand } from "./commands/gdgraph";
