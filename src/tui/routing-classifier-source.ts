@@ -22,8 +22,11 @@ import {
   type CategoryAssignment,
   type FlatPickerProvider,
   type RoutingCategory,
+  type RoutingTable,
 } from "../harness/routing/table";
 import { loadRoutingConfig, type RoutingConfigLocation } from "../harness/routing/config";
+import { deriveDefaultTable } from "../harness/routing/derive-default-table";
+import { availablePredicateFromProfiles, loadModelProfiles } from "../harness/routing/model-profile";
 
 /**
  * The interactive turn's candidate vocabulary: every catalogue category
@@ -61,12 +64,26 @@ export interface RoutingClassifierTurnResult {
 
 /**
  * AC5/AC6/AC7: run the classifier chain, then resolve the winning category
- * through the SAME `resolveCategoryDetailed` the `review`/`subagents` call
- * sites already use (project + user layers, no `derived` layer — matching
- * `spawn-subagent-tool.ts`'s own scope for a wired call site). Returns
- * `undefined` when routing is off, the line is a slash command / pinned /
- * empty-vocabulary case (`classifyTurn` itself returns `undefined`), or
- * every stage refused.
+ * through the SAME `resolveCategoryDetailed` — project + user + `derived`
+ * layers, exactly what `keryx routing list` (`../commands/routing.ts`) and
+ * `/routing` (`./routing-inspector.ts`) already build via `deriveDefaultTable`
+ * (flow 327, PRD §6.3). Unlike those two call sites, this one is ALWAYS
+ * inside a live turn — `opts.sessionProvider`/`opts.sessionModel` are
+ * required fields here, never `undefined` — so the derived table always
+ * builds; there is no "session not known yet" branch to guard for.
+ *
+ * This intentionally reaches further than `review`/`subagents`
+ * (`commands/review.ts`, `spawn-subagent-tool.ts`), which still resolve from
+ * project + user only (flow 305's original scope, predating the derived
+ * layer). Without `derived` here, an operator who has configured nothing —
+ * the common case — would see every category resolve to `session-default`,
+ * making `/route on` a no-op: the whole point of this flow is to route an
+ * UNCONFIGURED operator to the derived table's per-category pick (the
+ * strongest model for planning/review, one step down for
+ * subagents/docs/unattended, the smallest for quick), not just to honor
+ * explicit configuration. Returns `undefined` when routing is off, the line
+ * is a slash command / pinned / empty-vocabulary case (`classifyTurn` itself
+ * returns `undefined`), or every stage refused.
  */
 export async function runRoutingClassifierForTurn(
   line: string,
@@ -88,7 +105,15 @@ export async function runRoutingClassifierForTurn(
   const location: RoutingConfigLocation = { cwd: opts.cwd, ...(opts.userConfigDir !== undefined ? { userConfigDir: opts.userConfigDir } : {}) };
   const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
   const connected = connectedPredicateFrom(opts.detected);
-  const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table }, connected);
+  const profiles = loadModelProfiles(opts.userConfigDir);
+  const available = availablePredicateFromProfiles(profiles);
+  // Flow 327's `derived` layer, built from the SAME provider list already on
+  // hand (`opts.detected`, no extra probe) against the session's own
+  // provider/model — the same shape `keryx routing list` and `/routing` use.
+  const sessionProvider = opts.detected.find((p) => p.name === opts.sessionProvider);
+  const models = sessionProvider?.models ?? [opts.sessionModel];
+  const derived: RoutingTable = deriveDefaultTable(opts.sessionProvider, models, profiles, opts.sessionModel);
+  const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connected, available);
 
   if (resolved.assignment.kind === "session-default") {
     return { classification, category, assignment: resolved.assignment };

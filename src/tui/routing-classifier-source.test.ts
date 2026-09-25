@@ -51,13 +51,19 @@ test("runRoutingClassifierForTurn: a deterministic 'review' shortcut resolves th
   expect(tag).toBe("[review -> anthropic/claude-strong] (deterministic 100%)");
 });
 
-test("runRoutingClassifierForTurn: no table entry resolves to session-default — nothing routed", async () => {
+test("runRoutingClassifierForTurn: no project/user config AND no derivable profile data (unknown model ids, no curated/stored profile) resolves to session-default — nothing routed", async () => {
   const cwd = tmpDir();
   const result = await runRoutingClassifierForTurn("please review this PR", {
     enabled: true,
     jevEnabled: false,
     cwd,
-    detected: [{ name: "anthropic", models: ["claude-x"] }],
+    // Two UNKNOWN ids (not in the curated seed, nothing stored) — the
+    // `derived` layer's `comparable` filter (`deriveDefaultTable`) drops
+    // both for having no profile, so it derives nothing and resolution
+    // still falls all the way through to `default`. A single detected
+    // model would instead hit `deriveDefaultTable`'s "one model" branch and
+    // derive a same-as-session assignment — see the dedicated test below.
+    detected: [{ name: "anthropic", models: ["claude-x", "claude-y"] }],
     sessionProvider: "anthropic",
     sessionModel: "claude-x",
     env: {},
@@ -66,6 +72,31 @@ test("runRoutingClassifierForTurn: no table entry resolves to session-default �
   expect(result?.category).toBe("review");
   expect(result?.routed).toBeUndefined();
   expect(result !== undefined ? renderRoutingTagLine(result) : undefined).toBeUndefined();
+});
+
+test("runRoutingClassifierForTurn: an unconfigured operator (no project/user routing config, no stored model profiles) still routes 'quick' to the derived LIGHT model — flow 327's derived layer, not just project/user", async () => {
+  const cwd = tmpDir();
+  // No saveRoutingConfig call at all (project/user both empty) and `cwd` as
+  // `userConfigDir` has no stored model-profile file either — `loadModelProfiles`
+  // falls back to the curated seed alone (`model-profile.ts`'s
+  // `CURATED_SEED.anthropic`: claude-opus-4-8 = deep, claude-sonnet-5 =
+  // standard, claude-haiku-4-5 = light). This is exactly the "operator has
+  // configured nothing" case the derived layer exists for.
+  const result = await runRoutingClassifierForTurn("hi", {
+    enabled: true,
+    jevEnabled: false,
+    cwd,
+    detected: [{ name: "anthropic", models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"] }],
+    sessionProvider: "anthropic",
+    sessionModel: "claude-opus-4-8",
+    env: {},
+    userConfigDir: cwd,
+  });
+  // "hi" is the deterministic chit-chat shortcut ("quick") — no Jev/network call.
+  expect(result?.category).toBe("quick");
+  expect(result?.routed).toEqual({ providerId: "anthropic", modelId: "claude-haiku-4-5" });
+  const tag = result !== undefined ? renderRoutingTagLine(result) : undefined;
+  expect(tag).toBe("[quick -> anthropic/claude-haiku-4-5] (deterministic 100%)");
 });
 
 test("runRoutingClassifierForTurn: Jev enabled and credentialed drives the resolution", async () => {

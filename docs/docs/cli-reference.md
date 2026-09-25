@@ -210,7 +210,20 @@ Jev (when a credential resolves) is tried first, then the session's own
 model with a strict one-token label prompt, each stage bounded by a 3s
 timeout — a timeout, error, or low-confidence answer falls back to the next
 stage, and with nothing left, the turn simply runs on the session's own
-model, exactly as before this feature existed. An explicit `/model` switch
+model, exactly as before this feature existed. Jev's own pick is trusted
+starting at confidence 0.45 (`DEFAULT_JEV_CLASSIFIER_CONFIDENCE_THRESHOLD`,
+`src/harness/decision/jev-classifier.ts`) — measured against a real key:
+100% (20/20) on the sample set used to tune it, and 95% (19/20) on a
+separate, held-out set of 20 new requests never used to pick the threshold
+(`scripts/routing-classifier-live-check-holdout.ts`).
+
+The category is resolved through the same project → user → derived → default
+precedence `keryx routing list`/`/routing` use (`keryx routing` above). An
+operator who has configured nothing still gets routed by the **derived**
+layer: `planning`/`review` go to the strongest model available at or above
+the session's own, `subagents`/`docs`/`unattended` go one size step down, and
+`quick` goes to the smallest available model — so `/route on` changes
+something even before any `keryx routing set`. An explicit `/model` switch
 during the session always wins over classification for the rest of that
 session. When a turn is routed, a small tag (e.g. `[quick -> anthropic/
 claude-haiku-4-5]`, naming the category, the resolved model, and which stage

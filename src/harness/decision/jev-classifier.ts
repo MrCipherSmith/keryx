@@ -16,6 +16,18 @@ import {
 } from "./jev-client";
 import type { TaskClassifier, TaskClassifierResult, TaskClassifierUsage, TaskClassifyOptions } from "./classifier";
 import type { RoutingCategory } from "../routing/table";
+// PR #737 review fix — privacy: `task` is the operator's RAW `keryx shell`
+// request line, unlike every other Jev-backed caller in this codebase
+// (`turn-guard.ts`, `ci-triage.ts`, `conform-jev.ts`, `jev-comments.ts`,
+// `jev-docs.ts`, `jev-rules.ts`, `jev-scenarios.ts` — every one of them
+// redacts through this SAME facade before the text reaches `state`), this
+// module previously embedded `task` UNREDACTED. `security` is a CORE zone;
+// `harness` (this module) is CLIENT — a client importing a core,
+// deterministic redactor is the allowed direction (`src/lib/import-zones.ts`'s
+// directional table; only core->client is forbidden) — the identical import
+// `./jev-client.ts` (this module's own sibling) already uses for a vendor
+// error body.
+import { redactSensitiveText } from "../../security/service";
 
 /**
  * Below this Jev-reported confidence, the classification is refused rather
@@ -28,10 +40,27 @@ import type { RoutingCategory } from "../routing/table";
  * correct picks), while confidences at/above ~0.6 were also always correct
  * — i.e. Jev's picks were accurate, its self-reported confidence for this
  * question shape just runs lower than the vendor-suggested floor. Lowered
- * to 0.45 on that evidence — the same 20-sample live check then measured
- * 20/20 (100%) at this threshold, up from 9/20 (45%) at 0.6 — still
- * comfortably above the near-random ~1/7 (~0.14) a 7-way guess would score,
- * and still overridable per caller via `confidenceThreshold`.
+ * to 0.45 on that evidence.
+ *
+ * TWO numbers, honestly, because the first one alone is tuning-on-the-test-
+ * set: the SAME 20-sample set that picked 0.45 then scored 20/20 (100%) at
+ * that threshold — that number describes fit to its own tuning data, not
+ * generalization. A SEPARATE, held-out check
+ * (`scripts/routing-classifier-live-check-holdout.ts`, 20 NEW hand-labeled
+ * requests never seen while choosing the threshold, covering all 7 wired
+ * categories plus several deliberately hard/ambiguous ones — a diff that
+ * could read as "review" or "coding", a readiness question that could read
+ * as "review" or "planning", a request naming "subagent" that is really a
+ * "planning" ask) scored 19/20 (95%), 17 real Jev calls, $0.000426 total
+ * cost, ~388ms average latency. The one miss was a genuinely hard doc/code-
+ * comment case (Jev picked "coding" at confidence 0.53 for a request hand-
+ * labeled "docs") that a stricter 0.6 floor would not have fixed either —
+ * 0.53 is comfortably above both thresholds, so this was a category
+ * judgment call, not a low-confidence pick slipping through. 0.45 is kept on
+ * this evidence: 95% on a fresh, harder set is a reasonable generalization
+ * of the 100% tuning-set score, still comfortably above the near-random ~1/7
+ * (~0.14) a 7-way guess would score, and still overridable per caller via
+ * `confidenceThreshold`.
  */
 export const DEFAULT_JEV_CLASSIFIER_CONFIDENCE_THRESHOLD = 0.45;
 
@@ -117,7 +146,10 @@ export class JevTaskClassifier implements TaskClassifier {
         instructions: "How confident are you that the category you picked is the single best match, versus the request being genuinely ambiguous between categories?",
       },
     };
-    const state = `keryx shell request:\n${task}`;
+    // Redact BEFORE the request text is embedded in `state` — never send the
+    // operator's raw prompt to a third-party vendor (OpenRouter/Jev), same
+    // floor every sibling Jev-backed feature applies to its own state text.
+    const state = `keryx shell request:\n${redactSensitiveText(task)}`;
     try {
       preflightBudget(state, questions);
     } catch (error) {

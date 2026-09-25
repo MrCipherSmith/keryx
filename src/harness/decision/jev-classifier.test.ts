@@ -81,3 +81,26 @@ test("JevTaskClassifier: an out-of-vocabulary choice is refused", async () => {
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.reason).toContain("out-of-vocabulary");
 });
+
+// PR #737 review fix — privacy: the operator's raw request text must never
+// reach Jev unredacted, the same floor every OTHER Jev-backed caller in this
+// codebase applies (`turn-guard.ts`, `ci-triage.ts`, `conform-jev.ts`, etc.)
+// — mirrors `conform-jev.test.ts`'s own "secret redaction" test shape.
+test("JevTaskClassifier: a secret planted in the request text never reaches the Jev request body", async () => {
+  const secret = "AKIAIOSFODNN7EXAMPLE";
+  const fetchFn = fakeFetch({
+    answers: { category: { type: "choice", choice: "coding" }, confidence: { type: "noul", noul: 0.8 } },
+    usage: {},
+  });
+  const classifier = new JevTaskClassifier({ fetch: fetchFn, env: ENV_WITH_KEY });
+  await classifier.classify(`Rotate the credential AWS_ACCESS_KEY_ID=${secret} every 90 days.`, [...CATEGORIES]);
+  const calls = (fetchFn as unknown as { calls: { url: string; init: RequestInit }[] }).calls;
+  expect(calls).toHaveLength(1);
+  const body = JSON.parse(calls[0]!.init.body as string) as { state: string };
+  expect(body.state).not.toContain(secret);
+  expect(body.state).toContain("[REDACTED:");
+  // The rest of the request's wording still reaches Jev — redaction strips
+  // only the secret span, not the whole request (the request IS the feature
+  // Jev is classifying).
+  expect(body.state).toContain("Rotate the credential");
+});

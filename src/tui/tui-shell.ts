@@ -4613,10 +4613,25 @@ export async function launchTuiAgentShell(opts: {
       );
     };
     refreshRoutingSidebar();
-    /** `/route on|off`: live toggle + persistence (same shape as `setGuardEnabled`). */
+    /**
+     * `/route on|off`: live toggle + persistence (same shape as
+     * `setGuardEnabled`) — but NOT byte-identical to it: `saveShellConfig`
+     * merges its `patch` at the TOP level only (`{ ...loadShellConfig(dir),
+     * ...patch }`, `shell-config.ts`) — a nested object under a key is
+     * REPLACED whole, not merged. `setGuardEnabled`'s own
+     * `saveShellConfig({ turnGuard: { enabled: next } })` gets away with that
+     * because `ShellConfig.turnGuard` carries only `enabled`. `routingClassifier`
+     * is NOT that case: its type already declares a second field —
+     * `classifier?: "jev"` (PRD §9.2's future opt-in-to-Jev-specifically
+     * knob) — so a bare `{ enabled: next }` write here would silently drop
+     * it the moment anything starts setting it. Read-and-spread the existing
+     * value first, the same way `saveProviderBaseUrl`/`saveProviderModelParams`
+     * (`src/lib/shell-config.ts`) already merge their own nested objects.
+     */
     const setRoutingEnabled = (next: boolean): void => {
       routingEnabled = next;
-      saveShellConfig({ routingClassifier: { enabled: next } });
+      const existing = loadShellConfig().routingClassifier ?? {};
+      saveShellConfig({ routingClassifier: { ...existing, enabled: next } });
       refreshRoutingSidebar();
       io.onSystem?.(`Route: ${next ? "on" : "off"}\n`);
     };
@@ -8095,12 +8110,24 @@ export async function launchTuiAgentShell(opts: {
           // (including an aborted request — AbortError lands here too)
         }
       };
-      // Flow 338: resolve routing BEFORE the turn starts — bounded (≤
-      // `CLASSIFY_TURN_TIMEOUT_MS`) so this never hangs the shell, but
-      // necessarily sequential with dispatch since the routed provider/model
-      // must be known before `runAgentTurn` is called. Wrapped in its own
-      // async IIFE so `runLine` itself stays synchronous (its existing
-      // contract — every other call site awaits nothing from it).
+      // Flow 338: resolve routing BEFORE the turn starts — bounded, so this
+      // never hangs the shell, but necessarily sequential with dispatch
+      // since the routed provider/model must be known before `runAgentTurn`
+      // is called. Wrapped in its own async IIFE so `runLine` itself stays
+      // synchronous (its existing contract — every other call site awaits
+      // nothing from it).
+      //
+      // The bound is NOT a flat `CLASSIFY_TURN_TIMEOUT_MS` (3s): `classifyTurn`
+      // (`../harness/decision/classify-turn.ts`) tries Jev, then — on ANY Jev
+      // failure/timeout — the main-model classifier, each stage independently
+      // raced against its own `CLASSIFY_TURN_TIMEOUT_MS` timer
+      // (`withTimeout`). Worst case (Jev hangs to its own timeout, THEN the
+      // main-model stage also hangs to its own timeout) is ~2x
+      // `CLASSIFY_TURN_TIMEOUT_MS` (~6s) before this IIFE falls back to the
+      // session's own model — deliberate: a slow/hanging Jev call should not
+      // starve the main-model fallback of its own full timeout budget. Still
+      // strictly bounded (never hangs indefinitely), just not by the single
+      // constant this comment used to claim.
       //
       // `sessionDeps` captures the OUTER (session) `deps` here, before the
       // IIFE's own block-scoped `deps` shadows the name below — a `const`
