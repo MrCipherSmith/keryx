@@ -44,3 +44,9 @@ This is the output-persistence advisory scanner, not failed test assertions. Its
 No real Pro login, entitlement check or live model request; no release published. Optional dependency audit/Sonar were outside this changed-code gate. Upstream private subscription protocol may change independently of this build.
 
 Routing:graph_used yes (initial bounded navigation; earlier graph predates added files), wiki_used yes, ctx_used yes, raw_rg_used no.
+
+## Post-merge CI correction — 2026-09-26
+
+CI at `32286a90` exposed an omitted runtime invariant: the auth CLI used a one-shot SIGINT listener. A second Ctrl+C during cancellation could therefore regain default signal handling before login cleanup finished. The original focused suite did not include `src/mcp-servers/invariants.test.ts`.
+
+Changed registration to `process.on`, retaining the existing `finally` removal. A new behavioral regression emits SIGINT twice during a mocked login, verifies that the handler remains installed until settlement, and checks listener cleanup and the cancelled result. Both the existing source invariant and the new regression failed before the fix. Afterward, the invariant, CLI auth and OAuth suite passed: **74 tests, 0 failures**. Scoped ESLint passed. No live login or release is part of this correction.

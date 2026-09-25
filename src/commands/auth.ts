@@ -84,7 +84,7 @@ async function runAuthLogin(args: string[]): Promise<void> {
   }
   const controller = new AbortController();
   const cancel = () => controller.abort();
-  process.once("SIGINT", cancel);
+  process.on("SIGINT", cancel);
   const result = await loginDeviceCode({
     provider,
     signal: controller.signal,

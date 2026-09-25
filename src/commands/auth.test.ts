@@ -67,6 +67,33 @@ test("canonical subscription login uses the device endpoint and preserves safe f
   expect(errors.join()).toContain("HTTP 403");
 });
 
+test("repeated Ctrl+C remains handled until login settles and then removes its listener", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalError = console.error;
+  const listenersBefore = process.listenerCount("SIGINT");
+  const errors: string[] = [];
+  const listenerCounts: number[] = [];
+  globalThis.fetch = Object.assign(async (): Promise<Response> => {
+    listenerCounts.push(process.listenerCount("SIGINT"));
+    process.emit("SIGINT");
+    listenerCounts.push(process.listenerCount("SIGINT"));
+    process.emit("SIGINT");
+    listenerCounts.push(process.listenerCount("SIGINT"));
+    throw new Error("cancelled synthetic request");
+  }, { preconnect: originalFetch.preconnect });
+  console.error = (value?: unknown) => { errors.push(String(value)); };
+  try {
+    await authCommand(["login", "openai-codex"]);
+    expect(listenerCounts).toEqual(Array(3).fill(listenersBefore + 1));
+    expect(process.listenerCount("SIGINT")).toBe(listenersBefore);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join()).toContain("cancelled");
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.error = originalError;
+  }
+});
+
 test("canonical CLI status and logout preserve the independent Platform key", async () => {
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
