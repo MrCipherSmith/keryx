@@ -1,0 +1,85 @@
+---
+extends: common
+paths: ["**/*.rs"]
+metadata:
+  origin: authored
+---
+
+# Rust patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+Rust design and its common anti-patterns. Applies only to `*.rs` files.
+
+## Crate and module layout
+
+- `src/lib.rs` (or `src/main.rs` for a binary) is the crate root; group
+  related functionality into modules under `src/`, each with a clear
+  single responsibility — a module that only holds shared types with no
+  behavior ("models", "types", "common") invites the same cross-module
+  coupling a Go "utils" package does.
+- A workspace (`[workspace]` in the root `Cargo.toml`) splits genuinely
+  independent crates (a library plus a CLI that depends on it, or several
+  services sharing a core crate) — do not default to a workspace for a
+  single-binary project that has no reason to publish separate crates.
+- Keep `pub` surface intentional: re-export the types callers need from
+  `lib.rs`, keep internal modules `pub(crate)` or private so the compiler
+  (not convention) enforces the boundary.
+
+## Error handling design
+
+- A library crate defines its own error enum with `thiserror`, one
+  variant per failure mode, `#[source]`/`#[from]` on any variant that
+  wraps another error so `source()` and `?`-based conversion both work —
+  never collapse distinct failure modes into a single `Other(String)`
+  variant that erases the caller's ability to match on what happened.
+- An application/binary crate uses `anyhow::Result` at its outer layers
+  and `.context("doing x")`/`.with_context(|| ...)` at each call to `?`
+  that crosses a meaningful boundary, so a failure's final error chain
+  reads as a story, not a single opaque message.
+- Never use a `Result<T, String>`/`Result<T, Box<dyn Error>>` as a
+  permanent design in a library — `Box<dyn Error>` is a reasonable
+  quick-prototype return type but forces every caller to string-match or
+  downcast; graduate to a concrete `thiserror` enum once the error shapes
+  stabilize.
+
+## Ownership-driven API design
+
+- Take `&self`/`&mut self`/`self` deliberately: `self` (by value) only
+  when the method consumes or transforms the value into something else
+  (a builder's terminal `.build()`), `&mut self` when it mutates in place,
+  `&self` otherwise.
+- The typestate/builder pattern (a `FooBuilder` with chained `with_x`
+  methods returning `Self`, a terminal `.build() -> Result<Foo, ...>`) for
+  a constructor with many optional parameters, instead of a boolean-heavy
+  positional signature.
+- Prefer newtypes (`struct UserId(u64);`) over a bare primitive when a
+  value has domain meaning distinct from its representation — the
+  compiler then rejects passing a `ProductId` where a `UserId` is
+  expected, which a bare `u64` parameter cannot.
+
+## Trait design
+
+- Define a trait at the point of abstraction a consumer actually needs
+  (an `impl Trait` argument or a generic bound), sized to the methods that
+  consumer calls — a trait with every method the concrete type happens to
+  have is not an abstraction, it is a restatement of the type.
+- Prefer generics (`fn process<T: Processor>(p: &T)`) for a hot path where
+  monomorphization's code-size cost is acceptable and static dispatch
+  matters; use `Box<dyn Trait>`/`&dyn Trait` when you need a heterogeneous
+  collection or a boundary (a plugin registry, a callback list) where the
+  concrete type varies at runtime.
+
+## Anti-patterns to flag
+
+- A `.clone()` inserted to make the borrow checker pass without
+  considering whether restructuring ownership or borrowing differently
+  would avoid the copy — flag any clone in a hot path with no comment
+  explaining why it is necessary.
+- Stringly-typed errors (`Err(format!("something went wrong: {e}"))`
+  returned as `Result<T, String>`) in a library crate instead of a
+  `thiserror`-derived enum a caller can match on.
+- A "god module" (`utils`, `helpers`, `common`) accumulating unrelated
+  free functions — split by what the code actually does, the same
+  anti-pattern flagged in Go/Python's own pattern rules.
+- `unwrap()`/`expect()` reached for as a shortcut past a type error during
+  development and never revisited before the change ships.

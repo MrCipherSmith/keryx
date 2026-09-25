@@ -1,0 +1,82 @@
+---
+extends: common
+paths: ["**/*.rs"]
+metadata:
+  origin: authored
+---
+
+# Rust testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to Rust's built-in
+`#[test]` framework and its common extensions. Applies only to `*.rs` files.
+
+## Layout and naming
+
+- Unit tests live in a `#[cfg(test)] mod tests { use super::*; ... }` block
+  at the bottom of the file they test, giving them access to private
+  items; integration tests (exercising only the crate's public API) live
+  under `tests/` at the crate root, one file per test binary.
+- Name a test function for the behavior it verifies
+  (`rejects_negative_amount`, not `test1` or `test_validate`); group
+  related cases as separate `#[test]` functions or, for many similar
+  inputs, a parameterized loop/table within one function.
+- Fixture/golden data a test reads lives under `tests/fixtures/` (or a
+  crate-local `testdata/` if the project already uses that convention) —
+  match whatever the crate already does rather than inventing a new one.
+
+## Test structure
+
+- Prefer a small table of cases (a `Vec` of a local struct, or a slice of
+  tuples) iterated in one `#[test]` function over many near-duplicate test
+  functions, when the cases share the same assertion shape — mirrors the
+  table-driven convention from other stacks, adapted to Rust's lack of a
+  built-in subtest runner.
+- Assert with `assert_eq!`/`assert!`/`assert_ne!` from `std`, or the
+  project's already-adopted assertion crate (`pretty_assertions`,
+  `assert_matches`) — do not introduce a new assertion library into a
+  crate that has not adopted one.
+- For a `Result`-returning function, assert the specific error variant
+  (`assert!(matches!(err, MyError::NotFound { .. }))` or
+  `assert_eq!(err, MyError::NotFound)` when the error implements
+  `PartialEq`) rather than only `assert!(result.is_err())`, which passes
+  for the wrong failure just as readily as the right one.
+
+## Async tests
+
+- `#[tokio::test]` (or the project's already-configured async test
+  attribute) for an `async fn` test body; never block a `#[test]`
+  function's thread on a future with a hand-rolled executor when the
+  project already depends on `tokio`.
+- Join spawned tasks with `.await` on their `JoinHandle`, or a channel,
+  before asserting — never synchronize with `std::thread::sleep`/
+  `tokio::time::sleep` to "give a spawned task time to finish"; that is
+  non-deterministic under load and flakes in CI exactly like a Go test
+  that sleeps instead of joining a goroutine.
+
+## Property-based and fuzz testing
+
+- Reach for `proptest` or `quickcheck` (whichever the crate already
+  depends on) for a function with a large, structured input space
+  (a parser, a serializer round-trip) instead of hand-writing dozens of
+  near-identical example-based cases.
+- `cargo fuzz` (built on `libFuzzer`) for a parser or decoder that touches
+  untrusted input formats directly; note in the report that fuzzing runs
+  separately from `cargo test` and is not part of the default CI test run
+  unless the project has wired it in.
+
+## Benchmarks
+
+- Use `criterion` (the de facto ecosystem standard) for a benchmark that
+  needs statistical rigor (warm-up, outlier detection, regression
+  comparison across runs) rather than the unstable built-in `#[bench]`
+  attribute, which requires nightly.
+
+## Running and determinism
+
+- Run `cargo test` (add `--all-features`/`--workspace` when the project's
+  CI does) before reporting tests as passing; a test relying on wall-clock
+  timing, real network access, or shared global state is a flake risk —
+  prefer a fake clock, a mock boundary, or `#[serial]` (from the `serial_test`
+  crate) for tests that must not run concurrently.
+- New behavior gets a new test in the same change; a bug fix gets a
+  regression test that fails before the fix and passes after.

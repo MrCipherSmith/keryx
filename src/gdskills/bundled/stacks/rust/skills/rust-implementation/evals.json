@@ -1,0 +1,78 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a new Rust module under src/order that propagates errors with the ? operator",
+      "Add a thiserror error enum in Rust that wraps a downstream client's error with #[source]",
+      "Write this Rust function so it borrows instead of cloning to satisfy the borrow checker",
+      "Implement an async fn in Rust that fetches from a downstream service without blocking the tokio runtime",
+      "What's the right Rust trait size for this new client -- who should it be defined for?",
+      "Implement this Rust builder pattern for a struct with several optional fields",
+      "Add error handling to this Rust CLI using anyhow::Result and .context()"
+    ],
+    "negative": [
+      "Implement this feature in Go using errgroup for the worker pool",
+      "Add this endpoint in a Python FastAPI service",
+      "Implement this React component with the new form fields",
+      "Review this Rust diff for unsafe blocks and unwrap panics",
+      "Fix this failing cargo test in the order crate",
+      "Write table-driven Go tests for this function",
+      "Implement this feature in Rust but skip error handling for now"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "error-propagation-thiserror",
+      "prompt": "I'm adding a new function to a Rust library crate that calls a downstream client. How should I handle the Result and the error it can return?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "\\?" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer propagates the downstream client's fallible call with the ? operator rather than unwrapping it, and defines (or extends) a thiserror-derived error enum with a variant carrying #[source] or #[from] so the downstream error's cause is preserved for callers, rather than calling .unwrap()/.expect() on the Result or collapsing the failure into an opaque string.",
+          "pass_criteria": [
+            "Shows propagating the downstream call's Result with the ? operator, not .unwrap()/.expect() or a manual match that discards the error.",
+            "Names a concrete thiserror enum variant with #[source] or #[from] wrapping the downstream error (e.g. `Downstream(#[from] DownstreamError)`), not just 'handle the error properly'.",
+            "Explains that this preserves the original cause so callers can inspect it (via source() or the #[from] conversion), not merely that 'the error is handled'."
+          ],
+          "fail_criteria": [
+            "Recommends calling .unwrap() or .expect() on the downstream call's Result instead of propagating it with ? or an explicit match. Mentioning .unwrap()/.expect() only to warn against using it on fallible/untrusted input is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Propagate the downstream call with `?` rather than unwrapping it -- add a variant to this module's `thiserror`-derived error enum, something like `#[error(\"downstream call failed\")] Downstream(#[from] DownstreamError)`, so the `?` operator converts the downstream error into your own error type automatically via the generated `From` impl. The `#[from]` attribute also marks the field as `#[source]`, so `std::error::Error::source()` returns the original downstream error -- a caller further up can still inspect what actually went wrong instead of just seeing your wrapper's message. Don't reach for `.unwrap()`/`.expect()` here even though it would compile faster to write -- a downstream call is exactly the kind of fallible, externally-influenced operation that should never panic the process on failure.",
+        "known_wrong": "Since this is calling a downstream client I trust to basically always succeed, I'd just `.unwrap()` the Result and move on -- it keeps the function signature simple and avoids growing the error enum for a case that's rare in practice. If you're worried about it, you could `.expect(\"downstream call should succeed\")` instead so there's at least a message in the panic output, but either way there's no need to wrap it in your own error type or preserve the source chain for something this unlikely to fail.",
+        "vague": "Handle the error from the downstream call properly and make sure it's propagated correctly to the caller.",
+        "subtle_wrong": "Propagate it with `?` like this: add a `Downstream(String)` variant to your error enum and convert with `.map_err(|e| MyError::Downstream(e.to_string()))?` at the call site -- that keeps the enum simple (no need to pull in `#[source]`/`#[from]` or worry about the downstream error type implementing `std::error::Error`) while still returning a proper `Result` instead of unwrapping. Callers get a readable message either way."
+      },
+      "anti_patterns": [".unwrap()"]
+    },
+    {
+      "id": "async-blocking-call",
+      "prompt": "I need to write an async fn in a tokio-based Rust service that reads a config file and then sleeps briefly between retries. What should I watch out for?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that both the file read and the sleep must use tokio's async equivalents (tokio::fs::read/read_to_string and tokio::time::sleep) rather than the synchronous std::fs or std::thread::sleep, because a blocking call inside an async fn running on tokio's multi-threaded runtime can stall the worker thread and every other task scheduled on it -- not just this one -- and, if a genuinely CPU-bound or unavoidably-blocking operation is needed, routes it through tokio::task::spawn_blocking instead of calling it directly.",
+          "pass_criteria": [
+            "Names tokio::fs (e.g. tokio::fs::read or read_to_string) instead of std::fs for the config file read inside the async fn.",
+            "Names tokio::time::sleep instead of std::thread::sleep for the retry delay.",
+            "Explains the concrete consequence of blocking on a multi-threaded tokio runtime -- that it can stall the executor's worker thread for other tasks, not merely that it 'blocks the function'."
+          ],
+          "fail_criteria": [
+            "Recommends std::thread::sleep for the retry delay inside the async fn, whether alone or alongside the correct tokio::fs read. Mentioning std::thread::sleep only to warn against it is not a failure.",
+            "Recommends a synchronous std::fs read inside the async fn and dismisses it as fine because the file is small or the read is quick."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Use `tokio::fs::read_to_string(path).await` for the config file instead of `std::fs::read_to_string` -- the std version is a synchronous, blocking syscall, and calling it directly inside an `async fn` running on tokio's multi-threaded runtime can stall the worker thread that task is scheduled on, which stalls every other task tokio happens to schedule on that same thread too, not just this one. For the delay between retries, use `tokio::time::sleep(duration).await`, not `std::thread::sleep` -- `std::thread::sleep` blocks the OS thread for its whole duration with no way for the runtime to schedule other work on it, while `tokio::time::sleep` yields the task back to the executor and only wakes it when the timer fires. If you ever do need a genuinely CPU-bound or unavoidably-blocking call on this path, wrap it in `tokio::task::spawn_blocking(|| ...)` so it runs on tokio's dedicated blocking thread pool instead of a regular async worker thread.",
+        "known_wrong": "For something this small it's simpler to just use `std::fs::read_to_string` for the config -- it's one quick read at startup-ish time, not worth pulling in the async file API for. Same for the retry delay: `std::thread::sleep(duration)` is fine here since it's just a brief pause between attempts and the function isn't handling other work at that exact moment anyway, so blocking the thread for a few hundred milliseconds isn't really a problem in practice.",
+        "vague": "Make sure you use the async-friendly versions of file reading and sleeping so you don't block the runtime.",
+        "subtle_wrong": "Use `tokio::time::sleep(duration).await` for the retry delay -- that part's important since it yields back to the executor instead of blocking the thread. For the config file, `std::fs::read_to_string` is fine to leave as-is though, since it's a small local file and the read itself finishes in well under a millisecond, so it's not going to noticeably stall anything on the runtime even though it's technically a blocking call."
+      },
+      "anti_patterns": ["std::thread::sleep"]
+    }
+  ]
+}

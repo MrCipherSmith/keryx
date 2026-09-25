@@ -1,0 +1,85 @@
+---
+extends: common
+paths: ["**/*.rs"]
+metadata:
+  origin: authored
+---
+
+# Rust security
+
+Narrows `core-common-rules`' stack-agnostic security rules to Rust-specific,
+OWASP-relevant risks and the safe standard-library/ecosystem API to use
+instead. `unsafe` and panic-on-untrusted-input risks can appear anywhere a
+crate touches attacker-influenced data, so this file stays broad rather
+than narrowing to a single subdirectory.
+
+## `unsafe` blocks
+
+- Every `unsafe` block carries a `# Safety` doc comment (on the block or
+  the function containing it) stating the exact invariants the caller or
+  the block itself must uphold for the operation to be sound — not a
+  generic "this is safe" note, but the specific precondition (pointer
+  validity, alignment, lifetime, no concurrent mutation) that makes it so.
+- Keep an `unsafe` block as small as possible — wrap only the operation
+  that actually requires it (a raw pointer deref, an FFI call, a
+  `mem::transmute`), not the surrounding safe code, so the audited surface
+  stays minimal.
+- Never widen an `unsafe` block or drop its `# Safety` comment to silence
+  a compiler or clippy complaint; if the invariant cannot be stated, the
+  code is not actually sound and needs a different approach.
+
+## Panics on untrusted input
+
+- Never call `.unwrap()`/`.expect()` on a `Result`/`Option` derived from
+  network input, file contents, CLI arguments, or any other
+  attacker-influenced source — a panic there is a denial-of-service vector
+  (the process/thread aborts) even when the underlying bug is minor.
+  Propagate with `?`, or handle explicitly.
+- Guard array/slice indexing on untrusted-derived indices with `.get(i)`
+  (returns `Option`) instead of `arr[i]` (panics out of bounds); guard
+  integer arithmetic on untrusted values with `checked_add`/`checked_mul`/
+  `saturating_*`/`wrapping_*` as the operation's semantics require, instead
+  of a bare `+`/`*` that panics on overflow in debug builds and silently
+  wraps in release builds — both are wrong for a value an attacker
+  influences.
+
+## FFI boundaries
+
+- Validate every value crossing an `extern "C"` boundary before trusting
+  it — a raw pointer from C is not guaranteed non-null, valid, or
+  correctly aligned; check before dereferencing, and document the
+  ownership/lifetime contract (who frees it, using what allocator) in the
+  function's `# Safety` comment.
+- Never let a Rust panic unwind across an `extern "C"` boundary — undefined
+  behavior in most toolchains; catch it with `std::panic::catch_unwind` at
+  the FFI edge and convert it to an error code instead.
+
+## Dependency and supply-chain hygiene
+
+- Run `cargo audit` (or the project's already-configured equivalent) when
+  introducing or updating a dependency, or when asked to check for known
+  vulnerabilities — it checks `Cargo.lock` against the RustSec advisory
+  database.
+- Pin dependency versions deliberately in `Cargo.toml`; avoid a bare `*`
+  or an overly wide range that lets an unreviewed major/minor bump in.
+
+## Deserialization
+
+- When deserializing untrusted input with `serde`, apply size/depth limits
+  appropriate to the format and deserializer (a bounded reader, a
+  recursion-depth guard, or the deserializer's own limit configuration
+  where it exposes one) — an unbounded deserialize of attacker-controlled
+  JSON/bincode/etc. is a memory-exhaustion or stack-overflow
+  (deeply-nested structures) vector.
+- Never derive `Deserialize` for a type and then trust its field values
+  as pre-validated — validate ranges/formats/invariants after
+  deserializing, the same as any other externally-sourced value.
+
+## Randomness and secrets
+
+- Use a CSPRNG (the `rand` crate's default `ThreadRng`/`OsRng`, or the
+  `getrandom`/`ring` crates) for anything security-sensitive — tokens,
+  session IDs, keys, nonces; a non-cryptographic PRNG seeded predictably
+  is unsuitable for secrets even when its API looks the same.
+- Never hard-code a credential, API key, or signing secret in source; load
+  it from environment/secret storage the project already uses.
