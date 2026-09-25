@@ -10,7 +10,7 @@
   "title": "Negation-aware skill trigger scorer: Not-for clauses stop counting as evidence",
   "status": "in-progress",
   "createdAt": "2026-09-25T14:52:23.218Z",
-  "updatedAt": "2026-09-25T15:09:00.669Z",
+  "updatedAt": "2026-09-25T16:16:08.438Z",
   "source": {
     "type": "description",
     "ref": null
@@ -99,7 +99,7 @@
       "id": "T5",
       "title": "Survey exclusion-clause conventions in bundled SKILL.md files",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -107,7 +107,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "surveyed bundled SKILL.md exclusion-clause conventions via keryx ctx rg; findings recorded in journal"
     },
     {
       "id": "T6",
@@ -195,7 +197,7 @@
       "id": "T10",
       "title": "PR, review/fix loop, CI, merge sequencing",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -209,7 +211,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #725 opened against main, review rounds 1 and 2 clean (0 blocker/major after fixes), all CI checks green, PR marked ready for review; merge deliberately withheld pending PR #719 per owner's standing instruction (do not merge before #719 merges) - flow left in-progress, not completed, until the actual merge is confirmed"
     }
   ],
   "history": [
@@ -320,6 +324,16 @@
       "at": "2026-09-25T15:09:00.669Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 1) — opening PR, targeting main"
+    },
+    {
+      "at": "2026-09-25T16:16:08.177Z",
+      "event": "task-done",
+      "detail": "T5: Survey exclusion-clause conventions in bundled SKILL.md files"
+    },
+    {
+      "at": "2026-09-25T16:16:08.438Z",
+      "event": "task-done",
+      "detail": "T10: PR, review/fix loop, CI, merge sequencing"
     }
   ]
 }

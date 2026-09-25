@@ -402,3 +402,5 @@ mirrors — `deploy`/`interviewer`/`brainstorm` — even though only
 `job-orchestrator` is currently gated by a test, to avoid the same drift
 resurfacing silently later).
 
+- 2026-09-25T16:16:08.177Z - task-done: T5: Survey exclusion-clause conventions in bundled SKILL.md files
+- 2026-09-25T16:16:08.438Z - task-done: T10: PR, review/fix loop, CI, merge sequencing
