@@ -119,3 +119,56 @@
   with an explicit rebuttal clause so the judge cannot be talked into
   accepting either rationalization. No trigger/positive-prompt wording
   touched.
+
+## Honest gate: why the first run was re-run (answering the coordinator's check)
+
+- **First run (calibration commit `8e2cc023` HEAD), all 5 skills, `deepseek:
+  deepseek-chat`, `--strictness high --trials 10 --scope bundled`: verdict
+  `fail` on every skill.** Recorded in full here, not dropped:
+  - `docker-k8s-terraform-review`: `trigger-negative-3` ("Deploy this
+    Dockerfile image to production") passRate 0 — false positive. All 8
+    other trigger scenarios and both behavior scenarios (`dockerfile-root-user`,
+    `base-image-digest-pin`) passRate 1.
+  - `docker-k8s-terraform-build-fix`: `trigger-positive-4` ("This Helm chart
+    won't render, values lookup is failing") passRate 0 — false negative.
+    `trigger-negative-4` ("Fix the failing Go build") passRate 0 — false
+    positive. Both behavior scenarios passRate 1.
+  - `ci-pipeline-implementation`: `trigger-positive-4/5/6` (reusable-workflow
+    sharing, scoping `GITHUB_TOKEN`, isolating deploy credentials from
+    feature branches) all passRate 0 — false negatives. All 6 negatives
+    passRate 1.
+  - `ci-pipeline-code-review`: `trigger-positive-5/6` (permissions scoped
+    tightly enough?, PR-title-into-shell-command injection) passRate 0 —
+    false negatives. Both behavior scenarios passRate 1.
+  - `ci-pipeline-build-fix`: `trigger-positive-3` (GitHub's "Resource not
+    accessible by integration" error text) passRate 0 — false negative.
+    `trigger-negative-1/2/4/5` (Python import error, TypeScript compile
+    error, a sibling pack's Dockerfile build failure, "write a new workflow
+    that lints our code") all passRate 0 — false positives. Both behavior
+    scenarios passRate ≥0.9.
+  - Every one of these is the **deterministic** `trigger-rank-fork-family`
+    grader (`trials: 1` in the report regardless of `--trials 10` — routing
+    is not model-sampled), so this is not run-to-run variance: it is the
+    router genuinely mis-scoping five skills' descriptions against the full
+    684-trigger catalog. All 4 behavior (judge-graded) scenarios passed
+    cleanly on this first run.
+- **Why it was re-run:** not because a pack "almost passed" — every skill
+  failed outright, and the reason was named and reproducible (real
+  description/triggers scope gaps, not noise). Per the honesty rule: the
+  fix commit (`b2ea46de`, "close honest trigger-accuracy misses found by
+  the 10-trial gate") edited only `SKILL.md` `description:`/`triggers:`
+  frontmatter on all 5 skills to state real scope boundaries (explicit
+  "not for X, use Y" clauses, and naming literal vocabulary/error text a
+  real user would type, e.g. "Resource not accessible by integration",
+  "Helm chart won't render"). **Nothing in any `evals.json` scenario,
+  calibration, or judge-check recording was touched between the two
+  runs** — the same file's diff also re-measured `scout.test.ts`'s ratchet
+  (157 -> 159, evidence in that commit) and re-confirmed
+  `checkStablePackGate` for `go`/`python` still pass, both recorded above.
+  This is the allowed class of fix ("fix the SKILL.md description/triggers
+  frontmatter if it genuinely under-describes scope") — not a defect in a
+  calibration or scenario, so no calibration/scenario "genuinely defective"
+  justification applies here; nothing of that kind was changed.
+- **The second run (after `b2ea46de`) is the official gate result** for
+  stability/agent-generation purposes. Its per-skill outcome is recorded in
+  a separate journal entry below once it completes.

@@ -1,0 +1,430 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "ci-github-gitlab/ci-pipeline-build-fix",
+  "strictness": "high",
+  "trials": 10,
+  "triggerAccuracy": {
+    "truePositive": 5,
+    "falsePositive": 4,
+    "positives": 6,
+    "negatives": 6
+  },
+  "evidence": "authored",
+  "scenarios": [
+    {
+      "id": "trigger-positive-1",
+      "kind": "trigger-positive",
+      "prompt": "This workflow won't even parse -- GitHub says there's a YAML syntax error",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-2",
+      "kind": "trigger-positive",
+      "prompt": "Our deploy job can't read the API_KEY variable even though it's set in GitLab",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-3",
+      "kind": "trigger-positive",
+      "prompt": "The bot says Resource not accessible by integration when posting a PR comment",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-4",
+      "kind": "trigger-positive",
+      "prompt": "GitLab keeps saying this job's rules never match so it just gets skipped",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-5",
+      "kind": "trigger-positive",
+      "prompt": "actions/checkout is erroring out with an unrecognized input on this job",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-6",
+      "kind": "trigger-positive",
+      "prompt": "This job references another job in needs: that GitHub says doesn't exist",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-1",
+      "kind": "trigger-negative",
+      "prompt": "The build fails because a Python import is missing, fix the code",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-2",
+      "kind": "trigger-negative",
+      "prompt": "Our TypeScript compile step is failing with a type error, fix it",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-3",
+      "kind": "trigger-negative",
+      "prompt": "The Go binary fails go vet, please fix the source",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-4",
+      "kind": "trigger-negative",
+      "prompt": "This Dockerfile fails to build because of a missing apt package",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-5",
+      "kind": "trigger-negative",
+      "prompt": "Write a new workflow that lints our code on every push",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-6",
+      "kind": "trigger-negative",
+      "prompt": "Review this workflow for security issues before we merge it",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "permission-scope-fix",
+      "kind": "behavior",
+      "prompt": "This job fails with 'Resource not accessible by integration' when it tries to comment on the pull request. The workflow currently has no permissions: block. How do I fix it?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 9,
+      "passRate": 0.9,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "Add a job-level `permissions:` block granting exactly `pull-requests: write` to the job that posts the comment — not a workflow-level block, and not `write-all`.\n\nTwo things to confirm while doing it:\n\n1. If that job also checks out or reads repo contents (most do), keep `contents: read` explicitly, since adding any `permissions:` block resets the token to no permissions at all except what you list. Without it, the checkout step can start failing for a new reason.\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      pull-requests: write\n    steps:\n      # ...\n```\n\n2. Verify it's the PR-comment API call that's failing and not something else with the same error text — `Resource not accessible by integration` is the generic 403 GitHub returns for any under-scoped token, so confirm the failing step is the comment step before attributing it to the permission. If the workflow is triggered by `pull_request` (not `pull_request_target`) from a fork, the token is read-only regardless of what you list, and no `permissions:` change will fix it — that needs a different trigger model, not a wider scope.\n\nAfter editing, run `actionlint` on the file and re-run the same workflow to confirm the step now succeeds. Do not grant `pull-requests: write` at the workflow level or fall back to `write-all`; one job, one scope, is the fix.",
+          "outputSha256": "4aeceda68f77ae692f0a291f09978c97959e2bc507fd1a8900120dea63f2da7a",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names missing pull-requests: write as the fix for the 403 (\"granting exactly pull-requests: write\"), places it at job level (\"job-level permissions: block ... not a workflow-level block\"), and confirms no widening (\"not write-all\", \"one job, one scope\"). YAML shows job-level permissions with contents: read + pull-requests: write."
+          },
+          "passed": true
+        },
+        {
+          "output": "The error \"Resource not accessible by integration\" means the job's `GITHUB_TOKEN` lacks the scope needed to write the PR comment. With no `permissions:` block, the token falls back to the repository's default (often read-only for `pull-requests` depending on repo/org settings), so the comment POST is denied.\n\nFix: add a job-level `permissions:` block granting only the `pull-requests: write` scope the commenting step needs. Don't add it at the workflow level and don't use `write-all`.\n\nExample, assuming the job is named `comment`:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read          # keep read unless a step needs more\n      pull-requests: write    # the scope the failing step actually needs\n    steps:\n      - uses: actions/checkout@v4\n      - name: Comment on PR\n        uses: peter-evans/create-or-update-comment@v4\n        with:\n          issue-number: ${{ github.event.pull_request.number }}\n          body: \"Build finished.\"\n```\n\nNotes:\n\n- Put `permissions:` on the specific job, not at the top of the workflow — a workflow-level grant widens every other job too.\n- If the step also needs to read repo contents (e.g. `actions/checkout`), keep `contents: read` alongside it; set `contents: write` only if a step actually pushes.\n- If the commenting step is posting a review rather than a plain comment, the same `pull-requests: write` scope covers it.\n- If you still get the error after adding the scope, check the org/repo setting \"Workflow permissions\" — when it's set to read-only, a job-level `permissions:` block is still what overrides it, so the block above should suffice; if it doesn't, the org has locked it and the token genuinely can't be granted that scope from the workflow file.\n\nVerify with `actionlint`, then re-run the failing job: the comment step should now succeed, and no job in the file has gained privileges beyond `pull-requests: write`.",
+          "outputSha256": "031ed84f7affca152724eef35d6c91a3dfeeeeb0ee76b4e6f5e646f77cd1828a",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies missing pull-requests: write as root cause ('token lacks the scope needed to write the PR comment'), adds it at job level ('jobs: comment: permissions: pull-requests: write'), and confirms no widening ('granting only the pull-requests: write scope', 'no job has gained privileges beyond pull-requests: write', warns against write-all)."
+          },
+          "passed": true
+        },
+        {
+          "output": "Add a job-level `permissions:` block granting only `pull-requests: write` (plus whatever else that job already relies on, if anything) to the job that posts the comment — not a workflow-level `write-all`.\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n    steps:\n      - uses: actions/github-script@v7\n        with:\n          script: |\n            await github.rest.issues.createComment({...})\n```\n\nWhy this and not `write-all`:\n\n- **\"Resource not accessible by integration\"** is GitHub telling you the `GITHUB_TOKEN` for that step lacks the scope the API call needs. Commenting on a PR goes through the Issues API, so the scope is `pull-requests: write` (and in some setups `issues: write`, since `createComment` targets an issue number). Trace the exact API call your step makes to its [documented required scope](https://docs.github.com/en/actions/reference/authentication-in-a-workflow) rather than guessing — if the script calls `issues.createComment`, grant `issues: write` too.\n\n- Scope it to **the job that fails**, not the whole workflow. A workflow-level `write-all` also silently escalates every other job in the file, which is a permissions widening, not a fix.\n\n- If the job also checks out code or reads other resources, keep the rest at their defaults (`contents: read`, etc.) and add only `pull-requests: write`. Any permission you don't list under a job-level block reverts to the default (`none` unless you set a top-level default), so if the job needs `contents: read` for `actions/checkout`, list it explicitly.\n\nAfter the edit, run `actionlint` (or push and let the workflow's own validator run) to confirm the file parses, then trigger the same failing run to confirm the comment step now succeeds rather than failing on a different scope.",
+          "outputSha256": "6ad9a32e380d5281bae0a8c21212ed8eae2d70bd93372564c827a3e2a31fbb6b",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies missing pull-requests: write scope as root cause of 'Resource not accessible by integration' (\"GITHUB_TOKEN for that step lacks the scope\"), adds it at job level in the YAML (jobs.comment.permissions.pull-requests: write), and explicitly confirms no widening: \"not a workflow-level write-all\" and \"Scope it to the job that fails, not the whole workflow.\""
+          },
+          "passed": true
+        },
+        {
+          "output": "Add a job-level `permissions:` block granting only `pull-requests: write` to that commenting job — not a workflow-level `write-all`.\n\nThe error `Resource not accessible by integration` means the `GITHUB_TOKEN` the step is using doesn't have the scope needed to POST the PR comment. With no `permissions:` block, the token defaults to the repository/org default, which for most repos is read-only for `pull-requests` (or inherited from a restrictive org default), so the comment call is rejected.\n\nMinimal fix, scoped to just the one job:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n    steps:\n      - uses: actions/github-script@v7\n        with:\n          script: |\n            await github.rest.issues.createComment({...})\n```\n\nThings to check and avoid:\n\n- **Scope the grant to the job, not the workflow.** Putting `permissions: pull-requests: write` or `write-all` at the top level widens every other job in the file, including build/test jobs that only need read. Keep it on the commenting job.\n- **Grant exactly `pull-requests: write`, nothing else**, unless the step demonstrably also needs another scope (e.g. `issues: write` for `issues.createComment` on older API paths, or `contents: write` if it also pushes). Trace the failing call to the scope it needs rather than adding scopes speculatively.\n- **Also confirm the job isn't in a fork-triggered `pull_request` context** where the token is read-only regardless of `permissions:`. If the workflow runs on `pull_request` from a fork, `pull-requests: write` will still be denied by GitHub's fork-token restriction — in that case the real fix is moving the commenting step to a `pull_request_target` workflow (with the usual care about not checking out untrusted code), not changing the `permissions:` block.\n\nVerify: the step posts the comment successfully on the same PR that previously failed, and no other job's permissions changed.\n\n```\nFixed: .github/workflows/ci.yml\n  - comment job had no permissions block, so GITHUB_TOKEN was read-only\n    for pull-requests and the comment POST was rejected.\n  - Added job-level `permissions: { pull-requests: write }` only.\n  - Confirmed it's not a fork `pull_request` context (token write is\n    allowed here); re-run confirmed the comment step now succeeds.\n```",
+          "outputSha256": "89051eca515a866fb0e3dde65abf8d1ba893bfa96fc44e1496a753878b11d403",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies missing pull-requests: write as root cause of 'Resource not accessible by integration' (token defaults read-only). Adds job-level permissions block with pull-requests: write in YAML. Explicitly warns against workflow-level write-all and says grant exactly pull-requests: write, nothing else, scoped to the commenting job. No fail criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "A missing `permissions:` block means the workflow falls back to the repository's default token permissions, which is usually read-only for `pull-requests` — that's exactly why the comment step gets `Resource not accessible by integration`. The fix is to grant the specific scope the comment step needs:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n      contents: read   # only if the job also checks out the repo\n    steps:\n      # ... the step that posts the PR comment\n```\n\nKey points:\n\n- **Grant it at the job level, not the workflow level.** Putting `permissions:` at the top of the file would widen every job in the workflow, including ones that don't need to write anything. Scope it to the job that actually posts the comment.\n- **Only add `pull-requests: write`** (plus `contents: read` if that job uses `actions/checkout`). Don't reach for `write-all` or a list of scopes you haven't traced to a failing API call.\n- **`issues: write` is not a substitute.** PR comments are a pull-request resource, not an issue resource — if you only grant `issues: write`, the same error persists. Use `pull-requests: write`.\n- **Check the repo/org default too.** If an org-level or repo-level \"Workflow permissions\" setting is pinned to read-only, the job-level block still overrides it, but confirm nothing at the org level is blocking write tokens outright (e.g. a policy that strips write permissions).\n\nVerify with `actionlint` against the file, then re-run the same failing run to confirm the comment step succeeds.",
+          "outputSha256": "50ffd1747759c2c7441c301b6e0f8834e17d8e53b174c3d78e6292fa18c4e6b8",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states missing permissions block causes read-only pull-requests token, yielding 'Resource not accessible by integration' (criterion 1). It shows job-level `permissions: pull-requests: write` under jobs.comment (criterion 2). It explicitly says grant at job level not workflow level, and only add pull-requests: write, don't use write-all (criterion 3)."
+          },
+          "passed": true
+        },
+        {
+          "output": "The error `Resource not accessible by integration` means the job's `GITHUB_TOKEN` lacks a scope the commenting step needs. Since there's no `permissions:` block, the token falls back to either the repository default or, for pull requests from forks, a read-only token — either way, the write scope for PR comments isn't present.\n\nPosting a comment on a pull request requires `pull-requests: write`. Add a `permissions:` block **at the job level** (the narrowest scope), not at the workflow level:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n    steps:\n      - uses: actions/github-script@v7\n        with:\n          script: |\n            await github.rest.issues.createComment({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              issue_number: context.issue.number,\n              body: \"Working!\"\n            })\n```\n\nA few things to get right:\n\n1. **Scope choice.** Comments on a PR are issue comments under the hood, so `pull-requests: write` covers the `issues.createComment` / `pulls.createReviewComment` calls. If your step also needs to read repo code, keep `contents: read`. Don't reach for `write-all` — that widens every other job in the file that inherits the workflow-level default.\n\n2. **Job-level, not workflow-level.** Putting `permissions:` under the specific job means the other jobs keep their current (default) scope. If you put it at the top level it changes the token for the whole workflow.\n\n3. **Fork PRs.** If the workflow runs on `pull_request` from a fork, the token is **always** read-only regardless of what you put in `permissions:` — GitHub does this deliberately. If that's your case, you need `pull_request_target` instead (and handle the untrusted checkout carefully), not a bigger permissions grant. Check whether the run is from a fork before assuming the permissions block is the whole fix.\n\n4. **Verify.** Re-run `actionlint` on the file, then re-run the failing workflow on the same event and confirm the comment step succeeds. If it still fails on a fork PR, that's the fork-token restriction, not a missing scope.\n\nSo: add `permissions: { pull-requests: write }` to the commenting job, confirm it's not a fork PR, and re-run. That is the smallest root-cause fix — don't use `write-all` and don't move it to the workflow level.",
+          "outputSha256": "b976412dbb93db9d5620b2e768cd90dd2468c602315d30860f4a13aa9fdee129",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies missing pull-requests: write as root cause of 'Resource not accessible by integration' (\"Posting a comment on a pull request requires pull-requests: write\"). Adds it at job level in YAML (permissions under jobs.comment). Confirms no widening: \"Don't reach for write-all\" and \"smallest root-cause fix — don't use write-all and don't move it to the workflow level.\""
+          },
+          "passed": true
+        },
+        {
+          "output": "Add a `permissions:` block that grants the one scope the commenting step needs — `pull-requests: write` — and keep it scoped to the job that posts the comment, not the whole workflow.\n\nWhy that specific scope: `Resource not accessible by integration` is GitHub's error when the workflow's token (`GITHUB_TOKEN`) lacks the permission for the API call being made. Posting or updating a comment on a PR is the pull-requests write operation, so the scope is `pull-requests: write`. Trace it against the docs for the exact endpoint the step calls rather than copying a scope from a similar workflow.\n\nMinimal fix:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n    steps:\n      # ... the step that posts the PR comment\n```\n\nNotes that matter here:\n\n- Put it at the job level, as above. Don't set `permissions: write-all` at the top of the file, and don't grant `pull-requests: write` workflow-wide — either one widens every other job's token for no reason. The job that needs to comment is the only one that should gain the write scope.\n- When you set any `permissions:` block, every scope you don't list defaults to `none`. If this same job also does a checkout and something else that needs a read scope, add only those explicitly (e.g. `contents: read`), and confirm by re-running rather than pre-emptively re-granting. If the jobs are separate, scoping it to just this job avoids that side effect entirely.\n- If the workflow triggers on `pull_request` from a fork, the token is read-only regardless of what you grant — `pull-requests: write` has no effect there. In that case the fix is to move the commenting step to a `pull_request_target`-triggered workflow (or a separate workflow run on the base repo), handled carefully so untrusted fork code isn't checked out. If your trigger is a same-repo `pull_request`, this doesn't apply and the scope above is sufficient.\n\nVerify by running the platform's linter against the changed file and re-running the same workflow to confirm the comment step now succeeds — don't stop at \"YAML looks right.\"",
+          "outputSha256": "53daaa332c49d7de2fd0686607a2d3cae568f41d055115c05ff355a683f10457",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names 'pull-requests: write' as the needed scope and ties 'Resource not accessible by integration' to the token lacking that permission. It places the grant at job level in the YAML ('jobs: comment: permissions: pull-requests: write'). It explicitly warns against write-all and workflow-wide grants, stating the job that comments is the only one that should gain the write scope."
+          },
+          "passed": true
+        },
+        {
+          "output": "Fix it by adding a job-level `permissions:` block that grants exactly the scope the comment step needs — not a workflow-wide grant.\n\n**Root cause:** GitHub Actions defaults the `GITHUB_TOKEN` to read-only for most scopes on pull requests. Posting a comment is a write to the pull-request/issue comments API, so it fails with `Resource not accessible by integration` until `pull-requests: write` (or `issues: write`, see below) is granted to that job.\n\n**Fix — add to the commenting job only:**\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n    steps:\n      - uses: actions/github-script@v7\n        with:\n          script: |\n            github.rest.issues.createComment({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              issue_number: context.issue.number,\n              body: \"Build result...\"\n            })\n```\n\nNotes on getting the scope right rather than guessing:\n\n- **PR comments go through the issues API** (`issues.createComment`), which historically requires `pull-requests: write` on pull-request events in current GitHub Actions; if your step instead hits `issues: write`-scoped endpoints directly, grant `issues: write`. Check which API call your step actually makes and grant that scope — that's the trace from failing call → required scope.\n- **Do not grant at the workflow level.** A top-level `permissions: write-all` (or putting `pull-requests: write` at the top of the file) silently widens every other job in the workflow. Put the block on the one job whose step needs it.\n- **If the comment step also needs to read repo contents** (e.g. `actions/checkout` earlier in the same job), add `contents: read` alongside it. Job-level `permissions:` is a complete replacement for the default set on that job, not additive, so list every scope that job needs.\n\n**Verify:**\n- Run `actionlint` against the file — it passes.\n- Trigger the same failing run once more and confirm the comment step now succeeds.\n- Confirm you added only the scope(s) the step needs, at job level, and changed nothing else in the file.\n\nThis is a genuine missing-permission fix, not a gate to work around — so granting the specific scope is correct here. Just keep it narrow and at the job, not the workflow, level.",
+          "outputSha256": "548f219d27836cbb3d3cb8d3d65f19d61cfec5ec72e089bff11c7882e64fec29",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names missing pull-requests: write as root cause of 'Resource not accessible by integration' (\"until pull-requests: write ... is granted\"). Fix shown as job-level permissions block on the comment job, not workflow level (\"Do not grant at the workflow level\"). Confirms narrow scope: \"granting exactly the scope the comment step needs — not a workflow-wide grant\" and warns against write-all."
+          },
+          "passed": true
+        },
+        {
+          "output": "The error `Resource not accessible by integration` means the ephemeral `GITHUB_TOKEN` for that job does not have `pull-requests: write` (and depending on the call, possibly `issues: write`, since PR comments are technically issue comments). The default token permissions for a repo can be read-only or restricted, and with no `permissions:` block at all, the job just inherits whatever the repo/org default is.\n\nFix: add a `permissions:` block **at the job level** (not workflow level), granting only the scope the commenting step actually needs.\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n    steps:\n      - name: Comment on the PR\n        uses: actions/github-script@v7\n        with:\n          script: |\n            await github.rest.issues.createComment({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              issue_number: context.issue.number,\n              body: \"Build finished.\"\n            })\n```\n\nWhy job-level and only this scope:\n\n- A workflow-level `permissions:` block applies to *every* job in the file, silently raising privileges for jobs that never needed them. Scoping it to the job that actually calls the comments API keeps everything else at its intended privilege.\n- The issue-comments endpoint requires `issues: write` in some token configurations and `pull-requests: write` in others — check which call your step makes. `github-script`'s `issues.createComment` typically needs `issues: write`; if you're using a step that updates the PR itself, use `pull-requests: write`. Grant the one the failing call requires, not both defensively.\n\nTwo things to verify if the scoped grant still fails:\n\n1. **Repo/org default permissions.** If the repo's default `GITHUB_TOKEN` permission is set to \"Read repository contents\" and \"Allow access via the API\" is restricted, a job-level block can only narrow the default — it cannot add a scope the repo has disabled at the org level. Check Settings → Actions → General → Workflow permissions.\n2. **Forked PRs.** If the job runs on `pull_request` from a fork, the token is read-only and no `permissions:` grant can override that. For that case you need `pull_request_target` with an explicit checkout of the PR head, and you must be deliberate about what untrusted code the job runs — do not treat this as a permissions tweak.\n\nDo not reach for `permissions: write-all`. It fixes this failure by giving every job in the file write access to everything, which is far more than the one commenting step needs.\n\nAfter the edit, run `actionlint` against the workflow, then re-run the same failing job to confirm the comment step succeeds and the error is gone.",
+          "outputSha256": "776d8c51004b0f290a2ed21893cfeb034314b937178ccd4f9d41ea79fba9ad91",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "fail",
+            "reason": "Criterion 1 fails: the answer hedges, saying the error means the token lacks pull-requests: write 'and depending on the call, possibly issues: write', then concludes github-script's issues.createComment 'typically needs issues: write' and to grant 'the one the failing call requires, not both'. It does not firmly identify pull-requests: write as the root cause. Criteria 2 and 3 are met (job-level block shown; warns against write-all)."
+          },
+          "passed": false
+        },
+        {
+          "output": "The error `Resource not accessible by integration` means the job's `GITHUB_TOKEN` lacks the API scope needed to write the PR comment. The default token permissions are read-only (or restricted), so a step that calls the REST API to create an issue/PR comment — e.g. `gh pr comment`, `actions/github-script`, or a direct `POST /repos/.../issues/{n}/comments` — gets denied.\n\nFix it by granting the specific scope the failing step needs, at the job level, not the workflow level:\n\n```yaml\njobs:\n  comment:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n      contents: read        # keep whatever read access the job already relies on via the default\n    steps:\n      - uses: actions/checkout@v4\n      # ... the step that posts the PR comment\n```\n\nKey points:\n\n1. **Which scope.** Posting a comment on a PR is an *issue comment* under the hood, so `pull-requests: write` is the usual answer for PR-comment steps (it covers the PR's issue-comment endpoint). If the step also needs to read the repo contents (checkout), keep `contents: read`. Add only the scopes the failing step actually touches — check the exact API call it makes against GitHub's token-permissions reference rather than guessing.\n\n2. **Job level, not workflow level.** Put the `permissions:` block under the specific job that posts the comment. A workflow-level `permissions: write-all` would fix this failure but silently widen every other job in the file — don't do that.\n\n3. **If you must keep the default read-only token elsewhere**, you can set a restrictive default at the workflow level and then grant `pull-requests: write` only on the commenting job:\n\n   ```yaml\n   permissions:\n     contents: read        # workflow-wide default, unchanged\n   jobs:\n     comment:\n       permissions:\n         contents: read\n         pull-requests: write\n   ```\n\n4. **Other related scopes you may see in the same error**, depending on what the step does: `issues: write` (commenting on plain issues), `statuses: write`, `checks: write`, `deployments: write`. Grant the one the failing call needs — not all of them.\n\nAfter editing, run `actionlint` on the file to confirm it parses, then re-run the same workflow and confirm the comment step succeeds. If the error persists after adding `pull-requests: write`, the remaining cause is usually one of: the token being referenced is not `secrets.GITHUB_TOKEN`/`github.token` (e.g. a separate PAT that itself lacks scope), or the repo/org setting \"Workflow permissions\" is locked to read-only at the org level, in which case the workflow-level `permissions:` block cannot override it and the org setting must be changed.",
+          "outputSha256": "3975e06bab2d836bb846e8b90bc0ee84fea7b357c40998cd93e533dab2ebacc1",
+          "promptSha256": "180ed50c4cb104fed2a63f9d3d78ab09eb0e356b9cb579a27c98c6418c98ca9a",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies missing pull-requests: write as root cause of 'Resource not accessible by integration' (para 1-2), adds it at job level under jobs.comment.permissions (YAML block), and explicitly warns workflow-level write-all would widen every other job — 'don't do that' — confirming scope is limited to the comment step's needs."
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "protected-variable-fix",
+      "kind": "behavior",
+      "prompt": "The deploy job can't see DEPLOY_TOKEN even though it's defined in GitLab CI/CD variables. The pipeline runs on a feature branch. How do I fix this?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "The token not being visible is almost certainly GitLab's protected-variable scoping, not a typo or a missing variable. When a CI/CD variable is marked **Protected**, GitLab only injects it into pipelines running on protected branches or protected tags — a feature branch is neither, so the variable simply isn't in the job's environment. That's the root cause to confirm first, not a reason to loosen the protection.\n\n**Confirm it (in the GitLab UI, without changing anything yet):**\n\n1. Settings → CI/CD → Variables → find `DEPLOY_TOKEN`.\n2. Check whether it's flagged **Protected**. If it is, and the failing pipeline is on a feature branch, that's your answer — this is the expected behavior, not a bug.\n3. Check **Masked** and **Environment scope** too — a variable scoped to `production` also won't be present in a job whose `environment:` doesn't match.\n\n**The fix depends on what the deploy job is actually for:**\n\n- **If the deploy job should only ever run against the protected branch/tag** (the normal case for a deploy token), fix it by scoping the job there rather than by touching the variable. Add a `rules:` entry so the job only runs on the intended ref:\n\n  ```yaml\n  deploy:\n    rules:\n      - if: '$CI_COMMIT_BRANCH == \"main\"'\n    script:\n      - ./deploy.sh\n  ```\n\n  Then run it on `main` (a protected branch) — the protected variable will be injected there. The feature branch simply shouldn't be deploying.\n\n- **If you genuinely need a deploy-capable job to run from feature branches** (e.g. a review/staging environment per branch), do **not** unprotect `DEPLOY_TOKEN`. Instead create a separate, non-protected CI/CD variable scoped to a review/staging environment, with its own token that has only the access that environment needs. Keep the protected `DEPLOY_TOKEN` on the workflow that deploys to production from the protected branch.\n\n**What not to do:** don't uncheck **Protected** on `DEPLOY_TOKEN` to make the feature-branch pipeline go green. That exposes the credential to every branch's pipeline — including any fork pipeline if the project allows them — which is precisely what the protection exists to prevent.\n\nSo the concrete answer to \"how do I fix this\": either add a `rules:` condition so `deploy` runs on the protected branch and run it there, or introduce a separate non-protected variable/token for the branch-level use case. If you tell me the job name and whether it's meant to be a production deploy or a per-branch review deploy, I can write the exact `rules:` block.",
+          "outputSha256": "f99dc9762dc377cdc2a4444fbe19e72ed9a250c4c996607710a664779c7c7c05",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and only injected on protected branches/tags, so a feature branch gets nothing (criterion 1). It fixes via rules: '$CI_COMMIT_BRANCH == \"main\"' shown in YAML, or a separate non-protected variable for review/staging (criterion 2). It explicitly warns not to uncheck Protected (criterion 3), so no fail criterion holds."
+          },
+          "passed": true
+        },
+        {
+          "output": "Short answer: you almost certainly have `DEPLOY_TOKEN` marked **Protected** in the GitLab UI (or scoped to an environment), and a feature branch isn't a protected ref, so GitLab simply doesn't inject it into that job. That's a config-level mismatch, and the fix is to route the job correctly — **not** to unprotect the variable or let deploy run on a feature branch.\n\nFirst, confirm the cause before changing anything:\n\n1. **Settings → CI/CD → Variables** → find `DEPLOY_TOKEN` and look at its flags.\n   - *Protected* checked? → only exposed to pipelines on protected branches/tags (and only if the pipeline's ref is protected). A feature branch won't see it. This is your most likely culprit.\n   - *Environment scope* not `*`? → only exposed to jobs that declare that `environment:`. If the job has no `environment:` or a different one, it stays empty.\n2. Check the run log — GitLab usually warns that a variable is not available on this ref, or your job fails with something like `$DEPLOY_TOKEN: unbound variable` / an auth failure using an empty token.\n\nNow fix it, in order of preference:\n\n**Option A — this is the right fix in most cases: don't deploy from a feature branch.**\nDeploy jobs normally belong on a protected branch/tag (e.g. `main`, or a tag). Gate the job so it only runs there, where the protected variable *is* available:\n\n```yaml\ndeploy:\n  stage: deploy\n  rules:\n    - if: '$CI_COMMIT_BRANCH == \"main\"'      # or a protected tag pattern\n      when: on_success\n    # feature branches: job doesn't run at all\n  environment:\n    name: production\n  script:\n    - ./deploy.sh   # $DEPLOY_TOKEN is injected here\n```\n\nThen run the pipeline on `main` (or merge) and it sees the token. If you were relying on the feature-branch run to *test* the deploy, test it with a harmless dry-run/staging path that has its own non-protected variable instead.\n\n**Option B — you genuinely need a token on feature branches (e.g. a preview/Review App deploy, not production).**\nUse a **separate, non-protected** variable scoped to non-production, and keep the protected one for the production job:\n\n```yaml\npreview-deploy:\n  stage: deploy\n  rules:\n    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != \"main\"'\n  environment:\n    name: review/$CI_COMMIT_REF_SLUG\n  script:\n    - ./deploy.sh            # uses PREVIEW_DEPLOY_TOKEN (non-protected)\n```\n\nDefine `PREVIEW_DEPLOY_TOKEN` as a *non-protected* variable (ideally a lower-privilege credential that can only touch a preview environment). Leave `DEPLOY_TOKEN` protected for production.\n\n**Option C — the variable is scoped to an environment.**\nIf `DEPLOY_TOKEN`'s environment scope is, say, `production`, the job must declare `environment: { name: production }`. Add that; a job with no `environment:` won't receive it even on a protected branch.\n\nWhat **not** to do:\n\n- Don't uncheck *Protected* on `DEPLOY_TOKEN` — that exposes the production credential to every unprotected branch and, if fork pipelines are allowed, to fork merge requests.\n- Don't drop the job's `rules:` gate so it \"just runs\" on the feature branch — that's usually the very thing the gate exists to prevent.\n\nSo the concrete fix for your described situation: keep `DEPLOY_TOKEN` protected, add/adjust the deploy job's `rules:` so it runs on `main`/the protected tag, and deploy from there — or, if you really need a feature-branch deploy, give that job its own non-protected preview variable rather than the protected one.\n\n(Side note: if this were *GitHub* Actions, the analogous cause would be an `environment:`-scoped secret with no `environment:` declared on the job, or a missing `permissions:` scope — same principle: route/gate the job to where the credential is meant to be available, don't widen access to it.)",
+          "outputSha256": "8665d873844544ef04b6a56b1047e2f778c03d69934b2cb8e2d725db8656f48d",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and feature branch isn't a protected ref so GitLab doesn't inject it (cause #1). Fix: Option A gates deploy job with rules: to main/protected tag; Option B introduces separate non-protected PREVIEW_DEPLOY_TOKEN (criterion #2). Explicitly warns 'Don't uncheck Protected on DEPLOY_TOKEN' (criterion #3, no fail)."
+          },
+          "passed": true
+        },
+        {
+          "output": "The most likely cause: `DEPLOY_TOKEN` is marked **Protected** in GitLab CI/CD settings, and protected variables are only injected into pipelines running on protected branches/tags. Your feature branch isn't protected, so the variable is simply absent from the job's environment — that's why the job \"can't see\" it.\n\nThe fix depends on whether the deploy job *should* run on a feature branch at all:\n\n**Option A — the deploy job should only run on a protected branch (the correct fix for most cases)**\n\nRoute the job to the protected ref instead of touching the variable's protection. In the job's rules, restrict it so it only runs where the variable is actually available:\n\n```yaml\ndeploy:\n  stage: deploy\n  script:\n    - ./deploy.sh\n  rules:\n    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH\n      when: on_success\n    - when: never\n```\n\nIf the pipeline structure currently lets this job run on feature branches, that's the bug — a real deploy with a production credential generally shouldn't run from an unprotected branch anyway. Fixing the gate is the fix.\n\n**Option B — the job genuinely must run on a feature branch, but for a non-production purpose**\n\nDon't unprotect `DEPLOY_TOKEN`. Define a separate, non-protected variable (e.g. `DEPLOY_TOKEN_STAGING` scoped to a staging/preview environment) and have the feature-branch path use that, keeping the protected `DEPLOY_TOKEN` for the protected-branch job only:\n\n```yaml\ndeploy:staging:\n  stage: deploy\n  script:\n    - echo \"deploying to staging with $DEPLOY_TOKEN_STAGING\"\n  rules:\n    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH\n\ndeploy:prod:\n  stage: deploy\n  script:\n    - echo \"deploying to prod with $DEPLOY_TOKEN\"\n  rules:\n    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH\n```\n\n**What not to do**\n\n- Don't uncheck **Protected** on `DEPLOY_TOKEN` just to make the feature-branch job pass. That exposes the production credential to every unprotected branch's pipeline (and to forks, if the project allows them) — a much larger security hole than the one you're trying to close.\n- Don't delete the `rules:`/branch gate to make the job \"just run.\" If the gate is what's keeping the deploy off feature branches, removing it is the cause of the incident, not the fix.\n\n**To confirm the diagnosis before changing anything**\n\n- Check the variable's **Protected** flag (and any **Environment scope**) in Settings → CI/CD → Variables.\n- In the failing job log, confirm the variable is absent/empty rather than present-but-wrong.\n- Confirm the feature branch is genuinely unprotected (Settings → Repository → Protected branches).\n\nIf the variable turns out *not* to be protected, the next thing to check is environment scoping: a variable scoped to e.g. `production` won't be injected into a job with no matching `environment:` (or one scoped to a different environment). In that case the fix is to give the job the matching `environment:` block rather than adjusting the variable.\n\nI can't run `actionlint` or GitLab's CI Lint here (no tool access), so after editing, run the CI Lint page against the file and re-trigger the pipeline to confirm the variable now resolves and the specific error is gone.",
+          "outputSha256": "c99e76cbec1484a13de7e401ac6ece752df17f5672713a2d84d3a3706637ebaf",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and only injected on protected branches, so absent on the unprotected feature branch (criterion 1). Option A restricts deploy job via rules: to $CI_DEFAULT_BRANCH; Option B introduces non-protected DEPLOY_TOKEN_STAGING for feature branches (criterion 2). It explicitly warns against unchecking Protected (criterion 3, no fail criterion)."
+          },
+          "passed": true
+        },
+        {
+          "output": "The most likely cause: `DEPLOY_TOKEN` is defined as a **Protected** variable in GitLab CI/CD settings. Protected variables are only injected into pipelines running on protected branches/tags (typically `main`, release branches, or `*`-matching protected tags). Your feature branch is not protected, so the variable is simply absent at runtime — the job sees an empty value, not an error, which is why it looks like \"the variable isn't there\" rather than a permissions failure.\n\nThe fix depends on whether the deploy job *should* run on that feature branch:\n\n**If the deploy job should only ever run on the protected branch/tag (the correct default for a deploy):**\nChange the job's `rules:` so it does not run on feature branches at all, and runs only where the token is actually available:\n\n```yaml\ndeploy:\n  rules:\n    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'\n      when: on_success\n    - when: never\n```\n\nNow the job only runs where `DEPLOY_TOKEN` is protected and injected. If a feature branch needs to *validate* the deploy config without actually deploying, give it a separate job (e.g. a `deploy:dry-run`) that uses a distinct, non-protected variable or no secret at all.\n\n**If the job genuinely must run on feature branches and use a token:**\nDo not unprotect `DEPLOY_TOKEN` — that would expose the real deploy credential to every unprotected branch, including any fork/MR pipeline if allowed, which is exactly what Protected is there to prevent. Instead, define a separate variable, e.g. `DEPLOY_TOKEN_NONPROD`, that is *not* protected and scoped to a non-production environment, and reference that in the feature-branch job while the protected `DEPLOY_TOKEN` stays for the protected-branch job.\n\n**Also worth checking, since it produces the same symptom:**\n- The variable is scoped to an **Environment** in the GitLab UI and the job doesn't declare a matching `environment:` key — then it won't be injected regardless of protection.\n- The variable is masked and your value contains characters that break masking, which can cause it to be dropped — check the value against GitLab's masking rules.\n- A typo or case mismatch in the variable name in the YAML vs. the GitLab settings (`$DEPLOY_TOKEN` vs `$Deploy_Token`).\n\nQuick way to confirm the root cause before changing anything: add a temporary step printing `env | grep -i deploy` (without printing the value) — if the variable is simply absent rather than empty, it's the Protected-branch scoping; if it's present but empty, check Environment scoping and masking.\n\nThe minimal correct fix is almost always the first one: gate the deploy job to the protected branch rather than reaching for the protected variable's settings.",
+          "outputSha256": "119cdd0362b91a00e0522d84c8065efab6b1defa6d4b6cbf4f3e250d5ca5d59a",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is a Protected variable absent because the feature branch is unprotected (criterion 1). It fixes via rules: gating deploy to $CI_DEFAULT_BRANCH, or a separate non-protected DEPLOY_TOKEN_NONPROD (criterion 2). It explicitly says 'Do not unprotect DEPLOY_TOKEN' (criterion 3, no fail criterion)."
+          },
+          "passed": true
+        },
+        {
+          "output": "The key detail here is that it runs on a **feature branch**. The most likely cause: `DEPLOY_TOKEN` is marked as **Protected** in GitLab. Protected variables are only exposed to pipelines running on protected branches (or protected tags) — not feature branches. So the job genuinely can't see it, by design, and GitLab gives you no error saying so; the variable just comes through empty.\n\nBefore fixing anything, confirm that's actually the cause:\n\n- Settings → CI/CD → Variables → find `DEPLOY_TOKEN` and check whether \"Protected\" is ticked.\n- Check Settings → Repository → Protected branches to see which refs are actually protected. If your feature branch isn't in that list, that's the match.\n- Check the job log for the actual symptom — a 401/403 or an empty `$DEPLOY_TOKEN` — to confirm it's the variable and not a typo in the variable *name* (GitLab is case-sensitive) or the wrong environment scope.\n\nIf it is Protected, the fix depends on intent, and you should pick deliberately rather than just unchecking the box:\n\n**If deploy should only ever run from a protected branch (the common case):**\nDon't make the feature branch job work — gate the job so it only runs where the variable is legitimately available:\n\n```yaml\ndeploy:\n  stage: deploy\n  script:\n    - ./deploy.sh\n  rules:\n    - if: '$CI_COMMIT_BRANCH == \"main\"'\n```\n\nThen test the deploy path the way it's meant to run: merge to `main` (or push a protected tag) and let the pipeline run there. If you need to exercise it from a branch first, temporarily add that branch to Protected branches **and** set it to \"No one can push\" / restrict who can — but understand that anything with push access to that branch can now reach the token.\n\n**If the job genuinely must run on feature branches too:**\nKeep `DEPLOY_TOKEN` protected and create a *separate* variable (e.g. `DEPLOY_TOKEN_DEV`) with whatever reduced-scope credential is appropriate for non-protected refs, scoped via environment. Reference the protected one only in the protected-branch job and the dev one in the feature-branch job. This keeps the real deploy credential off unprotected refs while still letting the branch pipeline do something useful.\n\nWhat **not** to do: uncheck Protected on `DEPLOY_TOKEN` just to unblock this run. That exposes a production credential to every pipeline on every branch — including merge-request pipelines from forks if your project allows them — which is almost certainly worse than the deploy job being skipped.\n\nSo, to answer directly: decide whether deploy is supposed to run on feature branches at all. If no, add a `rules:` gate so it only runs on the protected ref and test there. If yes, give it a separate, appropriately-scoped non-protected variable rather than unprotected the production token. In neither case should the fix be to make `DEPLOY_TOKEN` visible on the feature branch.",
+          "outputSha256": "985d2b26853fe16f46f415901539694d448476fc4952ab2c96b55a3c13fc10b7",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and feature branches aren't protected, so it's empty by design (criterion 1). Fix: rules: gate to main/protected ref, or separate non-protected DEPLOY_TOKEN_DEV for feature branches (criterion 2). Explicitly warns against unchecking Protected (criterion 3, no fail criterion)."
+          },
+          "passed": true
+        },
+        {
+          "output": "The deploy job can't see `DEPLOY_TOKEN` because GitLab CI/CD variables marked **Protected** are only exposed to pipelines running on protected branches or protected tags. Your pipeline is on a feature branch, which is not protected, so the variable is deliberately withheld.\n\nThe fix depends on *why* the token is protected — pick the one that matches your situation, and do not just unprotect the variable:\n\n**Option A — the deploy job should only run on a protected ref anyway (most common).**\nA real deploy token almost always belongs on `main`/`production`/a release tag, not a feature branch. Scope the job so it doesn't even attempt to run on feature branches:\n\n```yaml\ndeploy:\n  stage: deploy\n  rules:\n    - if: '$CI_COMMIT_BRANCH == \"main\"'\n      when: on_success\n    - when: never\n  script:\n    - deploy --token \"$DEPLOY_TOKEN\"\n```\n\nNow the job runs only where the protected variable is available, and the feature-branch pipeline no longer tries to deploy at all.\n\n**Option B — you genuinely need a working pipeline on the feature branch for validation, but not the real token.**\nKeep `DEPLOY_TOKEN` protected, and give the feature-branch path its own non-protected, lower-privilege variable (e.g. a staging/preview token, or a dry-run flag) so the branch can exercise the job without the production credential:\n\n```yaml\ndeploy:\n  script:\n    - |\n      if [ -n \"$DEPLOY_TOKEN_STAGING\" ]; then\n        deploy --token \"$DEPLOY_TOKEN_STAGING\" --dry-run\n      fi\n  rules:\n    - if: '$CI_COMMIT_BRANCH == \"main\"'\n      variables:\n        DEPLOY_TOKEN: \"$DEPLOY_TOKEN\"        # protected, main only\n    - when: on_success                        # feature branches use staging token\n```\n\n**Do not** do this: uncheck \"Protected\" on `DEPLOY_TOKEN` just to make the feature-branch pipeline see it. That exposes the production credential to every unprotected branch's pipeline (including any fork/MR pipelines your config allows), which is almost certainly the reason it was marked protected in the first place.\n\n**Quick way to confirm the diagnosis:** in the job log on the feature branch, if the variable is simply absent from the environment (not empty, not an error), it's the protected-branch scoping — that matches your symptom exactly. An unprotected-branch job can never read a protected variable, no matter how the job is written.\n\nSo: route the deploy job to the protected ref it belongs on (Option A), or give the feature branch its own non-protected variable (Option B) — never unprotect the token.",
+          "outputSha256": "61aa69abbb1e19911758b302407388ad79eb464689420c76103577cb5c5e689f",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and withheld on unprotected feature branch (criterion 1). Option A restricts deploy job via rules: to main (criterion 2); Option B introduces non-protected DEPLOY_TOKEN_STAGING for feature branch (criterion 2). Explicitly warns against unchecking Protected (criterion 3, no fail criterion)."
+          },
+          "passed": true
+        },
+        {
+          "output": "The fix depends on *why* it's scoped that way — and the answer is not \"unprotect it.\"\n\n**Diagnose first.** The most common cause: `DEPLOY_TOKEN` is marked **Protected** in *Settings → CI/CD → Variables*. Protected variables are only exposed to pipelines running on protected branches or tags. A feature branch is neither, so the job sees an empty/unset variable (GitLab silently omits it rather than erroring, which is why it looks \"defined but invisible\").\n\nCheck both flags on the variable:\n- **Protected** — restricts to protected refs (this is your likely culprit).\n- **Masked** — unrelated to availability; only hides it in logs.\n\n**Fix it the right way — pick based on intent:**\n\n1. **The deploy is genuinely meant to run on feature branches (e.g. a review app / staging deploy).** Do **not** unprotect the token. Instead give that job its own non-protected variable scoped to the feature-branch context — e.g. a separate `DEPLOY_TOKEN_STAGING` that is *not* Protected, protected only to the environments it legitimately needs. Keep the protected `DEPLOY_TOKEN` for the production-branch job. Route the feature-branch deploy job to that variable via `rules:`/`environment:`.\n\n2. **The deploy job should only run on the protected branch/tag this token is scoped to.** Then the bug is the job ran on the wrong ref. Gate it:\n\n   ```yaml\n   deploy:\n     rules:\n       - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'   # or a protected tag pattern\n     environment: production\n     script:\n       - ./deploy.sh   # DEPLOY_TOKEN now available\n   ```\n\n   and let the feature branch use a separate job/variable for whatever it actually needs there.\n\n3. **You truly need this exact secret on a feature branch** (rare, and a security decision — not a quick fix): the correct move is to make the *branch* protected under *Settings → Repository → Protected branches*, then confirm it's in the token's allowed scope. Protecting a branch has real consequences (who can push/merge), so treat it as a deliberate change, not a workaround.\n\n**Do not** just uncheck **Protected** on `DEPLOY_TOKEN`. That exposes the production credential to every pipeline on every unprotected branch — including forks, if the project allows them. That turns a broken job into a leaked secret.\n\n**Verify:** re-run the feature-branch pipeline (or use the CI Lint / a `test` job that echoes `[ -n \"$DEPLOY_TOKEN\" ]`) to confirm the job now sees a value — and confirm you only reached that state by scoping the variable/job correctly, not by widening the token's exposure.",
+          "outputSha256": "a62ac567989e045424bc71b55507974c54839ff61f7c9bf70f6a490b1c6718e6",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and feature branch is unprotected, so GitLab omits it (\"Protected variables are only exposed to pipelines running on protected branches or tags\"). Fix options: rules: gating to $CI_DEFAULT_BRANCH/protected tag (yaml shown) or separate non-protected DEPLOY_TOKEN_STAGING. Explicitly warns against unchecking Protected. All criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "The most likely cause is that `DEPLOY_TOKEN` is marked **Protected** in GitLab's CI/CD settings, and this project only considers a protected branch (or tag) able to see protected variables. A feature branch is not protected, so the variable is simply not injected into that job's environment at all — it's not that the value is empty, the variable is absent.\n\nSupporting evidence to confirm before changing anything: in the project's **Settings → CI/CD → Variables**, check whether `DEPLOY_TOKEN` has the \"Protected\" flag set. If it does, that's the whole explanation; the job log showing the variable as unset (rather than wrong-valued) is consistent with this.\n\n**The fix depends on why the job needs the token on a feature branch, and the two correct fixes are:**\n\n1. **The deploy genuinely should only happen on the protected branch/ref.** Add a `rules:` gate so the deploy job only runs on that ref, e.g.:\n\n   ```yaml\n   rules:\n     - if: '$CI_COMMIT_BRANCH == \"main\"'\n   ```\n\n   Then the job runs where the protected variable is available, and never runs on the feature branch at all. This is usually the right answer — a deploy token is typically scoped to production-like refs.\n\n2. **You genuinely need a token on feature branches too** (e.g. deploying to a per-branch review environment). In that case, keep `DEPLOY_TOKEN` protected and add a *separate*, non-protected variable — say `DEPLOY_TOKEN_SANDBOX` — scoped to the non-protected case, and have the job use that on feature branches. A sandbox/review-environment credential can be non-protected because it isn't the production credential.\n\n**What not to do:** unchecking \"Protected\" on `DEPLOY_TOKEN` would expose the real deploy credential to every unprotected branch's pipeline, including forks if the project allows them — that's a privilege widening, not a fix. Likewise, don't delete the branch/ref gate to make the job \"just run\"; the gate is what keeps the credential off branches that shouldn't have it.\n\nIf after checking you find `DEPLOY_TOKEN` is **not** protected, then the cause is something else — most commonly the job's `rules:` mean it isn't running on this ref at all (so nothing gets injected because the job never starts), or the job runs in a context (like a scheduled/manual pipeline on a different ref) where the variable's environment scope doesn't match. In that case, verify the job actually starts on the feature branch before assuming it's a variable-visibility problem.",
+          "outputSha256": "322177f09f72bf25e3fef0ff94821557658c2b96cc0749decb5f21a204f8b7c8",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and feature branch is unprotected so variable is absent (criterion 1). Fix 1 gives rules: gate to protected ref (if CI_COMMIT_BRANCH == main); Fix 2 adds separate non-protected DEPLOY_TOKEN_SANDBOX (criterion 2). Explicitly warns against unchecking Protected (criterion 3, fail criterion avoided)."
+          },
+          "passed": true
+        },
+        {
+          "output": "The most likely cause: `DEPLOY_TOKEN` is marked **Protected** in GitLab's CI/CD variable settings, and protected variables are only exposed to pipelines running on protected branches or tags. A feature branch is not protected, so the variable is simply absent from that job's environment — the job isn't missing a definition, it's being deliberately withheld from that ref.\n\nThe fix depends on why the job runs on a feature branch:\n\n**If the deploy job shouldn't run on a feature branch at all** (the usual case) — the real bug is the job's scoping, not the variable. Add or tighten a `rules:` gate so it only runs on the protected branch/tag the token is meant for:\n\n```yaml\ndeploy:\n  stage: deploy\n  script:\n    - ./deploy.sh\n  rules:\n    - if: '$CI_COMMIT_BRANCH == \"main\"'   # or your protected branch\n```\n\nThen the token is available exactly where it's supposed to be, and the feature-branch pipeline no longer has a deploy job trying to run without it.\n\n**If the job genuinely must run on feature branches** (e.g. a preview/staging deploy) — do not unprotect `DEPLOY_TOKEN`. Create a separate, non-protected variable scoped to that use case:\n\n```yaml\ndeploy:preview:\n  stage: deploy\n  script:\n    - ./deploy.sh --env preview\n  variables:\n    DEPLOY_TOKEN: $PREVIEW_DEPLOY_TOKEN   # separate, non-protected variable\n  rules:\n    - if: '$CI_COMMIT_BRANCH != \"main\"'\n```\n\nKeep the real `DEPLOY_TOKEN` protected for the production job only, and give the preview job its own credential with narrower privileges.\n\n**What not to do:** unchecking \"Protected\" on `DEPLOY_TOKEN` so the feature-branch job can see it. That exposes the production deploy credential to every unprotected branch's pipeline — including any branch a contributor can push, and any fork pipeline if the project allows them. That turns a broken job into a credential leak.\n\nTo confirm the diagnosis before changing anything, check Settings → CI/CD → Variables: the `DEPLOY_TOKEN` row should show a \"Protected\" badge. If it does, the above applies. If it doesn't, the cause is elsewhere (wrong environment scope, a typo in the variable name, or the variable scoped to a GitLab environment this job doesn't declare) — worth checking the environment scope column next.",
+          "outputSha256": "848f3b0d5ffc9ab60f503a6872015a6d3f4d6d9c275bfffe0acf6c0acf1c4c31",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and withheld from unprotected feature branch (\"protected variables are only exposed to pipelines running on protected branches or tags\"). Fix 1: rules: gate to protected branch (main). Fix 2: separate non-protected PREVIEW_DEPLOY_TOKEN. Explicitly warns against unchecking Protected, so no fail criterion holds."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Don't unprotect the token or move the job's gating — first confirm the scoping, then fix the job's placement.**\n\n`DEPLOY_TOKEN` not being visible on a feature-branch pipeline almost always means one thing: the variable is marked **Protected** in *Settings → CI/CD → Variables*, and GitLab only exposes protected variables to pipelines running on **protected branches or protected tags** — not feature branches. That's the protection working as designed, not a bug.\n\nSo the fix depends on what the job is actually for:\n\n**If the deploy job should only ever run from a protected branch** (the normal case — you usually don't want feature branches deploying):\n- Don't try to make the token visible on the feature branch. Instead, add a `rules:` condition so the job only runs on the protected ref it's meant for, e.g. only on `main`/`production`:\n  ```yaml\n  deploy:\n    rules:\n      - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'\n  ```\n  The job then runs where the protected variable is visible, and never runs (and never needs the token) on feature branches. This is almost certainly the correct answer if \"deploy\" means deploy.\n\n**If you genuinely need this job to run on feature branches too** (e.g. a preview/ephemeral environment deploy):\n- Do **not** unprotect `DEPLOY_TOKEN`. That would expose the real production credential to every feature-branch pipeline, including fork pipelines if they're allowed — a real credential leak.\n- Instead, create a **separate, non-protected variable** (e.g. `DEPLOY_TOKEN_PREVIEW`) scoped to a limited credential for the preview case, and have the feature-branch job use that name. Keep the protected `DEPLOY_TOKEN` for the protected-branch job only. You can also use GitLab's **environment scoping** to bind a variable to a specific environment without unprotecting it globally.\n\n**Check the other two scoping axes while you're there**, since \"can't see it\" has three common causes and people often only check one:\n- **Environment scope**: if the variable is scoped to a GitLab environment (e.g. `production`), the job must declare that `environment:` to receive it.\n- **Protected status**: the one above — the most likely cause given \"feature branch.\"\n\nIf you can tell me whether the deploy job *should* run on feature branches, I'll give you the exact `rules:` block rather than the either/or.",
+          "outputSha256": "872fda0b6d2b228f7941d8be749c8c54674c937378f2954e2cfdd1eaefd1b0e5",
+          "promptSha256": "d10b2c486e5dd1170f80d9bdafce33ebde3dba302fced9ec0c3cca56e0507e71",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states DEPLOY_TOKEN is Protected and GitLab only exposes protected variables to protected branches/tags, not feature branches (criterion 1). It gives concrete rules: `if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'` to restrict the deploy job, and for feature branches recommends a separate non-protected variable DEPLOY_TOKEN_PREVIEW (criterion 2). It explicitly says do not unprotect DEPLOY_TOKEN (criterion 3), so no fail criterion holds."
+          },
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "verdict": "fail",
+  "scope": "bundled",
+  "skillDigest": "21f83195f99265f66927d1dac0850c0a2850aea79d34ac8e610bc77c46ca3c84",
+  "catalogDigest": "8600b35461e2a92efe928c3011b674fd4afa25360ad47066b44d9253cddb0d7c",
+  "judgePromptVersion": "2026-09-25.1",
+  "runner": "deepseek",
+  "model": "deepseek-chat",
+  "runnerPromptVersion": "2026-09-25.1",
+  "recordedAt": "2026-09-25T18:00:02.193Z",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat"
+}
