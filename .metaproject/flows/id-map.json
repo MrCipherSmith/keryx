@@ -286,5 +286,13 @@
     "toDir": "325-2026-09-24-w1-stack-detection-install-profiles-and-",
     "at": "2026-09-25T12:03:45.286Z",
     "reason": "id collided with main's flow 309 (Live model catalog at startup); allocation was per working copy"
+  },
+  {
+    "from": "326",
+    "to": "334",
+    "fromDir": "326-2026-09-25-negation-aware-skill-trigger-scorer-not-",
+    "toDir": "334-2026-09-25-negation-aware-skill-trigger-scorer-not-",
+    "at": "2026-09-25T14:52:39.058Z",
+    "reason": "ids 326-333 are taken by the parallel Jev programme session (flow packages not pushed yet); allocation is per working copy"
   }
 ]

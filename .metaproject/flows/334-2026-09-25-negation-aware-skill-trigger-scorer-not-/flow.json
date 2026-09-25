@@ -1,0 +1,354 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "334",
+  "slug": "negation-aware-skill-trigger-scorer-not-",
+  "title": "Negation-aware skill trigger scorer: Not-for clauses stop counting as evidence",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T14:52:23.218Z",
+  "updatedAt": "2026-09-25T17:22:04.451Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
+    },
+    {
+      "id": "T5",
+      "title": "Survey exclusion-clause conventions in bundled SKILL.md files",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "surveyed bundled SKILL.md exclusion-clause conventions via keryx ctx rg; findings recorded in journal"
+    },
+    {
+      "id": "T6",
+      "title": "Implement negation-aware token extraction in scout.ts (entry side)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:01:57.131Z",
+            "outcome": "started",
+            "detail": "implementing negation-aware token extraction"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "negation-aware token extraction implemented, all existing scout/eval/stack-pack/agents-verify tests pass, typecheck+lint clean"
+    },
+    {
+      "id": "T7",
+      "title": "Unit + regression tests for negation-aware scoring",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:04:31.522Z",
+            "outcome": "started",
+            "detail": "adding unit + regression tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "10 new tests added (stripExclusionClauses unit tests, real bundled nodejs-testing/nodejs-implementation regression, AC2 quality/pr scout test, full-catalog own-trigger regression loop); all pass, typecheck+lint clean"
+    },
+    {
+      "id": "T8",
+      "title": "Before/after trigger-accuracy measurement + stable pack gate re-check",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:08:28.754Z",
+            "outcome": "started",
+            "detail": "measuring before/after trigger accuracy across all 90 bundled skills"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "measured before/after trigger accuracy for all 90 bundled skills (TP 369->365, FP 4->3); stable-pack gate re-checked live for python+go via stack-packs.test.ts, neither regresses; full reasoning in journal"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: exclusion clauses are safe to write",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "added a section to write-a-rubric-scenario.md documenting the recognized exclusion-clause forms"
+    },
+    {
+      "id": "T10",
+      "title": "PR, review/fix loop, CI, merge sequencing",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-25T15:09:00.668Z",
+            "outcome": "started",
+            "detail": "opening PR, targeting main"
+          },
+          {
+            "at": "2026-09-25T17:22:04.167Z",
+            "outcome": "started",
+            "detail": "post-#719-merge re-measurement and CI fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "merged origin/main (PR #719 landed), re-measured ratchet/stable-gate/batch-2/misroute against the 110-skill catalog, fixed 3 CI-only issues (mirror sync, fragile test fixture, test timeout), all CI green on b53c713c; merge still withheld pending owner sequencing per standing instruction"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T14:52:23.218Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T14:52:39.058Z",
+      "event": "renumbered",
+      "detail": "326 -> 334: ids 326-333 are taken by the parallel Jev programme session (flow packages not pushed yet); allocation is per working copy"
+    },
+    {
+      "at": "2026-09-25T14:55:30.646Z",
+      "event": "task-added",
+      "detail": "T5: Survey exclusion-clause conventions in bundled SKILL.md files"
+    },
+    {
+      "at": "2026-09-25T14:55:30.909Z",
+      "event": "task-added",
+      "detail": "T6: Implement negation-aware token extraction in scout.ts (entry side)"
+    },
+    {
+      "at": "2026-09-25T14:55:31.165Z",
+      "event": "task-added",
+      "detail": "T7: Unit + regression tests for negation-aware scoring"
+    },
+    {
+      "at": "2026-09-25T14:55:31.421Z",
+      "event": "task-added",
+      "detail": "T8: Before/after trigger-accuracy measurement + stable pack gate re-check"
+    },
+    {
+      "at": "2026-09-25T14:55:31.681Z",
+      "event": "task-added",
+      "detail": "T9: Docs: exclusion clauses are safe to write"
+    },
+    {
+      "at": "2026-09-25T14:55:31.934Z",
+      "event": "task-added",
+      "detail": "T10: PR, review/fix loop, CI, merge sequencing"
+    },
+    {
+      "at": "2026-09-25T14:55:45.620Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T14:55:45.888Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T14:55:46.144Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T14:55:46.396Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T14:55:48.498Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T14:55:48.754Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T15:01:57.131Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — implementing negation-aware token extraction"
+    },
+    {
+      "at": "2026-09-25T15:02:08.172Z",
+      "event": "task-done",
+      "detail": "T6: Implement negation-aware token extraction in scout.ts (entry side)"
+    },
+    {
+      "at": "2026-09-25T15:04:31.522Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — adding unit + regression tests"
+    },
+    {
+      "at": "2026-09-25T15:04:41.584Z",
+      "event": "task-done",
+      "detail": "T7: Unit + regression tests for negation-aware scoring"
+    },
+    {
+      "at": "2026-09-25T15:08:28.754Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — measuring before/after trigger accuracy across all 90 bundled skills"
+    },
+    {
+      "at": "2026-09-25T15:08:34.442Z",
+      "event": "task-done",
+      "detail": "T8: Before/after trigger-accuracy measurement + stable pack gate re-check"
+    },
+    {
+      "at": "2026-09-25T15:08:46.963Z",
+      "event": "task-done",
+      "detail": "T9: Docs: exclusion clauses are safe to write"
+    },
+    {
+      "at": "2026-09-25T15:09:00.669Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — opening PR, targeting main"
+    },
+    {
+      "at": "2026-09-25T16:16:08.177Z",
+      "event": "task-done",
+      "detail": "T5: Survey exclusion-clause conventions in bundled SKILL.md files"
+    },
+    {
+      "at": "2026-09-25T16:16:08.438Z",
+      "event": "task-done",
+      "detail": "T10: PR, review/fix loop, CI, merge sequencing"
+    },
+    {
+      "at": "2026-09-25T17:22:04.167Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 2) — post-#719-merge re-measurement and CI fixes"
+    },
+    {
+      "at": "2026-09-25T17:22:04.451Z",
+      "event": "task-done",
+      "detail": "T10: PR, review/fix loop, CI, merge sequencing"
+    }
+  ]
+}

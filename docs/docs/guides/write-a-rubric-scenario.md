@@ -8,6 +8,97 @@ at all, alongside an answer that actually used it. Flow 316 replaced that for
 behavior scenarios with a rubric graded by a separate LLM judge call. This
 guide covers how to write one.
 
+## Exclusion clauses in a `description`/`triggers` are safe to write (flow 334)
+
+This section is unrelated to judge rubrics above — it is about the
+SEPARATE, purely lexical trigger scorer (`src/gdskills/governance/scout.ts`:
+`checkSkillSelected`/`checkSkillSelectedLeaveOneOut`/`scoutSkill`/
+`nearestSkills`), not the judge. It is grouped on this page because the same
+"don't fight the grader, write for it" spirit applies to a skill's
+`SKILL.md` frontmatter `description`/`triggers`. Every consumer of that
+scorer is affected: `keryx skills eval <id>`'s `triggerAccuracy`,
+`keryx skills scout`'s use/fork/create decision, `keryx skills stocktake`'s
+own-trigger-routes-back check, and `bundle/external.ts`'s vetting of an
+external skill import candidate (which scores the candidate's own
+`name + description` the same way).
+
+Before flow 334, that scorer was a plain bag-of-words/IDF match with no
+negation handling: text inside a skill's own exclusion clause — "Use when X.
+**Not for** Y (use \`other-skill\` instead)." — counted Y's words as ordinary
+POSITIVE evidence for the skill, exactly as if the description had claimed
+them. Authors were working around this by stripping words out of
+descriptions and stuffing eval prompts with jargon instead of writing the
+clause the convention already recommends. Concrete measured case: before the
+fix, `ts-js-node/nodejs-implementation`'s description — "... Not for UI
+markup/rendering code (use the matching UI framework pack) or writing/fixing
+tests (use nodejs-testing)." — scored 0.682 against the query "write vitest
+tests for this service", purely from "writing"/"tests" sitting inside its own
+disclaimer.
+
+**The scorer now strips exclusion-clause text from an entry's own
+description/triggers before scoring it.** Write your disclaimer normally —
+do not strip the topic word out of your description to avoid a false match,
+and do not avoid stating what a skill is NOT for. The recognized forms,
+surveyed from the bundled catalog (`stripExclusionClauses` in `scout.ts` is
+the exact implementation; this is a plain-language summary of it, not a
+substitute for reading it):
+
+- A sentence CONTAINING `not for` or `do not use for` anywhere in it (not
+  only at the start) — e.g. `Not for <clause>.` / `NOT for: <clause>.`, the
+  dominant convention (37+ bundled skills), usually paired with a redirect:
+  `Not for X (use \`other-skill\`).` The WHOLE sentence from that phrase to
+  its end is dropped, so `NOT for A, or NOT for B (use \`x\`)` in one
+  sentence drops both clauses together.
+- A sentence CONTAINING `does not` anywhere in it — e.g. `Does not edit code
+  or apply fixes.` Broad on purpose (any `does not`, not just a scope
+  disclaimer), so an ordinary capability statement using that phrase is also
+  affected; write around it if that costs you description-support for a
+  word you need (see the "Does not" tradeoff noted in the flow 334 journal).
+- A sentence that OPENS with `never`/`Never` — e.g. `Never run this against
+  a database migration.` (a mid-sentence `never` in otherwise-ordinary prose
+  — "a fix that never widens beyond the failure" — is deliberately left
+  alone; only a sentence-INITIAL `never` is treated as an exclusion clause,
+  to avoid over-triggering on normal English).
+- A `(not <clause>)` or `(never <clause>)` parenthetical aside, anywhere in
+  the text — e.g. `(not the CLI form)`.
+- A `(see <clause>)` cross-reference parenthetical — e.g. `(see api-truth
+  for version-diff checks)`.
+- A standalone `Use \`<other-skill>\` instead.` redirect with no `Not for`
+  wrapper — "use" immediately followed by EITHER a backtick/quote-wrapped
+  token OR a bare HYPHENATED skill-id-shaped token (the shape every real
+  bundled skill id has, e.g. `nodejs-testing`), then "instead" with nothing
+  in between. A bare, unhyphenated, unquoted word never matches, so this
+  never touches an ordinary "Use when ..." description opener that happens
+  to also contain "instead" later in the same sentence, nor a short aside
+  like "Use git bisect instead of a manual search" that names no other
+  skill at all.
+- `e.g.`/`i.e.` abbreviations inside a NOT-for sentence do not end it early.
+- A `(not only X but also Y)` parenthetical is left untouched — it is an
+  INCLUSIVE idiom, the opposite of an exclusion.
+- Deliberately NOT recognized: a plain `without` (too ambiguous on its own),
+  and a NOT-for clause that spans more than one sentence (not observed in
+  the bundled catalog; only the sentence a marker starts in is dropped).
+
+**Only your own DESCRIPTION-shaped text gets this treatment on both sides of
+a comparison; a live routing or trigger-accuracy prompt never does.** A
+skill's own description/triggers are always stripped. A QUERY is stripped
+only when it IS itself a skill description — `keryx skills scout`'s
+pre-creation dedupe query, `bundle/external.ts`'s candidate vetting, and
+`nearestSkills`'s (and `scoutSkill`'s) self-identification checks — never
+for `checkSkillSelected`/`checkSkillSelectedLeaveOneOut`, which always score
+a live prompt or trigger-accuracy probe exactly as typed, so an ordinary
+query that happens to open with "Never" (e.g. "Never mind the tests, push my
+branch") is never corrupted.
+
+Excluded tokens are dropped from the entry's positive evidence; they are
+**not** turned into negative evidence (a skill is not penalized for the
+topic it disclaims — see the `stripExclusionClauses` section comment in
+`scout.ts` for the full reasoning). This is layered on top of the shared
+tokenizer (`src/lib/route-tokens.ts`), not a change to it, and it does not
+touch behavior-scenario judging on this page — it only affects
+`triggerAccuracy`, `scoutSkill`'s use/fork overlap decision, `stocktake`'s
+own-trigger check, and external candidate vetting.
+
 ## The schema
 
 A behavior scenario's `expected_behavior` array may carry at most one judge

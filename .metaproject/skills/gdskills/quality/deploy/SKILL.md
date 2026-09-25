@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: "Use when deploying to any environment (staging, production) or when a deployment pipeline needs to run. NOT for the database schema changes a release depends on (use `db-migrate`)."
+description: "Use when deploying a release to any environment (staging, production) or when a deployment pipeline needs to run. NOT for the database schema changes a release depends on (use `db-migrate`)."
 triggers:
   - "deploy"
   - "deployment"

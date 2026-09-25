@@ -1,6 +1,6 @@
 ---
 name: job-orchestrator
-description: "Use when a GitHub issue or complex intent needs to be analyzed, planned, and implemented end-to-end with sub-agents. NOT for: the same pipeline under Task Manager flow state (use flow-orchestrator)."
+description: "Use when a GitHub issue or complex intent needs to be analyzed, planned, and implemented end-to-end with sub-agents — this skill orchestrates the whole task from issue to PR. NOT for: the same pipeline under Task Manager flow state (use flow-orchestrator)."
 triggers:
   - "implement issue"
   - "full workflow"
