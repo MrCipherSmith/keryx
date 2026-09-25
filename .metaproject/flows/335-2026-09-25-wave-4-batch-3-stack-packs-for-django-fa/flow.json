@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "335",
+  "slug": "wave-4-batch-3-stack-packs-for-django-fa",
+  "title": "Wave 4 batch 3: stack packs for django, fastapi, rust, java-kotlin-spring",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T15:14:43.714Z",
+  "updatedAt": "2026-09-25T15:40:37.418Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:18:45.690Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:25.226Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:40:37.160Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T15:14:43.714Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T15:18:38.321Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T15:18:40.804Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T15:18:45.690Z",
+      "event": "task-attempt",
+      "detail": "T1: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-25T15:18:45.947Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T15:19:25.226Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-25T15:40:33.225Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T15:40:37.160Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-25T15:40:37.418Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ]
+}

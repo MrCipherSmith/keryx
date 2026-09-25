@@ -1,0 +1,93 @@
+---
+extends: common
+paths: ["**/*.rs"]
+metadata:
+  origin: authored
+---
+
+# Rust coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern Rust
+(2021/2024 edition) idiom. Applies only to `*.rs` files — everything not
+Rust-specific still comes from the common rules this file `extends`.
+
+## Naming and structure
+
+- `snake_case` for functions, methods, variables, and modules;
+  `UpperCamelCase` for types, traits, and enum variants; `SCREAMING_SNAKE_CASE`
+  for constants and statics — `rustfmt`/`rustc` will warn on a mismatch.
+- A crate's public surface lives at the paths re-exported from `lib.rs`;
+  keep implementation details `pub(crate)` or private and re-export
+  deliberately, rather than making every module `pub` by default.
+- An identifier's name shrinks with its scope: a short-lived closure
+  parameter can be `x`, a `pub` function gets a full descriptive name.
+
+## Ownership, borrowing, and errors
+
+- Prefer borrowing (`&T`/`&mut T`) over taking ownership when the callee
+  does not need to keep the value; prefer `&str`/`&[T]` parameters over
+  `&String`/`&Vec<T>` so callers can pass either owned or borrowed data.
+- Resolve a borrow-checker conflict by restructuring ownership, splitting
+  the borrow, or shortening a borrow's lifetime — reach for `.clone()`
+  only when the value genuinely needs to be duplicated, and say why in a
+  comment when the clone is non-obvious; an unnecessary `.clone()` used
+  purely to silence the borrow checker is a cost paid on every call.
+- `Result<T, E>` for anything that can fail; propagate with the `?`
+  operator rather than a manual `match` that just re-returns `Err`.
+  `Option<T>` for genuine absence, not as a substitute for `Result` on an
+  operation that can fail for a reason worth naming.
+- Never call `.unwrap()`/`.expect()` on a `Result`/`Option` built from
+  fallible or untrusted input (a parsed argument, a network response, a
+  file read, a map lookup on external data) in production code without a
+  stated invariant that makes it truly infallible; prefer `?`, a `match`,
+  or a combinator (`unwrap_or`, `unwrap_or_else`, `ok_or`) that handles the
+  failure path.
+- Use `thiserror` to derive `std::error::Error` for a library's own error
+  enum (`#[error("...")]` per variant, `#[source]`/`#[from]` to preserve
+  the underlying cause); use `anyhow::Result`/`.context()`/`.with_context()`
+  in application/binary code that just needs to propagate and annotate
+  errors up to `main`, not to dictate a precise error type to its own
+  callers.
+
+## Traits and generics
+
+- Accept the narrowest trait bound a function actually needs (`AsRef<str>`
+  over `&String`, `Iterator<Item = T>` over `Vec<T>`) so callers keep
+  flexibility in what they pass.
+- Prefer returning a concrete type (`impl Trait` in return position) over
+  a boxed trait object (`Box<dyn Trait>`) unless runtime polymorphism
+  (a heterogeneous collection, a plugin-style callback list) is actually
+  needed — `impl Trait` avoids the allocation and indirection.
+- Derive `Debug`, `Clone`, `PartialEq`, etc. instead of hand-writing them
+  when the type's fields support it; hand-write only when the derived
+  behavior would be wrong for the type's invariants.
+
+## Iterators and control flow
+
+- Prefer an iterator chain (`.map`/`.filter`/`.fold`/`.collect`) over a
+  hand-rolled indexed loop when it expresses the transformation as clearly
+  — but do not force a chain that reads worse than a plain `for` loop just
+  to look idiomatic; readability wins over either style has priority.
+- Use pattern matching (`match`, `if let`, `let else`) to handle every
+  variant of an enum explicitly; avoid a catch-all `_ =>` arm on a `match`
+  over your own enum where a new variant should force every call site to
+  be revisited.
+
+## Async conventions (when the crate uses async)
+
+- `async fn` for I/O-bound work; never call a blocking operation
+  (`std::thread::sleep`, a synchronous file/socket read, a `std::sync`
+  primitive held across an `.await` point) inside an `async fn` running on
+  a multi-threaded executor — use the async equivalent (`tokio::time::sleep`,
+  `tokio::fs`, `tokio::sync::Mutex`) or `tokio::task::spawn_blocking` for
+  genuinely CPU-bound or blocking work.
+- Keep a `Mutex` guard's scope as short as possible and never hold one
+  across an `.await`; prefer `tokio::sync::Mutex` when the lock itself
+  must be held across an await point, `std::sync::Mutex` when it never is.
+
+## Formatting and lints
+
+- Format with `rustfmt` (`cargo fmt`) before finishing a change; do not
+  hand-format around a formatter that is already configured.
+- Run `cargo clippy -- -D warnings` and fix findings at the root cause
+  rather than adding a blanket `#[allow(...)]`.

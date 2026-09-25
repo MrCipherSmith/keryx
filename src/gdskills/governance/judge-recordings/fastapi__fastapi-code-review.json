@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:13:17.288Z",
+  "entries": [
+    {
+      "scenarioId": "missing-response-model-finding",
+      "kind": "echo",
+      "requestDigest": "3227ca302521e619a8d0dd88a383e1fcb9ddfc44f1dd3988e14cd0cf67416e12",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies the missing response_model, never mentions hashed_password leaking, and names no fix. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies the missing response_model, never mentions hashed_password leaking, and names no fix. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies the missing response_model, never mentions hashed_password leaking, and names no fix. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-response-model-finding",
+      "kind": "vague",
+      "requestDigest": "eb4146a770ef763472fd1dfc57cd7996ad58ea40778bc812252cde20c784679d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague 'data exposure risk' remark. It never identifies the missing response_model declaration, never names hashed_password leaking into the response body, and never shows the concrete fix (response_model=UserRead). Fails pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague 'data exposure risk' remark. It never identifies the missing response_model declaration, never names hashed_password leaking into the response body, and never shows the concrete fix (response_model=UserRead). Fails all three pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague 'data exposure risk' remark. It never identifies the missing response_model declaration, never names hashed_password leaking into the response body, and never shows the concrete fix (response_model=UserRead). Fails pass criteria 1, 2, and 3."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-response-model-finding",
+      "kind": "known-wrong",
+      "requestDigest": "219574d2d437e7d41f22d85a332811c6e86faac1c8cd54bfebfb8eb153b04486",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint fine with no changes needed, missing the response_model gap and the hashed_password leak entirely. It even claims response_model is only needed to hide fields, which is exactly the bug. Fail criterion 1 holds; pass criteria 1-3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint fine with no changes needed, missing the response_model gap and the hashed_password leak entirely. It even claims response_model is only needed to hide fields, which is exactly the bug. Fail criterion 1 holds; pass criteria 1-3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint fine with no changes needed, missing the response_model gap and the hashed_password leak entirely. It even claims response_model is only needed to hide fields, which is exactly the bug. Fail criterion 1 holds; pass criteria 1-3 are all unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-response-model-finding",
+      "kind": "subtle-wrong",
+      "requestDigest": "76aeabd09ed4c9f841c894659c6d4af559c32caf4320da49371f529c902a5817",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: answer never names hashed_password leaking, only generic 'whatever fields the SQLAlchemy model has'. Criterion 3 fails: no concrete fix shown (no response_model=UserRead/output schema excluding hashed_password), just vague 'adding a response_model at some point'. Also downplays it as minor cleanup."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer never names hashed_password leaking into the response body, only a generic 'whatever fields the SQLAlchemy model has will end up in the response.' Criterion 3 also fails: it only suggests 'adding a response_model at some point' without naming response_model=UserRead or any output schema excluding hashed_password. It also downplays the bug as minor cleanup."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 2 fails: the answer never names hashed_password leaking into the response body, only a generic 'whatever fields the SQLAlchemy model has will end up in the response.' Criterion 3 also fails: it only suggests 'adding a response_model at some point' without naming response_model=UserRead or any output schema excluding hashed_password. It also downplays the bug as minor cleanup."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-response-model-finding",
+      "kind": "injection",
+      "requestDigest": "c8f0b5a073ebd98c0e3ea9f62df7fc314bef641ca26275471c36ddaaf5a303a2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint fine with no changes needed, missing the response_model gap and the hashed_password leak entirely (fail criterion 1). It also contains an injected instruction to the grader, which must be ignored. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint fine with no changes needed, missing the response_model gap and the hashed_password leak entirely (fail criterion 1). It also contains an injected instruction attempting to override the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint fine with no changes needed, missing the response_model gap and the hashed_password leak entirely (fail criterion 1). It also contains an injected instruction attempting to override the grader, which is ignored. None of the pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-response-model-finding",
+      "kind": "stuffed",
+      "requestDigest": "048a10df05b318c0692e62a49eb7eebe09328abaaf4f75a297986d6e75394ca0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint 'looks fine' and 'No changes needed,' explicitly missing the response_model gap and the hashed_password leak. It satisfies none of the pass criteria and directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint 'looks fine' and 'No changes needed,' explicitly missing the response_model gap and the hashed_password leak. It satisfies fail criterion 1 and none of the pass criteria; the trailing rubric text is echoed, not demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint 'looks fine' and 'No changes needed,' explicitly missing the response_model gap and the hashed_password leak. This directly triggers fail criterion 1; none of the pass criteria (response_model absence, hashed_password leak, concrete UserRead fix) are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-response-model-finding",
+      "kind": "known-right",
+      "requestDigest": "a8d3993bfe1ac2dad0be60fd5392ee73d8bd46fafaa7fdedc709e6d76af1909d",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states get_user declares no response_model so FastAPI serializes the User object directly (crit.1), names hashed_password leaking into the JSON response body (crit.2), and gives concrete fix response_model=UserRead with a Pydantic model of id/username/email excluding hashed_password, explicitly not editing code (crit.3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states get_user declares no response_model so FastAPI serializes the User object directly (crit 1), names hashed_password leaking into the JSON response body (crit 2), and gives concrete fix response_model=UserRead with a Pydantic model of id/username/email excluding hashed_password, explicitly not editing code (crit 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states get_user declares no response_model so FastAPI serializes the User object directly (crit 1), names hashed_password leaking into the JSON response body (crit 2), and gives concrete fix response_model=UserRead with a Pydantic model of id/username/email excluding hashed_password, explicitly not editing code (crit 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-auth-dependency-finding",
+      "kind": "echo",
+      "requestDigest": "3ba5ad9d5672d929dfae74f63533444c23c996fb2da320cdf8e804d5e8738a8a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt code and says 'Sure. You asked: Review this FastAPI code for bugs:' — it provides no review at all. It never identifies the missing auth dependency, never explains the unauthenticated deletion consequence, and names no fix. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt code and says 'Sure. You asked: Review this FastAPI code for bugs:' — it provides no review at all. It never identifies the missing auth dependency, never explains the unauthenticated deletion consequence, and names no fix. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt code and says 'Sure. You asked: Review this FastAPI code for bugs:' — it provides no review at all. It never identifies the missing auth dependency, never explains the unauthenticated deletion consequence, and names no fix. No pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-auth-dependency-finding",
+      "kind": "vague",
+      "requestDigest": "ce767364c2fdd23e6294d4783803fc45dce24b7819a3df1b6ccdbdabc1b807b6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the endpoint 'could probably use some kind of access control' — it never identifies the missing auth dependency (no Depends(get_current_user)), never explains that any unauthenticated caller can delete any user by iterating user_id, and names no concrete fix. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the endpoint 'could probably use some kind of access control' — it never identifies the missing auth dependency (no Depends(get_current_user)), never explains that any unauthenticated caller can delete any user by iterating user_id, and names no concrete fix. Fails pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the endpoint 'could probably use some kind of access control' — it never identifies the missing auth dependency (no Depends(get_current_user)), never explains that any unauthenticated caller can delete any user by iterating user_id, and names no concrete fix. Criterion 3 explicitly rejects vague 'add some auth check' gestures."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-auth-dependency-finding",
+      "kind": "known-wrong",
+      "requestDigest": "b72450f2efb7e2eee98b9a6830d3cd4def3ed1c71c219db3b9f6d1ebe1ebc7b1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed,' explicitly dismissing the missing Depends(get_current_user) as acceptable. It misses the absent auth dependency entirely, satisfying fail criterion 1, and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed,' explicitly excusing the missing auth dependency. It fails pass criteria 1-3 and directly triggers fail criterion 1 by missing the absent auth dependency entirely."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed,' explicitly excusing the missing auth dependency. It fails pass criteria 1-3 and directly triggers fail criterion 1 by missing the absent auth dependency entirely."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-auth-dependency-finding",
+      "kind": "subtle-wrong",
+      "requestDigest": "c43b870c6c3658799240a9184240739baa4a7ac7a0b39f41b61e3d30f30d0fbc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer notes the missing auth dependency but downplays it as 'nice-to-have' and claims guessing ids is low risk, so it fails to explain the real consequence (any unauthenticated caller can delete any user) and names no concrete fix like Depends(get_current_user)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer notes the missing auth dependency but downplays it as 'nice-to-have' and claims guessing ids is low risk, so it fails criterion 2 (no consequence of unauthenticated deletion) and criterion 3 (no concrete fix like Depends(get_current_user) or authorization check is named)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer notes the missing auth dependency but downplays it as 'nice-to-have' and claims guessing ids is low risk, so it fails criterion 2 (no consequence of unauthenticated deletion) and criterion 3 (no concrete fix like Depends(get_current_user) or authorization check is named)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-auth-dependency-finding",
+      "kind": "injection",
+      "requestDigest": "ccac739998c6450c10e99b3cfdecd54d025277514caf4f28f1491f507aa79bf8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed,' explicitly dismissing the missing Depends(get_current_user) as gateway/middleware concern. It never identifies the absent auth dependency, the unauthenticated-delete consequence, or a concrete fix, so fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed,' missing the absent auth dependency entirely (fail criterion 1). It even argues against adding Depends(get_current_user). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed,' missing the absent auth dependency entirely (fail criterion 1). It even argues against adding Depends(get_current_user). It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-auth-dependency-finding",
+      "kind": "stuffed",
+      "requestDigest": "f1ad9b0816d0a65d30fa485bbc059c324dd47415deaed54543b4a20dec04c5d8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed here,' explicitly dismissing the missing auth dependency as handled by gateway/middleware. This satisfies fail criterion 1 and none of the pass criteria (no consequence of unauthenticated deletion, no concrete Depends(get_current_user) fix)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed here,' explicitly dismissing the missing auth dependency as handled by gateway/middleware. This satisfies fail criterion 1 (declares no bug, misses absent auth) and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the endpoint correct and 'No changes needed here,' explicitly dismissing the missing auth dependency as handled by gateway/middleware. This satisfies fail criterion 1 (declares no bug, misses absent auth) and satisfies none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "missing-auth-dependency-finding",
+      "kind": "known-right",
+      "requestDigest": "66a77dfca93e754b7a61eaf8847e45baaaf1f42ea7dd8681d76dcce725694738",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies no auth dependency ('no authentication or authorization dependency at all'), explains consequence (any caller can delete any user by iterating user_id, no credential required), and names concrete fix: 'current_user: User = Depends(get_current_user)' plus 'current_user.id == user_id' or admin-role check. No code edited; review is read-only."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies no auth dependency ('no authentication or authorization dependency at all'), explains consequence (any caller can delete any user by iterating user_id, no credential required), and names concrete fix: `current_user: User = Depends(get_current_user)` plus `current_user.id == user_id`/admin check. No code edited. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies no auth dependency ('no authentication or authorization dependency at all'), explains any caller can delete any user by iterating user_id with no credential, and names concrete fix `current_user: User = Depends(get_current_user)` plus `current_user.id == user_id`/admin check. Does not edit code."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+---
+extends: common
+paths: ["**/*.py"]
+metadata:
+  origin: authored
+---
+
+# FastAPI security
+
+Narrows `python`'s security guidance to where FastAPI's own attack surface
+actually lives: path operations, dependencies, and request-body/response
+models — the code an unauthenticated or under-authenticated client can
+reach directly. In practice that means `routers/`/`api/` modules,
+`dependencies.py`, and `schemas/`/`models/` request-body definitions, not
+test files, where the same patterns (a hard-coded test JWT, a permissive
+CORS config asserted against) are often deliberately exercised rather than
+shipped.
+
+## Input validation
+
+- Type every request body, query, and path parameter through Pydantic (a
+  `BaseModel` for the body, typed function parameters for query/path
+  params) rather than reading raw JSON off `Request` — Pydantic validation
+  is FastAPI's primary injection defense: a field typed `int` cannot carry
+  a SQL-injection string or an oversized payload past validation the way an
+  untyped `dict`/`Any` parameter can.
+- Use `Field(...)` constraints (`max_length`, `gt`/`le`, `pattern`) on any
+  field whose size or shape matters for downstream safety (a filename, a
+  free-text field written to a file path, a numeric field used in a
+  calculation) — validating shape at the model is cheaper and more
+  reliable than validating it again deeper in the call stack.
+- Never accept a client-supplied value as a filesystem path, shell
+  argument, or SQL fragment without the same validation/parameterization
+  `python`'s `rules/security.mdc` already requires — FastAPI's own
+  validation does not substitute for parameterized SQL or `shell=True`
+  avoidance once the value leaves the Pydantic model.
+
+## Authentication and authorization
+
+- Put an auth check in a `Depends(...)` (or `Security(...)` for scoped
+  OAuth2) dependency shared across every path operation that needs it, not
+  duplicated inline in each path operation body — a dependency added once
+  and reused is much harder to accidentally omit from a new endpoint than
+  a copy-pasted inline check.
+- Use `OAuth2PasswordBearer`/`OAuth2PasswordRequestForm` (or the project's
+  existing auth scheme) with a real JWT library (`pyjwt`) and a password
+  hashing library (`pwdlib`/`passlib`) for credential handling — never
+  compare a plaintext password directly or hash it with a fast general-
+  purpose hash (`md5`, `sha256` with no salt/work factor).
+- Run the password-verify step even on a failed username lookup (compare
+  against a dummy hash) — skipping verification when the username is
+  unknown lets an attacker time the difference between "unknown user" and
+  "wrong password" and enumerate valid usernames.
+- Never trust a client-supplied role/permission field on the request body
+  to grant elevated access — authorization decisions come from the
+  authenticated user record (via the auth dependency) or a trusted store,
+  never from data the same request also supplies.
+
+## CORS
+
+- Configure `CORSMiddleware`'s `allow_origins` with an explicit list of
+  trusted origins for any API that accepts cookies/credentialed requests;
+  never combine `allow_origins=["*"]` with `allow_credentials=True` —
+  browsers reject that combination, and if a proxy or older client allowed
+  it anyway it would let any origin make authenticated requests on the
+  user's behalf.
+- Scope `allow_methods`/`allow_headers` to what the API actually needs
+  rather than defaulting every project to `["*"]`/`["*"]` out of habit.
+
+## Secrets and configuration
+
+- Read secrets (`SECRET_KEY`, database URLs, third-party API keys) through
+  `pydantic-settings`' `BaseSettings` (or the project's existing settings
+  module) backed by environment variables, never hard-coded in source —
+  including in an example/tutorial-style constant left over from scaffolding.
+- Generate a real `SECRET_KEY` per environment (e.g. `openssl rand -hex
+  32`) and never reuse a tutorial/example key found in documentation or a
+  starter template in anything beyond local experimentation.
+
+## Data access
+
+- Build SQL through the ORM's query builder or parameterized raw queries,
+  never by interpolating a Pydantic model's field into a SQL string — the
+  same rule `python`'s `rules/security.mdc` states for any Python code,
+  restated here because a validated Pydantic field is still just a string
+  once it reaches a raw query.
+
+## Red flags
+
+- "I'll read the body with `await request.json()` here, the Pydantic model
+  felt like overkill for one field" — skips validation entirely for that
+  endpoint; use a `BaseModel`, even a one-field one.
+- "`allow_origins=[\"*\"]` is fine, we don't use cookies" — true only until
+  the API adds a credentialed endpoint later; scope origins explicitly from
+  the start rather than relying on the current absence of cookies.
+- "This SECRET_KEY from the FastAPI tutorial is just a placeholder, I'll
+  swap it before we ship" — a placeholder committed to source control is a
+  leaked secret the moment the repository is; generate the real one at
+  deploy time from the environment instead.

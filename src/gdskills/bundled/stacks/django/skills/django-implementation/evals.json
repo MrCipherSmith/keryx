@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "Add a Django model for Invoice with a status field and generate the migration",
+      "Write a Django REST Framework view that lists a customer's orders with their line items",
+      "Implement a class-based view in Django that shows a book's detail page along with its author",
+      "We need a standalone app to own the subscription-billing logic -- can you scaffold a Django app with models, admin, and urls set up?",
+      "Write a Django form that validates a signup submission with cross-field checks",
+      "Implement a queryset method on this Django model that returns only pending orders",
+      "Add a manager method to the Order model that avoids N+1 when listing items"
+    ],
+    "negative": [
+      "Implement this in plain Python with no framework, just a script that parses a CSV",
+      "Implement this FastAPI path operation that returns a list of users, not a Django view",
+      "Write a pytest test for this FastAPI endpoint that returns a list of users",
+      "Review this Node.js Express route for security issues",
+      "Add type hints to this untyped Python function in our shared utils package",
+      "Implement a React component that renders a list of the same orders",
+      "Fix this ModuleNotFoundError when importing mypkg.util in our plain Python service"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "select-related-n1",
+      "prompt": "Write a Django view function `book_list` that renders every Book in a template, where the template also displays each book's author name.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer builds the queryset with `select_related` on the author foreign key so the author's name is fetched in the same query as the books, rather than triggering one extra query per book when the template accesses `book.author.name`.",
+          "pass_criteria": [
+            "the queryset passed to the template is built with `Book.objects.select_related(\"author\")` (or an equivalent named relation) shown in actual code, not merely described as an intention",
+            "the view returns/renders that queryset so the template's per-book access to `book.author.name` does not trigger an additional query per row"
+          ],
+          "fail_criteria": [
+            "iterates or renders `Book.objects.all()` (or any queryset with no `select_related`/`prefetch_related` for the author relation) while the template accesses `book.author` per row, causing one query per book. Mentioning select_related only to describe the problem is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\nfrom django.shortcuts import render\n\ndef book_list(request):\n    books = Book.objects.select_related(\"author\").all()\n    return render(request, \"books/list.html\", {\"books\": books})\n```\n`select_related(\"author\")` performs a SQL join and pulls each book's author row into the same query as the books themselves, so the template's `{{ book.author.name }}` on every row hits data already loaded in Python instead of issuing a fresh query per book. This is the right choice specifically because `author` is a `ForeignKey` (single-valued) -- `select_related` only works for foreign-key/one-to-one relations; a many-valued relation would need `prefetch_related` instead.",
+        "known_wrong": "```python\nfrom django.shortcuts import render\n\ndef book_list(request):\n    books = Book.objects.all()\n    return render(request, \"books/list.html\", {\"books\": books})\n```\nThis just fetches all the books and hands them to the template -- simple and it works, since the template can access `book.author.name` on each one via Django's normal relation traversal, and `Book.objects.all()` is the standard way to list every row in a table.",
+        "vague": "Make sure the author lookup doesn't cause a separate query for every book in the list -- optimize the queryset before it reaches the template.",
+        "subtle_wrong": "```python\nfrom django.shortcuts import render\n\ndef book_list(request):\n    books = Book.objects.select_related(\"publisher\")\n    return render(request, \"books/list.html\", {\"books\": books})\n```\nAdding `select_related(\"publisher\")` eager-loads the book-publisher join in the same query, which is exactly the kind of optimization this queryset needed -- it turns what would otherwise be a per-row lookup into a single upfront join, so the view no longer pays a query-per-book cost when the template walks the list."
+      }
+    },
+    {
+      "id": "no-mark-safe-on-user-bio",
+      "prompt": "Implement a Django view that renders a user's bio -- submitted earlier through a profile-edit form -- on their public profile page template.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer renders the user-submitted bio through Django's normal template auto-escaping and does not call `mark_safe()` or apply the `|safe` filter to it, since the bio is user-controlled data and marking it safe would reintroduce stored XSS.",
+          "pass_criteria": [
+            "passes the bio to the template as an ordinary context variable rendered with normal auto-escaping (no `mark_safe()` call and no `|safe` filter applied to the bio anywhere in the view or template code shown)",
+            "shows the actual view/template code implementing this, not just a description of the approach"
+          ],
+          "fail_criteria": [
+            "wraps the bio in `mark_safe()` or renders it with the `|safe` template filter so it bypasses Django's auto-escaping. Mentioning `mark_safe`/`|safe` only to warn that they must not be used on user input is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\n# views.py\ndef profile_detail(request, username):\n    profile = get_object_or_404(Profile, user__username=username)\n    return render(request, \"profiles/detail.html\", {\"profile\": profile})\n```\n```html+django\n<!-- profiles/detail.html -->\n<p>{{ profile.bio }}</p>\n```\nThe bio is passed straight through as a normal context variable, so Django's template auto-escaper HTML-escapes it before rendering -- any `<script>` a user typed into their bio renders as inert text, not executable markup. No `mark_safe()`/`|safe` is used anywhere, because the bio is user-submitted data and marking it safe would let a user's own script tag execute in every visitor's browser (stored XSS).",
+        "known_wrong": "```python\n# views.py\nfrom django.utils.safestring import mark_safe\n\ndef profile_detail(request, username):\n    profile = get_object_or_404(Profile, user__username=username)\n    bio_html = mark_safe(profile.bio)\n    return render(request, \"profiles/detail.html\", {\"bio_html\": bio_html})\n```\nWrapping the bio in `mark_safe()` before passing it to the template lets it render exactly as the user typed it, including any basic formatting they added -- `mark_safe` is the documented way to tell Django a string is already safe HTML, so this is the standard tool for showing user content as-is.",
+        "vague": "Be careful with how the bio gets rendered so a user can't inject a script into their own profile page that runs for other visitors.",
+        "subtle_wrong": "```python\n# views.py\ndef profile_detail(request, username):\n    profile = get_object_or_404(Profile, user__username=username)\n    return render(request, \"profiles/detail.html\", {\"profile\": profile})\n```\n```html+django\n<!-- profiles/detail.html -->\n<p>{{ profile.bio|safe }}</p>\n```\nThe view itself stays simple and passes the profile through untouched -- the `|safe` filter is applied only in the template, right where the bio is displayed, which keeps the escaping decision colocated with the markup instead of scattered across the view layer."
+      },
+      "anti_patterns": [
+        "mark_safe"
+      ]
+    }
+  ]
+}

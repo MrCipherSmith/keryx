@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a new Spring Boot REST endpoint for placing an order",
+      "I'm building out a new NotificationService in Kotlin that needs to call two repositories -- how should I wire the dependencies through the constructor here?",
+      "Wire this OrderRequest DTO with jakarta.validation constraints in Spring",
+      "I need a repository method on OrderRepository that fetches orders with their line items in one query instead of N+1 -- what's the cleanest way to write that?",
+      "This OrderService method touches three repositories and I need all of it to roll back together if any one write fails -- what's the right way to set that up in Spring?",
+      "We're adding refund handling to our Kotlin-based Spring Boot service -- can you build out the controller-to-repository flow for it?",
+      "Add a new @RestController endpoint that delegates to this Spring service"
+    ],
+    "negative": [
+      "Implement this feature in Go using errgroup for concurrency",
+      "Implement this feature in a Python FastAPI service",
+      "Implement this React component with the new form fields",
+      "Add a new Node.js Express endpoint for this feature",
+      "Review this Spring Boot service for @Transactional self-invocation bugs",
+      "Fix this failing Maven build for the Spring project"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "constructor-vs-field-injection",
+      "prompt": "I'm adding a new @Service in this Spring Boot app that depends on a PaymentClient. How should I wire the dependency?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer wires the dependency with constructor injection -- a private final field in Java or a constructor val property in Kotlin -- rather than field-level @Autowired, and explains at least briefly why (immutability, or constructing the class in a plain unit test without the Spring container).",
+          "pass_criteria": [
+            "States that the dependency should be constructor-injected as a private final field (Java) or constructor val property (Kotlin), not annotated directly on the field.",
+            "Shows the concrete constructor shape (a constructor parameter assigned to the field, or a Kotlin primary-constructor property), not just 'use constructor injection' in the abstract.",
+            "Explains why, even briefly -- immutability (final/val) or testability without the Spring container."
+          ],
+          "fail_criteria": [
+            "Recommends field-level @Autowired injection (annotating a field directly, e.g. `@Autowired private PaymentClient paymentClient;`) as an acceptable or preferred way to wire this dependency, rather than constructor injection. Mentioning field @Autowired only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Add a constructor to the @Service class that takes the PaymentClient as a parameter and assign it to a private final field (Java): `private final PaymentClient paymentClient; public OrderService(PaymentClient paymentClient) { this.paymentClient = paymentClient; }` -- or, in Kotlin, declare it directly in the primary constructor: `class OrderService(private val paymentClient: PaymentClient)`. Don't reach for field-level `@Autowired` (`@Autowired private PaymentClient paymentClient;`) instead -- constructor injection lets the field be `final`/`val`, so the dependency can never be reassigned after construction, and it lets you construct `OrderService` directly with a mock in a plain unit test without spinning up the Spring container at all.",
+        "known_wrong": "Simplest way: just annotate the field directly with `@Autowired private PaymentClient paymentClient;` and Spring will inject it for you -- no need to write a constructor by hand for a single dependency, and you can always add more `@Autowired` fields later without touching a constructor signature. It works exactly the same as constructor injection at runtime, so there's no real downside for a straightforward case like this.",
+        "vague": "Just inject the PaymentClient dependency the way Spring expects and make sure it's wired in correctly.",
+        "subtle_wrong": "Spring supports constructor injection, but for a single dependency like this, field injection with `@Autowired private PaymentClient paymentClient;` is idiomatic enough and keeps the constructor signature stable as you add more collaborators later -- that's what I'd use here, keeping the field package-private so a test can swap it directly via reflection without needing a mock framework or constructor wiring."
+      },
+      "anti_patterns": ["@Autowired"]
+    },
+    {
+      "id": "transactional-self-invocation",
+      "prompt": "This Spring service has an outer @Transactional method that calls `this.processPayment()` on the same class. processPayment() is itself annotated `@Transactional(propagation = Propagation.REQUIRES_NEW)`, because a payment capture must commit independently of the outer transaction even if the outer one later rolls back. Does that work as expected?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that Spring's @Transactional is implemented with a proxy, and a same-class call like this.processPayment() bypasses that proxy entirely, so the inner method's own @Transactional(propagation = REQUIRES_NEW) is silently ignored -- no new transaction is suspended/started, and the call just executes as an ordinary method inside the outer transaction, so a later rollback of the outer transaction rolls back the payment capture too, defeating the whole point of REQUIRES_NEW. The fix is to extract processPayment() into a separate, constructor-injected bean so the call goes through the proxy.",
+          "pass_criteria": [
+            "States that the proxy-based nature of @Transactional means a same-class call such as this.processPayment() bypasses the proxy, so that method's own @Transactional(propagation = REQUIRES_NEW) does not apply to that call.",
+            "Names the concrete fix: extract processPayment() into a separate bean/class, constructor-inject it into the original service, and call it through that injected reference instead of this.",
+            "States the concrete consequence specific to REQUIRES_NEW -- no new transaction is suspended/started for the call, so the payment capture is not committed independently and will be rolled back along with the outer transaction if it later fails -- not just a vague 'it might not work'."
+          ],
+          "fail_criteria": [
+            "Claims the self-invocation call (this.processPayment()) works fine and actually gets its own REQUIRES_NEW transaction (suspending the outer one) without extracting it into a separate bean. Mentioning this only to warn against relying on it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- that call does not get the REQUIRES_NEW behavior you're relying on. Spring's @Transactional is implemented with a proxy (JDK dynamic proxy or CGLIB) wrapped around the bean; the proxy only intercepts calls that arrive through it from outside the bean. A call like this.processPayment() from another method in the same class goes straight to the real object, bypassing the proxy entirely -- so processPayment()'s own @Transactional(propagation = REQUIRES_NEW) is silently ignored: no new transaction is suspended or started for it, and the call just runs as a plain method inside whatever transaction the outer method already has open. That means if the outer transaction later rolls back, the payment capture rolls back with it -- exactly the outcome REQUIRES_NEW was supposed to prevent. To fix it, extract processPayment() into its own Spring bean (a separate class), constructor-inject that bean into the original service, and call it through the injected reference instead of this -- that call now goes through the proxy and REQUIRES_NEW actually takes effect, suspending the outer transaction and committing independently.",
+        "known_wrong": "That's fine -- @Transactional applies to any method annotated with it regardless of how it's called, so this.processPayment() will suspend the outer transaction and start its own REQUIRES_NEW transaction exactly as if some other bean had called it. Spring resolves the annotation per-method, not just at the proxy boundary, so same-class calls get the same propagation behavior too. No changes needed here.",
+        "vague": "Same-class calls to a @Transactional method can be tricky with proxies -- might be worth double-checking that REQUIRES_NEW actually behaves the way you expect here.",
+        "subtle_wrong": "That'll mostly work fine in practice -- REQUIRES_NEW just tells Spring to suspend whatever transaction is active and open a fresh one, and since this.processPayment() is still a call to a @Transactional-annotated method, Spring's transaction manager picks that up at the method boundary regardless of whether the call came through the proxy or directly via this. The payment capture still ends up in its own transaction and commits independently of the outer one, so there's nothing to fix as written."
+      },
+      "anti_patterns": ["this.processPayment()"]
+    }
+  ]
+}

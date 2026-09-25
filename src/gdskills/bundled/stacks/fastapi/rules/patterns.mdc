@@ -1,0 +1,108 @@
+---
+extends: common
+paths: ["**/*.py"]
+metadata:
+  origin: authored
+---
+
+# FastAPI patterns
+
+Narrows `python`'s stack-agnostic design guidance (and its own
+`asyncio`/resource patterns) to FastAPI's own request lifecycle: dependency
+injection, async vs. sync path operations, response modeling, and
+background work. Applies only to FastAPI project files.
+
+## Async vs. sync path operations
+
+- Declare a path operation `async def` only when its body actually awaits
+  something async (an async DB driver, `httpx.AsyncClient`, another
+  awaitable). An `async def` path operation runs directly on the event
+  loop, so a blocking call inside it (a sync DB driver, `requests.get`,
+  `time.sleep`, blocking file I/O, a CPU-bound loop) stalls every other
+  in-flight request on that worker.
+- Declare a path operation with plain `def` when its body calls a blocking
+  library with no async equivalent. FastAPI runs a `def` path operation in
+  an external threadpool automatically — this is current, documented
+  behavior, not a workaround — so a blocking call inside it does not block
+  the event loop.
+- The same rule applies to dependencies: a `def` dependency runs in the
+  threadpool, an `async def` dependency runs on the loop and must not
+  block. FastAPI accepts either kind of dependency under either kind of
+  path operation (an `async def` dependency under a `def` path operation
+  and vice versa), so choose per-dependency based on what its own body
+  does, not to match the path operation's own declaration.
+- For a compute-only path operation with no I/O at all, prefer `async def`
+  — it avoids the threadpool's scheduling overhead for work that was never
+  going to block anything.
+
+## Dependency injection
+
+- Use `Depends(...)` (or `Security(...)` for an auth dependency that also
+  carries OAuth2 scopes) to inject anything a path operation needs but
+  should not construct itself: a DB session, the current authenticated
+  user, pagination parameters, a feature flag. This is what makes each
+  piece independently testable via FastAPI's `app.dependency_overrides`.
+- Chain dependencies (a dependency that itself depends on another) instead
+  of duplicating the same setup logic across sibling dependencies — FastAPI
+  caches a dependency's result per request by default, so a shared
+  sub-dependency runs once even when several path-level dependencies need
+  it.
+- Use `yield` in a dependency that owns a resource needing teardown (a DB
+  session, a lock, an open connection); the code after `yield` runs after
+  the response is sent, even when the path operation raised — this is
+  FastAPI's own resource-lifecycle pattern for a request-scoped resource,
+  not a manual `try`/`finally` bolted onto a plain-return dependency.
+
+## Request/response modeling
+
+- Model every request body as a Pydantic `BaseModel`, never as a raw
+  `dict`/`Any` parameter — FastAPI validates the incoming JSON against the
+  model before the path operation body runs, which is the framework's own
+  first line of defense against malformed or malicious input (see
+  `rules/security.mdc`).
+- Use `field_validator`/`model_validator` (Pydantic v2) for a constraint
+  that spans multiple fields or needs custom logic beyond `Field(...)`'s
+  declarative constraints (`gt`, `max_length`, `pattern`), not a manual
+  `if`-check inside the path operation body after the model has already
+  validated.
+- Declare `response_model` (or a return-type annotation FastAPI can infer
+  one from) so the response is filtered to the declared fields even when
+  the object returned from the path operation carries more — this is a
+  correctness property, not just documentation: it is what keeps an
+  internal-only field out of the response body.
+
+## Background work
+
+- Use `BackgroundTasks` (injected the same way as any other dependency)
+  for work that must run after the response is sent but is short, best-
+  effort, and does not need retries, a result, or cross-process durability
+  (writing a log line, sending a best-effort notification).
+- Reach for a real task queue (Celery, arq, a message broker) instead of
+  `BackgroundTasks` once the work needs retries, visibility into failure,
+  distribution across multiple worker processes, or survival past the
+  serving process' lifetime — `BackgroundTasks` runs in-process and is lost
+  if the process restarts before it completes.
+
+## OpenAPI and schema
+
+- Let FastAPI generate the OpenAPI schema from type hints, `response_model`,
+  and `Field(...)` constraints rather than hand-maintaining a separate
+  OpenAPI YAML/JSON file alongside the code — the generated schema is what
+  keeps documentation and implementation from drifting apart.
+- Use `tags=[...]` on each `APIRouter`/path operation and a `summary`/
+  `description` (or a docstring, which FastAPI uses as the description)
+  for anything beyond an obvious CRUD endpoint, so the generated docs stay
+  usable as the API grows.
+
+## Anti-patterns to flag, not introduce
+
+- An `async def` path operation that calls a synchronous DB driver or
+  `requests.get` directly — this silently degrades every concurrent request
+  on that worker instead of raising an obvious error.
+- Accepting the request body as `request: Request` and manually calling
+  `await request.json()` to bypass Pydantic validation — this discards
+  FastAPI's own validation, error responses, and OpenAPI schema generation
+  for that endpoint.
+- Using `BackgroundTasks` for work that must not be lost (payment capture,
+  an email a user is relying on) instead of a real task queue with
+  retries.

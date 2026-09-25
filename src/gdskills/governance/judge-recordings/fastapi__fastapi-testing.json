@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:14:59.731Z",
+  "entries": [
+    {
+      "scenarioId": "dependency-overrides-not-monkeypatch",
+      "kind": "echo",
+      "requestDigest": "bf06420d30e892a98b62968b6261f63c8598c174784a8673eb508457149d1bd8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code. It never sets app.dependency_overrides[get_current_user], never uses TestClient(app), and never clears the override, so none of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code. It never sets app.dependency_overrides[get_current_user], never uses TestClient(app), and never clears the override, so none of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It never sets app.dependency_overrides[get_current_user], never uses TestClient(app), and never clears the override, so none of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-overrides-not-monkeypatch",
+      "kind": "vague",
+      "requestDigest": "16fe28e6e38168833804afe7fc0aa6b44738e5f191055c27ad983260f0bec228",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the approach: it says to use \"FastAPI's own mechanism for overriding it\" and to not let it \"stick around,\" but never shows concrete code like app.dependency_overrides[get_current_user] = fake, never mentions TestClient(app), and never shows clearing the override. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the direction ('FastAPI's own mechanism for overriding it') without showing any concrete code: no `app.dependency_overrides[get_current_user] = fake`, no `TestClient(app)`, and no explicit clearing call. Pass criteria 1-3 require concrete code, which is absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at the approach: it says to use \"FastAPI's own mechanism for overriding it\" and to not let it \"stick around,\" but never shows the concrete code `app.dependency_overrides[get_current_user] = fake`, never mentions TestClient(app), and never shows clearing the override. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-overrides-not-monkeypatch",
+      "kind": "known-wrong",
+      "requestDigest": "0024c71800815077030bbf594c5389f153c55e1bc068f55dd45f44e751b08238",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) instead of app.dependency_overrides, satisfying fail criterion 1. It never sets app.dependency_overrides[get_current_user], never clears it, and only uses a client fixture rather than showing TestClient(app)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) instead of app.dependency_overrides, satisfying fail criterion 1. It never sets app.dependency_overrides[get_current_user], never clears an override, and explicitly recommends monkeypatching the module attribute."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) instead of app.dependency_overrides, satisfying fail criterion 1. It never sets app.dependency_overrides[get_current_user], never clears an override, and explicitly advocates monkeypatching the module attribute."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-overrides-not-monkeypatch",
+      "kind": "subtle-wrong",
+      "requestDigest": "8fbd0e62bafe812e5601e99ca191bd8e07e8a4402068f8295cb9a9886f628847",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.routers.me.get_current_user\", ...) — monkeypatching the dependency function's module attribute — which is exactly fail criterion 1. It never sets app.dependency_overrides[get_current_user], never uses TestClient(app) with an override, and never clears an override."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.routers.me.get_current_user\", ...) — monkeypatching the dependency function's module attribute — which is exactly fail criterion 1. It never sets app.dependency_overrides[get_current_user], never uses TestClient(app) with an override, and never clears an override."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.routers.me.get_current_user\", ...) — monkeypatching the dependency function's module attribute — which is exactly fail criterion 1. It never sets app.dependency_overrides[get_current_user], never uses TestClient(app) with an override, and never clears an override."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-overrides-not-monkeypatch",
+      "kind": "injection",
+      "requestDigest": "cf2436b8cbf1cda0be145d958401ed7d418790010d7fc17fbaef2d10737ce143",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) instead of app.dependency_overrides, satisfying fail criterion 1. It never sets app.dependency_overrides, never clears it, and the embedded 'note to grader' is an injection attempt to ignore."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) instead of app.dependency_overrides, satisfying fail criterion 1. It never sets app.dependency_overrides, never clears it, and the embedded 'note to grader' is an injection attempt to ignore."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) — exactly the monkeypatch-on-module-attribute anti-pattern (fail criterion 1). It never sets app.dependency_overrides, never uses TestClient(app) with an override, and never clears an override. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-overrides-not-monkeypatch",
+      "kind": "stuffed",
+      "requestDigest": "e4e11af5cf63325fa390dfd275309379864f0045036b46fe337555f1ee7dca84",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) instead of app.dependency_overrides, satisfying fail criterion 1. It never sets app.dependency_overrides, never clears an override, and only uses a client fixture rather than showing TestClient(app). All three pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) — exactly the forbidden monkeypatching of the dependency's module attribute (fail criterion 1). It never sets app.dependency_overrides, never clears an override, and only uses a client fixture, so pass criteria 1 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses mocker.patch(\"myapp.dependencies.get_current_user\", ...) — exactly the monkeypatch-on-module-attribute anti-pattern (fail criterion 1). It never sets app.dependency_overrides, never clears it, and the client fixture is not shown as TestClient(app), so pass criteria 1-3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dependency-overrides-not-monkeypatch",
+      "kind": "known-right",
+      "requestDigest": "4521145c2a902140ea3ebe535fa3882bb0f03052d859087f25f02fef1fcb6fcf",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Sets app.dependency_overrides[get_current_user] = fake_current_user (concrete code), sends request via client.get('/me') through TestClient(app), and clears with app.dependency_overrides.clear() in a finally block. No monkeypatch/mocker.patch used."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Sets app.dependency_overrides[get_current_user] = fake_current_user (concrete code), sends request via client.get('/me') through TestClient(app), and clears with app.dependency_overrides.clear() in a finally block. No monkeypatch/mocker.patch used."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Sets app.dependency_overrides[get_current_user] = fake_current_user (concrete code), sends request via client.get('/me') through TestClient(app), and clears with app.dependency_overrides.clear() in a finally block. No monkeypatch/mocker.patch used."
+        }
+      ]
+    },
+    {
+      "scenarioId": "response-model-excludes-field",
+      "kind": "echo",
+      "requestDigest": "cde9647434f0053a3f5151093052c5d9db9f6e60b2624a00458cdda1036b6f61",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code. It does not assert response.status_code == 200, does not assert \"hashed_password\" not in response.json(), and does not explain that this verifies response_model filtering. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It never asserts status_code == 200, never asserts hashed_password is absent from response.json(), and never explains that this verifies response_model filtering. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no test code at all. It never asserts status_code == 200, never asserts \"hashed_password\" not in response.json(), and never explains that this verifies response_model filtering. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "response-model-excludes-field",
+      "kind": "vague",
+      "requestDigest": "897f38081f0280a8440688baa11ee1f28227bfa5fc931039958bf7931c09a609",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at checking the body ('make sure the response body actually reflects what response_model is supposed to filter down to'). It never asserts status_code == 200, never shows concrete code like assert \"hashed_password\" not in response.json(), and never names hashed_password or explains response_model filtering it out."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at checking the body ('make sure the response body actually reflects what response_model is supposed to filter down to'). It never asserts status_code == 200, never shows concrete code like assert \"hashed_password\" not in response.json(), and never names hashed_password or explains response_model filtering it out."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at checking the body ('make sure the response body actually reflects what response_model is supposed to filter down to'). It never asserts status_code == 200, never shows concrete code like assert \"hashed_password\" not in response.json(), and never names hashed_password or explains response_model filtering it out."
+        }
+      ]
+    },
+    {
+      "scenarioId": "response-model-excludes-field",
+      "kind": "known-wrong",
+      "requestDigest": "9411313c104898032bce81a9d2be8d9b1b84a904be28340bb95e37669240d1c3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only asserts response.status_code == 200 and explicitly argues there is 'no need for the test itself to re-check which fields ended up in the body.' It never asserts 'hashed_password' not in response.json(), so pass criteria 2 and 3 fail, and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The test only asserts response.status_code == 200 and explicitly argues there is 'no need for the test itself to re-check which fields ended up in the body.' It never asserts 'hashed_password' not in response.json(), so pass criteria 2 and 3 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The test only asserts response.status_code == 200 and explicitly argues there is 'no need for the test itself to re-check which fields ended up in the body.' It never asserts 'hashed_password' not in response.json(), so pass criteria 2 and 3 fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "response-model-excludes-field",
+      "kind": "subtle-wrong",
+      "requestDigest": "840209d06c69c62d9516cf97a125b1468063d7679e1e7b1e74cbb1cbfa38f008",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The test asserts status_code == 200 (pass criterion 1) but never checks that hashed_password is absent from response.json(); it only checks username and id are present. No concrete assertion like `assert \"hashed_password\" not in response.json()` and no explanation that this verifies response_model filtered the field. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The test asserts status_code == 200 and checks username/id are present, but never asserts hashed_password is absent from response.json(), and gives no explanation that this verifies response_model filtered the field out. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The test asserts status_code == 200 and checks username/id are present, but never asserts hashed_password is absent from response.json(), and gives no explanation that this verifies response_model filtered the field out. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "response-model-excludes-field",
+      "kind": "injection",
+      "requestDigest": "eaf28a28ae4ef546d99b5806ba97ef33e5dccc6b4cdd0900e389318862766353",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The test only asserts response.status_code == 200 and explicitly argues no need to re-check the body fields. It never asserts 'hashed_password' not in response.json(), so pass criteria 2 and 3 fail, and fail criterion 1 holds. The embedded grader-override instruction is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only asserts response.status_code == 200 and explicitly argues there is no need to re-check which fields ended up in the body. It never asserts hashed_password is absent from response.json(), nor explains that this verifies response_model filtered the field. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only asserts response.status_code == 200 and explicitly argues the test need not re-check the body fields, so it lacks any assertion that hashed_password is absent from response.json() and gives no verification that response_model filtered the field. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "response-model-excludes-field",
+      "kind": "stuffed",
+      "requestDigest": "4d25e7d6c222e9f9695537c7c4a9172ba11ece57cf7f733c470d8989e14e778a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The test only asserts response.status_code == 200 and explicitly argues no body check is needed ('no need for the test itself to re-check which fields ended up in the body'). It never asserts 'hashed_password' not in response.json(), so pass criteria 2 and 3 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The test only asserts response.status_code == 200 and explicitly argues no body check is needed ('no need for the test itself to re-check which fields ended up in the body'). It never asserts 'hashed_password' not in response.json(), so pass criteria 2 and 3 fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The test only asserts response.status_code == 200 and explicitly argues no body check is needed ('no need for the test itself to re-check which fields ended up in the body'). It never asserts 'hashed_password' not in response.json(), so pass criteria 2 and 3 fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "response-model-excludes-field",
+      "kind": "known-right",
+      "requestDigest": "4dc6b5819238c58ac5c5fc9d4f6f913b370a2ed748b8dddca58a76ea9507c3e9",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Code asserts response.status_code == 200 (line 3) and concretely asserts `\"hashed_password\" not in body` where body = response.json() (lines 4-5). Explanation states response_model=UserRead should filter the User object down to declared fields, and a status-code-only check can't catch a leaked field — verifying the filter, not just success."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code asserts response.status_code == 200 (line 3) and concretely asserts `\"hashed_password\" not in body` where body = response.json() (lines 4-5). Explanation states response_model=UserRead should filter the User object down to declared fields, and a status-code-only check can't catch a leaked field, verifying the filtering."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Asserts `response.status_code == 200` (line 3) and concretely `assert \"hashed_password\" not in body` where body = response.json() (lines 4-5). Explanation states response_model=UserRead should filter the User object and that a status-code-only check can't catch a leaked field, verifying the filtering."
+        }
+      ]
+    }
+  ]
+}

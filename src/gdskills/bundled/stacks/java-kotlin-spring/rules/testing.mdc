@@ -1,0 +1,80 @@
+---
+extends: common
+paths: ["**/*.java", "**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Java/Kotlin + Spring testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to JUnit 5 +
+Spring Boot Test conventions, for both Java and Kotlin. Applies only to
+`*.java`/`*.kt`/`*.kts` files.
+
+## Layout and naming
+
+- Tests live under `src/test/java` or `src/test/kotlin`, mirroring the
+  package of the class under test, named `<Type>Test` (unit) or
+  `<Type>IT`/`<Type>IntegrationTest` (integration) — match whichever
+  convention the project already uses.
+- Prefer a plain, dependency-free unit test (construct the class
+  directly, pass mocks/fakes to the constructor) for logic that does not
+  need the Spring container; reserve `@SpringBootTest` for genuine
+  integration coverage — a full context load per test class is slow and
+  is not a substitute for testing a service's logic in isolation.
+
+## Test slices
+
+- Use the narrowest Spring test slice that covers what is being tested:
+  `@WebMvcTest` for a controller (with `MockMvc`), `@DataJpaTest` for a
+  repository, `@SpringBootTest` only when the interaction across the
+  whole wired context is actually what is under test.
+- For a repository/integration test that needs a real database, prefer
+  Testcontainers over an in-memory substitute (H2 standing in for
+  Postgres/MySQL) when the project already uses Testcontainers — an
+  in-memory DB can silently pass a query that the real production
+  database would reject or execute differently.
+
+## Mocking
+
+- Mock/stub only the collaborators the class under test actually depends
+  on (Mockito's `@Mock`/`@InjectMocks`, or MockK for Kotlin) — do not
+  reach for `@MockitoBean`/`@SpringBootTest` just to avoid constructing a
+  plain dependency by hand when the class was designed for constructor
+  injection. `@MockitoBean` is the current annotation for mocking a bean
+  inside a Spring test slice; Spring Boot's own `@MockBean` is deprecated
+  since Boot 3.4 and removed in 4.x, so only reach for it on a project
+  still pinned below 3.4.
+- Assert on behavior/interactions relevant to the test (`verify(...)`),
+  not on incidental implementation details that would make the test
+  brittle to a harmless refactor.
+
+## Assertions and determinism
+
+- Use the project's already-configured assertion library (AssertJ,
+  JUnit's own assertions, or Kotlin's `kotlin.test`) — do not introduce a
+  second one into a project that has standardized.
+- Never synchronize with `Thread.sleep`/`delay` to wait for an async
+  result — use Awaitility (`await().atMost(...).until(...)`), a
+  `CompletableFuture`/coroutine join, or a `CountDownLatch`, so the test
+  is deterministic and not flaky under CI load.
+- A test covering validation should assert on the specific constraint
+  violation/exception type, not just that "some" exception was thrown.
+
+## Fixtures and lifecycle
+
+- Prefer a builder or a test-fixture factory method for constructing
+  entities/DTOs with sensible defaults, overriding only the fields the
+  test cares about, over duplicating a large constructor call in every
+  test method.
+- Use `@BeforeEach`/`@AfterEach` (or Kotlin's equivalents) for
+  per-test setup/teardown; reserve `@BeforeAll`/`@AfterAll` for
+  genuinely expensive, safely-shared setup (a Testcontainers instance).
+
+## Coverage expectations
+
+- New behavior gets a new test in the same change; a bug fix gets a
+  regression test that fails before the fix and passes after.
+- Run the project's build-tool test task (`./gradlew test` or `mvn test`)
+  for any change touching test files, and its integration-test task
+  separately when one is configured, before reporting done.

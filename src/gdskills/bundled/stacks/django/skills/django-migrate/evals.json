@@ -1,0 +1,49 @@
+{
+  "triggers": {
+    "positive": [
+      "Generate a Django migration for this new required field on the Order model",
+      "The display_name column needs to be populated from existing first_name/last_name values on all existing rows -- what's the right way to do that as a Django migration?",
+      "This Django migration only defines a forward RunPython operation -- how do I add the reverse function so it can be rolled back cleanly with `migrate`?",
+      "We're removing the `legacy_phone` column from a Django model via a rolling deploy -- what's the safe sequencing so instances running the old code don't break mid-rollout?",
+      "The accounts app in our Django project has accumulated 40+ migration files going back two years -- can you collapse them into a smaller set?",
+      "Write a RunPython migration that normalizes existing phone numbers",
+      "We want to rename a column but can't do it in one shot with our rolling deploy setup -- how should I split this Django schema change into multiple releases?"
+    ],
+    "negative": [
+      "Fix this Django migration conflict that's currently blocking makemigrations from running",
+      "Implement the actual view logic that will use this new field, not the migration",
+      "Write a database migration for our Node.js service using Knex",
+      "Write an Alembic migration for our FastAPI service's SQLAlchemy models",
+      "Add a pytest-django test for this model's new field",
+      "Run a Prisma migration for our TypeScript backend",
+      "Review this Django migration for correctness, don't write a new one"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "stage-destructive-column-drop",
+      "prompt": "We deploy Django app code and run migrations as separate steps, with a rolling deploy across several app servers. The `User` model has an old `full_name` column that's now replaced by separate `first_name`/`last_name` columns; all reads/writes of `full_name` in the codebase have already been removed in the code we're about to ship. How should the migration to actually drop the `full_name` column be sequenced?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer ships the code that stops reading/writing full_name in one release, and only drops the full_name column in a later, separate release/migration once that release's rollout has been confirmed complete -- not merely scheduled after the deploy step in a pipeline. Placing a migration step after a deploy step in the same pipeline run does not, by itself, prove every instance has finished rolling onto the new code (a stalled or partially-failed rollout can leave old-code instances running well after the deploy step reports success), and keeping the drop in the same release as the code change is unsafe regardless of step ordering or added verification within that release -- the column drop must be its own, later release, gated on confirming the prior release's rollout is fully complete.",
+          "pass_criteria": [
+            "states that dropping the `full_name` column must happen in a separate, later migration/release from the code change that stops using it, and that this later step should only run once the prior release's rollout is confirmed complete (not merely scheduled after it in a pipeline)",
+            "explains why: during a rolling deploy, some app server instances still run the old code (which still reads/writes `full_name`) while others already run the new code, so dropping the column before every instance has actually finished rolling onto the new code would break the old instances"
+          ],
+          "fail_criteria": [
+            "recommends dropping the `full_name` column in the same release/migration as the code change that removes its usage. Noting that combining them would be 'faster' only to then reject it as unsafe is not this failure.",
+            "treats scheduling the migration step to run after the deploy step within the same release's pipeline as sufficient on its own to guarantee every old-code instance is gone, with no verification (e.g. checking rollout/replica status or a health check) that the rollout actually completed"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Ship the code change (already done here, since the codebase no longer reads/writes `full_name`) as its own release first, and confirm it has fully rolled out to every app server -- e.g. checking that the deployment shows 100% of instances on the new revision, not just that the deploy step exited successfully. Only after that confirmation -- in a separate, later release -- generate and apply the migration that actually drops the `full_name` column:\n```bash\npython manage.py makemigrations accounts   # in the follow-up release\n```\nThis produces a `RemoveField` operation for `full_name`. The reason for the two-release split plus the explicit confirmation: during a rolling deploy some servers are still running the previous release's code, which still references `full_name`, while others already run the new code, and a deploy step reporting success doesn't guarantee every instance has actually finished cycling onto the new code (a stuck pod, a slow canary, or a failed health check can leave old instances running past that point). Splitting into a later release and confirming rollout completion before touching the schema removes that window entirely.",
+        "known_wrong": "Since the code no longer reads or writes `full_name` at all, it's safe to include the column drop in this same release -- generate the migration now:\n```bash\npython manage.py makemigrations accounts\n```\nand ship it alongside the code change. There's no reason to wait for a second release since the application layer is already fully decoupled from that column.",
+        "vague": "Don't drop the column and remove the code that uses it at the same time -- give it some separation so nothing breaks during the rollout.",
+        "subtle_wrong": "You can ship the column drop in this same release as long as the migration step is placed after the code-deploy step in the pipeline definition, rather than before or during it -- since the pipeline runs steps in order, by the time the migration step executes every server is guaranteed to already be on the new code. That keeps it to one release instead of splitting into two: the ordering of steps within the pipeline is what actually matters, not which release they belong to, and a deploy step that has exited successfully means the rollout is done."
+      }
+    }
+  ]
+}

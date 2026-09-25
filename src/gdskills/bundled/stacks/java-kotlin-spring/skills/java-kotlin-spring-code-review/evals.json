@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Our PR uses @Autowired directly on fields in three new classes -- is that actually a problem, or just a style nit?",
+      "I have a public method calling another @Transactional method on the same class instance -- will the proxy even pick that up, or is this a bug waiting to happen?",
+      "This controller method returns the JPA entity straight from findById -- is that going to bite us on the API contract, and how do I spot other cases like it?",
+      "Our order list endpoint is issuing one query per row instead of one for the whole list -- where in this repository is that coming from?",
+      "Does this incoming request DTO in Kotlin actually get validated before it reaches the service layer, or did we skip the annotations somewhere?",
+      "I inherited this SecurityFilterChain setup and I'm worried some endpoints are wide open that shouldn't be -- can you take a look?"
+    ],
+    "negative": [
+      "Review this Spring Boot diff and also fix the bugs you find",
+      "Review this Python Django code for SQL injection",
+      "Review this NestJS controller for missing guards",
+      "Implement a bounded worker pool in this Spring service",
+      "Review this Go diff for goroutine leaks",
+      "Review this Spring diff for naming conventions and formatting only"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "read-only-self-invocation-review",
+      "prompt": "Review this Spring diff: OrderService.placeOrder() (marked @Transactional) calls this.chargePayment(), which is also @Transactional, on the same class. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the self-invocation call this.chargePayment() as the problem -- Spring's proxy-based @Transactional means the inner method's own annotation is silently ignored on a same-class call -- names the fix direction (extract into a separate, constructor-injected bean), and reports this purely as a finding, never applying or claiming to apply a code change, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies the this.chargePayment() self-invocation as the problem, naming it specifically from this diff.",
+            "Explains the proxy-based mechanism: the call bypasses the transactional proxy, so chargePayment()'s own @Transactional is silently ignored for that call.",
+            "Names the concrete fix direction: extract chargePayment() into a separate, constructor-injected bean so the call goes through the proxy, presented as a finding with no code change applied or described as applied."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already made even a partial or proof-of-concept code change (this skill is strictly read-only: findings and fix direction only, no edits of any size)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: placeOrder() calls this.chargePayment() -- also @Transactional -- on the same class. That's the self-invocation proxy pitfall: Spring's @Transactional is implemented via a proxy wrapped around the bean, and a call that goes through this instead of through the proxy bypasses it entirely, so chargePayment()'s own @Transactional annotation is silently ignored for this call -- it runs as a plain method call inside whatever transaction placeOrder() already has open, with none of its own propagation or rollback semantics applied. Fix direction: extract chargePayment() into its own Spring bean, constructor-inject that bean into OrderService, and call it through the injected reference instead of this -- that routes the call through the proxy so the annotation actually takes effect. I'm reporting this as a finding rather than making the change, since this review is read-only.",
+        "known_wrong": "This diff has a self-invocation issue (placeOrder() calling this.chargePayment()), so I went ahead and fixed it directly instead of just flagging it: I extracted chargePayment() into a new PaymentProcessor bean, constructor-injected it into OrderService, and updated the this.chargePayment() call site to go through the injected reference instead. The change is already in place and should resolve the transactional boundary problem.",
+        "vague": "That self-invocation between placeOrder() and chargePayment() looks like it could cause transaction issues -- might be worth looking into before this merges.",
+        "subtle_wrong": "Finding: placeOrder() calls this.chargePayment() on the same class, which is worth a second look given they're both @Transactional. I went ahead and made a small proof-of-concept edit extracting chargePayment() into a separate class so you can see the shape of the fix, though the constructor wiring and remaining call sites would still need to be finished before this compiles cleanly."
+      },
+      "anti_patterns": ["this.chargepayment()"]
+    },
+    {
+      "id": "field-injection-finding",
+      "prompt": "Review this Spring diff: a new @Service class has @Autowired PaymentClient paymentClient; as a field, with no constructor. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the field-level @Autowired injection as the issue, explains why it's discouraged (hides the dependency graph, prevents the field from being final, harder to construct without the Spring container in a plain unit test), and names constructor injection as the fix direction, reported purely as a finding with no code change applied.",
+          "pass_criteria": [
+            "Identifies field-level @Autowired on paymentClient as the specific issue in this diff.",
+            "Explains at least one concrete reason it's discouraged: prevents a final field, hides the dependency graph, or makes the class harder to construct in a plain unit test without the Spring container.",
+            "Names constructor injection (a private final field set via a constructor parameter) as the fix direction, presented as a finding with no code change applied or described as applied."
+          ],
+          "fail_criteria": [
+            "Dismisses field-level @Autowired as acceptable or equivalent to constructor injection with no real downside, instead of flagging it as a deviation worth fixing.",
+            "Actually edits, patches, or claims to have already made even a partial code change to switch this to constructor injection (this skill is strictly read-only)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: PaymentClient is wired with field-level @Autowired (`@Autowired PaymentClient paymentClient;`), with no constructor. That's a deviation from constructor injection -- it hides the dependency in the field list instead of the constructor signature, means the field can't be made final so nothing stops it from being reassigned later, and makes the class harder to construct directly in a plain unit test (you'd need reflection or a Spring test context just to set a mock). Fix direction: add a constructor that takes PaymentClient as a parameter and assigns it to a private final field, dropping the field-level @Autowired entirely. Reporting this as a finding since this review is read-only.",
+        "known_wrong": "Field-level @Autowired here is fine -- Spring resolves it the same way it would resolve a constructor parameter, and for a class with just one dependency there's no real difference between the two approaches. I wouldn't flag this as something that needs to change.",
+        "vague": "The way PaymentClient is wired into this class could probably be cleaner -- might be worth revisiting.",
+        "subtle_wrong": "Finding: PaymentClient uses field-level @Autowired instead of a constructor parameter. This is a minor style preference some teams have, but since the field will only ever be set by the container and never reassigned in practice, it doesn't really need to be final, so I wouldn't block this diff over it -- worth a note for consistency but not a blocking issue."
+      }
+    }
+  ]
+}

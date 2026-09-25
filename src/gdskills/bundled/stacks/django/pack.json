@@ -1,0 +1,43 @@
+{
+  "id": "django",
+  "family": "framework",
+  "extends": "python",
+  "modules": ["django-rules", "django-skills"],
+  "detectionMarkers": ["django"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 335, Wave 4 batch 3"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["django-implementation"],
+    "test": ["django-testing"],
+    "review": ["django-code-review"],
+    "build-fix": ["django-build-fix"],
+    "migrate": ["django-migrate"]
+  },
+  "agentProfile": {
+    "displayName": "Django",
+    "auditFocus": [
+      "a loop that issues one query per row where `select_related`/`prefetch_related` would collapse it (N+1)",
+      "`mark_safe`/the `|safe` template filter applied to anything that traces back to user input",
+      "`.raw()`/`.extra()` built with f-strings/`%`/`.format()` instead of the `params` argument",
+      "`@csrf_exempt` or `CsrfViewMiddleware` disabled on a view that actually needs CSRF protection",
+      "a model field or migration change with no corresponding migration file, or a hand-edited migration that drifts from `makemigrations` output",
+      "`SECRET_KEY`/`DEBUG=True`/permissive `ALLOWED_HOSTS` reaching a production settings module"
+    ],
+    "buildCommands": [
+      "python manage.py check",
+      "python manage.py makemigrations --check --dry-run",
+      "ruff check . / ruff format --check .",
+      "mypy . (with django-stubs) or the project's configured type checker",
+      "python manage.py test  # or: pytest (pytest-django) if the project uses it"
+    ],
+    "fixGuardrails": [
+      "never add `mark_safe`/`|safe` to route around an escaping error instead of fixing the underlying markup",
+      "never disable CSRF (`@csrf_exempt`, removing `CsrfViewMiddleware`) to make a failing request succeed",
+      "never hand-edit a generated migration file to dodge a `makemigrations` conflict without resolving the actual model drift",
+      "never widen a narrowed queryset/model field type or drop a validator just to make a check pass"
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "What should the pytest suite look like for the new FastAPI order-creation route -- I want to make sure a valid POST actually persists the order.",
+      "Test this FastAPI route with TestClient to confirm it returns a 404",
+      "How do I fake being logged in when testing this FastAPI route, without hitting the real auth flow?",
+      "Test that this FastAPI endpoint returns a 422 on an invalid request body",
+      "This test keeps making a real network call to Stripe during CI -- how do I stub that out properly?",
+      "Add test coverage for this FastAPI router's signup endpoint"
+    ],
+    "negative": [
+      "Write a pytest test for this plain Python function with no HTTP layer at all",
+      "Add pytest-django coverage for this Django view, not a FastAPI route",
+      "Implement this FastAPI endpoint that creates an order",
+      "Review this FastAPI test file for testing convention violations without changing it",
+      "Fix this pytest collection error in our FastAPI test suite",
+      "Write a Jest test for this React component",
+      "Review this FastAPI diff for security issues before merging"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "dependency-overrides-not-monkeypatch",
+      "prompt": "Write a pytest test for a FastAPI endpoint `GET /me` that requires an authenticated user via a `get_current_user` dependency. How should the test supply a fake authenticated user?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer overrides the dependency with `app.dependency_overrides[get_current_user] = fake_dependency`, sent through TestClient against the real app, and clears the override afterward -- rather than monkeypatching the dependency function's module attribute.",
+          "pass_criteria": [
+            "sets `app.dependency_overrides[get_current_user] = <fake>` (or the equivalent for the project's actual dependency), shown as concrete code, to supply the fake authenticated user",
+            "sends the request through `TestClient(app)` (or `httpx.AsyncClient` against the app) so the override is exercised through FastAPI's own request pipeline",
+            "clears the override afterward (e.g. `app.dependency_overrides.clear()` in a fixture teardown or at the end of the test) so it does not leak into other tests"
+          ],
+          "fail_criteria": [
+            "uses `mocker.patch`/`monkeypatch.setattr` on the `get_current_user` function's module attribute instead of `app.dependency_overrides`. Mentioning that this would be the wrong approach is not itself a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\nfrom myapp.main import app\nfrom myapp.dependencies import get_current_user\nfrom myapp.schemas import User\n\n\ndef fake_current_user() -> User:\n    return User(id=1, username=\"testuser\")\n\n\ndef test_me_returns_authenticated_user(client):\n    app.dependency_overrides[get_current_user] = fake_current_user\n    try:\n        response = client.get(\"/me\")\n    finally:\n        app.dependency_overrides.clear()\n    assert response.status_code == 200\n    assert response.json()[\"username\"] == \"testuser\"\n```\nThe fake user is supplied by setting `app.dependency_overrides[get_current_user]`, FastAPI's own supported override mechanism, so the real `/me` request still goes through `TestClient(app)` and exercises the actual request pipeline -- routing, other dependencies, response_model filtering -- with only that one dependency swapped. The `try`/`finally` clears the override afterward so it can't leak into a later test that expects the real dependency or a different fake.",
+        "known_wrong": "```python\ndef test_me_returns_authenticated_user(client, mocker):\n    mocker.patch(\"myapp.dependencies.get_current_user\", return_value=User(id=1, username=\"testuser\"))\n    response = client.get(\"/me\")\n    assert response.status_code == 200\n    assert response.json()[\"username\"] == \"testuser\"\n```\nUsing `mocker.patch` on `get_current_user` directly is a familiar pattern from regular Python unit testing -- patch the function, call the code, assert the result -- and it avoids having to learn FastAPI's own override API. Since `mocker.patch` automatically undoes itself at the end of the test via pytest-mock's fixture teardown, there's no extra cleanup to write either.",
+        "vague": "Swap in a fake user for the auth dependency using FastAPI's own mechanism for overriding it in tests, and make sure the override doesn't stick around for other tests.",
+        "subtle_wrong": "```python\ndef test_me_returns_authenticated_user(client, mocker):\n    mocker.patch(\"myapp.routers.me.get_current_user\", return_value=User(id=1, username=\"testuser\"))\n    response = client.get(\"/me\")\n    assert response.status_code == 200\n    assert response.json()[\"username\"] == \"testuser\"\n```\nPatches `get_current_user` at its point of use in the `me` router module, following the same 'patch at the point of use' guidance as any other pytest mock, rather than patching FastAPI's dependency-injection system directly -- since `Depends(get_current_user)` resolves the name from the router module's own namespace, patching it there should intercept the same call the endpoint actually makes."
+      },
+      "anti_patterns": ["mocker.patch"]
+    },
+    {
+      "id": "response-model-excludes-field",
+      "prompt": "Write a pytest test for a FastAPI `GET /users/{id}` endpoint that declares `response_model=UserRead`, where the underlying `User` object also carries a `hashed_password` field that `UserRead` does not include. What should the test verify beyond a 200 status code?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer asserts, in addition to the 200 status code, that the response JSON body does not contain the hashed_password field -- verifying response_model actually filtered it out -- rather than stopping at the status code check.",
+          "pass_criteria": [
+            "asserts `response.status_code == 200` (or equivalent) as part of the test",
+            "additionally asserts that `hashed_password` (or the specific excluded field) is absent from `response.json()`, shown as concrete code such as `assert \"hashed_password\" not in response.json()`",
+            "explains that this verifies `response_model` actually filtered the field out of the response, not merely that the request succeeded"
+          ],
+          "fail_criteria": [
+            "only asserts the status code (or that the call didn't raise) without checking the response body for the excluded field. Mentioning that a field could leak is not itself a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\ndef test_get_user_excludes_hashed_password(client, seeded_user):\n    response = client.get(f\"/users/{seeded_user.id}\")\n    assert response.status_code == 200\n    body = response.json()\n    assert \"hashed_password\" not in body\n    assert body[\"username\"] == seeded_user.username\n```\nBeyond the 200 status code, the test explicitly asserts `\"hashed_password\" not in body`. `response_model=UserRead` is supposed to filter the returned `User` object down to just the fields `UserRead` declares, but that's a property of the schema definition matching the endpoint's actual intent -- a typo or a forgotten field removal in `UserRead` would otherwise ship a leaked field with every unit test still green, since a status-code-only check can't catch it. Checking `username` too confirms the response still carries the fields it should.",
+        "known_wrong": "```python\ndef test_get_user_returns_ok(client, seeded_user):\n    response = client.get(f\"/users/{seeded_user.id}\")\n    assert response.status_code == 200\n```\nA 200 status code confirms the endpoint found the user and returned a response without erroring, which is the main thing this test needs to verify. Since `response_model=UserRead` is declared on the path operation, FastAPI handles the field filtering automatically at the framework level -- that's exactly what response_model is for -- so there's no need for the test itself to re-check which fields ended up in the body.",
+        "vague": "Check more than just the status code -- make sure the response body actually reflects what response_model is supposed to filter down to.",
+        "subtle_wrong": "```python\ndef test_get_user_returns_ok(client, seeded_user):\n    response = client.get(f\"/users/{seeded_user.id}\")\n    assert response.status_code == 200\n    body = response.json()\n    assert body[\"username\"] == seeded_user.username\n    assert body[\"id\"] == seeded_user.id\n```\nChecks the status code and confirms the expected fields (`username`, `id`) are present and correct in the response body, which is the main behavior the endpoint needs to get right -- if `UserRead` is declared correctly, verifying the fields that should be there is enough evidence the schema is working as intended."
+      }
+    }
+  ]
+}

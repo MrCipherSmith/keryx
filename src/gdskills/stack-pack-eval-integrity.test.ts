@@ -434,6 +434,11 @@ const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set([
   "vue",
   "angular",
   "mobx",
+  // Wave 4 batch 3 (flow 335) — authored after I11 existed, enforced.
+  "django",
+  "fastapi",
+  "rust",
+  "java-kotlin-spring",
   "docker-k8s-terraform",
   "ci-github-gitlab",
   // Wave 4 batch 4 (flow 336) — authored after I11 existed, so enforced

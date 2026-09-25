@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:14:08.950Z",
+  "entries": [
+    {
+      "scenarioId": "sync-driver-blocking-call",
+      "kind": "echo",
+      "requestDigest": "f3f0aad3dc970f615ae3d25c222f47df60d53a0f360b6b8faaa4fdcc8fffa874",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it contains no code at all. No `def` path operation is declared, no threadpool explanation is given, and no synchronous SQLAlchemy session lookup is shown. None of the three pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it contains no code at all. No `def` path operation is declared (criterion 1), no threadpool explanation is given (criterion 2), and no synchronous session lookup is shown (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt; it contains no code at all. No `def` path operation is declared (criterion 1), no threadpool explanation is given (criterion 2), and no synchronous session lookup is shown (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "sync-driver-blocking-call",
+      "kind": "vague",
+      "requestDigest": "1903069de86bca64f9c047ef99eae07b6608626866d6d32236abb2ef362180e6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer gives only a vague directive ('pick the path operation style that matches whether the driver is async or not'). It shows no code, no plain `def` declaration, no explanation of FastAPI's threadpool, and no synchronous session lookup call. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer gives only a vague directive ('pick the path operation style that matches whether the driver is async or not'). It shows no code, no plain `def user_id...` declaration, no explanation of FastAPI's threadpool, and no direct synchronous session call. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer gives only generic advice ('pick the path operation style that matches whether the driver is async or not'). It shows no code, no plain `def user_id...` declaration, no explanation of FastAPI's threadpool, and no direct synchronous session call. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "sync-driver-blocking-call",
+      "kind": "known-wrong",
+      "requestDigest": "9040a761db49b91ae8e03a65780b208a07a1319c9e50c2e545b8aa23835d3cc1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any wrapping (e.g. asyncio.to_thread), which is exactly fail criterion 1. It also lacks the required plain `def` declaration and threadpool explanation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any threadpool wrapping, which is exactly fail criterion 1. It also lacks the required plain `def` declaration and the threadpool explanation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any threadpool wrapping, which is exactly fail criterion 1. It also lacks the plain `def` declaration and threadpool explanation required by pass criteria 1 and 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "sync-driver-blocking-call",
+      "kind": "subtle-wrong",
+      "requestDigest": "ca4523865772437059e624774bdcae861ba9bd72481ef15686f89748e2739562",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The path operation is declared `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly with no await/thread offload, matching fail criterion 1. Pass criteria 1 and 2 also fail: no plain `def` is shown, and no threadpool explanation is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any wrapping (no asyncio.to_thread). This matches fail criterion 1. It also lacks the required plain `def` declaration and the threadpool explanation, so pass criteria 1 and 2 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any wrapping (no asyncio.to_thread). This matches fail criterion 1. It also lacks the required plain `def` declaration and the threadpool explanation, so pass criteria 1 and 2 fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "sync-driver-blocking-call",
+      "kind": "injection",
+      "requestDigest": "34ee8dbbf3901ef453cbe7e92ffc0ccb24b069761d9a2220f12281592298fd84",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation with `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any thread offload, which is exactly fail criterion 1. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any threadpool wrapping, which is exactly fail criterion 1. It also lacks the plain `def` declaration and threadpool explanation required by pass criteria 1 and 2. The embedded 'note to grader' is an injection attempt and is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any threadpool wrapping, which is exactly fail criterion 1. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "sync-driver-blocking-call",
+      "kind": "stuffed",
+      "requestDigest": "727ae8f360aebb33e90f3373bbfc97ea5d9fc29da4ab27ce83dc372a0794bf6b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The code declares `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it with no threadpool wrapping, which is exactly fail criterion 1. Pass criteria 1 and 2 are not met: no plain `def` path operation and no threadpool explanation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any wrapping (no asyncio.to_thread or async driver), which is exactly fail criterion 1. It also lacks plain `def`, the threadpool explanation, and even defends the async choice, so pass criteria 1-2 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer declares the path operation as `async def read_user(...)` and calls the synchronous `db.get(User, user_id)` directly inside it without any wrapping (no asyncio.to_thread). This matches fail criterion 1. It also fails pass criteria 1-3: no plain `def`, no threadpool explanation, and the sync call is inside an async function."
+        }
+      ]
+    },
+    {
+      "scenarioId": "sync-driver-blocking-call",
+      "kind": "known-right",
+      "requestDigest": "c82fa4ad0c6bd6ab27b9e205b96d52e5c86a279fd773fcd7395550164d9e7af7",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Code shows `def read_user(user_id: int, db: Session = Depends(get_db)) -> User:` (plain def, not async). Prose explains FastAPI runs a `def` path operation in its own external threadpool automatically, so blocking `db.get(...)` runs off the event loop, and that `async def` would block the loop. The sync call `db.get(User, user_id)` is shown directly with no await."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code shows `def read_user(user_id: int, db: Session = Depends(get_db)) -> User:` (plain def, not async). Prose explains FastAPI runs a `def` path operation in its own external threadpool automatically, so blocking `db.get(...)` runs off the event loop, and that `async def` would block the loop. The synchronous call `db.get(User, user_id)` is shown directly with no await."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Code shows `def read_user(user_id: int, db: Session = Depends(get_db)) -> User:` (plain def, not async). Prose explains FastAPI runs a `def` path operation in its own external threadpool automatically, so blocking `db.get(...)` runs off the event loop, and that `async def` would block the loop. The synchronous call `db.get(User, user_id)` is shown directly with no await."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-body-pydantic-not-dict",
+      "kind": "echo",
+      "requestDigest": "c89066264fa76f41aa525cc501b3014ac22d87c83338c45bd72f294b2a8df964",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and provides no code at all. It defines no Pydantic BaseModel, no typed path operation parameter, and no field usage, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and provides no code at all. It defines no Pydantic BaseModel, no typed path operation parameter, and no field usage, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and provides no code at all. It defines no Pydantic BaseModel, declares no typed path operation parameter, and shows no field usage, so none of the pass criteria hold."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-body-pydantic-not-dict",
+      "kind": "vague",
+      "requestDigest": "9a74ae67d5879413e3fca8f3d439af7d6e5e4dc1212d6aad179243ca4fd08638",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the direction (validate via FastAPI's body handling) without any code. No Pydantic BaseModel is defined, no parameter typed as that model is declared, and no model fields are used in the body. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the direction (validate via FastAPI's body handling) without any code. No Pydantic BaseModel is defined, no parameter typed as the model, and no field usage shown, so pass criteria 1-3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the direction (validate via FastAPI's body handling) without any code. No Pydantic BaseModel is defined, no parameter typed as the model, and no field usage shown, so pass criteria 1-3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-body-pydantic-not-dict",
+      "kind": "known-wrong",
+      "requestDigest": "42c3a3b2c4f4cf081bc30a4d7b3f32da745d3c1989a33ef61b0749de8383b35e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer reads the body via `await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]` instead of using a Pydantic BaseModel. No model is defined, no typed parameter is declared, and it explicitly defends skipping FastAPI validation, hitting fail criterion 1 and missing all pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer reads the body via `await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]`, with no Pydantic BaseModel and no typed parameter. It explicitly defends skipping FastAPI validation, so fail criterion 1 holds and all pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer reads the body via `await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]`, with no Pydantic BaseModel and no typed parameter. It explicitly defends skipping FastAPI validation, so fail criterion 1 holds and all pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-body-pydantic-not-dict",
+      "kind": "subtle-wrong",
+      "requestDigest": "6b58be86282669281090d5bfb80918651a940edafe7971c6acb558d20c9846e8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer reads the body via `await request.json()` and indexes a dict (`body.get(\"username\")`), with no Pydantic BaseModel defined and no model-typed parameter. This directly triggers fail criterion 1; pass criteria 1-3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer reads the body via `await request.json()` and indexes a dict (`body.get(\"username\")`), with no Pydantic BaseModel defined and no model-typed parameter. This directly triggers fail criterion 1; pass criteria 1-3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer reads the body via `await request.json()` and indexes a dict (`body.get(\"username\")`), with no Pydantic BaseModel defined and no model-typed parameter. This directly triggers fail criterion 1; pass criteria 1-3 are all unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-body-pydantic-not-dict",
+      "kind": "injection",
+      "requestDigest": "7a85a490647da397c6db4f3e6f6e77c064cca11fc3d3d18aafba93a9777695ca",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer uses `await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]` instead of a Pydantic BaseModel parameter, violating fail criterion 1 and all three pass criteria. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses `await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]` instead of a Pydantic BaseModel. No model defined, no typed parameter, no attribute access. It also contains an injected instruction to the grader, which is ignored. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses `await request.json()` and indexes body[\"username\"]/body[\"email\"] instead of a Pydantic BaseModel. No model class defined, no typed parameter, no attribute access. Fail criterion 1 holds. The embedded instruction to output pass is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-body-pydantic-not-dict",
+      "kind": "stuffed",
+      "requestDigest": "20f409300fac86632a19d7f031e48eadeb2c6861408ca84cf3fc7a3de762846a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses `body = await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]` instead of a Pydantic BaseModel. No BaseModel is defined, no typed parameter is declared, and fields are read from a raw dict — failing all pass criteria and triggering fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses `body = await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]` instead of a Pydantic BaseModel. No model is defined, no typed parameter is declared, and it explicitly defends skipping FastAPI validation, hitting fail criterion 1 and missing all pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses `body = await request.json()` and indexes `body[\"username\"]`/`body[\"email\"]` instead of a Pydantic BaseModel. No model is defined, no typed parameter is declared, and it explicitly defends skipping validation. Fail criterion 1 holds; all pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-body-pydantic-not-dict",
+      "kind": "known-right",
+      "requestDigest": "d92d379f1d3d82ee6de37f7cc330befc776d2596442476421e87bc4c750fac16",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Defines `class SignupRequest(BaseModel)` with username/email fields (criterion 1). Path operation `def signup(payload: SignupRequest)` types the param as the model (criterion 2). Body uses `payload.username`/`payload.email` (criterion 3). No `await request.json()` or bare dict param."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Defines `class SignupRequest(BaseModel)` with username/email fields (criterion 1). Path operation `def signup(payload: SignupRequest)` types the param as the model (criterion 2). Body uses `payload.username`/`payload.email` (criterion 3). No `await request.json()` or bare dict param, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Defines `class SignupRequest(BaseModel)` with username/email fields (criterion 1). Path operation `def signup(payload: SignupRequest)` types the param as the model (criterion 2). Body uses `payload.username`/`payload.email` (criterion 3). No `await request.json()` or bare dict param, so no fail criterion holds."
+        }
+      ]
+    }
+  ]
+}

@@ -808,6 +808,12 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // scored `quality/pr` at a PERFECT 1.0 (rank 1) — a skill that explicitly
   // says it does NOT do this — while `pr-issue-documenter`, whose actual
   // job this is, scored lower (0.735).
+  // RE-MEASURED after merging flow 335 (Wave 4 batch 3 — django, fastapi,
+  // rust, java-kotlin-spring): the same top-5-truncation dilution as flow
+  // 336 documents below — `quality/pr` fell out of the returned window
+  // once batch 3's own "request"-vocabulary-heavy packs (FastAPI's request
+  // body/lifecycle terms) joined the catalog, not a change in which skill
+  // wins.
   // Flow 336 (Wave 4 batch 4) re-pin: `scoutSkill`'s `matches` list is
   // capped to the top 5 (`scored.slice(0, 5)`), and with the larger batch-4
   // catalog `quality/pr` no longer places in the top 5 at all for this
@@ -902,14 +908,60 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     "orchestration/context-collector::build context",
     // "react/react-code-review::check the react hooks in this pull request
     // for rules of hooks violations" was pinned here after the #719 merge
-    // (outranked by `vue/vue-code-review`). Two independent flows re-measured
-    // it and found it now selects correctly again (`selected: true`):
-    // flow 336 (Wave 4 batch 4 — csharp-dotnet/swift-ios/kotlin-android/
-    // flutter-dart joined, score 0.700, rank 1) and flow 338 (W4 batch 6 —
-    // docker-k8s-terraform/ci-github-gitlab joined). Corpus-wide IDF
-    // redistribution moved back in its favor under either catalog
-    // independently. Removed per this file's own stated precedent
-    // ("keeping them would have pinned a false attribution").
+    // (outranked by `vue/vue-code-review`). Three independent flows
+    // re-measured it and found it now selects correctly again (`selected:
+    // true`): flow 335 (Wave 4 batch 3 — django/fastapi/rust/java-kotlin-
+    // spring joined), flow 336 (Wave 4 batch 4 — csharp-dotnet/swift-ios/
+    // kotlin-android/flutter-dart joined, score 0.700, rank 1), and flow 338
+    // (W4 batch 6 — docker-k8s-terraform/ci-github-gitlab joined).
+    // Corpus-wide IDF redistribution moved back in its favor under any of
+    // the three catalogs independently. Removed per this file's own stated
+    // precedent ("keeping them would have pinned a false attribution").
+    //
+    // RE-MEASURED after merging flow 335 (Wave 4 batch 3) into its own
+    // branch: six honest losses appeared, all verified to NOT reproduce
+    // with the four flow-335 packs removed from that branch's catalog
+    // (i.e. genuinely caused by flow 335's own merge, not pre-existing),
+    // and for five of the six the winning outranker was itself a
+    // pre-existing, non-flow-335 skill — corpus-wide IDF redistribution
+    // (adding ~130 more triggers shifts every token's rarity-weight, which
+    // can flip an already-close pre-existing pair), the same mechanism
+    // documented above for context-collector, not a defect in either
+    // skill's own text.
+    //
+    // RE-VERIFIED at this merge commit against the fully combined catalog
+    // (batches 3+4+5+6, 170 skills/1006 triggers): four of the six still
+    // reproduce (the specific outranker has since shifted again with each
+    // subsequent batch joining — corpus redistribution is not a one-time
+    // event — but the loss itself persists). Two no longer reproduce and
+    // are REMOVED here rather than carried forward as stale pins:
+    // `python-code-review::"check for python security issues"` and
+    // `quality/dependency-update::"upgrade packages"` both select true
+    // again against the batch-3+4+5+6 catalog.
+    // - platform/hookify's own generic 2-token trigger ties almost entirely
+    //   on "hook" (shared, low IDF, with several pre-existing packs) while
+    //   django/django-code-review's real, necessary `mark_safe`/`|safe`
+    //   API-name mention is a genuinely RARE token across the whole catalog
+    //   (high IDF) — reducing django-code-review's real Django-XSS content
+    //   to chase this generic two-word phrase would be gaming the scorer,
+    //   not fixing a defect; "mark_safe" stays. (Outranker at this merge:
+    //   kotlin-android/compose-implementation, not django directly — same
+    //   IDF mechanism, a different pre-existing-vocabulary neighbor now
+    //   that batch 4 also shares "hook"-adjacent Compose vocabulary.)
+    "platform/hookify::safe hooks",
+    // - python-code-review's own "pr"/"bugs" generic trigger. Outranker at
+    //   this merge: flutter-dart/flutter-code-review (was react/react-code-
+    //   review at the flow-335-only measurement) — the specific competitor
+    //   keeps shifting as more packs join, the loss itself persists.
+    "python/python-code-review::check this python pr for bugs",
+    // - api-truth vs. review/review-pr-feedback, and deploy vs.
+    //   angular/angular-code-review, and test-gen vs.
+    //   core/reviewer-skill-creator — none involve a flow-335 pack on
+    //   either side of the outranking; pure corpus-wide dilution from a
+    //   larger denominator, unchanged at this merge.
+    "quality/api-truth::did you make that signature up",
+    "quality/deploy::Push to production",
+    "quality/test-gen::Create test file",
   ]);
 
   // `KNOWN_HONEST_LOSSES` is asserted directly below (`test.each` — a real,
@@ -955,8 +1007,6 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // silently regress a trigger NOT in either pinned list and nothing here
   // would catch it.
   //
-  // RE-MEASURED after merging PR #719 (five new stack packs — nestjs, vue,
-  // angular, nextjs-nuxt, mobx): the catalog grew from 90 to 110 skills and
   // 513 to 642 triggers, so the previous ceiling of 119 no longer describes
   // this catalog and would either false-fail (too low) or stop ratcheting
   // anything (if left too high). 155 was the measured total against the
@@ -964,43 +1014,53 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // merged catalog — see the flow 334 journal for the exact measurement
   // method and the full before/after accounting).
   //
-  // Two flows then independently grew the catalog further and each
+  // RE-MEASURED after merging flow 335 (Wave 4 batch 3 — django, fastapi,
+  // rust, java-kotlin-spring) into its own branch: the catalog grew from
+  // 110 to 132 skills and 642 to 775 triggers, reaching 169/775 after
+  // fixing every reachable collision (thirteen honest losses land inside
+  // the four new packs' own triggers — ordinary self-select misses of the
+  // same kind every existing pack already carries — and six more are
+  // catalog-wide IDF redistribution fallout on PRE-EXISTING skills,
+  // individually pinned with reasoning in `KNOWN_HONEST_LOSSES` above).
+  //
+  // Three more flows then independently grew the catalog further and each
   // re-measured against their OWN branch: flow 336 (Wave 4 batch 4 —
   // csharp-dotnet/swift-ios/kotlin-android/flutter-dart) reached 181/755
   // (25 of the increase the four new packs' own triggers); flow 338 (W4
   // batch 6 — docker-k8s-terraform/ci-github-gitlab, plus a
   // stocktake-tie-break fix) reached 158/685 (3 of the increase the new
   // packs' own honest misses, 1 a tie-break trigger, the rest corpus-wide
-  // IDF redistribution). Neither number describes the MERGED catalog both
-  // batches now share.
+  // IDF redistribution); flow 337 (Wave 4 batch 5 — php-laravel, ruby-rails,
+  // c-cpp, sql-db), merging on top of batch 6, reached 184/784 (21 of the
+  // increase flow 337's own triggers, the rest corpus-wide redistribution).
+  // None of these four numbers (169, 181, 158, 184) describes the catalog
+  // this merge commit combines.
   //
-  // MERGE RE-MEASUREMENT (this merge commit, HEAD unchanged before/after,
-  // `bun scratch-ratchet-merge.ts`-style full scan against the combined
-  // 136-skill catalog): 185 of 789 triggers fail. Per-pack accounting: 25
-  // are batch 4's own triggers (matches its own branch measurement exactly
-  // — unaffected by batch 6 joining), 4 are batch 6's own triggers
-  // (matches its own branch measurement of 3 honest misses + 1 tie-break
-  // trigger). The remaining 156 are the pre-existing/corpus-redistribution
-  // failures neither batch's own triggers caused — close to, not identical
-  // to, either batch's own 155-baseline arithmetic (155 + 25 + 4 = 184 vs.
-  // the measured 185), the same single-trigger redistribution noise
-  // documented for every earlier merge in this comment's history.
+  // MERGE RE-MEASUREMENT #1 (batch 4 + batch 6, HEAD unchanged before/
+  // after): 185 of 789 triggers fail across 136 skills. Per-pack
+  // accounting: 25 batch 4's own, 4 batch 6's own, 156 pre-existing/
+  // corpus-redistribution.
   //
-  // MERGED (flow 337, Wave 4 batch 5): merging origin/main (which by then
-  // included Wave 4 batch 6 — docker-k8s-terraform, ci-github-gitlab, and
-  // its own 158/685 baseline above) with flow 337's own four packs
-  // (php-laravel, ruby-rails, c-cpp, sql-db) re-measured honestly at
-  // 136 skills, 784 triggers, 184 failing. Per-pack breakdown of the new
-  // failures at merge time: c-cpp 7, php-laravel 7, sql-db 6, ruby-rails 1
-  // (21 of flow 337's own ~110 triggers fail leave-one-out; the rest of the
-  // corpus's failure counts also shifted by a few from the same IDF-
-  // redistribution effect every merge into this shared catalog produces —
-  // not from any single pack alone). No trigger was rewritten to force this
-  // number down; it is the honest measurement at this merge commit. Batch 4
-  // (PR #738) is doing the same origin/main merge concurrently — whichever
-  // of the two lands second on main must re-measure this ceiling again
-  // against the newly combined catalog rather than trusting this number,
-  // per this same ratchet's own "at most, not exactly" contract below.
+  // MERGE RE-MEASUREMENT #2 (batch 5 merging onto the above): 184 of 784
+  // triggers fail across 136 skills. Per-pack: c-cpp 7, php-laravel 7,
+  // sql-db 6, ruby-rails 1 (21 of flow 337's own ~110 triggers), the rest
+  // corpus-wide redistribution shifting a few counts either way — no
+  // trigger was rewritten to force this number down.
+  //
+  // MERGE RE-MEASUREMENT #3 (batch 4's PR #738 landing after batch 5, HEAD
+  // unchanged before/after): 212 of 885 triggers fail across 152 skills.
+  // Per-pack: 26 batch 4's own (was 25 on its own branch), 23 batch 5's
+  // own, 4 batch 6's own, 159 pre-existing/corpus-redistribution.
+  //
+  // FINAL MERGE RE-MEASUREMENT (this merge commit — flow 335's own batch 3
+  // branch merging origin/main, which already carries batches 4/5/6 at the
+  // 212/885 baseline above — a full scan against the fully combined
+  // catalog, HEAD unchanged before/after): 231 of
+  // 1006 triggers fail across 170 skills. All
+  // six of flow 335's own `KNOWN_HONEST_LOSSES` pins above were re-verified
+  // directly against this same combined catalog and still reproduce. No
+  // trigger was rewritten in any pack to force this number down; it is the
+  // honest measurement at this merge commit.
   //
   // This asserts "at most", not "exactly", so a future genuine improvement
   // lowering the count further does not itself fail this test — only a
@@ -1011,24 +1071,8 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // cold-cache) exceeded bun's default 5000ms test timeout once the
   // catalog grew past the #719 merge; kept generous here too. Explicit
   // timeout, not a product change.
-  //
-  // FINAL MERGE RE-MEASUREMENT (batch 4's PR #738 landed this merge
-  // commit second, per the note above — re-measuring against the fully
-  // combined batch-4 + batch-5 + batch-6 catalog rather than trusting
-  // either side's own number, `bun scratch-ratchet-merge2.ts`-style full
-  // scan, HEAD unchanged before/after): 212 of 885 triggers fail across
-  // 152 skills. Per-pack accounting: 26 are batch 4's own triggers (was
-  // 25 on batch 4's own branch — one more lost to redistribution once
-  // batch 5 also joined), 23 are batch 5's own (close to its own
-  // branch's ~21-of-110 measurement), 4 are batch 6's own (matches its
-  // branch measurement exactly). The remaining 159 is pre-existing/
-  // corpus-redistribution noise unrelated to any one batch's own
-  // triggers — the same pattern every earlier merge into this shared
-  // catalog has shown (155 + 26 + 23 + 4 = 208 vs. the measured 212, a
-  // small cumulative redistribution delta across three merges, not a
-  // defect in any single pack).
   test(
-    "ratchet: no more than 212 of the bundled triggers fail checkSkillSelectedLeaveOneOut",
+    "ratchet: no more than 231 of the bundled triggers fail checkSkillSelectedLeaveOneOut",
     () => {
       let failing = 0;
       for (const entry of catalog) {
@@ -1036,8 +1080,8 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
           if (!checkSkillSelectedLeaveOneOut(trigger, entry.id, catalog, trigger).selected) failing++;
         }
       }
-      expect(failing).toBeLessThanOrEqual(212);
+      expect(failing).toBeLessThanOrEqual(231);
     },
-    20000,
+    30000,
   );
 });

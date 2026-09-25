@@ -1,0 +1,40 @@
+[
+  {
+    "query": "Use when a Django project fails manage.py check, makemigrations/migrate, the test suite, or lint/type-check -- resolves migration conflicts and inconsistent migration history, ImproperlyConfigured settings errors, app-loading/circular-import errors, mypy/django-stubs type errors, and ruff failures with the smallest root-cause fix. Not for adding a feature (see django-implementation) or fixing test content (see django-testing).",
+    "decision": "fork",
+    "topMatch": "python/python-build-fix",
+    "recordedAt": "2026-09-25T18:06:19.335Z",
+    "skillName": "django-build-fix",
+    "justification": "top match python/python-build-fix (0.3-0.55 range) is the same build-fix category but for generic Python tooling, not Django's own manage.py/migration/ImproperlyConfigured failure modes; a fork scoped to Django's own build/check/migration errors is warranted since the shared category is deliberate but the specific failure surface (makemigrations conflicts, app-loading, django-stubs) is not covered by python-build-fix."
+  },
+  {
+    "query": "Use when reviewing Django changes for correctness and injection-class risks -- checks N+1 queries missing select_related/prefetch_related, mark_safe/|safe applied to user-traceable data, raw()/extra() built by string interpolation, @csrf_exempt on a session-authenticated view, missing/hand-edited migrations, and settings.py misconfiguration (DEBUG, SECRET_KEY, ALLOWED_HOSTS). Read-only: reports findings, does not edit code.",
+    "decision": "create",
+    "topMatch": "fastapi/fastapi-code-review",
+    "recordedAt": "2026-09-25T18:06:19.640Z",
+    "skillName": "django-code-review",
+    "justification": "top match python/python-code-review is the same review category but for generic Python risks (mutable defaults, bare except, resource leaks), not Django's own injection-class sinks (N+1 via select_related, mark_safe/|safe XSS, raw()/extra() SQL, csrf_exempt, migration hygiene); a Django-scoped fork covers concerns python-code-review has no visibility into."
+  },
+  {
+    "query": "Use when implementing or extending a feature in a Django (5.x) project -- covers models and migrations, class-based/function-based views, forms and serializers, querysets with select_related/prefetch_related to avoid N+1, and the framework's CSRF/escaping defaults. Not for plain Python with no Django import (see python-implementation) or a Django version-major upgrade (see django-migrate).",
+    "decision": "fork",
+    "topMatch": "django/django-code-review",
+    "recordedAt": "2026-09-25T18:06:19.952Z",
+    "skillName": "django-implementation",
+    "justification": "top match django/django-testing is this same pack's test-authoring skill, sharing only generic Django-project vocabulary (models, views, pytest-django) from its own test-authoring scope, not implementation/typing/queryset-design guidance; decision is fork since both are legitimately Django-scoped but cover disjoint workflows (writing production code vs. writing tests)."
+  },
+  {
+    "query": "Use when generating, reviewing, or safely applying Django schema/data migrations -- makemigrations for a model change, RunPython data migrations with forward/reverse functions, merge migrations for divergent branches, and staged rollout for a migration that must ship alongside a multi-phase deploy (e.g. a column removal). Not for a Django-major-version framework upgrade (there is no separate django-upgrade skill in this pack; treat a version jump as django-implementation plus this skill's migration discipline) or for fixing a broken/conflicting migration that's blocking the build (see django-build-fix).",
+    "decision": "create",
+    "topMatch": "java-kotlin-spring/java-kotlin-spring-migrate",
+    "recordedAt": "2026-09-25T18:06:20.259Z",
+    "skillName": "django-migrate"
+  },
+  {
+    "query": "Use when writing Django TestCase/SimpleTestCase classes, simulating browser requests against a view with Django's own request-simulation helper, wiring pytest-django fixtures (db, django_user_model), building factory_boy model factories, or asserting on permission/form/queryset behavior in a Django app's own test suite. Django-specific: ORM assertions, migration-aware test databases, and DRF serializer/view tests, scoped to code that actually imports Django.",
+    "decision": "create",
+    "topMatch": "fastapi/fastapi-testing",
+    "recordedAt": "2026-09-25T18:06:20.569Z",
+    "skillName": "django-testing"
+  }
+]

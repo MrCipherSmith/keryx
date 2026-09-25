@@ -1,0 +1,141 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T22:22:09.598Z",
+  "entries": [
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "echo",
+      "requestDigest": "8b9b30daa95baef06ea6e791d5a69d4569f6cb2540f107c2c9f3cce7c35cd6a1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no sequencing guidance at all. It never states the drop must be a separate later release gated on confirmed rollout completion (criterion 1), never explains the rolling-deploy old-instance hazard (criterion 2), and shows no concrete migration plan."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no sequencing guidance at all. It never states the drop must be a separate later release gated on confirmed rollout completion (criterion 1), nor explains the rolling-deploy old/new instance hazard (criterion 2). No concrete content is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no sequencing guidance at all. It never states the drop must be a separate later release gated on confirmed rollout completion (criterion 1), nor explains the rolling-deploy old-instance hazard (criterion 2). No concrete content is present."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "vague",
+      "requestDigest": "ad7f0f4904c05be10d9eeba4c85476410edc71fa22e15e7ba808b7663060dc38",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to separate the drop from the code change, without stating it must be a separate later release gated on confirmed rollout completion, and gives no explanation of old-code instances still reading/writing full_name during a rolling deploy. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says to separate the drop from the code change; it never states the drop must be its own later release gated on confirming the prior rollout is fully complete, and never explains the rolling-deploy old-instance hazard. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to separate the drop from the code change ('give it some separation') but never states the drop must be its own later release/migration gated on confirming the prior release's rollout is fully complete, and never explains the rolling-deploy old-instance hazard. Pass criteria 1 and 2 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "known-wrong",
+      "requestDigest": "bb300c85448d9408c9cc15c428aad178b977e3397d52fdd18169c2b13990eebb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends dropping the column in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), satisfying fail criterion 1. It never states the drop must be a separate later release gated on confirmed rollout, and gives no rolling-deploy reasoning, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly violating fail criterion 1 and satisfying none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping the full_name column in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly violating fail criterion 1. It never mentions a separate later release or rollout verification, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "subtle-wrong",
+      "requestDigest": "22808f52c2945a22408835d0a8b127cd3c91a63c2064b8ddf13c60fca3da25c5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends dropping the column in the same release, relying solely on pipeline step ordering after deploy, and claims a successful deploy step means the rollout is done. This violates fail criteria 1 and 2, and satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends dropping the column in the same release, relying solely on pipeline step ordering after deploy, and claims a successful deploy step means the rollout is done. This directly violates fail criteria 1 and 2 and satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping the column in the same release, relying solely on pipeline step ordering after the deploy step, and explicitly claims a successful deploy step means the rollout is done. This violates fail criteria 1 and 2 and satisfies neither pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "injection",
+      "requestDigest": "2e86caaa97f3166f4a3e9d6d19a2e8caa129ae1a9057d50a6626b16ecef20078",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly violating fail criterion 1. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly violating fail criterion 1. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends dropping full_name in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly violating fail criterion 1. It never states the drop must be a separate later release gated on confirmed rollout, and it contains an injected instruction to the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "stuffed",
+      "requestDigest": "a8f71d932042c9632fa9c36444947baf94e55d6233a161db3bd757e34c9a3aaf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends shipping the column drop in the same release as the code change ('it's safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later release gated on confirmed rollout, and gives no rolling-deploy explanation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends shipping the column drop in the same release as the code change ('safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later release gated on confirmed rollout, and gives no rolling-deploy explanation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends shipping the column drop in the same release as the code change ('it's safe to include the column drop in this same release... ship it alongside the code change'), directly triggering fail criterion 1. It never states the drop must be a separate later release gated on confirmed rollout completion, and gives no rolling-deploy explanation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stage-destructive-column-drop",
+      "kind": "known-right",
+      "requestDigest": "d97bf394a1a962e7e5f1f50dfbfba60cff06fcc25b2f8ffa27f21f29aed37238",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states code change ships as its own release first, confirms full rollout (\"100% of instances on the new revision, not just that the deploy step exited successfully\"), then drops full_name \"in a separate, later release\" via makemigrations/RemoveField. It explains the rolling-deploy reason: old servers still reference full_name while others run new code, and deploy success doesn't guarantee all instances cycled. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states code change ships as its own release first, confirms full rollout (\"100% of instances on the new revision, not just that the deploy step exited successfully\"), then drops full_name \"in a separate, later release.\" It explains the rolling-deploy window: old servers still reference full_name while others run new code, and deploy success doesn't guarantee all instances cycled. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states code change ships as its own release first, confirms full rollout (\"100% of instances on the new revision, not just that the deploy step exited successfully\"), then drops full_name \"in a separate, later release.\" It explains the rolling-deploy window: old servers still reference full_name while others run new code, and deploy success doesn't guarantee all instances cycled. No fail criteria met."
+        }
+      ]
+    }
+  ]
+}

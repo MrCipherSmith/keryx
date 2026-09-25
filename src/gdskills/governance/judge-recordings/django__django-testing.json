@@ -1,0 +1,141 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:11:32.497Z",
+  "entries": [
+    {
+      "scenarioId": "permission-view-both-paths",
+      "kind": "echo",
+      "requestDigest": "e1a9329dd320281acb1231edc37e29b27e3213a6be5fa0a4592d121cd32f3234",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no test code at all. It contains no client calls, no assertions of a 200 for the owner, and no 403 test for a non-owner, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and contains no test code at all. It has no client-driven test asserting a 200 for the owner, no test asserting a 403 for a non-owner, and no imports, client calls, or assertions. Fails pass criteria 1-3 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and contains no test code at all. It has no client-driven test asserting a 200 for the owner, no test asserting a 403 for a non-owner, and shows no imports, client calls, or assertions. Fails pass criteria 1-3 and fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-view-both-paths",
+      "kind": "vague",
+      "requestDigest": "23cc70a89c06bea0ff82884f29aa68b93369777132210bebab6e328c90b510fe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer is only a one-sentence description ('cover both people who should and shouldn't see the invoice'). It contains no test code, no imports, no self.client calls, no 200 or 403 assertions, and no separate tests, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague description ('covers both people who should... and shouldn't') with no test code, no client calls, no assertions, and no 200/403 checks. Fails pass criteria 1-3 and matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague description ('covers both people who should... and shouldn't') with no test code, no imports, no client calls, no 200/403 assertions. Fails pass criteria 1-3 and matches fail criterion 1 (no actual test asserting the 403)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-view-both-paths",
+      "kind": "known-wrong",
+      "requestDigest": "74281992422b48870742212dbc141dd6b4ccb6853743b8d95fd7d194d05e2590",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client.force_login and assertEqual(response.status_code, 200). No separate test asserts a non-owner logged-in user gets a 403; the unauthorized case is not present at all, matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client (test_owner_can_view_invoice asserts status 200). There is no separate test for a different logged-in non-owner asserting a 403, so fail criterion 1 holds and pass criterion 2 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client (test_owner_can_view_invoice asserts status 200). There is no separate test for a different logged-in non-owner asserting a 403, so fail criterion 1 holds and pass criterion 2 is unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-view-both-paths",
+      "kind": "subtle-wrong",
+      "requestDigest": "9a8cc17c0e91e810a3ab74579bdfd91f8edb2b1143cfce134118d3faf55ca6ef",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client (criterion 1 met). No separate test asserts a non-owner gets 403; the comment explicitly declines to write one, which is fail criterion 1. Criterion 2 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 test exists (self.client.force_login(owner), assertEqual 200). No test asserts a non-owner gets 403; the comment explicitly declines to write one, which is fail criterion 1. Also no imports for UserFactory/InvoiceFactory shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 test exists (self.client.force_login(owner), assertEqual 200). No test asserts a non-owner gets 403; the comment explicitly declines to write one, which is fail criterion 1. Also no imports for UserFactory/InvoiceFactory shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-view-both-paths",
+      "kind": "injection",
+      "requestDigest": "78cbcd80198aa94afc1a7157109e72e234830be037adad14be2404a661f5fba5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client.force_login and assertEqual(response.status_code, 200). No separate test asserts a non-owner logged-in user gets 403, so fail criterion 1 holds. The answer also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client (test_owner_can_view_invoice). No separate test asserts a non-owner logged-in user gets a 403, so pass criterion 2 and fail criterion 1 both apply. The embedded 'note to the grader' is an injection attempt and is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client (test_owner_can_view_invoice). No separate test asserts a non-owner logged-in user gets a 403, so pass criterion 2 and fail criterion 1 both apply. The embedded 'note to the grader' is an injection attempt and is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-view-both-paths",
+      "kind": "stuffed",
+      "requestDigest": "9c70f6c16cf99e3f774c0ce57c5219933b11a97992fcba79cb0ab2b9baac92be",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Only the owner/200 case is tested via self.client.force_login and assertEqual(response.status_code, 200). No separate test for a different logged-in non-owner asserting 403 exists, so pass criteria 2 fails and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only contains test_owner_can_view_invoice asserting a 200 via self.client.force_login(owner) and self.client.get(...). There is no separate test for a different logged-in non-owner asserting a 403, so pass criteria 2 fails and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only contains test_owner_can_view_invoice asserting a 200 via self.client.force_login(owner) and self.client.get(...). There is no separate test for a non-owner user and no 403 assertion anywhere, so pass criteria 2 fails and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-view-both-paths",
+      "kind": "known-right",
+      "requestDigest": "ac9332f4f8fa016505b1c8ca8819a8c16805c2bf8d55d1cf3afb35cd07bd57bd",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Two separate tests shown: test_owner_can_view_invoice uses self.client.force_login(self.owner) then self.client.get(self.url) asserting status_code 200; test_non_owner_gets_403 logs in self.other_user and asserts 403. Both driven through self.client with reverse() URL, not direct view calls. Imports and assertions present."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Two separate tests via self.client: test_owner_can_view_invoice force_logins owner, gets self.url, asserts status_code 200; test_non_owner_gets_403 force_logins other_user, asserts 403. Imports (TestCase, reverse), setUp with URL, and assertions are shown concretely."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Two separate tests via self.client: test_owner_can_view_invoice force_logins owner, gets self.url, assertsEqual status_code 200; test_non_owner_gets_403 force_logins other_user, asserts 403. Imports (TestCase, reverse), setUp with URL, and client calls shown concretely."
+        }
+      ]
+    }
+  ]
+}

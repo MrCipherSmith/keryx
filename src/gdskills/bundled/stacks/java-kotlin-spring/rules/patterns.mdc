@@ -1,0 +1,65 @@
+---
+extends: common
+paths: ["**/*.java", "**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Java/Kotlin + Spring patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+Spring Boot 3.x design and its common anti-patterns, for both Java and
+Kotlin. Applies only to `*.java`/`*.kt`/`*.kts` files.
+
+## Transaction boundaries and the self-invocation pitfall
+
+- `@Transactional` is placed on the outermost service method that defines
+  the unit of work, not scattered on every repository call.
+- Spring's declarative transactions are proxy-based (AOP): a call from
+  one method to another `@Transactional` method **on the same class**,
+  through `this`, bypasses the proxy entirely — the annotation is
+  silently ignored, no new transaction starts and no rollback happens on
+  that inner call. Split the self-invoking method out into a separate
+  bean the caller depends on (constructor-injected), so the call crosses
+  a real proxy boundary, instead of calling `this.otherTransactionalMethod()`.
+- Keep a `@Transactional` method free of unrelated I/O (HTTP calls,
+  file access) that would hold the transaction/connection open longer
+  than necessary.
+
+## Spring Data JPA query patterns
+
+- Watch for N+1: iterating a collection and accessing a lazy association
+  per item issues one query per item. Fix with `@EntityGraph` on the
+  repository method, a JPQL `JOIN FETCH`, or a projection that selects
+  only the fields actually needed — do not switch every association to
+  `FetchType.EAGER` as a blanket fix, which just moves the N+1 into every
+  unrelated query that loads the entity.
+- Prefer a derived query method or `@Query` with named parameters over
+  building JPQL/native SQL by string concatenation.
+- Use a projection (an interface or DTO) for a read path that only needs
+  a subset of an entity's fields, instead of loading the full entity
+  graph and mapping it down in the service layer.
+
+## Dependency injection and bean design
+
+- Define an interface at the consumer boundary (the package/module that
+  calls through it) when a component genuinely has more than one
+  implementation or needs to be mocked across module boundaries; do not
+  add an interface with a single Spring-managed implementation "for
+  testability" when constructor injection with a concrete class already
+  gives a test the same seam via a test double.
+- Favor constructor injection producing an immutable, fully-initialized
+  bean over setter injection or field injection, which both allow a bean
+  to exist in a partially-configured state.
+
+## Anti-patterns to flag
+
+- A "god service" that accumulates unrelated business logic across
+  multiple domains — split by bounded responsibility, mirroring the
+  controller/service/repository layering above.
+- Catching a broad `Exception`/`RuntimeException` in a service method
+  only to log and swallow it, instead of letting it propagate to a
+  `@ControllerAdvice`/`@ExceptionHandler` that maps it to the right HTTP
+  response.
+- A `@RestController` method containing business/query logic directly
+  instead of delegating to a service — controllers should stay thin.

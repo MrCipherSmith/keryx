@@ -64,19 +64,27 @@ pair is generated only from a stack pack that has already cleared its own
 governance gates, via `keryx agents generate --stack <id> [--check] [--json]`.
 As of flow 317's honest gate run at trials=10 (DeepSeek `deepseek-chat` for
 both the runner and the judge, `--strictness high`, `PACK_MIN_TRIALS` raised
-5 -> 10), `python` and `go` clear it and each ships a generated pair:
-`python-code-auditor` / `python-build-fixer`, `go-code-auditor` /
-`go-build-fixer`. `ts-js-node` cleared the gate at trials=5 (marginally, at
-exactly the 0.8 floor) but DROPPED OUT at the higher trial count —
+5 -> 10), `python` and `go` cleared it and each shipped a generated pair.
+`ts-js-node` cleared the gate at trials=5 (marginally, at exactly the 0.8
+floor) but DROPPED OUT at the higher trial count —
 `no-ts-ignore-suppression` fell to 6/10 (0.6), a genuine model-answer-quality
 gap checked against the recorded trials (not a rubric defect) — so it is
 back to `stability: experimental` and its generated pair was removed.
 `react` still fails: `no-disable-hooks-lint` scored 3/10 (0.3), confirming
-rather than reversing the earlier 3/5 finding. See
+rather than reversing the earlier 3/5 finding. Flow 335 (Wave 4 batch 3,
+post-merge with batches 4/5/6) demoted `python` back to `stability:
+experimental` too: `python-testing`'s own trigger-positive-1 no longer
+routes to itself once the fully combined catalog (170 skills, 1006
+triggers) is in place — outranked by `flutter-dart/flutter-testing` on the
+shared "widget" token, a corpus-wide binary-IDF effect (any skill that
+merely contains a shared token lowers its corpus-wide weight, regardless
+of wording) that is not fixable by editing any single pack's content. Its
+generated pair was removed; see `python/agent-refs.json`'s `note` and the
+flow 335 journal for the full diagnosis. `go` remains the only stack with a
+generated pair today: `go-code-auditor` / `go-build-fixer`. See
 `docs/requirements/keryx-agent-platform-expansion/workstreams/
 W1-stack-catalog.md`, "Implementation notes: flow 317 (grader follow-ups)"
-for the full per-scenario breakdown. Neither `react` nor `ts-js-node` has a
-generated pair today.
+and the flow 335 notes for the full per-scenario breakdown.
 
 A project can drop its own files under `.metaproject/agents/<name>.md`. A
 project definition with the same `name` as a bundled one **overrides** it;

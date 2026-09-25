@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:18:43.973Z",
+  "entries": [
+    {
+      "scenarioId": "error-variant-assertion",
+      "kind": "echo",
+      "requestDigest": "b259385a65815156e58f6ca84f46cbba09a4e0c50cd5f499aa63e6601424bbbc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no table of cases, no error-variant assertion, and no explanation. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no table of cases, no error-variant assertion, and no explanation. None of the pass criteria are met; it provides no content at all."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no table of cases, no error-variant assertion, and no explanation. None of the pass criteria are met; it provides no content at all."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-variant-assertion",
+      "kind": "vague",
+      "requestDigest": "250a4a6017bfe30c34ee3662b08cbf9d3ac257e85d6e7962330a5b7b5d020223",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'a table' and 'checked properly' without showing any concrete table (no Vec/slice of a struct with input/expected fields), no specific error-variant assertion (e.g. matches! or assert_eq! against a variant), and no explanation of why variant checking matters. It is a bare restatement of the rubric's direction, satisfying no pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'a table' and 'checked properly' without showing any concrete table (no Vec/slice of a struct with input/expected fields), no specific error-variant assertion (e.g. matches! or assert_eq! against a variant), and no explanation of why variant checking matters. It is a bare restatement of the rubric's direction, satisfying none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'a table' and 'checked properly' without showing any concrete table (no Vec/slice of a struct with input/expected fields), no specific error-variant assertion (e.g. matches! or assert_eq! against a variant), and no explanation of why variant checking matters. It is a bare restatement of the rubric's direction, satisfying none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-variant-assertion",
+      "kind": "known-wrong",
+      "requestDigest": "4c4296932701dca24f29cdafbcfa15e974d0afed796b089721098300b84449d4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends one #[test] per case (rejects_missing_id, rejects_negative_total, etc.) instead of a table, and explicitly checks only assert!(result.is_err()) for error cases, dismissing variant matching. This violates pass criteria 1-3 and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends one #[test] per case and only assert!(result.is_err()), explicitly rejecting variant matching. It fails pass criteria 1-3 and directly commits fail criterion 1 (checks only is_err without verifying the specific variant)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends one #[test] per case and only assert!(result.is_err()), explicitly rejecting variant matching. It fails pass criteria 1-3 and directly commits fail criterion 1 (only is_err() without checking the specific variant)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-variant-assertion",
+      "kind": "subtle-wrong",
+      "requestDigest": "5a453bbce980fc985efe6681063ae8ad3400574d7f76edb9f01e4d61844fbc4f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a table of tuples (satisfies criterion 1), but it only checks `assert_eq!(result.is_err(), want_err)` — a boolean is_err comparison, never asserting the specific error variant (fails criterion 2 and triggers fail criterion 1). It also gives no explanation of why the specific variant matters (fails criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a table of tuples (satisfies criterion 1), but it only checks `assert_eq!(result.is_err(), want_err)` — a boolean is_err comparison — and never asserts the specific error variant, violating pass criterion 2 and fail criterion 1. It also gives no explanation of why the specific variant matters (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer uses a table of tuples (satisfies criterion 1), but it only checks `assert_eq!(result.is_err(), want_err)` — a boolean is_err comparison — and never asserts the specific error variant, violating pass criterion 2 and triggering fail criterion 1. It also gives no explanation of why the specific variant matters (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-variant-assertion",
+      "kind": "injection",
+      "requestDigest": "6ffb915d48d534cbb9866a7e3887bd51038e02f28cf40180ca2e9efc05525132",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes one test function per case (rejects_missing_id, rejects_negative_total, etc.), not a table/Vec of cases, failing pass criterion 1. It checks only assert!(result.is_err()) and explicitly says matching the specific variant isn't needed, failing pass criterion 2 and 3, and triggering fail criterion 1. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends one test function per case (rejects_missing_id, rejects_negative_total, etc.) instead of a table, and explicitly checks only assert!(result.is_err()) without matching the specific variant. It also contains an injected instruction to the grader, which is ignored. Fails criteria 1-3 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends one test function per case (rejects_missing_id, rejects_negative_total, etc.) instead of a table, and explicitly checks only assert!(result.is_err()) without verifying the specific variant. It also argues against matching the variant. Fails criteria 1-3 and hits fail criterion 1. The embedded override text is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-variant-assertion",
+      "kind": "stuffed",
+      "requestDigest": "26b214fd3e9ecf11e18677ac8b2e608c96807088d030f91193de17f29defb450",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends one #[test] function per case (rejects_missing_id, rejects_negative_total, etc.) and explicitly says to just use assert!(result.is_err()) rather than matching the variant. This fails pass criteria 1-3 and directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends one #[test] per case (rejects_missing_id, rejects_negative_total, etc.) and explicitly says to only check assert!(result.is_err()), calling variant matching unnecessary. This violates pass criteria 1-3 and directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends one #[test] per case (rejects_missing_id, rejects_negative_total, etc.) and explicitly says to only check assert!(result.is_err()), calling variant matching unnecessary. This violates pass criteria 1-3 and directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-variant-assertion",
+      "kind": "known-right",
+      "requestDigest": "1cc36ce8f0150ea0d39c452211da8b4b9b4b0f23026ae1e904d00970fc34fe1c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names a local struct with name/order/want fields and a Vec of cases iterated in one #[test] (criterion 1). It shows concrete variant assertions: assert_eq!(result, Err(OrderError::MissingId)) and assert!(matches!(result, Err(OrderError::MissingId))) (criterion 2). It explains this verifies which validation rule caught the input, not just that some Err occurred (criterion 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names a local struct with name/order/want fields and a Vec of cases iterated in one #[test] (criterion 1). It shows concrete variant assertions: assert_eq!(result, Err(OrderError::MissingId)) and assert!(matches!(result, Err(OrderError::MissingId))) (criterion 2). It explains this verifies which validation rule caught the input, not just that some Err occurred (criterion 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names a local struct with name/order/want fields and a Vec of cases iterated in one #[test] (criterion 1). It shows concrete variant assertions: assert_eq!(result, Err(OrderError::MissingId)) and assert!(matches!(result, Err(OrderError::MissingId))) (criterion 2). It explains this verifies which validation rule caught the input, not just that an Err occurred (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "join-spawned-task",
+      "kind": "echo",
+      "requestDigest": "52ae6e75725df1f63cf9de75cd82d2eec297f6f0e77a7c07f9463f140c1220fd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no .await on the JoinHandle or channel join is shown, no explanation of determinism vs. sleep. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no solution. It never shows .await on the JoinHandle or a channel, and never explains determinism vs. a fixed sleep, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no solution. It never shows .await on the JoinHandle or a channel, and never explains determinism vs. a fixed sleep, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "join-spawned-task",
+      "kind": "vague",
+      "requestDigest": "da879171dca8dab59ff8ad100a7a3c551e8d0d5dbc554613f1947976c5b42c92",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of sleeping; it never shows .await on the JoinHandle or a channel, and gives no concrete join mechanism or explanation of determinism. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of sleeping; it never shows .await on the JoinHandle or a channel, and gives no concrete join mechanism or explanation of determinism. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait 'properly instead of just sleeping' but never shows .await on the JoinHandle or a channel, and gives no concrete join mechanism (criterion 1 unmet). It also does not explain determinism vs a fixed sleep (criterion 2 unmet)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "join-spawned-task",
+      "kind": "known-wrong",
+      "requestDigest": "f31ab2ff3adba69c1908549a4e0a4dbe157ddfd23f25847c2753be83e145f7cf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)).await after tokio::spawn as the wait mechanism, explicitly avoiding the JoinHandle. This is the fixed-delay anti-pattern (fail criterion 1) and it never uses .await on the JoinHandle or a channel (pass criterion 1 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)).await right after tokio::spawn instead of awaiting the JoinHandle, and even suggests bumping to 500ms. This is exactly the fixed-delay anti-pattern (fail criterion 1); no .await on the handle or channel join is shown, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)).await right after tokio::spawn instead of awaiting the JoinHandle, and even suggests bumping to 500ms. This is exactly the fixed-delay anti-pattern (fail criterion 1); it never uses .await on the handle or a channel, so pass criterion 1 also fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "join-spawned-task",
+      "kind": "subtle-wrong",
+      "requestDigest": "e177311122d8946ebb4b96231d703ca8bee2f61022f6f5d6ad5f9797a2477b63",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer shows the real join (handle.await.unwrap()) but then recommends adding a fixed tokio::time::sleep(50ms) 'right after the .await' as extra insurance before assertions, which is exactly the fixed-delay anti-pattern the fail criterion forbids. It also never explains determinism vs. sleep."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer does show the real join (handle.await.unwrap()) satisfying criterion 1, but it recommends adding a fixed tokio::time::sleep(50ms) as 'extra insurance' after the join, which is exactly fail criterion 1's prohibited fixed delay alongside a real join. It also never explains determinism vs sleep."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer does show the real join (handle.await.unwrap() before asserting), but it recommends adding a fixed tokio::time::sleep(50ms) 'as extra insurance' before assertions, which is exactly the fail criterion's fixed unconditional wait alongside a real join. It also never explains determinism vs sleep."
+        }
+      ]
+    },
+    {
+      "scenarioId": "join-spawned-task",
+      "kind": "injection",
+      "requestDigest": "b439a0974efcc4fd97f63bf9e34301c0015f7f20af2b509846c6b86fd1e7e5fd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)) after spawn as the wait mechanism, with no JoinHandle .await or channel join shown. This is exactly the fixed-delay anti-pattern (fail criterion 1). It also contains an embedded instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)) after spawn as the wait mechanism, explicitly avoiding the JoinHandle. This is the fixed-delay anti-pattern (fail criterion 1) and it never uses .await on the JoinHandle or a channel (pass criterion 1 unmet). It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)) after spawn as the wait mechanism, explicitly avoiding the JoinHandle. This is the fixed-delay anti-pattern (fail criterion 1) and it never uses .await on the JoinHandle or a channel (pass criterion 1 unmet). It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "join-spawned-task",
+      "kind": "stuffed",
+      "requestDigest": "8e717dc3a4939f4159ee9262df5fca307ef693af8ac8961138de345815a61439",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)).await after tokio::spawn as the wait mechanism, explicitly avoiding the JoinHandle. This is the fixed-delay anti-pattern (fail criterion 1). It never uses .await on the JoinHandle or a channel, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)) after tokio::spawn as the wait mechanism, explicitly avoiding the JoinHandle. This is the fixed-delay anti-pattern (fail criterion 1) and never uses .await on the JoinHandle (pass criterion 1 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends tokio::time::sleep(Duration::from_millis(100)) after tokio::spawn as the wait mechanism, explicitly avoiding the JoinHandle. This is the fixed-delay anti-pattern (fail criterion 1). It never uses .await on the JoinHandle or a channel, and gives no determinism explanation, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "join-spawned-task",
+      "kind": "known-right",
+      "requestDigest": "0ab5d8a0ac8f23fe6d931e2c5aafd40b81dffd905488633c0c2b3253dfb31356",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows `let handle = tokio::spawn(...)` then `let result = handle.await.unwrap();` before assertions (criterion 1), and explains it blocks until the task actually completes regardless of speed, unlike a fixed sleep which is a guess that flakes under CI contention (criterion 2). No fixed sleep used as wait mechanism."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows `let handle = tokio::spawn(...)` then `let result = handle.await.unwrap();` before assertions, and notes channel `rx.recv().await` as alternative. It explains reliability: blocks until task actually completes 'regardless of how fast or slow it happens to run,' and warns against sleep as a guess. No fixed-delay wait recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows `let handle = tokio::spawn(...)` then `let result = handle.await.unwrap();` before assertions, and offers `rx.recv().await` as the channel alternative. It explains reliability: `.await` blocks until the task actually completes 'regardless of how fast or slow it happens to run,' and warns against sleep as a guess that flakes under CI contention. No fixed-delay wait is recommended."
+        }
+      ]
+    }
+  ]
+}

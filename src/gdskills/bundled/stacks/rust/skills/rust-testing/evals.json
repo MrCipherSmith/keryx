@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "I just wrote parse_header and it has zero coverage -- can you set it up with tests the idiomatic way, inline in the same file?",
+      "Add table-style test cases for this Rust validator with a Vec of cases",
+      "`cargo test -p order` is red on main after my last change -- test_reject_duplicate_line_item is failing, can you dig into why and fix it?",
+      "Add a proptest for this Rust parser function",
+      "I want hard numbers before I optimize parse_batch -- what's the right way to measure it so the compiler doesn't just optimize the whole thing away?",
+      "Test this async fn with #[tokio::test] and join the spawned task properly",
+      "Right now only the internals of this crate have coverage -- how do I set up tests that exercise it the same way an external consumer would, calling only what's exported?"
+    ],
+    "negative": [
+      "Write pytest tests for this Python function",
+      "Add Jest tests for this React component",
+      "Review this Rust diff for unwrap panics and unsafe blocks",
+      "Fix the cargo build error in this crate",
+      "Implement a new Rust service that calls this downstream API",
+      "Write Go table-driven tests for this function",
+      "Add unit tests in a Go _test.go file for this package"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "error-variant-assertion",
+      "prompt": "I need to add several test cases for this Rust function that validates an order and returns a Result. How should I structure them and check the error cases?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer structures the cases as a small table -- a Vec or slice of a local struct with fields for the input and the expected outcome -- iterated in one test rather than many near-duplicate test functions, and for the error cases asserts the specific error variant (e.g. with matches! or assert_eq! against a PartialEq error type) rather than only checking result.is_err().",
+          "pass_criteria": [
+            "Uses a table of cases -- a Vec or slice of a struct/tuple per case with input and expected fields -- not one function per case or a long sequence of unrelated asserts.",
+            "Shows the concrete error assertion checking the specific variant (e.g. `assert!(matches!(err, OrderError::MissingId))` or `assert_eq!(err, OrderError::MissingId)`), not only `assert!(result.is_err())`.",
+            "Explains why checking the specific variant matters (it verifies which validation failed, not merely that something failed)."
+          ],
+          "fail_criteria": [
+            "Checks only `result.is_err()`/`result.is_ok()` for the error cases without verifying which specific error variant occurred."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Structure this as a small table: define a local struct with fields like `name: &str`, `order: Order`, and `want: Result<Order, OrderError>`, then build a `Vec` of cases covering the happy path, zero-value/empty-field inputs, and each distinct validation failure. Loop over the cases in one `#[test]` function and compare the actual result against `want`. For the error cases specifically, don't stop at `assert!(result.is_err())` -- that passes just as readily for the wrong error as the right one. Instead assert the specific variant: if `OrderError` derives `PartialEq`, `assert_eq!(result, Err(OrderError::MissingId))` works directly; otherwise use `assert!(matches!(result, Err(OrderError::MissingId)))`. That way the test actually verifies which validation rule caught the bad input, not just that validation returned some `Err`.",
+        "known_wrong": "I'd write a separate `#[test]` function per case -- `fn rejects_missing_id()`, `fn rejects_negative_total()`, `fn accepts_valid_order()`, and so on -- each building its own `Order` and calling `validate`. For the error ones I'd just check `assert!(result.is_err())` -- that's simpler than matching on the specific variant and is good enough to confirm validation caught the bad input; you don't really need to know which exact error came back for a test like this.",
+        "vague": "Structure the test cases in a table and make sure the error cases are checked properly along the way.",
+        "subtle_wrong": "Define a `Vec` of `(name, order, want_err)` tuples covering the cases you need, then loop with `for (name, order, want_err) in cases { let result = validate(order); assert_eq!(result.is_err(), want_err, \"{name}\"); }`. That gives you a table without needing a case-per-function setup, and comparing `is_err()` against a bool is enough to know whether validation caught the bad input for each named case."
+      },
+      "anti_patterns": ["is_err()"]
+    },
+    {
+      "id": "join-spawned-task",
+      "prompt": "My #[tokio::test] spawns a task with tokio::spawn and I want to wait for it to finish before asserting on the result. What's the right way?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer waits for the spawned task using its actual JoinHandle (.await on the handle returned by tokio::spawn) or a channel, before running assertions, never a fixed tokio::time::sleep/std::thread::sleep delay as a stand-in for or supplement to a real join. A select against a deadline used purely as a non-blocking safety net alongside that join -- firing only if the task hangs, never taken instead of or before the real join -- is a legitimate timeout guard, not the fixed-delay anti-pattern this scenario tests for.",
+          "pass_criteria": [
+            "Uses .await on the JoinHandle returned by tokio::spawn (or a channel send/receive) as the actual join mechanism before asserting, shown concretely.",
+            "Explains why this is reliable/deterministic compared to a fixed sleep delay (it doesn't depend on how fast the task happens to run)."
+          ],
+          "fail_criteria": [
+            "Recommends a fixed, unconditional wait before the join can be observed to have happened -- a tokio::time::sleep or std::thread::sleep taken before or instead of the join, or a backoff/polling loop that sleeps between checks -- anywhere in the wait step, whether as the sole mechanism or as extra 'insurance' alongside a real join. This does NOT include a select!'s timeout branch used only as a deadline safety net around the real join (it fires solely on a hang, and the join itself is what the assertion still actually waits on) -- do not fail an answer for that pattern alone."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Use the `JoinHandle` that `tokio::spawn` returns: `let handle = tokio::spawn(async move { ... });` and then `let result = handle.await.unwrap();` in the test, right before your assertions -- `.await`ing the handle blocks the test task until the spawned task has actually completed, regardless of how fast or slow it happens to run on a given machine or under load. That gives you the task's return value directly, so you can assert on `result` rather than on some side effect you have to guess has landed. If the spawned task communicates through a channel instead of returning a value, receiving from that channel (`rx.recv().await`) works the same way -- it blocks until the sender side actually signals. Avoid `tokio::time::sleep`/`std::thread::sleep` for this -- a fixed delay is a guess about how long the task will take, and it either wastes time when the task finishes early or flakes under CI contention when it doesn't finish in time.",
+        "known_wrong": "The simplest way is to just add `tokio::time::sleep(Duration::from_millis(100)).await` right after `tokio::spawn(...)`, then run your assertions -- that gives the task enough time to finish in almost every case without needing to hang onto the `JoinHandle` or deal with `.unwrap()`ing it. If it's occasionally still flaky in CI, bump the delay up to something like 500ms; that's usually enough headroom and is a lot less code than threading a handle or a channel through just for a test.",
+        "vague": "Wait for the spawned task properly instead of just sleeping for a bit before you check the result.",
+        "subtle_wrong": "Hold onto the handle and `.await` it: `let handle = tokio::spawn(async move { ... }); let result = handle.await.unwrap();` before asserting -- that's the reliable way to know it's finished. If you're still seeing occasional flakes in CI, throw in a short `tokio::time::sleep(Duration::from_millis(50)).await` right after the `.await` too, just as extra insurance before the assertions run."
+      },
+      "anti_patterns": ["tokio::time::sleep"]
+    }
+  ]
+}

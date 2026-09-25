@@ -1,0 +1,48 @@
+{
+  "triggers": {
+    "positive": [
+      "Can you look over the changes in this Django PR (#482) and flag any N+1 query risk before it ships?",
+      "Check this Django PR for CSRF or XSS issues",
+      "Audit this Django view for security problems around user input",
+      "Review this Django migration to make sure it matches the model change",
+      "Does this queryset in our Django Order model hit the DB once per row, or is select_related missing somewhere?",
+      "Review this Django REST Framework serializer for mass-assignment risk"
+    ],
+    "negative": [
+      "Implement this new feature in this Django view, don't just review it",
+      "Review this plain Python module for bare except clauses",
+      "Review this FastAPI endpoint for missing auth or CORS misconfiguration",
+      "Review this Node.js Express route for injection vulnerabilities",
+      "Fix the failing Django migration, don't just report what's wrong",
+      "Write pytest tests covering this Django view's permission checks",
+      "Review this React component for unnecessary re-renders"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "flag-raw-query-string-interpolation",
+      "prompt": "Review this Django code for security issues:\n\n```python\ndef search_orders(request):\n    status = request.GET.get(\"status\", \"\")\n    orders = Order.objects.raw(\n        f\"SELECT * FROM orders_order WHERE status = '{status}'\"\n    )\n    return render(request, \"orders/search.html\", {\"orders\": orders})\n```",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that the `status` query parameter is interpolated directly into the raw SQL string with an f-string, which is a SQL injection vulnerability, and recommends passing it through `raw()`'s `params` argument instead.",
+          "pass_criteria": [
+            "identifies the f-string interpolation of `status` into the raw SQL string as a SQL injection vulnerability, citing the specific line/code",
+            "recommends the fix concretely: pass `status` via the `params` argument (e.g. `Order.objects.raw(\"SELECT * FROM orders_order WHERE status = %s\", [status])`), not just \"sanitize the input\" in the abstract"
+          ],
+          "fail_criteria": [
+            "reviews the code without flagging the f-string SQL interpolation as a vulnerability, or suggests a fix that still builds the query string by interpolating `status` (e.g. escaping quotes manually) instead of using `params`. Mentioning that raw() with string interpolation is dangerous only as background context, while still flagging this exact line, is not this failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```\n[security] views.py:4 — `Order.objects.raw(f\"...status = '{status}'\")` builds the raw SQL by\n  interpolating the `status` GET parameter directly into the string with an\n  f-string. This is a SQL injection vulnerability: a value like\n  `x' OR '1'='1` breaks out of the intended WHERE clause. Fix: pass status\n  through raw()'s params argument instead --\n  `Order.objects.raw(\"SELECT * FROM orders_order WHERE status = %s\", [status])`\n  -- so the database driver parameterizes it rather than the string being\n  built by hand.\n```\nThis names the exact line, explains the injection mechanism (breaking out of the string literal), and gives the concrete `params`-based fix rather than a general warning.",
+        "known_wrong": "```\nThe search_orders view looks fine -- it reads the status filter from the\nquery string and returns matching orders. raw() is a normal way to run a\ncustom query when the ORM's query builder doesn't fit, and status here is\njust a simple filter value.\n```\nThis approves the code without flagging that `status` is interpolated directly into the raw SQL string via an f-string, which is exactly the SQL injection pattern Django's own raw() documentation warns against.",
+        "vague": "Watch out for SQL injection risk anywhere user input reaches a raw query in this codebase.",
+        "subtle_wrong": "```\n[note] views.py:4 — the status filter is built with an f-string into the raw\n  SQL. Since `request.GET.get(\"status\", \"\")` only returns simple query-string\n  values (not file uploads or JSON bodies), and the orders_order table has no\n  sensitive columns beyond what's already shown in the search results, this is\n  low risk in practice. Worth cleaning up eventually but not blocking.\n```\nThis correctly locates the f-string interpolation but downgrades it to a non-blocking style note by reasoning that GET-parameter input is inherently lower risk and the table has no sensitive columns -- a plausible-sounding risk assessment that still recommends merging code with a live SQL injection vector, since any GET parameter is exactly the kind of value an attacker controls directly through the URL."
+      },
+      "anti_patterns": ["f-string"]
+    }
+  ]
+}

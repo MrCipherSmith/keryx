@@ -249,6 +249,10 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   // for the files it is actually about.
   "nextjs-nuxt": ["tsx", "jsx", "vue", "ts"],
   mobx: ["ts", "tsx"],
+  // Wave 4 batch 3 (flow 335).
+  django: ["py", "pyi"],
+  fastapi: ["py", "pyi"],
+  "java-kotlin-spring": ["java", "kt", "kts"],
   // Wave 4 batch 4 (flow 336).
   "csharp-dotnet": ["cs"],
   "swift-ios": ["swift"],

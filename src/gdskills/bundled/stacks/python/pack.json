@@ -7,7 +7,7 @@
     "origin": "authored",
     "sourceRef": "flow 309 (W1 Lane D), completed in flow 314"
   },
-  "stability": "stable",
+  "stability": "experimental",
   "skills": {
     "implement": ["python-implementation"],
     "test": ["python-testing"],

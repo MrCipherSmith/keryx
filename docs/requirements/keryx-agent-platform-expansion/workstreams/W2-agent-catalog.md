@@ -620,6 +620,33 @@ keryx agents generate --stack <id> [--check] [--json]
   alter the documented behavior of, `keryx agents bootstrap|external|monitor`
   (regression test against the existing `agent-commands.test.ts` suite).
 
+## Implementation notes: Wave 4 batch 3 (flow 335)
+
+Four new W1 stack packs authored (`django`, `fastapi`, `rust`,
+`java-kotlin-spring` — see `W1-stack-catalog.md`, "Implementation notes:
+Wave 4 batch 3 (flow 335)"), all `stability: "experimental"` after the
+honest 10-trial DeepSeek gate (weak trigger accuracy across nearly every
+skill; two behavior scenarios below the 0.8 floor). No generated agent
+pair for any of the four.
+
+**`python` demoted to `experimental` in this flow (owner decision:
+MrCipherSmith, in chat, 2026-09-26).** Merging origin/main (Wave 4
+batches 4/5/6) into flow 335's branch grew the bundled catalog to 170
+skills/1006 triggers, which broke `python`'s own `checkStablePackGate`:
+`python-testing`'s trigger-positive-1 is outranked by
+`flutter-dart/flutter-testing` on the shared "widget" token — a
+corpus-wide binary-IDF effect (adding more skills that merely CONTAIN a
+shared token, regardless of how the trigger is worded, lowers that
+token's weight for every skill relying on it) verified not fixable by
+editing `django-testing`/`fastapi-testing`/any single pack's content.
+`python/pack.json`, its `python-rules`/`python-skills` install-manifest
+entries, and its `agentProfile`-generated `python-code-auditor`/
+`python-build-fixer` pair are removed the same way flow 317 removed
+`ts-js-node`'s pair — no grandfathering. Follow-up recorded in the flow
+335 journal: route and gate only among packs of a project's
+detected/installed stacks rather than the whole bundled catalog, then
+re-gate `python` under that narrower scope.
+
 ## Implementation notes: Wave 4 batch 5 (flow 337)
 
 Four new W1 stack packs authored (`php-laravel`, `ruby-rails`, `c-cpp`,

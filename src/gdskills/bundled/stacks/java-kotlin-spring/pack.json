@@ -1,0 +1,40 @@
+{
+  "id": "java-kotlin-spring",
+  "family": "framework",
+  "modules": ["java-kotlin-spring-rules", "java-kotlin-spring-skills"],
+  "detectionMarkers": ["spring-boot", "spring"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 335, Wave 4 batch 3"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["java-kotlin-spring-implementation"],
+    "test": ["java-kotlin-spring-testing"],
+    "review": ["java-kotlin-spring-code-review"],
+    "build-fix": ["java-kotlin-spring-build-fix"],
+    "migrate": ["java-kotlin-spring-migrate"]
+  },
+  "agentProfile": {
+    "displayName": "Java/Kotlin + Spring",
+    "auditFocus": [
+      "field-level @Autowired injection instead of constructor injection with final fields (Java) or val properties (Kotlin)",
+      "a public method calling another @Transactional method on `this` within the same class, relying on the self-invocation proxy that Spring's AOP-based transaction management cannot intercept",
+      "a controller/service returning a JPA entity directly instead of a DTO, leaking persistence internals and lazy-loading traps across the API boundary",
+      "a lazy-loaded association accessed in a loop with no @EntityGraph/fetch join, producing an N+1 query pattern",
+      "a request DTO with no Bean Validation (jakarta.validation) annotations, or a controller that trusts unvalidated input",
+      "a SecurityFilterChain/authorization rule that is overly permissive, or CSRF disabled on a session-based (cookie-authenticated) endpoint with no compensating control"
+    ],
+    "buildCommands": [
+      "./gradlew build (or mvn verify, matching the project's build tool)",
+      "./gradlew test (or mvn test)",
+      "./gradlew check (or the project's configured lint/static-analysis task, when configured)"
+    ],
+    "fixGuardrails": [
+      "Never switch field @Autowired injection back in to work around a wiring error instead of fixing the constructor/bean definition.",
+      "Never widen a SecurityFilterChain rule (e.g. permitAll on a protected path) just to make a 403 disappear.",
+      "Never disable a failing test or a Bean Validation constraint to reach a green build.",
+      "Never add a broad exception handler that swallows the root cause instead of fixing it."
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "triggers": {
+    "positive": [
+      "manage.py check is failing with ImproperlyConfigured, can you fix it",
+      "After merging release/2.1 into main, `makemigrations` reports two leaf nodes in the payments app's migration history for our Django project -- what's the right way to reconcile that before I merge?",
+      "Django app won't load, there's a circular import between two apps",
+      "Type-checking chokes on `Invoice.objects` with an incompatible-type error even though django-stubs is installed -- any idea why?",
+      "makemigrations wants to create a migration that conflicts with an existing one",
+      "Pytest blows up before collecting a single test in our Django app -- traceback points to a bad import inside conftest.py. What's going on?",
+      "ruff check is failing on this Django project"
+    ],
+    "negative": [
+      "Add a new feature to this Django view, the build is currently green",
+      "Write more pytest-django tests for this already-passing view",
+      "Review this Django migration for correctness, don't fix anything",
+      "Fix this ModuleNotFoundError in our plain Python script with no Django",
+      "Fix this FastAPI app that fails to start with a dependency resolution error",
+      "Fix this failing Jest test in our React frontend",
+      "npm run build is failing in our Node.js service"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "migration-conflict-merge-not-hand-edit",
+      "prompt": "Running `python manage.py makemigrations` fails with: 'Conflicting migrations detected; multiple leaf nodes in the migration graph: (0004_add_phone, 0004_add_address in accounts).' Fix it.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer resolves a migration conflict with two leaf migrations by generating a merge migration (`python manage.py makemigrations --merge`) and reviewing the result, rather than hand-editing either migration's `dependencies` to force one order.",
+          "pass_criteria": [
+            "runs (or explicitly instructs running) `python manage.py makemigrations --merge` to generate a merge migration resolving the two leaf nodes",
+            "states that the generated merge migration should be reviewed before applying/committing it"
+          ],
+          "fail_criteria": [
+            "resolves the conflict by hand-editing one migration's `dependencies` list to point at the other, instead of generating a merge migration. Mentioning that hand-editing dependencies is unsafe only as a warning, while still recommending --merge, is not this failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Run:\n```bash\npython manage.py makemigrations --merge\n```\nThis detects the two leaf migrations (`0004_add_phone` and `0004_add_address`, both children of the same parent) and generates a new migration, e.g. `0005_merge_20260925_1200.py`, whose `dependencies` list both leaves so the graph has a single path again. Review the generated file before committing -- confirm it doesn't silently drop any operation -- since `--merge` only needs a real conflict to resolve when both branches' changes are independent (as here, phone vs. address fields); if they touched the same field, the review step is where that would surface.",
+        "known_wrong": "Open `accounts/migrations/0004_add_address.py` and change its `dependencies` from `[(\"accounts\", \"0003_initial\")]` to `[(\"accounts\", \"0004_add_phone\")]` so it comes after `0004_add_phone` instead of being a sibling leaf. That resolves the 'multiple leaf nodes' error directly by hand-editing the dependency graph.",
+        "vague": "You need to merge the two migration branches together so there's only one path through the migration graph again.",
+        "subtle_wrong": "The cleanest fix here is to delete `0004_add_address.py` and regenerate it after `0004_add_phone` has been applied, so its `dependencies` naturally point at `0004_add_phone` instead of the shared parent -- that avoids needing a separate merge migration file at all and keeps the migration history linear."
+      },
+      "anti_patterns": ["hand-edit"]
+    }
+  ]
+}

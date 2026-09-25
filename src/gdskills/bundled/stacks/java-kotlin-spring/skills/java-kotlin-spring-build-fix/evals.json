@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Our CI just started failing on ./gradlew assemble -- the log points to two different versions of jackson-databind on the classpath. How do I track down which dependency is pulling in the wrong one?",
+      "After adding a second implementation of PaymentGateway, the app won't boot anymore and the stack trace mentions NoUniqueBeanDefinitionException. What's going on?",
+      "mvn verify is failing with a circular bean dependency",
+      "Our lint step is red because of a ktlint violation in OrderMapper.kt -- can you clean it up?",
+      "`./gradlew test` won't even compile -- there's a type mismatch somewhere in the OrderServiceTest sources. Can you track it down?",
+      "NoSuchBeanDefinitionException on startup, fix this Spring build"
+    ],
+    "negative": [
+      "npm install is failing with a peer dependency conflict",
+      "cargo build is failing for this Rust crate",
+      "go build is failing with an undefined symbol",
+      "Implement a new feature in this Spring service",
+      "Review this Spring diff for concurrency bugs",
+      "Write JUnit tests for this Spring controller"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-suppresswarnings-suppression",
+      "prompt": "checkstyle is flagging an unused import in my Java code after a refactor. How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer removes the actual unused import that checkstyle flagged, rather than suppressing the finding with @SuppressWarnings or a checkstyle-disable comment.",
+          "pass_criteria": [
+            "States that the fix is to remove the specific unused import statement, not merely 'clean up imports' in the abstract.",
+            "Does not rely on @SuppressWarnings or a checkstyle-disable comment/baseline entry as the fix for this finding.",
+            "Either names re-running checkstyle to confirm the finding clears, or does not suggest skipping verification."
+          ],
+          "fail_criteria": [
+            "Recommends adding @SuppressWarnings or a checkstyle-disable comment/baseline entry to silence the unused-import finding instead of removing the import."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "That means the refactor left an import statement that nothing in the file references anymore. The fix is simply to delete that import line -- most IDEs will highlight it directly, or you can match it against checkstyle's reported line number. There's no suppression needed here; an unused import is dead weight with no runtime cost either way, so removing it is strictly better than silencing the finding. Re-run checkstyle afterward to confirm it's clear and that the refactor didn't leave any other unused imports nearby.",
+        "known_wrong": "Easiest fix is to add `@SuppressWarnings(\"unused\")` above the class, or add a checkstyle-disable comment around the import block -- that stops checkstyle from flagging it without you needing to hunt down which specific import is unused. You can leave the import in place in case the code changes again later and needs it back.",
+        "vague": "Clean up the imports so checkstyle stops complaining about this file.",
+        "subtle_wrong": "Rather than deleting the import outright, add a checkstyle-disable comment (`// CHECKSTYLE:OFF: UnusedImports`) around that line -- that way if a later change in this file ends up needing the same import again, it's already there and won't need to be re-added. It keeps the diff smaller than fully removing and potentially re-adding the import later."
+      },
+      "anti_patterns": ["@SuppressWarnings"]
+    },
+    {
+      "id": "circular-bean-dependency",
+      "prompt": "Spring fails to start with BeanCurrentlyInCreationException -- OrderService and PaymentService each require the other in their constructors. How do I fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies this as a genuine circular bean dependency and fixes it by breaking the cycle -- extracting the shared behavior into a third bean, or refactoring so one side no longer needs the other at construction time -- treating @Lazy only as a stated last resort rather than the default fix.",
+          "pass_criteria": [
+            "Identifies the actual cycle: OrderService and PaymentService each depend on the other through their constructors.",
+            "Proposes breaking the cycle as the primary fix direction -- extracting shared behavior into a third bean, or removing the unnecessary constructor-time dependency on one side -- not just deferring it.",
+            "Treats @Lazy (if mentioned at all) as an explicitly-stated last resort for a case where the cycle is genuinely unavoidable, not as the default or preferred fix."
+          ],
+          "fail_criteria": [
+            "Recommends @Lazy on one of the constructor dependencies as the fix, presented as the default or preferred solution rather than an explicitly-flagged last resort for an unavoidable cycle."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This means OrderService's constructor needs a PaymentService, and PaymentService's constructor needs an OrderService -- Spring can't construct either one first because each is waiting on the other. The real fix is to break the cycle rather than paper over it: look at what each side actually calls on the other, and pull that shared behavior into a third bean that both OrderService and PaymentService depend on instead of depending on each other directly. Often one side only needs a narrow slice of the other's behavior (e.g. OrderService only needs PaymentService to charge a card, PaymentService only needs OrderService to look up an order) -- extracting those specific operations into a shared collaborator usually removes the cycle entirely. Reach for @Lazy on one of the constructor parameters only if you've confirmed the cycle really is structurally unavoidable and say so explicitly in the fix -- it defers when the proxy is resolved rather than fixing the design that created the two-way dependency, so it should be the fallback, not the first move.",
+        "known_wrong": "The fastest fix is to add `@Lazy` to the PaymentService parameter in OrderService's constructor -- that breaks the immediate circular-creation error because Spring injects a proxy instead of eagerly resolving the real bean, and you don't have to restructure anything. This is the standard way to handle a circular dependency in Spring, so I'd just do that and move on.",
+        "vague": "You've got a circular dependency between these two services -- restructure things so they don't need each other directly.",
+        "subtle_wrong": "Add `@Lazy` to the PaymentService constructor parameter in OrderService -- that's the standard, low-risk way to resolve `BeanCurrentlyInCreationException` without a bigger refactor, since Spring just defers resolving the real bean until it's first used. If you want to clean the design up later you could look at extracting shared logic into a third bean, but for getting the context started again, @Lazy here is the right call."
+      },
+      "anti_patterns": ["@Lazy"]
+    }
+  ]
+}

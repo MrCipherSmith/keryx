@@ -478,24 +478,32 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
     // phrasing; rewritten honestly and NEVER iterated against the router
     // across two review rounds, the final honest gate re-run demoted all
     // three back to "experimental" (see each pack's own agent-refs.json
-    // `note` for the specific failing skill/scenario). Only go and python
-    // (flow 317) still ship a generated pair. ts-js-node/react/nextjs-nuxt/
-    // vue all stay experimental too, for their own reasons.
-    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
+    // `note` for the specific failing skill/scenario). Flow 335 (Wave 4
+    // batch 3, post-merge with batches 4/5/6): python DROPPED back to
+    // "experimental" too — a corpus-wide binary-IDF collision with
+    // flutter-dart/flutter-testing on python-testing's own
+    // trigger-positive-1, not fixable by editing any single pack's content
+    // (see python/agent-refs.json's note and the flow 335 journal; owner
+    // decision: MrCipherSmith, in chat, 2026-09-26). Only go still ships a
+    // generated pair. ts-js-node/react/nextjs-nuxt/vue all stay
+    // experimental too, for their own reasons.
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor"]);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: zero problems (only python and go generate; angular/mobx/nestjs demoted after the realism sweep, flow 318)", () => {
-    // Flow 317: python and go are the real, on-disk "stable" packs after the
-    // trials=10 honest DeepSeek judge gate run, each with a generated agent
-    // pair on disk whose gate status the default (non-stubbed) resolver
-    // checks for real. Flow 318 (Wave 4 batch 2) added angular, mobx, and
-    // nestjs to that set at various points, but review round 1's realism
-    // sweep (PR #719) found their trigger prompts were gamed, and the final
-    // honest re-run (never iterated against the router) demoted all three
-    // back to "experimental" (see the comment above `generatedNames`'s
-    // first assertion). ts-js-node stays "experimental" (its pair removed
-    // in flow 317) and react/nextjs-nuxt/vue stay "experimental" too, so
-    // none of those contribute anything here either way.
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (only go generates; python demoted at the batch-3 merge, angular/mobx/nestjs demoted after the realism sweep, flow 318)", () => {
+    // Flow 317: python and go were the real, on-disk "stable" packs after
+    // the trials=10 honest DeepSeek judge gate run, each with a generated
+    // agent pair on disk whose gate status the default (non-stubbed)
+    // resolver checks for real. Flow 318 (Wave 4 batch 2) added angular,
+    // mobx, and nestjs to that set at various points, but review round 1's
+    // realism sweep (PR #719) found their trigger prompts were gamed, and
+    // the final honest re-run (never iterated against the router) demoted
+    // all three back to "experimental" (see the comment above
+    // `generatedNames`'s first assertion). Flow 335 (Wave 4 batch 3,
+    // post-merge with batches 4/5/6) demoted python too — see above. Only
+    // go remains gate-cleared. ts-js-node stays "experimental" (its pair
+    // removed in flow 317) and react/nextjs-nuxt/vue stay "experimental"
+    // too, so none of those contribute anything here either way.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
@@ -505,12 +513,7 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual([
-      "go-build-fixer",
-      "go-code-auditor",
-      "python-build-fixer",
-      "python-code-auditor",
-    ]);
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor"]);
   });
 
   // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated

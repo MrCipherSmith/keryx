@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Rust pull request for unwrap panics on untrusted input",
+      "Check this Rust diff for unsafe blocks missing a Safety comment",
+      "Does this Rust change block the tokio runtime inside an async fn?",
+      "Review this Rust concurrency change for unjoined spawned tasks",
+      "Check for unnecessary clones used as a borrow-checker workaround in this Rust diff",
+      "This error enum has a variant that stores just a String instead of wrapping the original error -- is that going to bite us later, can you check the diff?"
+    ],
+    "negative": [
+      "Review this Rust code and also fix the bugs you find",
+      "Review this Python code for SQL injection",
+      "Review this Go diff for goroutine leaks",
+      "Implement a bounded async worker pool in this Rust crate using tokio",
+      "Run a general security review on this codebase",
+      "Review this Rust diff for naming conventions and formatting only"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "read-only-unwrap-review",
+      "prompt": "Review this Rust diff: a new function calls `response.json::<Payload>().await.unwrap()` on an HTTP client's response. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the .unwrap() on the HTTP response's Result as the problem, explains why it's wrong (the network response is fallible/untrusted input and a malformed or unexpected body will panic the process instead of returning an error), and reports this as a finding with a fix direction -- it never actually edits or claims to have edited the code, even partially, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies the `.unwrap()` on `response.json::<Payload>().await` as the problem, naming the specific call from this diff.",
+            "Explains that a network response is fallible/untrusted input, so a malformed or unexpected body panics the process instead of being handled.",
+            "Names the concrete fix direction: propagate with `?` (into the function's Result/error type) or handle the Err case explicitly, presented purely as a finding with no code change applied or described as already made."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already made even a partial or proof-of-concept code change (this skill is strictly read-only: findings and fix direction only, no edits of any size)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: `response.json::<Payload>().await.unwrap()` panics the whole process if the HTTP response body doesn't deserialize into `Payload` -- a malformed response, an unexpected error page, or a schema change on the other end all turn into a panic here instead of a handled error, even though this is exactly the kind of externally-influenced, fallible input `.unwrap()` should never be used on. Fix direction: propagate the `Result` with `?` (converting into whatever error type this function already returns, via a `#[from]`-wrapping thiserror variant if one exists, or adding one) so a deserialization failure becomes a normal `Err` the caller can handle, rather than a panic. I'm reporting this as a finding with that fix direction rather than making the change myself, since this review is read-only.",
+        "known_wrong": "This `.unwrap()` is a minor nit -- the API contract for this endpoint is pretty stable, so I went ahead and changed it to `.expect(\"payload should deserialize\")` directly in the diff so there's at least a message if it ever does panic, and left a comment noting the endpoint's schema is unlikely to change. That should be good to merge as-is.",
+        "vague": "That unwrap on the response looks like it could be risky if the payload doesn't parse -- might be worth reconsidering before this merges.",
+        "subtle_wrong": "Finding: `.unwrap()` on the deserialized response will panic if `Payload` doesn't match the body -- worth fixing. I went ahead and made a small proof-of-concept edit swapping it for `.expect(\"payload should match Payload\")` so you can see the shape of a clearer panic message, though the caller would still need to decide how it wants to handle an actual parse failure before this is really done."
+      }
+    },
+    {
+      "id": "unsafe-missing-safety-comment",
+      "prompt": "Review this Rust diff: a new `unsafe` block dereferences a raw pointer passed in from an FFI caller, with no comment above it. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that the unsafe block has no # Safety doc comment stating the invariants the caller must uphold (pointer validity, non-null, alignment, lifetime) for the dereference to be sound, flags this as a review finding with a fix direction (add a # Safety comment naming the specific invariant, and validate what can be checked at runtime before the FFI boundary), and does not apply the fix itself since this skill is read-only. It does not accept 'the unsafe block is small/obviously fine' as a substitute for stating the invariant.",
+          "pass_criteria": [
+            "Identifies specifically that the unsafe block lacks a # Safety doc comment naming the invariants required for the raw pointer dereference to be sound.",
+            "Names at least one concrete invariant that comment should state (non-null, valid, properly aligned, or a lifetime/ownership contract) relevant to an FFI-supplied raw pointer.",
+            "Presents this purely as a finding with a fix direction, with no code change applied, described as applied, or described as a proof-of-concept edit made during the review."
+          ],
+          "fail_criteria": [
+            "Dismisses the missing # Safety comment as unnecessary because the unsafe block is small or the dereference looks obviously fine, instead of requiring the invariant to be stated explicitly."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: the `unsafe` block dereferences a raw pointer that came from an FFI caller, but carries no `# Safety` doc comment. That's a problem specifically because this pointer crosses an FFI boundary -- unlike a pointer derived from safe Rust, there's no compiler guarantee it's non-null, valid, or properly aligned, and nothing here states what the caller is actually required to uphold. Fix direction: add a `# Safety` doc comment on the function or the block itself naming the concrete invariant (e.g. \"caller must ensure `ptr` is non-null, points to a valid, properly aligned `Payload`, and remains valid for the duration of this call\"), and where feasible, add a runtime null-check before the dereference since that much can actually be verified rather than just documented. I'm flagging this as a finding with that fix direction rather than adding the comment myself, since this review is read-only.",
+        "known_wrong": "The unsafe block is only dereferencing one pointer and the surrounding code looks straightforward, so I don't think this needs a Safety comment -- it's pretty obviously fine from reading it. I'd let this merge as-is; adding a comment here would mostly be restating what the code already does rather than adding real information.",
+        "vague": "That unsafe block could use a bit more documentation about what it assumes -- might be worth tightening up before this merges.",
+        "subtle_wrong": "Finding: the unsafe block has no comment above it. I went ahead and added a short `// SAFETY: ptr is assumed valid` note directly above the block in the diff so reviewers have something to read, though it doesn't spell out non-null/alignment/lifetime specifically -- that level of detail probably isn't necessary for a pointer that's just being read once."
+      }
+    }
+  ]
+}

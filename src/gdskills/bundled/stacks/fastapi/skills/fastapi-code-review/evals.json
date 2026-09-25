@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this FastAPI diff for blocking calls inside async path operations",
+      "Check this FastAPI pull request for bugs before I merge it",
+      "Before this FastAPI route goes out, can you check whether anyone could hit it without being logged in, or whether our cross-origin setup is too loose?",
+      "I'm worried some of these FastAPI handlers might be leaking internal fields back to the client since we didn't always declare an output schema -- can you take a look?",
+      "Review this async FastAPI code for blocking database calls",
+      "Check this FastAPI code for a request body that skips Pydantic validation"
+    ],
+    "negative": [
+      "Implement a new FastAPI endpoint that fetches order history",
+      "Review this plain Python module for mutable default arguments and broad except clauses",
+      "Fix the mypy type errors in this FastAPI project so the build passes",
+      "Write pytest tests for this FastAPI router",
+      "Review this Django view for SQL injection issues",
+      "Run review-security-code on our whole repository for OWASP issues"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "missing-response-model-finding",
+      "prompt": "Review this FastAPI code for bugs:\n\n@router.get(\"/users/{user_id}\")\ndef get_user(user_id: int, db: Session = Depends(get_db)):\n    user = db.get(User, user_id)\n    if user is None:\n        raise HTTPException(status_code=404, detail=\"Not found\")\n    return user\n\n# User is a SQLAlchemy model with fields: id, username, email, hashed_password",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags the missing response_model declaration and explains that without it, the returned User object -- including hashed_password -- serializes straight into the response body, then names the concrete fix, without editing the code itself.",
+          "pass_criteria": [
+            "identifies that the path operation declares no `response_model` (or equivalent return-type annotation), so FastAPI does not filter the returned `User` object's fields before serializing the response",
+            "states specifically that `hashed_password` will leak into the response body as a consequence, not just a generic 'could expose data' remark",
+            "names the concrete fix: declare `response_model=UserRead` (or equivalent) using an output schema that excludes `hashed_password`, shown as the fix rather than only described in the abstract -- and does not modify the code itself, since this skill only reports findings"
+          ],
+          "fail_criteria": [
+            "declares the endpoint has no bug or is fine as written, missing the response_model gap and the hashed_password leak entirely"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: `get_user` declares no `response_model`, so FastAPI serializes the `User` SQLAlchemy object returned from the function directly, with all of its fields -- including `hashed_password` -- into the JSON response body. There's nothing here filtering the output down to only the fields a client should see; anyone calling this endpoint gets the user's password hash back in the response. Fix: declare `response_model=UserRead` on the path operation, where `UserRead` is a Pydantic model containing only `id`, `username`, and `email` (no `hashed_password`). FastAPI will then serialize through `UserRead` regardless of what extra fields the underlying `User` object carries. This is a real data-exposure bug, so I'm flagging it as the primary finding here rather than editing the code myself, since this review is read-only.",
+        "known_wrong": "This endpoint looks fine -- it fetches the user by ID, handles the not-found case with a proper 404, and returns the user object, which is exactly what a `GET /users/{id}` endpoint should do. FastAPI automatically converts the SQLAlchemy object into JSON for the response, so a `response_model` is only strictly required when you actually want to hide fields, and this simple lookup endpoint doesn't need that. No changes needed.",
+        "vague": "There's a data exposure risk here -- returning the raw user object without any kind of output schema is generally not a great idea.",
+        "subtle_wrong": "Worth a note: this endpoint returns the raw `User` object with no `response_model`, so whatever fields the SQLAlchemy model has will end up in the response. I'd suggest adding a `response_model` at some point, though since the frontend for this app only reads `username` and `email` off the response today, it's more of a minor cleanup than something that needs fixing before merge."
+      },
+      "anti_patterns": ["response_model"]
+    },
+    {
+      "id": "missing-auth-dependency-finding",
+      "prompt": "Review this FastAPI code for bugs:\n\n@router.delete(\"/users/{user_id}\")\ndef delete_user(user_id: int, db: Session = Depends(get_db)):\n    user = db.get(User, user_id)\n    if user is None:\n        raise HTTPException(status_code=404, detail=\"Not found\")\n    db.delete(user)\n    db.commit()\n    return {\"ok\": True}",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that the DELETE endpoint has no authentication/authorization dependency, so any caller can delete any user by id, and names Depends(get_current_user) (or an equivalent auth dependency) as the concrete fix, without editing the code itself.",
+          "pass_criteria": [
+            "identifies that the endpoint has no auth dependency (no `Depends(get_current_user)` or equivalent) despite performing a destructive action (deleting a user)",
+            "explains the consequence: any unauthenticated caller can delete any user by guessing/iterating `user_id`, since nothing checks who is making the request or whether they're allowed to delete this particular user",
+            "names a concrete fix: add an auth dependency (e.g. `current_user: User = Depends(get_current_user)`) and, ideally, an authorization check that the caller is allowed to delete this specific user -- not just a vague 'add some auth check'"
+          ],
+          "fail_criteria": [
+            "declares the endpoint has no bug or is fine as written, missing the absent auth dependency entirely"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: `delete_user` has no authentication or authorization dependency at all -- nothing in this path operation checks who is calling it or whether they're allowed to delete this particular user. As written, any caller who can reach this route can delete any user by iterating `user_id`, with no credential required. Fix: add `current_user: User = Depends(get_current_user)` as a parameter so the endpoint requires a valid authenticated caller, and ideally check `current_user.id == user_id` (or an admin-role check) before deleting, so an authenticated user can't delete someone else's account either. This is a serious authorization gap, so I'm flagging it as the primary finding rather than fixing it myself, since this review is read-only.",
+        "known_wrong": "This looks correct -- it fetches the user, returns a proper 404 if missing, deletes it, and commits the transaction, which is exactly the right flow for a delete endpoint. Auth is typically handled at the API gateway or middleware layer in most FastAPI setups, so it's reasonable for the individual path operation not to add its own `Depends(get_current_user)` and duplicate that check itself. No changes needed here.",
+        "vague": "This endpoint could probably use some kind of access control before letting a delete go through.",
+        "subtle_wrong": "Worth flagging: there's no explicit auth dependency on this DELETE endpoint. That said, since `user_id` is an internal database identifier and not something exposed anywhere publicly, the practical risk of someone guessing valid ids is fairly low, so I'd treat this as a nice-to-have hardening item rather than something blocking the merge."
+      },
+      "anti_patterns": ["Depends(get_current_user)"]
+    }
+  ]
+}

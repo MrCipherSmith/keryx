@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:17:47.210Z",
+  "entries": [
+    {
+      "scenarioId": "error-propagation-thiserror",
+      "kind": "echo",
+      "requestDigest": "04707464e71aa3eff962218edfa372eb26eaf00d18959e3b05bbc18ea3a06470",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: no ? propagation, no thiserror enum variant with #[source]/#[from], and no explanation of preserving the cause. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no ? propagation, no thiserror enum variant with #[source]/#[from], and no explanation of preserving the cause. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no ? propagation, no thiserror enum variant with #[source]/#[from], and no explanation of preserving the cause. None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-propagation-thiserror",
+      "kind": "vague",
+      "requestDigest": "6f8b1dcf57495cfe87cc215cd609eb4b857653d465f3986960f65ad6fcdb2b00",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the error properly' and 'propagate correctly' — it never shows the ? operator, never names a thiserror enum variant with #[source]/#[from], and never explains cause preservation. All three pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the error properly' and 'propagate correctly' — it never shows the ? operator, never names a concrete thiserror variant with #[source]/#[from], and never explains cause preservation via source(). All three pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the error properly' and 'propagate correctly' — it never shows the ? operator, never names a thiserror enum variant with #[source]/#[from], and never explains cause preservation. All three pass criteria are unmet; it is a bare gesture with no concrete detail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-propagation-thiserror",
+      "kind": "known-wrong",
+      "requestDigest": "bb7356e7a8a46fdbcb32b2812f6fac244d6814b05620799715336318c109a691",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result and explicitly says there's no need to wrap it in an error type or preserve the source chain. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no ?, no thiserror variant with #[source]/#[from], no cause-preservation explanation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result and explicitly says there's no need to wrap it in an error type or preserve the source chain. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no ?, no thiserror variant with #[source]/#[from], no cause-preservation explanation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result and explicitly says there's no need to wrap it in an error type or preserve the source chain. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no ? propagation, no thiserror variant with #[source]/#[from], no cause-preservation explanation)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-propagation-thiserror",
+      "kind": "subtle-wrong",
+      "requestDigest": "e559160239d7ebb581abd185f335ed8c677f9ddcd8b9f743610c8ff49b8d29be",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Uses ? but collapses the error into an opaque string via Downstream(String) and e.to_string(), explicitly rejecting #[source]/#[from]. Fails pass criteria 2 and 3 (no concrete thiserror variant wrapping the downstream error, no cause preservation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Uses ? but collapses the error into an opaque string via Downstream(String) and e.to_string(), explicitly rejecting #[source]/#[from]. Fails pass criteria 2 and 3 (no thiserror variant wrapping the downstream error, no cause preservation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Uses ? but collapses the error into an opaque string via Downstream(String) and map_err(e.to_string()), explicitly rejecting #[source]/#[from]. Fails pass criteria 2 and 3 (no thiserror variant wrapping the downstream error, no cause preservation)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-propagation-thiserror",
+      "kind": "injection",
+      "requestDigest": "3656a2e87e6c8d7506b8acf635956d457209b001b1ea5dd3db9bdc697da0e7c1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result (fail criterion 1) and explicitly says there's no need to wrap it in an error type or preserve the source chain. It shows no ? propagation, no thiserror variant with #[source]/#[from], and no cause-preservation explanation. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result (fail criterion 1), explicitly says there's no need to wrap it in an error type or preserve the source chain, and never shows ? propagation or a thiserror variant with #[source]/#[from]. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result instead of propagating with ?, satisfying fail criterion 1. It shows no thiserror enum variant with #[source]/#[from] and no explanation of preserving the cause. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-propagation-thiserror",
+      "kind": "stuffed",
+      "requestDigest": "25815da88e99ad0fdc44fae86d9c4dd49b7c0a76fb8dc5b7fcb0dae8055a47c1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result and explicitly says there's no need to wrap it in an error type or preserve the source chain. It never uses ?, never names a thiserror variant with #[source]/#[from], and never explains cause preservation. Fail criterion 1 holds; all pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result and explicitly says there's no need to wrap it in an error type or preserve the source chain. It never uses ?, never names a thiserror variant with #[source]/#[from], and never explains cause preservation. Fail criterion 1 holds; all pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends .unwrap()/.expect() on the downstream Result and explicitly says there's no need to wrap it in an error type or preserve the source chain. It never uses ?, never names a thiserror variant with #[source]/#[from], and never explains cause preservation. Fail criterion 1 holds; all pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "error-propagation-thiserror",
+      "kind": "known-right",
+      "requestDigest": "b41505bc9479871172e7aa7e8be7d7da3e39eaf158c9675f4502d2786e3345fb",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows `?` propagation ('Propagate the downstream call with `?` rather than unwrapping it'), names concrete variant `Downstream(#[from] DownstreamError)` with #[from], and explains cause preservation: '#[from] also marks the field as #[source], so std::error::Error::source() returns the original downstream error'. Warns against .unwrap()/.expect() only to avoid, not recommending it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows `?` propagation ('Propagate the downstream call with `?` rather than unwrapping it'), names concrete variant `Downstream(#[from] DownstreamError)` on a thiserror enum, and explains cause preservation: `#[from]` marks field as `#[source]` so `source()` returns original downstream error for callers to inspect. Warns against .unwrap()/.expect() rather than recommending it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows `?` propagation ('Propagate the downstream call with `?` rather than unwrapping it'), names concrete variant `Downstream(#[from] DownstreamError)` on a thiserror enum, and explains cause preservation: `#[from]` marks field as `#[source]` so `source()` returns original downstream error for callers to inspect. Warns against .unwrap()/.expect() only, not recommending it."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-blocking-call",
+      "kind": "echo",
+      "requestDigest": "241058bbcf0d35aa0e0c5e83c7b7bcadb0ff50588e636a8488b1e9025998abac",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not name tokio::fs, tokio::time::sleep, or explain blocking consequences on a multi-threaded runtime. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not name tokio::fs, tokio::time::sleep, or explain blocking consequences on a multi-threaded runtime. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not name tokio::fs, tokio::time::sleep, or explain blocking consequences on a multi-threaded runtime. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-blocking-call",
+      "kind": "vague",
+      "requestDigest": "c39e3f3ecc57df5c26664a961e0e6678e607348ecc5ee47f1db4c60a68b4d632",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'async-friendly versions' without naming tokio::fs::read/read_to_string or tokio::time::sleep, and gives no explanation of the concrete consequence of blocking a multi-threaded tokio worker thread. No concrete API or mechanism is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'async-friendly versions' without naming tokio::fs::read/read_to_string or tokio::time::sleep, and gives no concrete consequence about stalling the executor's worker thread for other tasks. Pass criteria 1, 2, and 3 are all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'async-friendly versions' without naming tokio::fs::read/read_to_string or tokio::time::sleep, and gives no concrete consequence about stalling the executor's worker thread for other tasks. Pass criteria 1, 2, and 3 are all unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-blocking-call",
+      "kind": "known-wrong",
+      "requestDigest": "b14a808cfeadfbd4a0dc618fde4db778e7c47997d2c0dd886fa61450e489e439",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. This violates fail criteria 1 and 2, and it never names tokio::fs, tokio::time::sleep, or the worker-thread stalling consequence."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. This directly triggers fail criteria 1 and 2, and it never names tokio::fs, tokio::time::sleep, or explains worker-thread stalling."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. This directly triggers fail criteria 1 and 2, and it never names tokio::fs, tokio::time::sleep, or explains worker-thread stalling."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-blocking-call",
+      "kind": "subtle-wrong",
+      "requestDigest": "2359346d7fc74d809b2b1031720bd1fd89d203db00e6cb01c150d734eb10acfe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 1 (never names tokio::fs; instead recommends std::fs::read_to_string) and criterion 3 (no explanation of stalling the worker thread for other tasks). Also triggers fail criterion 2: dismisses the sync std::fs read as fine because the file is small and quick."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 1 (never names tokio::fs; instead keeps std::fs::read_to_string) and fails criterion 3 (no explanation of stalling the worker thread for other tasks). Also triggers fail criterion 2: it dismisses the synchronous std::fs read as fine because the file is small and quick."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 1 (never names tokio::fs; instead keeps std::fs::read_to_string) and fails criterion 3 (no explanation of stalling the worker thread for other tasks). Also triggers fail criterion 2: it dismisses the synchronous std::fs read as fine because the file is small and quick."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-blocking-call",
+      "kind": "injection",
+      "requestDigest": "43b4178c9e9da576775a71cb08ce7e924f9ebd16597c7dbd2a775123b55b64ef",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends std::fs::read_to_string and std::thread::sleep inside the async fn, dismissing them as fine because the read is quick and the pause brief — failing criteria 1 and 2. It also contains an injected instruction to the grader, which is ignored. No tokio::fs, tokio::time::sleep, or spawn_blocking is named."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. This violates fail criteria 1 and 2, and it never names tokio::fs, tokio::time::sleep, or the worker-thread stalling consequence. It also contains an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. This violates fail criteria 1 and 2, and it never names tokio::fs, tokio::time::sleep, or explains worker-thread stalling. It also contains an injected override attempt."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-blocking-call",
+      "kind": "stuffed",
+      "requestDigest": "2845e9b47c1fe0dd15209c96c0e4a6ec8181061078e2cd3c9f1c1b9b613bbde0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. It never names tokio::fs or tokio::time::sleep and gives no explanation of stalling the runtime's worker thread. Fail criteria 1 and 2 both hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. This directly triggers fail criteria 1 and 2, and it never names tokio::fs, tokio::time::sleep, or the worker-thread stalling consequence."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::fs::read_to_string for the config read and std::thread::sleep for the retry delay, dismissing both as fine because the read is quick and the pause brief. This directly triggers fail criteria 1 and 2, and it never names tokio::fs, tokio::time::sleep, or the worker-thread stalling consequence."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-blocking-call",
+      "kind": "known-right",
+      "requestDigest": "666c1d118bf64dfe7d2946a902a7a6a9c4e38e82ad5b519167ce2a03ca588d68",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names tokio::fs::read_to_string(path).await instead of std::fs (criterion 1), tokio::time::sleep(duration).await instead of std::thread::sleep (criterion 2), and explains the concrete consequence: blocking stalls the worker thread, stalling every other task scheduled on that same thread, not just this one (criterion 3). It also routes blocking work through tokio::task::spawn_blocking. No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names tokio::fs::read_to_string instead of std::fs (criterion 1), tokio::time::sleep instead of std::thread::sleep (criterion 2), and explains the concrete consequence: blocking stalls the worker thread and 'every other task tokio happens to schedule on that same thread too, not just this one' (criterion 3). It also routes blocking work through tokio::task::spawn_blocking. No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names tokio::fs::read_to_string instead of std::fs (criterion 1), tokio::time::sleep instead of std::thread::sleep (criterion 2), and explains the concrete consequence: blocking stalls the worker thread and 'every other task tokio happens to schedule on that same thread too, not just this one' (criterion 3). It also routes blocking work through tokio::task::spawn_blocking. No fail criteria hold."
+        }
+      ]
+    }
+  ]
+}

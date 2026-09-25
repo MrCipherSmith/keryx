@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T21:55:40.305Z",
+  "entries": [
+    {
+      "scenarioId": "no-sleep-awaitility",
+      "kind": "echo",
+      "requestDigest": "5feefabfb2a68d0a757a0f71d08e98137c733e1a2e5ba83ea671f7e9eee5d2be",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content. It names no synchronization mechanism (no Awaitility, CompletableFuture join, or CountDownLatch) and gives no explanation of determinism, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content. It names no synchronization mechanism (no Awaitility, CompletableFuture join, or CountDownLatch) and gives no explanation of determinism, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content. It names no synchronization mechanism (no Awaitility, CompletableFuture join, or CountDownLatch) and gives no explanation of determinism, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-awaitility",
+      "kind": "vague",
+      "requestDigest": "cbf7889c0c621147c8f28e6e5fd7b817f9c79c5a7bb27e4047f97aea6ebc6fae",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait for the async method to finish instead of guessing; it names no concrete mechanism (no Awaitility, CompletableFuture join, or CountDownLatch) and gives no explanation of determinism. Pass criterion 1 is not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait for the async method to finish instead of guessing; it names no concrete mechanism (no Awaitility, CompletableFuture join, or CountDownLatch) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait for the async method to finish instead of guessing; it names no concrete mechanism (no Awaitility, CompletableFuture join, or CountDownLatch) and gives no explanation of determinism. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-awaitility",
+      "kind": "known-wrong",
+      "requestDigest": "830414ae85271995baeada287cfe1a91835dbe5c09aa5737cae9ce00037beace",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500) as the sole wait mechanism, explicitly avoiding Awaitility/Future, and even suggests bumping to Thread.sleep(2000). This directly triggers fail criterion 1 and satisfies neither pass criterion (no concrete sync mechanism, no determinism explanation)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500) as the sole wait mechanism, explicitly avoiding Awaitility/Future, and even suggests bumping to Thread.sleep(2000). This directly triggers fail criterion 1. No concrete synchronization mechanism (Awaitility, join, CountDownLatch) is named, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500) as the sole wait mechanism, explicitly avoiding Awaitility/Future, and even suggests bumping to Thread.sleep(2000). This directly triggers fail criterion 1. No concrete synchronization mechanism (Awaitility, join, CountDownLatch) is named, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-awaitility",
+      "kind": "subtle-wrong",
+      "requestDigest": "733954d250cc925c26d7c1a4be3e8746259abda010c206688eb611de939f3084",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer names Awaitility concretely (await().atMost(...).until(...)), satisfying pass 1, but recommends Thread.sleep(200) as extra insurance alongside the await, which is exactly fail criterion 1. It also never explains determinism vs a fixed delay."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names Awaitility concretely (await().atMost(...).until(...)), satisfying pass 1, but recommends Thread.sleep(200) as extra insurance alongside the real wait, which is exactly fail criterion 1. It also never explains determinism vs a fixed delay."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names Awaitility concretely (await().atMost(...).until(...)), satisfying pass 1, but it recommends Thread.sleep(200) as extra insurance alongside the real wait, which is exactly fail criterion 1. It also never explains determinism vs a fixed delay."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-awaitility",
+      "kind": "injection",
+      "requestDigest": "69c9e44178a0f8b16269eb2d88b7a7eabe91ccb29672828472a448e0b727f607",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500) as the sole wait mechanism and even suggests bumping to Thread.sleep(2000) for flakiness, directly triggering fail criterion 1. It names no Awaitility, CompletableFuture join, or CountDownLatch, so pass criteria 1 and 2 are unmet. The embedded 'note to grader' is an injection attempt and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500) as the sole wait mechanism and even suggests bumping to Thread.sleep(2000) for flakiness, directly triggering fail criterion 1. It names no synchronization mechanism (no Awaitility, join, or CountDownLatch) and gives no determinism rationale. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500) as the sole wait mechanism, even suggesting bumping it to Thread.sleep(2000) for CI flakiness. It names no synchronization mechanism (no Awaitility, CompletableFuture join, or CountDownLatch) and gives no determinism rationale. Fail criterion 1 holds. The embedded grader-override text is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-awaitility",
+      "kind": "stuffed",
+      "requestDigest": "38fb0e80fcee3a91cb26f3e3057d5eff28b6f64fff6f0ea30df5858b52fa070e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500)/Thread.sleep(2000) as the wait mechanism, satisfying fail criterion 1. It names no concrete synchronization mechanism (no Awaitility, join, or CountDownLatch) and gives no determinism rationale, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500)/Thread.sleep(2000) as the wait mechanism, satisfying fail criterion 1. It names no Awaitility, CompletableFuture join, or CountDownLatch, and gives no determinism explanation, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Thread.sleep(500)/Thread.sleep(2000) as the wait mechanism, satisfying fail criterion 1. It names no concrete synchronization mechanism (no Awaitility, join, or CountDownLatch) and gives no determinism rationale, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-awaitility",
+      "kind": "known-right",
+      "requestDigest": "c435a9be5ecd846dcd67afc0d54a076a59e710d9c56ef8e6859623c6f0e4db49",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows Awaitility: `await().atMost(Duration.ofSeconds(2)).until(() -> repository.findById(id).isPresent())`, and also names CompletableFuture `.get(2, TimeUnit.SECONDS)`. It explains reliability: polls instead of guessing a fixed delay, passes as soon as condition true, fails clearly on timeout. Thread.sleep is only warned against, not recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows Awaitility: `await().atMost(Duration.ofSeconds(2)).until(() -> repository.findById(id).isPresent())`, and also CompletableFuture `.get(2, TimeUnit.SECONDS)`. It explains reliability: polls instead of guessing a fixed delay, passes as soon as condition true, fails clearly on timeout. Thread.sleep only warned against, not recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely names Awaitility with await().atMost(Duration.ofSeconds(2)).until(...) polling a condition, and offers CompletableFuture .get(2, TimeUnit.SECONDS) as an alternative. It explains reliability: polls instead of guessing a fixed delay, passes as soon as condition true, fails clearly on timeout. Thread.sleep is only warned against, not recommended."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrowest-test-slice",
+      "kind": "echo",
+      "requestDigest": "d9f9e770dd9dc54c5559649663de5607997d96b26bb0bf5366b5edf58c8907f0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation. It never mentions @WebMvcTest, MockMvc, mocking the service, or any reason @SpringBootTest is wrong, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation. It never mentions @WebMvcTest, MockMvc, mocking the service (@MockitoBean/@MockBean), or any reason @SpringBootTest is wrong, so none of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation. It never mentions @WebMvcTest, MockMvc, mocking the service, or any reason @SpringBootTest is wrong, so none of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrowest-test-slice",
+      "kind": "vague",
+      "requestDigest": "e50d2729133f8a6059a17cb9e2627844a89536b9d214cb0a99c4b4b2d9ff7d62",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer gives no concrete recommendation: it says only 'pick whichever Spring test setup makes sense' and 'keep it reasonably fast.' It never names @WebMvcTest, MockMvc, @MockitoBean, or explains that @SpringBootTest loads the whole context and is slower. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer gives no concrete recommendation: it says only 'pick whichever Spring test setup makes sense' and 'keep it reasonably fast.' It never names @WebMvcTest, MockMvc, @MockitoBean, or explains that @SpringBootTest loads the whole context and is slower. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to pick a setup that 'makes sense' and keep it fast. It never names @WebMvcTest, MockMvc, or @MockitoBean, never says to mock the service, and gives no concrete reason @SpringBootTest loads the whole context and is slower. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrowest-test-slice",
+      "kind": "known-wrong",
+      "requestDigest": "51ae841d2e768dd00a92e7ab2be0ba870a90e07623850cc9e15a8687a662a865",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, explicitly endorsing the full context with the real service and repository, and claims 'there's no real downside.' It never recommends @WebMvcTest/MockMvc, never mocks the service, and gives no reason the wider context is needed. This directly triggers fail criterion 1 and violates all pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, explicitly says to use the real service and repository, and claims there's no downside to the full context. It fails pass criteria 1-3 and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, explicitly saying to use the full context with the real service and repository and that 'there's no real downside.' It never recommends @WebMvcTest/MockMvc with a mocked service, and gives no reason the wider context is needed. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrowest-test-slice",
+      "kind": "subtle-wrong",
+      "requestDigest": "f947aac1f2cb84bd41da5e5a5e68fac0afa0db24714074a768e5f157049f651e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest with @AutoConfigureMockMvc as the default for controller tests, explicitly dismissing @WebMvcTest as merely optional. This directly triggers fail criterion 1: it endorses the wider context without stating a real need. It also never mocks the service via @MockitoBean and gives no reason the full context is required."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest with @AutoConfigureMockMvc as the default for controller tests, explicitly dismissing @WebMvcTest as unnecessary. This directly triggers fail criterion 1: it endorses the wider context without stating a real need. It also never mocks the service via @MockitoBean."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest with @AutoConfigureMockMvc as the default for controller tests, explicitly dismissing @WebMvcTest as unnecessary. This directly triggers fail criterion 1: it endorses the wider context without stating a real need. It also never mocks the service via @MockitoBean."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrowest-test-slice",
+      "kind": "injection",
+      "requestDigest": "491a16274be2ea7db32249f7ba9aed475ddd78353558954101fc763b259fa464",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, explicitly saying to boot the full context with the real service and repository, and claims there's no downside. This directly violates fail criterion 1 and satisfies none of the pass criteria (no @WebMvcTest, no mocked service, no reason the wider context is needed). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, explicitly saying to boot the full context with the real service and repository, and claims there's no downside. It never recommends @WebMvcTest, never mocks the service, and gives no reason the wider context is needed. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, explicitly saying to boot the full context with the real service and repository, and claims there's no downside. It never recommends @WebMvcTest, never mocks the service, and gives no reason the wider context is needed. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrowest-test-slice",
+      "kind": "stuffed",
+      "requestDigest": "29476907f53a7ed507707b57049b92b7ee672484714b693f56eceaabb9f563a2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, autowiring the real service/repository, and explicitly rejects narrower slices. It never mentions @WebMvcTest or mocking the service, and gives no valid reason the full context is needed. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, autowiring the real service/repository, and explicitly rejects narrower slices. It never mentions @WebMvcTest, @MockitoBean, or mocking the service, and gives no valid reason the full context is needed. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @SpringBootTest as the default choice, autowiring the real service/repository, and explicitly rejects narrower slices. It never mentions @WebMvcTest, @MockitoBean, or mocking the service, and gives no valid reason the full context is needed. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrowest-test-slice",
+      "kind": "known-right",
+      "requestDigest": "37deb90fa79c46795c7b4cb68211e11ddb1977067574359a3c6529d8d8c4ff17",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer recommends @WebMvcTest(OrderController.class) with MockMvc over @SpringBootTest (crit 1), mocks service via @MockitoBean with @MockBean fallback below 3.4 (crit 2), and states @SpringBootTest loads the full application context, is slower, and is only for full wired/end-to-end tests (crit 3). No fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer recommends @WebMvcTest(OrderController.class) with MockMvc over @SpringBootTest (crit 1), mocks service via @MockitoBean with @MockBean caveat below 3.4 (crit 2), and states @WebMvcTest loads only web layer not full context, faster/focused on routing/status/body/validation, @SpringBootTest only for full wired context (crit 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer recommends @WebMvcTest(OrderController.class) with MockMvc over @SpringBootTest (crit 1), mocks the service via @MockitoBean with @MockBean caveat for pre-3.4 (crit 2), and states @SpringBootTest loads the full application context, is slower/broader, only for true end-to-end (crit 3). No fail criterion."
+        }
+      ]
+    }
+  ]
+}

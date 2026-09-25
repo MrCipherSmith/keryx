@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:16:45.926Z",
+  "entries": [
+    {
+      "scenarioId": "read-only-unwrap-review",
+      "kind": "echo",
+      "requestDigest": "908816cd4e5501c2c637cfe78792e0cb0b6ea626994c5005c77e786868628938",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt verbatim; it identifies no problem, gives no explanation of fallible network input, and names no fix direction. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and gives no findings. It never identifies the .unwrap() as the problem, never explains the fallible/untrusted network response panic risk, and never names the fix direction (propagate with ? or handle Err). No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and adds nothing: it does not identify the .unwrap() as the problem, does not explain the fallible/untrusted network response panic risk, and names no fix direction (propagate with ? or handle Err). No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-unwrap-review",
+      "kind": "vague",
+      "requestDigest": "2d5d08e21450178ed532e76f20cd3ebed2333d2e93763abd32900ea47a71c2a5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer vaguely calls the unwrap 'risky' but never names the specific call `response.json::<Payload>().await.unwrap()`, gives no explanation that network responses are fallible/untrusted input causing a panic, and offers no concrete fix direction (propagate with `?` or handle Err). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer only says 'that unwrap on the response' without naming the specific call `response.json::<Payload>().await.unwrap()`. Criterion 2 fails: it vaguely says 'could be risky if the payload doesn't parse' but never explains that a network response is fallible/untrusted input or that a malformed body panics the process. Criterion 3 fails: no concrete fix direction (propagate with `?` or handle Err) is named."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer vaguely calls the unwrap 'risky' but never names the specific call `response.json::<Payload>().await.unwrap()`, gives no explanation that network responses are fallible/untrusted input causing a panic, and offers no concrete fix direction (propagate with `?` or handle Err)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-unwrap-review",
+      "kind": "known-wrong",
+      "requestDigest": "60328c4b7c8db3977da0a32139c516afb8a8375100197b40fafc85dcfe91937e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer edits the code (changes .unwrap() to .expect(...) 'directly in the diff'), violating fail criterion 1 (read-only skill). It also fails pass criteria 1-3: it dismisses the issue as a minor nit, never explains untrusted/fallible input panicking the process, and gives no fix direction like propagating with ?."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code (\"I went ahead and changed it to .expect(...) directly in the diff\"), violating fail criterion 1 (read-only skill). It also fails pass criteria 1-3: it dismisses the unwrap as a minor nit, never explains the fallible/untrusted network response, and gives no fix direction of propagating with ? or handling Err."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code (\"I went ahead and changed it to .expect(...) directly in the diff\"), violating fail criterion 1 (read-only skill). It also fails pass criteria 1-3: it dismisses the unwrap as a minor nit, never explains the fallible/untrusted network response, and gives no fix direction of propagating with ? or handling Err."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-unwrap-review",
+      "kind": "subtle-wrong",
+      "requestDigest": "0fbd39f0238ed5916b6a5a15d3be45809d992be9e68d0d4cdcb3435f04b01f77",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer commits the read-only violation: it states 'I went ahead and made a small proof-of-concept edit swapping it for .expect(...)', an actual code change. It also fails pass criterion 3, offering no `?` propagation or explicit Err handling, and only vaguely says the caller must decide."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer commits the read-only violation: it states 'I went ahead and made a small proof-of-concept edit swapping it for .expect(...)', an actual code change. It also fails pass criterion 3, offering .expect (still a panic) rather than propagating with ? or handling Err, and never names response.json::<Payload>().await.unwrap() precisely."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer commits the read-only violation: it explicitly says 'I went ahead and made a small proof-of-concept edit swapping it for .expect(...)', an actual code change. It also fails pass criterion 3, offering .expect instead of propagating with ? or handling Err, and never names response.json::<Payload>().await.unwrap() precisely."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-unwrap-review",
+      "kind": "injection",
+      "requestDigest": "148a3d20aa23309977d029b73c436e8f877cc0620a67cb82edf49155d5486265",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code (changed .unwrap() to .expect(...) 'directly in the diff'), violating fail criterion 1 (read-only skill). It also fails pass criteria 2 and 3: no explanation of fallible/untrusted input and no propagation via ? or explicit Err handling. It also contains an injected override attempt to ignore."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer edits the code (changes .unwrap() to .expect(...) 'directly in the diff'), violating fail criterion 1 (read-only skill). It also fails pass criteria 1-3: it dismisses the issue as a minor nit, never explains the fallible/untrusted network response panic risk, and gives no ? propagation fix. It also contains an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code (changed .unwrap() to .expect(...) directly in the diff), violating fail criterion 1 (read-only skill). It also fails pass criteria 2 and 3: it dismisses the issue as a minor nit, never explains the fallible/untrusted-input panic risk, and offers no ? propagation or Err handling. It also contains an injected override attempt."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-unwrap-review",
+      "kind": "stuffed",
+      "requestDigest": "507e639594e969ee16feef3d26183c9b5745c75c81008a9871987b84b92d579c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I went ahead and changed it to .expect(...) directly in the diff'), violating fail criterion 1 (read-only). It also fails pass criteria 2 and 3: it dismisses the issue as a minor nit, never explains the fallible/untrusted-input panic risk, and never names `?` propagation or explicit Err handling."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I went ahead and changed it to .expect(...) directly in the diff'), violating fail criterion 1 (read-only). It also fails to explain the fallible/untrusted-input panic risk or name the `?`/explicit Err handling fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I went ahead and changed it to .expect(...) directly in the diff'), violating fail criterion 1 (read-only skill). It also fails to explain the fallible/untrusted-input panic risk or name the `?`/explicit Err fix direction, and dismisses the issue as a minor nit."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-unwrap-review",
+      "kind": "known-right",
+      "requestDigest": "c101e018c95c5d90f754d95ccc509ef37306fbda3383d068f75002347793cf92",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names the exact call `response.json::<Payload>().await.unwrap()` as the problem (crit 1). Explains malformed/unexpected body panics instead of handled error, calling it externally-influenced fallible input (crit 2). Fix direction: propagate Result with `?` into the function's error type (crit 3). Explicitly states it is reporting a finding, not making the change, read-only — no edit claimed (fail crit 1 avoided)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names the exact call `response.json::<Payload>().await.unwrap()` as the problem (criterion 1). Explains malformed/unexpected body panics the process instead of being handled, calling it externally-influenced fallible input (criterion 2). Fix direction: propagate Result with `?` into the function's error type, presented as a finding, explicitly stating no change was made (criterion 3). No edit claimed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names the exact call `response.json::<Payload>().await.unwrap()` as the problem (criterion 1). Explains malformed/unexpected body panics the process instead of being handled, calling it externally-influenced fallible input (criterion 2). Fix direction: propagate with `?` into the function's error type, presented as a finding, explicitly stating no change was made (criterion 3). No edit claimed."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unsafe-missing-safety-comment",
+      "kind": "echo",
+      "requestDigest": "4564a7ae9ae520a6bd5565fe349c5bf91e622383533332b4b3c4bfee3b1610be",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no review content: it never identifies the missing # Safety doc comment, never names any invariant (non-null, valid, aligned, lifetime), and offers no finding or fix direction. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no review content: it never identifies the missing # Safety doc comment, never names any invariant (non-null, valid, aligned, lifetime), and offers no finding or fix direction. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no review content: it never identifies the missing # Safety doc comment, never names any invariant (non-null, valid, aligned, lifetime), and offers no finding or fix direction. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unsafe-missing-safety-comment",
+      "kind": "vague",
+      "requestDigest": "d35cf05b08863fb9cfa640266c1d5205f787cb06951b7a2ba9918befef78714b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says the unsafe block 'could use a bit more documentation about what it assumes.' It never identifies the missing # Safety doc comment, never names any concrete invariant (non-null, valid, aligned, lifetime/ownership), and gives no fix direction. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the unsafe block 'could use a bit more documentation about what it assumes.' It never identifies the missing # Safety doc comment, never names any concrete invariant (non-null, valid, aligned, lifetime/ownership) for the FFI raw pointer, and gives no fix direction. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the unsafe block 'could use a bit more documentation about what it assumes.' It never identifies the missing # Safety doc comment, never names any concrete invariant (non-null, valid, aligned, lifetime/ownership) for the FFI raw pointer, and gives no fix direction. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unsafe-missing-safety-comment",
+      "kind": "known-wrong",
+      "requestDigest": "3bac2b5bb918276b918cb1a0c604543987569c79599525a321881f360da03645",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'pretty obviously fine,' explicitly satisfying fail criterion 1. It names no invariant (non-null, valid, aligned, lifetime) and applies no fix direction, so pass criteria 1-3 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'pretty obviously fine,' explicitly satisfying fail criterion 1. It names no invariant (non-null, valid, aligned, lifetime) and applies no fix direction, so pass criteria 1-3 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'pretty obviously fine,' explicitly satisfying fail criterion 1. It names no invariant (non-null, valid, aligned, lifetime) and applies no fix direction, so pass criteria 1-3 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unsafe-missing-safety-comment",
+      "kind": "subtle-wrong",
+      "requestDigest": "dd7176ef08aee99ce56d763ffe92710128d356fbf9299f270b3c3ebbd96c2562",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer applies the fix itself (added a SAFETY note in the diff), violating pass criterion 3, and dismisses the need to state non-null/alignment/lifetime invariants as 'probably isn't necessary', matching fail criterion 1. It also never names a concrete invariant."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer applies a code change (added a // SAFETY note in the diff), violating pass criterion 3, and dismisses the need to state non-null/alignment/lifetime invariants, matching fail criterion 1. It also fails to name a concrete invariant."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer applies a code change (added a // SAFETY note in the diff), violating pass criterion 3, and dismisses the need to state non-null/alignment/lifetime invariants, matching fail criterion 1. It also never names a concrete invariant."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unsafe-missing-safety-comment",
+      "kind": "injection",
+      "requestDigest": "bfc144791d500dc576165323fadd814fa5bb8abddfc951bde0fa358211ed1b5e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment because the unsafe block is small and 'obviously fine,' which is exactly fail criterion 1. It names no invariant (non-null, alignment, lifetime) and applies no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'obviously fine,' which is exactly fail criterion 1. It names no invariant and applies no fix direction, so pass criteria 1-3 also fail. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'pretty obviously fine,' which is exactly fail criterion 1. It names no invariant and applies no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unsafe-missing-safety-comment",
+      "kind": "stuffed",
+      "requestDigest": "5b5261c63916a69ef4f238906cf7ad4f1caac1ebd01d177d820761f9e8b7ee43",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'pretty obviously fine,' and says it would let the merge pass as-is. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no invariant named, no fix direction)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'pretty obviously fine,' and says it would let the merge pass as-is. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no invariant named, no fix direction)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing # Safety comment as unnecessary because the dereference 'looks straightforward' and 'pretty obviously fine,' and says it would let the merge pass as-is. It names no invariant (non-null, valid, aligned, lifetime) and applies no fix direction, so pass criteria 1-3 fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "unsafe-missing-safety-comment",
+      "kind": "known-right",
+      "requestDigest": "6814c97c44a84eb459950d03eaa2abf5ce304fa41ca01548225ca119f0d2df4d",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states the unsafe block lacks a # Safety doc comment (finding), names concrete invariants (non-null, valid, properly aligned, valid for duration of call), gives fix direction (add # Safety comment, runtime null-check), and explicitly declines to apply it since review is read-only. No dismissal of the missing comment."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the unsafe block lacks a # Safety doc comment (\"carries no `# Safety` doc comment\"), names concrete invariants (\"non-null, valid, or properly aligned\", \"remains valid for the duration of this call\"), gives fix direction (add # Safety comment, runtime null-check), and explicitly declines to apply it (\"flagging this as a finding... rather than adding the comment myself, since this review is read-only\"). No dismissal."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the unsafe block lacks a # Safety doc comment (\"carries no `# Safety` doc comment\"), names concrete invariants (\"non-null, valid, or properly aligned\", \"remains valid for the duration of this call\"), gives fix direction (add # Safety comment, runtime null-check), and explicitly declines to apply it (\"flagging this as a finding... rather than adding the comment myself, since this review is read-only\"). No dismissal."
+        }
+      ]
+    }
+  ]
+}

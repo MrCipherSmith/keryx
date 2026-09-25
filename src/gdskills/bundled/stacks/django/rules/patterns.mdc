@@ -1,0 +1,92 @@
+---
+extends: common
+paths: ["**/models.py", "**/models/**/*.py", "**/views.py", "**/views/**/*.py", "**/managers.py", "**/migrations/**/*.py", "**/*.py"]
+metadata:
+  origin: authored
+---
+
+# Django patterns
+
+Narrows `python`'s design guidance to idiomatic Django (5.x) ORM, view, and
+migration patterns and the anti-patterns they replace. Applies to Django
+project files; a non-Django module in the same repo still follows `python`'s
+own `rules/patterns.mdc`.
+
+## Query optimization (the N+1 problem)
+
+- When a view or serializer will access a related object for every row in a
+  queryset (`obj.author.name` in a loop, or a DRF nested serializer field),
+  add `select_related("author")` for a `ForeignKey`/`OneToOneField` and
+  `prefetch_related("tags")` for a `ManyToManyField`/reverse `ForeignKey` —
+  `select_related` joins in one query; `prefetch_related` issues one extra
+  query per relation and joins in Python. Combine both when a
+  `prefetch_related` path itself needs a `select_related` (`Prefetch("best_pizza__toppings")`
+  after `select_related("best_pizza")`).
+- Use `only()`/`defer()` to trim columns from a wide model only when a
+  profiled query shows the extra columns matter; reaching for it by default
+  makes the queryset fragile to a later field access that silently triggers
+  a new query.
+- Prefer `QuerySet.exists()` over `bool(qs)`/`len(qs) > 0` for an
+  existence check, and `.count()` over `len(list(qs))`, so the database does
+  the work instead of materializing every row into Python.
+- Use `bulk_create`/`bulk_update`/`update()` for a batch write instead of a
+  Python loop calling `.save()` per instance — a per-instance loop is an N+1
+  on the write side, and skips `bulk_create`'s single round trip (note it
+  bypasses `save()`/signals unless explicitly configured to call them).
+
+## Migrations
+
+- Run `python manage.py makemigrations` to generate a migration from a model
+  change; never hand-write a migration's `operations` list to match a model
+  edit by guesswork — let Django diff the models, then review the generated
+  file.
+- Give a migration that needs to transform existing row data a `RunPython`
+  operation with both a forward and a reverse function (or
+  `migrations.RunPython.noop` when reversal is genuinely not meaningful),
+  not a schema-only migration that silently leaves old data inconsistent
+  with a new constraint.
+- Keep a destructive migration (dropping a column/table another release
+  still reads) behind a deploy sequence that ships the code change first,
+  then the schema change, when the project deploys code and migrations
+  separately — a same-release drop-and-read is a two-phase problem, not a
+  one-step migration.
+- Never edit a migration file that has already been applied in another
+  environment (shared branch, staging, production) to "fix" it in place;
+  add a new migration instead — editing history desyncs any environment
+  that already recorded the old migration as applied.
+
+## Models as the single source of truth
+
+- Put a field-level invariant (a `CheckConstraint`, a `unique_together`/
+  `UniqueConstraint`, a `validators=[...]` list) on the model field or
+  `Meta.constraints`, not only in a form's `clean()` — validation the
+  database itself does not enforce can still be violated by a direct
+  `.save()`, the admin, a shell, or another service writing to the same
+  table.
+- Use a model `Manager`/`QuerySet` subclass to name a repeated filter
+  (`Order.objects.pending()`) instead of repeating the same `.filter(...)`
+  chain at every call site.
+
+## Views
+
+- A view that only reads and renders/serializes belongs on a generic
+  class-based view (`ListView`/`DetailView`/DRF `ReadOnlyModelViewSet`); a
+  view with custom branching logic per HTTP method is a legitimate reason to
+  drop to a function-based view or override a specific CBV method
+  (`get_queryset`, `form_valid`) rather than reimplementing the whole
+  request/response cycle.
+- Return the framework's own response helpers (`HttpResponseRedirect`/
+  `redirect()`, `JsonResponse`, DRF's `Response`) instead of building a raw
+  `HttpResponse` with a hand-set `Content-Type` and manually serialized body.
+
+## Anti-patterns to flag, not introduce
+
+- A `for` loop over a queryset that touches a related object per iteration
+  with no `select_related`/`prefetch_related` upstream — this is Django's
+  most common performance bug and is invisible in a small dev dataset.
+- `fields = "__all__"` on a `ModelForm`/`ModelSerializer` that accepts
+  user input, silently exposing every future field for mass-assignment.
+- A signal handler (`post_save`, etc.) that performs a slow or
+  externally-visible side effect (sending an email, calling a third-party
+  API) synchronously inside the request/response cycle instead of queuing it
+  through the project's async task runner (Celery or equivalent).

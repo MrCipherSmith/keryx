@@ -1,0 +1,92 @@
+---
+extends: common
+paths: ["**/views.py", "**/views/**/*.py", "**/forms.py", "**/serializers.py", "**/templatetags/**/*.py", "**/settings*.py", "**/settings/**/*.py"]
+metadata:
+  origin: authored
+---
+
+# Django security
+
+Narrows `python`'s security guidance to Django's own injection-class sinks:
+views, forms/serializers, template-tag modules, and settings — the Python
+files where Django's built-in CSRF/XSS/SQL-injection protections are either
+relied on or bypassed (template-rendered `.html` files are not `.py`, so
+they are out of this rule's `paths:` scope by construction, even though the
+XSS guidance below still applies to what those views/templatetags render
+into them). Applies only to the listed `.py` files; a non-request-facing
+module (a standalone script, a batch job with no HTTP surface) still
+follows `python`'s own `rules/security.mdc`.
+
+## CSRF
+
+- Leave `django.middleware.csrf.CsrfViewMiddleware` enabled and let
+  `{% csrf_token %}`/the framework's CSRF cookie handling do its job for
+  every state-changing view (`POST`/`PUT`/`PATCH`/`DELETE`).
+- Never add `@csrf_exempt` to make a failing request succeed without first
+  establishing that the endpoint has another, equivalent protection (a
+  signed webhook signature, a non-browser API authenticated by token, never
+  session/cookie auth) — CSRF exemption on a session-authenticated endpoint
+  reopens the exact attack the middleware exists to block.
+- A DRF `APIView`/`ViewSet` using `SessionAuthentication` still needs CSRF
+  protection on unsafe methods (DRF enforces this by default for session
+  auth); do not disable it to work around a client that isn't sending the
+  token — fix the client to send it.
+
+## Cross-site scripting (XSS)
+
+- Rely on Django's automatic template auto-escaping for any value that
+  reaches an HTML template — do not disable it project-wide.
+- Never apply `mark_safe()`/the `|safe` template filter/`format_html()`'s
+  raw-string argument to a value that traces back to user input (a form
+  field, a query parameter, an uploaded file's name, anything stored from a
+  prior user submission) — `mark_safe`/`|safe` tell Django to skip escaping
+  entirely, and reintroduce stored or reflected XSS on exactly the value the
+  auto-escaper was protecting. `mark_safe`/`|safe` are for markup the
+  application itself constructs and fully controls (a trusted CMS field
+  rendered through a sanitizer, static admin-authored HTML) — never for
+  data supplied by a request.
+- Build dynamically-assembled HTML with `format_html()`/`format_html_join()`
+  (which escape each interpolated argument) instead of string
+  concatenation or an f-string passed to `mark_safe()`.
+
+## SQL injection
+
+- Django's ORM parameterizes query values automatically
+  (`.filter(name=user_input)`); this protection does not extend to
+  `.raw()` or `.extra()` — pass user-derived values through the `params`
+  argument (`Model.objects.raw("... WHERE id = %s", [id])`), never by
+  interpolating them into the SQL string with an f-string/`%`/`.format()`.
+- Treat `.extra()` as legacy; prefer expressing the same query with the ORM
+  (`annotate`, `F()`, `Q()`, `Func`) or a parameterized `.raw()` call — the
+  Django security team explicitly does not treat unsanitized input reaching
+  `.extra()`'s `select`/`where` clauses as a framework bug, because
+  `.extra()` was never given the ORM's own escaping.
+
+## Settings and secrets
+
+- `SECRET_KEY` must be at least 50 characters, unique per environment, never
+  the `django-insecure-` placeholder `startproject` generates, and never
+  committed to source — read it from the environment/secret store.
+- `DEBUG` must be `False` in any settings module used in production;
+  `DEBUG = True` leaks stack traces, local variable values, and settings
+  contents to any visitor who triggers an unhandled exception.
+- `ALLOWED_HOSTS` must be a real, non-empty list of the application's actual
+  hostnames in production, never `["*"]` — an empty or wildcard value
+  defeats the Host-header validation Django's deploy checks exist to
+  enforce.
+- Run `python manage.py check --deploy` before a production release; it
+  flags exactly these three (and related HSTS/secure-cookie) settings
+  automatically — don't hand-audit `settings.py` for them instead.
+
+## Red flags
+
+- "I'll add `|safe` here, this content only ever comes from an admin form" —
+  if that admin form field can ever hold end-user-influenced text (a
+  support agent pasting a customer's message, a bio field editable by the
+  account owner), the trust boundary already includes untrusted input.
+- "`.extra()` with an f-string is fine, this value is just an internal ID"
+  — an "internal" ID that ever originates from a URL param, form field, or
+  header is user-controlled regardless of how it's described; use `params`.
+- "`@csrf_exempt` unblocks this POST and the tests pass now" — passing
+  tests after exempting CSRF proves the exemption works, not that it's
+  safe; verify the endpoint has an equivalent protection first.

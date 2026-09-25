@@ -1,0 +1,42 @@
+{
+  "id": "rust",
+  "family": "language",
+  "modules": ["rust-rules", "rust-skills"],
+  "detectionMarkers": ["rust"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 335, Wave 4 batch 3"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["rust-implementation"],
+    "test": ["rust-testing"],
+    "review": ["rust-code-review"],
+    "build-fix": ["rust-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Rust",
+    "auditFocus": [
+      "an .unwrap()/.expect() on a Result or Option built from untrusted or fallible external input (a network response, a file read, a parsed argument) instead of propagating with ?",
+      "an unsafe block with no # Safety doc comment stating the invariants the caller must uphold, or one wider than the specific operation that requires it",
+      "a borrow-checker conflict worked around with an unnecessary .clone() instead of restructuring ownership, splitting borrows, or using a reference",
+      "a blocking call (std::thread::sleep, a synchronous file/network read, a std::sync::Mutex held across an .await) inside an async fn instead of the async equivalent or spawn_blocking",
+      "an integer operation on untrusted input with no overflow/bounds check (raw arithmetic or indexing instead of checked_add/get/saturating_* where the value could be attacker-influenced)",
+      "a custom error type that loses the underlying cause instead of using #[source]/#[from] (thiserror) or .context() (anyhow) to preserve it"
+    ],
+    "buildCommands": [
+      "cargo build --all-targets",
+      "cargo clippy --all-targets -- -D warnings",
+      "cargo fmt --check",
+      "cargo test"
+    ],
+    "fixGuardrails": [
+      "Never silence a clippy finding with a blanket #[allow(clippy::all)] or a lint-level allow instead of fixing the root cause.",
+      "Never add .unwrap()/.expect() to make a type error or a Result mismatch disappear; propagate with ? or handle the error explicitly.",
+      "Never bump the edition or MSRV in Cargo.toml just to make an error disappear without understanding why it changed.",
+      "Never delete or skip a failing test to reach a green build.",
+      "Never widen an unsafe block or drop a # Safety comment to silence a compiler or clippy complaint about it."
+    ]
+  }
+}
