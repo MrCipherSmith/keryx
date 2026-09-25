@@ -93,6 +93,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/ci` | Failed CI runs/jobs of the current branch's PR, each with an advisory triage and its deterministic-signal evidence. |
 | `/conform` | Check a PR, a review report, or a diff against a reference document's clauses, with Jev. |
 | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
+| `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
 

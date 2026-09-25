@@ -129,3 +129,9 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # not something to commit. Written 0o600. Same reasoning, same placement, as
 # the `review-conform/` entry just above.
 .metaproject/data/review-jev-rules/
+# Flow 331's review-conform adapter runs `keryx review conform` with its cwd
+# set to bench/jev-review/fixtures/conform-project/ (its own scratch
+# .metaproject/tasks.config.json), so that command writes the same
+# recent-docs.json runtime state there — same reasoning as the entry above,
+# just at a nested path the root-anchored pattern above does not reach.
+bench/jev-review/fixtures/conform-project/.metaproject/data/

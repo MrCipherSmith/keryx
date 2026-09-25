@@ -306,6 +306,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Managed work",
     summary: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule.",
   },
+  {
+    kind: "slash",
+    name: "/guard",
+    group: "Managed work",
+    summary: "Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on|off].",
+  },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {
     kind: "slash",
