@@ -1,0 +1,85 @@
+---
+extends: common
+paths: ["**/*.py"]
+metadata:
+  origin: authored
+---
+
+# FastAPI testing
+
+Narrows `python`'s `pytest` conventions to FastAPI's own test client and
+dependency-override patterns. Applies only to FastAPI project files; see
+`skills/fastapi-testing/SKILL.md` for the full test-authoring workflow this
+rule file backs.
+
+## Test client
+
+- Test path operations through `fastapi.testclient.TestClient` (sync tests)
+  or `httpx.AsyncClient` with `ASGITransport` (async tests) against the
+  real `app` instance, rather than calling the path operation function
+  directly — calling the function directly skips FastAPI's own request
+  parsing, dependency resolution, and response-model filtering, which is
+  exactly what most bugs in a path operation live in.
+- Build the `TestClient`/`AsyncClient` from a fixture shared across a test
+  module (or `conftest.py` once a second module needs it), not
+  re-instantiated per test, unless a test needs a differently configured
+  app instance.
+
+## Dependency overrides
+
+- Override a dependency for a test with `app.dependency_overrides[real_dep]
+  = fake_dep`, not by monkeypatching the dependency function's module
+  attribute — `dependency_overrides` is FastAPI's own supported mechanism
+  and is what keeps the override scoped to the app instance under test.
+- Clear `app.dependency_overrides` after each test that sets one (a fixture
+  `yield`ing the override and clearing it in teardown, or `.clear()` in the
+  test itself) — an override left in place leaks into unrelated tests run
+  afterward in the same process.
+- Use a dependency override for the current-user/auth dependency to test
+  both an authenticated and an unauthenticated path without standing up
+  real credential handling in every test.
+
+## Request/response assertions
+
+- Assert on the parsed response body (`response.json()`) and
+  `response.status_code`, not just that the call didn't raise — a path
+  operation that returns the wrong status code or a malformed body with no
+  exception is a real bug a bare "it didn't crash" assertion misses.
+- For a validation-error case, assert the `422` status FastAPI returns for
+  a Pydantic validation failure, not a generic exception — a request that
+  fails Pydantic validation never reaches the path operation body at all.
+- When `response_model` is declared, assert that a field the model
+  excludes (e.g. `hashed_password`) is actually absent from the response
+  body for at least one test — this is the behavior `response_model`
+  exists to guarantee, and a typo in the model's field list would
+  otherwise ship unnoticed.
+
+## Database and external dependencies
+
+- Use a real test database (a throwaway SQLite file, a test-scoped
+  Postgres schema, or the project's own configured test-DB fixture) behind
+  a `get_db`-style dependency override, not a hand-rolled mock of the ORM
+  session, for anything beyond the simplest unit test — an ORM session
+  mock only checks that the code called the mock the way the mock expects.
+- Mock genuinely external services (a third-party HTTP API, an email
+  provider) at the client boundary (`httpx`/`requests` mock, or the
+  project's configured HTTP mocking library), matching `python`'s own
+  testing rule: mock external dependencies, not internal collaborators.
+
+## Async tests
+
+- Mark an async test `pytest.mark.asyncio` (or the project's configured
+  async plugin/mode) exactly as `python`'s testing rule requires; this
+  applies the same way to a test that awaits `AsyncClient` calls against a
+  FastAPI app.
+
+## Coverage expectations
+
+- Every new or touched path operation gets at least one test for its
+  success path, its validation-failure path (a `422` for bad input when
+  the body is a Pydantic model), and, when it requires auth, both an
+  authenticated and an unauthenticated case.
+- A dependency with nontrivial logic (parses a header, decodes a token,
+  applies a business rule) gets its own test independent of any path
+  operation that happens to use it, in addition to the path operation's
+  own integration-level test.

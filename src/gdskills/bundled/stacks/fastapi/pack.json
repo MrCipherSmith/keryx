@@ -1,0 +1,43 @@
+{
+  "id": "fastapi",
+  "family": "framework",
+  "extends": "python",
+  "modules": ["fastapi-rules", "fastapi-skills"],
+  "detectionMarkers": ["fastapi"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 335, Wave 4 batch 3"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["fastapi-implementation"],
+    "test": ["fastapi-testing"],
+    "review": ["fastapi-code-review"],
+    "build-fix": ["fastapi-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "FastAPI",
+    "auditFocus": [
+      "a blocking call (sync DB driver, `requests`, `time.sleep`, sync file I/O) inside an `async def` path operation or dependency instead of a `def` one FastAPI can offload to its threadpool",
+      "a request body or query model that skips Pydantic validation by typing a parameter as `dict`/`Any` instead of a `BaseModel`",
+      "a path operation with no `response_model`/return type where one would prevent leaking internal fields (e.g. `hashed_password`) in the response",
+      "a dependency-injected auth check (`Depends(get_current_user)`) missing from a path operation that should require it",
+      "`CORSMiddleware` configured with `allow_origins=[\"*\"]` alongside `allow_credentials=True`, which browsers reject and which is unsafe if they didn't",
+      "secrets/config read from hard-coded values instead of `pydantic-settings`/environment, or a `SECRET_KEY` committed in source"
+    ],
+    "buildCommands": [
+      "ruff check .",
+      "ruff format --check .",
+      "mypy . || pyright",
+      "pytest -x -q",
+      "python -c \"import <app_module>\" # or: uvicorn <app_module>:app --port 0 as an app-startup smoke check"
+    ],
+    "fixGuardrails": [
+      "never add `# type: ignore` or `# noqa` to silence a checker without fixing or explaining the underlying issue",
+      "never move a blocking call into an `async def` path operation to \"simplify\" it -- keep it `def` so FastAPI's threadpool handles it, or make the call itself async",
+      "never widen a Pydantic model's field type to `Any`/`dict` just to make validation errors stop",
+      "fix the smallest root cause; do not refactor unrelated code while resolving a build/lint/type failure"
+    ]
+  }
+}

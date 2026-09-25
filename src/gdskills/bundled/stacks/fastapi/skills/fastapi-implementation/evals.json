@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "Add a FastAPI path operation for creating a new order",
+      "Implement this endpoint in FastAPI that returns paginated items",
+      "Write a Pydantic model that validates a signup request body",
+      "Add a FastAPI dependency for the current authenticated user",
+      "Add background task support to this FastAPI endpoint for sending a welcome email",
+      "Create a new APIRouter for the payments resource",
+      "Implement OAuth2 password login in FastAPI"
+    ],
+    "negative": [
+      "Implement this in Django instead of FastAPI",
+      "Write a pytest test for this plain Python function that has no HTTP layer",
+      "Review this FastAPI diff for blocking calls inside async def",
+      "Fix this ModuleNotFoundError breaking our FastAPI app's import",
+      "Implement asyncio.TaskGroup for concurrent fetches in this plain Python script, no web framework involved",
+      "Review this Express.js route for security issues"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "sync-driver-blocking-call",
+      "prompt": "Implement a FastAPI path operation `GET /users/{user_id}` that looks up a user with a synchronous SQLAlchemy session (the project has no async DB driver configured) and returns the user.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer declares the path operation with plain `def`, not `async def`, so FastAPI runs it in its own threadpool instead of blocking the event loop, since the synchronous SQLAlchemy call cannot be awaited.",
+          "pass_criteria": [
+            "declares the path operation function with plain `def user_id... -> ...:`, not `async def`, shown in actual code",
+            "explains that FastAPI runs a `def` path operation in an external threadpool automatically, which is why a blocking synchronous DB call is safe there but would block the event loop inside `async def`",
+            "the synchronous SQLAlchemy session lookup is shown being called directly (no `await`), consistent with a non-async function"
+          ],
+          "fail_criteria": [
+            "declares the path operation `async def` and calls the synchronous SQLAlchemy session directly inside it without wrapping it (e.g. via `asyncio.to_thread` or a real async driver). Mentioning that this would be wrong is not itself a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\nfrom fastapi import APIRouter, Depends, HTTPException\nfrom sqlalchemy.orm import Session\n\nrouter = APIRouter()\n\n\n@router.get(\"/users/{user_id}\", response_model=UserRead)\ndef read_user(user_id: int, db: Session = Depends(get_db)) -> User:\n    user = db.get(User, user_id)\n    if user is None:\n        raise HTTPException(status_code=404, detail=\"User not found\")\n    return user\n```\nThis is declared with plain `def`, not `async def`, because the project's SQLAlchemy session is synchronous and there's no async driver to await. FastAPI runs a `def` path operation in its own external threadpool automatically, so the blocking `db.get(...)` call runs off the main event loop and doesn't stall other concurrent requests. If this were declared `async def` instead, that same blocking call would run directly on the event loop and block every other in-flight request on that worker until it returned.",
+        "known_wrong": "```python\nfrom fastapi import APIRouter, Depends, HTTPException\nfrom sqlalchemy.orm import Session\n\nrouter = APIRouter()\n\n\n@router.get(\"/users/{user_id}\", response_model=UserRead)\nasync def read_user(user_id: int, db: Session = Depends(get_db)) -> User:\n    user = db.get(User, user_id)\n    if user is None:\n        raise HTTPException(status_code=404, detail=\"User not found\")\n    return user\n```\nMarking the path operation `async def` is the modern, recommended style for FastAPI endpoints and lets the function be awaited by anything that needs to call it directly in tests. The synchronous `db.get(...)` call still works fine here since Python doesn't require `await` on every call inside an `async def` -- only on things that are themselves awaitable -- so this returns the correct user with no errors.",
+        "vague": "Make sure the database call doesn't end up blocking the event loop -- pick the path operation style that matches whether the driver is async or not.",
+        "subtle_wrong": "```python\nfrom fastapi import APIRouter, Depends, HTTPException\nfrom sqlalchemy.orm import Session\n\nrouter = APIRouter()\n\n\n@router.get(\"/users/{user_id}\", response_model=UserRead)\nasync def read_user(user_id: int, db: Session = Depends(get_db)) -> User:\n    user = db.get(User, user_id)\n    if user is None:\n        raise HTTPException(status_code=404, detail=\"User not found\")\n    return user\n```\nKept it `async def` since the rest of the router's endpoints are already async and mixing `def` and `async def` path operations in the same file looks inconsistent -- FastAPI handles both under the hood anyway, so the synchronous `db.get` call here is a minor, low-risk tradeoff for keeping the router's style uniform."
+      },
+      "anti_patterns": ["async def"]
+    },
+    {
+      "id": "request-body-pydantic-not-dict",
+      "prompt": "Write a FastAPI `POST /signup` endpoint that accepts a JSON body with `username` and `email` fields and creates a user.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer declares the request body as a Pydantic BaseModel parameter so FastAPI validates it before the path operation runs, rather than reading the raw body with `await request.json()` or accepting it as an untyped dict.",
+          "pass_criteria": [
+            "defines a Pydantic `BaseModel` (e.g. `class SignupRequest(BaseModel): username: str; email: str`) for the request body, shown as actual code",
+            "declares the path operation parameter typed as that model (e.g. `payload: SignupRequest`) so FastAPI parses and validates the body automatically before the function body runs",
+            "shows the model's fields being used in the function body (e.g. `payload.username`, `payload.email`) rather than manually indexing into a dict"
+          ],
+          "fail_criteria": [
+            "reads the request body via `await request.json()` (or accepts it as a bare `dict`/`Any` parameter) instead of a Pydantic `BaseModel`. Mentioning that this would skip validation is not itself a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\nfrom fastapi import APIRouter\nfrom pydantic import BaseModel, EmailStr\n\nrouter = APIRouter()\n\n\nclass SignupRequest(BaseModel):\n    username: str\n    email: EmailStr\n\n\n@router.post(\"/signup\", response_model=UserRead)\ndef signup(payload: SignupRequest) -> User:\n    return create_user(username=payload.username, email=payload.email)\n```\nThe body is declared as a `SignupRequest` Pydantic model, so FastAPI parses and validates the incoming JSON -- checking both fields are present and `email` is a well-formed address -- before `signup`'s body ever runs, and returns a `422` automatically on bad input. The function reads `payload.username`/`payload.email` off the validated model rather than indexing into a raw dict, so a typo'd or missing field fails at validation time instead of surfacing as a `KeyError` deep in `create_user`.",
+        "known_wrong": "```python\nfrom fastapi import APIRouter, Request\n\nrouter = APIRouter()\n\n\n@router.post(\"/signup\", response_model=UserRead)\nasync def signup(request: Request) -> User:\n    body = await request.json()\n    return create_user(username=body[\"username\"], email=body[\"email\"])\n```\nReading the body with `await request.json()` is simple and flexible -- it avoids defining a separate Pydantic model for what's just two fields, and the function can grab whatever keys it needs directly off the parsed dict. Since `create_user` will raise if a field is missing anyway, there's no real need for FastAPI's own validation layer here for such a small payload.",
+        "vague": "Make sure the incoming username and email get validated before the signup logic runs, using FastAPI's own request-body handling rather than parsing it by hand.",
+        "subtle_wrong": "```python\nfrom fastapi import APIRouter, Request\n\nrouter = APIRouter()\n\n\n@router.post(\"/signup\", response_model=UserRead)\nasync def signup(request: Request) -> User:\n    body = await request.json()\n    username = body.get(\"username\")\n    email = body.get(\"email\")\n    if not username or not email:\n        raise HTTPException(status_code=422, detail=\"username and email are required\")\n    return create_user(username=username, email=email)\n```\nThis reads the body manually with `await request.json()` and adds its own presence check that raises a `422`, matching the same status code FastAPI's own validation would return -- so callers see the same error behavior as if a Pydantic model had validated the body, without the overhead of declaring one for just two required strings."
+      },
+      "anti_patterns": ["await request.json()"]
+    }
+  ]
+}

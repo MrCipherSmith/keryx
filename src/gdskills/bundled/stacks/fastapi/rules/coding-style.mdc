@@ -1,0 +1,68 @@
+---
+extends: common
+paths: ["**/*.py"]
+metadata:
+  origin: authored
+---
+
+# FastAPI coding style
+
+Narrows `python`'s coding style to FastAPI's own project conventions. A
+FastAPI project is still a Python project — everything not specific to
+FastAPI's own idiom still comes from `python`'s `rules/coding-style.mdc`,
+which this file extends.
+
+## Path operations
+
+- Name path operation functions for the action they perform
+  (`read_item`, `create_user`), not for the HTTP method alone — the
+  decorator (`@app.get(...)`, `@app.post(...)`) already states the method.
+- Group related path operations behind an `APIRouter` per resource/domain
+  (`routers/items.py` exposing `router = APIRouter(prefix="/items",
+  tags=["items"])`) rather than registering every route directly on a single
+  `app` instance once the project has more than a handful of endpoints.
+- Declare an explicit `response_model` (or a return type annotation FastAPI
+  can use as one) on every path operation that returns a Pydantic model or
+  ORM object — this is what filters the response to the declared fields and
+  keeps an internal-only field (a password hash, an audit flag) from
+  leaking into the API response.
+- Use `Annotated[<type>, Depends(...)]`/`Annotated[<type>, Query(...)]` etc.
+  for parameter declarations (the current recommended style) rather than
+  the bare `= Depends(...)`/`= Query(...)` default-value form, unless the
+  project's own code still uses the older form consistently.
+
+## Pydantic models
+
+- Define request/response schemas as Pydantic `BaseModel` subclasses, not
+  as bare `dict`/`Any` parameters — see `rules/patterns.mdc` for why this is
+  also the project's injection defense, not just a style preference.
+- Keep a model's field constraints on the field itself (`Field(gt=0,
+  le=100)`, `Literal[...]` for a closed set of values) instead of
+  re-validating the same constraint by hand in the path operation body.
+- Separate the model used for input (what a client may send) from the model
+  used for output (what the API returns) when they differ by even one field
+  — do not reuse a single model for both and rely on route logic to strip
+  the extra field before responding.
+- Configure a model with `model_config = ConfigDict(...)` (Pydantic v2), not
+  the v1 inner `class Config:` — the project's Pydantic version is declared
+  in `pyproject.toml`; confirm it before assuming v2-only syntax.
+
+## Dependencies
+
+- Keep a dependency function small and single-purpose (fetch the current
+  user, open a DB session, parse a header) — a dependency that both
+  authenticates and performs business logic should split so the auth part
+  is reusable on its own.
+- Prefer a `yield`-based dependency (`def get_db(): ... yield session ...
+  finally: session.close()`) for anything that needs teardown, over a
+  plain-return dependency plus a manual close call in the path operation.
+
+## Project layout
+
+- Match the project's existing layout — a `src/<package>/`
+  `routers/`, `models/`/`schemas/`, `dependencies.py`, `main.py` split for a
+  multi-router app, or a single `main.py` for a small service — rather than
+  introducing a different structure alongside it.
+- Keep the FastAPI `app = FastAPI(...)` instantiation and top-level
+  middleware/router registration in one place (typically `main.py`); do not
+  scatter `app.include_router(...)` calls across unrelated modules.

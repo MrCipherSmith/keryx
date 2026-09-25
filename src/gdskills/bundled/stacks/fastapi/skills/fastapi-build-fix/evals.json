@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Fix this FastAPI app that fails to start with a dependency resolution error",
+      "Our FastAPI app fails to import after adding a new router",
+      "This Depends() dependency is failing to resolve, please fix it",
+      "mypy is failing on this FastAPI path operation's return type",
+      "ruff check is failing on our FastAPI project, fix the violations",
+      "This Pydantic model is raising a validation error I don't understand",
+      "Fix this FastAPI router registration error causing a 404"
+    ],
+    "negative": [
+      "Fix this generic ModuleNotFoundError unrelated to FastAPI's own wiring",
+      "Fix this Django migration conflict blocking makemigrations from running",
+      "Implement a new FastAPI endpoint that lists orders",
+      "Write pytest tests for this FastAPI router",
+      "Review this FastAPI diff for security issues",
+      "Fix the TypeScript build failure in our Node service",
+      "Our pip dependency resolver reports a version conflict between two unrelated packages"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "pydantic-mismatch-not-any",
+      "prompt": "A Pydantic model in our FastAPI project raises `PydanticUserError: cannot mix Config class and model_config` at import time after someone added a v2-style validator to an older model. How do you fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer diagnoses the actual cause -- the model mixes Pydantic v1's class Config with v2 syntax -- and fixes it by converting the model consistently to one Pydantic version (matching the project's pinned version), rather than making the error disappear by widening field types to Any/dict.",
+          "pass_criteria": [
+            "identifies the root cause: the model mixes Pydantic v1's `class Config:` with v2-style syntax (e.g. a v2 validator or `model_config`), which Pydantic v2 rejects",
+            "names the concrete fix: convert the model fully to one Pydantic version's syntax -- e.g. replace `class Config:` with `model_config = ConfigDict(...)` (v2) or remove the v2-style addition (if the project is pinned to v1) -- consistent with the project's actual pinned Pydantic version",
+            "shows or names the specific change (the class body converted, or the field/validator adjusted), not just 'fix the Pydantic version mismatch' in the abstract"
+          ],
+          "fail_criteria": [
+            "proposes retyping the model's fields as `Any`/`dict` (or removing Pydantic validation from the model) to make the error stop, instead of fixing the actual v1/v2 syntax mismatch. Mentioning that this would be wrong is not itself a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This is a Pydantic v1/v2 syntax mismatch: the model still has an inner `class Config:` (v1 style) while something -- a validator or another field -- was added using v2 syntax, and Pydantic v2 refuses to mix the two on the same model. First confirm the project's actual pinned Pydantic version in `pyproject.toml`; if it's v2 (the common case for a current FastAPI project), convert the model fully: replace `class Config:` with `model_config = ConfigDict(...)`, using the v2-equivalent keys for whatever the old `Config` class set (e.g. `orm_mode` becomes `from_attributes`), and make sure every validator on the model uses `@field_validator`/`@model_validator`, not the v1 `@validator`. Once the whole model is consistently v2, rerun the app import to confirm `PydanticUserError` is gone, then rerun `mypy`/`pytest` since the field behavior itself may have changed slightly between the two config styles.",
+        "known_wrong": "Simplest fix: since the validator logic is the newer addition, just drop strict typing on the affected fields and use `Any` for now so Pydantic doesn't try to apply the conflicting validation machinery:\n\n```python\nclass Item(BaseModel):\n    name: Any\n    price: Any\n\n    class Config:\n        orm_mode = True\n```\n\nThis clears the `PydanticUserError` immediately since there's no more type-specific validation for Pydantic to get confused about, and the app starts up again. You can revisit the proper v1/v2 migration later once there's time to go through every field.",
+        "vague": "Sounds like the model is mixing old and new Pydantic config styles -- pick one version's syntax and apply it consistently across the model instead of mixing them.",
+        "subtle_wrong": "Since the error is specifically about `Config` and `model_config` conflicting, the fastest fix is to just delete the inner `class Config:` block entirely and leave the v2 addition in place:\n\n```python\nclass Item(BaseModel):\n    name: str\n    price: float\n\n    @field_validator(\"price\")\n    @classmethod\n    def price_positive(cls, v):\n        return v\n```\n\nThat clears the import-time error right away. The settings that used to live in `Config` (like `orm_mode`) probably weren't load-bearing for this particular model anyway, so it should be safe to drop them without checking what they were doing."
+      },
+      "anti_patterns": ["`Any`"]
+    },
+    {
+      "id": "dependency-resolution-not-removed",
+      "prompt": "Our FastAPI app fails to start with an error that a dependency function's parameter cannot be resolved. Fix it.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer diagnoses which parameter FastAPI could not resolve and fixes it by giving that parameter a proper Depends()/request-data annotation, rather than removing the Depends() wiring and calling the dependency function directly. Because the prompt supplies no code or exact error text, an answer that first asks for the actual error message and the dependency function's signature, while explicitly ruling out removing Depends() as the eventual fix, is also correct.",
+          "pass_criteria": [
+            "either names the concrete fix -- giving the unresolved parameter a proper `Depends(...)` (or a request-data annotation like `Query(...)`/a plain type FastAPI can parse) -- once the failing signature is known, or asks for the actual error message and the dependency function's signature before proposing a fix, since neither was supplied",
+            "explains that FastAPI couldn't determine how to resolve one of the dependency's own parameters, and that the fix is to give that parameter a source FastAPI understands, not to bypass dependency injection",
+            "commits to keeping `Depends(...)`-based injection in place once the fix is identified or known"
+          ],
+          "fail_criteria": [
+            "proposes removing the `Depends(...)` wiring and calling the dependency function directly (or hard-coding its return value) to make the startup error disappear. Mentioning that this would be wrong is not itself a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "I'd need the actual startup error message and the dependency function's signature to name the exact fix -- FastAPI's error names which parameter it couldn't resolve, and that's the one to look at. In general, this happens when a dependency function has a parameter with no default and no annotation FastAPI recognizes as either request data (a `Query(...)`/`Path(...)`/plain scalar type) or another `Depends(...)`. The fix is to give that specific parameter the annotation it's missing -- e.g. if it's meant to come from another dependency, add `Depends(other_dep)`; if it's meant to come from the request, annotate it with the right FastAPI parameter type. I wouldn't remove `Depends(...)` from the call site to sidestep the error -- that would lose dependency injection (and `app.dependency_overrides` testability) for that value entirely; once the real fix is applied, rerun the app-startup check to confirm it resolves cleanly.",
+        "known_wrong": "Easiest fix: since FastAPI can't figure out how to resolve the parameter, just call the dependency function directly inside the path operation instead of injecting it through `Depends(...)`:\n\n```python\n@router.get(\"/items\")\ndef read_items(user_id: int):\n    db = get_db_session()  # called directly, no Depends()\n    return db.query(Item).filter_by(owner_id=user_id).all()\n```\n\nThis sidesteps FastAPI's dependency resolution entirely, so the startup error goes away immediately and the endpoint still gets a working session. You lose the ability to override it in tests via `app.dependency_overrides`, but that's a minor tradeoff for getting the app running again quickly.",
+        "vague": "Figure out which parameter FastAPI can't resolve and give it the annotation it needs instead of working around the dependency system.",
+        "subtle_wrong": "Since the unresolved parameter is causing the whole app to fail at startup, the pragmatic move is to give it a hard-coded default value so FastAPI stops trying to resolve it as a dependency at all:\n\n```python\ndef get_db(session_factory=default_session_factory):\n    return session_factory()\n```\n\nThat clears the resolution error because the parameter now has a plain default instead of an unresolved dependency, and the app starts. It's a bit less flexible than proper injection, but it unblocks startup without having to dig into why the original wiring didn't resolve."
+      },
+      "anti_patterns": ["Depends"]
+    }
+  ]
+}
