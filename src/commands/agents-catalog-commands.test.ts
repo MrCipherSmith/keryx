@@ -185,16 +185,18 @@ describe("keryx agents verify", () => {
   // count — the marginal-at-the-floor fragility flow 316 review round 1
   // predicted) and its pair was removed; `react` stays `experimental` and
   // ships none. Flow 318 (Wave 4 batch 2) adds `angular` (both auditor and
-  // fixer — its skills.review and skills["build-fix"] are both non-empty)
-  // and `nestjs` (fixer ONLY — skills.review is empty, review-backend
-  // already covers backend review, and the generator only produces an
-  // auditor when skills.review is non-empty, R1 review PR #719 M2). `mobx`
-  // clears the gate too but deliberately carries no `agentProfile` at all
-  // (R1 review PR #719 M1 — code-mobx-store-review/ts-js-node+react
+  // fixer — its skills.review and skills["build-fix"] are both non-empty).
+  // `mobx` clears the gate too but deliberately carries no `agentProfile`
+  // at all (R1 review PR #719 M1 — code-mobx-store-review/ts-js-node+react
   // build-fix already cover its ground), so it contributes nothing here.
+  // `nestjs` cleared the gate in T13's first honest run and briefly shipped
+  // a fixer-only pair (R1 review PR #719 M2), but the R1 review fix pass
+  // de-jargoned a trigger prompt that had named the internal APP_FILTER
+  // token unprompted, and the FINAL honest gate re-run found it honestly
+  // fails to route — nestjs is demoted back to experimental with no pair.
   // The real, un-stubbed CLI path reports zero problems across the whole
-  // catalog, and exactly those seven generated agent names are present.
-  test("the real bundled catalog verifies ok with zero problems (python, go, angular, nestjs are gate-cleared with a generated pair; flow 318)", async () => {
+  // catalog, and exactly those six generated agent names are present.
+  test("the real bundled catalog verifies ok with zero problems (python, go, angular are gate-cleared with a generated pair; flow 318)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -214,7 +216,6 @@ describe("keryx agents verify", () => {
       "angular-code-auditor",
       "go-build-fixer",
       "go-code-auditor",
-      "nestjs-build-fixer",
       "python-build-fixer",
       "python-code-auditor",
     ]);

@@ -508,7 +508,7 @@
       ],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "nestjs-skills": {
       "kind": "skill",
@@ -525,7 +525,7 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "vue-rules": {
       "kind": "rule",

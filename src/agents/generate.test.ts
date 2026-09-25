@@ -277,11 +277,15 @@ describe("generateStackAgentPair", () => {
 
     // Pin the shipped, honest-gate outcome explicitly: go and python clear
     // the gate (flow 314/316/317, Wave 4 batch 1); react and ts-js-node
-    // still fail it; angular, mobx, and nestjs clear it (flow 318, Wave 4
-    // batch 2, T13's honest DeepSeek runner+judge trials=10 gate run);
-    // nextjs-nuxt and vue still fail it (see their own agent-refs.json
-    // `note` for the specific failing scenario/collision).
-    expect(gateCleared).toEqual(["angular", "go", "mobx", "nestjs", "python"]);
+    // still fail it; angular and mobx clear it (flow 318, Wave 4 batch 2).
+    // nestjs cleared the gate in T13's first honest run but was DEMOTED
+    // after the R1 review fix pass (PR #719): de-jargoning
+    // nestjs-implementation's exception-filter trigger prompt (it had
+    // named the internal APP_FILTER token unprompted) made that prompt
+    // honestly fail to route, and the final honest gate re-run reflects
+    // that. nextjs-nuxt and vue still fail it (see their own
+    // agent-refs.json `note` for the specific failing scenario/collision).
+    expect(gateCleared).toEqual(["angular", "go", "mobx", "python"]);
 
     // Direction 1: every gate-cleared pack that carries an `agentProfile`
     // regenerates to exactly what is on disk — the byte-identical
@@ -314,15 +318,14 @@ describe("generateStackAgentPair", () => {
       expect(gateCleared).toContain(origin.sourceRef);
     }
 
-    // Explicit, not implied by the loop above: exactly 7 generated files
-    // ship — go/python/angular each get a full pair (4 modules x 2 = wait,
-    // 3 packs x 2 files = 6), nestjs gets only a build-fixer (its
-    // skills.review is empty, R1 review PR #719 M2 — the generator never
-    // produces an auditor with nothing to point at), and mobx carries no
-    // agentProfile at all (R1 review PR #719 M1) so it contributes zero.
-    // go(2) + python(2) + angular(2) + nestjs(1) + mobx(0) = 7.
-    expect(gateCleared).toEqual(["angular", "go", "mobx", "nestjs", "python"]);
-    expect(generatedFileCount).toBe(7);
+    // Explicit, not implied by the loop above: exactly 6 generated files
+    // ship — go/python/angular each get a full pair (3 packs x 2 files);
+    // mobx carries no agentProfile at all (R1 review PR #719 M1) so it
+    // contributes zero; nestjs was demoted after the R1 review fix pass
+    // (see the comment above `gateCleared`'s assertion) so its
+    // build-fixer.md is gone too. go(2) + python(2) + angular(2) = 6.
+    expect(gateCleared).toEqual(["angular", "go", "mobx", "python"]);
+    expect(generatedFileCount).toBe(6);
   });
 
   // R2-4: the byte-identical regeneration path (Direction 1 above) has
