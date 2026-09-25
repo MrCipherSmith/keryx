@@ -113,6 +113,16 @@ export interface ShellConfig {
    * loader.
    */
   routing?: Record<string, unknown>;
+  /**
+   * Flow 327 — the operator's PER-USER model-profile catalogue (strength
+   * tier, price, context length, priority, per-field provenance;
+   * `src/harness/routing/model-profile.ts`'s `ModelProfile`), keyed by
+   * `<providerId>/<modelId>`. Not validated at this layer (a raw
+   * best-effort reader/writer, like every other structured field above);
+   * `loadModelProfiles`/`loadStoredModelProfiles` do the validation. Read/
+   * written only through `model-profile.ts`, never raw here.
+   */
+  modelProfiles?: Record<string, unknown>;
 }
 
 /**

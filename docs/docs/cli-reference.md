@@ -1244,8 +1244,10 @@ recorded as cross-family when both sides in fact ran the same vendor.
 The **routing table** — flow 305 — maps a task category to a model, so
 different kinds of work land on different providers/models without running
 `/model` before every turn. Two config layers, same precedence pattern as
-`security.config.json`: **explicit per-call override > per-project
-`routing.config.json` > per-user entry (shell config) > session default**.
+`security.config.json`, plus flow 327's automatically-built **derived**
+layer: **explicit per-call override > per-project `routing.config.json` >
+per-user entry (shell config) > derived (flow 327, below) > session
+default**.
 
 Categories (PRD `docs/requirements/keryx-jev-router/PRD.md` §4): `default`,
 `review`, `subagents`, `quick`, `coding`, `planning`, `docs`, `unattended`.
@@ -1287,25 +1289,76 @@ keryx routing set <category> <provider>/<model> [--user|--project]
 keryx routing set <category> <provider> [--user|--project]
 keryx routing unset <category> [--user|--project]
 keryx routing trust
+keryx routing profile list [--json]
+keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>
 ```
 
 | Subcommand | Flags | Description |
 |---|---|---|
-| `list` | `--json` | Every category, its resolved assignment (`session default`, `<provider>/<model>`, or `<provider> (provider default)`), which layer answered (`project`, `user`, or `default`), and — when applicable — the not-connected entry it fell back from. |
+| `list` | `--json` | Every category, its resolved assignment (`session default`, `<provider>/<model>`, `<provider> (provider default)`, or `auto (derived from <provider>'s models) -> …`), which layer answered (`project`, `user`, `derived`, or `default`), and — when applicable — the not-connected or unavailable entry it fell back from. |
 | `set` | `<category> <provider>/<model>`, `--user`\|`--project` | Pin an exact model for a category. Default layer: `--user`. A `--project` write is not auto-approved — run `keryx routing trust` afterward. |
 | `set` | `<category> <provider>`, `--user`\|`--project` | Pin a provider's own default model for a category (no `/model` — the "provider default" form). |
 | `unset` | `<category>`, `--user`\|`--project` | Clear a category back to `session default`. Default layer: `--user`. |
 | `trust` | — | Print `routing.config.json`'s entries and approve its current content, so the project layer starts applying. |
+| `profile list` | `--json` | Every stored model profile: strength tier, input/output price per million tokens, context length, priority, each field's source, and availability. |
+| `profile set` | `<provider>/<model>`, `--tier`\|`--price-in`\|`--price-out`\|`--context`\|`--priority <value>` | An operator correction to one profile field — stored with `source: "operator"`, never overwritten by a later refresh. |
 
 In the TUI, `/routing` opens a list+detail modal: the list side shows every
-category's current resolution (with a not-connected fallback notice inline,
-and an unapproved-project notice when relevant); selecting one opens a
-**flat** searchable model picker — one list spanning every connected
+category's current resolution (with a not-connected/unavailable fallback
+notice inline, an `auto (derived from …)` marker for a category nobody
+configured, and an unapproved-project notice when relevant); selecting one
+opens a **flat** searchable model picker — one list spanning every connected
 provider's models (built on the same type-to-filter machinery `/model` uses),
 never a "pick a provider first" step — with a "provider default" row per
-connected provider and a "session default" row. A confirmed pick writes
-immediately to the per-user layer. `t` on the list side shows the project
-file's entries and arms an approval; `y` confirms, any other key cancels.
+connected provider and a "session default" row. Each model row also shows its
+profile (tier, price, context, priority, each field's source), and an
+`available: false` model is marked `UNAVAILABLE` (still selectable). A
+confirmed pick writes immediately to the per-user layer. `t` on the list side
+shows the project file's entries and arms an approval; `y` confirms, any
+other key cancels.
+
+### Model profiles and the derived default table (flow 327)
+
+Keryx records what it honestly knows about each connected model — strength
+tier, input/output price per million tokens, and context length — in a
+per-user **model profile** catalogue (`docs/requirements/keryx-jev-router/
+PRD.md` §6), keyed by `<provider>/<model>`. Every field carries its own
+**source**, in the order each is tried:
+
+- `reported` — read directly off a provider's live `/models` response, when
+  it carries `pricing`/`context_length` (confirmed for OpenRouter; parsed
+  generically for any gateway that returns the same shape).
+- `curated` — a small, hand-maintained seed table for the three providers
+  with no live `/models` endpoint at all: `anthropic`, `openai`, `gemini`.
+  Shows up from the FIRST read of the catalogue, before anything is written.
+- `guessed` — strength tier only, from the same name-pattern heuristic
+  `keryx review tier` already uses (`nano`/`mini`/`haiku`/… → `light`,
+  `opus`/`pro`/`large`/… → `deep`) — never used for price.
+- `operator` — set by `keryx routing profile set` or `/routing`'s picker.
+  Never overwritten by a later refresh.
+- `unknown` — a price/context field with no reported/curated/operator value.
+  Never `0`, never a fabricated number.
+
+A profile is refreshed — diffed against what's already stored, never
+wholesale replaced — every time a provider's live model list is fetched: at
+`keryx shell` startup, on `keryx providers status --refresh`, and on a
+`/connect` **Test**/`keryx providers test` (whose result then mentions the
+diff, e.g. `ok — 12 model(s) (profiles: 3 added, 1 changed, 1 now
+unavailable)`). A model no longer listed is marked `available: false` and
+KEPT, never deleted; a routing entry that resolves to an unavailable model is
+treated as unresolved at that layer and falls through, shown as:
+
+```
+<provider>/<model> — unavailable, falling back to <resolved>
+```
+
+**Derived default routing.** When a category has nothing configured at any
+layer, keryx derives a sensible default from the SESSION's own connected
+provider's models and their profiles: one model becomes the default for
+every category; with several models, `quick`/`subagents`/`docs`/`unattended`
+get the lightest/cheapest, `planning`/`review` get the strongest, and
+`default`/`coding` stay the session's own model, unchanged. `keryx routing
+list` shows this as `auto (derived from <provider>'s models) -> …`.
 
 ---
 
