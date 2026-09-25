@@ -264,6 +264,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Managed work",
     summary: "Show project-wide items needing review (proposals, blocked sessions).",
   },
+  {
+    kind: "slash",
+    name: "/ci",
+    group: "Managed work",
+    summary: "Failed CI runs/jobs of the current branch's PR, each with an advisory triage.",
+  },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {
     kind: "slash",

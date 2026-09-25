@@ -86,6 +86,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `/flows` | Browse project flows and inspect one. |
 | `/review` | Show project-wide items needing review (proposals, blocked sessions). |
+| `/ci` | Failed CI runs/jobs of the current branch's PR, each with an advisory triage. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
 
