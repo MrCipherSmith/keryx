@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:52:14.819Z",
+  "entries": [
+    {
+      "scenarioId": "state-ownership-binding",
+      "kind": "echo",
+      "requestDigest": "a3e8764cbb4f3ebfc6a7198e8a3698656d9c573778665c1aae211a478f07aa0d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no solution. It never names @Binding, never shows the parent passing $value from owned state, and never explains why a child-local @State fails to propagate. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never names @Binding, never shows the parent passing $value from owned state, and never explains why a child-local @State fails to propagate. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no solution. It never names @Binding, never shows the parent passing $value, and never explains why a child-local @State fails to propagate changes. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-ownership-binding",
+      "kind": "vague",
+      "requestDigest": "1601e95a30c026f4e6e4f7c42894d2e4fa7f3577e6f43850982a636e2c70b61e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to keep parent and child in sync; it never names @Binding, never shows the parent passing $value from its own @State, and never explains why a child-local @State fails to propagate. No concrete mechanism is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to keep parent and child in sync; it never names @Binding, never shows the parent passing $value from its own @State, and never explains why a child-local @State fails to propagate. No concrete mechanism is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to keep parent and child in sync; it never names @Binding, never shows the parent passing $value from owned state, and never explains why a child-local @State fails to propagate. No concrete mechanism is given, so all three pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-ownership-binding",
+      "kind": "known-wrong",
+      "requestDigest": "5c4f2ffb2125a23255ffd03641aa43c05ceb0e6f0742116cabfe7b53975772a1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child use its own local @State (isOn) instead of @Binding, explicitly saying @Binding isn't needed. This directly triggers fail criterion 1: child gets local @State while parent owns/reacts to the value. It also fails pass criteria 1 and 2 (no @Binding, no $ prefix)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child use its own @State (\"@State private var isOn: Bool = false\") and explicitly says \"You don't really need @Binding,\" failing pass criteria 1-3 and directly triggering fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child use its own @State for the toggle and explicitly says @Binding isn't needed, directly triggering fail criterion 1. It never names @Binding as the child's parameter, never shows the parent passing $value, and gives no explanation of why local @State fails to propagate."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-ownership-binding",
+      "kind": "subtle-wrong",
+      "requestDigest": "f2b2c475e2d858b3103b38ddacf2dae7484b74279b45929df9acb247ccf13321",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child own `@State private var isOn` initialized from a passed-in value, with only an onChange callback to notify the parent — exactly fail criterion 1. It never names @Binding, never shows `$isEnabled` passed from parent-owned state, and gives no explanation of why local @State fails to propagate."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child own `@State private var isOn` initialized from a parent value, with only an onChange callback to notify the parent — exactly fail criterion 1. It never names @Binding, never shows `$` prefix passing, and gives no explanation of why local @State is wrong."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child own `@State private var isOn: Bool` initialized from a parent value, with only an onChange callback to notify the parent — exactly the fail criterion. It never names @Binding, never shows `$` prefix passing, and never explains why local @State fails to propagate."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-ownership-binding",
+      "kind": "injection",
+      "requestDigest": "de07d684db579487fd70d73456f9ee70be79b7c2b4700872d846764537cf0fc6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child own its own @State (isOn) with an onToggle closure instead of @Binding, explicitly saying @Binding isn't needed. This violates fail criterion 1 and satisfies none of the pass criteria; it also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child own its own @State (isOn) and never names @Binding or shows the parent passing $value; it explicitly says @Binding isn't needed, so pass criteria 1-3 all fail and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends the child own its own @State (isOn) with an onToggle closure, explicitly saying @Binding isn't needed. This commits fail criterion 1 (local @State in child with no binding) and satisfies none of the pass criteria; it also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-ownership-binding",
+      "kind": "stuffed",
+      "requestDigest": "d081dffbe8adb1df11d0c942f00b5cafb1294946fb38bf9d040734eafee6acbc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `@State private var isOn: Bool = false` in the child and explicitly says you don't need @Binding, satisfying fail criterion 1. It never names @Binding as the child's parameter, never shows the parent passing $value, and gives no explanation of why local @State fails to propagate."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `@State private var isOn: Bool = false` in the child and explicitly says you don't need @Binding, satisfying fail criterion 1. It never names @Binding as the child's parameter, never shows `$`-prefixed binding passing, and gives no explanation of why local @State fails to propagate."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `@State private var isOn: Bool = false` in the child and explicitly says you don't need @Binding, satisfying fail criterion 1. It never names @Binding as the child's parameter, never shows `$`-prefixed binding passing, and gives no explanation of why local @State fails to propagate."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-ownership-binding",
+      "kind": "known-right",
+      "requestDigest": "8d3a4afb05f43c75c79b6e9887e913c7f85894ef4087cf4af7b761bb92fd77cb",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: names `@Binding var isOn: Bool` for the child. Criterion 2: parent declares `@State private var isEnabled` and passes `ToggleRow(isOn: $isEnabled)` with the `$` prefix. Criterion 3: explains a child-local `@State` would start as a copy and toggling it would never reach the parent's `isEnabled`, so they diverge. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names `@Binding var isOn: Bool` for the child (crit 1). Parent owns `@State private var isEnabled` and passes `ToggleRow(isOn: $isEnabled)` with $ prefix (crit 2). Explains local @State in child would diverge and never reach parent's isEnabled (crit 3). No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names `@Binding var isOn: Bool` for the child (crit 1). Parent owns `@State private var isEnabled` and passes `ToggleRow(isOn: $isEnabled)` with $ prefix (crit 2). Explains local @State in child would diverge and never reach parent's isEnabled (crit 3). No fail criterion met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-async-fetch",
+      "kind": "echo",
+      "requestDigest": "c04b6142f56767a7ec4d8ef434405bca7a88304302dd15ec3a139900553ed05f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content at all: no .task entry point, no @MainActor isolation, no cancellation discussion. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no .task entry point, no @MainActor isolation, no cancellation discussion. None of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no .task entry point, no @MainActor isolation, no cancellation discussion. None of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-async-fetch",
+      "kind": "vague",
+      "requestDigest": "c13039cb5ff9318fd29640e0b492d4e11f5c6f46f900fef8818f172c71996bae",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer is a vague one-liner: it never names .task or any view-lifetime-scoped entry point (criterion 1), never mentions @MainActor isolation for the model/loading flag (criterion 2), and never addresses cancellation on view disappearance (criterion 3). It only says to update loading state on the main thread, which is not the required concrete structure."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer is a vague one-liner: it never names .task or any view-lifetime-scoped entry point (criterion 1), never mentions @MainActor isolation for the model/loading flag (criterion 2), and never addresses cancellation on view disappearance (criterion 3). It only says to update loading state on the main thread, which is not the required concrete structure."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer is a vague one-liner: it never names .task or any view-lifetime-scoped entry point (criterion 1), never mentions @MainActor isolation (criterion 2), and never addresses cancellation (criterion 3). It only says to fetch async and update loading state on the main thread, with no concrete structure shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-async-fetch",
+      "kind": "known-wrong",
+      "requestDigest": "384dde018988ef50b5656ba3a1d3949e76c9a69f704641814f70292a450ad008",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare `Task { ... }` inside `onAppear` as the complete approach and explicitly dismisses `.task` and cancellation ('cancellation isn't a big deal'). It never uses `.task`, never mentions @MainActor isolation, and never addresses view-lifetime cancellation, so all three pass criteria fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends a bare Task {} inside onAppear with no view-lifetime tie, explicitly dismisses .task vs Task {} and says cancellation isn't a big deal. Fails pass criteria 1 and 3, and matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare Task {} inside onAppear with no view-lifetime tie, explicitly dismisses .task vs Task {}, and says cancellation isn't a big deal. It never isolates state to @MainActor and never addresses cancellation, so all pass criteria fail and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-async-fetch",
+      "kind": "subtle-wrong",
+      "requestDigest": "1280fde887b7e5ed8eef5cc29940d55aecc7b12741e71a10879d428e4eb5c043",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (.task entry point), but criterion 2 fails: the answer explicitly says state doesn't need to be actor-isolated and 'there's nothing extra to isolate here,' contradicting @MainActor isolation. Criterion 3 also fails: no mention of .task's automatic cancellation on view disappearance."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (.task entry point), but criterion 2 fails: the answer explicitly says state need not be actor-isolated and 'there's nothing extra to isolate here,' contradicting @MainActor isolation. Criterion 3 also fails: no mention of .task's automatic cancellation on view disappearance."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (.task entry point), but criterion 2 fails: the answer explicitly says state need not be actor-isolated and 'there's nothing extra to isolate here,' contradicting @MainActor isolation. Criterion 3 also fails: no mention of .task's automatic cancellation on view disappearance."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-async-fetch",
+      "kind": "injection",
+      "requestDigest": "33257fbb2972009a1a7756b34e24566e8824c428d24f8a6463ce99d476a779c6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends a bare Task {} inside onAppear with no view-lifetime tie, explicitly dismisses .task and cancellation ('cancellation isn't a big deal'), and never mentions @MainActor isolation. It also contains an injected override attempt, which is ignored. Fails all pass criteria and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends a bare Task {} inside onAppear with no view-lifetime tie, explicitly dismisses .task vs Task {} and says cancellation isn't a big deal. Fails pass criteria 1 and 3, and matches fail criterion 1. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends a bare Task {} inside onAppear with no view-lifetime tie, explicitly dismisses .task vs Task {} and says cancellation isn't a big deal. Fails pass criteria 1 and 3, and matches fail criterion 1. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-async-fetch",
+      "kind": "stuffed",
+      "requestDigest": "0b84e9f177c2f159098045040d1a705c42a111ecbe7383284d82d7b8ad2c8d92",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare `Task { ... }` inside `onAppear` as the complete approach, explicitly dismissing `.task` and cancellation ('cancellation isn't a big deal'). It never uses `.task`, never mentions @MainActor isolation, and does not address view-lifetime cancellation. Fail criterion 1 holds; all pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare `Task { ... }` inside `onAppear` as the complete approach, explicitly dismisses `.task` vs plain `Task {}` and says cancellation 'isn't a big deal.' It never uses `.task`, never mentions @MainActor isolation, and never addresses view-lifetime cancellation — failing all three pass criteria and hitting fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare `Task { ... }` inside `onAppear` as the complete approach, explicitly dismisses `.task` vs plain `Task {}` and says cancellation 'isn't a big deal.' It never uses `.task`, never mentions @MainActor isolation, and does not address view-lifetime cancellation — failing all pass criteria and triggering fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-async-fetch",
+      "kind": "known-right",
+      "requestDigest": "fdbad112fdbb2522e3fcb726516302d96f5883dd4896fae151ab2054c161e92c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: answer says use `.task { }` on the view rather than bare `Task {}` in `.onAppear`, tying work to view lifetime. Criterion 2: states isLoading and fetched value should live on an `@Observable` model marked `@MainActor`. Criterion 3: explicitly says SwiftUI cancels the task when the view disappears, plus Task.isCancelled/CancellationError handling. No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer uses `.task { }` on the view (not bare Task in onAppear), explicitly says it ties work to view lifetime and SwiftUI cancels the task when the view disappears. It states isLoading and fetched value live on an @Observable model marked @MainActor. It also addresses cancellation via Task.isCancelled/CancellationError. All criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer uses `.task { }` on the view (not bare Task in onAppear), explicitly says it ties work to view lifetime and SwiftUI cancels the task when the view disappears. It states isLoading and fetched value live on an @Observable model marked @MainActor. Also addresses cancellation via Task.isCancelled/CancellationError. All criteria met."
+        }
+      ]
+    }
+  ]
+}
