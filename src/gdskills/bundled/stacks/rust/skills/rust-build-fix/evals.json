@@ -15,7 +15,7 @@
       "Implement a new Rust feature in the order crate",
       "Review this Rust diff for unsafe blocks and unwrap panics",
       "Write Rust tests for this function",
-      "Our CMake configure step is failing with a missing header error, this is a C++ project not a Cargo one"
+      "Our CMake configure step is failing with a missing header error"
     ]
   },
   "scenarios": [
@@ -70,7 +70,9 @@
         "vague": "You should fix that clone properly instead of suppressing the finding -- make sure it's actually addressed before you call this done.",
         "subtle_wrong": "That redundant_clone finding is easy to clear without touching the surrounding logic: leave the `.clone()` exactly where it is and add a comment above it explaining that it's there for simplicity, so future readers understand it's intentional. That way you're not silently ignoring clippy's feedback anymore, and you don't have to change the function's signature or verify that borrowing would actually work at every call site."
       },
-      "anti_patterns": ["#[allow(clippy"]
+      "anti_patterns": [
+        "#[allow(clippy"
+      ]
     }
   ]
 }
