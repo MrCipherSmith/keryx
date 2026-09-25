@@ -9,7 +9,7 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic security rules to
 Rails-specific, OWASP-relevant risks and the safe framework API to use
-instead. Applies only to `*.rb` files.
+instead. Applies to `*.rb` and `*.erb` files.
 
 ## Mass assignment and strong parameters
 

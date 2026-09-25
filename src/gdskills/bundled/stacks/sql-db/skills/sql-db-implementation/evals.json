@@ -34,9 +34,9 @@
             "If following path (b), names the concrete non-blocking way to enforce NOT NULL afterward -- an ADD CONSTRAINT ... CHECK (col IS NOT NULL) NOT VALID followed by a separate VALIDATE CONSTRAINT -- rather than a plain SET NOT NULL; path (a) satisfies this automatically since the DEFAULT already guarantees no nulls exist."
           ],
           "fail_criteria": [
-            "Recommends a direct ALTER TABLE ... ALTER COLUMN ... SET NOT NULL on the large table with no constant default and no prior backfill/NOT VALID+VALIDATE sequence -- neither safe path was followed.",
+            "Recommends a direct ALTER TABLE ... ALTER COLUMN ... SET NOT NULL on the large table (whether before or after a backfill) with no constant default and no prior NOT VALID+VALIDATE sequence -- neither safe path was followed.",
             "Recommends backfilling millions of rows with a single unbatched UPDATE statement when the value is not a shared constant.",
-            "Claims a NON-constant default (one computed per row, e.g. a function call, a value derived from another column, or a per-row unique value) gets the same metadata-only fast path as a constant default -- only a literal constant qualifies; a non-constant default still forces a full table rewrite."
+            "Claims a VOLATILE default (one that produces a different value per row/per evaluation, e.g. gen_random_uuid() or random()) gets the same metadata-only fast path as a constant -- only a genuinely constant or non-volatile (IMMUTABLE/STABLE) expression that evaluates to the same value across the statement qualifies (a STABLE function like now() does still get the fast path); a VOLATILE default still forces a full table rewrite."
           ]
         }
       ],

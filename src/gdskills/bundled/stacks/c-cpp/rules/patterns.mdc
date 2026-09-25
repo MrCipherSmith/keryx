@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*.c", "**/*.h", "**/*.cpp", "**/*.cc", "**/*.cxx", "**/*.hpp", "**/*.hxx"]
+paths: ["**/*.c", "**/*.h", "**/*.cpp", "**/*.cc", "**/*.cxx", "**/*.hpp", "**/*.hxx", "**/*.hh", "**/*.ipp", "**/*.inl", "**/*.tpp", "**/*.cppm", "**/*.ixx"]
 metadata:
   origin: authored
 ---

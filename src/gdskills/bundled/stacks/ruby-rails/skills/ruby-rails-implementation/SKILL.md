@@ -53,7 +53,7 @@ checklist from; read them before writing code, not just this summary.
   belong on the model).
 - For a new background job, decide what makes `perform` idempotent
   before writing it — a uniqueness check, an idempotency key, or an
-  upsert — most Active Job queue adapters (Sidekiq, SQS, Resque) are
+  upsert — most Active Job queue adapters (Sidekiq, SQS) are
   at-least-once, not exactly-once, though the actual guarantee depends
   on the configured adapter (the inline/test adapters have none).
 

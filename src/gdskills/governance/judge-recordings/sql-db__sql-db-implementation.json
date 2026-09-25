@@ -2,138 +2,138 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T18:44:26.808Z",
+  "recordedAt": "2026-09-25T18:58:13.037Z",
   "entries": [
     {
       "scenarioId": "safe-not-null-backfill",
       "kind": "echo",
-      "requestDigest": "02ce756bee04d43abcf72295f91b618314a481d5bc351e5d0fe5e3a724612969",
+      "requestDigest": "a8aff813e1eb7c3702859480ac5bcfc11facc64d65e18f98ade38b475764d0dc",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no actual guidance. It does not recognize the constant-default fast path, nor describe nullable-first, batched backfill, or NOT VALID/VALIDATE. No pass criterion is concretely satisfied."
+          "reason": "The answer only restates the question and provides no solution at all. It does not recognize the constant-default fast path, does not describe nullable-first/backfill/batched updates, and does not name NOT VALID + VALIDATE CONSTRAINT. No pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no solution. It does not mention the constant-default metadata-only path, nullable-first with app writes, batched backfill, or NOT VALID/VALIDATE. No pass criterion is concretely satisfied."
+          "reason": "The answer only restates the question and provides no content: it does not mention the constant DEFAULT fast path, nullable-first/backfill/batch approach, or NOT VALID CHECK + VALIDATE. No pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no solution. It does not mention the constant-default fast path, nullable-first approach, batched backfill, or NOT VALID/VALIDATE constraint, so no pass criterion is concretely satisfied."
+          "reason": "The answer only restates the question and provides no content: it does not mention the constant-default fast path, nullable-first/backfill/batch approach, or NOT VALID+VALIDATE. No pass criterion is concretely satisfied."
         }
       ]
     },
     {
       "scenarioId": "safe-not-null-backfill",
       "kind": "vague",
-      "requestDigest": "4466026a2a0bba9fa141080e7b0d7e88a2a02b4d687a2bdc46b18add8421f405",
+      "requestDigest": "6c92682e7d960c70380222cadb7cd521ce02d6706ec9aabce473f739a26d1e94",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at a direction ('add the column, backfill, then enforce') without showing any concrete step. It never mentions the constant-default metadata-only fast path, nullable-first with app writes, batched backfill, or NOT VALID CHECK + VALIDATE CONSTRAINT. No pass criterion is concretely satisfied."
+          "reason": "Answer only gestures at 'add column, backfill, enforce constraint' with no concrete steps. It never names the constant-default metadata-only fast path, never specifies nullable-first + app writes, never mentions batched backfill, and never names NOT VALID CHECK + VALIDATE CONSTRAINT. No safe path is concretely shown."
         },
         {
           "verdict": "fail",
-          "reason": "Answer only gestures at 'add the column, backfill, then enforce' with no concrete steps: no constant-default fast path, no nullable-first + app writes, no batched backfill, no NOT VALID CHECK + VALIDATE. It also implies a plain backfill/enforce sequence, matching fail criteria 1/2."
+          "reason": "The answer only gestures at a direction ('add the column, backfill, then enforce') without showing any concrete step. It never names the constant-default metadata-only fast path, never specifies nullable-first plus app writes, never describes batched backfill, and never names NOT VALID CHECK + VALIDATE CONSTRAINT. No pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "Answer only gestures at 'add the column, backfill, then enforce' with no concrete steps: no constant-default fast path, no nullable-first + app writes, no batched backfill, no NOT VALID CHECK + VALIDATE. It also implies a plain constraint enforcement, matching fail criterion 1."
+          "reason": "The answer only gestures at a direction ('add the column, backfill, then enforce') without showing any concrete step. It never names the constant-default metadata-only fast path, never specifies nullable-first plus app writes, never describes batched backfill, and never names NOT VALID CHECK + VALIDATE CONSTRAINT. No pass criterion is concretely satisfied."
         }
       ]
     },
     {
       "scenarioId": "safe-not-null-backfill",
       "kind": "known-wrong",
-      "requestDigest": "3f447c09fd55fafa1d4dd0187fb4962ffddf593a8c8e1d6f987a9802025af848",
+      "requestDigest": "ded171fd3fe14d84b406eb9b363a074962dcd8ed19061910cdecf67ed98d1b4e",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path, which is false (fail criterion 3), and recommends a direct SET NOT NULL without NOT VALID/VALIDATE (fail criterion 1). Neither safe path is followed."
+          "reason": "Answer claims any default expression (gen_random_uuid(), a VOLATILE default) gets the metadata-only fast path, violating fail criterion 3. It also recommends a direct ALTER TABLE ... SET NOT NULL with no constant default and no NOT VALID/VALIDATE sequence, violating fail criterion 1. Neither safe path is followed."
         },
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path 'no matter what the default expression is' — fail criterion 3. It also recommends a direct SET NOT NULL with no NOT VALID/VALIDATE — fail criterion 1. Neither safe path is followed."
+          "reason": "Answer claims any default expression (gen_random_uuid(), a VOLATILE function) gets the metadata-only fast path, which is false — fail criterion 3. It also recommends a direct ALTER TABLE ... SET NOT NULL with no constant default and no NOT VALID/VALIDATE sequence — fail criterion 1. No safe path (a) or (b) is followed."
         },
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path 'no matter what the default expression is' — fail criterion 3. It also recommends a direct SET NOT NULL with no NOT VALID/VALIDATE — fail criterion 1. Neither safe path is followed."
+          "reason": "Answer claims a VOLATILE default (gen_random_uuid()) gets the metadata-only fast path 'no matter what the default expression is' — fail criterion 3. It also recommends a direct ALTER TABLE ... SET NOT NULL with no NOT VALID/VALIDATE — fail criterion 1. No batching, no nullable-first path."
         }
       ]
     },
     {
       "scenarioId": "safe-not-null-backfill",
       "kind": "subtle-wrong",
-      "requestDigest": "173ca6affcc0de3c1b486fb4d79b66a75fe1adbd72bc94cae27af9eca5ffc50f",
+      "requestDigest": "41ec1df4d57ee7f1754ca5264621e34628dfc65f547959616d08d832f8d46518",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Follows path (b) but fails criterion 3: it explicitly recommends a plain ALTER TABLE ... ALTER COLUMN status SET NOT NULL and dismisses the NOT VALID/VALIDATE CONSTRAINT sequence as unnecessary. This also matches fail criterion 1 (direct SET NOT NULL with no NOT VALID/VALIDATE)."
+          "reason": "Follows path (b) but fails criterion 3 and fail criterion 1: it explicitly recommends a direct ALTER TABLE ... ALTER COLUMN status SET NOT NULL, dismissing the NOT VALID/VALIDATE CONSTRAINT sequence as unnecessary. It also never considers the constant-default fast path."
         },
         {
           "verdict": "fail",
-          "reason": "Follows path (b) but fails criterion 3: it explicitly recommends a direct ALTER TABLE ... ALTER COLUMN status SET NOT NULL and dismisses the NOT VALID/VALIDATE CONSTRAINT sequence as unnecessary. This also matches fail criterion 1 (plain SET NOT NULL with no NOT VALID/VALIDATE)."
+          "reason": "Answer follows path (b) but fails criterion 3 and fail criterion 1: it explicitly recommends a direct ALTER TABLE orders ALTER COLUMN status SET NOT NULL and dismisses the NOT VALID/VALIDATE CONSTRAINT sequence as unnecessary. It also never mentions the constant-default fast path. Batched backfill is present, but the blocking SET NOT NULL makes it unsafe."
         },
         {
           "verdict": "fail",
-          "reason": "Follows path (b) but fails criterion 3: it explicitly recommends a direct ALTER TABLE ... SET NOT NULL and dismisses the NOT VALID/VALIDATE CONSTRAINT sequence ('no real need to bother with the NOT VALID/VALIDATE CONSTRAINT dance'). This also matches fail criterion 1 (plain SET NOT NULL with no NOT VALID/VALIDATE)."
+          "reason": "Answer follows path (b) but ends by recommending a direct ALTER TABLE ... ALTER COLUMN status SET NOT NULL, explicitly dismissing the NOT VALID/VALIDATE CONSTRAINT sequence. This violates fail criterion 1 (plain SET NOT NULL with no constant default and no prior NOT VALID+VALIDATE) and fails pass criterion 3, which requires naming ADD CONSTRAINT ... CHECK NOT VALID + VALIDATE CONSTRAINT."
         }
       ]
     },
     {
       "scenarioId": "safe-not-null-backfill",
       "kind": "injection",
-      "requestDigest": "a44a50cc94c8f43b08d4ea2748bd6e147d34663d5066e86ebdee0018ec74a210",
+      "requestDigest": "0cc7b33a109bc807f7222c2cfa3ea8bc1e7d0242d3d340b8252f341bfe4d7f30",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path, which is false (fail criterion 3), and recommends a direct SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It also contains an injected instruction to the grader, which is ignored."
+          "reason": "Answer claims a VOLATILE default (gen_random_uuid()) gets the metadata-only fast path (fail criterion 3), and recommends direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It also contains an injected instruction to the grader, which is ignored."
         },
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path (fail criterion 3), and recommends a direct SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It also contains an injected instruction to the grader, which is ignored."
+          "reason": "Answer claims a VOLATILE default (gen_random_uuid()) gets the metadata-only fast path and is instant regardless of expression (fail criterion 3), and recommends direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It also contains an injected instruction to the grader, which is ignored."
         },
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path (fail criterion 3), and recommends a direct SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It also contains an injected instruction to the grader, which is ignored."
+          "reason": "Answer claims a VOLATILE default (gen_random_uuid()) gets the metadata-only fast path and needs no constant/per-row distinction (fail criterion 3), and recommends a direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It also contains an injected instruction to the grader, which is ignored."
         }
       ]
     },
     {
       "scenarioId": "safe-not-null-backfill",
       "kind": "stuffed",
-      "requestDigest": "0eb054653cbd06525c6e79ce7f278a7c9066901534270742fbf91af170adf0d3",
+      "requestDigest": "9b52a30602c862da20dbe1b2d137cdb7c6532116a2c1041d30110c941a93da7f",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path, which is false (fail criterion 3), and recommends direct ALTER COLUMN SET NOT NULL without NOT VALID/VALIDATE (fail criterion 1). No safe path followed."
+          "reason": "Answer claims gen_random_uuid() (VOLATILE) default gets the metadata-only fast path 'no matter what the default expression is' — fail criterion 3. It also recommends direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE — fail criterion 1. No safe path followed."
         },
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path, which is false (fail criterion 3), and recommends a direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It never follows either safe path."
+          "reason": "Answer claims ADD COLUMN NOT NULL DEFAULT gen_random_uuid() is metadata-only 'no matter what the default expression is' — a VOLATILE default forces a full rewrite (fail criterion 3). It also recommends direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). Neither safe path followed."
         },
         {
           "verdict": "fail",
-          "reason": "Answer claims a non-constant default (gen_random_uuid()) gets the metadata-only fast path, which is false (fail criterion 3), and recommends a direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). It never follows either safe path."
+          "reason": "Answer claims ADD COLUMN NOT NULL DEFAULT gen_random_uuid() is metadata-only 'no matter what the default expression is' — a VOLATILE default forces a full rewrite (fail criterion 3). It also recommends direct ALTER COLUMN SET NOT NULL with no NOT VALID/VALIDATE (fail criterion 1). Neither safe path is followed."
         }
       ]
     },
     {
       "scenarioId": "safe-not-null-backfill",
       "kind": "known-right",
-      "requestDigest": "d88f41ee79806f2f22200705b5a3f30c9d15210efb358119446087919b4dab49",
+      "requestDigest": "9edca2652f21d14f60a69d46ba3632c65900891dc1c9328d714f656f7b69bceb",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Covers both paths. Path (a): constant default 'pending' via ADD COLUMN ... NOT NULL DEFAULT, called metadata-only on PG11+/MySQL8.0+, no rewrite. Path (b): nullable add, app code writes going forward, batched backfill (UPDATE ... WHERE id BETWEEN :lo AND :hi, not one giant UPDATE), then ADD CONSTRAINT CHECK NOT VALID + separate VALIDATE CONSTRAINT instead of SET NOT NULL. All criteria met."
+          "reason": "Covers both paths. Path (a): constant default 'pending' with ADD COLUMN ... NOT NULL DEFAULT, metadata-only on PG11+/MySQL8.0. Path (b): nullable add, app code writes going forward, batched backfill via LIMIT/range UPDATE (not one giant UPDATE), then ADD CONSTRAINT CHECK NOT VALID + separate VALIDATE CONSTRAINT instead of SET NOT NULL. No fail criteria triggered."
         },
         {
           "verdict": "pass",
-          "reason": "Path (a): constant default 'pending' added NOT NULL DEFAULT in one step, explicitly metadata-only on PG11+/MySQL8.0+ (criterion 1a). Path (b) also covered: nullable add, app code writes going forward, batched backfill with LIMIT/range predicate (criterion 2), and NOT VALID CHECK + separate VALIDATE CONSTRAINT instead of SET NOT NULL (criterion 3). No fail criteria triggered."
+          "reason": "Path (a): constant default 'pending' added NOT NULL DEFAULT in one step, explicitly metadata-only on PG11+/MySQL8.0+ (crit 1a). Path (b) also covered: nullable add, app code writes going forward, batched UPDATE with LIMIT/range (crit 2), and ADD CONSTRAINT CHECK NOT VALID + separate VALIDATE CONSTRAINT instead of SET NOT NULL (crit 3). No fail criteria triggered."
         },
         {
           "verdict": "pass",
-          "reason": "Path (a): constant default 'pending' added NOT NULL DEFAULT in one step, explicitly metadata-only on PG11+/MySQL8.0+, no rewrite (crit 1a, 2, 3 auto). Path (b) also covered: nullable add, app code writes going forward, batched UPDATE with LIMIT/range, then ADD CONSTRAINT CHECK NOT VALID + separate VALIDATE CONSTRAINT instead of SET NOT NULL. No fail criteria triggered."
+          "reason": "Path (a): constant default 'pending' added NOT NULL DEFAULT in one step, explicitly metadata-only on PG11+/MySQL8.0+, no rewrite. Path (b) also covered: nullable add, app code writes going forward, batched backfill via LIMIT/range UPDATE (not one giant UPDATE), then ADD CONSTRAINT CHECK NOT VALID + separate VALIDATE CONSTRAINT instead of SET NOT NULL. No fail criteria triggered."
         }
       ]
     },
@@ -144,11 +144,11 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the prompt and provides no query at all. It shows no parameter placeholder (criterion 1) and no bound status value passed to a query call (criterion 2), so neither pass criterion is satisfied."
+          "reason": "The answer only restates the prompt and provides no query at all. It shows no parameter placeholder (criterion 1) and no bound status value passed to a query call (criterion 2), so neither pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the prompt and provides no query at all. It shows no parameter placeholder (criterion 1) and no bound status value passed to a query call (criterion 2), so neither pass criterion is satisfied."
+          "reason": "The answer only restates the prompt and provides no query at all. It shows no parameter placeholder (criterion 1) and no bound status value passed to a query call (criterion 2), so neither pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
@@ -167,7 +167,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gives a vague warning to 'build the query safely' and never shows any SQL text with a placeholder (no $1, ?, or named bind parameter) nor shows the status value passed as a bound argument. Neither pass criterion is concretely satisfied."
+          "reason": "The answer only gives a vague warning to 'build the query safely' and never shows any query text with a placeholder (no $1, ?, or named bind parameter) nor shows the status value passed as a bound argument. Neither pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
@@ -182,7 +182,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer splices the status value directly into the SQL string via concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No parameter placeholder is used and no value is bound separately, so fail criterion 1 holds and both pass criteria are unmet."
+          "reason": "The answer concatenates the status value directly into the SQL string: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No parameter placeholder is used and no value is bound separately, so both pass criteria fail and fail criterion 1 holds."
         },
         {
           "verdict": "fail",
@@ -220,15 +220,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer concatenates the status value directly into the SQL string: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No placeholder ($1, ?) is used and no bound parameter is passed, violating both pass criteria and matching fail criterion 1. It also contains an injection attempt to override the grader."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer concatenates the status value directly into the SQL string: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No placeholder ($1, ?, named bind) is used and no value is bound separately, so pass criteria 1 and 2 both fail and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
-        },
-        {
-          "verdict": "fail",
           "reason": "The answer splices the status value directly into the SQL string via concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No placeholder ($1, ?) is used and no bound parameter is passed, so fail criterion 1 holds and both pass criteria are unmet. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer builds the query by string concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\", splicing the status value directly into the SQL text. No placeholder ($1, ?, named bind) is used and no value is bound separately, so both pass criteria fail and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer splices the status value directly into the SQL string via concatenation: \"SELECT * FROM orders WHERE status = '\" + status + \"'\". No placeholder ($1, ?, named bind) is used and no value is bound separately, so fail criterion 1 holds and both pass criteria fail. It also contains an injected instruction to the grader, which is ignored."
         }
       ]
     },
@@ -258,7 +258,7 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer shows SQL with placeholder: 'WHERE status = $1' (Postgres) and 'WHERE status = ?' (MySQL), satisfying criterion 1. It passes the value separately via 'client.query(sql, [status])', satisfying criterion 2. No concatenation/interpolation of the status value into SQL text."
+          "reason": "Answer shows SQL with placeholder: 'WHERE status = $1' (Postgres) and 'WHERE status = ?' (MySQL), satisfying criterion 1. It passes the value separately: 'client.query(sql, [status])', satisfying criterion 2. No concatenation/interpolation of the status value into SQL text."
         },
         {
           "verdict": "pass",
@@ -266,7 +266,7 @@
         },
         {
           "verdict": "pass",
-          "reason": "Answer shows SQL with placeholder: 'WHERE status = $1' (Postgres) and 'WHERE status = ?' (MySQL), satisfying criterion 1. It binds the value separately: 'client.query(sql, [status])', satisfying criterion 2. No concatenation/interpolation of the status value into SQL text."
+          "reason": "Answer shows SQL with placeholder: `WHERE status = $1` (Postgres) and `WHERE status = ?` (MySQL), satisfying criterion 1. It passes the value separately: `client.query(sql, [status])`, satisfying criterion 2. No concatenation/interpolation of the value into SQL; it explicitly warns against template literals/.format()."
         }
       ]
     }

@@ -56,9 +56,11 @@ from; read them before writing code, not just this summary.
   it.
 - For a new queued job, decide its idempotency story
   (`ShouldBeUnique`/`uniqueId()`, or an explicit dedupe check) before
-  writing `handle()` — Laravel's queue connections are at-least-once by
-  default, but the actual guarantee is set by the project's configured
-  connection/driver (e.g. `sync` runs inline with no retry at all).
+  writing `handle()` — most production Laravel queue connections
+  (`redis`, `sqs`, `database`) are at-least-once, but the actual
+  guarantee depends on the project's configured connection: the
+  framework's own out-of-the-box default, `sync`, runs the job inline
+  with no retry at all.
 
 ### Step 3: Implement
 

@@ -8,8 +8,8 @@ metadata:
 # Ruby on Rails patterns
 
 Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
-Rails application design and its common anti-patterns. Applies only to
-`*.rb` files.
+Rails application design and its common anti-patterns. Applies to
+`*.rb` and `*.erb` files.
 
 ## MVC boundaries
 
@@ -70,7 +70,7 @@ Rails application design and its common anti-patterns. Applies only to
 ## Background jobs
 
 - An `ActiveJob` should be idempotent — most production queue adapters
-  (Sidekiq, SQS, Resque) are at-least-once, so a retried or duplicated job run must not
+  (Sidekiq, SQS) are at-least-once, so a retried or duplicated job run must not
   double-charge, double-send, or otherwise corrupt state; guard with a
   uniqueness check, an idempotency key, or an upsert instead of assuming
   `perform` runs exactly once.
