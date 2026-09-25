@@ -48,23 +48,55 @@ keryx already had.
    `.metaproject/rules/**` and `rules/**`, every project-skill or installed
    gdskill whose name or `metadata.category` marks it a coding convention, and
    anything named by `--rules <paths>`.
-2. Splits each rule document into clauses with `extractReferenceClauses`
-   (the same deterministic splitter `review conform` uses) and decides, per
-   `(rule, changed file)` pair, whether the clause applies — by declared path
-   globs (`metadata.paths`) and/or `metadata.stack_requires`, failing toward
-   inclusion exactly like `keryx review stack`/`scope.ts` already do.
-3. Takes every changed hunk from `keryx review scope` (mechanical bulk
-   already dropped) and asks Jev, per applicable `(hunk, clause)` pair,
-   **one question**: "does this hunk VIOLATE this clause?" — batched under
-   the vendor's 64k token budget, capped at `--max-calls` (default 150),
-   with the selection and every drop reported, never silent.
-4. Synthesizes findings deterministically: `problem` quotes the clause,
+2. **Category filter, before clause extraction.** Each discovered (never an
+   explicit `--rules`) source is classified `code`/`process`/`docs` —
+   explicit frontmatter first (`applies_to: code|process|docs`, or
+   `metadata.category`), else a documented filename/title heuristic
+   (`PROCESS_RULE_HEURISTIC_TERMS`: `commit`, `git`, `tdd`, `workflow`,
+   `definition-of-done`, `documentation`, `requirements`, `plan`,
+   `prompting`, `subagent`, `skill`, `jobs`, `orchestrat`, `review-process`,
+   `release`). A `process`/`docs` source never reaches clause extraction at
+   all — excluded, and reported with its reason under `excludedSources`.
+3. Splits each remaining rule document into clauses with
+   `extractReferenceClauses` (the same deterministic splitter `review
+   conform` uses), then TAGS each clause `state_kind: "pr"|"report"|"hunk"` +
+   `checkable` by REUSING `review conform`'s own
+   `applyClauseTags`/`buildClauseTagQuestions`/`clauseTagFromChoice` — an
+   explicit `[state:hunk]`/`[not-checkable: ...]` marker on the clause text
+   when the rule author wrote one, else one Jev `choice` call per doc's
+   untagged clauses (never per clause), cached by the doc's content hash at
+   `.metaproject/data/review-jev-rules/clause-tags.json` (a jev-rules-
+   specific cache file — `review conform` and `review-jev-rules` never race
+   on the same one). Only a clause tagged `state_kind: "hunk"` and
+   `checkable` is ever paired against a hunk; anything else is dropped and
+   reported under `droppedClauses`.
+4. Decides, per `(rule, changed file)` pair, whether an applicable clause
+   applies — by declared path globs (`metadata.paths`) and/or
+   `metadata.stack_requires`, failing toward inclusion exactly like `keryx
+   review stack`/`scope.ts` already do.
+5. Takes every changed hunk from `keryx review scope` (mechanical bulk
+   already dropped) and asks Jev, per applicable `(hunk, hunk-checkable
+   clause)` pair, **one question**: "does this hunk VIOLATE this clause?" —
+   batched under the vendor's 64k token budget, capped at `--max-calls`
+   (default 150), with the selection and every drop reported, never silent.
+6. Synthesizes findings deterministically: `problem` quotes the clause,
    `impact` is the rule's own stated rationale (if it has a `## Rationale`/
    `## Why` section) or a fixed template, `suggested_fix` names the clause to
    bring the hunk in line with, `evidence` is the hunk location(s) + Jev's
    probability. Severity is capped at `minor` unless the rule itself declares
    a higher one (`[severity: major]` on the clause). One finding per
    `(clause, file)`, deduped across every hunk of that file with a hunk list.
+
+**Why steps 2 and 3 exist:** a live check of this repository's own 41-doc
+`.metaproject/rules/**` corpus against a merged PR hand-labelled ~1/10
+findings correct — several false positives were a process/agent-behaviour
+rule (commit-message formatting, TDD workflow, an agent's own prompting
+standard) paired against a code hunk it was never meant to describe, because
+the corpus declares no `metadata.paths`/`stack_requires` and applicability
+therefore fails open to "applies everywhere". These two filters are cheap,
+deterministic, and applied BEFORE any violation-scoring Jev call, so they cut
+cost as well as noise. See `.metaproject/flows/330-*/journal.md` for the
+full before/after numbers.
 
 ---
 
@@ -95,13 +127,21 @@ declares:
 { "review": { "jev": { "rules": true } } }
 ```
 
-Every hunk and every rule-clause sent to Jev is redacted first through
-`src/security/service.ts` — the same floor `review conform` and `review
-ci-triage` already apply. No cache or output file stores a credential. A
-results cache lives at `.metaproject/data/review-jev-rules/violation-cache.json`
-(gitignored, mode `0600`) keyed on the clause text and hunk location, so a
-re-run over unchanged hunks and unchanged rules costs zero additional Jev
-calls.
+Every hunk, every rule-clause sent for violation scoring, and every clause
+sent for tagging is redacted first through `src/security/service.ts` — the
+same floor `review conform` and `review ci-triage` already apply. No cache or
+output file stores a credential. Two caches, both gitignored and mode `0600`
+under `.metaproject/data/review-jev-rules/`:
+
+- `violation-cache.json`, keyed on the clause text and hunk location, so a
+  re-run over unchanged hunks and unchanged rules costs zero additional Jev
+  calls.
+- `clause-tags.json`, keyed on the rule doc's own content hash — REUSING
+  `review conform`'s own clause-tagging cache module
+  (`src/review/conform-tag-cache.ts`) at this jev-rules-specific path, so a
+  re-run against a DIFFERENT diff but the SAME rule corpus costs zero
+  additional tagging calls even when the hunks (and so the violation cache)
+  miss.
 
 ---
 
@@ -109,8 +149,12 @@ calls.
 
 Emits a `REVIEW_RESULT`-shaped object matching
 `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`
-— `status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats` —
-under `--json`. Its findings merge into the consolidated array exactly like
+— `status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats`,
+plus `tokens` (with `taggingCalls`/`violationCalls` counted separately),
+`selection` (including `droppedClauses`'s count), `ruleSources`,
+`excludedSources` (category-filtered sources with their reason), and
+`droppedClauses` (tag-filtered `(ruleId, clauseId)` pairs with their reason)
+— under `--json`. Its findings merge into the consolidated array exactly like
 any other reviewer's: same Quality Gate, same dedup, same Wave C
 verification.
 
@@ -158,8 +202,9 @@ theoretical pattern), and `synthesizeFindingsFromViolations` dedupes by
 | Rationalization | Why it is wrong |
 |---|---|
 | "Jev said 0.9, so this is definitely a violation" | A `noul` score is a probability, not a verdict — severity stays capped at `minor` unless the rule itself declares higher, precisely because Jev alone is not authoritative |
-| "This rule clause doesn't really describe code, but the pair matched anyway" | Applicability defaults to "applies everywhere" when a rule declares no path/stack restriction — a broad rule corpus produces broad, sometimes off-topic pairs; that is a property of the rule corpus, not a defect in this reviewer |
+| "This rule clause doesn't really describe code, but the pair matched anyway" | Applicability defaults to "applies everywhere" when a rule declares no path/stack restriction — the clause-kind filter (step 3) and the category filter (step 2) catch most of this before scoring, but a `state_kind: "hunk"` clause on an off-topic rule can still pass through; that is a property of the rule corpus, not a defect in this reviewer |
 | "No findings means the diff is clean" | `--max-calls` bounds how many pairs are checked; a capped run reports `selection.droppedPairs` for exactly this reason — read the selection stats before treating silence as clean |
+| "A rule wasn't checked and I don't know why" | Read `excludedSources` (category filter, at discovery) and `droppedClauses` (tag filter, per clause) before assuming a rule was silently skipped — both name the exact reason |
 | "I'll skip the opt-in check since I trust this project" | The opt-in and credential gates exist because hunk and rule-clause text leaves the machine; skipping them is skipping consent, not a shortcut |
 
 ---
@@ -168,13 +213,17 @@ theoretical pattern), and `synthesizeFindingsFromViolations` dedupes by
 
 Before trusting a run's findings:
 
-1. Read `selection.droppedPairs`/`selection.notApplicable` in the `--json`
-   output — a capped or narrowly-applicable run covered less than "every
-   changed hunk against every applicable clause" and the report should say so.
-2. Spot-check a handful of findings against the actual hunk: does the quoted
+1. Read `selection.droppedPairs`/`selection.notApplicable`/
+   `selection.droppedClauses` in the `--json` output — a capped, narrowly-
+   applicable, or tag-filtered run covered less than "every changed hunk
+   against every applicable clause" and the report should say so.
+2. Read `excludedSources` — a process/meta rule doc excluded by the category
+   filter is reported by name and reason, never silently absent from
+   `ruleSources`.
+3. Spot-check a handful of findings against the actual hunk: does the quoted
    line and the cited clause text support the claim? Jev's probability is not
    evidence a human can inspect; the quote and the clause text are.
-3. Confirm every finding carries `reviewer: "review-jev-rules"` and a
+4. Confirm every finding carries `reviewer: "review-jev-rules"` and a
    `dedupe_key` — both are required for the orchestrator's Quality Gate and
    Wave C verification to route it correctly.
 

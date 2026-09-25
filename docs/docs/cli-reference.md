@@ -4283,13 +4283,13 @@ keryx review jev-rules --pr 712 --repo MrCipherSmith/keryx --rules rules/core --
 | Flag | Description |
 |---|---|
 | `--diff <ref>` \| `--pr <n>` \| `--scope <scope.json>` | Exactly one is required. `--scope` takes the whole `keryx review scope --json` document (the same file every other reviewer's dispatch reads) — the orchestrator's own path. `--diff`/`--pr` build the scope themselves via `hunkRegionsFromDiff`. |
-| `--rules <paths>` | Comma-separated extra rule files/directories, checked in addition to auto-discovery (`.metaproject/rules/**`, `rules/**`, and any project-skill/installed gdskill whose name or `metadata.category` marks it a coding convention). |
+| `--rules <paths>` | Comma-separated extra rule files/directories, checked in addition to auto-discovery (`.metaproject/rules/**`, `rules/**`, and any project-skill/installed gdskill whose name or `metadata.category` marks it a coding convention). A path named here always bypasses the category filter below, even when its own filename/title would otherwise mark it `process`/`docs`. |
 | `--max-calls <n>` | Caps how many `(hunk, rule clause)` pairs are scored, default 150. Selection order is deterministic (regions in input order, rules sorted by path, clauses in extraction order); anything beyond the cap is reported dropped, never silently. |
 | `--threshold <0..1>` | Below this Jev probability a pair is not reported. Default `0.5`. |
 | `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
-| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
-| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`, a JSON array consumed in call order) from files on disk — no real `gh` call, no real network. |
-| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats`, plus `tokens`/`selection`/`ruleSources`) conforming to `reviewer-finding.schema.json`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model — used for both clause tagging and violation scoring. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`, a JSON array consumed in call order — tagging calls first, then violation calls) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats`, plus `tokens`/`selection`/`ruleSources`/`excludedSources`/`droppedClauses`) conforming to `reviewer-finding.schema.json`. |
 
 **Finding synthesis is deterministic.** `problem` quotes the violated clause;
 `impact` is the rule's own stated rationale (its first clause under a
@@ -4302,17 +4302,60 @@ is capped at `minor` unless the clause itself declares a higher one
 file)`, deduped across every hunk of that file with a hunk list, never one
 finding per hunk.
 
+**Two precision/cost filters run before any hunk is scored:**
+
+1. **Clause-kind filtering.** Every rule doc's clauses are tagged
+   `state_kind: "pr" | "report" | "hunk"` and `checkable` — REUSING `review
+   conform`'s own tagging (`applyClauseTags`/`buildClauseTagQuestions`/
+   `clauseTagFromChoice`), an explicit `[state:hunk]`/`[not-checkable: ...]`
+   marker on the clause text when the rule author wrote one, else a single
+   Jev `choice` call per doc's untagged clauses, cached by the doc's content
+   hash at `.metaproject/data/review-jev-rules/clause-tags.json` (a
+   jev-rules-specific cache file, so a `review conform` run and a
+   `review-jev-rules` run never race on the same one). Only a clause tagged
+   `state_kind: "hunk"` and `checkable` is ever paired against a hunk — a
+   `"pr"`/`"report"`-kind or not-checkable clause is dropped and reported
+   (count in the summary line, full `(ruleId, clauseId, reason)` list under
+   `droppedClauses` in `--json`). Tagging is one-time per doc content: the
+   usage summary counts it separately, `tagging: N call(s) (cached next
+   run)`, from `violation: N call(s)` (the `noul` scoring calls).
+2. **Rule-source category filter.** Before clause extraction runs at all,
+   each discovered (never an explicit `--rules`) rule source is classified
+   `code`/`process`/`docs` — explicit frontmatter first (`applies_to:
+   code|process|docs` at the frontmatter's top level, or `metadata.category`),
+   else a documented filename/title heuristic
+   (`PROCESS_RULE_HEURISTIC_TERMS` in `src/review/jev-rules.ts`: `commit`,
+   `git`, `tdd`, `workflow`, `definition-of-done`, `documentation`,
+   `requirements`, `plan`, `prompting`, `subagent`, `skill`, `jobs`,
+   `orchestrat`, `review-process`, `release`). A `process`/`docs` source is
+   excluded before it ever reaches tagging or scoring — reported with its
+   reason under `excludedSources` in `--json` (and counted in the summary
+   line) — unless it is named explicitly via `--rules`.
+
+These two fixes are the answer to a measured problem: a live check of this
+reviewer against a merged PR of this repository, using this repository's own
+41-doc `.metaproject/rules/**` corpus (none of which declares
+`metadata.paths`/`stack_requires`), hand-labelled ~1/10 findings correct —
+several of the false positives were exactly a process/agent-behaviour rule
+(commit-message formatting, TDD workflow, an agent's own prompting standard)
+paired against a code hunk it was never meant to describe. See
+`.metaproject/flows/330-*/journal.md` for the full before/after numbers.
+
 **Opt-in, and named as a privacy decision.** Disabled by default. A project
 enables it with `review.jev.rules: true` in `.metaproject/tasks.config.json`.
-Every hunk and every rule-clause sent to Jev is redacted first
-(`src/security/service.ts`), the same floor `review conform`/`review
-ci-triage` already apply. With the setting off, or with no OpenRouter
-credential, the command refuses before any read and makes no network call.
+Every hunk, every rule-clause, and every clause sent to a tagging call is
+redacted first (`src/security/service.ts`), the same floor `review
+conform`/`review ci-triage` already apply. With the setting off, or with no
+OpenRouter credential, the command refuses before any read and makes no
+network call.
 
-**A results cache**, keyed on the clause text and hunk location, lives at
-`.metaproject/data/review-jev-rules/violation-cache.json` (gitignored, mode
-`0600`) — a re-run over unchanged hunks and unchanged rules costs zero
-additional Jev calls.
+**Two caches**, both gitignored and mode `0600` under
+`.metaproject/data/review-jev-rules/`: `violation-cache.json`, keyed on the
+clause text and hunk location (a re-run over unchanged hunks and unchanged
+rules costs zero additional Jev calls), and `clause-tags.json`, keyed on the
+rule doc's own content hash (a re-run against a DIFFERENT diff but the SAME
+rule corpus costs zero additional tagging calls, even though the hunks —
+and so the violation cache — miss).
 
 ### `review ci-triage --eval`
 

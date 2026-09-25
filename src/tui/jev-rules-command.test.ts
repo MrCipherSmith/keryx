@@ -91,9 +91,11 @@ describe("renderJevRulesForShell", () => {
         finding({ dedupe_key: "rules/a.mdc::a-1::src/a.ts", file: "src/a.ts" }),
       ],
       stats: { blocker: 0, major: 1, minor: 1, info: 0 },
-      tokens: { jevCalls: 1 },
-      selection: { maxCalls: 150, selectedPairs: 2, droppedPairs: 0, notApplicable: 0 },
+      tokens: { jevCalls: 1, taggingCalls: 0, violationCalls: 1 },
+      selection: { maxCalls: 150, selectedPairs: 2, droppedPairs: 0, notApplicable: 0, droppedClauses: 0 },
       ruleSources: [{ path: "rules/a.mdc", kind: "project-rule" }, { path: "rules/b.mdc", kind: "project-rule" }],
+      excludedSources: [],
+      droppedClauses: [],
     };
     const text = renderJevRulesForShell(result);
     expect(text).toContain("review-jev-rules: DONE_WITH_CONCERNS");
@@ -113,9 +115,11 @@ describe("renderJevRulesForShell", () => {
       summary: "Checked 0 (hunk, rule-clause) pair(s) against working diff; 0 finding(s) at/above threshold 0.5. 0 pair(s) dropped by --max-calls 150.",
       findings: [],
       stats: { blocker: 0, major: 0, minor: 0, info: 0 },
-      tokens: { jevCalls: 0 },
-      selection: { maxCalls: 150, selectedPairs: 0, droppedPairs: 0, notApplicable: 0 },
+      tokens: { jevCalls: 0, taggingCalls: 0, violationCalls: 0 },
+      selection: { maxCalls: 150, selectedPairs: 0, droppedPairs: 0, notApplicable: 0, droppedClauses: 0 },
       ruleSources: [],
+      excludedSources: [],
+      droppedClauses: [],
     };
     expect(renderJevRulesForShell(result)).toContain("No findings at or above threshold.");
   });

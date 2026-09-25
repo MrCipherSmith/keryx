@@ -30,14 +30,31 @@ async function projectRoot(enabled: boolean): Promise<string> {
   return dir;
 }
 
-/** One rule doc at `.metaproject/rules/test-rule.mdc` — discovered automatically, no `--rules` needed. Two clauses: a rationale bullet (used as `impact` for the other) and the actual checkable clause. */
+/**
+ * One rule doc at `.metaproject/rules/test-rule.mdc` — discovered
+ * automatically, no `--rules` needed. Three clauses, all tagged EXPLICITLY
+ * (`[state:hunk]`/`[not-checkable: ...]`) so no clause-tagging Jev call is
+ * ever made by a test that does not itself exercise tagging: a rationale
+ * bullet (used as `impact` for the others, and excluded from pairing by the
+ * `not-checkable` marker) and two checkable clauses.
+ */
 async function writeTestRule(root: string): Promise<void> {
   await mkdir(path.join(root, ".metaproject", "rules"), { recursive: true });
   await writeFile(
     path.join(root, ".metaproject", "rules", "test-rule.mdc"),
-    ["# Test Rule", "", "## Rationale", "", "- Keeps the test deterministic and easy to reason about.", "", "## Clauses", "", "- Every widget must be documented.", ""].join(
-      "\n",
-    ),
+    [
+      "# Test Rule",
+      "",
+      "## Rationale",
+      "",
+      "- Keeps the test deterministic and easy to reason about. [not-checkable: a rationale statement, not itself a checkable rule]",
+      "",
+      "## Clauses",
+      "",
+      "- Every widget must be documented. [state:hunk]",
+      "- Every widget must have a test. [state:hunk]",
+      "",
+    ].join("\n"),
     "utf8",
   );
 }
@@ -109,8 +126,8 @@ describe("AC8: keryx review jev-rules --scope <scope.json> --json", () => {
     await writeTestRule(ROOT);
     const scopePath = await writeScope(ROOT);
     const fixturesDir = await writeFixtures(ROOT, {
-      ".metaproject/rules/test-rule.mdc::rationale-1": { type: "noul", noul: 0.1 },
       ".metaproject/rules/test-rule.mdc::clauses-1": { type: "noul", noul: 0.95 },
+      ".metaproject/rules/test-rule.mdc::clauses-2": { type: "noul", noul: 0.1 },
     });
     process.chdir(ROOT);
     process.env.OPENROUTER_API_KEY = "sk-or-test";
@@ -122,6 +139,8 @@ describe("AC8: keryx review jev-rules --scope <scope.json> --json", () => {
       reviewer: string;
       findings: Array<Record<string, unknown>>;
       stats: Record<string, number>;
+      droppedClauses: Array<{ ruleId: string; clauseId: string; reason: string }>;
+      tokens: { jevCalls: number; taggingCalls: number; violationCalls: number };
     };
     expect(parsed.reviewer).toBe("review-jev-rules");
     expect(parsed.findings).toHaveLength(1);
@@ -131,6 +150,13 @@ describe("AC8: keryx review jev-rules --scope <scope.json> --json", () => {
     expect(finding.impact).toBe("Keeps the test deterministic and easy to reason about.");
     expect(finding.reviewer).toBe("review-jev-rules");
     expect(process.exitCode ?? 0).toBe(0);
+    // The rationale clause is tagged `[not-checkable: ...]` — excluded from pairing, reported, never sent to Jev.
+    expect(parsed.droppedClauses).toEqual([
+      { ruleId: ".metaproject/rules/test-rule.mdc", clauseId: "rationale-1", reason: "a rationale statement, not itself a checkable rule" },
+    ]);
+    // No explicit-marker clause ever needs a Jev tagging call.
+    expect(parsed.tokens.taggingCalls).toBe(0);
+    expect(parsed.tokens.violationCalls).toBe(1);
 
     const schemaRaw = await readFile(
       path.join(import.meta.dir, "..", "gdskills", "bundled", "skills", "review", "review-orchestrator", "reviewer-finding.schema.json"),
@@ -146,24 +172,26 @@ describe("AC8: keryx review jev-rules --scope <scope.json> --json", () => {
     await writeTestRule(ROOT);
     const scopePath = await writeScope(ROOT);
     const fixturesDir = await writeFixtures(ROOT, {
-      ".metaproject/rules/test-rule.mdc::rationale-1": { type: "noul", noul: 0.1 },
       ".metaproject/rules/test-rule.mdc::clauses-1": { type: "noul", noul: 0.2 },
+      ".metaproject/rules/test-rule.mdc::clauses-2": { type: "noul", noul: 0.1 },
     });
     process.chdir(ROOT);
     process.env.OPENROUTER_API_KEY = "sk-or-test";
 
     await reviewCommand(["jev-rules", "--scope", scopePath, "--fixtures", fixturesDir, "--json"]);
-    const parsed = JSON.parse(output()) as { findings: unknown[]; status: string; tokens: { jevCalls: number } };
+    const parsed = JSON.parse(output()) as { findings: unknown[]; status: string; tokens: { jevCalls: number; taggingCalls: number; violationCalls: number } };
     expect(parsed.findings).toEqual([]);
     expect(parsed.status).toBe("DONE");
     expect(parsed.tokens.jevCalls).toBe(1);
+    expect(parsed.tokens.taggingCalls).toBe(0);
+    expect(parsed.tokens.violationCalls).toBe(1);
   });
 
   test("--max-calls caps the pairs selected, reported rather than silently truncated", async () => {
     ROOT = await projectRoot(true);
     await writeTestRule(ROOT);
     const scopePath = await writeScope(ROOT);
-    const fixturesDir = await writeFixtures(ROOT, { ".metaproject/rules/test-rule.mdc::rationale-1": { type: "noul", noul: 0.6 } });
+    const fixturesDir = await writeFixtures(ROOT, { ".metaproject/rules/test-rule.mdc::clauses-1": { type: "noul", noul: 0.6 } });
     process.chdir(ROOT);
     process.env.OPENROUTER_API_KEY = "sk-or-test";
 
@@ -185,6 +213,158 @@ describe("AC8: keryx review jev-rules --scope <scope.json> --json", () => {
     expect(parsed.findings).toEqual([]);
     expect(parsed.ruleSources).toEqual([]);
     expect(process.exitCode ?? 0).toBe(0);
+  });
+});
+
+/** A scope with one region at `filePath`, `text` as the (already `+`-prefixed) changed line. */
+async function writeScopeFor(root: string, filePath: string, text: string): Promise<string> {
+  const scopePath = path.join(root, `scope-${filePath.replace(/[/.]/g, "-")}.json`);
+  await writeFile(
+    scopePath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "diff",
+      contextLines: 20,
+      files: [filePath],
+      regions: [{ path: filePath, startLine: 1, endLine: 3, changedLines: 1, contextTruncated: false, text }],
+      drops: [],
+      counts: {
+        filesSeen: 1,
+        filesRetained: 1,
+        filesDropped: 0,
+        blocksSeen: 1,
+        blocksRetained: 1,
+        blocksDropped: 0,
+        changedLinesRetained: 1,
+        changedLinesDropped: 0,
+        droppedByReason: { lockfile: 0, generated: 0, vendored: 0, snapshot: 0, minified: 0, binary: 0, "whitespace-only": 0, "comment-only": 0 },
+      },
+    }),
+    "utf8",
+  );
+  return scopePath;
+}
+
+/** A JSON array of `{answers, usage}` bodies, ONE per Jev call in order — unlike `writeFixtures`, this can model a TAGGING call followed by a VIOLATION call (or any other sequence a test needs). */
+async function writeCallSequenceFixtures(
+  responses: ReadonlyArray<Record<string, { type: "choice"; choice: string } | { type: "noul"; noul: number }>>,
+): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-jev-rules-fixtures-"));
+  await writeFile(
+    path.join(dir, "jev-responses.json"),
+    JSON.stringify(responses.map((answers) => ({ answers, usage: { input_tokens: 50, output_tokens: 3, cost: 0.0005 } }))),
+    "utf8",
+  );
+  return dir;
+}
+
+describe("AC-follow-up 1: reused conform clause tagging, cached across runs", () => {
+  async function writeUntaggedRule(root: string): Promise<void> {
+    await mkdir(path.join(root, ".metaproject", "rules"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "rules", "fresh-rule.mdc"),
+      ["# Fresh Rule", "", "## Clauses", "", "- Every exported function needs a docstring.", ""].join("\n"),
+      "utf8",
+    );
+  }
+
+  test("an untagged clause costs one tagging call plus one violation call; a later run against a DIFFERENT hunk (same rule doc) reuses the cached tag", async () => {
+    ROOT = await projectRoot(true);
+    await writeUntaggedRule(ROOT);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    const scope1 = await writeScopeFor(ROOT, "src/widget.ts", "+export function widget() {}");
+    const fixtures1 = await writeCallSequenceFixtures([
+      { "clauses-1": { type: "choice", choice: "hunk" } },
+      { ".metaproject/rules/fresh-rule.mdc::clauses-1": { type: "noul", noul: 0.9 } },
+    ]);
+    await reviewCommand(["jev-rules", "--scope", scope1, "--fixtures", fixtures1, "--json"]);
+    const first = JSON.parse(output()) as {
+      tokens: { jevCalls: number; taggingCalls: number; violationCalls: number };
+      findings: Array<{ file: string }>;
+    };
+    expect(first.tokens.taggingCalls).toBe(1);
+    expect(first.tokens.violationCalls).toBe(1);
+    expect(first.tokens.jevCalls).toBe(2);
+    expect(first.findings).toHaveLength(1);
+    expect(first.findings[0]?.file).toBe("src/widget.ts");
+
+    logs = [];
+    const scope2 = await writeScopeFor(ROOT, "src/other.ts", "+export function other() {}");
+    // Only ONE response supplied — a second tagging call here would throw
+    // (`fixtureJevFetch`'s own "a call beyond that was made"), so this run
+    // PROVES the tag cache was hit rather than merely asserting a count.
+    const fixtures2 = await writeCallSequenceFixtures([{ ".metaproject/rules/fresh-rule.mdc::clauses-1": { type: "noul", noul: 0.4 } }]);
+    await reviewCommand(["jev-rules", "--scope", scope2, "--fixtures", fixtures2, "--json"]);
+    const second = JSON.parse(output()) as { tokens: { jevCalls: number; taggingCalls: number; violationCalls: number }; findings: unknown[] };
+    expect(second.tokens.taggingCalls).toBe(0);
+    expect(second.tokens.violationCalls).toBe(1);
+    expect(second.findings).toEqual([]);
+  });
+});
+
+describe("AC-follow-up 2: rule-source category filter, applied before clause extraction", () => {
+  async function writeProcessAndCodeRules(root: string): Promise<void> {
+    await mkdir(path.join(root, ".metaproject", "rules"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "rules", "commit-message-formatting.mdc"),
+      ["# Commit Message Formatting", "", "## Clauses", "", "- Commit subjects must be imperative mood. [state:hunk]", ""].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".metaproject", "rules", "code-style.mdc"),
+      ["# Code Style", "", "## Clauses", "", "- Every widget must be documented. [state:hunk]", ""].join("\n"),
+      "utf8",
+    );
+  }
+
+  test("a process-named rule file is excluded before clause extraction; a code-named one is still checked", async () => {
+    ROOT = await projectRoot(true);
+    await writeProcessAndCodeRules(ROOT);
+    const scopePath = await writeScope(ROOT);
+    const fixturesDir = await writeFixtures(ROOT, { ".metaproject/rules/code-style.mdc::clauses-1": { type: "noul", noul: 0.7 } });
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["jev-rules", "--scope", scopePath, "--fixtures", fixturesDir, "--json"]);
+    const parsed = JSON.parse(output()) as {
+      ruleSources: Array<{ path: string; kind: string }>;
+      excludedSources: Array<{ path: string; kind: string; reason: string }>;
+      findings: Array<{ problem: string }>;
+    };
+    expect(parsed.ruleSources.map((s) => s.path)).toEqual([".metaproject/rules/code-style.mdc"]);
+    expect(parsed.excludedSources).toHaveLength(1);
+    expect(parsed.excludedSources[0]?.path).toBe(".metaproject/rules/commit-message-formatting.mdc");
+    expect(parsed.excludedSources[0]?.reason).toContain("commit");
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]?.problem).toContain("code-style.mdc");
+  });
+
+  test("--rules names the excluded file explicitly: the category filter is bypassed for it", async () => {
+    ROOT = await projectRoot(true);
+    await writeProcessAndCodeRules(ROOT);
+    const scopePath = await writeScope(ROOT);
+    const fixturesDir = await writeFixtures(ROOT, {
+      ".metaproject/rules/code-style.mdc::clauses-1": { type: "noul", noul: 0.2 },
+      ".metaproject/rules/commit-message-formatting.mdc::clauses-1": { type: "noul", noul: 0.2 },
+    });
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand([
+      "jev-rules",
+      "--scope",
+      scopePath,
+      "--rules",
+      ".metaproject/rules/commit-message-formatting.mdc",
+      "--fixtures",
+      fixturesDir,
+      "--json",
+    ]);
+    const parsed = JSON.parse(output()) as { ruleSources: Array<{ path: string }>; excludedSources: unknown[] };
+    expect(parsed.ruleSources.map((s) => s.path).sort()).toEqual([".metaproject/rules/code-style.mdc", ".metaproject/rules/commit-message-formatting.mdc"]);
+    expect(parsed.excludedSources).toEqual([]);
   });
 });
 

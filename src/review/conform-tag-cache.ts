@@ -26,13 +26,21 @@ interface CacheFile {
 
 export { hashOriginContent as hashConformDocContent };
 
-function cacheFilePath(cwd: string): string {
-  return path.join(cwd, CONFORM_TAG_CACHE_PATH);
+function cacheFilePath(cwd: string, cacheRelPath: string): string {
+  return path.join(cwd, cacheRelPath);
 }
 
-/** Read the whole cache file. A missing or unparsable file reads as empty — never thrown. */
-export async function readClauseTagCache(cwd: string): Promise<CacheFile> {
-  const file = cacheFilePath(cwd);
+/**
+ * Read the whole cache file. A missing or unparsable file reads as empty —
+ * never thrown. `cacheRelPath` defaults to conform's own cache
+ * ({@link CONFORM_TAG_CACHE_PATH}); a caller with its own tag cache (flow
+ * 330's `review-jev-rules`, `JEV_RULES_TAG_CACHE_PATH` in
+ * `./jev-rules-cache.ts`) passes its own path so the two reviewers' caches
+ * never collide on disk, while both go through this exact module rather than
+ * a copy of its read/write/merge logic.
+ */
+export async function readClauseTagCache(cwd: string, cacheRelPath: string = CONFORM_TAG_CACHE_PATH): Promise<CacheFile> {
+  const file = cacheFilePath(cwd, cacheRelPath);
   if (!(await pathExists(file))) return {};
   try {
     const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
@@ -53,17 +61,18 @@ export function cachedTagsFor(cache: CacheFile, docPath: string, contentHash: st
   return entry.tags;
 }
 
-/** Merge a freshly-resolved set of clause tags into the cache for `docPath`/`contentHash`, and persist it. */
+/** Merge a freshly-resolved set of clause tags into the cache for `docPath`/`contentHash`, and persist it. `cacheRelPath` — see {@link readClauseTagCache}. */
 export async function writeClauseTagCache(
   cwd: string,
   docPath: string,
   contentHash: string,
   tags: Readonly<Record<string, ClauseTag>>,
+  cacheRelPath: string = CONFORM_TAG_CACHE_PATH,
 ): Promise<void> {
-  const current = await readClauseTagCache(cwd);
+  const current = await readClauseTagCache(cwd, cacheRelPath);
   const existing = cachedTagsFor(current, docPath, contentHash) ?? {};
   const next: CacheFile = { ...current, [docPath]: { contentHash, tags: { ...existing, ...tags } } };
   // 0o600: this file names reference documents and their per-clause tags —
   // other users on the same machine should not be able to read it.
-  await writeFileAtomic(cacheFilePath(cwd), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  await writeFileAtomic(cacheFilePath(cwd, cacheRelPath), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
 }

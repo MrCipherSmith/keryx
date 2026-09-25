@@ -19,11 +19,12 @@ import { DEFAULT_CONTEXT_LINES } from "../review/scope";
 import type { ScopedRegion } from "../review/scope";
 import { createFixtureConformPrPort, createGhConformPrPort, type ConformPrInfo, type ConformPrPort } from "../review/conform-pr-port";
 import { readJevRulesEnabled } from "../review/jev-rules-config";
-import { cacheKeyFor, cachedProbability, readJevRulesCache, writeJevRulesCache } from "../review/jev-rules-cache";
+import { cacheKeyFor, cachedProbability, JEV_RULES_TAG_CACHE_PATH, readJevRulesCache, writeJevRulesCache } from "../review/jev-rules-cache";
 import {
   DEFAULT_JEV_RULES_THRESHOLD,
   DEFAULT_MAX_JEV_RULE_CALLS,
   batchAllRulePairs,
+  classifyRuleSourceCategory,
   extractRuleRationale,
   findingStats,
   isCodingConventionSkill,
@@ -35,7 +36,17 @@ import {
   type RuleNoulQuestion,
   type RuleSourceFile,
   type RuleViolationCandidate,
+  type TaggedRuleSource,
 } from "../review/jev-rules";
+import {
+  applyClauseTags,
+  buildClauseTagQuestions,
+  clauseTagFromChoice,
+  extractReferenceClauses,
+  type ClauseTag,
+  type ReferenceClause,
+} from "../review/conform-clauses";
+import { cachedTagsFor, hashConformDocContent, readClauseTagCache, writeClauseTagCache } from "../review/conform-tag-cache";
 import {
   callJevSystemOne,
   DEFAULT_JEV_MODEL,
@@ -128,13 +139,27 @@ function declaredPathsFromContent(content: string): string[] {
     .filter((entry) => entry.length > 0);
 }
 
+export interface ExcludedRuleSource {
+  readonly path: string;
+  readonly kind: string;
+  readonly reason: string;
+}
+
+export interface RuleSourceDiscovery {
+  readonly sources: readonly RuleSourceFile[];
+  /** Category-filtered out (AC-follow-up 2) — reported, never silently absent. Explicit `--rules` paths are never excluded here (see the merge below). */
+  readonly excluded: readonly ExcludedRuleSource[];
+}
+
 /**
  * AC2: discover every rule source this run will check hunks against — see
  * `src/review/jev-rules.ts`'s module header for the documented, deliberately
  * narrow discovery scope and why it is narrow. `explicitPaths` (`--rules`)
- * always wins a path collision, since it is the caller's explicit override.
+ * always wins a path collision, since it is the caller's explicit override —
+ * including the category filter below: a source named explicitly is checked
+ * even when its filename/title would otherwise mark it `process`/`docs`.
  */
-async function discoverRuleSources(cwd: string, explicitPaths: readonly string[]): Promise<RuleSourceFile[]> {
+async function discoverRuleSources(cwd: string, explicitPaths: readonly string[]): Promise<RuleSourceDiscovery> {
   const discovered: RuleSourceFile[] = [];
 
   for (const root of [join(cwd, ".metaproject", "rules"), join(cwd, "rules")]) {
@@ -184,11 +209,33 @@ async function discoverRuleSources(cwd: string, explicitPaths: readonly string[]
     }
   }
 
+  // AC-follow-up 2: the cheap category filter, applied BEFORE clause
+  // extraction — a `discovered` (never an explicit `--rules`) source
+  // classified `process`/`docs` is excluded from pairing here, so it never
+  // reaches tagging or violation scoring at all. `--rules` bypasses this
+  // outright: it is added to `byPath` afterwards regardless, so an explicit
+  // path always wins even when it would otherwise be filtered.
+  const explicitPathSet = new Set(explicit.map((source) => source.path));
+  const excluded: ExcludedRuleSource[] = [];
+  const filteredDiscovered: RuleSourceFile[] = [];
+  for (const source of discovered) {
+    if (explicitPathSet.has(source.path)) {
+      filteredDiscovered.push(source);
+      continue;
+    }
+    const decision = classifyRuleSourceCategory(source.path, source.text);
+    if (decision.category !== "code") {
+      excluded.push({ path: source.path, kind: source.kind, reason: decision.reason });
+      continue;
+    }
+    filteredDiscovered.push(source);
+  }
+
   const byPath = new Map<string, RuleSourceFile>();
-  for (const source of discovered) byPath.set(source.path, source);
+  for (const source of filteredDiscovered) byPath.set(source.path, source);
   // Explicit wins: written last, so it overwrites a discovered entry at the same path.
   for (const source of explicit) byPath.set(source.path, source);
-  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+  return { sources: [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path)), excluded: excluded.sort((a, b) => a.path.localeCompare(b.path)) };
 }
 
 async function fixturePrPort(dir: string): Promise<ConformPrPort> {
@@ -224,9 +271,29 @@ export interface JevRulesComputedResult {
   readonly summary: string;
   readonly findings: ReturnType<typeof synthesizeFindingsFromViolations>;
   readonly stats: ReturnType<typeof findingStats>;
-  readonly tokens: { readonly jevCalls: number; readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number };
-  readonly selection: { readonly maxCalls: number; readonly selectedPairs: number; readonly droppedPairs: number; readonly notApplicable: number };
+  readonly tokens: {
+    readonly jevCalls: number;
+    /** One-time-per-doc-content clause-tagging calls (AC-follow-up 1) — cached next run by `./conform-tag-cache.ts`. */
+    readonly taggingCalls: number;
+    /** The `noul` violation-scoring calls — what AC9's live check originally measured in full. */
+    readonly violationCalls: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly costUsd?: number;
+  };
+  readonly selection: {
+    readonly maxCalls: number;
+    readonly selectedPairs: number;
+    readonly droppedPairs: number;
+    readonly notApplicable: number;
+    /** Count of (ruleId, clauseId) pairs excluded because the clause is not tagged `state_kind: "hunk"` and `checkable` — full ids in `droppedClauses` below. */
+    readonly droppedClauses: number;
+  };
   readonly ruleSources: readonly { readonly path: string; readonly kind: string }[];
+  /** AC-follow-up 2: rule sources classified `process`/`docs` by the category filter and excluded before clause extraction — reported with the reason, never silently. */
+  readonly excludedSources: readonly ExcludedRuleSource[];
+  /** AC-follow-up 1: every (ruleId, clauseId) dropped by the tag-based filter, with why — the full detail behind `selection.droppedClauses`'s count. */
+  readonly droppedClauses: readonly { readonly ruleId: string; readonly clauseId: string; readonly reason: string }[];
 }
 
 export interface JevRulesRunOptions {
@@ -240,17 +307,88 @@ export interface JevRulesRunOptions {
   readonly fetchFn?: typeof fetch;
 }
 
+/** Shared running totals across every Jev call this run makes — tagging and violation calls counted separately (AC-follow-up 1's "tagging: N calls (cached next run)" usage line). */
+interface JevUsageAccumulator {
+  taggingCalls: number;
+  violationCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  sawUsage: boolean;
+}
+
+function accumulateUsage(acc: JevUsageAccumulator, usage: { input_tokens?: number; output_tokens?: number; cost?: number }): void {
+  if (usage.input_tokens !== undefined) {
+    acc.inputTokens += usage.input_tokens;
+    acc.sawUsage = true;
+  }
+  if (usage.output_tokens !== undefined) {
+    acc.outputTokens += usage.output_tokens;
+    acc.sawUsage = true;
+  }
+  if (usage.cost !== undefined) {
+    acc.costUsd += usage.cost;
+    acc.sawUsage = true;
+  }
+}
+
 /**
- * Everything past "which hunks and which rules": discovery, applicability,
- * pair selection, batching, the Jev calls (cache-aware), and finding
- * synthesis. Shared by the CLI (`runJevRules`, below) and any other adapter
- * that already has its own hunks — currently `src/tui/jev-rules-command.ts`'s
- * `/jevrules`, which runs this over the working diff with no CLI arg parsing
- * at all.
+ * AC-follow-up 1: resolve one rule source's clauses to their FULL tags —
+ * `state_kind`/`checkable` — by REUSING `../review/conform-clauses.ts`'s
+ * `applyClauseTags`/`buildClauseTagQuestions`/`clauseTagFromChoice` and
+ * `../review/conform-tag-cache.ts`'s cache read/write, exactly the shape
+ * `src/commands/review.ts`'s `resolveConformClauseTags` already established
+ * for `review conform` — but writing to `JEV_RULES_TAG_CACHE_PATH`, a
+ * jev-rules-specific cache file, so the two reviewers never race on the same
+ * cache file on disk. One Jev `choice` call per doc's UNTAGGED clauses (never
+ * per clause), and only when neither an explicit `[state:...]` marker nor a
+ * cached tag already answers it — the "tagging calls are one-time per doc
+ * content, cached next run" guarantee.
+ */
+async function resolveRuleSourceClauseTags(cwd: string, source: RuleSourceFile, fetchFn: typeof fetch, model: string, usage: JevUsageAccumulator): Promise<readonly ReferenceClause[]> {
+  const rawClauses = extractReferenceClauses(source.text);
+  const contentHash = hashConformDocContent(source.text);
+  const cache = await readClauseTagCache(cwd, JEV_RULES_TAG_CACHE_PATH);
+  const cachedTags = cachedTagsFor(cache, source.path, contentHash) ?? {};
+  const resolved = new Map<string, { source: "jev" | "cache"; tag: ClauseTag }>();
+  for (const [id, tag] of Object.entries(cachedTags)) resolved.set(id, { source: "cache", tag });
+
+  const needsTagging = rawClauses.filter((clause) => clause.explicit === undefined && cachedTags[clause.clause_id] === undefined);
+  const tagQuestions = buildClauseTagQuestions(needsTagging);
+  if (Object.keys(tagQuestions).length > 0) {
+    const result = await callJevSystemOne(
+      fetchFn,
+      { model, state: `Rule-document clause classification (review-jev-rules): "${source.path}" — no additional state beyond each clause's own text.`, questions: tagQuestions },
+      { env: process.env },
+    );
+    usage.taggingCalls += 1;
+    accumulateUsage(usage, result.usage);
+    const freshTags: Record<string, ClauseTag> = {};
+    for (const [id, answer] of Object.entries(result.answers)) {
+      if (answer.type !== "choice") continue;
+      const tag = clauseTagFromChoice(answer.choice);
+      resolved.set(id, { source: "jev", tag });
+      freshTags[id] = tag;
+    }
+    if (Object.keys(freshTags).length > 0) {
+      await writeClauseTagCache(cwd, source.path, contentHash, freshTags, JEV_RULES_TAG_CACHE_PATH);
+    }
+  }
+  return applyClauseTags(rawClauses, resolved);
+}
+
+/**
+ * Everything past "which hunks and which rules": discovery (with the
+ * category filter), clause tagging (with the tag-cache), applicability, pair
+ * selection, batching, the violation-scoring Jev calls (cache-aware), and
+ * finding synthesis. Shared by the CLI (`runJevRules`, below) and any other
+ * adapter that already has its own hunks — currently
+ * `src/tui/jev-rules-command.ts`'s `/jevrules`, which runs this over the
+ * working diff with no CLI arg parsing at all.
  *
  * Callers MUST have already passed the opt-in and credential gates — this
  * function makes network calls unconditionally when there is anything to
- * score.
+ * tag or score.
  */
 export async function computeJevRulesResult(options: JevRulesRunOptions): Promise<JevRulesComputedResult> {
   const { cwd, regions, targetLabel } = options;
@@ -259,19 +397,22 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
   const model = options.model ?? DEFAULT_JEV_MODEL;
   const fetchFn = options.fetchFn ?? globalThis.fetch;
 
-  const sources = await discoverRuleSources(cwd, options.explicitRulePaths ?? []);
+  const { sources, excluded } = await discoverRuleSources(cwd, options.explicitRulePaths ?? []);
   const detectedStack = await detectProjectStack(cwd);
-  const selection = selectRuleHunkPairs(regions, sources, detectedStack, maxCalls);
+
+  const usage: JevUsageAccumulator = { taggingCalls: 0, violationCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, sawUsage: false };
+  const taggedSources: TaggedRuleSource[] = [];
+  for (const source of sources) {
+    const clauses = await resolveRuleSourceClauseTags(cwd, source, fetchFn, model, usage);
+    taggedSources.push({ source, clauses });
+  }
+
+  const selection = selectRuleHunkPairs(regions, taggedSources, detectedStack, maxCalls);
   const batches = batchAllRulePairs(selection.selected);
 
   const cache = await readJevRulesCache(cwd);
   const candidates: RuleViolationCandidate[] = [];
   const newCacheEntries = new Map<string, number>();
-  let jevCalls = 0;
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let costUsd = 0;
-  let sawUsage = false;
 
   for (const batch of batches) {
     const uncachedQuestions: Record<string, RuleNoulQuestion> = {};
@@ -292,19 +433,8 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
     if (Object.keys(uncachedQuestions).length === 0) continue;
 
     const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: uncachedQuestions as JevQuestions }, { env: process.env });
-    jevCalls += 1;
-    if (result.usage.input_tokens !== undefined) {
-      inputTokens += result.usage.input_tokens;
-      sawUsage = true;
-    }
-    if (result.usage.output_tokens !== undefined) {
-      outputTokens += result.usage.output_tokens;
-      sawUsage = true;
-    }
-    if (result.usage.cost !== undefined) {
-      costUsd += result.usage.cost;
-      sawUsage = true;
-    }
+    usage.violationCalls += 1;
+    accumulateUsage(usage, result.usage);
     for (const item of batch.items) {
       const questionKey = ruleQuestionKey(item.ruleId, item.clause.clause_id);
       if (!(questionKey in uncachedQuestions)) continue;
@@ -327,10 +457,12 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
   const findings = synthesizeFindingsFromViolations(candidates, threshold, ruleRationales);
   const stats = findingStats(findings);
   const status = stats.blocker > 0 || stats.major > 0 ? "DONE_WITH_CONCERNS" : "DONE";
+  const jevCalls = usage.taggingCalls + usage.violationCalls;
   const summary =
     `Checked ${selection.selected.length} (hunk, rule-clause) pair(s) across ${regions.length} hunk(s) and ${sources.length} rule source(s) ` +
-    `against ${targetLabel}; ${findings.length} finding(s) at/above threshold ${threshold}. ` +
-    `${selection.dropped.length} pair(s) dropped by --max-calls ${selection.maxCalls}.`;
+    `(${excluded.length} source(s) excluded by category filter) against ${targetLabel}; ${findings.length} finding(s) at/above threshold ${threshold}. ` +
+    `${selection.dropped.length} pair(s) dropped by --max-calls ${selection.maxCalls}; ${selection.droppedClauses.length} clause(s) dropped as not hunk-checkable. ` +
+    `tagging: ${usage.taggingCalls} call(s) (cached next run); violation: ${usage.violationCalls} call(s).`;
 
   return {
     status,
@@ -338,14 +470,19 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
     summary,
     findings,
     stats,
-    tokens: sawUsage ? { jevCalls, inputTokens, outputTokens, costUsd } : { jevCalls },
+    tokens: usage.sawUsage
+      ? { jevCalls, taggingCalls: usage.taggingCalls, violationCalls: usage.violationCalls, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costUsd: usage.costUsd }
+      : { jevCalls, taggingCalls: usage.taggingCalls, violationCalls: usage.violationCalls },
     selection: {
       maxCalls: selection.maxCalls,
       selectedPairs: selection.selected.length,
       droppedPairs: selection.dropped.length,
       notApplicable: selection.notApplicable.length,
+      droppedClauses: selection.droppedClauses.length,
     },
     ruleSources: sources.map((source) => ({ path: source.path, kind: source.kind })),
+    excludedSources: excluded,
+    droppedClauses: selection.droppedClauses,
   };
 }
 

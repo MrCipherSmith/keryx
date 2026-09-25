@@ -16,6 +16,18 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 
 export const JEV_RULES_CACHE_PATH = ".metaproject/data/review-jev-rules/violation-cache.json";
 
+/**
+ * The clause-tag cache location for `review-jev-rules`'s own reuse of
+ * `./conform-tag-cache.ts` (precision-fix follow-up to flow 330's original
+ * AC1-AC10): a jev-rules-specific file under the same gitignored
+ * `.metaproject/data/review-jev-rules/` directory as the violation cache
+ * above, rather than sharing conform's `review-conform/clause-tags.json` —
+ * so a `review conform` run and a `review-jev-rules` run never race on the
+ * same file, while both read/write through the exact same cache module
+ * (`readClauseTagCache`/`writeClauseTagCache`, parameterised by this path).
+ */
+export const JEV_RULES_TAG_CACHE_PATH = ".metaproject/data/review-jev-rules/clause-tags.json";
+
 interface CacheFile {
   readonly [key: string]: { readonly probability: number };
 }

@@ -45,7 +45,41 @@
 // `isCodingConventionSkill` below is the one place this decision lives, so a
 // future author extending it has one function to change, not a scattered
 // heuristic.
-import { extractReferenceClauses, type RawReferenceClause } from "./conform-clauses";
+//
+// # Precision fix (post-AC9 live check on MrCipherSmith/keryx PR #712)
+//
+// AC9's live check measured ~1/10 hand-labelled precision. Its journal named
+// the cause: this repo's own `.metaproject/rules/**` corpus is 41 broad prose
+// docs with no `metadata.paths`/`stack_requires`, several of which are
+// PROCESS/AGENT-BEHAVIOUR rules (how to write a commit message, TDD workflow,
+// how an agent should report its own edits) with no real per-hunk
+// applicability at all — paired against every hunk anyway because
+// `clauseApplicability` fails toward inclusion when a rule declares no
+// restriction. Two complementary, deterministic fixes, both applied BEFORE
+// any violation-scoring Jev call is made (so they also cut cost, not only
+// noise):
+//
+//   1. Clause-kind filtering (`isHunkCheckableClause`, `TaggedRuleSource`,
+//      `selectRuleHunkPairs` below): every rule doc's clauses are tagged
+//      `state_kind`/`checkable` by REUSING `./conform-clauses.ts`'s own
+//      `applyClauseTags`/`buildClauseTagQuestions`/`clauseTagFromChoice` —
+//      the exact mechanism `review conform` already uses for its reference
+//      documents, cached by content hash via `./conform-tag-cache.ts` — and
+//      only a clause tagged `state_kind: "hunk"` and `checkable` is ever
+//      paired against a hunk. Tagging is I/O (a cache read, sometimes one
+//      Jev `choice` call per doc) so it lives in the ADAPTER
+//      (`src/commands/review-jev-rules.ts`'s `resolveRuleSourceClauseTags`),
+//      not here; this module stays pure, taking already-tagged clauses in.
+//   2. Rule-source category filtering (`classifyRuleSourceCategory`,
+//      `PROCESS_RULE_HEURISTIC_TERMS` below): a CHEAPER, coarser pre-filter
+//      the adapter applies at DISCOVERY time, before clause extraction runs
+//      at all — explicit frontmatter (`applies_to`/`metadata.category`)
+//      first, else a documented filename/title heuristic that catches
+//      exactly the process docs AC9's ten hand-labelled findings named
+//      (commit-message-formatting, tdd-workflow, opus-5-5-prompting,
+//      definition-of-done, ...). `--rules <paths>` always overrides — an
+//      operator who explicitly names a process doc still gets it checked.
+import { extractReferenceClauses, type ReferenceClause } from "./conform-clauses";
 import { hunkClauseFacts, hunkRedactedStateText } from "./conform-state";
 import { estimateTokens } from "./cost";
 import type { ScopedRegion } from "./scope";
@@ -109,6 +143,107 @@ export function isCodingConventionSkill(name: string, content: string): { readon
     matches: false,
     reason: 'no convention marker found (directory name, or frontmatter metadata.category: "conventions")',
   };
+}
+
+/**
+ * Read one TOP-LEVEL `key: value` frontmatter scalar — unlike
+ * {@link metadataScalar}, not nested under a `metadata:` block. Used for
+ * `applies_to: code|process|docs` (AC-follow-up 2), a field rule authors are
+ * meant to write at the frontmatter's own top level, the same place
+ * `description`/`alwaysApply` already live in every `.mdc` file in this repo
+ * (see `.metaproject/rules/core/*.mdc`). Never throws.
+ */
+export function frontmatterScalar(content: string, key: string): string | undefined {
+  if (!content.startsWith("---")) return undefined;
+  const end = content.indexOf("\n---", 3);
+  if (end === -1) return undefined;
+  const re = new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(.+)$`, "m");
+  const match = re.exec(content.slice(3, end));
+  if (match?.[1] === undefined) return undefined;
+  const raw = match[1].trim();
+  return raw.length >= 2 && ((raw[0] === '"' && raw.at(-1) === '"') || (raw[0] === "'" && raw.at(-1) === "'")) ? raw.slice(1, -1) : raw;
+}
+
+// ---------------------------------------------------------------------------
+// Rule-source category filter — a CHEAP pre-filter, applied by the adapter
+// BEFORE clause extraction/tagging, so a process/meta rule doc (how to write
+// a commit message, how an agent should report its own edits) never costs a
+// tagging call OR a violation call at all. This is the corpus-shape problem
+// flow 330's own AC9 live-check journal already named as future work: "a
+// narrower, explicitly-curated rule set... aimed at hunk-checkable coding
+// conventions specifically" — this filter is that narrowing, made cheap and
+// deterministic rather than hand-curated.
+// ---------------------------------------------------------------------------
+
+export const RULE_SOURCE_CATEGORIES = ["code", "process", "docs"] as const;
+export type RuleSourceCategory = (typeof RULE_SOURCE_CATEGORIES)[number];
+
+function isRuleSourceCategory(value: string): value is RuleSourceCategory {
+  return (RULE_SOURCE_CATEGORIES as readonly string[]).includes(value);
+}
+
+/**
+ * The documented default filename/title heuristic (AC-follow-up 2): a rule
+ * source whose path or title contains any of these (case-insensitive) is
+ * treated as `process` unless frontmatter says otherwise. Exported so a rule
+ * author — or a test — can see and pin the exact list rather than reverse-
+ * engineering it from behaviour. Substring match on purpose: "review-process"
+ * catches `code-review-process-notes.mdc` as readily as an exact filename.
+ */
+export const PROCESS_RULE_HEURISTIC_TERMS = [
+  "commit",
+  "git",
+  "tdd",
+  "workflow",
+  "definition-of-done",
+  "documentation",
+  "requirements",
+  "plan",
+  "prompting",
+  "subagent",
+  "skill",
+  "jobs",
+  "orchestrat",
+  "review-process",
+  "release",
+] as const;
+
+/** A rule doc's own title: frontmatter `description`, else its first `#` heading, else empty. */
+function ruleSourceTitle(content: string): string {
+  const description = frontmatterScalar(content, "description");
+  if (description !== undefined) return description;
+  const heading = /^#\s+(.+)$/m.exec(content);
+  return heading?.[1] ?? "";
+}
+
+export interface RuleSourceCategoryDecision {
+  readonly category: RuleSourceCategory;
+  readonly reason: string;
+}
+
+/**
+ * AC-follow-up 2: classify one rule source's category. Explicit frontmatter
+ * wins outright — `applies_to` (top-level) first, then `metadata.category` —
+ * over the heuristic, which is only a default for the many `.mdc` docs this
+ * repo's own corpus ships with neither field. `filePath` is matched together
+ * with the doc's own title so a file named ambiguously (`house-rules.mdc`)
+ * can still be caught by a title that names process ("Commit Workflow").
+ */
+export function classifyRuleSourceCategory(filePath: string, content: string): RuleSourceCategoryDecision {
+  const appliesTo = frontmatterScalar(content, "applies_to");
+  if (appliesTo !== undefined && isRuleSourceCategory(appliesTo)) {
+    return { category: appliesTo, reason: `frontmatter declares applies_to: "${appliesTo}"` };
+  }
+  const metaCategory = metadataScalar(content, "category");
+  if (metaCategory !== undefined && isRuleSourceCategory(metaCategory)) {
+    return { category: metaCategory, reason: `frontmatter declares metadata.category: "${metaCategory}"` };
+  }
+  const haystack = `${filePath} ${ruleSourceTitle(content)}`.toLowerCase();
+  const hit = PROCESS_RULE_HEURISTIC_TERMS.find((term) => haystack.includes(term));
+  if (hit !== undefined) {
+    return { category: "process", reason: `filename/title heuristic matched "${hit}"` };
+  }
+  return { category: "code", reason: "no frontmatter category declared and no process/meta heuristic term matched the filename or title" };
 }
 
 const RATIONALE_HEADING_RE = /rationale|why|purpose|reason/i;
@@ -197,7 +332,30 @@ export const DEFAULT_MAX_JEV_RULE_CALLS = 150;
 export interface RuleHunkPair {
   readonly region: ScopedRegion;
   readonly ruleId: string;
-  readonly clause: RawReferenceClause;
+  readonly clause: ReferenceClause;
+  readonly reason: string;
+}
+
+/**
+ * One rule source paired with its already-TAGGED clauses (conform's
+ * `applyClauseTags`/`buildClauseTagQuestions`/`clauseTagFromChoice`,
+ * resolved by the adapter — see `src/commands/review-jev-rules.ts`'s
+ * `resolveRuleSourceClauseTags`). `selectRuleHunkPairs` below is still pure:
+ * it reads tags a caller already resolved, it never resolves them itself.
+ */
+export interface TaggedRuleSource {
+  readonly source: RuleSourceFile;
+  readonly clauses: readonly ReferenceClause[];
+}
+
+/** Precision fix: only a clause tagged `state_kind: "hunk"` and `checkable` can ever describe a code-hunk violation — a `"pr"`/`"report"`-kind or not-checkable clause paired against a hunk anyway is exactly the category-mismatch false-positive shape AC9's live check found (commit-message-formatting, opus-5-5-prompting, tdd-workflow). */
+export function isHunkCheckableClause(clause: ReferenceClause): boolean {
+  return clause.state_kind === "hunk" && clause.checkable;
+}
+
+export interface DroppedClause {
+  readonly ruleId: string;
+  readonly clauseId: string;
   readonly reason: string;
 }
 
@@ -205,40 +363,65 @@ export interface PairSelectionResult {
   readonly selected: readonly RuleHunkPair[];
   readonly dropped: readonly RuleHunkPair[];
   readonly notApplicable: readonly { readonly region: ScopedRegion; readonly ruleId: string; readonly reason: string }[];
+  /** Every (ruleId, clauseId) excluded from pairing because it is not `state_kind: "hunk"` and `checkable` — reported once per clause, never silently. */
+  readonly droppedClauses: readonly DroppedClause[];
   readonly maxCalls: number;
 }
 
+function droppedClauseReason(clause: ReferenceClause): string {
+  if (!clause.checkable) return clause.reason ?? `not checkable (state_kind: "${clause.state_kind}")`;
+  return `tagged state_kind: "${clause.state_kind}", not "hunk" — not a hunk-checkable clause`;
+}
+
 /**
- * AC3: build every applicable (hunk, clause) pair and cap it at `maxCalls`.
- * Order is deterministic — regions in input order (already the diff's own
- * order), rule sources sorted by path, clauses in extraction order — so the
- * SAME diff and SAME rule set always select the SAME pairs, and a caller
- * re-running with a smaller `--max-calls` sees a stable prefix drop from the
- * tail, not a different sample.
+ * AC3, plus the precision-fix follow-up: build every applicable (hunk,
+ * clause) pair, from clauses already filtered to `state_kind: "hunk"` and
+ * `checkable`, and cap it at `maxCalls`. Order is deterministic — regions in
+ * input order (already the diff's own order), rule sources sorted by path,
+ * clauses in each source's own order — so the SAME diff and SAME rule set
+ * always select the SAME pairs, and a caller re-running with a smaller
+ * `--max-calls` sees a stable prefix drop from the tail, not a different
+ * sample.
  */
 export function selectRuleHunkPairs(
   regions: readonly ScopedRegion[],
-  sources: readonly RuleSourceFile[],
+  taggedSources: readonly TaggedRuleSource[],
   detectedStack: DetectedStack,
   maxCalls: number = DEFAULT_MAX_JEV_RULE_CALLS,
 ): PairSelectionResult {
-  const sortedSources = [...sources].sort((a, b) => a.path.localeCompare(b.path));
+  const sorted = [...taggedSources].sort((a, b) => a.source.path.localeCompare(b.source.path));
+
+  // Every dropped (ruleId, clauseId) is reported exactly once, regardless of
+  // how many hunks it would otherwise have been paired against.
+  const droppedClauses: DroppedClause[] = [];
+  const seenDropped = new Set<string>();
+  for (const { source, clauses } of sorted) {
+    for (const clause of clauses) {
+      if (isHunkCheckableClause(clause)) continue;
+      const key = `${source.path}::${clause.clause_id}`;
+      if (seenDropped.has(key)) continue;
+      seenDropped.add(key);
+      droppedClauses.push({ ruleId: source.path, clauseId: clause.clause_id, reason: droppedClauseReason(clause) });
+    }
+  }
+
   const all: RuleHunkPair[] = [];
   const notApplicable: { readonly region: ScopedRegion; readonly ruleId: string; readonly reason: string }[] = [];
   for (const region of regions) {
-    for (const source of sortedSources) {
+    for (const { source, clauses } of sorted) {
       const decision = clauseApplicability(source, region.path, detectedStack);
       if (!decision.applicable) {
         notApplicable.push({ region, ruleId: source.path, reason: decision.reason });
         continue;
       }
-      for (const clause of extractReferenceClauses(source.text)) {
+      for (const clause of clauses) {
+        if (!isHunkCheckableClause(clause)) continue;
         all.push({ region, ruleId: source.path, clause, reason: decision.reason });
       }
     }
   }
   const cap = Number.isFinite(maxCalls) && maxCalls >= 0 ? Math.trunc(maxCalls) : DEFAULT_MAX_JEV_RULE_CALLS;
-  return { selected: all.slice(0, cap), dropped: all.slice(cap), notApplicable, maxCalls: cap };
+  return { selected: all.slice(0, cap), dropped: all.slice(cap), notApplicable, droppedClauses, maxCalls: cap };
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +451,7 @@ export function ruleQuestionKey(ruleId: string, clauseId: string): string {
  * rule document itself happens to contain, the same floor every other piece
  * of state sent to Jev already gets (see `conform-jev.ts`'s own note).
  */
-function questionFor(ruleId: string, clause: RawReferenceClause): RuleNoulQuestion {
+function questionFor(ruleId: string, clause: ReferenceClause): RuleNoulQuestion {
   return {
     type: "noul",
     instructions:
@@ -461,7 +644,7 @@ export const DEFAULT_IMPACT_TEMPLATE =
 export interface RuleViolationCandidate {
   readonly region: ScopedRegion;
   readonly ruleId: string;
-  readonly clause: RawReferenceClause;
+  readonly clause: ReferenceClause;
   readonly probability: number;
 }
 

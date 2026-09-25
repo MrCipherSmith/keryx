@@ -7,17 +7,21 @@ import {
   batchAllRulePairs,
   batchRulePairsForRegion,
   cappedSeverity,
+  classifyRuleSourceCategory,
   clauseApplicability,
   DEFAULT_JEV_RULES_THRESHOLD,
   declaredSeverityAndCleanText,
   extractRuleRationale,
   findingStats,
   firstChangedLineQuote,
+  frontmatterScalar,
   globToRegExp,
   inferLanguage,
   isCodingConventionSkill,
+  isHunkCheckableClause,
   matchesAnyGlob,
   metadataScalar,
+  PROCESS_RULE_HEURISTIC_TERMS,
   probabilityToConfidence,
   probabilityToUncappedSeverity,
   RULE_TOKEN_BUDGET,
@@ -27,10 +31,11 @@ import {
   type RuleHunkPair,
   type RuleSourceFile,
   type RuleViolationCandidate,
+  type TaggedRuleSource,
 } from "./jev-rules";
 import type { ScopedRegion } from "./scope";
 import type { DetectedStack } from "./stack";
-import type { RawReferenceClause } from "./conform-clauses";
+import type { ReferenceClause, ReferenceClauseStateKind } from "./conform-clauses";
 
 function region(overrides: Partial<ScopedRegion> = {}): ScopedRegion {
   return {
@@ -44,8 +49,26 @@ function region(overrides: Partial<ScopedRegion> = {}): ScopedRegion {
   };
 }
 
-function clause(id: string, text: string, headingPath: readonly string[] = []): RawReferenceClause {
-  return { clause_id: id, text, heading_path: [...headingPath] };
+/** A fully-tagged clause fixture — defaults to `state_kind: "hunk", checkable: true` (the common case every existing test needs); pass overrides to build a dropped-clause fixture. */
+function clause(
+  id: string,
+  text: string,
+  headingPath: readonly string[] = [],
+  overrides: Partial<{ state_kind: ReferenceClauseStateKind; checkable: boolean; reason: string }> = {},
+): ReferenceClause {
+  return {
+    clause_id: id,
+    text,
+    heading_path: [...headingPath],
+    state_kind: overrides.state_kind ?? "hunk",
+    checkable: overrides.checkable ?? true,
+    tag_source: "explicit",
+    ...(overrides.reason !== undefined ? { reason: overrides.reason } : {}),
+  };
+}
+
+function taggedSource(source: RuleSourceFile, clauses: readonly ReferenceClause[]): TaggedRuleSource {
+  return { source, clauses };
 }
 
 const CERTAIN_STACK: DetectedStack = {
@@ -125,9 +148,11 @@ describe("clauseApplicability", () => {
 });
 
 describe("selectRuleHunkPairs", () => {
-  const sources: RuleSourceFile[] = [
-    { path: "rules/b.mdc", kind: "project-rule", text: "# B\n- clause one\n- clause two\n" },
-    { path: "rules/a.mdc", kind: "project-rule", text: "# A\n- only clause\n" },
+  const sourceB: RuleSourceFile = { path: "rules/b.mdc", kind: "project-rule", text: "# B\n- clause one\n- clause two\n" };
+  const sourceA: RuleSourceFile = { path: "rules/a.mdc", kind: "project-rule", text: "# A\n- only clause\n" };
+  const sources: TaggedRuleSource[] = [
+    taggedSource(sourceB, [clause("b-1", "clause one", ["B"]), clause("b-2", "clause two", ["B"])]),
+    taggedSource(sourceA, [clause("a-1", "only clause", ["A"])]),
   ];
 
   test("deterministic order: regions in input order, sources sorted by path, clauses in extraction order", () => {
@@ -141,6 +166,7 @@ describe("selectRuleHunkPairs", () => {
       "src/two.ts/rules/b.mdc/b-1",
       "src/two.ts/rules/b.mdc/b-2",
     ]);
+    expect(result.droppedClauses).toEqual([]);
   });
 
   test("a `--max-calls` cap keeps a stable prefix and reports the rest as dropped, never silently", () => {
@@ -153,11 +179,107 @@ describe("selectRuleHunkPairs", () => {
   });
 
   test("a rule inapplicable to a file is reported in notApplicable, not silently dropped", () => {
-    const scoped: RuleSourceFile[] = [{ ...sources[0]!, declaredPaths: ["src/only-here/**"] }];
+    const scoped: TaggedRuleSource[] = [taggedSource({ ...sourceB, declaredPaths: ["src/only-here/**"] }, sources[0]!.clauses)];
     const result = selectRuleHunkPairs([region({ path: "src/elsewhere.ts" })], scoped, CERTAIN_STACK);
     expect(result.selected).toEqual([]);
     expect(result.notApplicable).toHaveLength(1);
     expect(result.notApplicable[0]?.reason).toContain("no declared path glob");
+  });
+
+  test("a clause not tagged hunk/checkable is excluded from pairing and reported once in droppedClauses", () => {
+    const mixed: TaggedRuleSource[] = [
+      taggedSource(sourceA, [
+        clause("a-1", "checkable clause", ["A"]),
+        clause("a-2", "a rationale statement", ["A"], { state_kind: "pr", checkable: false, reason: "descriptive rationale, not itself checkable" }),
+        clause("a-3", "a PR-kind clause", ["A"], { state_kind: "pr", checkable: true }),
+      ]),
+    ];
+    const regions = [region({ path: "src/one.ts" }), region({ path: "src/two.ts" })];
+    const result = selectRuleHunkPairs(regions, mixed, CERTAIN_STACK, 100);
+    // Only the hunk-checkable clause pairs, across both regions.
+    expect(result.selected.map((p) => p.clause.clause_id)).toEqual(["a-1", "a-1"]);
+    // Each dropped clause is reported exactly once, regardless of how many regions it would have paired against.
+    expect(result.droppedClauses).toEqual([
+      { ruleId: "rules/a.mdc", clauseId: "a-2", reason: "descriptive rationale, not itself checkable" },
+      { ruleId: "rules/a.mdc", clauseId: "a-3", reason: 'tagged state_kind: "pr", not "hunk" — not a hunk-checkable clause' },
+    ]);
+  });
+});
+
+describe("isHunkCheckableClause", () => {
+  test("true only for state_kind: hunk AND checkable", () => {
+    expect(isHunkCheckableClause(clause("c-1", "x", [], { state_kind: "hunk", checkable: true }))).toBe(true);
+    expect(isHunkCheckableClause(clause("c-1", "x", [], { state_kind: "hunk", checkable: false }))).toBe(false);
+    expect(isHunkCheckableClause(clause("c-1", "x", [], { state_kind: "pr", checkable: true }))).toBe(false);
+    expect(isHunkCheckableClause(clause("c-1", "x", [], { state_kind: "report", checkable: true }))).toBe(false);
+  });
+});
+
+describe("classifyRuleSourceCategory / PROCESS_RULE_HEURISTIC_TERMS", () => {
+  test("frontmatter applies_to wins outright over any heuristic", () => {
+    const content = '---\napplies_to: code\ndescription: "commit workflow"\n---\n# Commit Workflow\n';
+    const decision = classifyRuleSourceCategory("rules/core/commit-message-formatting.mdc", content);
+    expect(decision.category).toBe("code");
+    expect(decision.reason).toContain("applies_to");
+  });
+
+  test("frontmatter metadata.category wins over the heuristic", () => {
+    const content = "---\nmetadata:\n  category: docs\n---\n# TDD Workflow\n";
+    const decision = classifyRuleSourceCategory("rules/core/tdd-workflow.mdc", content);
+    expect(decision.category).toBe("docs");
+    expect(decision.reason).toContain("metadata.category");
+  });
+
+  test("filename heuristic marks a process/meta doc without any frontmatter category", () => {
+    const decision = classifyRuleSourceCategory("rules/core/commit-message-formatting.mdc", "# Commit Message Formatting\n- do X\n");
+    expect(decision.category).toBe("process");
+    expect(decision.reason).toContain("commit");
+  });
+
+  test("title heuristic (frontmatter description) catches an ambiguous filename", () => {
+    const content = '---\ndescription: "Definition-of-Done checklist"\n---\n# House Rules\n';
+    const decision = classifyRuleSourceCategory("rules/core/house-rules.mdc", content);
+    expect(decision.category).toBe("process");
+    expect(decision.reason).toContain("definition-of-done");
+  });
+
+  test("no frontmatter and no heuristic term matched defaults to code", () => {
+    const decision = classifyRuleSourceCategory("rules/core/async-patterns.mdc", "# Async Patterns\n- use Promise.all\n");
+    expect(decision.category).toBe("code");
+    expect(decision.reason).toContain("no frontmatter category");
+  });
+
+  test("PROCESS_RULE_HEURISTIC_TERMS is the documented, pinned list", () => {
+    expect(PROCESS_RULE_HEURISTIC_TERMS).toEqual([
+      "commit",
+      "git",
+      "tdd",
+      "workflow",
+      "definition-of-done",
+      "documentation",
+      "requirements",
+      "plan",
+      "prompting",
+      "subagent",
+      "skill",
+      "jobs",
+      "orchestrat",
+      "review-process",
+      "release",
+    ]);
+  });
+});
+
+describe("frontmatterScalar", () => {
+  test("reads a top-level scalar, quoted or bare, never nested under metadata", () => {
+    const content = '---\ndescription: "hello"\nalwaysApply: false\n---\nbody\n';
+    expect(frontmatterScalar(content, "description")).toBe("hello");
+    expect(frontmatterScalar(content, "alwaysApply")).toBe("false");
+    expect(frontmatterScalar(content, "missing")).toBeUndefined();
+  });
+
+  test("no frontmatter yields undefined rather than throwing", () => {
+    expect(frontmatterScalar("no frontmatter here", "description")).toBeUndefined();
   });
 });
 
