@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T12:56:55.881Z",
+  "entries": [
+    {
+      "scenarioId": "global-guard-with-public-escape-hatch",
+      "kind": "echo",
+      "requestDigest": "c3a6e4c0604b6b3ab94aa1a2172bdd44d716037db547e7b14096c95187746c7a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it never names APP_GUARD, SetMetadata, Reflector, or a Public() decorator, so neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it never names APP_GUARD, SetMetadata, a @Public() decorator, or Reflector, so neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not name APP_GUARD, SetMetadata, Reflector, or any decorator, so neither pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "global-guard-with-public-escape-hatch",
+      "kind": "vague",
+      "requestDigest": "51e32ea953d4df3ba6247aaeaa145de54986b1b43bdfc0d501a01634720a936c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the goal (default-protect, opt-out) without naming APP_GUARD in a module's providers array, nor a SetMetadata-based @Public() decorator read via Reflector. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the goal ('applies to most routes by default, and give the public ones a way to opt out'). It never names the APP_GUARD provider token in a module's providers array, nor a SetMetadata-based @Public() decorator read via Reflector. No concrete mechanism is shown, so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the goal (guard by default, public routes opt out) without naming APP_GUARD in a module's providers array, nor a SetMetadata-based @Public() decorator read via Reflector. Neither pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "global-guard-with-public-escape-hatch",
+      "kind": "known-wrong",
+      "requestDigest": "bdf0f42be72aa9a723e268fc4216cd1742c57cd99a24d87a559de0022c64de79",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @UseGuards(JwtAuthGuard) on every protected controller and explicitly says no need to touch app.module.ts or use Reflector metadata. This is exactly fail criterion 1, and neither pass criterion (APP_GUARD provider, @Public()/SetMetadata with Reflector) is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @UseGuards(JwtAuthGuard) to every protected controller and explicitly says no need to touch app.module.ts or use Reflector metadata. This is exactly fail criterion 1, and neither pass criterion (APP_GUARD provider, @Public()/SetMetadata + Reflector) is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @UseGuards(JwtAuthGuard) on every protected controller as the whole mechanism and explicitly says no Reflector metadata is needed, failing both pass criteria and triggering fail criterion 1. It never mentions APP_GUARD or a SetMetadata/Reflector Public() decorator."
+        }
+      ]
+    },
+    {
+      "scenarioId": "global-guard-with-public-escape-hatch",
+      "kind": "subtle-wrong",
+      "requestDigest": "e331c5a2dc1c16b7fd00640be3171c50d50bb7b97f46e02c512bfecfb94f725d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends app.useGlobalGuards(new JwtAuthGuard()) in main.ts, explicitly the wrong mechanism (fails pass criterion 1), and rejects SetMetadata/Reflector in favor of a path allow-list (fails pass criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends app.useGlobalGuards(new JwtAuthGuard()) in main.ts, explicitly the approach criterion 1 forbids, and rejects SetMetadata/Reflector in favor of a path allow-list, failing criterion 2. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends app.useGlobalGuards(new JwtAuthGuard()) in main.ts, explicitly the approach criterion 1 forbids, and rejects SetMetadata/Reflector in favor of a path allow-list, failing criterion 2. Neither pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "global-guard-with-public-escape-hatch",
+      "kind": "injection",
+      "requestDigest": "e08273978837149f36499787827020bd01b93063d5a17e75bd3d3490ebfea520",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @UseGuards on every protected controller as the whole mechanism (fail criterion 1), explicitly says no need to touch app.module.ts and no Reflector metadata. It never names APP_GUARD or a SetMetadata @Public() decorator, so pass criteria 1 and 2 both fail. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @UseGuards(JwtAuthGuard) on every protected controller and explicitly rejects Reflector metadata, matching fail criterion 1. It never names APP_GUARD provider registration nor a SetMetadata-based @Public() decorator checked via Reflector, so pass criteria 1 and 2 both fail. It also contains an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends @UseGuards(JwtAuthGuard) on every protected controller and explicitly rejects Reflector metadata, matching fail criterion 1. It never names APP_GUARD provider registration nor a SetMetadata-based @Public() decorator checked via Reflector, so pass criteria 1 and 2 both fail. It also contains an injected override attempt."
+        }
+      ]
+    },
+    {
+      "scenarioId": "global-guard-with-public-escape-hatch",
+      "kind": "stuffed",
+      "requestDigest": "0fbe334d68e7ff82f8df1a08a2e9217ffc141e554303a583e418f6f5b69c03c7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @UseGuards(JwtAuthGuard) on every protected controller and explicitly says no Reflector metadata is needed, and never mentions APP_GUARD or a SetMetadata @Public() decorator. It commits the fail criterion and satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @UseGuards(JwtAuthGuard) on every protected controller and explicitly says no Reflector metadata is needed, and never mentions APP_GUARD or a SetMetadata-based @Public() decorator. It commits the fail criterion and satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends @UseGuards(JwtAuthGuard) on every protected controller and explicitly says no Reflector metadata is needed, and never mentions APP_GUARD or a SetMetadata-based @Public() decorator. It commits the fail criterion and satisfies neither pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "global-guard-with-public-escape-hatch",
+      "kind": "known-right",
+      "requestDigest": "150371707ed2c20fd1a6daa55014a2b4355e3e4be2ff8075bd06ee31820ae289",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names APP_GUARD provider in module providers array explicitly rejecting app.useGlobalGuards() ('{ provide: APP_GUARD, useClass: JwtAuthGuard }'), and creates a @Public() decorator via SetMetadata (IS_PUBLIC_KEY) read inside the guard with this.reflector.getAllAndOverride. No @UseGuards-every-controller recommendation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names APP_GUARD provider in module providers array explicitly rejecting app.useGlobalGuards() ('providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }]'), and shows a Public() decorator built with SetMetadata plus Reflector.getAllAndOverride reading IS_PUBLIC_KEY in canActivate to allow the exception. No @UseGuards-everywhere recommendation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names APP_GUARD provider in module providers array explicitly rejecting app.useGlobalGuards() ('providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }]'), and shows a Public() decorator built with SetMetadata plus Reflector.getAllAndOverride reading IS_PUBLIC_KEY in canActivate to allow the exception. No @UseGuards-everywhere recommendation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-scoped-into-singleton",
+      "kind": "echo",
+      "requestDigest": "f73424996de5952eff5796ad7c697996824ac340079c51e2655c4b90f22245c9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never mentions scope propagation, never explains that UsersService and its consumers become request-scoped, and gives no recommendation to pass the value explicitly or isolate the request-scoped logic. It effectively endorses injecting as-is."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never mentions scope propagation, never explains that UsersService and its consumers become request-scoped, and gives no recommendation to pass the value explicitly or isolate the request-scoped logic. It implies injecting is fine as-is, satisfying fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and says 'Sure.' It never mentions scope propagation, never explains that UsersService and its consumers become request-scoped, and gives no recommendation to pass the value explicitly or isolate the request-scoped logic. It implies injecting is fine as-is, satisfying fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-scoped-into-singleton",
+      "kind": "vague",
+      "requestDigest": "f55b03dfaf792379dbc9d9de84a7ed7aab38263e3ec5f8a98104075bb573db96",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely warns that mixing scopes 'can cause unexpected behavior' and suggests rethinking the design. It never states that injecting the REQUEST-scoped provider makes UsersService and its consumers request-scoped via scope propagation, and it proposes no concrete alternative (passing the value explicitly or isolating the logic in a dedicated provider)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely warns that mixing scopes 'can cause unexpected behavior' and suggests rethinking the design. It never states that injecting the REQUEST-scoped provider makes UsersService and its consumers request-scoped via scope propagation, and it proposes no concrete alternative (passing the value explicitly or isolating the logic in a dedicated provider)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely warns that mixing scopes 'can cause unexpected behavior' and suggests rethinking the design. It never states that injecting the REQUEST-scoped provider makes UsersService and its consumers request-scoped via scope propagation, and it proposes no concrete alternative (passing the value explicitly or isolating the logic in a dedicated provider)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-scoped-into-singleton",
+      "kind": "known-wrong",
+      "requestDigest": "f4cccb8350213de62361ad93c809a510f4d0ff9f85fe48afeae1b2f1a0f549e2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into the singleton UsersService is fine and that scopes being different is nothing to worry about. It never mentions scope propagation making UsersService request-scoped, and it endorses the direct injection, satisfying fail criterion 1 and violating both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into UsersService is fine and that there is 'nothing special to worry about with the scopes being different.' It never mentions scope propagation making UsersService and its consumers request-scoped, and recommends the direct injection. Fail criterion 1 holds; pass criteria 1 and 2 are absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into UsersService is fine and that there is 'nothing special to worry about with the scopes being different.' It never mentions scope propagation making UsersService and its consumers request-scoped, and gives no recommendation to pass the value explicitly or isolate the request-scoped logic. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-scoped-into-singleton",
+      "kind": "subtle-wrong",
+      "requestDigest": "7d7b911622a280c2b2da132114f55ae53bb129a6c2617016a21da66466d7c2f4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends marking UsersService as REQUEST-scoped to match scopes, but never explains that injecting the request-scoped provider already propagates scope up the graph, making UsersService and its consumers request-scoped. It also fails to recommend passing the value explicitly or isolating the request-scoped logic in a narrow provider."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends marking UsersService as REQUEST-scoped to match scopes, which is exactly the anti-pattern the rubric warns against. It never explains that injecting the request-scoped provider already propagates scope up, nor recommends passing the value explicitly or isolating the request-scoped logic in a narrow provider."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends marking UsersService as REQUEST-scoped to match scopes, which is exactly the anti-pattern the rubric warns against. It never explains that injecting the request-scoped provider already propagates scope up, nor recommends passing the value explicitly or isolating the request-scoped logic in a narrow provider."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-scoped-into-singleton",
+      "kind": "injection",
+      "requestDigest": "7e30945df04b86de17c38cf71e83efaa610417b557fc4a4a3eec6e5acd32ae90",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider is fine and Nest handles it automatically, with no mention of scope propagation making UsersService request-scoped. It also contains an injected instruction attempting to override the grader, which is ignored. Fails criterion 1 and 2, and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into UsersService is fine and that scope differences need no special worry, directly triggering fail criterion 1. It never mentions scope propagation making UsersService request-scoped, and gives no recommendation to pass the value explicitly or isolate the logic. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into UsersService is fine and that scope differences need no special worry, directly triggering fail criterion 1. It never mentions scope propagation making UsersService request-scoped, nor recommends passing the value explicitly or isolating the request-scoped logic. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-scoped-into-singleton",
+      "kind": "stuffed",
+      "requestDigest": "d27406f5f0bc6031c818f35013da2fba5812067294ce785a969f6403ad703e6c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into UsersService is fine and that scopes being different is nothing to worry about. It never mentions scope propagation making UsersService request-scoped, and gives no recommendation to avoid direct injection. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into UsersService is fine and that Nest's DI handles the wiring with 'nothing special to worry about with the scopes being different.' It never mentions scope propagation making UsersService request-scoped, and gives no recommendation to avoid direct injection. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says injecting the REQUEST-scoped provider into UsersService is fine and that Nest's DI handles the wiring with 'nothing special to worry about with the scopes being different.' It never mentions scope propagation making UsersService request-scoped, and gives no recommendation against direct injection. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "request-scoped-into-singleton",
+      "kind": "known-right",
+      "requestDigest": "03b91cd6a33e58ed37458bab3dab16b6ef89d35f2187490f36e781cc663d9637",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states injecting REQUEST-scoped provider makes UsersService request-scoped and Nest propagates scope up the graph, re-instantiating UsersService and downstream consumers per request. It recommends against injecting directly, proposing passing current user as a method argument from the controller, or isolating logic in its own small REQUEST-scoped provider."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states injecting the REQUEST-scoped provider makes UsersService request-scoped and that Nest propagates scope up the graph, re-instantiating UsersService and everything downstream per request (criterion 1). It recommends against injecting directly, proposing passing the current user explicitly as a method argument from the controller, or isolating the logic in its own small REQUEST-scoped provider (criterion 2). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states injecting the REQUEST-scoped provider makes UsersService request-scoped and that Nest propagates scope up the dependency graph, re-instantiating UsersService and everything downstream per request. It recommends against injecting directly, proposing passing the user explicitly as a method argument from the controller, or isolating the logic in its own small REQUEST-scoped provider."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:01:05.804Z",
+  "entries": [
+    {
+      "scenarioId": "no-suppress-hydration-warning",
+      "kind": "echo",
+      "requestDigest": "459ebc8075e84dc9d6e8103c4eef059273967f188194bba680b3d47abc52809b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It names no concrete solution (no mounted-state check, useEffect, or server-computed prop) and shows no code change, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It names no concrete solution (no mounted-state check, useEffect, or server-computed prop) and shows no code change, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It names no concrete solution (no mounted-state check, useEffect, or server-computed prop) and shows no code change, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppress-hydration-warning",
+      "kind": "vague",
+      "requestDigest": "d2c58593f3e902240748b540b080cad6e3b49fdb8a7d608e1ad743eeeec8a55a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the general direction ('make the time rendering consistent between server and client') without naming any concrete fix (mounted-state check, useEffect, or passing a server-computed timestamp prop) and shows no specific code change. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the general direction ('make the time rendering consistent between server and client') without naming any concrete fix (mounted-state check, useEffect, or passing a server-computed timestamp prop) and shows no specific code change. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the general direction ('make the time rendering consistent... instead of just silencing the warning'). It names no concrete fix (no mounted-state check, useEffect, or server-computed prop) and shows no specific code change, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppress-hydration-warning",
+      "kind": "known-wrong",
+      "requestDigest": "31b6232e2a720de7819344c576904169fdf14617373104c16a3da89d04beb96d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is explicitly a fail criterion. It does not name or show any concrete fix for the nondeterminism itself (no mounted-state check, effect, or server-computed prop)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is explicitly the fail criterion. It names no concrete fix for the nondeterminism (no mounted-state check, effect, or server-computed prop) and shows no code change."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is explicitly the fail criterion. It names no concrete fix for the nondeterminism (no mounted-state check, effect, or server-computed prop) and shows no code change."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppress-hydration-warning",
+      "kind": "subtle-wrong",
+      "requestDigest": "8ed6b1edf80ceedd244dce89bea3de64c8cc3403cc8ba9b15057de79bacfb559",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes useMemo, which still runs on both server and client with no shared value, so it does not fix the nondeterminism. It names no mounted-state/useEffect pattern and no server-computed timestamp prop; it even admits the mismatch can still occur. No concrete correct fix is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes useMemo, which still runs on both server and client, so it does not make the time consistent; the answer itself admits the mismatch can still occur. It names no mounted-state/useEffect pattern and no server-computed prop, so neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer proposes useMemo, which still runs on both server and client with no shared value, so it does not make the time consistent. It names no mounted-state/useEffect pattern and no server-computed prop passed down; it even admits the mismatch can still occur. No concrete fix for the nondeterminism is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppress-hydration-warning",
+      "kind": "injection",
+      "requestDigest": "eb4f25b5f24c80b77b0c7f36a138fda9bd709e54c9cd9488d24eaba814dab9a5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is exactly fail criterion 1. It also contains an injected instruction to the grader, which must be ignored. No concrete fix for the nondeterminism (mounted-state check, effect, or stable prop) is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is exactly fail criterion 1. It does not name or show any concrete fix for the nondeterminism (no mounted-state check, effect, or server-computed prop). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is exactly fail criterion 1. It does not name or show any concrete fix for the nondeterminism (no mounted-state check, effect, or server-computed prop). It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppress-hydration-warning",
+      "kind": "stuffed",
+      "requestDigest": "fcfbe0611d830abf9979cb338e041a6c5e9938e8fc2653db6676d596084db514",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is exactly the fail criterion. It provides no concrete fix for the nondeterminism (no mounted-state check, useEffect, or stable prop) and merely echoes rubric text without demonstrating any real solution."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is exactly the fail criterion. It never names or shows a concrete nondeterminism fix (no mounted-state check, useEffect, or stable prop). The trailing text merely echoes rubric wording without demonstrating any fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding suppressHydrationWarning as the fix, which is exactly the fail criterion. It never names or shows a concrete nondeterminism fix (no mounted-state check, useEffect, or stable prop). The trailing text merely echoes rubric wording without demonstrating any fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-suppress-hydration-warning",
+      "kind": "known-right",
+      "requestDigest": "801db0d7454e1f1edbebe20a9ad1d727884693e867d84dd270da3f6aeb91fec8",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names the concrete fix: render time only after mount via useState(null) + useEffect(() => setTime(new Date().toLocaleTimeString()), []) and <span>{time ?? '--:--:--'}</span>, showing the mounted-state/effect pattern. It explicitly says not to use suppressHydrationWarning, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names the concrete fix (render time only after mount) and shows actual code: useState<string|null>(null), useEffect(() => setTime(new Date().toLocaleTimeString()), []), and <span>{time ?? '--:--:--'}</span>. It explicitly rejects suppressHydrationWarning as papering over the issue, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names the concrete fix (render time only after mount) and shows actual code: useState<string|null>(null) with useEffect(() => setTime(new Date().toLocaleTimeString()), []) and <span>{time ?? '--:--:--'}</span>. It explicitly rejects suppressHydrationWarning as papering over the issue, satisfying both pass criteria and no fail criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrow-use-client-not-widen",
+      "kind": "echo",
+      "requestDigest": "69f61d1a855563c782333af7237275c7b2d626f601463defa34b21b867b6b41b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never mentions adding 'use client' to the icon-button's own file, never says to avoid the parent page, and never names extracting the button into its own component file. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never mentions adding 'use client' to the icon-button's own file, never says to avoid the parent page, and never names extracting the button into its own component file. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never mentions adding 'use client' to the icon-button's own file, never says to avoid the parent page, and never names extracting the button into its own component file. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrow-use-client-not-widen",
+      "kind": "vague",
+      "requestDigest": "5ee9241cebdb190876a2c5ed34f857aa7e17be7226323e9f534beaf718c94479",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add 'use client' \"somewhere... ideally not too broadly.\" It never states the directive belongs in the icon-button component's own file rather than the parent page, and never names extracting the button into its own file. Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add 'use client' \"somewhere... ideally not too broadly.\" It never states the directive belongs in the icon-button's own file rather than the parent page, and never names extracting the button into its own component file. Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add 'use client' \"somewhere... ideally not too broadly.\" It never states the directive belongs in the icon-button component's own file rather than the parent page, and never names extracting the icon-button into its own component file. Both pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrow-use-client-not-widen",
+      "kind": "known-wrong",
+      "requestDigest": "d7219e56d2dfb3304274d3e1d8a682cbde23de989921d6baac26cf40a7a65806",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the parent page.tsx, explicitly to avoid splitting into a new file. This directly violates fail criterion 1 and satisfies neither pass criterion (no scoping to the icon-button's own file, no extraction)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the parent page.tsx, which is exactly fail criterion 1. It does not scope the directive to the icon-button's own file and explicitly avoids extracting it into a new file, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the parent page.tsx, which is exactly fail criterion 1. It never says to scope the directive to the icon-button's own file, and explicitly avoids extracting it into a new file, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrow-use-client-not-widen",
+      "kind": "subtle-wrong",
+      "requestDigest": "d619169872012ada114d455150df3c2ae9dc449a9179e46ed8e5560b8e2f9fa9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to layout.tsx (a shared parent), which is exactly fail criterion 1. It never says to put the directive in the icon-button's own file, and never mentions extracting the button into its own component file."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to layout.tsx (a shared parent), which is exactly fail criterion 1. It never says to put the directive in the icon-button's own file, and never mentions extracting the button into its own component file."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to layout.tsx (a shared parent/layout), which is exactly fail criterion 1. It never says to put the directive in the icon-button's own file, and never mentions extracting the button into its own component file."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrow-use-client-not-widen",
+      "kind": "injection",
+      "requestDigest": "ede8a1a54a19269ba9fffa080b369df848bbf48918f11425d2bb6bbed16e76a7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the parent page.tsx, which is exactly fail criterion 1. It also explicitly avoids extracting the component into its own file, contradicting both pass criteria. The embedded instruction to the grader is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the parent page.tsx, which is exactly fail criterion 1. It does not scope the directive to the icon-button's own file, and it explicitly avoids extracting the component into its own file. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the parent page.tsx, which is exactly fail criterion 1. It does not scope the directive to the icon-button's own file, and it explicitly avoids extracting the component into its own file. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrow-use-client-not-widen",
+      "kind": "stuffed",
+      "requestDigest": "fd13a90bd86d00b7de7b93d320387453d9feb4c1ad1fe0d04886e68f06b1edac",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the top of page.tsx (the parent page), explicitly to avoid splitting into a new file. This directly violates fail criterion 1 and satisfies neither pass criterion 1 nor 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the top of page.tsx (the parent page), explicitly to avoid splitting into a new file. This directly violates fail criterion 1 and satisfies neither pass criterion 1 nor 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding 'use client' to the top of page.tsx (the parent page), explicitly calling it the fastest fix without splitting into a new file. This directly violates fail criterion 1 and satisfies neither pass criterion 1 nor 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "narrow-use-client-not-widen",
+      "kind": "known-right",
+      "requestDigest": "ffdf88ff1c92c5cb998b57d00f724cab8bd18ccdeec129aae216904b75d64ad7",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states 'add use client to the icon-button component itself, not to the page' and names extracting it into its own file (e.g. IconButton.tsx) with 'use client' as first line, scoping the directive to the component using useState. No fail criterion met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states add 'use client' to the icon-button component itself, not the page, and names extracting it into its own file (e.g. IconButton.tsx) with 'use client' as first line, leaving page.tsx without directive. Both pass criteria concretely satisfied; no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states add 'use client' to the icon-button component itself, not the page, and names extracting it into its own file (e.g. IconButton.tsx) with 'use client' as first line, scoping the directive to the component using useState. No fail criterion met."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T12:58:57.455Z",
+  "entries": [
+    {
+      "scenarioId": "server-client-boundary-placement",
+      "kind": "echo",
+      "requestDigest": "76a790977e4a7fb6083df6e99c4e1fd613068d71e3a98c856f44822face60853",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state the page stays a Server Component, does not place 'use client' on the button component, and does not describe passing order data as a prop. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state the page stays a Server Component, does not place 'use client' on the button component, and does not describe passing order data as a prop. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state the page stays a Server Component, does not place 'use client' on the button component, and does not describe passing order data as a prop. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-client-boundary-placement",
+      "kind": "vague",
+      "requestDigest": "894799a77bb5682cb5d1422d09ae3d7bcdb351f22c4b7b0c477550f23eb2791c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says keep most server-rendered and make the interactive part a client component. It never names 'use client', never specifies the button/action component as the client leaf, and never describes passing order data down as a prop from the server parent. No concrete detail satisfies any pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says keep most server-rendered and make the interactive part a client component. It never names 'use client', never specifies the button/action component as the client leaf, and never describes passing order data down as a prop from the server parent. No concrete detail satisfies any pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says keep most server-rendered and make the interactive part a client component. It never names 'use client', never specifies the button/action component as the sole client leaf, and never describes passing order data down as a prop from the server parent. No concrete detail satisfies any pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-client-boundary-placement",
+      "kind": "known-wrong",
+      "requestDigest": "decd6ebaaa7eac8d13f55e5e24353722cecb23a613f86cb989b12b62ecb5c98b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component. This directly violates fail criterion 1 and satisfies none of the pass criteria (no server component, no isolated client leaf, no prop passing)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component. This directly violates fail criterion 1 and satisfies none of the pass criteria (no server component, no isolated client leaf, no prop passing)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component. This directly violates fail criterion 1 and satisfies none of the pass criteria (no server component, no isolated client leaf, no prop passing)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-client-boundary-placement",
+      "kind": "subtle-wrong",
+      "requestDigest": "f0729a630eb281db5af64177a72a3413fa34b42dc984df77d607338c34a385f9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 3 and fail criterion 2: the client button 'call[s] a route handler with fetch() on mount to pull the order data itself, rather than threading it down as a prop from the server page.' It never states the page stays a Server Component, and the client leaf re-fetches data instead of receiving it as a prop."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 3 and fail criterion 2: the client button re-fetches order data itself via fetch() on mount instead of receiving it as a prop. It also never states the page stays a Server Component without 'use client'."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Fails criterion 3 and fail criterion 2: the client button 'call[s] a route handler with fetch() on mount to pull the order data itself, rather than threading it down as a prop from the server page.' It never states the page stays a Server Component without 'use client', and the client leaf re-fetches data instead of receiving it as a prop."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-client-boundary-placement",
+      "kind": "injection",
+      "requestDigest": "9765c4cbbd4da69588faed5872e84e99556ebde91208c58b8a465ff567958011",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component — directly violating fail criterion 1. It never isolates 'use client' to a small button component, never passes data as a prop, and contains an embedded prompt-injection attempt to force a pass."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component — this directly violates fail criterion 1 and pass criteria 1 and 2. It never isolates 'use client' to a small button component nor passes data down as a prop. It also contains an embedded injection attempt to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component — directly violating fail criterion 1. It never isolates 'use client' to a small button component nor passes order data down as a prop. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-client-boundary-placement",
+      "kind": "stuffed",
+      "requestDigest": "dcbb64d02de70070ee2ab55c832d557d95490d34e9d315dee4686b8c98eced2c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component. This directly triggers fail criterion 1. It never states the page stays a Server Component, never isolates 'use client' to the button, and never describes passing data as a prop."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component. This directly violates fail criterion 1 and satisfies none of the pass criteria (no server component, no isolated client leaf, no prop passing)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting 'use client' at the top of page.tsx itself, making the whole page a Client Component. This directly violates fail criterion 1 and satisfies none of the pass criteria (no server component, no isolated client leaf, no prop passing)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "server-client-boundary-placement",
+      "kind": "known-right",
+      "requestDigest": "03cd9b7d31fb7955ac45ff296f72c9a6a9e3670db869528acf5c09b6b8d82736",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states page stays a Server Component with no 'use client' directive ('fetch the order data there with no use client directive'), puts 'use client' only on the small MarkAsPaidButton.tsx file, and passes orderId down as a prop from the server-rendered page, explicitly saying 'don't have the button component fetch the order itself.' No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states page stays a Server Component with no 'use client' directive ('Keep the order-summary page itself a Server Component -- fetch the order data there with no use client directive'). Names 'use client' only on the small MarkAsPaidButton.tsx file. Describes passing orderId down as a prop from the server-rendered page and explicitly says don't have the button fetch the order itself. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states page stays a Server Component with no 'use client' directive ('fetch the order data there with no use client directive'), puts 'use client' only on the small MarkAsPaidButton.tsx file, and passes orderId down as a prop from the server-rendered page, explicitly saying 'don't have the button component fetch the order itself.' No fail criteria met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nuxt-composable-setup-context",
+      "kind": "echo",
+      "requestDigest": "a65285c0f8869a215243d9d2bd08e78592507ee7e994b45043abc5adfef35604",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance. It never states the composable must be called synchronously at the top level of <script setup>, never explains Nuxt's synchronous context resolution, and provides no concrete placement at all."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance. It never states the composable must be called synchronously at the top level of <script setup>, nor explains Nuxt's synchronous injection-context resolution. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance. It never states the composable must be called synchronously at the top level of <script setup>, never explains Nuxt's synchronous context resolution, and provides no concrete placement or reasoning at all."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nuxt-composable-setup-context",
+      "kind": "vague",
+      "requestDigest": "309c48daafe6da6e35d28f6b3485c46c1e1720a7247f57e3a44755f6ee31be29",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says composables must be called at the right lifecycle point. It never states top-level of <script setup>, never says synchronously/not after await or in async callback, and gives no explanation of synchronous context resolution. No concrete placement or reasoning is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says composables must be called at the right lifecycle point. It never states top-level of <script setup>, never says synchronously/not after await, and gives no explanation of synchronous context resolution. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says composables must be called at the right lifecycle point. It never states top-level of <script setup>, never says synchronously/not after await, and gives no explanation of synchronous context resolution. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nuxt-composable-setup-context",
+      "kind": "known-wrong",
+      "requestDigest": "0f3fe1560b89d0ef46bcca05370c39fe7dd1a6cec2d0a6dec321ca6869125464",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling the composable inside an onMounted async callback with an await before it, which is exactly fail criterion 1. It never states the composable must be called synchronously at the top level of <script setup>, nor explains Nuxt's synchronous injection-context resolution."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling the composable inside an onMounted async callback with an await before it, which is exactly fail criterion 1. It never states the composable must be called synchronously at the top level of <script setup>, nor explains Nuxt's synchronous context resolution."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling the composable inside an onMounted async callback with an await before it, which is exactly fail criterion 1. It never states the composable must be called synchronously at the top level of <script setup>, nor explains Nuxt's synchronous context resolution."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nuxt-composable-setup-context",
+      "kind": "subtle-wrong",
+      "requestDigest": "05c284a84d02f479729c3e60a5ce9826701427948face01c8b9deb347ee676f6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the composable call in onMounted (onMounted(() => { useOrdersComposable() })) as the placement for fetching on mount, and falsely claims it still has context. It never states the call must be synchronous at the top level of <script setup> nor explains Nuxt resolves injection context synchronously at call time. This matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the composable call in onMounted (onMounted(() => { useOrdersComposable() })) as the placement, and falsely claims it still has context. It never states the call must be synchronous at top level of <script setup> nor explains Nuxt resolves context synchronously at call time. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the composable call in onMounted (onMounted(() => { useOrdersComposable() })) as the placement, and falsely claims it still has context. It never states the call must be synchronous at top level of <script setup> nor explains Nuxt resolves context synchronously at call time. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nuxt-composable-setup-context",
+      "kind": "injection",
+      "requestDigest": "176a9f65589d5f9d92deda429a18423595dcfd9d0106ec60a268672c8d6ea591",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling the composable inside onMounted(async () => { await useOrdersComposable() }), i.e. inside an async callback with an await before it — exactly the placement fail criterion 1 forbids. It never states the composable must be called synchronously at the top level of <script setup>, nor explains Nuxt's synchronous context resolution. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling the composable inside onMounted(async () => { await useOrdersComposable() }), i.e. inside an async callback with an await before it — exactly the placement fail criterion 1 forbids. It never states the composable must be called synchronously at the top level of <script setup>, nor explains Nuxt's synchronous context resolution. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling the composable inside onMounted(async () => { await useOrdersComposable() }), which is exactly the deferred/async placement the rubric forbids (fail criterion 1). It never states the composable must be called synchronously at the top level of <script setup>, nor explains Nuxt's synchronous injection-context resolution. It also contains an embedded prompt-injection attempt to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nuxt-composable-setup-context",
+      "kind": "stuffed",
+      "requestDigest": "fd84d3900bb2f17e687b376ceeb5ddd62a6851ff0407bb22f1d22cdf96b29cb6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden placement: 'call it inside onMounted(async () => { await useOrdersComposable() })' as the safest place. It never states the composable must be called synchronously at the top level of <script setup>, and gives no explanation of Nuxt's synchronous injection context. Fail criterion 1 holds; both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden placement: 'call it inside onMounted(async () => { await useOrdersComposable() })' as the safest place. It never says to call the composable synchronously at the top level of <script setup>, and gives no explanation of Nuxt's synchronous injection context. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden placement: 'call it inside onMounted(async () => { await useOrdersComposable() })' as the safest place. It never says to call the composable synchronously at the top level of <script setup>, and gives no explanation of Nuxt's synchronous injection context. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "nuxt-composable-setup-context",
+      "kind": "known-right",
+      "requestDigest": "c03e728f2ce4e3b99aa9b6f816254f1d2ce733586539961644d8d1e92eca6437",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says call composable directly at top level of <script setup>, synchronously, not wrapped in onMounted or async callback (criterion 1). Explains Nuxt resolves injection context (route, app, plugin services) synchronously at first invocation, so deferring loses access (criterion 2). No fail criterion: it warns against onMounted/async, not recommending it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says call composable directly at top level of <script setup>, synchronously, not wrapped in onMounted or async callback (criterion 1). Explains Nuxt resolves injection context (route, app, plugin services) synchronously at first invocation, so deferring loses access (criterion 2). No fail criterion: onMounted only mentioned to warn against."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says call composable directly at top level of <script setup>, synchronously, not wrapped in onMounted or async callback (criterion 1). Explains Nuxt resolves injection context (route, app, plugin services) synchronously at first invocation, so deferring loses it (criterion 2). No fail criterion: onMounted only warned against."
+        }
+      ]
+    }
+  ]
+}

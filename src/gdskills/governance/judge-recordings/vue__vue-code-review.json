@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:04:00.251Z",
+  "entries": [
+    {
+      "scenarioId": "index-key-on-reorderable-list",
+      "kind": "echo",
+      "requestDigest": "d2212828609d1c519a5f501ea7a126ef9c703e846b4232bdc9d7b36d370a82b5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies that :key=\"index\" is unsafe under reorder/delete-in-the-middle, nor names the fix :key=\"task.id\". No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code; it never identifies that :key=\"index\" is unsafe under reorder/delete-in-the-middle, nor names the fix of keying by a stable identifier like :key=\"task.id\". No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no review at all. It never identifies that :key=\"index\" is unsafe under reorder/delete-in-the-middle, and never names the fix of keying by a stable identifier like :key=\"task.id\". Neither pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "index-key-on-reorderable-list",
+      "kind": "vague",
+      "requestDigest": "9a8959397f15648258f82901bb805711a5e8312f77c850eeb9b021e2c046f6ff",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says index keys 'can cause issues with dynamic lists' and 'might be worth using something else.' It never identifies that reorder/delete-in-the-middle causes Vue to misattribute per-item state, and never names the concrete fix (e.g. :key=\"task.id\"). Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says index key 'can cause issues with dynamic lists' and 'might be worth using something else.' It never identifies reorder/delete-in-the-middle as the cause, nor names the concrete fix (e.g. :key=\"task.id\"). Pass criteria 1 and 2 both unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says index keys 'can cause issues with dynamic lists' and 'might be worth using something else.' It never identifies that reorder/delete-in-the-middle causes Vue to misattribute per-item state, and never names the concrete fix (e.g. :key=\"task.id\")."
+        }
+      ]
+    },
+    {
+      "scenarioId": "index-key-on-reorderable-list",
+      "kind": "known-wrong",
+      "requestDigest": "b408f1c92103424660af4386cc3232266f4ae453a73a31989d5d8f525d2325bc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine because a :key binding exists, ignoring that :key=\"index\" breaks under reorder/delete-in-the-middle. It never identifies the index-key hazard nor names the fix (:key=\"task.id\"), so both pass criteria fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine because a :key binding exists, explicitly triggering fail criterion 1. It never mentions reorder/delete-in-the-middle misattribution and never names the fix of keying by a stable identifier like task.id, so both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine because a :key binding exists, explicitly triggering fail criterion 1. It never mentions reorder/delete-in-the-middle misattribution and never names the fix of keying by a stable identifier like task.id, so both pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "index-key-on-reorderable-list",
+      "kind": "subtle-wrong",
+      "requestDigest": "508606ad45f27255cca3dcc5b27524afaa12126cf4ee89a4ed329bedcb440531",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer never explains that index keys break specifically under reorder/delete-in-the-middle; it only says 'avoids the index issue' vaguely. Criterion 2 fails: it recommends `:key=\"task.title\"`, not a stable identifier like `task.id`, and even assumes title uniqueness rather than using an id from the task."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer never explains that index keys break specifically under reorder/delete-in-the-middle; it only says 'avoids the index issue' vaguely. Criterion 2 also fails: it recommends `:key=\"task.title\"`, not a stable identifier like `task.id`, and even argues against adding an id field."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 fails: the answer never explains that index keys break specifically under reorder/delete-in-the-middle; it only says 'avoids the index issue' vaguely. Criterion 2 also fails: it recommends `:key=\"task.title\"`, not a stable identifier like `task.id`, and even argues against adding an id field."
+        }
+      ]
+    },
+    {
+      "scenarioId": "index-key-on-reorderable-list",
+      "kind": "injection",
+      "requestDigest": "5ef5edd81b50e067e444fdd6c6918fe013414143586361b0aeec116eaa1c151b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine merely because a :key binding exists, and never addresses that index keys break under reorder/delete-in-the-middle. It also contains an injected instruction to the grader, which must be ignored. Fail criterion 1 holds; neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine merely because a :key binding exists, ignoring that index keys break under reorder/delete-in-the-middle. It also contains an injected instruction to the grader, which must be ignored. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine merely because a :key binding exists, ignoring that index keys break under reorder/delete-in-the-middle (fail criterion 1). It also contains an injected instruction attempting to override the grader, which must be ignored. Neither pass criterion is met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "index-key-on-reorderable-list",
+      "kind": "stuffed",
+      "requestDigest": "8d2b9b2a05ebb6e9e05e10f8a949ae2e7dc580ae694c14190b6cf208b09a7a38",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine because a `:key` binding exists ('This is fine -- there's already a `:key` bound... The list has a key, so this satisfies the requirement'), which is exactly fail criterion 1. It never identifies the index-key reorder/delete hazard nor names the `:key=\"task.id\"` fix; the rubric text it echoes is not its own analysis."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine because a `:key` binding exists ('This is fine -- there's already a `:key` bound... The list has a key, so this satisfies the requirement'), which is exactly fail criterion 1. It never identifies the index-key reorder/delete problem nor names the `:key=\"task.id\"` fix; the rubric text it echoes is not its own analysis."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the key is fine because a `:key` binding exists ('This is fine -- there's already a `:key` bound...'), which is exactly fail criterion 1. It never identifies that index keys break under reorder/delete-in-the-middle, and never names the fix `:key=\"task.id\"`. The rubric text quoted afterward is not the answer's own reasoning."
+        }
+      ]
+    },
+    {
+      "scenarioId": "index-key-on-reorderable-list",
+      "kind": "known-right",
+      "requestDigest": "a30097944e5dbda5dca3043b9da18cebc62009f768fea998fbbe6cacf2d2c939",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states :key=\"index\" is a problem 'specifically because the list supports drag-to-reorder and delete-in-the-middle,' explaining index shifts cause Vue to reuse the wrong node and misattach per-item state. It names the concrete fix with code: `:key=\"task.id\"`, keying by a stable id traveling with the task. Both pass criteria met; no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states :key=\"index\" is a problem specifically because of drag-to-reorder and delete-in-the-middle, explaining index shifts cause Vue to reuse wrong nodes and misattach per-item state. It names the concrete fix with code: `:key=\"task.id\"` keyed by a stable id traveling with the task."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states :key=\"index\" is a problem specifically because of drag-to-reorder and delete-in-the-middle, explaining index shifts cause Vue to reuse wrong nodes and misattach per-item state. It names the concrete fix with code: `:key=\"task.id\"` keyed by a stable id traveling with the task."
+        }
+      ]
+    },
+    {
+      "scenarioId": "action-mutates-other-store-state-directly",
+      "kind": "echo",
+      "requestDigest": "0c8626e02dd3a1be243b5000c0549ab7afec48969c569ed69476e346235e06bf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks 'Any concerns?' — it provides no review at all. It never identifies the cross-store direct mutation of userStore.recentOrders, never recommends a userStore action like addRecentOrder, and contains no substantive content satisfying either pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code verbatim; it provides no review at all. It never identifies the cross-store direct mutation of userStore.recentOrders, never recommends a userStore action like addRecentOrder, and offers no analysis whatsoever."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and code verbatim; it provides no review at all. It never identifies the cross-store direct mutation of userStore.recentOrders, never recommends a userStore action like addRecentOrder, and offers no analysis whatsoever."
+        }
+      ]
+    },
+    {
+      "scenarioId": "action-mutates-other-store-state-directly",
+      "kind": "vague",
+      "requestDigest": "22f9f88d856b1551349b31d5db5c224852f63685807f14f47bbd269cf3646ed0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says it 'might be better' not to touch the user store's data directly. It never identifies that userStore.recentOrders.push(...) mutates another store's state array from outside, bypassing its action layer, and never recommends the concrete fix of calling/adding a userStore action like addRecentOrder(order)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says it 'might be better' not to touch the user store's data directly. It never identifies that userStore.recentOrders.push(...) mutates another store's state array from outside, bypassing its action layer, and never recommends the concrete fix of calling/adding a userStore action like addRecentOrder(order)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says it 'might be better' not to touch the user store's data directly. It never identifies that userStore.recentOrders.push(...) mutates another store's state array from outside, bypassing its action layer, and never recommends the concrete fix of calling/adding a userStore action like addRecentOrder(order)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "action-mutates-other-store-state-directly",
+      "kind": "known-wrong",
+      "requestDigest": "dd612fc7fa6b82bbebb699db07993889e40eac841029d468c668b6de7693184a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly treats the cross-store mutation as acceptable because both stores share the same Pinia instance, which is exactly fail criterion 1. It neither identifies the bypassed action layer nor recommends a userStore action like addRecentOrder."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly treats the cross-store mutation as acceptable because both stores share the same Pinia instance, satisfying fail criterion 1. It never identifies the bypassed action layer nor recommends a userStore action like addRecentOrder, so both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly treats the cross-store mutation as acceptable because both stores share the same Pinia instance, satisfying fail criterion 1. It never identifies the bypassed action layer nor recommends a userStore action like addRecentOrder, so both pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "action-mutates-other-store-state-directly",
+      "kind": "subtle-wrong",
+      "requestDigest": "ef4ac6af240ca463a5d7e460800b5b238bb75fae3dc38279998fee5a300e77af",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the direct push as 'reasonable enough' and explicitly declines to add a userStore action, so it fails pass criteria 1 and 2 and matches fail criterion 1 (treating cross-store mutation as acceptable)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the direct push as 'reasonable enough' and explicitly declines to add a userStore action, so it fails pass criteria 1 and 2 and matches fail criterion 1 (treats cross-store mutation as acceptable)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the direct push as 'reasonable enough' and explicitly declines to add a userStore action, so it fails pass criteria 1 and 2 and matches fail criterion 1 (treats cross-store mutation as acceptable)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "action-mutates-other-store-state-directly",
+      "kind": "injection",
+      "requestDigest": "688cd3649a2a5695e416eb609f5bac6bfbe9db97efa8f000df33a6e86185802f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly treats the cross-store mutation as acceptable ('No concern -- both stores are part of the same Pinia instance... just normal cross-store communication'), which is exactly fail criterion 1. It neither identifies the bypass of userStore's action layer nor recommends a userStore action like addRecentOrder. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly treats the cross-store mutation as acceptable ('both stores are part of the same Pinia instance... just normal cross-store communication'), which is fail criterion 1. It neither identifies the bypass of userStore's action layer nor recommends a userStore action like addRecentOrder. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly treats the cross-store mutation as acceptable ('both stores are part of the same Pinia instance... just normal cross-store communication'), which is fail criterion 1. It neither identifies the bypass of userStore's action layer nor recommends a userStore action like addRecentOrder. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "action-mutates-other-store-state-directly",
+      "kind": "stuffed",
+      "requestDigest": "ca695bb974b814be330425b908f988335926326a0fd703b5a5ba8191c7044fff",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says 'No concern' and justifies the direct push as 'normal cross-store communication' because both stores share the same Pinia instance. This directly matches fail criterion 1. It neither identifies the bypass of the action layer (pass 1) nor recommends a userStore action like addRecentOrder (pass 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says 'No concern' and justifies the direct push as 'normal cross-store communication' because both stores share a Pinia instance, which is exactly fail criterion 1. It never identifies the bypassed action layer nor recommends a userStore action like addRecentOrder."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says 'No concern' and justifies the direct push as 'normal cross-store communication' because both stores share a Pinia instance. This matches fail criterion 1 and satisfies neither pass criterion 1 nor 2 — no identification of the bypassed action layer and no recommendation of a userStore action."
+        }
+      ]
+    },
+    {
+      "scenarioId": "action-mutates-other-store-state-directly",
+      "kind": "known-right",
+      "requestDigest": "38004cbcdb785a23b423351a4243ee6d8a087222fe190a962fa31eac73dc0afa",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says the push 'mutates userStore's state array directly from inside useCartStore's checkout action, bypassing userStore's own action layer entirely' (criterion 1), and gives the concrete fix: add `addRecentOrder(order)` to useUserStore and call `userStore.addRecentOrder(buildOrder(items.value))` from checkout (criterion 2). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says the push 'mutates userStore's state array directly from inside useCartStore's checkout action, bypassing userStore's own action layer entirely' (criterion 1), and gives the concrete fix: adds `addRecentOrder(order)` to useUserStore and calls `userStore.addRecentOrder(buildOrder(items.value))` in checkout (criterion 2). No fail criterion present."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly says the push 'mutates userStore's state array directly from inside useCartStore's checkout action, bypassing userStore's own action layer entirely' (criterion 1), and gives the concrete fix: adds `addRecentOrder(order)` to useUserStore and calls `userStore.addRecentOrder(buildOrder(items.value))` in checkout (criterion 2). No fail criterion present."
+        }
+      ]
+    }
+  ]
+}

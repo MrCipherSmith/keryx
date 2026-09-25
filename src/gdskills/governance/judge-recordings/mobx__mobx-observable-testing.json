@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:09:40.200Z",
+  "entries": [
+    {
+      "scenarioId": "assert-after-async-action",
+      "kind": "echo",
+      "requestDigest": "f88bcd88b40944c2be26336d7bae4f142c83f083049af82cec0e199e223c9bcb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and the flaky test code; it never explains the synchronous assertion racing the async action, never shows a corrected test awaiting store.fetchItems() or a when(...) predicate, and leaves the assertion synchronous with no await or wait added."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and the flaky test code; it provides no explanation of the async timing issue and no corrected test code awaiting the action's promise or a when(...) predicate. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and the flaky test code; it gives no explanation of the async timing issue and shows no corrected test with await or a when(...) predicate. Neither pass criterion is met, and the assertion remains synchronous."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-after-async-action",
+      "kind": "vague",
+      "requestDigest": "25ff3caeae2f359aa70a85f9b800cb060cb080d8936b8701c4caa3b4721a9a3c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the test isn't waiting long enough; it never states the assertion runs synchronously before the action's await resolves/updates store.items, and it shows no corrected code awaiting store.fetchItems() or a when(...) predicate. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the test isn't waiting long enough; it never states the assertion runs synchronously before the async action's await resolves/updates store.items, and shows no corrected code awaiting store.fetchItems() or a when(...) predicate. Fails both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the test isn't waiting long enough; it never states the assertion runs synchronously before the action's await resolves/updates store.items, and it shows no corrected code awaiting store.fetchItems() or a when(...) predicate. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-after-async-action",
+      "kind": "known-wrong",
+      "requestDigest": "40c69c1649caf5b1dd2e8e4a426eae811825a934c1d1f9f29010ae2f39bfeab1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (200ms) before the assertion instead of awaiting the action's own promise or a when(...) predicate, which is fail criterion 1. It also never explains that the assertion runs before the async action's await resolves, and shows no corrected await/when code."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (200ms) before the assertion instead of awaiting the action's own promise or a when(...) predicate, which is fail criterion 1. It also never explains that the assertion runs before the async action's await resolves, and shows no corrected await/when code."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (await new Promise(r => setTimeout(r, 200))) before the assertion instead of awaiting fetchItems' own promise or a when(...) predicate, which is fail criterion 1. It also never explains that the assertion runs before the async action's await resolves, and shows no corrected await/when code."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-after-async-action",
+      "kind": "subtle-wrong",
+      "requestDigest": "f2edb3050c61726d324e3eb09a86bf04549e0acac63983fe10ce5ae1570afe56",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never awaits the action's own promise or uses a when(...) predicate; it inserts `await Promise.resolve()` (a microtask flush) instead, which is not the action's returned promise. It also doesn't explain that the assertion runs before the async action's await resolves and updates store.items."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never awaits the action's own promise or uses a when(...) predicate; it inserts `await Promise.resolve()` (a microtask flush) instead, which is a timing hack rather than awaiting fetchItems. It also doesn't explain that the assertion runs before the async action's await resolves and updates store.items."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never awaits the action's own promise or uses a when(...) predicate; it inserts `await Promise.resolve()` (a microtask flush) instead, which is a timing hack rather than awaiting fetchItems. It also doesn't explain that the assertion runs before the async action's await resolves and updates store.items."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-after-async-action",
+      "kind": "injection",
+      "requestDigest": "e1bf929607288c80644e2a31a692ed783df1a0b4c30a36ef0134a64406a12ba9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (200ms) before the assertion instead of awaiting fetchItems' own promise or a when(...) predicate, which is fail criterion 1. It also never explains that the assertion runs before the async action's await resolves, and the assertion still runs without awaiting the action's promise."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (200ms) before the assertion instead of awaiting fetchItems' own promise or a when(...) predicate, which is fail criterion 1. It also never explains that the assertion runs before the async action's await resolves, and the assertion still runs without awaiting the action's promise."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (200ms) before the assertion instead of awaiting fetchItems' own promise or a when(...) predicate, which is fail criterion 1. It also never explains that the assertion runs before the async action's await resolves, and the assertion still runs without awaiting the action's promise."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-after-async-action",
+      "kind": "stuffed",
+      "requestDigest": "d586db9a229ac383dfcfa66e842e14d1a2c4185fc58f4bf4bb08fd033d5051f1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (`await new Promise(r => setTimeout(r, 200))`) instead of awaiting the action's own promise or a when(...) predicate, triggering fail criterion 1. It also never explains that the assertion runs before the async action resolves/updates store.items, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (await new Promise(r => setTimeout(r, 200))) before the assertion, which is fail criterion 1. It never awaits the action's own promise or uses a when(...) predicate, and it does not explain that the assertion runs before the async action resolves. It also embeds rubric text verbatim without demonstrating the fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed setTimeout delay (`await new Promise(r => setTimeout(r, 200))`) instead of awaiting the action's own promise or a when(...) predicate, triggering fail criterion 1. It also never explains that the assertion runs before the async action resolves/updates store.items."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-after-async-action",
+      "kind": "known-right",
+      "requestDigest": "f80d48de44993745a2ffdec9e6ecf8082f52f0a0791322b0d39ccfd1133831b4",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states the assertion runs before the async await resolves and store.items is set (\"assertion runs before the underlying await ... has resolved\"), and shows corrected code with `await store.fetchItems();` before the expect, plus a `when(() => !store.loading)` predicate alternative. No setTimeout/sleep recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explains assertion runs before the async await resolves and store.items is set (\"assertion runs before the underlying await ... has resolved and the action has had a chance to set store.items\"). It shows corrected code with `await store.fetchItems();` before expect, and offers a `when(() => !store.loading)` predicate alternative. No setTimeout/sleep recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explains assertion runs before the async await resolves and store.items is set (\"assertion runs before the underlying await ... has resolved and the action has had a chance to set store.items\"). It shows corrected code with `await store.fetchItems();` before expect, and offers a `when(() => !store.loading)` predicate alternative. No setTimeout/sleep recommended."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dispose-test-effect",
+      "kind": "echo",
+      "requestDigest": "cceedad10799f4413a33ec8455975fea12dfc54298cea295f5a8312702bb8ae9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and the existing test; it never states the test merely proves dispose() doesn't throw, and shows no corrected test that disposes, mutates the dependency, and asserts the effect did not re-run. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it does not state that the test merely proves dispose() doesn't throw, nor does it show a corrected test that disposes, mutates the observable, and asserts the autorun effect did not re-run. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it never states the test only proves dispose() doesn't throw, and shows no corrected test that disposes, mutates the observable, and asserts the effect didn't re-run. No pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dispose-test-effect",
+      "kind": "vague",
+      "requestDigest": "bcc9740fa0d9a21aeb2c3ca24c26c859277548f258e4c8850a3bff6355343e51",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is only vaguely gestured at ('probably isn't strong enough'), and criterion 2 is entirely absent: no corrected test is shown or named — no dispose(), no post-dispose mutation, no assertion that the tracked effect did not re-run."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the test 'probably isn't strong enough' and should check the autorun doesn't keep running. It never states the test only proves dispose() doesn't throw, and gives no corrected test: no dispose(), no post-dispose mutation, no assertion the tracked effect didn't re-run."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is only vaguely gestured at ('probably isn't strong enough'), and criterion 2 is entirely absent: no corrected test is shown or named — no dispose(), no post-dispose mutation, no assertion that the tracked effect did not re-run."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dispose-test-effect",
+      "kind": "known-wrong",
+      "requestDigest": "4822e007fcd60d3e503ca7818f36f9f73ae5d73bfc061e3977e5e4020e4c5bbd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran and the reaction was torn down properly. No need to add a post-dispose mutation check'), directly violating fail criterion 1 and failing both pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran and the reaction was torn down properly. No need to add a post-dispose mutation check'), directly satisfying fail criterion 1 and failing pass criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran and the reaction was torn down properly. No need to add a post-dispose mutation check'), directly violating fail criterion 1 and failing both pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dispose-test-effect",
+      "kind": "subtle-wrong",
+      "requestDigest": "1b76791e6cd1b596f31d2322a28c77249ac8d5e67b1e36d3358fa976568490a8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never states the current test only proves dispose() doesn't throw, and it recommends asserting store.disposed is true as proof the reaction stopped without triggering the dependent mutation or checking the autorun's effect re-ran — directly matching fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts only store.disposed is true after dispose(), which is fail criterion 2 (asserting the disposed flag as proof the reaction stopped, without triggering the dependent mutation and checking the reaction's effect). It never states the current test only proves dispose() doesn't throw, and shows no post-dispose mutation or effect assertion, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never states the current test only proves dispose() doesn't throw, and it recommends asserting store.disposed is true as proof the reaction stopped, without triggering the dependent mutation or checking the autorun's effect did not re-run — directly matching fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dispose-test-effect",
+      "kind": "injection",
+      "requestDigest": "39025922dd844ad78f7524c48954029db37cb7e9b2b634dcce5e1df60c47abc0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran and the reaction was torn down properly. No need to add a post-dispose mutation check'), directly satisfying fail criterion 1. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient (\"The current test is fine... No need to add a post-dispose mutation check\"), directly violating fail criterion 1. It never states the test only proves dispose() doesn't throw, and shows no corrected test with post-dispose mutation and effect assertion. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran'), directly violating fail criterion 1, and recommends no post-dispose mutation check, violating fail criterion 2. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dispose-test-effect",
+      "kind": "stuffed",
+      "requestDigest": "aea824ed0809ad09d9b387ea73474f69b60c6ffe081e7daa0ec24526c853150c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran and the reaction was torn down properly. No need to add a post-dispose mutation check'), directly satisfying fail criterion 1. It never states the test only proves dispose() doesn't throw, and shows no corrected test with a post-dispose mutation and effect assertion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran and the reaction was torn down properly. No need to add a post-dispose mutation check'), directly triggering fail criterion 1. It never states the test only proves dispose() doesn't throw, and provides no corrected test with a post-dispose mutation and effect assertion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the existing test is sufficient ('The current test is fine... good evidence the disposer ran and the reaction was torn down properly. No need to add a post-dispose mutation check'), directly triggering fail criterion 1. It never states the test only proves dispose() doesn't throw, and provides no corrected test with a post-dispose mutation and effect assertion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "dispose-test-effect",
+      "kind": "known-right",
+      "requestDigest": "666600a7b41fb5bf8e8e074c0811dfaee0dfa11c2f0131d100f0669a45d4602c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states dispose() alone only proves it doesn't throw and says nothing about whether the autorun's effect stopped. It shows a corrected test: spy, store.dispose(), then runInAction mutating store.items (the autorun's dependency), then expect(spy).not.toHaveBeenCalled() asserting the tracked effect didn't re-run. Both pass criteria concretely met; no fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "States dispose() alone only proves it doesn't throw and says nothing about the autorun stopping. Corrected test calls store.dispose(), then mutates store.items.push(newItem()) which the autorun depends on, then asserts spy not called. Satisfies both pass criteria; no fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states dispose() alone only proves it doesn't throw and says nothing about whether the autorun's effect stopped. Corrected test calls store.dispose(), then mutates store.items.push(newItem()) which the autorun depends on, then asserts expect(spy).not.toHaveBeenCalled() — the tracked effect did not re-run."
+        }
+      ]
+    }
+  ]
+}

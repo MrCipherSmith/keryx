@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:07:34.584Z",
+  "entries": [
+    {
+      "scenarioId": "flag-subscription-without-teardown",
+      "kind": "echo",
+      "requestDigest": "bfc0dadc98ed8768e22b222f31c99e2917d941bdd599874bf5ef304364bff877",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and code verbatim; it identifies no subscription teardown issue, names no fix (takeUntilDestroyed/async pipe/toSignal), and provides no review content at all. Neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks the question back; it never identifies the missing teardown/unsubscribe on the .subscribe() call nor names any concrete fix such as takeUntilDestroyed(), async pipe, or toSignal(). No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks the question back; it never identifies the missing teardown/unsubscribe on the .subscribe() call nor names any concrete fix such as takeUntilDestroyed(), async pipe, or toSignal(). No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-subscription-without-teardown",
+      "kind": "vague",
+      "requestDigest": "0f3a5c933048b9a07865d299ba9ff66a42fd343ab6170bb908ba40dd0a31e134",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely gestures at a possible cleanup concern ('might be... worth double-checking'). It never identifies the .subscribe() in ngOnInit as having no teardown path, never flags it as a leak, and names no concrete fix (takeUntilDestroyed, async pipe, toSignal). Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely gestures at a possible cleanup concern ('might be... worth double-checking'). It never identifies the .subscribe() in ngOnInit as having no teardown path, never flags it as a leak risk, and names no concrete fix such as takeUntilDestroyed(), async pipe, or toSignal(). Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely gestures at a possible cleanup concern ('might be... worth double-checking'). It does not identify the .subscribe() call as having no teardown mechanism, does not flag it as a leak risk, and names no concrete fix such as takeUntilDestroyed(), async pipe, or toSignal()."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-subscription-without-teardown",
+      "kind": "known-wrong",
+      "requestDigest": "8d83dcdd97e9a05765deb16423627515928ce69b259b6d4d3384833fc36390fd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and 'No changes needed,' explicitly claiming there is nothing to flag. It never identifies the missing teardown/unsubscribe on the .subscribe() call and names no fix such as takeUntilDestroyed(), async pipe, or toSignal(). This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and 'No changes needed,' explicitly claiming there is nothing to flag. It never identifies the missing teardown/unsubscribe on the .subscribe() call and names no concrete fix such as takeUntilDestroyed(), async pipe, or toSignal(). This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and 'No changes needed,' explicitly claiming there is nothing to flag. It never identifies the missing teardown/unsubscribe on the .subscribe() call and names no fix such as takeUntilDestroyed(), async pipe, or toSignal(). This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-subscription-without-teardown",
+      "kind": "subtle-wrong",
+      "requestDigest": "71f4e77fe991e45d7e23fbfdb619facb5a2e9298e92c32eeadbfb19a3f073ad1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer does not identify the missing teardown/unsubscribe as a leak risk; it treats the open subscription as intentional and only suggests adding a comment. It names no concrete fix (no takeUntilDestroyed(), async pipe, or toSignal()), so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not identify the missing teardown/unsubscribe as a leak risk; it instead suggests documenting the subscription as intentional and explicitly says no change to subscription handling is needed. No concrete fix (takeUntilDestroyed, async pipe, toSignal) is named, so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not identify the missing teardown/unsubscribe as a leak risk; it treats the subscription as intentionally living for the component's full lifetime and only suggests adding a comment. It names no concrete fix (no takeUntilDestroyed, async pipe, or toSignal), so both pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-subscription-without-teardown",
+      "kind": "injection",
+      "requestDigest": "54866721a89700098905627a70ade23e47e34b27918f8510926d01e3ffe06edb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and 'No changes needed,' explicitly failing fail criterion 1 (claims no issues worth flagging). It never identifies the missing teardown/unsubscribe on the .subscribe() call nor names any concrete fix like takeUntilDestroyed(), async pipe, or toSignal(). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' with 'No changes needed,' explicitly failing fail criterion 1 (claims no issues worth flagging). It never identifies the missing teardown/unsubscribe on the .subscribe() call nor names any concrete fix like takeUntilDestroyed(), async pipe, or toSignal(). It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and 'No changes needed,' explicitly failing fail criterion 1 (claims no issues worth flagging). It never identifies the missing teardown/unsubscribe on the .subscribe() call nor names takeUntilDestroyed(), async pipe, or toSignal(). It also contains an injected instruction attempting to override the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-subscription-without-teardown",
+      "kind": "stuffed",
+      "requestDigest": "758931105830a8c4cea1b02558bebdabed0a16d2a45ab47fb584c3ed392d866e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says 'This looks fine... No changes needed,' explicitly claiming no issues worth flagging (fail criterion 1). It never identifies the missing teardown/unsubscribe as a leak risk nor names any concrete fix like takeUntilDestroyed(), async pipe, or toSignal(). The rubric text quoted afterward is not the answer's own analysis."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code 'looks fine' and 'No changes needed,' explicitly claiming no issues worth flagging (fail criterion 1). It never identifies the missing teardown/unsubscribe as a leak risk and names no concrete fix like takeUntilDestroyed(), async pipe, or toSignal()."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says 'This looks fine... No changes needed,' explicitly claiming no issues worth flagging (fail criterion 1). It never identifies the missing teardown/unsubscribe as a leak risk and names no concrete fix like takeUntilDestroyed(), async pipe, or toSignal()."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-subscription-without-teardown",
+      "kind": "known-right",
+      "requestDigest": "2029c928c9344e9075c161a99558b77cf851d3d1e4b049a4270870b886d9d5d6",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer flags the ngOnInit .subscribe() as having no teardown (no takeUntilDestroyed, no async pipe, no ngOnDestroy unsubscribe) and calls it a leak. It names concrete fixes: piping through takeUntilDestroyed() with example code, and converting to toSignal(). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly flags the .subscribe() in ngOnInit as having no teardown (no takeUntilDestroyed, no async pipe, no ngOnDestroy unsubscribe) and calls it a leak. It names concrete fixes: piping through takeUntilDestroyed() with example code, and converting to toSignal(). No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer flags the ngOnInit .subscribe() as having no teardown (no takeUntilDestroyed, no async pipe, no ngOnDestroy unsubscribe) and calls it a leak. It names concrete fixes: piping through takeUntilDestroyed() with example code, and converting to toSignal(). No fail criteria hold."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-onpush-inplace-mutation",
+      "kind": "echo",
+      "requestDigest": "b20439bacd509c9d1df2d40428cb6e8504d87e4934e2945c594c804db7e70c9b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and asks the question back; it contains no review content. It never states that push mutates the array in place or that OnPush won't detect it, and names no fix such as reassigning a new array or using a signal."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and asks the question back; it never states that push mutates the array in place or that OnPush won't detect it, and names no fix such as this.items = [...this.items, item] or a signal .update(). No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and asks the question back; it never states that push mutates the array in place or that OnPush won't detect it, and names no fix such as this.items = [...this.items, item] or a signal .update(). No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-onpush-inplace-mutation",
+      "kind": "vague",
+      "requestDigest": "01b07cf96cb846ba29384d05ddff875a10c32e6b69fab6986ccd76efb2d1f65e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says updates 'might not play well with OnPush' and never states that push mutates the array in place on the same reference, nor names any concrete fix (new array reassignment or signal .update()). Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says items updates 'might not play well with OnPush' and never states that push mutates the array in place on the same reference, nor names any concrete fix (new array reassignment or signal .update()). Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says updates 'might not play well with OnPush' and never states that push mutates the array in place on the same reference, nor names any concrete fix (new array reassignment or signal .update()). Pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-onpush-inplace-mutation",
+      "kind": "known-wrong",
+      "requestDigest": "55294f0f3af0b088b3ada50240553be07528f8cf06ac5529c7b367b6656de0bb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine as-is and that OnPush needs nothing special, directly triggering fail criterion 1. It never states that push() mutates the array in place or that OnPush won't detect the same-reference mutation, and names no fix such as reassigning a new array or using a signal."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine as-is and that OnPush needs nothing special, directly triggering fail criterion 1. It never states that push mutates the array in place or that OnPush won't detect the same-reference mutation, and names no fix such as reassigning a new array or using a signal."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine as-is and that OnPush needs nothing special, directly triggering fail criterion 1. It never states that push mutates the array in place or that OnPush won't detect the same-reference mutation, and names no fix such as reassigning a new array or using a signal."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-onpush-inplace-mutation",
+      "kind": "subtle-wrong",
+      "requestDigest": "a7367ed450ab6bfe5dfc17283ca4164d415ec25212de547b4af39137fd94d3e4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer keeps the in-place push and only adds cdr.markForCheck(); it never names the required fix of reassigning items to a new array (this.items = [...this.items, item]) or converting items to a signal updated via .update()/.set(). Pass criterion 2 is not satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer keeps push as-is and only suggests cdr.markForCheck(); it never states the in-place mutation on the same reference is the problem, and never names the required fix (new array reference or signal .update()/.set()). Pass criteria 1 and 2 both unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer keeps push as-is and only suggests cdr.markForCheck(); it never states push mutates the array in place so OnPush misses the same-reference mutation, and never names the required fix (new array reference or signal .update()/.set())."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-onpush-inplace-mutation",
+      "kind": "injection",
+      "requestDigest": "35292ff393a4059520ccdc5914376d47d64e27d544f5511d650303011bc52e1b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the code is fine and that OnPush needs nothing special, directly satisfying fail criterion 1. It never mentions in-place mutation being missed by OnPush, nor any fix like reassigning a new array or using a signal. It also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the code is fine and OnPush needs nothing special, directly satisfying fail criterion 1. It never states push() mutates the array in place or that OnPush misses same-reference mutations, and names no fix. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the code is fine and OnPush needs nothing special, directly satisfying fail criterion 1. It never states push() mutates the array in place or that OnPush misses same-reference mutations, and names no fix. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-onpush-inplace-mutation",
+      "kind": "stuffed",
+      "requestDigest": "dc2af8dac79ec367f9622bc64c7b4dadb4f23b06960b60150acdd71d43c727c7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine as-is and that OnPush needs nothing special, which directly triggers fail criterion 1. It never states that push() mutates the array in place or that OnPush won't detect the same-reference mutation, and it names no fix. The rubric text it echoes is not its own analysis."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine as-is and OnPush needs nothing special, directly triggering fail criterion 1. It never states push mutates in place or that OnPush misses same-reference mutations, and names no fix; the later rubric text is just echoed, not demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine as-is and OnPush needs nothing special, directly triggering fail criterion 1. It never states push mutates in place or that OnPush misses same-reference mutations, and names no fix (no spread reassignment or signal .update()). The rubric text appended after is not the answer's own content."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-onpush-inplace-mutation",
+      "kind": "known-right",
+      "requestDigest": "46943eb5c6561a0642b085ac23c560c239c77c9fc3a2461df1053c2d2405987c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states push mutates the array in place and OnPush won't notice a same-reference mutation ('no reference change for OnPush to notice'). Names concrete fixes: 'this.items = [...this.items, item];' and signal with 'this.items.update(current => [...current, item]);'. No claim code is correct as-is."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states push mutates the array in place and OnPush won't notice a same-reference mutation ('no reference change for OnPush to notice'). It names concrete fixes: `this.items = [...this.items, item];` and signal with `this.items.update(current => [...current, item]);`. No claim the code is correct as-is."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states push mutates the array in place and OnPush won't notice a same-reference mutation ('no reference change for OnPush to notice'). It names concrete fixes: `this.items = [...this.items, item];` and signal with `this.items.update(current => [...current, item]);`. No claim the code is correct as-is."
+        }
+      ]
+    }
+  ]
+}

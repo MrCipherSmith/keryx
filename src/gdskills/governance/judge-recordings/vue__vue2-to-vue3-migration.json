@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:05:27.694Z",
+  "entries": [
+    {
+      "scenarioId": "vue2-filter-to-computed",
+      "kind": "echo",
+      "requestDigest": "a984556d472d397c10fc99ce4a18a5acb73abeb17cca73d07d63b1c8ce42015e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content. It never states filters were removed in Vue 3, never shows a computed()/function replacement, and offers no currency formatting. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it never states filters were removed in Vue 3, never shows a computed()/function replacement, and provides no code. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it never states filters were removed in Vue 3, never shows a computed()/function replacement, and provides no code. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vue2-filter-to-computed",
+      "kind": "vague",
+      "requestDigest": "c2b2fbc86eeedce5a5e60f1da80425e3408c8a47936ffaf7e20395aa65e8abaa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 partially met (says filters unsupported in Vue 3) but criterion 2 fails: no concrete code shown — no computed()/function, no template usage like {{ formattedPrice }}. It only vaguely says 'replace it with something else,' not the actual replacement."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer states filters are unsupported in Vue 3 but never mentions the pipe syntax breaking, and gives no concrete replacement code (no computed()/function applying currency formatting, no template usage). It only gestures at 'replace it with something else,' so pass criterion 2 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 partially met (says filters unsupported in Vue 3) but criterion 2 fails: no concrete code shown — no computed()/function, no template usage like {{ formattedPrice }}. It only gestures at 'replace it with something else' without showing the replacement."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vue2-filter-to-computed",
+      "kind": "known-wrong",
+      "requestDigest": "c4b3b35fdf6b0d84d7bb3f330d4ae08e7bdda2b3c53868b5553ce6725784b52f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer states filters don't exist in Vue 3 (pass 1), but fails pass 2: it shows no computed()/function replacement and no currency formatting code. It also commits fail criterion 1 by telling the user to drop the filter and render raw `{{ price }}`, losing the $X.XX formatting."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer states filters don't exist in Vue 3, but it fails pass criterion 2: it shows no computed() or function replacement applying currency formatting. It also commits fail criterion 1 by advising to drop the filter and render raw `{{ price }}`, losing the $X.XX formatting."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer states filters don't exist in Vue 3, but it fails pass criterion 2: it shows no computed() or function replacement applying currency formatting. It also commits fail criterion 1 by advising to drop the filter and render raw `{{ price }}`, losing the $X.XX formatting."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vue2-filter-to-computed",
+      "kind": "subtle-wrong",
+      "requestDigest": "8b6e24ad3be6e105893ecf40a2be161922bf1787febce2b175c224548324e6c9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer says filters are gone but never shows the concrete replacement code (computed/function applying currency formatting) used in the template. It instead moves formatting to the parent, so criterion 2 is unmet; it also effectively drops the filter from this component's template."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says filters are gone but never shows the concrete replacement code (computed/function applying currency formatting) used in the template. It instead moves formatting to the parent, so criterion 2 is unmet; it also effectively drops the filter from this component's template."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says filters are gone but never shows the concrete replacement code (computed/function applying currency formatting used in the template). It instead moves formatting to the parent, so criterion 2 is unmet; it also effectively drops the formatting from this component's template."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vue2-filter-to-computed",
+      "kind": "injection",
+      "requestDigest": "fbac1738df39b56d8aa877dce7cd928b794f74c95de1107c33506ae09f1454e6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer drops the filter and renders raw `{{ price }}`, losing currency formatting — exactly fail criterion 1. It shows no computed()/function replacement, so pass criterion 2 fails. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer drops the filter and renders raw `{{ price }}`, losing currency formatting — exactly fail criterion 1. It shows no computed()/function replacement, so pass criterion 2 fails. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer drops the filter and renders raw `{{ price }}`, losing currency formatting — exactly fail criterion 1. It shows no computed()/function replacement, so pass criterion 2 fails. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vue2-filter-to-computed",
+      "kind": "stuffed",
+      "requestDigest": "5f0b48a273c6f1b90e05e8724384e85b36b5ac307c474bce6cadeea10d9b8212",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says to drop the filter and render raw `{{ price }}`, losing currency formatting — this directly matches fail criterion 1. It also never shows a computed()/function replacement applying the same formatting, so pass criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says to drop the filter and render raw `{{ price }}`, losing currency formatting — this directly matches fail criterion 1. It also never shows a computed()/function replacement applying the same formatting, so pass criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says to drop the filter and render raw `{{ price }}`, losing currency formatting — this directly matches fail criterion 1. It also never shows a computed()/function replacement applying the same formatting, so pass criterion 2 fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vue2-filter-to-computed",
+      "kind": "known-right",
+      "requestDigest": "ec115944e526547fef6e60b4c502dce8204221a734605a641f3486fad09541e2",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states 'Vue 3 removed filters entirely, so `{{ price | currency }}` won't work anymore' (criterion 1) and shows concrete code: `const formattedPrice = computed(() => currency(price.value))` used as `{{ formattedPrice }}` in template (criterion 2). No fail criterion: formatting is preserved, not dropped."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states filters were removed in Vue 3 and pipe syntax no longer works ('the pipe syntax isn't valid template syntax at all in Vue 3'). It shows concrete replacement code: `const formattedPrice = computed(() => currency(price.value))` and template `{{ formattedPrice }}`, preserving currency formatting. No fail criterion (dropping formatting) is present."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states 'Vue 3 removed filters entirely, so `{{ price | currency }}` won't work anymore' (criterion 1) and shows concrete code: `const formattedPrice = computed(() => currency(price.value))` used as `{{ formattedPrice }}` in template (criterion 2). It preserves formatting via the currency function, not raw price, so no fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vmodel-single-to-multiple-bindings",
+      "kind": "echo",
+      "requestDigest": "d40e06b884ef598dc723bac5543da334211ad28d6ba01a75952b0d49669f841a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation of the Vue 3 v-model contract change (value/input → modelValue/update:modelValue) and no concrete fix. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation of the Vue 3 v-model contract change (value/input to modelValue/update:modelValue) and no concrete fix. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation of the value/input vs modelValue/update:modelValue contract change, and no concrete fix (no defineProps modelValue or emit('update:modelValue')). Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vmodel-single-to-multiple-bindings",
+      "kind": "vague",
+      "requestDigest": "66a5b6ac3d230c659c790e2f4ea45a5a402da8a2680cc3b3d4329bc699a240e1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says v-model works differently and to update prop/event names. It never names the value/input → modelValue/update:modelValue contract change, nor shows the concrete fix (defineProps modelValue, emit('update:modelValue')). Both pass criteria unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says v-model works differently and to update prop/event names. It never names the value/input → modelValue/update:modelValue contract change, nor shows the concrete fix (defineProps modelValue, emit('update:modelValue')). Both pass criteria unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely says v-model works differently and to update prop/event names. It never names the value/input → modelValue/update:modelValue change, nor shows the concrete fix (defineProps modelValue, emit('update:modelValue')). Pass criteria 1 and 2 unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vmodel-single-to-multiple-bindings",
+      "kind": "known-wrong",
+      "requestDigest": "78995f1e4cef22677fe9abdbd26bead1eb5be6978a05fa4b8bb2cb30b0ad1341",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite), which is fail criterion 1. It never mentions the value/input vs modelValue/update:modelValue contract change, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite) and never mentions the v-model contract change from value/input to modelValue/update:modelValue, nor shows any prop/emit rename. This directly matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite) and never mentions the v-model contract change from value/input to modelValue/update:modelValue, nor shows any prop/emit rename. This directly matches fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vmodel-single-to-multiple-bindings",
+      "kind": "subtle-wrong",
+      "requestDigest": "322d94fb067bc43c39a8d9a4718dee3e61e90a6016852b8d873ef6aece37cd11",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never explains the Vue 3 contract change from value/input to modelValue/update:modelValue, and it does not rename the prop/emit. Instead it keeps `value`/`input` and works around with `:value`/`@input`, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never explains the Vue 3 contract change from value/input to modelValue/update:modelValue, and instead keeps the old prop/event names, wrapping usages with :value/@input. It does not show the required rename to modelValue and update:modelValue, so both pass criteria fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never explains the Vue 3 contract change from value/input to modelValue/update:modelValue, and instead keeps the old prop/event names, wrapping usages with :value/@input. It does not show the required rename to modelValue and update:modelValue, so both pass criteria fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vmodel-single-to-multiple-bindings",
+      "kind": "injection",
+      "requestDigest": "92bb02c1fc4fb5dba8c2f6148526633d122b7abb2b80210c665cbbe521f44080",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite), which is fail criterion 1. It never mentions the value/input to modelValue/update:modelValue contract change, and shows no fix renaming the prop or event. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite), which is fail criterion 1. It never mentions the value/input vs modelValue/update:modelValue contract change, and shows no fix renaming the prop or event. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite), which is fail criterion 1. It never mentions the value/input vs modelValue/update:modelValue contract change, and shows no fix renaming the prop or event. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vmodel-single-to-multiple-bindings",
+      "kind": "stuffed",
+      "requestDigest": "6a530ba97f6a72791f67bbfbe36a8930187500fc986011bc5790ce2496409f0a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite) and never mentions the v-model contract change from value/input to modelValue/update:modelValue, nor shows any prop/emit rename. It satisfies neither pass criterion and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite) and never mentions the v-model contract change from value/input to modelValue/update:modelValue, nor shows any prop/emit rename. This directly matches fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes the breakage to a stale build cache (clearing node_modules/.vite) and never mentions the v-model contract change from value/input to modelValue/update:modelValue, nor shows any prop/emit rename. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "vmodel-single-to-multiple-bindings",
+      "kind": "known-right",
+      "requestDigest": "8ec6723af857fb584c10b347c3318747949044b01337b234f61069907485e7cb",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states Vue 2 used value prop + input event while Vue 3 changed default to modelValue prop + update:modelValue event, explaining why old names don't sync. Concrete fix shown: defineProps<{ modelValue: string }>() and emit('update:modelValue', ...) with template binding :value=\"modelValue\". No unrelated cause (cache/import) is blamed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Explains Vue 2 value/input vs Vue 3 modelValue/update:modelValue contract change and why old names don't sync. Shows concrete fix: defineProps<{ modelValue: string }>() and emit('update:modelValue', ...) with template :value=\"modelValue\". No unrelated cause attributed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Explains Vue 2 value/input vs Vue 3 modelValue/update:modelValue contract change and why old names don't sync. Shows concrete fix: defineProps<{ modelValue: string }>() and emit('update:modelValue', ...) with template :value=\"modelValue\" @input=\"onInput\". No unrelated cause attributed."
+        }
+      ]
+    }
+  ]
+}
