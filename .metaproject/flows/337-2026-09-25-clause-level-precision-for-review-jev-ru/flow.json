@@ -8,9 +8,9 @@
   "id": "337",
   "slug": "clause-level-precision-for-review-jev-ru",
   "title": "Clause-level precision for review-jev-rules: a process step inside a code rule is not checked against code",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-25T17:51:18.810Z",
-  "updatedAt": "2026-09-25T18:05:59.475Z",
+  "updatedAt": "2026-09-25T18:07:45.437Z",
   "source": {
     "type": "description",
     "ref": null
@@ -52,10 +52,14 @@
     "AC9": {
       "at": "2026-09-25T18:05:59.475Z",
       "note": "PR #712 live re-measure: before 2 findings/0 TP -> after 0 findings/0 TP (nothing to hand-label; the 2 prior FPs are the pre-classified clause). PR #717 live re-measure (same setup, fresh cache): before 0 findings -> after 0 findings (unchanged, no regression). tokens PR712 {jevCalls:57,taggingCalls:19,violationCalls:38}; PR717 {jevCalls:74,taggingCalls:19,violationCalls:55}; combined 131 jevCalls (38 tagging + 93 violation), cost ~$0.011 total. Recorded in journal.md."
+    },
+    "AC10": {
+      "at": "2026-09-25T18:07:45.437Z",
+      "note": "PR #732 opened (https://github.com/MrCipherSmith/keryx/pull/732) from feat/clause-tag-precision to main, not merged, CI pending. Commit a7e375ee contains only src/review/conform-clauses.ts, conform-clauses.test.ts, conform-tag-cache.ts, conform-tag-cache.test.ts, and this flow's own .metaproject/flows/337-*/ files — .metaproject/data/ regeneration from the post-commit hook (gdgraph/wiki artifacts) was reverted with git checkout before push, working tree clean."
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/732"
   },
   "tasks": [
     {
@@ -114,7 +118,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -122,7 +126,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-reviewed diff (conform-clauses.ts/.test.ts, conform-tag-cache.ts/.test.ts), pushed feat/clause-tag-precision, opened PR #732 (not merged, CI pending) with before/after measurement table."
     }
   ],
   "history": [
@@ -198,6 +204,21 @@
       "at": "2026-09-25T18:05:59.475Z",
       "event": "ac-confirmed",
       "detail": "AC9: PR #712 live re-measure: before 2 findings/0 TP -> after 0 findings/0 TP (nothing to hand-label; the 2 prior FPs are the pre-classified clause). PR #717 live re-measure (same setup, fresh cache): before 0 findings -> after 0 findings (unchanged, no regression). tokens PR712 {jevCalls:57,taggingCalls:19,violationCalls:38}; PR717 {jevCalls:74,taggingCalls:19,violationCalls:55}; combined 131 jevCalls (38 tagging + 93 violation), cost ~$0.011 total. Recorded in journal.md. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:07:37.691Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/732 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T18:07:38.044Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T18:07:45.437Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: PR #732 opened (https://github.com/MrCipherSmith/keryx/pull/732) from feat/clause-tag-precision to main, not merged, CI pending. Commit a7e375ee contains only src/review/conform-clauses.ts, conform-clauses.test.ts, conform-tag-cache.ts, conform-tag-cache.test.ts, and this flow's own .metaproject/flows/337-*/ files — .metaproject/data/ regeneration from the post-commit hook (gdgraph/wiki artifacts) was reverted with git checkout before push, working tree clean. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "signatures": [
@@ -299,6 +320,18 @@
       },
       "criterion": "AC9",
       "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
+    },
+    {
+      "at": "2026-09-25T18:07:45.437Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:8842a29ee76bfddfb5f0d8e14738702387deafd215e1e81fd52523c5920654bd"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
