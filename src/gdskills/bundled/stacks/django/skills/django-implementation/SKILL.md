@@ -1,6 +1,6 @@
 ---
 name: django-implementation
-description: "Use when implementing or extending a feature in a Django (5.x) project -- covers models and migrations, class-based/function-based views, forms and serializers, querysets with select_related/prefetch_related to avoid N+1, and the framework's CSRF/escaping defaults. Not for plain Python with no Django import (see python-implementation) or a Django version-major upgrade (see django-migrate)."
+description: "Use when implementing or extending a feature in a Django (5.x) project -- covers models and migrations, class-based/function-based views, forms and serializers, querysets with select_related/prefetch_related to avoid N+1, the framework's CSRF/escaping defaults, and the code-level changes for a Django major-version upgrade (e.g. 4.x to 5.x; pair with django-migrate for any accompanying schema migration discipline). Not for plain Python with no Django import (see python-implementation)."
 triggers:
   - "add a django model for..."
   - "write a django rest view that..."

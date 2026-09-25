@@ -91,7 +91,7 @@ test.
 
 ```
 Generated: billing/tests/test_views.py
-  - 6 test cases (authorized + unauthorized paths for InvoiceDetailView)
+  - 6 test cases (authorized + unauthorized paths for ArticleDetailView)
   - all passing via pytest-django
 ```
 

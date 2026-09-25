@@ -1,6 +1,6 @@
 ---
 name: django-migrate
-description: "Use when generating, reviewing, or safely applying Django schema/data migrations -- makemigrations for a model change, RunPython data migrations with forward/reverse functions, merge migrations for divergent branches, and staged rollout for a migration that must ship alongside a multi-phase deploy (e.g. a column removal). Not for a Django-major-version framework upgrade (there is no separate django-upgrade skill in this pack; treat a version jump as django-implementation plus this skill's migration discipline) or for fixing a broken/conflicting migration that's blocking the build (see django-build-fix)."
+description: "Use when generating, reviewing, or safely applying Django schema/data migrations -- makemigrations for a model change, RunPython data migrations with forward/reverse functions, merge migrations for divergent branches, and staged rollout for a migration that must ship alongside a multi-phase deploy (e.g. a column removal). Not for a Django major-version framework upgrade (there is no separate django-upgrade skill in this pack; the code-level upgrade work is owned by django-implementation) or for fixing a broken/conflicting migration that's blocking the build (see django-build-fix)."
 triggers:
   - "generate a django migration for this model change"
   - "write a data migration to backfill this field"
