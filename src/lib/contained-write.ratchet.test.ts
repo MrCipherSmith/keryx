@@ -49,6 +49,7 @@ const COVERED_FILES = [
   "src/commands/rules.ts",
   "src/commands/update.ts",
   "src/commands/security-audit-harness.ts",
+  "src/commands/hooks.ts",
   "src/lib/install-plan.ts",
   "src/commands/init.ts",
   "src/testing/service.ts",

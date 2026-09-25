@@ -707,18 +707,19 @@ describe("keryx hooks trust / untrust", () => {
   });
 
   test("disable refuses to write through a .metaproject/hooks.json symlink that escapes the project", async () => {
-    // R700-04 is a different owner's contained-write fix; this test only
-    // asserts THIS worker's surface (disable) does not crash and reports
-    // some failure when the target is unwritable-as-expected. If R700-04's
-    // contained-write wiring lands in `hooks.ts` later, this test still
-    // holds: a refusal is a refusal either way.
+    // R700-04: `writeDocAtomic` now routes every hooks.json write through
+    // `writeContained`, which refuses a symlink whose resolved target leaves
+    // `root` rather than following it.
     const { symlinkSync, mkdirSync: mkdirSyncNode } = await import("node:fs");
     const outside = path.join(path.dirname(project), `keryx-hooks-outside-${Date.now()}`);
     mkdirSyncNode(outside, { recursive: true });
     mkdirSyncNode(path.join(project, ".metaproject"), { recursive: true });
     symlinkSync(path.join(outside, "hooks.json"), projectHooksPath());
     await hooksCommand(["disable", "keryx.learning-observer"], { cwd: project, homeDir: home });
-    // Whatever happened, it must not have silently succeeded writing outside `project`.
+    expect(process.exitCode).not.toBe(0);
+    expect(errors.join("\n")).toContain(`Refusing to write ${projectHooksPath()}`);
+    expect(errors.join("\n")).toContain("Nothing was written");
+    // The outside target must not have been created or written through the link.
     expect(existsSync(path.join(outside, "hooks.json"))).toBe(false);
   });
 });

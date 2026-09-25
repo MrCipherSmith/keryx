@@ -9,9 +9,10 @@
 // only from `hooks enable`/`hooks disable`. `list`/`validate`/`test` are
 // read-only (`test` spawns the hook's own command, which may itself write —
 // that is the hook's business, not this command's).
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { ContainedWriteError, mkdirContained, writeContained } from "../lib/contained-write";
 import { confirm as realConfirm } from "../lib/prompt";
 import { resolveHooksHomeDir, resolveHooksProjectRoot } from "./agent-hooks";
 import { bothStreamsAreATerminal } from "./mcp-servers";
@@ -23,6 +24,7 @@ import {
   LEARNING_OBSERVER_EVENT_KIND,
   NOOP_IMPACT_EVIDENCE_PROVIDER,
   NOOP_LEARNING_OBSERVATION_SINK,
+  PROJECT_HOOKS_REL,
   buildHookEnv,
   buildHookStdin,
   createRealHookRunner,
@@ -873,13 +875,36 @@ function readDoc(filePath: string): HooksDoc {
   return parsed as HooksDoc;
 }
 
-/** Atomic temp+rename write, creating the parent directory when absent. */
-function writeDocAtomic(filePath: string, doc: HooksDoc): void {
-  mkdirSync(path.dirname(filePath), { recursive: true });
+/**
+ * Contained, atomic write of `doc` to the project or user hooks file (R700-04).
+ * `filePath` is only for the error/refusal message — the actual target is
+ * always derived from `scope` + `cwd`/`homeDir` through `writeContained`, so
+ * a symlink at `.metaproject/hooks.json` (or `<home>/.keryx/hooks.json`)
+ * that resolves outside its root is refused rather than followed.
+ *
+ * User scope: `<homeDir>/.keryx` may not exist yet (a fresh operator who has
+ * never run `hooks disable --user` before) — create it with `mkdirContained`
+ * ONLY when absent, so an existing `.keryx` that is itself a symlink (e.g.
+ * into a dotfiles repo) is left alone rather than re-created.
+ */
+async function writeDocAtomic(filePath: string, doc: HooksDoc, scope: HookScope, cwd: string, homeDir: string): Promise<void> {
   const body = `${JSON.stringify(doc, null, 2)}\n`;
-  const temp = `${filePath}.${process.pid}.tmp`;
-  writeFileSync(temp, body, "utf8");
-  renameSync(temp, filePath);
+  try {
+    if (scope === "project") {
+      await writeContained(cwd, PROJECT_HOOKS_REL, body);
+    } else {
+      const userConfigDir = path.join(homeDir, ".keryx");
+      if (!existsSync(userConfigDir)) {
+        await mkdirContained(homeDir, ".keryx");
+      }
+      await writeContained(userConfigDir, "hooks.json", body);
+    }
+  } catch (err) {
+    if (err instanceof ContainedWriteError) {
+      fail(`Refusing to write ${filePath}: ${err.message}. Nothing was written.`);
+    }
+    throw err;
+  }
 }
 
 function addManagedId(doc: HooksDoc, id: string): void {
@@ -915,14 +940,16 @@ function builtinClassFor(id: string): HookClass | undefined {
   return BUILTIN_HOOK_REGISTRATIONS.find((reg) => reg.id === id)?.class;
 }
 
-function disableBuiltin(
+async function disableBuiltin(
   doc: HooksDoc,
   id: string,
   filePath: string,
   scope: HookScope,
   acknowledgeGateRisk: boolean,
   userFilePath: string,
-): void {
+  cwd: string,
+  homeDir: string,
+): Promise<void> {
   // D12: a project file can never disable a built-in GATE, and a user file
   // needs the explicit `--acknowledge-gate-risk` flag — mirrors the runtime's
   // own tighten-only rule (`resolveHookRegistrations`) so the CLI refuses the
@@ -950,7 +977,7 @@ function disableBuiltin(
   }
   addManagedId(doc, id);
   validateBeforeWrite(doc, scope, filePath);
-  writeDocAtomic(filePath, doc);
+  await writeDocAtomic(filePath, doc, scope, cwd, homeDir);
   if (cls !== undefined && isProtectedBuiltinClass(cls)) {
     console.log(`Disabled built-in gate "${id}" for every project you open (in ${userFilePath}). keryx shell says so at the start of each session. Turn it back on with: keryx hooks enable ${id} --user`);
   } else {
@@ -958,7 +985,7 @@ function disableBuiltin(
   }
 }
 
-function enableBuiltin(doc: HooksDoc, id: string, filePath: string, scope: HookScope): void {
+async function enableBuiltin(doc: HooksDoc, id: string, filePath: string, scope: HookScope, cwd: string, homeDir: string): Promise<void> {
   const events = builtinEventsFor(id);
   const hasOverrideSomewhere = events.some((event) =>
     (doc.hooks[event] ?? []).some((raw) => isDisableOverride(raw) && (raw as { id: string }).id === id),
@@ -980,7 +1007,7 @@ function enableBuiltin(doc: HooksDoc, id: string, filePath: string, scope: HookS
   }
   removeManagedId(doc, id);
   validateBeforeWrite(doc, scope, filePath);
-  writeDocAtomic(filePath, doc);
+  await writeDocAtomic(filePath, doc, scope, cwd, homeDir);
   console.log(`Enabled built-in hook "${id}" in ${filePath} (removed the Keryx-managed disable override).`);
 }
 
@@ -1014,15 +1041,16 @@ function findFullRegistrations(doc: HooksDoc, id: string): Array<{ event: string
  * entry is preserved by spreading `entry` first; no entry is removed,
  * reordered, or otherwise edited; entries under OTHER ids are untouched.
  */
-function setProjectOrUserHookEnabled(
+async function setProjectOrUserHookEnabled(
   doc: HooksDoc,
   id: string,
   enabled: boolean,
   filePath: string,
   scope: HookScope,
   cwd: string,
+  homeDir: string,
   deps: HooksCommandDeps,
-): void {
+): Promise<void> {
   const found = findFullRegistrations(doc, id);
   if (found.length === 0) {
     fail(`Unknown hook id "${id}": not a built-in and not defined in ${filePath}.`);
@@ -1040,7 +1068,7 @@ function setProjectOrUserHookEnabled(
   }
   addManagedId(doc, id);
   validateBeforeWrite(doc, scope, filePath);
-  writeDocAtomic(filePath, doc);
+  await writeDocAtomic(filePath, doc, scope, cwd, homeDir);
   console.log(
     `${enabled ? "Enabled" : "Disabled"} hook "${id}" in ${filePath} (${found.length} event${found.length === 1 ? "" : "s"}).`,
   );
@@ -1096,13 +1124,13 @@ async function runEnableDisable(action: "enable" | "disable", args: readonly str
   const isBuiltin = BUILTIN_HOOK_IDS.includes(id);
   if (isBuiltin) {
     if (action === "disable") {
-      disableBuiltin(doc, id, filePath, scope, args.includes("--acknowledge-gate-risk"), userHooksPath(homeDir));
+      await disableBuiltin(doc, id, filePath, scope, args.includes("--acknowledge-gate-risk"), userHooksPath(homeDir), cwd, homeDir);
     } else {
-      enableBuiltin(doc, id, filePath, scope);
+      await enableBuiltin(doc, id, filePath, scope, cwd, homeDir);
     }
     return;
   }
-  setProjectOrUserHookEnabled(doc, id, action === "enable", filePath, scope, cwd, deps);
+  await setProjectOrUserHookEnabled(doc, id, action === "enable", filePath, scope, cwd, homeDir, deps);
 }
 
 // ---------------------------------------------------------------------------

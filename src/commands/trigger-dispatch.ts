@@ -799,7 +799,13 @@ async function dispatchLocked(
         runId,
         interactive: false,
         profileId: "unattended-untrusted",
+        // R700-01/D9: hooks are read from the worktree (that is what
+        // actually runs), but trust is looked up under the MAIN project
+        // root — the one the operator actually ran `keryx hooks trust` in.
+        // A per-run worktree path would never match anything they trusted.
+        trustRoot: projectRoot,
       });
+      for (const line of shellHooks?.notices ?? []) console.error(line);
       const agentDeps: AgentDeps = {
         provider,
         providerId: dispatch.provider,

@@ -116,6 +116,74 @@ major `schemaVersion`, a built-in id collision, or a duplicate
 full-registration id within one event — is a load error, and the whole load
 reports `ok: false`. **Nothing is silently dropped or partially applied.**
 
+The project layer's own hooks are also **tighten-only**: a project file can
+never turn off a built-in `gate`/`gate-advisory` hook, and a project's
+command hooks only run once you have explicitly trusted the exact file
+content that defines them — see the next section.
+
+## Project hooks need your trust
+
+`.metaproject/hooks.json` is checked into the repository, so cloning a
+project and opening it in `keryx shell` must never be enough, by itself, to
+run someone else's commands. A project's **full command-hook
+registrations** — anything with `argv`, not a disable-only override — only
+run once you have explicitly trusted the exact content that defines them.
+Until then they are dropped from the loaded set entirely: `keryx hooks test`
+refuses to run one by hand either, and a child agent can never inherit one
+(see [Child-agent inheritance](#child-agent-inheritance) below). Validation
+still runs over the whole file regardless of trust, so a schema error in an
+untrusted file still fails the load the same way it always did.
+
+**What is digested.** Trust is bound to the canonicalised, executable shape
+of every full project-scope command-hook registration — event, id, matcher,
+class, argv, cwd, env, timeoutMs, runsIn, network, appliesToChildAgents,
+profiles, enabled, in file order — never the raw bytes of the file. A
+disable-only override, `description`, and Keryx's own `_keryxManaged`
+bookkeeping block are excluded, so a `keryx hooks enable`/`disable` rewrite
+or reformatting the file does not by itself revoke trust; changing what a
+hook actually runs does.
+
+**Where trust is stored.** A small file in your own per-user Keryx config
+directory (next to the MCP server trust store), never inside the project and
+never in `.metaproject/`. Trust is per project root: cloning the same
+repository into a second directory, or opening it from a different machine,
+needs its own `keryx hooks trust`.
+
+**`keryx hooks trust` / `keryx hooks untrust`.** `keryx hooks trust` prints
+every command the file would register — event, matcher, class, whether it
+runs unsandboxed, its argv — with a warning line for any hook that runs
+unsandboxed, then asks you to confirm exactly that version. `--yes` skips
+the prompt for scripted use; with no terminal to ask in and no `--yes`,
+`hooks trust` refuses and writes nothing. `keryx hooks untrust` withdraws
+trust for the project, so its command hooks stop running again until you
+trust it again.
+
+**The session-start notice.** Opening a project whose `.metaproject/hooks.json`
+defines command hooks that are not trusted — or that changed since you last
+trusted them — prints a line at session start naming the hooks that did not
+run and how to review and trust them. This is not silent: a hook you expect
+never firing is exactly the thing this notice exists to surface.
+
+**Headless surfaces fail closed and say so.** There is no terminal to ask
+"trust this?" in over ACP, a `keryx serve` remote turn, or a scheduled
+trigger dispatch — these surfaces never prompt and never trust on your
+behalf. An untrusted or changed project file still prints its notice (over
+ACP, as an agent message plus a log line; elsewhere, on stderr), worded for
+the fact that the session cannot ask, and its command hooks simply do not
+run. Trust the file from a terminal in the project first.
+
+**Enable/disable carry-over.** Running `keryx hooks enable`/`disable`
+against an already-trusted project file automatically re-records trust for
+the new version, since you just approved the change that produced it — the
+CLI tells you so. Editing the file any other way, or running `enable`/
+`disable` against a file that was not already trusted, leaves it untrusted;
+`keryx hooks disable`/`enable` says so and names the command to run.
+
+**`bundle import --allow-hooks`.** Importing a bundle that carries a project
+hooks file writes `.metaproject/hooks.json` but never trusts it — the
+imported hooks do not run until you review and run `keryx hooks trust`
+yourself, exactly as if you had written the file by hand.
+
 ## Schema
 
 Both files validate against
@@ -132,8 +200,12 @@ below). Every registration entry is one of:
   `unsandboxed`), `network` (`none` default | `restricted`),
   `appliesToChildAgents` (default `true`), `profiles` (omitted/empty = all
   three profiles), `enabled` (default `true`), `description?`.
-- **A disable-only override**: `{"id": "keryx.<name>", "enabled": false}`
-  exactly.
+- **A disable-only override**: `{"id": "keryx.<name>", "enabled": false}`,
+  or, to disable a built-in **gate**/**gate-advisory** hook from your own
+  `~/.keryx/hooks.json` only, `{"id": "keryx.<name>", "enabled": false,
+  "acknowledge": "disable-builtin-gate"}` — see
+  [Built-ins](#built-ins) for which ids this applies to and why a project
+  file can never do this at all.
 
 `argv` is never shell-interpolated — it is spawned directly, closing the
 command-injection-via-interpolation class.
@@ -314,22 +386,44 @@ first.
 ## Built-ins
 
 Five built-in hooks, fixed order, `keryx.`-namespaced ids, all enabled by
-default. A project can only disable one by id (`{id, enabled: false}`),
-never redefine it.
+default.
 
 | id | event(s) | matcher | class | What it does |
 |---|---|---|---|---|
 | `keryx.ctx-guard` | `PreToolUse` | `Bash` | `gate` | Routes Bash tool calls through the gdctx routing guard (spawns `keryx ctx hook claude`). |
 | `keryx.security-check-input` | `UserPromptSubmit` | `*` | `gate` | Scans a submitted prompt for injection/secret patterns before it reaches the model (`keryx security check-input --source untrusted-external --runtime claude`). |
 | `keryx.security-check-output` | `PreToolUse` | `Write\|Edit` | `gate` | Scans a Write/Edit's content before it executes (`keryx security check-output --runtime claude`). |
-| `keryx.learning-observer` | `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `Stop`, `SessionEnd` (exactly these seven) | `*` | `observe` | Appends a redacted, bounded observation record for W3's Observe stage — see [Extension points](#extension-points-for-w3-and-w8) below. In-process, not a spawned command. |
+| `keryx.learning-observer` | `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `Stop`, `SessionEnd` (exactly these seven) | `*` | `observe` | Appends a redacted, bounded observation record for the Observe stage — on by default, see [learning.md](./learning.md). In-process, not a spawned command. |
 | `keryx.impact-evidence` | `PreToolUse` | `Write\|Edit` | `gate-advisory` | On a session's first edit of a file, injects impact evidence (importers, related tests, memory caveats) — see [Extension points](#extension-points-for-w3-and-w8) below. In-process, not a spawned command. |
+
+**Who can turn one off, and from where** (tighten-only: a hook config can
+only ever remove enforcement it would otherwise add, never widen what a
+project can do to a user's machine):
+
+- **`gate` and `gate-advisory`** (`keryx.ctx-guard`,
+  `keryx.security-check-input`, `keryx.security-check-output`,
+  `keryx.impact-evidence`) — these have decision power, so they **cannot be
+  disabled from a project file at all**; the disable override is ignored
+  with a warning, trusted or not. From your own `~/.keryx/hooks.json` you
+  can turn one off for yourself, but only with the explicit
+  `{"acknowledge": "disable-builtin-gate"}` field alongside `enabled:
+  false` (or `keryx hooks disable <id> --user --acknowledge-gate-risk` from
+  the CLI) — without it the override is likewise ignored with a warning.
+  keryx shell prints a banner naming any gate you have turned off this way
+  at the start of every session.
+- **`keryx.learning-observer`** (`observe`, no decision power) — can be
+  disabled from either scope, project or user, with a plain `{id, enabled:
+  false}` override, no acknowledgement needed. Disabling it only reduces
+  what gets recorded.
+
+A project can never redefine a built-in, only disable it by id where that
+is permitted above.
 
 `keryx.learning-observer` and `keryx.impact-evidence` are the only two
 built-ins whose handler is `{kind: "builtin", name: ...}` rather than a
-spawned command — they run in-process through an injectable port so W3/W8
-can plug in without a process boundary. That handler kind is never available
-to a user/project registration; only these two fixed declarations use it.
+spawned command — they run in-process through an injectable port. That
+handler kind is never available to a user/project registration; only these
+two fixed declarations use it.
 
 `keryx.ctx-guard`'s matcher is `Bash` only, not `Bash|Grep` like the guard
 installed into host harnesses — `keryx shell`'s own builtin tool set has no
@@ -341,9 +435,15 @@ alone covers everything that needs it here.
 A spawned Keryx subagent never inherits a host harness's ambient hooks, and
 does not implicitly inherit its parent's full merged set either — it
 inherits exactly the ids whose `appliesToChildAgents` is `true` (the
-schema's default). `HookRuntime.inheritedHookIds()` computes this list (one
-entry per distinct id, in registration order), and it is recorded verbatim
-in `SubagentStart`'s `inheritedHookIds` payload field for both spawn paths
+schema's default), taken from the parent's already-loaded `registrations`.
+An untrusted or changed project hook is dropped from `registrations` before
+a child agent is ever spawned (see
+[Project hooks need your trust](#project-hooks-need-your-trust) above), so
+it is never a candidate for inheritance either — trusting the file later,
+mid-session, does not retroactively hand it to a child spawned before that
+point. `HookRuntime.inheritedHookIds()` computes this list (one entry per
+distinct id, in registration order), and it is recorded verbatim in
+`SubagentStart`'s `inheritedHookIds` payload field for both spawn paths
 (`spawnKind: "external"` via `spawn-subagent-tool.ts`'s `deps.runExternal`,
 and `spawnKind: "internal"` via `spawnChild()`). Set
 `appliesToChildAgents: false` on an expensive or parent-only hook (e.g. a
@@ -376,12 +476,18 @@ warning, or `keryx hooks validate`), not swallowed.
 keryx hooks list [--json]
 keryx hooks validate [--json] [--ci]
 keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
+keryx hooks trust [--yes]
+keryx hooks untrust
 keryx hooks enable <id> [--user]
-keryx hooks disable <id> [--user]
+keryx hooks disable <id> [--user] [--acknowledge-gate-risk]
 ```
 
 - **`keryx hooks list`** — the merged, resolved registration set. With no
-  config files present, exactly the five built-ins, all enabled.
+  config files present, exactly the five built-ins, all enabled. When the
+  project file defines command hooks that are not trusted (or changed since
+  they were), a header line says so and each affected row shows
+  `trust=untrusted` (or `trust=changed since trusted`); `--json` carries the
+  same state under `projectTrust`.
 
   ```
   $ keryx hooks list
@@ -403,7 +509,14 @@ keryx hooks disable <id> [--user]
   synthetic payload for its event, or a `--payload-file` JSON document you
   supply. Reports the decision, exit code, stdout/stderr (capped, truncation
   flagged), duration, and — on a failure — what effect that failure would
-  have under `--profile` (default `monitored-trusted-local`).
+  have under `--profile` (default `monitored-trusted-local`). Refuses
+  outright, without running anything, when the hook is a project command
+  hook that is not currently trusted.
+- **`keryx hooks trust [--yes]` / `keryx hooks untrust`** — review and
+  approve (or withdraw approval for) `.metaproject/hooks.json`'s command
+  hooks; see
+  [Project hooks need your trust](#project-hooks-need-your-trust) above for
+  what this does and does not cover.
 - **`keryx hooks enable <id>` / `keryx hooks disable <id>`** — flip a
   registration's `enabled` state in `.metaproject/hooks.json` by default, or
   `~/.keryx/hooks.json` with `--user`. For a built-in, this writes a
@@ -411,6 +524,13 @@ keryx hooks disable <id> [--user]
   tracks exactly which ids Keryx itself added, so `keryx hooks enable`
   refuses to touch an override it does not recognise as Keryx-managed (it
   looks hand-authored — remove it by hand if that is what you want).
+  Disabling a built-in **gate**/**gate-advisory** hook is refused outright
+  from project scope, and from `--user` scope needs
+  `--acknowledge-gate-risk` alongside it — see
+  [Built-ins](#built-ins) above. Running `enable`/`disable` against an
+  already-trusted project file re-records trust for the resulting version
+  automatically; against an untrusted one, the file stays untrusted and the
+  command says so.
 
 ## Worked example: a project hook
 
@@ -473,6 +593,20 @@ Try it standalone before it ever gates a real session:
 keryx hooks validate
 keryx hooks test no-rm-rf-root --event PreToolUse
 ```
+
+`hooks test` above runs the command directly and needs no trust. Once the
+file is ready, trust it so `keryx shell` actually runs `no-rm-rf-root` and
+`edit-log` for real sessions in this project — review what `keryx hooks
+trust` prints (it names every command, matcher, and whether it runs
+unsandboxed) before confirming:
+
+```
+keryx hooks trust
+```
+
+Anyone else who clones this project, or you yourself on another machine,
+sees the session-start notice for these two hooks until they run `keryx
+hooks trust` here too.
 
 ## Extension points for W3 and W8
 

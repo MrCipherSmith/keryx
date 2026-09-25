@@ -23,6 +23,7 @@ import type { HarnessConfig } from "../harness/config";
 import {
   createHookRuntime,
   createRealHookRunner,
+  formatHookLoadNotices,
   loadHookConfig,
   resolveHookHomeDir,
   type HookRuntime,
@@ -385,12 +386,32 @@ function invalidHookConfigRuntime(): HookRuntime {
  * tightens straight to `deny` (`tightenOutcome`'s headless-fail-closed rule),
  * never opens an approval nothing here could answer.
  */
+/**
+ * R700-01: notices already printed on this process, keyed by `${projectRoot}
+ * \n${line}`, so a remote server handling many turns for the same project
+ * does not repeat "hooks are not trusted" once per turn. Never cleared — a
+ * process restart is the only reset, matching every other per-process dedupe
+ * in this file.
+ */
+const printedHookNotices = new Set<string>();
+
+function emitRemoteHookNotices(projectRoot: string, notices: readonly string[]): void {
+  for (const line of notices) {
+    const key = `${projectRoot}\n${line}`;
+    if (printedHookNotices.has(key)) continue;
+    printedHookNotices.add(key);
+    console.error(line);
+  }
+}
+
 function buildRemoteHookRuntime(opts: {
   projectRoot: string;
   sessionId: string;
   runId: string;
   profileId: PolicyProfile["profileId"];
   env?: NodeJS.ProcessEnv;
+  /** R700-01/D9: where the trust store lives. Omitted reads the real per-user config dir. */
+  configDir?: string;
 }): HookRuntime | undefined {
   const env = opts.env ?? process.env;
   if (env.KERYX_HOOKS === "off") {
@@ -401,7 +422,24 @@ function buildRemoteHookRuntime(opts: {
   // `os.homedir()` that (unlike them) never honored a `KERYX_HOME`
   // operator/test override. `lib/` may not import from `commands/`, so the
   // pure resolver lives in `harness/hooks/config.ts` and all three share it.
-  const loaded = loadHookConfig({ projectRoot: opts.projectRoot, homeDir: resolveHookHomeDir(env) });
+  const homeDir = resolveHookHomeDir(env);
+  const loaded = loadHookConfig({
+    projectRoot: opts.projectRoot,
+    homeDir,
+    ...(opts.configDir !== undefined ? { projectTrust: { configDir: opts.configDir } } : {}),
+  });
+  // R700-01: a remote turn is headless by construction (no terminal to ask
+  // "trust this?" in) — surface untrusted/changed project hooks, a load
+  // failure, tighten-only warnings and gate-off banners the same way every
+  // other headless surface does, deduped per process above.
+  emitRemoteHookNotices(
+    opts.projectRoot,
+    formatHookLoadNotices(loaded, {
+      projectRoot: opts.projectRoot,
+      userFile: path.join(homeDir, ".keryx", "hooks.json"),
+      surface: "headless",
+    }),
+  );
   if (!loaded.ok) {
     return invalidHookConfigRuntime();
   }
@@ -720,6 +758,7 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     runId: turnId,
     profileId: input.profile.profileId,
     ...(input.hooksEnv !== undefined ? { env: input.hooksEnv } : {}),
+    ...(input.dir !== undefined ? { configDir: input.dir } : {}),
   });
   const deps: RunDeps = {
     provider: input.provider,

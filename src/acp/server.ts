@@ -333,6 +333,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       runId: idSeq(),
       interactive: true,
       profileId: "monitored-trusted-local",
+      // R700-01: ACP has no terminal to ask "trust this?" in — the notice
+      // text must say so instead of pointing at a prompt no one will see.
+      noticeSurface: "headless",
       ...(options.hooksEnv !== undefined ? { env: options.hooksEnv } : {}),
     });
     if (shellHooks === undefined) {
@@ -340,6 +343,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       return;
     }
     shellHooksBySession.set(sessionId, shellHooks);
+    reportHookNotices(sessionId, shellHooks.notices ?? []);
     // SessionStart is never gate-capable (`GATE_CAPABLE_EVENTS` excludes it —
     // `harness/hooks/semantics.ts`'s own comment) — a hook here cannot refuse
     // the session, so this is fired for its side effects only and never
@@ -788,6 +792,23 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       sendUpdate(sessionId, {
         sessionUpdate: "agent_message_chunk",
         content: textBlock(`keryx: MCP server "${problem.name}" ${problem.reason}\n`),
+      });
+    }
+  }
+
+  /**
+   * R700-01: tell the client (and the agent log) about this session's hook
+   * config notices — untrusted/changed project hooks, a load failure,
+   * tighten-only warnings, gate-off banners (`harness/hooks/notices.ts`).
+   * Same channel as {@link reportMcpProblems}: an `agent_message_chunk` so
+   * every client renders it in the thread, plus a stderr line.
+   */
+  function reportHookNotices(sessionId: string, notices: readonly string[]): void {
+    for (const line of notices) {
+      options.logError(`acp: session ${sessionId}: ${line}`);
+      sendUpdate(sessionId, {
+        sessionUpdate: "agent_message_chunk",
+        content: textBlock(`${line}\n`),
       });
     }
   }
