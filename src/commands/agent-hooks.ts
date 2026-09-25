@@ -126,6 +126,17 @@ export interface ShellHookContext {
    * value as `[]`.
    */
   notices?: readonly string[];
+  /**
+   * R700-01 fix (flow 319): returns `notices` the FIRST time any caller asks,
+   * then `[]` on every later call — so a `ShellHookContext` shared between
+   * two consumers (the TUI attempt and the readline fallback it falls
+   * through to in `commands/shell.ts`, when a TUI session starts, shows
+   * these notices, then hits an unrelated exception) prints each line at
+   * most once instead of once per consumer. Optional, like `notices` above:
+   * a hand-built context (tests) that never calls this just falls back to
+   * reading `notices` directly, unaffected.
+   */
+  takeNotices?: () => readonly string[];
 }
 
 /**
@@ -290,5 +301,11 @@ export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): Shell
     opts.onConfigError?.(loaded.diagnostics);
     runtime = createInvalidConfigRuntime(opts.interactive);
   }
-  return { runtime, sessionId: opts.sessionId, runId: opts.runId, notices };
+  let noticesTaken = false;
+  const takeNotices = (): readonly string[] => {
+    if (noticesTaken) return [];
+    noticesTaken = true;
+    return notices;
+  };
+  return { runtime, sessionId: opts.sessionId, runId: opts.runId, notices, takeNotices };
 }

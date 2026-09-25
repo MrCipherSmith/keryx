@@ -271,9 +271,14 @@ async function runList(args: readonly string[], deps: HooksCommandDeps): Promise
     return;
   }
   if (loaded.projectHooks.state === "untrusted" || loaded.projectHooks.state === "changed") {
-    const reason = loaded.projectHooks.state === "changed" ? "changed since trusted" : "not trusted";
+    // R700-01 fix (flow 319): "not trusted" already says the untrusted state
+    // plainly, so a trailing "(not trusted)" repeated it for no reason — the
+    // parenthetical is dropped for that state. "changed" is genuinely new
+    // information the header doesn't otherwise say, so it stays, worded as a
+    // fact about what happened rather than a bare label.
+    const suffix = loaded.projectHooks.state === "changed" ? " (changed since you trusted it)" : "";
     console.error(
-      `Project hooks in ${loaded.projectHooks.filePath} are not trusted and do not run (${reason}). Review and trust them with: keryx hooks trust`,
+      `Project hooks in ${loaded.projectHooks.filePath} are not trusted and do not run${suffix}. Review and trust them with: keryx hooks trust`,
     );
   }
   console.log(renderListText(allRows, profileId));

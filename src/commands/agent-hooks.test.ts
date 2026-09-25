@@ -287,6 +287,38 @@ test("R700-01: the notice is produced on EVERY build of the runtime, not suppres
   }
 });
 
+test("R700-01 fix (flow 319): takeNotices() returns the lines once, then [] on the SAME context", async () => {
+  const { dir, homeDir, configDir } = await makeTrustProject();
+  try {
+    const result = buildShellHookRuntime({
+      projectRoot: dir,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir,
+      configDir,
+      env: { KERYX_HOOKS: "on" },
+    });
+    // `.notices` (untouched, read as many times as a caller likes) still
+    // shows the untrusted-project-hooks notice from the shared fixture.
+    expect(result?.notices?.length).toBeGreaterThan(0);
+    // A first consumer (e.g. a TUI session that starts and prints these at
+    // startup) gets the same lines back from `takeNotices()` …
+    expect(result?.takeNotices?.()).toEqual(result?.notices);
+    // … but a SECOND consumer of the SAME context — the readline fallback a
+    // TUI session falls through to after an unrelated later failure — gets
+    // nothing, so the operator is never shown the same lines twice.
+    expect(result?.takeNotices?.()).toEqual([]);
+    expect(result?.takeNotices?.()).toEqual([]);
+    // `.notices` itself is unaffected by `takeNotices()` having run — it
+    // still reflects what was computed, for any reader that only wants that.
+    expect(result?.notices?.length).toBeGreaterThan(0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("R700-01: a user-disabled gate produces the OFF banner", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-gate-off-"));
   try {

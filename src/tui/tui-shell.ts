@@ -5454,7 +5454,12 @@ export async function launchTuiAgentShell(opts: {
     // `addStatusIfShown`'s splash status area is proven to render one line
     // reliably; a multi-line block risks being clipped or shown as one
     // truncated line there.
-    for (const line of liveDeps?.hooks?.notices ?? []) announceStartupNotice(line);
+    // `takeNotices()` (R700-01 fix, flow 319) consumes these lines at most
+    // once across the whole process — if this same `ShellHookContext` later
+    // reaches `commands/shell.ts`'s readline fallback (an unrelated failure
+    // below falls through to it), that branch's own print loop sees an
+    // already-emptied notice list instead of repeating every line.
+    for (const line of liveDeps?.hooks?.takeNotices?.() ?? liveDeps?.hooks?.notices ?? []) announceStartupNotice(line);
     if (viewedReadOnly) {
       // The wordmark would sit under the read-only view it just rendered.
       splash.removeIfShown();

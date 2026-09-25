@@ -595,6 +595,38 @@ describe("keryx hooks trust / untrust", () => {
     expect(logs.join("\n")).toContain("trust=untrusted");
   });
 
+  // R700-01 fix (flow 319): "are not trusted and do not run (not trusted)"
+  // said the same thing twice — the parenthetical is dropped for the
+  // untrusted state (the sentence already says it), and reworded to a fact
+  // ("changed since you trusted it") for the changed state, which is
+  // genuinely new information the sentence doesn't otherwise carry.
+  test("R700-01 fix: the untrusted header has no redundant parenthesis", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["list"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const header = errors.find((e) => e.includes("are not trusted and do not run"));
+    expect(header).toBeDefined();
+    expect(header).toContain("are not trusted and do not run. Review and trust them with: keryx hooks trust");
+    expect(header).not.toContain("(not trusted)");
+    expect(header).not.toContain("(untrusted)");
+  });
+
+  test("R700-01 fix: the changed-since-trusted header names what changed, not a bare label", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    // Trusted at THIS digest; changing the file after trust makes it "changed".
+    await writeOneGateHook("my-gate-renamed");
+    errors = [];
+    await hooksCommand(["list"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const header = errors.find((e) => e.includes("are not trusted and do not run"));
+    expect(header).toBeDefined();
+    expect(header).toContain(
+      "are not trusted and do not run (changed since you trusted it). Review and trust them with: keryx hooks trust",
+    );
+    expect(header).not.toContain("(changed since trusted)");
+  });
+
   test("list --json carries projectTrust and per-row trust", async () => {
     await writeOneGateHook();
     await hooksCommand(["list", "--json"], { cwd: project, homeDir: home });

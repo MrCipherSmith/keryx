@@ -170,8 +170,8 @@ Usage:
   keryx skills eval --reverify <pack-dir> [--sample N] --judge <provider>[:<model>] [--json]
 
 Examples:
-  keryx skills eval review/postgres-migration
-  keryx skills eval review/postgres-migration --judge anthropic:claude-sonnet-4-5 --json
+  keryx skills eval react/react-testing
+  keryx skills eval react/react-testing --judge anthropic:claude-sonnet-4-5 --json
 `);
 }
 
@@ -187,7 +187,7 @@ Usage:
               [--samples <n>] [--record] [--json]
 
 Examples:
-  keryx skills judge-check review/postgres-migration --judge anthropic:claude-sonnet-4-5
+  keryx skills judge-check react/react-testing --judge anthropic:claude-sonnet-4-5
 `);
 }
 
