@@ -43,9 +43,9 @@ are the rule set findings are checked against.
 - Any `GlobalScope.launch`/`GlobalScope.async` in the diff — flag it;
   the fix direction is `viewModelScope`/`lifecycleScope`/a passed-in
   scope.
-- A new goroutine-equivalent (`launch`/`async`) with no scope tied to a
-  lifecycle owner, or a fire-and-forget `launch` whose result/exception
-  is silently dropped.
+- A new coroutine (`launch`/`async`) with no scope tied to a lifecycle
+  owner, or a fire-and-forget `launch` whose result/exception is silently
+  dropped.
 - A suspend call awaited with no cancellation awareness inside a loop
   that should stop early (missing `ensureActive()`/`isActive` check in a
   long-running or CPU-bound loop).

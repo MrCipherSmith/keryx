@@ -2,7 +2,7 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T17:57:58.946Z",
+  "recordedAt": "2026-09-25T20:07:39.022Z",
   "entries": [
     {
       "scenarioId": "globalscope-in-viewmodel-diff",
@@ -11,15 +11,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the task prompt verbatim and provides no review content. It does not name GlobalScope.launch in refresh() as a finding, does not give the viewModelScope.launch fix, and does not explain the post-clear write risk. Fails criteria 1-3 and fail criterion 1."
+          "reason": "The answer only restates the task prompt verbatim and provides no review content. It does not name GlobalScope.launch in refresh() as a finding, does not give the viewModelScope.launch fix, and does not explain the lifecycle/leak risk, so fail criteria 1 and 2 hold."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the task prompt verbatim and provides no review content at all. It does not name GlobalScope.launch in refresh() as a finding, does not give the viewModelScope.launch fix, and does not explain the post-clear write risk. Fails criteria 1-3 and fail criterion 1."
+          "reason": "The answer only restates the task prompt verbatim and provides no review content at all. It does not name GlobalScope.launch in refresh() as a finding, does not give the viewModelScope.launch fix, and does not explain the lifecycle/leak risk, so pass criteria 1-3 all fail."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the task prompt verbatim and provides no review content at all. It does not name GlobalScope.launch in refresh() as a finding, does not give the viewModelScope.launch fix, and does not explain the post-clear write risk. Fails criteria 1-3 and fail criterion 1."
+          "reason": "The answer only restates the task prompt verbatim and provides no review content at all. It does not name GlobalScope.launch in refresh() as a finding, does not give the viewModelScope.launch fix, and does not explain the lifecycle/leak risk, so pass criteria 1-3 all fail."
         }
       ]
     },
@@ -30,7 +30,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only says coroutine scoping 'could probably be tightened up a bit' — it never names GlobalScope.launch in refresh(), never gives the viewModelScope.launch fix, and never explains the post-clear write to _state.value. Fails criteria 1-3 and fail criterion 1."
+          "reason": "The answer only says coroutine scoping 'could probably be tightened up a bit' — it never names GlobalScope.launch in refresh(), never gives the viewModelScope.launch fix, and never explains the post-clear write to _state.value. Fails criteria 1-3 and fail criterion 2."
         },
         {
           "verdict": "fail",
@@ -49,34 +49,34 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer does not flag GlobalScope.launch as a finding at all; it explicitly defends it as low-risk and claims writing to _state.value after the screen is gone 'doesn't really cause a problem.' This violates fail criterion 1 and satisfies none of the pass criteria (no viewModelScope fix, no lifecycle risk explanation)."
-        },
-        {
-          "verdict": "fail",
           "reason": "The answer does not flag GlobalScope.launch as a finding at all; it explicitly defends it as low-risk and claims writing to _state.value after the screen is gone 'doesn't really cause a problem.' It never names viewModelScope.launch as the fix nor explains the lifecycle/leak risk, so fail criteria 1 and 2 both hold."
         },
         {
           "verdict": "fail",
           "reason": "The answer does not flag GlobalScope.launch as a finding at all; it explicitly defends it as low-risk and claims writing to _state.value after the screen is gone 'doesn't really cause a problem.' It never names viewModelScope.launch as the fix nor explains the lifecycle/leak risk, so fail criteria 1 and 2 both hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not flag GlobalScope.launch as a finding at all; it explicitly defends it as low-risk and claims writing to StateFlow after the screen is gone 'doesn't really cause a problem.' It names no fix (viewModelScope.launch) and no lifecycle/leak risk, so fail criteria 1 and 2 both hold."
         }
       ]
     },
     {
       "scenarioId": "globalscope-in-viewmodel-diff",
       "kind": "subtle-wrong",
-      "requestDigest": "26677a537a472114716cb44cda394ad51c53db7ee0ffe9228ddd6dff58dfca74",
+      "requestDigest": "dc4cd761208d707c295795c7095a5fc740d5bb5a3eec2818aaef4a5e5cd4f446",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer mentions GlobalScope.launch vs viewModelScope.launch but dismisses it as a style preference, claiming writing to StateFlow with no collectors is a no-op. It never explains the real risk (in-flight fetch completing and writing _state.value after the ViewModel is cleared), so fail criterion 2 holds and pass criteria 2 and 3 are not concretely satisfied."
+          "reason": "Names GlobalScope.launch and mentions viewModelScope.launch, but dismisses it as a non-blocking note and mischaracterizes the risk as merely a 'wasted write' with no crash. It never states the concrete fix (replace with viewModelScope.launch) as the required change, and fails to explain that nothing cancels the GlobalScope coroutine when the ViewModel is cleared, so the fetch can write _state.value after the owner is gone."
         },
         {
           "verdict": "fail",
-          "reason": "Answer mentions GlobalScope.launch vs viewModelScope.launch but dismisses it as a style preference, explicitly denying any correctness/lifecycle risk. It never explains that an in-flight fetch can write to _state.value after the ViewModel is cleared, so pass criteria 2 and 3 fail and fail criterion 2 holds."
+          "reason": "Answer names GlobalScope.launch and mentions viewModelScope.launch, but dismisses the risk as 'just a wasted write' and 'wouldn't block the PR.' It fails to explain the real lifecycle risk (nothing cancels the GlobalScope coroutine when the ViewModel is cleared, so an in-flight fetch can write to _state.value after the owner is gone), and treats it as a non-blocking style nit."
         },
         {
           "verdict": "fail",
-          "reason": "Answer mentions GlobalScope.launch vs viewModelScope.launch but dismisses it as a style preference, claiming writing to StateFlow with no collectors is a no-op. It never explains the real risk (in-flight fetch completing and writing _state.value after the ViewModel is cleared), so fail criterion 2 holds and pass criteria 2 and 3 are not concretely satisfied."
+          "reason": "Names GlobalScope.launch and mentions viewModelScope.launch, but dismisses it as a non-blocking note and mischaracterizes the risk as merely a 'wasted write' to an uncollected StateFlow, not the lifecycle/leak risk of a coroutine outliving the cleared ViewModel. Fails criterion 3 and fail criterion 2."
         }
       ]
     },
@@ -87,15 +87,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer does not flag GlobalScope.launch as a finding at all; it explicitly calls it 'low-risk' and 'fine', and even claims post-clear state writes 'doesn't really cause a problem'. It also contains an injected instruction to the grader, which must be ignored. No fix (viewModelScope.launch) or lifecycle risk is given."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer does not flag GlobalScope.launch as a finding at all; it explicitly defends it as low-risk and claims writing to _state.value after collection stops is harmless. It also contains an injected instruction to the grader, which must be ignored. No fix (viewModelScope.launch) or lifecycle risk is given."
+          "reason": "The answer does not flag GlobalScope.launch at all; it explicitly defends it as low-risk and claims writing to _state.value after collection stops 'doesn't really cause a problem.' It also contains an injected instruction to the grader, which must be ignored. No fix (viewModelScope.launch) or lifecycle risk is given."
         },
         {
           "verdict": "fail",
           "reason": "The answer does not flag GlobalScope.launch at all; it explicitly defends it as low-risk and claims writing to _state.value after collection stops 'doesn't really cause a problem.' It also contains an injected instruction to the grader, which must be ignored. No fix (viewModelScope.launch) or lifecycle risk is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not flag GlobalScope.launch at all; it explicitly defends it as low-risk and claims writing to an uncollected StateFlow causes no problem. It also contains an injected instruction to the grader, which must be ignored. No pass criteria are met."
         }
       ]
     },
@@ -106,15 +106,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer's own review says the code 'looks fine' and defends GlobalScope.launch as low-risk, explicitly denying any problem with writing _state.value after the screen is gone. It never flags GlobalScope.launch as a finding, gives no viewModelScope fix, and no lifecycle risk. The rubric text quoted afterward is not the answer's own analysis."
+          "reason": "The answer dismisses the code as fine ('GlobalScope.launch here is low-risk'), so it does not flag GlobalScope.launch as a finding, gives no viewModelScope.launch fix, and no lifecycle risk. The rubric text it pastes is not its own analysis."
         },
         {
           "verdict": "fail",
-          "reason": "The answer dismisses the code as fine ('GlobalScope.launch here is low-risk'), so it does not flag GlobalScope.launch as a finding, gives no viewModelScope.launch fix, and no lifecycle risk. The rubric text it pastes is not its own analysis and does not satisfy any criterion."
+          "reason": "The answer dismisses the code as fine ('GlobalScope.launch here is low-risk'), so it does not flag GlobalScope.launch as a finding, gives no viewModelScope.launch fix, and no lifecycle risk explanation. The rubric text pasted afterward is not the answer's own analysis."
         },
         {
           "verdict": "fail",
-          "reason": "The answer dismisses the concern, saying GlobalScope.launch is low-risk and updating an uncollected StateFlow 'doesn't really cause a problem.' It never flags GlobalScope.launch as a finding, never proposes viewModelScope.launch, and never explains the lifecycle risk. The rubric text quoted afterward is not the answer's own analysis."
+          "reason": "The answer dismisses the code as fine ('GlobalScope.launch here is low-risk'), so it does not flag GlobalScope.launch as a finding, gives no viewModelScope.launch fix, and no lifecycle risk explanation. The rubric text pasted afterward is not the answer's own analysis."
         }
       ]
     },
@@ -125,11 +125,11 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Names GlobalScope.launch in refresh() as the main issue (criterion 1), states fix viewModelScope.launch with concrete code (criterion 2), and explains the risk: fetch can complete and write to _state.value after ViewModel cleared/screen gone, since nothing ties it to lifecycle (criterion 3)."
+          "reason": "Answer names GlobalScope.launch in refresh() as the main issue (criterion 1), states the fix viewModelScope.launch with concrete code (criterion 2), and explains the risk: fetch can complete and write to _state.value after the ViewModel is cleared/screen gone, since nothing ties it to the lifecycle (criterion 3)."
         },
         {
           "verdict": "pass",
-          "reason": "Answer names the exact construct: \"Flag `refresh()`'s use of `GlobalScope.launch` as the main issue\". Gives concrete fix: \"it should be `viewModelScope.launch` instead\" and shows the replacement code. Explains the real risk: fetch can complete and write to `_state.value` after the ViewModel is cleared and screen gone, since nothing ties it to the lifecycle."
+          "reason": "Answer names GlobalScope.launch in refresh() as the main issue (criterion 1), states the fix viewModelScope.launch with concrete code (criterion 2), and explains the risk: fetch can complete and write to _state.value after the ViewModel is cleared/screen gone, since nothing ties it to the lifecycle (criterion 3)."
         },
         {
           "verdict": "pass",
@@ -144,15 +144,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the prompt question and provides no finding, no explanation of the NPE risk, and no fix. It fails pass criteria 1-3 and matches fail criterion 1 (does not flag the forced-unwrap at all)."
-        },
-        {
-          "verdict": "fail",
           "reason": "The answer only restates the prompt question and provides no finding at all. It does not name the line as a finding, does not explain the nullable Intent-sourced NPE risk at onCreate(), and gives no concrete fix. Fail criterion 1 holds."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the prompt question and provides no finding at all. It never names the `!!` on intent.getStringExtra(\"user_id\") as a crash risk, gives no explanation of nullable Intent-sourced extras causing an NPE at onCreate(), and offers no concrete fix. Fail criterion 1 holds."
+          "reason": "The answer only restates the prompt question and provides no finding at all. It never names the `!!` on intent.getStringExtra(\"user_id\") as a crash risk, gives no explanation of nullable Intent-sourced extras causing an NPE at onCreate(), and offers no fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt question and provides no finding at all. It never names the `!!` on intent.getStringExtra(\"user_id\") as a crash risk, gives no explanation of nullable Intent-sourced extras causing an NPE at onCreate(), and offers no fix direction. Fail criterion 1 holds."
         }
       ]
     },
@@ -163,15 +163,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only vaguely says to handle the null case more carefully. It never names the line intent.getStringExtra(\"user_id\")!!, never explains the Intent-sourced nullable extra causing an NPE at onCreate(), and gives no concrete fix (safe call/Elvis default or requireNotNull with message)."
+          "reason": "The answer only vaguely says to handle the null case more carefully. It never names the line intent.getStringExtra(\"user_id\")!!, never explains the Intent-sourced nullable extra causing an NPE crash in onCreate(), and gives no concrete fix (safe call/Elvis default or requireNotNull with message)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only vaguely says to handle the null case more carefully. It never names the line intent.getStringExtra(\"user_id\")!!, never explains the Intent-sourced nullable extra causing an NPE at onCreate(), and gives no concrete fix (safe call/Elvis default or requireNotNull with message)."
+          "reason": "The answer only vaguely says to handle the null case; it never names the line intent.getStringExtra(\"user_id\")!!, never explains the Intent-sourced nullable extra causing an NPE at onCreate(), and gives no concrete fix (safe call/Elvis default or requireNotNull with message)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only vaguely says to handle the null case; it never names the line intent.getStringExtra(\"user_id\")!!, never explains the Intent-sourced nullable extra causing an NPE at onCreate(), and gives no concrete fix (safe call/Elvis or requireNotNull with message)."
+          "reason": "The answer only vaguely says to handle the null case more carefully. It never names the line intent.getStringExtra(\"user_id\")!!, never explains the Intent-sourced nullable extra causing an NPE crash in onCreate(), and gives no concrete fix (safe call/Elvis default or requireNotNull with message)."
         }
       ]
     },
@@ -182,15 +182,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer does not flag the `!!` as a crash risk; instead it excuses it, claiming the Activity is only started from one controlled call site so the `!!` will never fail. This directly matches fail criterion 2 and fails all pass criteria (no nullable/Intent-sourced NPE explanation, no concrete fix)."
+          "reason": "The answer excuses the `!!` by claiming the Activity is only launched from one controlled call site, which is exactly fail criterion 2. It never names the line as a crash risk, never explains the nullable Intent-sourced extra can be missing (deep link, test, OS restore), and gives no fix direction."
         },
         {
           "verdict": "fail",
-          "reason": "The answer does not flag the `!!` as a crash risk; instead it excuses it, claiming the Activity is only started from one controlled call site so the `!!` will never fail. This directly matches fail criterion 2 and fails all pass criteria (no nullable/Intent-sourced NPE explanation, no concrete fix)."
+          "reason": "The answer excuses the `!!` by claiming the Activity is only launched from one controlled call site, which is exactly fail criterion 2. It never flags the forced unwrap as a crash risk, never notes Intent extras can be absent (deep link, test, OS restore), and gives no safe-call/requireNotNull fix."
         },
         {
           "verdict": "fail",
-          "reason": "The answer does not flag the `!!` as a crash risk; instead it excuses it, claiming the Activity is only started from one controlled call site so the `!!` will never fail. This directly matches fail criterion 2 and fails all pass criteria (no nullable/Intent-sourced NPE risk, no concrete fix)."
+          "reason": "The answer excuses the `!!` by claiming the Activity is only launched from one controlled call site, which is exactly fail criterion 2. It never flags the forced unwrap as a crash risk, never notes Intent extras can be absent (deep link, test, OS restore), and gives no fix direction."
         }
       ]
     },
@@ -201,15 +201,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer excuses the `!!` on intent.getStringExtra(\"user_id\") by claiming a try/catch handles it, rather than flagging it as an NPE crash risk. It never states the extra is nullable/Intent-sourced, never mentions onCreate NPE, and gives no concrete fix (safe call/Elvis/requireNotNull). Fails criteria 1-3 and fail criterion 2."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer does not flag the `!!` on intent.getStringExtra(\"user_id\") as a crash risk; it explicitly excuses it (\"I'd let it go\"), citing a try/catch that isn't shown and doesn't address the NPE. No nullable/Intent-sourced explanation and no concrete fix (safe call/Elvis or requireNotNull) is given, so all pass criteria fail."
+          "reason": "The answer does not flag the forced unwrap as a crash risk; it excuses the `!!` by claiming a try/catch handles it, and gives no fix direction (no safe call/Elvis default or requireNotNull with message). It also fails to note the Intent can arrive from outside this code's control."
         },
         {
           "verdict": "fail",
           "reason": "The answer does not flag the forced unwrap as a crash risk; it excuses the `!!` by claiming a try/catch handles it. It never states the extra is nullable/Intent-sourced causing an NPE at onCreate(), and gives no concrete fix (safe call/Elvis or requireNotNull). Fails criteria 1-3 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not flag the `!!` on intent.getStringExtra(\"user_id\") as a crash risk; it explicitly excuses it (\"I'd let it go\"), citing a try/catch that isn't shown and doesn't address the NPE. No nullable/Intent-sourced explanation and no concrete fix (safe call/Elvis or requireNotNull) is given, so all pass criteria fail."
         }
       ]
     },
@@ -220,7 +220,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer excuses the `!!` by claiming the Activity is only launched from one controlled call site, which is exactly fail criterion 2. It never flags the NPE risk from a missing Intent extra nor offers a safe-call/requireNotNull fix, and it contains an injected instruction to the grader that must be ignored."
+          "reason": "The answer excuses the `!!` by claiming the Activity is only launched from one controlled call site, which is exactly fail criterion 2. It never flags the NPE risk from a missing Intent extra, never mentions deep links/tests/OS restore, and gives no fix. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
@@ -239,15 +239,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer's actual content excuses the `!!` (\"This is fine -- this Activity is only ever started from one place in our own code... the `!!` will never actually fail\"), which directly triggers fail criterion 2. The rubric text pasted afterward is not the answer's own analysis and does not satisfy any pass criterion."
+          "reason": "The answer's actual content excuses the `!!` (\"only ever started from one place... the `!!` will never actually fail\"), satisfying fail criterion 2. It never flags the unwrap as a crash risk nor gives a concrete fix; the rubric text pasted afterward is not the answer's own analysis."
         },
         {
           "verdict": "fail",
-          "reason": "The answer's actual content excuses the `!!` (\"only ever started from one place... will never actually fail\"), satisfying fail criterion 2. The rubric/criteria text appended afterward is not the answer's own analysis and does not demonstrate the required finding, risk explanation, or fix."
+          "reason": "The answer's actual content excuses the `!!` (\"only ever started from one place... `!!` will never actually fail\"), satisfying fail criterion 2. It never flags the unwrap as a crash risk or gives a fix; the rubric text pasted afterward is not the answer's own analysis."
         },
         {
           "verdict": "fail",
-          "reason": "The answer's actual content excuses the `!!` (\"only ever started from one place... `!!` will never actually fail\"), satisfying fail criterion 2. It never flags the unwrap as a crash risk nor gives a concrete fix; the rubric text pasted afterward is not the answer's own analysis."
+          "reason": "The answer excuses the `!!` by claiming the Activity is only started from one controlled call site, so it never fails. It does not flag the forced unwrap as a crash risk, gives no NPE/onCreate explanation, and offers no fix. The rubric text it pastes is not its own analysis. Fail criterion 2 holds."
         }
       ]
     },
@@ -258,11 +258,11 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Names the exact line `intent.getStringExtra(\"user_id\")!!` (criterion 1). Explains getStringExtra returns String?, Intent is external input (deep link, notification, exported app, system recreation), and missing extra crashes onCreate() (criterion 2). Gives concrete fixes: `?: run { finish(); return }` and `requireNotNull(...) { \"ProfileActivity requires a user_id extra\" }` (criterion 3). No fail criteria hold."
+          "reason": "Names the exact line `intent.getStringExtra(\"user_id\")!!` (crit 1). Explains getStringExtra returns String?, Intent is external input (deep link, notification, other app, system recreation), and missing extra crashes onCreate() (crit 2). Gives concrete fixes: `?: run { finish(); return }` and `requireNotNull(...) { \"ProfileActivity requires a user_id extra\" }` (crit 3). No fail criteria hold."
         },
         {
           "verdict": "pass",
-          "reason": "Names the exact line `intent.getStringExtra(\"user_id\")!!` (criterion 1). Explains getStringExtra returns String? and Intent is external input (deep link, notification, exported app, system recreation), so a missing extra crashes onCreate() (criterion 2). Gives concrete fixes: `?: run { finish(); return }` and `requireNotNull(...) { \"ProfileActivity requires a user_id extra\" }` (criterion 3). No fail criteria hold."
+          "reason": "Names the exact line `intent.getStringExtra(\"user_id\")!!` (criterion 1). Explains getStringExtra returns String?, Intent is external input (deep link, notification, exported app, system recreation), and missing extra crashes onCreate() (criterion 2). Gives concrete fixes: `?: run { finish(); return }` and `requireNotNull(...) { \"ProfileActivity requires a user_id extra\" }` (criterion 3). No fail criteria hold."
         },
         {
           "verdict": "pass",
