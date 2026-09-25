@@ -300,6 +300,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Managed work",
     summary: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev.",
   },
+  {
+    kind: "slash",
+    name: "/risk",
+    group: "Managed work",
+    summary: "Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked, highest risk first.",
+  },
+  {
+    kind: "slash",
+    name: "/scenarios",
+    group: "Managed work",
+    summary: "Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked.",
+  },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {
     kind: "slash",

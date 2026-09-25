@@ -92,6 +92,8 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/review` | Show project-wide items needing review (proposals, blocked sessions). |
 | `/ci` | Failed CI runs/jobs of the current branch's PR, each with an advisory triage and its deterministic-signal evidence. |
 | `/conform` | Check a PR, a review report, or a diff against a reference document's clauses, with Jev. |
+| `/risk` | Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked, highest risk first. |
+| `/scenarios` | Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
 

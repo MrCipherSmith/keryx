@@ -93,6 +93,11 @@ import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
 import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
+// flow 332: registration only — everything else lives in
+// jev-risk-command.ts/jev-scenarios-command.ts, mirroring flow 330's own
+// jev-rules-command.ts note, so no other flow's concurrent work collides.
+import { isJevRiskCommand, runJevRiskForShell } from "./jev-risk-command";
+import { isJevScenariosCommand, runJevScenariosForShell } from "./jev-scenarios-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
@@ -7276,6 +7281,34 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isConformCommand(command.name)) {
           showConform();
+          return;
+        }
+        if (isJevRiskCommand(command.name)) {
+          // flow 332: a one-shot check on the working diff, not a modal —
+          // see `jev-risk-command.ts`'s own header for why.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-risk: scoring the working diff's hunks…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevRiskForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-risk: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
+          return;
+        }
+        if (isJevScenariosCommand(command.name)) {
+          // flow 332: a one-shot check on the working diff, not a modal —
+          // same shape as `/risk` immediately above.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-scenarios: checking likely-affected scenarios…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevScenariosForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-scenarios: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
           return;
         }
         if (command.name === "/bus") {

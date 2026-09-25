@@ -216,6 +216,20 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 332 (AC6): the risk-map one-shot over `keryx review jev-risk`'s
+    // working-diff run. TUI-only, same reasoning as `/conform`.
+    name: "/risk",
+    description: "Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 332 (AC6): the functional-review one-shot over `keryx review
+    // jev-scenarios`'s working-diff run. TUI-only, same reasoning as `/conform`.
+    name: "/scenarios",
+    description: "Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev",
+    modes: AGENT_ONLY,
+  },
+  {
     // P2 flipped this, as the entry it replaces said it would: `/mcp` was
     // "Deprecated alias of /integrations", kept pointing at the installer
     // only because the consumer view did not exist and a slash command
