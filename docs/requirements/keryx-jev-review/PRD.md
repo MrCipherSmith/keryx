@@ -1,5 +1,5 @@
 # Keryx Jev Rule-Conformance Reviewer — PRD
-Version: 0.1.0
+Version: 0.2.0
 
 ## Problem
 
@@ -55,6 +55,13 @@ and a fix suggestion. Confirmed candidates enter the review package exactly like
 other reviewer's findings. Jev never writes a finding, an explanation, or a fix by
 itself.
 
+The operator has since asked for the rollout to start smaller: three narrow, cheaply
+measurable triage tasks that need no rule-extraction machinery (CI failure triage,
+reviewer-dispatch scoring, finding/comment verification — Requirements 20-23), then a
+reference-document conformance mode that generalizes the same clause-extraction idea to
+documents governing process rather than only code (Requirements 24-29), and only then
+the full hunk-based rule-conformance mechanism above. `PLAN.md` is phased in that order.
+
 ## Non-goals (this version)
 
 - Jev is not a standalone reviewer and never produces a `findings.json` entry directly.
@@ -74,6 +81,11 @@ itself.
   the keryx repository. keryx is public; both sources are private. The mechanism keeps
   rule content in its own project's `project-skills` tree and loads it at run time
   (Requirement 12).
+- Any of the three early wins (Requirements 20-23) or the reference-document mode
+  (Requirements 24-29) taking an automatic action — a rerun, a merge, a status-check
+  write, a `handled_comments` update, or a posted reply. Every one of them is advisory
+  or feeds the same confirmation pass as the hunk-based mechanism; none of them closes
+  a loop by itself.
 
 ## Users
 
@@ -358,6 +370,127 @@ injected-fetch test discipline.
     holistically, is bounded to 64k tokens of state+questions per request, and every
     finding it contributes was authored by the confirmation pass, not by Jev.
 
+## Additional requirements: early wins, then a reference-document mode
+
+The operator has approved the direction and asked for the rollout order to change:
+front-load the cheapest, most measurable uses of Jev — three narrow triage tasks that
+need no rule-extraction machinery at all — ahead of the hunk-based rule-conformance
+mechanism in Requirements 1-19, and add a second mode that generalizes rule extraction
+to documents that govern process, not only code. `PLAN.md` reflects the new phase
+order (Phase 1 early wins, Phase 2 reference-document mode, Phase 3+ the hunk-based
+mechanism above). Requirements 20-23 below are the early wins; Requirements 24-29 are
+the reference-document mode. Both reuse the Jev client (Requirement 1) and the
+candidate/confirmation-pass split (Requirements 9-10) — nothing here introduces a
+second way for a `noul`/`choice` answer to become an authored artifact.
+
+20. **Early win: CI failure triage (advisory only).** Given a failed CI job's log
+    excerpt and the failing test's name as `state`, a `choice` question with
+    `criteria: ["flaky", "infra", "real-regression"]` asks Jev to pick one, with the
+    per-option probability recorded. The output is advisory text only — "this looks
+    flaky, consider a rerun" or "this looks like a real regression in `<file>`" printed
+    to the console/PR — and never triggers a rerun, a merge decision, or a status-check
+    write by itself. keryx has no existing CI-run-history reader; this requirement adds
+    one narrow read path (a new port following the live/fixture split `GitHubPort`
+    already establishes, `src/commands/review.ts:1120-1134` — `createGhPort`/
+    `createFixturePort`) scoped to fetching one failed job's log and this repository's
+    recent run history for the same job name, nothing broader.
+21. **Early win: reviewer-dispatch scoring is additive, never subtractive.** Given a
+    PR's diff summary (file list, insertion/deletion counts — not the full diff) as
+    `state`, one `noul` question per bundled/project reviewer asks Jev whether that
+    reviewer is warranted. A reviewer already dispatched by an existing deterministic
+    trigger — a matching `metadata.paths`/description glob, or a `stack_requires` tag
+    (`descriptionPathTriggers`/`extractStackRequiresField`,
+    `src/review/reviewers.ts:175-197,256`) — is dispatched regardless of what Jev
+    answers: this requirement can only ADD a reviewer to the round that no path/stack
+    rule already forces, for the case where a reviewer's own trigger is absent
+    (`pathsSource: "none"`, `src/review/reviewers.ts:50`, today meaning "dispatched on
+    every round"). No test may assert a case where a path-forced reviewer's coverage
+    entry is `skipped` because of a low Jev score.
+22. **Early win: finding conformance (support, duplication, severity tier).** For each
+    finding an existing reviewer produced, before it is written to `findings.json`,
+    three Jev questions run against `state = {the cited hunk, the finding's problem
+    text}`: a `noul` question ("is this finding supported by the cited hunk"), a second
+    `noul` question against each other finding already collected this round ("is this a
+    duplicate of finding `<id>`"), and a `choice` question
+    (`criteria: ["blocker","major","minor","info"]`) for severity. Every answer is
+    recorded as an annotation alongside the finding, never as a mutation of it — this
+    is additional signal for the human or the confirmation pass, not a second
+    verification pipeline. It does not replace or bypass `review-verifier`
+    (`src/review/verification.ts`) and never reaches a `confirmed`/`refuted` verdict by
+    itself, on the same rule Requirement 11 already states.
+23. **Early win: does the new commit address this comment?** For each unanswered human
+    PR comment (`unansweredComments` over `PrCommentState.handled_comments`,
+    `src/review/pr-comments.ts:1492`) collected by `keryx review comments collect`
+    (`src/commands/review.ts:984-1039`), a `noul` question with `state = {the comment
+    text, the new commit's diff}` asks whether the comment is now addressed. A
+    high-probability answer is surfaced as a suggestion in the author's per-finding
+    response step — never as an automatic write to `handled_comments` or an automatic
+    reply; `keryx review comments reply` keeps deciding, and posting, exactly as it
+    does today.
+
+24. **Reference-document mode: three state kinds.** A reference document (a rule file,
+    a skill, or a project skill) governs three different kinds of state, and a clause
+    extracted from it (Requirements 4-6's mechanism, extended) is tagged
+    `state_kind: "pr" | "report" | "hunk"`: (1) `pr` — the PR's own description,
+    metadata, and size against a stated budget; (2) `report` — whether one of keryx's
+    OWN reviewers' output follows the document's reviewer contract (every finding
+    carries severity/evidence/location-class, fixed lane order, no praise, pre-existing
+    kept apart); (3) `hunk` — code and test hunks checked against the sibling
+    code-level documents the reference document points to (style patterns, testing
+    conventions such as behaviour-level assertions and no vacuous tests), using the
+    exact same hunk×rule mechanism as Requirements 7-9. A `hunk`-kind clause is not a
+    new mechanism; it is an ordinary Requirement-4 rule whose source happens to be
+    reached by following the reference document's own citations to sibling documents.
+    Illustrative examples only (invented for this document, not quoted from any real
+    file): a `pr`-kind clause might read "the PR body names an explicit out-of-scope
+    list"; a `report`-kind clause might read "every blocker-severity finding names a
+    file and a line"; a `hunk`-kind clause might read "a new test asserts on a return
+    value or an observable side effect, not solely on a mock having been called."
+25. **Reference-document mode: state gathering per clause kind.** `pr`-kind clauses are
+    checked against state gathered through the existing `GitHubPort` abstraction
+    (`resolvePort`/`createGhPort`/`createFixturePort`, `src/commands/review.ts:
+    1120-1134`) — PR title, body (split into named sections the same way the document
+    names them), and diff stats, with `src/review/scope.ts`'s existing drop-reason
+    taxonomy (`lockfile|generated|vendored|snapshot|minified`, `scope.ts:77-87`) reused
+    to exclude mechanical bulk from a size-budget clause the same way the pre-filter
+    already excludes it from review. `report`-kind clauses are checked against an
+    existing review package's own `report.md`/`findings.json`
+    (`ManagedReviewManifest`/`StructuredReviewFinding`, `src/review/types.ts:78-138,
+    351-442`) — no new artifact format, this mode reads what the pipeline already
+    writes. `hunk`-kind clauses reuse Requirement 3's `buildReviewScope` blocks
+    unchanged.
+26. **Reference-document mode: a clause Jev cannot check is recorded, not dropped.** A
+    clause phrased as a live/manual action with no gatherable state to check it against
+    — "verified on a live instance," "the round starts by reading the discussion" —
+    is tagged `checkable: false` with a one-line `reason` at extraction time
+    (Requirement 6's extraction pass), kept in the normalized clause set, reported in
+    coverage as `not_checkable` (never silently omitted, never counted as `0`
+    violations — same "not recorded ≠ 0" discipline as Requirement 16), and never
+    dispatched to Jev. A reference document's conformance report always states how many
+    of its clauses were checkable versus not.
+27. **Reference-document mode: confirmation pass, same shape as Requirement 10.** Every
+    flagged clause (a `pr`/`report`-kind low-conformance answer, or a `hunk`-kind
+    candidate) is handed to the same confirmation pass as Requirement 10, which cites
+    the clause id in its explanation. `hunk`-kind confirmed findings enter
+    `findings.json` exactly as Requirement 11 describes; `pr`/`report`-kind confirmed
+    findings are reported to the author/operator (PR comment or console) and are not
+    forced into `findings.json`'s per-hunk shape, since a PR-body or report-lane
+    violation has no `file`/`line` to anchor to.
+28. **Reference-document mode: CLI surface.** `keryx review conform --ref <doc>
+    [--pr <n> | --report <path> | --diff <ref>] [--explain] [--json]` selects which
+    clause kinds run from what was supplied: `--pr` runs `pr`-kind (and, combined with
+    a diff, `hunk`-kind) clauses against that pull request via `GitHubPort`; `--report`
+    runs `report`-kind clauses against an existing review package's report/findings
+    files; `--diff` alone runs `hunk`-kind clauses only. Output reports, per clause:
+    kind, checkable/not-checkable, and (when checkable) the Jev answer and, with
+    `--explain`, the confirmation-pass result.
+29. **Reference-document mode: TUI conformance view.** A view (extending the sidebar/
+    modal of Requirement 17) shows, per loaded reference document: clause counts by
+    kind and by checkable/not-checkable, the last PR's `pr`-kind conformance, the last
+    review package's `report`-kind conformance, and the current diff's `hunk`-kind
+    conformance, with drill-down into every flagged clause and its confirmation-pass
+    explanation.
+
 ## Success criteria
 
 - A project with `review.jev.enabled: true` and at least one applicable rule (bundled
@@ -373,6 +506,14 @@ injected-fetch test discipline.
   any team's own checklist skills) as a keryx project skill and see it participate in a
   Jev triage round without keryx's own repository gaining a single line of that
   project's rule text.
+- CI failure triage (Requirement 20) never reruns a job or writes a status check by
+  itself — its output is console/PR-comment advisory text only, and this is asserted by
+  a test, not just stated.
+- Reviewer-dispatch scoring (Requirement 21) has zero test cases where a reviewer with a
+  matching path/stack trigger is skipped because of a low Jev score.
+- A reference document's conformance report (Requirement 26) always states a
+  checkable/not-checkable split — a report that omits this split is a bug, not a
+  formatting choice.
 
 ## Risks / honest limits
 
@@ -395,3 +536,13 @@ injected-fetch test discipline.
   client for `POST /api/v1/systemone`. This PRD proposes the shape (Requirement 1) but
   does not claim ownership of a single shared module — see PLAN.md's Open Questions for
   the decision this needs from the operator.
+- **CI failure triage has no historical prior of its own to launch with.** keryx has no
+  existing CI-run-history reader (Requirement 20 adds the first narrow one), so a
+  flaky/infra/real-regression classifier ships with no measured accuracy on this
+  repository's own history until PLAN.md's evaluation phase runs it against real reruns.
+- **Reference-document mode is the least mechanical of everything in this PRD.**
+  Deciding whether a PR body names an out-of-scope list, or whether a report's lanes are
+  in the right order, is closer to the kind of judgement Jev's vendor says it is not
+  built for than a styling checklist bullet is. Requirement 26's checkable/not-checkable
+  split and Requirement 27's confirmation pass exist specifically because this mode is
+  more likely to need a human or a strong model to have the last word, not less.
