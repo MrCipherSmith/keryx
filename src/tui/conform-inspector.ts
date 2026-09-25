@@ -50,6 +50,19 @@ export interface ConformSetupRead {
 
 export type ConformClauseStatus = "satisfied" | "likely-violated" | "not-checkable" | "not-evaluated";
 
+/** Flow 326, AC4: one aggregated hunk location + its Jev probability, for a hunk-kind clause row's worst hunk / further violations. */
+export interface ConformHunkLocation {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+export interface ConformAggregateHunk {
+  readonly location: ConformHunkLocation;
+  readonly probability: number;
+}
+
+/** Flow 326, AC4: one row per CLAUSE — a hunk-kind clause carries how many hunks were judged/below threshold, the worst hunk, and up to `--max-hunks` further violations, never one row per hunk. */
 export interface ConformClauseRow {
   readonly clause_id: string;
   readonly state_kind: "pr" | "report" | "hunk";
@@ -58,6 +71,10 @@ export interface ConformClauseRow {
   readonly reason?: string;
   readonly evidence: readonly string[];
   readonly explanation?: string;
+  readonly hunksJudged?: number;
+  readonly hunksBelowThreshold?: number;
+  readonly worst?: ConformAggregateHunk;
+  readonly furtherViolations?: readonly ConformAggregateHunk[];
 }
 
 export type ConformRunOutcome =
@@ -128,9 +145,16 @@ export function formatConformSetupLines(
   return lines;
 }
 
+function locationLabel(loc: ConformHunkLocation): string {
+  return `${loc.path}:${loc.startLine}-${loc.endLine}`;
+}
+
 function statusSummary(row: ConformClauseRow): string {
   if (row.status === "not-checkable") return `not checkable — ${row.reason ?? "no reason recorded"}`;
   if (row.status === "not-evaluated") return "not evaluated — no state supplied this run";
+  if (row.hunksJudged !== undefined && row.hunksJudged > 0) {
+    return `${STATUS_LABEL[row.status]} (${row.hunksBelowThreshold ?? 0}/${row.hunksJudged} hunks below threshold)`;
+  }
   if (row.probability === undefined) return STATUS_LABEL[row.status];
   return `${STATUS_LABEL[row.status]} (${pct(row.probability)})`;
 }
@@ -163,10 +187,18 @@ export function flattenConformClauses(clauses: readonly ConformClauseRow[]): rea
   return (["pr", "report", "hunk"] as const).flatMap((kind) => clauses.filter((c) => c.state_kind === kind));
 }
 
-/** AC8: a detail view with evidence and the explanation. */
+/** AC8/flow 326 AC4: a detail view with evidence, the worst hunks (hunk-kind clauses), and the explanation. */
 export function formatConformDetailLines(row: ConformClauseRow | undefined): string[] {
   if (row === undefined) return ["No clause selected."];
   const lines: string[] = [`${row.clause_id} (${row.state_kind}) — ${statusSummary(row)}`, ""];
+  if (row.worst !== undefined) {
+    lines.push(`worst hunk: ${locationLabel(row.worst.location)} (${pct(row.worst.probability)})`);
+    if (row.furtherViolations !== undefined && row.furtherViolations.length > 0) {
+      lines.push("further violating hunks:");
+      for (const v of row.furtherViolations) lines.push(`  - ${locationLabel(v.location)} (${pct(v.probability)})`);
+    }
+    lines.push("");
+  }
   if (row.evidence.length > 0) {
     lines.push("evidence:");
     for (const fact of row.evidence) lines.push(`  - ${fact}`);

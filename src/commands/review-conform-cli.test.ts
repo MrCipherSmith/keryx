@@ -14,6 +14,10 @@ import { CONFORM_RECENTS_PATH } from "../review/conform-report";
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures", "conform");
 const REF_PATH = path.join(FIXTURES_DIR, "invented-ref.md");
 const REPORT_DIR = path.join(FIXTURES_DIR, "report-package");
+// Flow 326, AC5: a reference document with two hunk-kind clauses, scored
+// against an invented diff with >=10 hunks (12 files, one hunk each).
+const MANY_HUNKS_DIR = path.join(FIXTURES_DIR, "many-hunks");
+const MANY_HUNKS_REF = path.join(MANY_HUNKS_DIR, "invented-ref.md");
 const ORIGINAL_CWD = process.cwd();
 const ORIGINAL_KEY = process.env.OPENROUTER_API_KEY;
 const realLog = console.log;
@@ -169,6 +173,122 @@ describe("AC6: keryx review conform --report — report-kind clauses only", () =
     expect(byId.get("change-limits-1")?.status).toBe("not-evaluated");
     expect(byId.get("hunks-1")?.status).toBe("not-evaluated");
     expect(byId.get("ownership-1")?.status).toBe("not-checkable");
+  });
+});
+
+describe("Flow 326, AC1/AC5: the aggregated report fits a human read for a large PR (>=10 hunks)", () => {
+  test("one row group per clause — never one row per hunk x clause — and the report stays small", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR]);
+
+    const text = output();
+    // 3 clauses total (1 pr-kind, 2 hunk-kind), scored against 12 hunks each
+    // for the hunk-kind clauses — the OLD per-hunk-x-clause report would have
+    // printed at least 12 * 2 = 24 clause rows for the hunk clauses alone;
+    // this one prints exactly 3 (one row per clause id).
+    const clauseRows = text.split("\n").filter((line) => /^- \[/.test(line));
+    expect(clauseRows).toHaveLength(3);
+    expect(clauseRows.some((l) => l.includes("change-limits-1"))).toBe(true);
+    expect(clauseRows.some((l) => l.includes("hunks-1"))).toBe(true);
+    expect(clauseRows.some((l) => l.includes("hunks-2"))).toBe(true);
+
+    expect(text).toContain("hunks judged: 12, below threshold: 12");
+    expect(text).toContain("worst hunk:");
+    expect(text).toContain("further violating hunks:");
+
+    // Test-pinned line bound (AC5): this fixture's rendered report is exactly
+    // this many lines — far fewer than one row per hunk x clause would be.
+    const lineCount = text.split("\n").filter((l) => l.length > 0).length;
+    expect(lineCount).toBeLessThanOrEqual(35);
+  });
+
+  test("--max-hunks bounds how many further violating hunk locations are shown per clause", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--max-hunks", "1", "--json"]);
+
+    const parsed = JSON.parse(output()) as { clauses: readonly { clause_id: string; furtherViolations?: readonly unknown[] }[] };
+    const hunks1 = parsed.clauses.find((c) => c.clause_id === "hunks-1");
+    expect(hunks1?.furtherViolations).toHaveLength(1);
+  });
+
+  test("--max-hunk-calls truncates the hunks judged and the report names which clauses were affected", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    // 2 hunk-kind clauses * 12 hunks = 24 questions; a budget of 6 keeps floor(6/2) = 3 hunks.
+    await reviewCommand([
+      "conform",
+      "--ref",
+      MANY_HUNKS_REF,
+      "--pr",
+      "998",
+      "--fixtures",
+      MANY_HUNKS_DIR,
+      "--max-hunk-calls",
+      "6",
+      "--json",
+    ]);
+
+    const parsed = JSON.parse(output()) as {
+      clauses: readonly { clause_id: string; hunksJudged?: number }[];
+      hunkBudget?: { maxHunkCalls: number; totalHunks: number; hunksJudged: number; hunksSkipped: number; truncatedClauses: readonly string[] };
+    };
+    const hunks1 = parsed.clauses.find((c) => c.clause_id === "hunks-1");
+    expect(hunks1?.hunksJudged).toBe(3);
+    expect(parsed.hunkBudget).toEqual({
+      maxHunkCalls: 6,
+      totalHunks: 12,
+      hunksJudged: 3,
+      hunksSkipped: 9,
+      truncatedClauses: ["hunks-1", "hunks-2"],
+    });
+  });
+
+  test("--max-hunk-calls truncation is never silent in the text report", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--max-hunk-calls", "6"]);
+
+    const text = output();
+    expect(text).toContain("hunk budget:");
+    expect(text).toContain("judged 3/12 hunk(s)");
+    expect(text).toContain("9 hunk(s) skipped for clause(s): hunks-1, hunks-2");
+  });
+
+  test("--detail prints the full per-hunk breakdown in the text report", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--detail"]);
+
+    const text = output();
+    expect(text).toContain("detail (--detail):");
+    // Every one of the 12 hunks for hunks-1 is listed under --detail.
+    for (let i = 1; i <= 12; i += 1) {
+      expect(text).toContain(`module${i}.ts`);
+    }
+  });
+
+  test("--json nests the full per-hunk detail under each clause, regardless of --detail", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--json"]);
+
+    const parsed = JSON.parse(output()) as { clauses: readonly { clause_id: string; hunks?: readonly unknown[] }[] };
+    const hunks1 = parsed.clauses.find((c) => c.clause_id === "hunks-1");
+    expect(hunks1?.hunks).toHaveLength(12);
   });
 });
 

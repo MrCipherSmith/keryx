@@ -3416,6 +3416,7 @@ keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/
 keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
                      [--repo <owner/repo>] [--explain] [--threshold <0..1>]
                      [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+                     [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
@@ -4036,6 +4037,35 @@ keryx review conform --ref docs/pipeline-contribution-policy.md --pr 999 --json
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
 | `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), every Jev call (`jev-response.json`), and (with `--explain`) the explanation pass (`explain-response.json`) — no real `gh` call, no real network. |
 | `--json` | Prints `{ref, target, threshold, clauses, usage}` instead of the human-readable report. |
+| `--max-hunks <n>` | Flow 326. How many further violating hunk locations a hunk-kind clause's row shows, beyond the single worst one. Default `3`. |
+| `--max-hunk-calls <n>` | Flow 326. Caps hunk × clause Jev questions for the WHOLE run — each judged hunk costs one question per hunk-kind clause, so the region budget is `floor(--max-hunk-calls / hunk-kind-clause-count)`. Default `40`. When it truncates, the report names which clauses were judged on a subset and how many hunks were skipped — never silently. |
+| `--detail` | Flow 326. Prints the full per-hunk breakdown (every judged hunk's status/location/probability) under each hunk-kind clause's row in the TEXT report. `--json` always nests this detail, with or without `--detail`. |
+
+**One row per clause, not one row per hunk × clause (flow 326).** A live run
+of `keryx review conform` against PR #712 of this repository, before this
+flow, printed 271 rows — one per (hunk, hunk-kind clause) pair, unreadable
+for any PR with more than a handful of hunks. The report is now aggregated
+per clause: a hunk-kind clause's row names how many hunks were judged and how
+many fell below `--threshold`, the single worst hunk (its location and Jev
+probability), and up to `--max-hunks` further violating hunk locations —
+`likely-violated` when ANY judged hunk falls below threshold, `satisfied`
+only when EVERY judged hunk is at or above it. A pr/report-kind clause (which
+was already one verdict, not one per hunk) is unaffected. The full per-hunk
+detail — every judged hunk, not just the worst and the further violations
+shown — always stays available: nested under each clause's `hunks` field in
+`--json`, or printed inline with `--detail` in the text report.
+
+```text
+## hunk
+
+- [likely violated] hunks-1
+    hunks judged: 12, below threshold: 12
+    worst hunk: src/invented/module1.ts:1-3 (20%)
+    further violating hunks:
+      - src/invented/module2.ts:1-3 (20%)
+      - src/invented/module3.ts:1-3 (20%)
+      - src/invented/module4.ts:1-3 (20%)
+```
 
 **Opt-in, and named as a privacy decision.** Disabled by default. The
 document's clauses, PR text, report and diff are sent to Jev after secret
@@ -4136,6 +4166,25 @@ workflow). When that happens the deterministic override is withheld — which
 one of them is "this job" cannot be told apart from the name alone — and the
 run is only mentioned as an advisory-only evidence line, the same degrade
 path a missing, skipped, or unreadable job already gets.
+
+**A third known signal gap (flow 326, AC6): pagination can hide the triaged
+run's own entry from the same-head list it is compared against.**
+`runsForHeadSha` is bounded/paginated (`-L 10` in the live `gh run list`
+adapter) and can come back without an entry for the run actually being
+triaged at all — just missing from that one page. The old comparison read
+that as "every success in the list is later than this run", which could
+credit a run that in fact ran BEFORE the triaged one (only missing from this
+particular page) as same-head rerun evidence. With no baseline timestamp for
+the triaged run, "later" cannot be answered honestly, so the whole same-head
+signal is skipped rather than guessed whenever this happens — no override,
+no advisory evidence line from a later-passed run, only a dedicated
+`same head: other run(s) ... were found, but this run's own entry was not
+among them (pagination) — cannot tell whether they are later, so no override
+applied.` line. This is a gap in COVERAGE, not correctness: a triaged run
+that genuinely did have a later, verified same-head pass can go unrecognized
+if pagination happens to drop its own entry from the page fetched, exactly
+the same shape the job-name-ambiguity gap above has (the signal degrades to
+"no evidence" rather than to a wrong answer).
 
 **Measured accuracy (flow 307, AC6) — honestly, whatever it is.** A live run
 of `--eval` against the real runs of the eight cases in

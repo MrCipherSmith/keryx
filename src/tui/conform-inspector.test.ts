@@ -35,6 +35,20 @@ const CLAUSES: readonly ConformClauseRow[] = [
   { clause_id: "process-1", state_kind: "pr", status: "not-checkable", reason: "no artefact records this", evidence: [] },
 ];
 
+// Flow 326, AC4: an aggregated hunk-kind row — one per clause, carrying how
+// many hunks were judged/below threshold, the worst hunk, and further
+// violations, never one row per hunk.
+const HUNK_AGGREGATE_ROW: ConformClauseRow = {
+  clause_id: "hunks-2",
+  state_kind: "hunk",
+  status: "likely-violated",
+  evidence: [],
+  hunksJudged: 5,
+  hunksBelowThreshold: 2,
+  worst: { location: { path: "src/invented/example.ts", startLine: 10, endLine: 14 }, probability: 0.12 },
+  furtherViolations: [{ location: { path: "src/invented/other.ts", startLine: 3, endLine: 6 }, probability: 0.31 }],
+};
+
 test("isConformCommand matches only the exact /conform token", () => {
   expect(isConformCommand("/conform")).toBe(true);
   expect(isConformCommand("/conform extra text")).toBe(true);
@@ -89,6 +103,25 @@ test("formatConformDetailLines: no selection, evidence, and a labelled advisory 
   const withExplanation = formatConformDetailLines(CLAUSES[1]).join("\n");
   expect(withExplanation).toContain("ADVISORY");
   expect(withExplanation).toContain("Looks violated because X.");
+});
+
+// Flow 326, AC4: the aggregated clause list shows one row per clause — a
+// hunk-kind clause's row names hunks judged/below threshold, never a
+// separate row per hunk.
+test("formatConformClauseLines: a hunk-kind aggregate row shows hunks judged/below threshold, not a per-hunk row", () => {
+  const lines = formatConformClauseLines([HUNK_AGGREGATE_ROW], 0);
+  expect(lines.some((l) => l.includes("hunks-2") && l.includes("likely violated") && l.includes("2/5 hunks below threshold"))).toBe(
+    true,
+  );
+});
+
+// Flow 326, AC4: the detail view lists the worst hunk (with evidence/location
+// + probability) and further violating hunks.
+test("formatConformDetailLines: a hunk-kind row's detail names the worst hunk and further violations", () => {
+  const detail = formatConformDetailLines(HUNK_AGGREGATE_ROW).join("\n");
+  expect(detail).toContain("worst hunk: src/invented/example.ts:10-14 (12%)");
+  expect(detail).toContain("further violating hunks:");
+  expect(detail).toContain("src/invented/other.ts:3-6 (31%)");
 });
 
 otuiTest("AC8: pick a doc, pick a target, run, and view clauses grouped by kind with a detail", async () => {

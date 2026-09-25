@@ -4,12 +4,17 @@
 import { describe, expect, test } from "bun:test";
 import { applyClauseTags, extractReferenceClauses } from "./conform-clauses";
 import {
+  aggregateConformVerdicts,
   batchConformItems,
+  boundHunkRegions,
   CONFORM_TOKEN_BUDGET,
   DEFAULT_CONFORM_THRESHOLD,
+  DEFAULT_MAX_HUNK_CALLS,
+  DEFAULT_MAX_HUNKS,
   evaluatedVerdict,
   notCheckableVerdict,
   notEvaluatedVerdict,
+  type ConformHunkLocation,
 } from "./conform-jev";
 
 function clause(text: string): ReturnType<typeof applyClauseTags>[number] {
@@ -101,5 +106,149 @@ describe("AC6: verdict computation", () => {
     const c = clause("A pr-kind rule.");
     const verdict = evaluatedVerdict(c, { factLines: ["fact"], decisive: { satisfied: false, reason: "over budget" } }, 0.7);
     expect(verdict.decisive).toEqual({ satisfied: false, reason: "over budget" });
+  });
+
+  test("evaluatedVerdict stamps the given hunk location onto the verdict", () => {
+    const c = clause("A hunk-kind rule.");
+    const loc: ConformHunkLocation = { path: "src/x.ts", startLine: 1, endLine: 3 };
+    const verdict = evaluatedVerdict(c, { factLines: [] }, 0.9, DEFAULT_CONFORM_THRESHOLD, loc);
+    expect(verdict.location).toEqual(loc);
+  });
+});
+
+function hunkClause(text: string, clauseId = "h-1"): ReturnType<typeof applyClauseTags>[number] {
+  const raw = extractReferenceClauses(`# H\n\n- ${text} [state:hunk]`);
+  const tagged = applyClauseTags(raw, new Map())[0]!;
+  return { ...tagged, clause_id: clauseId };
+}
+
+function hunkVerdict(clauseId: string, probability: number, location: ConformHunkLocation, threshold = DEFAULT_CONFORM_THRESHOLD) {
+  return evaluatedVerdict(hunkClause("A hunk rule.", clauseId), { factLines: [] }, probability, threshold, location);
+}
+
+describe("Flow 326, AC2: aggregateConformVerdicts — one row per clause, not one row per hunk × clause", () => {
+  test("a not-checkable clause passes through unchanged", () => {
+    const raw = extractReferenceClauses("# H\n\n- Manual step. [not-checkable: no artefact]");
+    const tagged = applyClauseTags(raw, new Map())[0]!;
+    const [agg] = aggregateConformVerdicts([notCheckableVerdict(tagged)]);
+    expect(agg!.status).toBe("not-checkable");
+    expect(agg!.reason).toBe("no artefact");
+    expect(agg!.hunksJudged).toBe(0);
+  });
+
+  test("empty set: a clause whose kind has no state supplied this run reads not-evaluated, never per-hunk fields", () => {
+    const c = clause("A pr-kind rule.");
+    const [agg] = aggregateConformVerdicts([notEvaluatedVerdict(c)]);
+    expect(agg!.status).toBe("not-evaluated");
+    expect(agg!.hunksJudged).toBe(0);
+    expect(agg!.worst).toBeUndefined();
+  });
+
+  test("a pr/report-kind clause (single verdict, no location) passes through with its own probability", () => {
+    const c = clause("A pr-kind rule.");
+    const verdict = evaluatedVerdict(c, { factLines: ["fact"] }, 0.83);
+    const [agg] = aggregateConformVerdicts([verdict]);
+    expect(agg!.probability).toBe(0.83);
+    expect(agg!.hunksJudged).toBe(0);
+    expect(agg!.worst).toBeUndefined();
+  });
+
+  test("a hunk-kind clause: satisfied only when EVERY judged hunk is at/above threshold", () => {
+    const verdicts = [
+      hunkVerdict("h-1", 0.9, { path: "a.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-1", 0.6, { path: "b.ts", startLine: 3, endLine: 4 }),
+    ];
+    const [agg] = aggregateConformVerdicts(verdicts);
+    expect(agg!.status).toBe("satisfied");
+    expect(agg!.hunksJudged).toBe(2);
+    expect(agg!.hunksBelowThreshold).toBe(0);
+  });
+
+  test("a hunk-kind clause: likely-violated when ANY retained hunk falls below threshold, worst hunk is the lowest probability", () => {
+    const verdicts = [
+      hunkVerdict("h-1", 0.9, { path: "a.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-1", 0.1, { path: "b.ts", startLine: 3, endLine: 4 }),
+      hunkVerdict("h-1", 0.3, { path: "c.ts", startLine: 5, endLine: 6 }),
+    ];
+    const [agg] = aggregateConformVerdicts(verdicts);
+    expect(agg!.status).toBe("likely-violated");
+    expect(agg!.hunksJudged).toBe(3);
+    expect(agg!.hunksBelowThreshold).toBe(2);
+    expect(agg!.worst?.location).toEqual({ path: "b.ts", startLine: 3, endLine: 4 });
+    expect(agg!.worst?.probability).toBe(0.1);
+    // "c.ts" (0.3) is the only further violation, below threshold and not the worst.
+    expect(agg!.furtherViolations).toEqual([{ location: { path: "c.ts", startLine: 5, endLine: 6 }, probability: 0.3 }]);
+  });
+
+  test("ties: a probability exactly at threshold reads satisfied (matches evaluatedVerdict's own >= comparison)", () => {
+    const verdicts = [hunkVerdict("h-1", DEFAULT_CONFORM_THRESHOLD, { path: "a.ts", startLine: 1, endLine: 2 })];
+    const [agg] = aggregateConformVerdicts(verdicts);
+    expect(agg!.status).toBe("satisfied");
+    expect(agg!.hunksBelowThreshold).toBe(0);
+  });
+
+  test("furtherViolations is capped at maxHunks, most severe (lowest probability) first, excluding the worst", () => {
+    const verdicts = [
+      hunkVerdict("h-1", 0.05, { path: "worst.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-1", 0.1, { path: "a.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-1", 0.2, { path: "b.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-1", 0.3, { path: "c.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-1", 0.4, { path: "d.ts", startLine: 1, endLine: 2 }),
+    ];
+    const [agg] = aggregateConformVerdicts(verdicts, 2);
+    expect(agg!.worst?.location.path).toBe("worst.ts");
+    expect(agg!.furtherViolations.map((v) => v.location.path)).toEqual(["a.ts", "b.ts"]);
+  });
+
+  test("multiple clauses keep their own groups, in first-encountered order", () => {
+    const verdicts = [
+      hunkVerdict("h-1", 0.9, { path: "a.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-2", 0.1, { path: "b.ts", startLine: 1, endLine: 2 }),
+      hunkVerdict("h-1", 0.8, { path: "c.ts", startLine: 1, endLine: 2 }),
+    ];
+    const aggregates = aggregateConformVerdicts(verdicts);
+    expect(aggregates.map((a) => a.clause_id)).toEqual(["h-1", "h-2"]);
+    expect(aggregates[0]!.hunksJudged).toBe(2);
+    expect(aggregates[1]!.hunksJudged).toBe(1);
+  });
+
+  test("the default max-hunks constant is 3", () => {
+    expect(DEFAULT_MAX_HUNKS).toBe(3);
+  });
+});
+
+describe("Flow 326, AC3: boundHunkRegions — caps hunk × clause questions per run", () => {
+  test("under budget: every region is kept, nothing skipped", () => {
+    const result = boundHunkRegions(["r1", "r2", "r3"], 4, 40);
+    expect(result.regions).toEqual(["r1", "r2", "r3"]);
+    expect(result.skippedRegions).toBe(0);
+    expect(result.totalRegions).toBe(3);
+  });
+
+  test("over budget: a deterministic prefix is kept, the rest counted as skipped", () => {
+    const regions = Array.from({ length: 10 }, (_, i) => `r${i}`);
+    // 4 clauses * 10 regions = 40 questions; budget 12 -> floor(12/4) = 3 regions kept.
+    const result = boundHunkRegions(regions, 4, 12);
+    expect(result.regions).toEqual(["r0", "r1", "r2"]);
+    expect(result.skippedRegions).toBe(7);
+    expect(result.totalRegions).toBe(10);
+  });
+
+  test("no hunk-kind clauses at all: nothing to bound, every region kept", () => {
+    const regions = ["r1", "r2"];
+    const result = boundHunkRegions(regions, 0, 40);
+    expect(result.regions).toEqual(regions);
+    expect(result.skippedRegions).toBe(0);
+  });
+
+  test("no regions: nothing to bound", () => {
+    const result = boundHunkRegions([], 5, 40);
+    expect(result.regions).toEqual([]);
+    expect(result.skippedRegions).toBe(0);
+    expect(result.totalRegions).toBe(0);
+  });
+
+  test("the default max-hunk-calls constant is 40", () => {
+    expect(DEFAULT_MAX_HUNK_CALLS).toBe(40);
   });
 });
