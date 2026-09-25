@@ -1,6 +1,4 @@
 {
-  "agents": [
-    "mobx-code-auditor",
-    "mobx-build-fixer"
-  ]
+  "agents": [],
+  "note": "No generated agent pair by design, matching W2's original decision: mobx has no agentProfile in pack.json, so `agents generate --stack mobx` is refused (agents-catalog-commands.test.ts pins this). code-mobx-store-review already covers MobX-specific review, and ts-js-node/react build-fix already cover the build-failure case, so a generated mobx-code-auditor/mobx-build-fixer pair would duplicate existing coverage rather than add any. mobx's own pack.json stability is still \"stable\" -- this is about the generated-agent layer only, not the skills."
 }

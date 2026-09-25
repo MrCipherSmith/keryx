@@ -24,28 +24,5 @@
     "review": [],
     "build-fix": [],
     "migrate": []
-  },
-  "agentProfile": {
-    "displayName": "MobX",
-    "auditFocus": [
-      "an observable field or collection read or written outside an `action`/`@action.bound` method with `enforceActions` on, or a direct mutation that bypasses the store's own action boundary",
-      "a state mutation after an `await` inside an async action that is not wrapped in `runInAction`",
-      "a component that reads observable state but is not wrapped in `observer`, so it silently stops re-rendering on change",
-      "an `autorun`/`reaction`/`when` created without its disposer stored and called in the owning store's `dispose()`, or component-owned reactions started in render instead of an effect",
-      "a computed value recomputed by hand in a component or by calling a store method on every render instead of a `@computed` getter",
-      "an observable array/object spread or index-mutated as if it were a plain value in a way that breaks MobX's own array/map/set API (`.replace()`, `.set()`, `.remove()`)"
-    ],
-    "buildCommands": [
-      "the project's type-check script (e.g. tsc --noEmit, or its package.json equivalent)",
-      "the project's lint script (`@typescript-eslint/explicit-member-accessibility` and any mobx-specific eslint plugin configured)",
-      "the project's test script covering store/observer behavior",
-      "the project's bundler build (Vite/webpack/Next.js production build)"
-    ],
-    "fixGuardrails": [
-      "never mutate observable state outside an action to silence an `enforceActions` warning; wrap the mutation in the store's own action instead",
-      "never remove `observer` from a component to stop a re-render bug instead of finding the actual stale-dependency or mutation cause",
-      "never delete or loosen a store/reaction test assertion to make it pass",
-      "never introduce a second, ad-hoc state container (plain useState mirroring store state) to route around a reactivity bug instead of fixing the store"
-    ]
   }
 }

@@ -470,34 +470,40 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    // Flow 318 (Wave 4 batch 2, T13-T14): angular, mobx, and nestjs cleared
-    // the honest trials=10 gate and each ship a generated pair alongside
-    // go/python; nextjs-nuxt and vue stay experimental (see their own
-    // agent-refs.json `note`), same as ts-js-node/react from batch 1.
+    // Flow 318 (Wave 4 batch 2, T13-T14, revised in R1 review PR #719): angular
+    // and nestjs cleared the honest trials=10 gate and ship generated
+    // personas alongside go/python — angular gets both (its skills.review
+    // and skills["build-fix"] are both non-empty), nestjs gets ONLY a
+    // build-fixer (skills.review is empty; review-backend already covers
+    // backend review, and the generator only produces an auditor when
+    // skills.review is non-empty, R1 M2). mobx also clears the gate but
+    // deliberately carries no `agentProfile` at all (R1 M1 — its ground is
+    // already covered by code-mobx-store-review and ts-js-node/react
+    // build-fix), so it contributes nothing here. nextjs-nuxt and vue stay
+    // experimental (see their own agent-refs.json `note`), same as
+    // ts-js-node/react from batch 1.
     expect(generatedNames).toEqual([
       "angular-build-fixer",
       "angular-code-auditor",
       "go-build-fixer",
       "go-code-auditor",
-      "mobx-build-fixer",
-      "mobx-code-auditor",
       "nestjs-build-fixer",
-      "nestjs-code-auditor",
       "python-build-fixer",
       "python-code-auditor",
     ]);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: zero problems (python, go, angular, mobx, nestjs are gate-cleared, flow 318)", () => {
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (python, go, angular, nestjs generate; mobx and nestjs's auditor deliberately don't, flow 318)", () => {
     // Flow 317: python and go are the real, on-disk "stable" packs after the
     // trials=10 honest DeepSeek judge gate run, each with a generated agent
     // pair on disk whose gate status the default (non-stubbed) resolver
-    // checks for real. Flow 318 (Wave 4 batch 2) adds angular, mobx, and
-    // nestjs to that same real, on-disk "stable" set. ts-js-node stays
-    // "experimental" (its pair removed in flow 317) and react/nextjs-nuxt/
-    // vue stay "experimental" (react never had a pair; nextjs-nuxt and vue
-    // failed this flow's own honest gate run), so none of those four
-    // contribute anything here either way.
+    // checks for real. Flow 318 (Wave 4 batch 2) adds angular (full pair)
+    // and nestjs (build-fixer only, R1 M2) to that same real, on-disk
+    // "stable" set; mobx clears the gate too but carries no agentProfile at
+    // all (R1 M1). ts-js-node stays "experimental" (its pair removed in
+    // flow 317) and react/nextjs-nuxt/vue stay "experimental" (react never
+    // had a pair; nextjs-nuxt and vue failed this flow's own honest gate
+    // run), so none of those four contribute anything here either way.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
@@ -512,10 +518,7 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       "angular-code-auditor",
       "go-build-fixer",
       "go-code-auditor",
-      "mobx-build-fixer",
-      "mobx-code-auditor",
       "nestjs-build-fixer",
-      "nestjs-code-auditor",
       "python-build-fixer",
       "python-code-auditor",
     ]);

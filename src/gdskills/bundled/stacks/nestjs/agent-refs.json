@@ -1,6 +1,4 @@
 {
-  "agents": [
-    "nestjs-code-auditor",
-    "nestjs-build-fixer"
-  ]
+  "agents": ["nestjs-build-fixer"],
+  "note": "No nestjs-code-auditor: pack.json's skills.review is empty (review-backend already covers backend review), and the generator only produces an auditor when skills.review is non-empty (R1 review, PR #719, M2)."
 }

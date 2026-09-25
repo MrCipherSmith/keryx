@@ -184,10 +184,17 @@ describe("keryx agents verify", () => {
   // (`no-ts-ignore-suppression` passRate 0.6 < 0.8 at the higher trial
   // count — the marginal-at-the-floor fragility flow 316 review round 1
   // predicted) and its pair was removed; `react` stays `experimental` and
-  // ships none. The real, un-stubbed CLI path reports zero problems across
-  // the whole catalog, and exactly those four generated agent names are
-  // present.
-  test("the real bundled catalog verifies ok with zero problems (python and go are gate-cleared, flow 317)", async () => {
+  // ships none. Flow 318 (Wave 4 batch 2) adds `angular` (both auditor and
+  // fixer — its skills.review and skills["build-fix"] are both non-empty)
+  // and `nestjs` (fixer ONLY — skills.review is empty, review-backend
+  // already covers backend review, and the generator only produces an
+  // auditor when skills.review is non-empty, R1 review PR #719 M2). `mobx`
+  // clears the gate too but deliberately carries no `agentProfile` at all
+  // (R1 review PR #719 M1 — code-mobx-store-review/ts-js-node+react
+  // build-fix already cover its ground), so it contributes nothing here.
+  // The real, un-stubbed CLI path reports zero problems across the whole
+  // catalog, and exactly those seven generated agent names are present.
+  test("the real bundled catalog verifies ok with zero problems (python, go, angular, nestjs are gate-cleared with a generated pair; flow 318)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -202,7 +209,15 @@ describe("keryx agents verify", () => {
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
+    expect(generatedNames).toEqual([
+      "angular-build-fixer",
+      "angular-code-auditor",
+      "go-build-fixer",
+      "go-code-auditor",
+      "nestjs-build-fixer",
+      "python-build-fixer",
+      "python-code-auditor",
+    ]);
   });
 
   test("narrows to one agent by name", async () => {
@@ -303,7 +318,12 @@ describe("keryx agents generate", () => {
         family: "language",
         modules: [],
         stability: "stable",
-        skills: { review: ["fixture-skill"], "build-fix": [] },
+        // R1 review, PR #719 (M2): both buckets must be non-empty here — the
+        // generator now omits a persona entirely when its matching skill
+        // bucket is empty, and several tests below (symlink refusal on the
+        // fixer's own target, "writing both generated files") depend on
+        // both the auditor AND the fixer actually being generated.
+        skills: { review: ["fixture-skill"], "build-fix": ["fixture-skill"] },
         agentProfile: {
           displayName: "Fixture Lang",
           auditFocus: ["fixture risk pattern"],
@@ -535,7 +555,12 @@ describe("keryx agents generate — gate enforcement on fixture packs (flow 314 
           family: "language",
           modules: [],
           stability,
-          skills: { review: ["fixture-skill"] },
+          // R1 review, PR #719 (M2): both buckets non-empty so every test in
+          // this describe block that expects a full auditor+fixer pair
+          // (byte-identical regeneration, symlink refusal on the fixer's own
+          // target) still has both to work with — the generator now omits a
+          // persona entirely when its matching bucket is empty.
+          skills: { review: ["fixture-skill"], "build-fix": ["fixture-skill"] },
           agentProfile: {
             displayName: "Fixture Lang",
             auditFocus: ["risk one"],

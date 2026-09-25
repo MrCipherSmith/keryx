@@ -427,7 +427,11 @@ describe("stack pack layout (negative fixtures — proving the checks above actu
       );
       const pack = readPackJson(packDir);
       expect(pack.extends).toBeDefined();
-      expect(existsSync(path.join(STACKS_ROOT, pack.extends!))).toBe(false);
+      const ids = extendsList(pack);
+      expect(ids.length).toBeGreaterThan(0);
+      for (const id of ids) {
+        expect(existsSync(path.join(STACKS_ROOT, id))).toBe(false);
+      }
     } finally {
       cleanup();
     }
