@@ -1,0 +1,42 @@
+{
+  "id": "c-cpp",
+  "family": "language",
+  "modules": ["c-cpp-rules", "c-cpp-skills"],
+  "detectionMarkers": ["c-cpp"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 337, Wave 4 batch 5"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["c-cpp-implementation"],
+    "test": ["c-cpp-testing"],
+    "review": ["c-cpp-code-review"],
+    "build-fix": ["c-cpp-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "C / C++",
+    "auditFocus": [
+      "raw `new`/`delete` or manual `malloc`/`free` where RAII/a smart pointer (`unique_ptr`/`shared_ptr`) already fits the ownership model",
+      "a pointer or reference returned to, or captured from, a local/stack-destroyed object (use-after-free / dangling reference)",
+      "a container iterator or pointer used after the container it points into was resized, erased from, or reallocated",
+      "an unchecked `malloc`/`new` return, or a missing `free`/destructor on an error/early-return path in C",
+      "signed integer overflow, unvalidated array/index bounds, or an out-of-bounds access on a fixed-size buffer",
+      "a shared variable read/written from more than one thread with no mutex/atomic guarding it",
+      "a memory-safety or UB bug report whose verification step never mentions AddressSanitizer/UndefinedBehaviorSanitizer/ThreadSanitizer"
+    ],
+    "buildCommands": [
+      "cmake --preset <configured-preset> (or cmake -S . -B build)",
+      "cmake --build build",
+      "ctest --test-dir build --output-on-failure",
+      "cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer -g' && cmake --build build-asan && ctest --test-dir build-asan"
+    ],
+    "fixGuardrails": [
+      "never silence a sanitizer finding by disabling the sanitizer, adding a suppression, or narrowing what it scans instead of fixing the underlying memory/UB bug",
+      "never replace a real bounds/null check with a cast or a suppression comment to make a warning disappear",
+      "never widen an unsafe C API (`strcpy`, `sprintf`, `gets`) back in while resolving an unrelated failure",
+      "fix the smallest root cause; do not refactor unrelated ownership or threading code while resolving a single build/test/sanitizer failure"
+    ]
+  }
+}

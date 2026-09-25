@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "AddressSanitizer reports a heap-buffer-overflow in this test run",
+      "ThreadSanitizer flagged a data race, help me fix it",
+      "UndefinedBehaviorSanitizer is reporting signed integer overflow here",
+      "Our CMake configure step is failing with an undefined reference",
+      "This template won't instantiate, fix the compile error",
+      "The build is failing with a missing header error",
+      "Our test binary crashes under ASan, track down the root cause"
+    ],
+    "negative": [
+      "Implement this new feature from scratch, no build errors involved",
+      "Write GoogleTest cases for this already-working class",
+      "Review this diff for memory safety before merging",
+      "Fix this failing go build for the worker package",
+      "Our npm build is failing with a webpack error",
+      "Fix this failing pytest collection error"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "asan-heap-overflow-fix-not-suppress",
+      "prompt": "AddressSanitizer reports:\n\n```\nERROR: AddressSanitizer: heap-buffer-overflow on address ...\nREAD of size 1 at ... thread T0\n    #0 TokenStream::peek() token_stream.cpp:42\n```\n\nHow do I fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer treats the ASan report as pointing at a real out-of-bounds read in TokenStream::peek() at line 42, and fixes it by adding or correcting the bounds check that prevents reading past the buffer -- it does not suggest disabling, narrowing, or otherwise routing around the sanitizer to make the finding go away.",
+          "pass_criteria": [
+            "Identifies the finding as a genuine out-of-bounds read at the reported location (TokenStream::peek(), token_stream.cpp:42), not a false positive to be dismissed.",
+            "Proposes a concrete fix: adding/correcting a bounds check (e.g. comparing the read position against the buffer's length) before the read that peek() performs.",
+            "States that the fix should be re-verified by re-running the test under the ASan build, not just a plain build."
+          ],
+          "fail_criteria": [
+            "Recommends disabling ASan, removing the sanitizer flag, adding an ASan suppress list/suppression entry, or excluding token_stream.cpp/this test from the sanitized build instead of fixing the out-of-bounds read. Mentioning that only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This is a real out-of-bounds read, not a false positive -- ASan is pointing at token_stream.cpp:42 inside TokenStream::peek(). Read the surrounding code: peek() is almost certainly reading `buffer_[pos_]` (or similar) without first checking that `pos_` is still within `buffer_`'s bounds, most likely on the last token where `pos_` has already reached the end. Fix it by adding the missing bounds check before the read, e.g. `if (pos_ >= buffer_.size()) return kEof;` (or whatever peek()'s documented behavior should be at end-of-input) before the indexing. Once the check is in, rebuild the ASan configuration (`cmake --build build-asan`) and re-run the specific test that exercises this path (`ctest --test-dir build-asan -R TokenStreamTest --output-on-failure`) to confirm ASan no longer reports the overflow -- a plain, non-sanitized rebuild passing is not sufficient confirmation.",
+        "known_wrong": "ASan is pretty aggressive and throws false positives on tight parsing loops like this fairly often. Simplest fix is to just suppress it -- add token_stream.cpp's TokenStream::peek to an ASan suppress list (or drop -fsanitize=address for that one translation unit) so the rest of the sanitized build stays clean and this known-noisy function doesn't keep flagging.",
+        "vague": "Take a look at what's happening around line 42 in peek() and make sure the bounds are being handled correctly there.",
+        "subtle_wrong": "The read at line 42 is one byte past the buffer on the very last token, so the safest fix is to just allocate the underlying buffer with one extra byte of padding (`buffer_.resize(buffer_.size() + 1)`) when TokenStream is constructed, so that stray read always lands in valid memory. That way peek()'s existing logic doesn't need to change at all, and the ASan report goes away because the read is no longer actually out of bounds."
+      },
+      "anti_patterns": ["suppress"]
+    },
+    {
+      "id": "tsan-race-add-sync-not-serialize",
+      "prompt": "ThreadSanitizer reports a data race:\n\n```\nWARNING: ThreadSanitizer: data race\n  Write of size 8 at 0x... by thread T1:\n    #0 Cache::put(...) cache.cpp:31\n  Previous read of size 8 at 0x... by thread T2:\n    #0 Cache::get(...) cache.cpp:18\n```\n\nHow should I fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer adds real synchronization (a mutex guarding both Cache::get and Cache::put's access to the shared state, or converting the field to std::atomic if a single word suffices) at the specific accesses TSan names, rather than working around the race by serializing the whole test suite or disabling the sanitizer.",
+          "pass_criteria": [
+            "Names a concrete synchronization mechanism -- a mutex (e.g. std::lock_guard/std::mutex) guarding both cache.cpp:31 (put) and cache.cpp:18 (get), or std::atomic if the shared data is a single word -- applied at the actual accesses TSan flagged.",
+            "States that both the read in get() and the write in put() need to be covered by the same synchronization, not just one side.",
+            "Does not propose serializing the test (running it single-threaded, adding a global test-only lock around the whole test body) or disabling/skipping TSan as the fix."
+          ],
+          "fail_criteria": [
+            "Recommends running the test single-threaded, adding a sleep to reduce the race window, or disabling/skipping ThreadSanitizer instead of adding real synchronization to Cache::get/Cache::put. Mentioning that only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "TSan is naming the actual unsynchronized pair: a write in Cache::put() at cache.cpp:31 racing a read in Cache::get() at cache.cpp:18, both touching the same shared field with no lock between them. Add a std::mutex member to Cache guarding whatever field both functions touch, and take it in both: `std::lock_guard<std::mutex> lock(mutex_);` at the top of both get() and put() before they read/write the shared state. If the shared data really is just a single word (a counter, a pointer swap), std::atomic<T> with appropriate memory order is a lighter-weight alternative to a full mutex -- but either way, both the read side and the write side need the same synchronization, not just one of them. Rebuild under TSan (`-fsanitize=thread`) and re-run the specific test to confirm the warning is gone before considering this fixed.",
+        "known_wrong": "The simplest fix is to just run this particular test single-threaded -- add `GTEST_FLAG_SET` or a test-only global lock around the whole test body so get() and put() never actually execute concurrently during the test run. That removes the race TSan is seeing without having to add locking to Cache itself, which keeps the production code's hot path exactly as fast as it is today.",
+        "vague": "Cache::get and Cache::put seem to be touching something shared without any protection, that probably needs to be locked down.",
+        "subtle_wrong": "Add the mutex, but only take the lock inside put() around the write at cache.cpp:31 -- get() at cache.cpp:18 is just reading a value, and a plain read of an already-word-aligned field is safe to leave unlocked on most platforms since a single aligned load or store doesn't tear. That gets the write side properly guarded, which is the side TSan is really worried about, without slowing down the more frequent read path with lock overhead."
+      }
+    }
+  ]
+}
