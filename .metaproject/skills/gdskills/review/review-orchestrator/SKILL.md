@@ -13,7 +13,7 @@ triggers:
   - "review --legacy-profiles"
 metadata:
   author: "MrCipherSmith"
-  version: "1.9.0"
+  version: "1.10.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -1551,92 +1551,59 @@ When writing review report metadata or a PR comment:
 STATUS: DONE | DONE_WITH_CONCERNS
 ```
 
-`DONE` — no blockers or majors found.
-`DONE_WITH_CONCERNS` — one or more blocker or major findings present.
+`DONE` — no blockers or majors in the changed code.
+`DONE_WITH_CONCERNS` — one or more blocker or major findings in the changed code.
+
+The machine `verdict` is unchanged (`APPROVE`, `APPROVE_WITH_SUGGESTIONS`,
+`REQUEST_CHANGES`). The prose does not print those tokens. It prints the line
+in `templates/review-report.md`: `Changes requested` or `No blockers, merge-ready`.
+
+Render the human report from that file. Do not invent a second skeleton here.
 
 ```markdown
-# Review Report
+**Changes requested — 1 Blocker, 2 Major, 4 Minor, 1 question.** Reviewed `<head>` against `<base>` (round N). <what holds, and where the risk is.>
 
-## Verdict: APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES
-<!-- APPROVE: zero blockers/majors. APPROVE_WITH_SUGGESTIONS: minors/info only.
-     REQUEST_CHANGES: one or more blocker or major. -->
+### Blocker
+**F-001. <one-sentence claim>.** `path/to/file.ts:line`, in the diff.
+<proof: traced path, probe, or failing scenario>
+Fix: <concrete>
 
-## Summary
-<2-4 sentences: what the change does, overall code health, key concerns.>
+### Major
+**F-002. <one-sentence claim>.** `path/to/file.ts:line`, pre-existing — render under Pre-existing instead when location_class says so.
 
-## Review Scope
-- Branch: `<BRANCH>`
-- Parent ref: `<PARENT>`
-- Merge-base: `<BASE_SHA>`
-- Scope mode: `<default-with-uncommitted | explicit-hash-range>`
-- Reviewers dispatched: <comma-separated list>
-- Changed files: <count>
-- Context mode: `<none | light | full>`
-- Model strategy: `<ask | adaptive>`
-- Current model: `<actual current model id/name, or unknown>`
-- Model assignment: `<per-reviewer tier/model from each dispatch's \`model\` block | unsupported>`
-- Token budget: `<used/limit if known; omissions count>`
+### Minor
+- **F-010. <claim>.** `path:line`, in the diff — <proof and fix, one to three sentences>.
 
-## Stats
-- blocker: N
-- major: N
-- minor: N
-- info: N
+### Questions
+1. <an info finding that needs an author answer; other info is not published>
 
-## Stage counts
-<!-- Required. State what each stage REMOVED, and never state it as a precision
-     improvement: no precision baseline exists to improve on. The one measured
-     from the review packages on disk was 53/53 = 100% — pinned there by
-     construction, because nothing in that corpus could record a finding as
-     wrong. Copy these from `scope.md`; do not re-count by hand. -->
-- dropped by pre-filter: <files>, <blocks>, <changed lines> (or `not recorded` if no scope was built)
-- verification mode: `<off | annotate | filter>`
-- verdicts: confirmed N, refuted N, unverifiable N, unverified N
-- refuted by the verifier: N (removed: N — always 0 outside `filter`)
-- retained: N
+### Pre-existing (not blocking)
+- **F-020. <claim>.** `path:line` — <why it is out of this diff>
 
-## Blockers (must fix before merge)
-<[F-NNN] findings with severity=blocker, sorted by file>
+### Verified clean
+- <what was checked> — <how>
 
-## Major Issues
-<[F-NNN] findings with severity=major>
-
-## Minor & Info
-<[F-NNN] findings with severity=minor or info>
-
-## Checked and cleared
-<Required whenever a reviewer tested a hypothesis and it did not hold. One line
-each: the defect that was looked for, and the evidence that rules it out. Not a
-list of virtues — a list of hypotheses that died, so no later round spends a
-reviewer re-raising them.>
-
-## Positive Notes
-<Optional. Highlight things done well. Keep brief.>
+### How this review was run
+- **Run by:** @<gh-login> with `review-orchestrator`
+- **Scope:** `<base>..<head>`, round N, PR #N
+- **Orchestrator:** `review-orchestrator`
+- **<actual model name>:** <reviewers on that model>
+- **Not run:** <reviewer — reason>
+- **Verification:** <mode>; confirmed N, refuted N, unverifiable N, unverified N
 ```
 
-### Why `Checked and cleared` is separate from `Positive Notes`
+Pick the domain file the same way reviewers are picked: frontend scope, or a
+fullstack / paired PR, reads `templates/pr-comment-frontend.md`. Backend-only
+reads `templates/pr-comment-backend.md`. A paired PR always uses the frontend
+file and must include the wire-contract line.
 
-They read alike and do opposite work. "Both entry points read the score from the
-same report" is a virtue; it tells a later round nothing, because no round was
-going to claim otherwise. "The drift bar cannot contradict the drift badge —
-`schema-drift-table.ts:61` always seeds `ddl` and `distributed` is a primitive
-boolean that is always serialized, so a backend match implies a `ddlTextDiffers`
-match" is a **retired hypothesis**: it names the bug that was hunted and the fact
-that kills it.
+`## Checked and cleared` is now **Verified clean**. Same rule: a hypothesis
+that was tested and died, with the evidence, not a list of virtues. There is
+no Positive Notes section. A compliment is not a result.
 
-The cost of omitting them is paid in rounds. A plausible-but-wrong finding that
-was investigated and dropped in round 1 is investigated again in round 2 by a
-different reviewer, and the author answers it twice. Writing the negative down
-once ends that loop; it is also the only artifact that distinguishes *checked and
-clean* from *never looked at*, which is the distinction an approving verdict rests
-on.
-
-Entries come from the reviewers, not from you: a reviewer that dropped a candidate
-returns it with the evidence, and consolidation collects them. A reviewer that
-returns zero findings and zero cleared hypotheses has told you nothing about the
-code, and should be asked once what it examined.
-
----
+Tables: counts, ids, `file:line`, statuses, before/after, pass/fail only. A
+finding is a paragraph or a list item. A cell longer than about ten words is
+not a table cell.
 
 ## Skill Learning Handoff
 
@@ -1668,188 +1635,41 @@ the orchestrator's step.
 
 ## PR Review Report Publication
 
-When the review target is a GitHub pull request, ask whether to publish the consolidated review report after the report is generated. A PR target is present when the user provided a PR URL/number, `gh pr view` resolves the current branch, or the caller passes `pr_number` / `pr_url`.
-
-Ask before publishing unless `publish_pr_review_report` was explicitly set by automation settings:
+When the review target is a GitHub pull request, ask whether to publish after
+the report exists, unless `publish_pr_review_report` is already set:
 
 ```text
 Publish this review report to the PR?
 
-  A) Concise PR comment only
-  B) Concise PR comment + detailed AI markdown artifact (recommended for follow-up fixes)
+  A) PR comment only
+  B) PR comment + follow-up file (recommended when a fix round will follow)
   C) Do not publish
 
 > pick a letter (default: C)
 ```
 
-**Automation values:**
-- `publish_pr_review_report: comment` or legacy `true` -> publish the concise PR comment only.
-- `publish_pr_review_report: comment-and-ai-artifact` -> publish the concise PR comment and generate the detailed AI markdown artifact.
-- `publish_pr_review_report: none` or legacy `false` -> do not publish.
+Automation values, names unchanged:
 
-**Default:** do not publish without explicit confirmation. If no PR number can be resolved, skip publication and state that no PR target was available.
+- `comment` or legacy `true` -> the PR comment only.
+- `comment-and-ai-artifact` -> the PR comment plus the follow-up file.
+- `none` or legacy `false` -> do not publish.
 
-### Concise PR Comment
+Default is do not publish. No resolvable PR number means skip and say so.
 
-The visible PR comment is for humans. It must be written in English only and stay
-concise, under the brevity rule above: **the summary is at most two sentences and
-carries a link to the artifact holding the detail.**
+The comment is the report in `templates/review-report.md`, English, with the
+domain file chosen above. It does not use a tool heading, a finding table, or
+a meta table. It does not carry a co-author line, a `Generated with` trailer,
+or any sentence that names a vendor or a product as the author. Say who ran
+the orchestrator and which reviewers ran; do not sign the comment as them.
 
-The finding rows below are a bounded exception, not a licence: they exist because
-a reviewer scanning a PR needs the blockers in front of them. Keep them to the
-`blocker` and `major` rows; everything at `minor` or below goes behind the
-`<details>` fold or, better, into the AI artifact and is linked. The full findings
-set, the round history and the reasoning belong in the flow package — pasting them
-here is the failure this rule names.
+The follow-up file path and the metadata rules (real model names, Run vs Not
+run, no `adaptive` in the model slot) live in that same template. Write the
+body to a temp file and post with `gh pr comment <n> --body-file <file>`.
 
-```markdown
-## AI Review Report
-
-**Verdict:** REQUEST_CHANGES
-**Summary:** At most two sentences: the overall risk and the main merge blocker. Detail: <link to the AI artifact or the flow package>.
-
-| Severity | Area | Finding | Suggested Fix | Owner |
-|---|---|---|---|---|
-| blocker | `src/file.ts:42` | What is broken and why it matters. | Concrete fix direction, not a vague instruction. | author |
-
-<details>
-<summary>Minor / info findings</summary>
-
-| Severity | Area | Finding | Suggested Fix |
-|---|---|---|---|
-| minor | `src/other.ts:10` | ... | ... |
-
-</details>
-
-### Meta
-| Field | Value |
-|---|---|
-| Orchestrator | `review-orchestrator` |
-| Model | `<actual current model id/name, or unknown; never inherit or unsupported>` |
-| Model strategy | `<ask | adaptive>` |
-| Model assignment | `<per-reviewer tier/model from each dispatch's \`model\` block | unsupported>` |
-| Agents run | `<reviewers actually dispatched, including fallback runtimes when used>` |
-| Available reviewers | `<all reviewers considered by the orchestrator for this repository/runtime, grouped briefly as generic/convention/project/legacy when useful>` |
-| Skipped reviewers | `<reviewers not dispatched with short reasons, e.g. no matching files, optional group not selected, unavailable native agent, PR number missing>` |
-| Selection basis | `<auto-detected scope, explicit flags, user-selected optional groups, and why this reviewer set was chosen>` |
-| Fallback/blocked reviewers | `<reviewers run via fallback or blocked because native agent/skill was unavailable, otherwise none>` |
-| Scope | `<PR #N, base..head, merge-base>` |
-| Commit | `<HEAD sha>` |
-| Context | `<job/context path if provided, otherwise none>` |
-| AI artifact | `<markdown link or file path to the detailed AI report when generated, otherwise none>` |
-| AI artifact description | `<one concise human-readable sentence explaining that the linked markdown file contains detailed findings, fix guidance, patch guidance, regression coverage, validation plan, and follow-up agent context>` |
-| Reviewed at | `<UTC timestamp>` |
-```
-
-### Detailed AI Markdown Artifact
-
-When the user chooses option B, generate a separate English-only markdown artifact for AI follow-up work. Prefer a repository-local job/review path such as:
-
-```text
-jobs/reviews/pr-<number>/review-ai-report.md
-```
-
-If the review is running inside `job-orchestrator`, write it under the active job docs, for example:
-
-```text
-.metaproject/jobs/<job-name>/ai/review-ai-report.md
-```
-
-If the environment provides an external artifact mechanism, attach or upload that markdown file and put the link/path in the concise PR comment `AI artifact` meta row. If no attachment/upload mechanism exists, keep the file path in the comment and in `review_context.review_plan.publication_plan.ai_artifact_path`.
-
-The concise PR comment must also include an `AI artifact description` meta row whenever an AI artifact is generated. The description is for human readers and must explain what was added and what the file contains, for example: `Detailed AI follow-up report with expanded findings, fix guidance, illustrative patch guidance, Gherkin regression coverage, validation plan, and context for follow-up agents.`
-
-The AI artifact must use this structure:
-
-```markdown
----
-review_run_id: <stable id, e.g. pr-5462-2026-06-13T10-22-00Z>
-orchestrator: review-orchestrator
-verdict: <APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES>
-context_mode: <none | light | full>
-model_strategy: <ask | adaptive>
-current_model: <actual current model id/name, or unknown>
-model_assignment: <per-reviewer tier/model from each dispatch's `model` block | unsupported>
-agents:
-  - <reviewer>
-scope:
-  pr: <number or null>
-  base: <base sha/ref>
-  head: <head sha/ref>
-  files_changed: <count>
-generated_at: <UTC timestamp>
----
-
-# AI Review Report
-
-## Executive Summary
-<Short machine-readable summary of merge risk and required fix order.>
-
-## Review Context
-<Bounded description of diff scope, requirements, omitted context, and assumptions.>
-
-## Findings
-
-### F-NNN: <title>
-
-- Severity: blocker | major | minor | info
-- Reviewer: <reviewer>
-- File: `path/to/file.ts`
-- Lines: <line or range>
-- Confidence: high | medium | low
-- Status: open
-
-Problem:
-<Detailed explanation of what is wrong.>
-
-Why it matters:
-<Correctness, safety, maintainability, performance, or UX impact.>
-
-Evidence:
-<Specific code references or behavior observed.>
-
-Suggested fix:
-<Detailed fix plan with steps.>
-
-Patch guidance:
-```diff
-<Optional illustrative diff. Keep it minimal and clearly mark if illustrative.>
-```
-
-Regression coverage:
-```gherkin
-Feature: <feature or invariant>
-
-  Scenario: <behavior that should not regress>
-    Given <initial state>
-    When <action>
-    Then <expected result>
-```
-
-## Fix Order
-1. <Blocker/major fix sequencing with dependencies.>
-
-## Validation Plan
-- <Commands or checks to run.>
-
-## Notes For Follow-Up Agents
-<Context needed by an implementer agent; no secrets, raw prompts, or unrelated local paths.>
-```
-
-Formatting rules for PR comments and AI artifacts:
-- English only, regardless of chat language or reviewer output language.
-- Keep the visible comment concise: max 10 blocker/major rows before `<details>`.
-- Put minor/info findings under `<details>` unless there are no higher severity findings.
-- Every blocker/major row must include a concrete suggested fix.
-- Include enough metadata to reproduce the review, but do not include internal prompts, raw logs, secrets, or unrelated local paths.
-- The PR comment metadata must distinguish `Agents run` from `Available reviewers` and `Skipped reviewers`; never use a single `Agents` row that hides skipped or unavailable reviewers.
-- `Skipped reviewers` must include short reasons from `review_context.routing.reasons`, `review_context.review_plan.skipped`, and dispatch/runtime compatibility checks.
-- If the list is long, keep `Agents run` complete and summarize `Available reviewers` / `Skipped reviewers` by group with counts plus notable names; put full details in the AI artifact when one is generated.
-- When `comment-and-ai-artifact` is selected, the PR comment meta section must include both `AI artifact` and `AI artifact description`; do not rely on the link alone.
-- In the metadata table, `Model` must be the actual model id/name. Put `unsupported`, `adaptive`, or `ask` under `Model strategy` / `Model assignment`, not under `Model`.
-- If posting via CLI, write the body to a temp file and use `gh pr comment <pr-number> --body-file <file>`; never inline a large heredoc into shell history.
-
----
+Re-read head and the thread immediately before posting. If head moved, re-check
+the findings against the new head and name the commits that were not reviewed.
+Do not post a finding another reviewer already filed on this head; if yours
+extends theirs, cite theirs.
 
 ## Job Context Awareness
 

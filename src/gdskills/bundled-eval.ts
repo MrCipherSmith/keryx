@@ -1627,6 +1627,18 @@ export const KNOWN_SKILL_COMPANION_DOCUMENTS: ReadonlyMap<string, string> = new 
     "orchestrator-prompt.md",
     "the prompt template an orchestrator skill reads to build a subagent dispatch (context-collector, feature-analyzer, issue-analyzer, job-orchestrator, task-implementer); carries no frontmatter and is not addressed by any runtime — read by the skill's own instructions, not by a harness loader",
   ],
+  [
+    "review-report.md",
+    "the human report skeleton review-orchestrator renders at the end of a round; lives under templates/ and is read by that skill's own instructions, not by a harness loader",
+  ],
+  [
+    "pr-comment-frontend.md",
+    "the frontend PR-comment checklist review-orchestrator reads when the scope is frontend or paired; lives under templates/ and is not a harness build",
+  ],
+  [
+    "pr-comment-backend.md",
+    "the backend PR-comment checklist review-orchestrator reads for a backend-only scope; lives under templates/ and is not a harness build",
+  ],
 ]);
 
 function walkSkillDocuments(root: string, accept: (name: string) => boolean): string[] {

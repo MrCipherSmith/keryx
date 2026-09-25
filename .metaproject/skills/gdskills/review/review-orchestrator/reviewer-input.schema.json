@@ -190,6 +190,11 @@
               "null"
             ],
             "description": "What the fix offered as proof: the test added, the mutation that went red, the command run."
+          },
+          "prior_findings_status": {
+            "type": "string",
+            "enum": ["open", "closed", "partial", "regressed", "withdrawn"],
+            "description": "What this round concluded about the prior finding, after checking the code. Distinct from claimed_disposition, which is what the fix asserted. Optional; the report still owes one line per prior finding."
           }
         },
         "additionalProperties": true
