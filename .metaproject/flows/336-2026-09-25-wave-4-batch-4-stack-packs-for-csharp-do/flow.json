@@ -8,9 +8,9 @@
   "id": "336",
   "slug": "wave-4-batch-4-stack-packs-for-csharp-do",
   "title": "Wave 4 batch 4: stack packs for csharp-dotnet, swift-ios, kotlin-android, flutter-dart",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-25T15:14:46.872Z",
-  "updatedAt": "2026-09-25T18:47:35.891Z",
+  "updatedAt": "2026-09-25T20:57:37.706Z",
   "source": {
     "type": "description",
     "ref": null
@@ -56,10 +56,14 @@
     "AC10": {
       "at": "2026-09-25T18:47:35.891Z",
       "note": "W1-stack-catalog.md Implementation notes section and W2-agent-catalog.md 0.1.12 changelog entry both committed (46382387)"
+    },
+    "AC11": {
+      "at": "2026-09-25T20:44:27.708Z",
+      "note": "PR #738 merged as squash commit f6eb6094 after review round 1 (1 blocker + 6 majors + minors, all fixed) and a narrow Opus verification (VERIFIED); CI green on typecheck-and-tests and full matrix; two concurrent origin/main merges (batch 5, batch 6) resolved additively with fresh ratchet re-measurements"
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/738"
   },
   "baseBranch": "main",
   "owner": {
@@ -304,6 +308,106 @@
       "at": "2026-09-25T18:47:35.891Z",
       "event": "ac-confirmed",
       "detail": "AC10: W1-stack-catalog.md Implementation notes section and W2-agent-catalog.md 0.1.12 changelog entry both committed (46382387) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:44:21.718Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/738 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T20:44:27.708Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: PR #738 merged as squash commit f6eb6094 after review round 1 (1 blocker + 6 majors + minors, all fixed) and a narrow Opus verification (VERIFIED); CI green on typecheck-and-tests and full matrix; two concurrent origin/main merges (batch 5, batch 6) resolved additively with fresh ratchet re-measurements (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T20:44:33.821Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T20:44:42.147Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T20:44:42.149Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/336-2026-09-25-wave-4-batch-4-stack-packs-for-csharp-do/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#738 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__738.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 738 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-25T20:46:55.909Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/738 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T20:47:37.384Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T20:47:44.981Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-25T20:47:44.982Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 8 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#B1 (blocker, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M1 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M2 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M3 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M4 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M5 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M6 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#MIN-1 (minor, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | verifier-stats (violated): round `2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738` ran with `verification_mode: annotate` and received 0 claims while retaining 8 finding(s) at or above `minor` (2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#B1, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M1, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M2, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M3, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M4, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M5, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M6, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#MIN-1). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-25T20:50:14.849Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/738 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T20:50:15.154Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T20:50:22.753Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-09-25T20:50:22.754Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 8 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#B1 (blocker, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M1 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M2 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M3 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M4 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M5 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M6 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#MIN-1 (minor, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-25T20:54:04.283Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/738 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T20:54:08.042Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T20:54:15.464Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: failed"
+    },
+    {
+      "at": "2026-09-25T20:54:15.465Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 7 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#B1 (blocker, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M1 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M2 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M3 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M4 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M5 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M6 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-25T20:57:29.413Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/738 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T20:57:29.731Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T20:57:37.705Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 5: passed"
+    },
+    {
+      "at": "2026-09-25T20:57:37.706Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "signatures": [
@@ -503,6 +607,290 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC10",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T20:44:27.708Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T20:57:37.706Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89",
+      "headCommit": "016db54c8f683c2985a3c73be1c700f59e9d874b"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T20:44:42.147Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/336-2026-09-25-wave-4-batch-4-stack-packs-for-csharp-do/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#738 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__738.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 738 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T20:47:44.981Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "2 of 5 conditions failed — terminal-dispositions (violated): 8 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#B1 (blocker, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M1 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M2 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M3 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M4 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M5 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M6 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#MIN-1 (minor, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738): no disposition recorded | verifier-stats (violated): round `2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738` ran with `verification_mode: annotate` and received 0 claims while retaining 8 finding(s) at or above `minor` (2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#B1, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M1, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M2, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M3, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M4, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M5, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M6, 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#MIN-1). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T20:50:22.753Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 8 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#B1 (blocker, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M1 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M2 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M3 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M4 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M5 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M6 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#MIN-1 (minor, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T20:54:15.464Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 7 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#B1 (blocker, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M1 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M2 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M3 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M4 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M5 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03#M6 (major, round 2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738-r03): marked fixed (`acted-on`) but its evidence names no commit SHA The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T20:57:37.705Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 4 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
     }
   ]

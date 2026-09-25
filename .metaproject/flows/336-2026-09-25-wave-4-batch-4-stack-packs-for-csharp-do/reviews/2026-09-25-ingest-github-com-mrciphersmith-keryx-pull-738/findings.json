@@ -1,0 +1,155 @@
+[
+  {
+    "id": "B1",
+    "reviewer": "review-orchestrator",
+    "severity": "blocker",
+    "problem": "CI was red: branch behind main, stale manifest.test.ts profile list, four scout.test.ts fixtures/pins invalidated by the larger catalog",
+    "impact": "PR could not merge; CI never ran while the branch was also dirty against a moving main",
+    "suggested_fix": "rebase/merge, re-pin fixtures honestly, re-measure the ratchet ceiling with per-trigger accounting",
+    "evidence": "bun test failures; gh pr checks showing CI red",
+    "confidence": "high",
+    "file": "src/gdskills/governance/scout.test.ts",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/manifest/manifest.test.ts",
+        "src/gdskills/bundled/install-manifest.json"
+      ],
+      "enumeration_method": "ran the full targeted suite (manifest.test.ts, scout.test.ts, stack-pack-eval-integrity.test.ts) and fixed every failure"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#B1"
+  },
+  {
+    "id": "M1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "unstable composable parameter guidance predates Kotlin 2.0.20 strong-skipping-mode default",
+    "impact": "guidance would tell a reader recomposition-skip is defeated when it usually is not under the current default",
+    "suggested_fix": "correct to the instance-identity fallback mechanism",
+    "evidence": "ctx7 Jetpack Compose developer docs (strong skipping default since Kotlin 2.0.20)",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/kotlin-android/rules/patterns.mdc",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/kotlin-android/skills/compose-implementation/SKILL.md",
+        "src/gdskills/bundled/stacks/kotlin-android/skills/kotlin-android-code-review/SKILL.md"
+      ],
+      "enumeration_method": "grep for unstable-parameter/skip-check wording across the pack"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M1"
+  },
+  {
+    "id": "M2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "fictional Compose Compiler 1.5.x/Kotlin 2.0 compatibility pairing; deprecated lintOptions DSL",
+    "impact": "guidance describes a compatibility problem that can no longer occur the way described",
+    "suggested_fix": "correct to the Kotlin-2.0 plugin-versioned-with-Kotlin model; lint {} not lintOptions",
+    "evidence": "ctx7 Compose Compiler docs (developer.android.com/develop/ui/compose/compiler)",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/kotlin-android/skills/kotlin-android-build-fix/SKILL.md",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/kotlin-android/skills/kotlin-android-build-fix/SKILL.md"
+      ],
+      "enumeration_method": "grep for lintOptions/Compose-Compiler-version-pairing wording across the pack; only one skill referenced it"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M2"
+  },
+  {
+    "id": "M3",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "EncryptedSharedPreferences recommended without the known-reliability-issue caveat",
+    "impact": "guidance points at a library Google no longer recommends for new code",
+    "suggested_fix": "prefer Android Keystore directly; state the reason",
+    "evidence": "androidx security-crypto release notes (bug fixes referenced); general knowledge of the library's known issues",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/stacks/kotlin-android/rules/security.mdc",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/flutter-dart/rules/security.mdc",
+        "src/gdskills/bundled/stacks/kotlin-android/skills/kotlin-android-code-review/SKILL.md"
+      ],
+      "enumeration_method": "grep for EncryptedSharedPreferences across both packs that reference the Android backing store"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M3"
+  },
+  {
+    "id": "M4",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "MainActor isolation guidance didn't reflect View's default isolation since the iOS 18 SDK",
+    "impact": "would require redundant @MainActor annotation on plain View-owned @State, and the mainactor-async-fetch eval scenario's subtle_wrong was arguably correct under the real rule",
+    "suggested_fix": "state the real distinction: implicit for View-owned state, explicit for a separate model type",
+    "evidence": "swift-migration-guide (partial), general knowledge of the iOS 18 SDK's View isolation default",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/stacks/swift-ios/rules/patterns.mdc",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/swift-ios/skills/swiftui-implementation/evals.json"
+      ],
+      "enumeration_method": "traced the MainActor claim from patterns.mdc into the one eval scenario that depended on it"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M4"
+  },
+  {
+    "id": "M5",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "detectionMarkers for 3 batch-4 packs could false-fire or fail open (unknown marker keys, generic language tags)",
+    "impact": "a Kotlin-DSL Spring project, a non-iOS Swift package, or a non-Flutter Dart package could all incorrectly install one of these packs",
+    "suggested_fix": "narrow to the one real, exclusive detect.ts tag per pack; match pack.json to the manifest",
+    "evidence": "src/stack/detect.ts source read; src/gdskills/manifest/plan.ts's resolveComponentInclusion fail-open behavior on an unknown marker key",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/install-manifest.json",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/swift-ios/pack.json",
+        "src/gdskills/bundled/stacks/kotlin-android/pack.json",
+        "src/gdskills/bundled/stacks/flutter-dart/pack.json"
+      ],
+      "enumeration_method": "read detect.ts's full STACK_DETECT_TAGS list and cross-checked every batch-4 pack's detectionMarkers against it"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M5"
+  },
+  {
+    "id": "M6",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "--dart-define/.env claimed to keep a secret server-side",
+    "impact": "guidance would tell a reader a build-time-injected value is safe on the device when it is compiled into the binary",
+    "suggested_fix": "correct: both are compiled into the binary and equally recoverable; only source-control exposure differs",
+    "evidence": "general knowledge of Flutter build-time constant compilation",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/flutter-dart/rules/security.mdc",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/kotlin-android/rules/security.mdc"
+      ],
+      "enumeration_method": "the narrow verification pass found the same error class uncorrected in kotlin-android's local.properties/CI-secret guidance"
+    },
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#M6"
+  },
+  {
+    "id": "MIN-1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "multiple minor content/wording/calibration issues bundled (see report body)",
+    "impact": "various small correctness/clarity gaps",
+    "suggested_fix": "see report body for the full itemized list",
+    "evidence": "manual review of pack content and eval scenario calibration",
+    "confidence": "medium",
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#MIN-1"
+  },
+  {
+    "id": "INFO-1",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "I11-rewording (before the gate) plausibly contributed to some of the gate's own trigger-positive misses",
+    "impact": "documented interaction, not a defect requiring a fix; re-wording after the gate would be tuning to the result, which the standing rule forbids",
+    "suggested_fix": "no action needed; recorded in W1 doc and flow journal",
+    "evidence": "flow 336 journal's I11-rewording/trigger-failure interaction section",
+    "confidence": "high",
+    "global_id": "2026-09-25-ingest-github-com-mrciphersmith-keryx-pull-738#INFO-1"
+  }
+]
