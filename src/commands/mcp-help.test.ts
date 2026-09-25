@@ -59,7 +59,7 @@ describe("keryx mcp --help leads with the consumer surface", () => {
   test("and it points at the in-session equivalents, both of them", () => {
     // The distinction is the whole reason there are two commands.
     expect(help).toContain("/mcp");
-    expect(help).toContain("/integrations");
+    expect(help).toContain("/integrate");
   });
 });
 

@@ -226,7 +226,7 @@ function printAgentsHelp(): void {
     'keryx agents external run <id> --task "<text>" [--unattended] [--write]',
     "keryx agents list [--stack <id>] [--json]",
     "keryx agents show <name> [--json]",
-    `keryx agents export --runtime <${AGENT_EXPORT_RUNTIMES.join("|")}> <name> [--dry-run] [--json]`,
+    `keryx agents export --runtime <${AGENT_EXPORT_RUNTIMES.join("|")}> <name> [--dry-run] [--force] [--json]`,
     "keryx agents verify [<name>] [--json]",
     "keryx agents generate --stack <id> [--check] [--json]",
   ]);

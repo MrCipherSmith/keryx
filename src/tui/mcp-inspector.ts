@@ -45,7 +45,7 @@ export const MCP_INSPECTOR_FOOTER = [
 
 export const MCP_TAB_KEYS = "keys: c/d connect/disconnect · y confirm · click a row to arm, again to confirm";
 
-export const MCP_TOOLS_COMMAND = "/integrations";
+export const MCP_TOOLS_COMMAND = "/integrate";
 
 /**
  * `/mcp` is NO LONGER this view.
@@ -56,9 +56,12 @@ export const MCP_TOOLS_COMMAND = "/integrations";
  * command aimed at nothing is worse than one aimed at the old thing."
  *
  * P2 built that surface, so `/mcp` now means what D-04 says it means —
- * the servers keryx CONNECTS TO (`mcp-consumer.ts`). This view keeps
- * `/integrations`, which is what it always was: where keryx ITSELF is
- * registered into an editor's config.
+ * the servers keryx CONNECTS TO (`mcp-consumer.ts`). This view was
+ * `/integrations` through P2; R700-09 renamed it to `/integrate`, matching
+ * the CLI verb it drives (`keryx integrate`) — the CLI `integrations` verb
+ * (installs hooks/instructions for agent runtimes) is a different command
+ * this view does not touch, and the two names sitting one letter apart was
+ * itself the confusion this rename closes.
  *
  * The two are genuinely easy to confuse — this file's own header says the
  * MCP tab "is easy to misread as 'the MCP servers this agent is connected

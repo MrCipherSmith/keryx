@@ -98,7 +98,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx providers remove <name> [--yes] [--json]\n",
     "  keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]\n",
     "  keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]\n",
-    "  keryx integrations doctor --runtime <id>[,<id>...|all] [--json]\n",
+    "  keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]\n",
     "  keryx integrations matrix [--check] [--write] [--json] [--file <path>]\n",
     "  integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix\n",
     // Flow 309 (W1 Lane A): brand-new `stack` verb — one USAGE_BODY line plus
@@ -112,12 +112,14 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]\n",
     "                                               Run one hook once against a synthetic or captured payload\n",
     "  keryx hooks enable <id> [--user]              Flip a hook's enabled state (project file, or --user for ~/.keryx/hooks.json)\n",
-    "  keryx hooks disable <id> [--user]\n",
-    "  hooks     Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration\n",
+    "  keryx hooks trust [--yes]                     Show every command in .metaproject/hooks.json and trust exactly that version\n",
+    "  keryx hooks untrust                           Withdraw trust; project command hooks stop running\n",
+    "  keryx hooks disable <id> [--user] [--acknowledge-gate-risk]\n",
+    "  hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration\n",
     // Flow 313 (W4 portability, T10): the new `keryx bundle` verb — seven
     // USAGE_BODY lines plus its Commands: summary row.
     "  keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]\n",
-    "  keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--dry-run] [--json]\n",
+    "  keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run] [--json]\n",
     "  keryx bundle import <catalog-dir> --external [--dry-run] [--json]\n",
     "  keryx bundle inspect <bundle> [--target-scope <scope>] [--json]\n",
     "  keryx bundle verify <bundle> [--json]\n",
@@ -141,6 +143,19 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune\n",
   ];
 
+  // R700-09: lines the pre-flow fixture already had, whose TEXT changed
+  // (rather than a brand-new line being added) — `NEW_LINES` above only
+  // handles pure additions, so a changed line is instead named here as
+  // [oldLine, newLine]: the test asserts the new text is present, then
+  // substitutes the OLD text back in before comparing against the immutable
+  // pre-flow-303 capture, which still carries the original wording.
+  const REPLACED_LINES: ReadonlyArray<readonly [string, string]> = [
+    [
+      "  agents    Manage optional global agent bootstrap instructions\n",
+      "  agents    Manage optional global agent bootstrap instructions, and the agent catalog (list/show/export/verify/generate)\n",
+    ],
+  ];
+
   test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
     const current = await runBun([cliPath, "--help"]);
@@ -150,6 +165,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     for (const line of NEW_LINES) {
       expect(reconstructed).toContain(line);
       reconstructed = reconstructed.replace(line, "");
+    }
+    for (const [oldLine, newLine] of REPLACED_LINES) {
+      expect(reconstructed).toContain(newLine);
+      reconstructed = reconstructed.replace(newLine, oldLine);
     }
     // The banner's version moves with every release; the block under it is what AC5 pins.
     const withoutVersion = (text: string): string => text.replace(/^keryx \S+\n/, "keryx <version>\n");
@@ -261,6 +280,36 @@ test("the guard defers to a group that answers `--help` deeper, and passes a chi
   expect(shouldInterceptHelp("agents", ["bootstrap", "--help"])).toBe(false);
   // After the separator the flag is the child process's, not ours.
   expect(shouldInterceptHelp("harness", ["exec", "--", "cmd", "--help"])).toBe(false);
+});
+
+// R700-07: `skills`/`memory`/`security` `--help`, and `--help` on the
+// specific subcommands whose own handler already guards it safely, must
+// reach the real handler instead of the generic `groupUsage` slice — every
+// OTHER subcommand of these three verbs (e.g. `skills install`, `memory
+// new`) must keep going through the interception guard, since most do not
+// check `--help` at all and some (`skills install`) write files.
+test("skills/memory/security --help defers to the real handler for the bare verb and the listed safe subcommands", () => {
+  expect(shouldInterceptHelp("skills", ["--help"])).toBe(false);
+  expect(shouldInterceptHelp("memory", ["--help"])).toBe(false);
+  expect(shouldInterceptHelp("security", ["--help"])).toBe(false);
+
+  expect(shouldInterceptHelp("skills", ["doctor", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("skills", ["uninstall", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("skills", ["scout", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("skills", ["eval", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("skills", ["judge-check", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("skills", ["stocktake", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("memory", ["handoff", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("security", ["audit-harness", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("security", ["impact-evidence", "--help"])).toBe(false);
+
+  // Every other subcommand of these three verbs is unaffected — still
+  // intercepted, exactly as before this fix.
+  expect(shouldInterceptHelp("skills", ["install", "--help"])).toBe(true);
+  expect(shouldInterceptHelp("skills", ["catalog", "--help"])).toBe(true);
+  expect(shouldInterceptHelp("memory", ["new", "--help"])).toBe(true);
+  expect(shouldInterceptHelp("memory", ["search", "--help"])).toBe(true);
+  expect(shouldInterceptHelp("security", ["scan", "--help"])).toBe(true);
 });
 
 test("every dispatched group either has its own usage lines or falls back to the full help", () => {

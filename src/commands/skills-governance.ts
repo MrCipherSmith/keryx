@@ -142,7 +142,74 @@ export async function skillsGovernanceCommand(args: readonly string[], deps: Ski
 // scout
 // ---------------------------------------------------------------------------
 
+function printScoutHelp(): void {
+  console.log(`keryx skills scout
+
+Pre-creation dedupe gate: does an existing skill already cover this?
+
+Usage:
+  keryx skills scout <name-or-description> [--record <pack-dir>] [--skill-name <name>]
+              [--justification <text>] [--include-imports] [--candidate <dir>]
+              [--scope bundled|all] [--origin learned --source-ref <id>] [--json]
+
+Examples:
+  keryx skills scout "review a Postgres migration"
+  keryx skills scout "review a Postgres migration" --record .metaproject/gdskills/review --json
+`);
+}
+
+function printEvalHelp(): void {
+  console.log(`keryx skills eval
+
+Behavioral compliance eval: trigger accuracy + scenario pass rate. --judge <provider>[:<model>]
+grades judge-graded behavior scenarios with a live LLM judge.
+
+Usage:
+  keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>]
+              [--judge <provider>[:<model>]] [--scope bundled|all] [--model-grader] [--json]
+  keryx skills eval --reverify <pack-dir> [--sample N] --judge <provider>[:<model>] [--json]
+
+Examples:
+  keryx skills eval review/postgres-migration
+  keryx skills eval review/postgres-migration --judge anthropic:claude-sonnet-4-5 --json
+`);
+}
+
+function printJudgeCheckHelp(): void {
+  console.log(`keryx skills judge-check
+
+Proves a skill's judge-graded scenarios are hard to game: runs the canned empty/echo/known-wrong/
+injection/stuffed/known-right answers through the live judge and exits 1 on any mismatch.
+--record saves the verdicts for offline replay.
+
+Usage:
+  keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all]
+              [--samples <n>] [--record] [--json]
+
+Examples:
+  keryx skills judge-check review/postgres-migration --judge anthropic:claude-sonnet-4-5
+`);
+}
+
+function printStocktakeHelp(): void {
+  console.log(`keryx skills stocktake
+
+Periodic catalog health check: keep|improve|update|retire|merge.
+
+Usage:
+  keryx skills stocktake [--scope bundled|all] [--quick] [--json]
+
+Examples:
+  keryx skills stocktake
+  keryx skills stocktake --scope all --json
+`);
+}
+
 async function scoutCommand(args: readonly string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printScoutHelp();
+    return;
+  }
   // R2-8: a value-taking flag given with no usable value (trailing, or
   // immediately followed by another flag) is refused up front, rather than
   // the loop below silently swallowing the NEXT flag as this one's value
@@ -346,6 +413,10 @@ function isStrictness(value: string | undefined): value is "low" | "medium" | "h
 }
 
 async function evalCommand(args: readonly string[], deps: SkillsGovernanceDeps = {}): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printEvalHelp();
+    return;
+  }
   // Flow 317 (FU3): `--reverify <pack-dir>` is a distinct mode of `eval` —
   // re-judging RECORDED trials live, never running a fresh eval — so it is
   // dispatched before the normal `<skill-id>` usage check below (a pack
@@ -676,6 +747,10 @@ interface JudgeCheckRow {
  * something `--record`'s output is missing.
  */
 async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernanceDeps = {}): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printJudgeCheckHelp();
+    return;
+  }
   const buildJudge = deps.buildJudge ?? buildEvalJudge;
   const skillId = args[0];
   if (skillId === undefined || skillId.startsWith("--")) {
@@ -877,6 +952,10 @@ async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernance
 // ---------------------------------------------------------------------------
 
 async function stocktakeCommand(args: readonly string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printStocktakeHelp();
+    return;
+  }
   const scopeResult = parseScope(args);
   if (!scopeResult.ok) {
     console.error(scopeResult.error);

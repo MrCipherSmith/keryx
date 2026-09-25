@@ -159,6 +159,6 @@ export function printMcpHelp(): void {
     `  ${style.dim("Run `keryx serve-mcp --help` or `keryx integrate --help` for the publisher surface.")}`,
   );
   console.log(
-    `  ${style.dim("In a session, `/mcp` shows the same list live; `/integrations` is the publisher view.")}`,
+    `  ${style.dim("In a session, `/mcp` shows the same list live; `/integrate` is the publisher view.")}`,
   );
 }

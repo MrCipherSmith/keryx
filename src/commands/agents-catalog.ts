@@ -2,7 +2,7 @@
 //
 //   keryx agents list [--stack <id>] [--json]
 //   keryx agents show <name>
-//   keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--dry-run] [--json]
+//   keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--dry-run] [--force] [--json]
 //   keryx agents verify [<name>] [--json]
 //
 // Every read here goes through `loadAgentCatalog`/`compileAgentDefinition`/

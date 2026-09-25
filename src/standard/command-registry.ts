@@ -1169,20 +1169,6 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     sideEffects: ["rewrites .metaproject/hooks.json, or ~/.keryx/hooks.json with --user, updating _keryxManaged.managedHookIds"],
   },
   {
-    module: "hooks",
-    command: "hooks disable",
-    summary:
-      "Disable a hook registration: writes a disable-only override for a built-in, or flips `enabled: false` on a project/user hook.",
-    intent: ["hooks disable", "выключи хук", "disable a lifecycle hook"],
-    args: [
-      { name: "<id>", type: "string", required: true, desc: "the hook id to disable" },
-      { name: "user", type: "bool", required: false, desc: "target ~/.keryx/hooks.json instead of .metaproject/hooks.json" },
-    ],
-    json: false,
-    read: false,
-    sideEffects: ["rewrites .metaproject/hooks.json, or ~/.keryx/hooks.json with --user, updating _keryxManaged.managedHookIds"],
-  },
-  {
     module: "bundle",
     command: "bundle export",
     summary:
@@ -1213,6 +1199,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       { name: "render-for", type: "string", required: false, desc: "comma-separated harness ids to render imported rules into; defaults to the harnesses with rules-export already installed" },
       { name: "force", type: "string", required: false, desc: "targetRelative or displayId (scope:path) of a conflicting entry to overwrite anyway; repeatable" },
       { name: "external", type: "bool", required: false, desc: "treat <bundle> as an Agent-Skills-standard catalog directory instead of a portable bundle" },
+      { name: "allow-hooks", type: "bool", required: false, desc: "required to import any hook-config (hooks.json) entry; without it, a bundle carrying one is refused" },
       { name: "dry-run", type: "bool", required: false, desc: "plan (and, for --external, vet) without writing anything" },
       { name: "json", type: "bool", required: false, desc: "print the plan/result as JSON" },
     ],

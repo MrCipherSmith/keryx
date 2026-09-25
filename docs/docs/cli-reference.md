@@ -368,7 +368,7 @@ its model.
 | `/status` | The session id, project root, model, reasoning effort, the tools the session's turns are offered, and whether the client's MCP servers are running. |
 
 Every other shell command is left out because it needs the terminal UI —
-`/workspace`, `/review`, `/governance`, `/triggers`, `/integrations`, `/mcp`,
+`/workspace`, `/review`, `/governance`, `/triggers`, `/integrate`, `/mcp`,
 `/game` and the pickers — or
 a session feature this wire does not carry. One typed anyway is answered with
 the list above rather than sent to the model.
@@ -2060,8 +2060,14 @@ keryx hooks list [--json]
 keryx hooks validate [--json] [--ci]
 keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
 keryx hooks enable <id> [--user]
-keryx hooks disable <id> [--user]
+keryx hooks trust [--yes]
+keryx hooks untrust
+keryx hooks disable <id> [--user] [--acknowledge-gate-risk]
 ```
+
+Project command hooks run only after `keryx hooks trust`; changing the file
+revokes trust. A project file cannot disable a built-in gate; `--user
+--acknowledge-gate-risk` can.
 
 The CLI over `keryx shell`'s lifecycle hook runtime (W6): ten named events
 (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
@@ -4576,8 +4582,11 @@ the exact `keryx mcp trust <name>` a held one is waiting for. It reads the
 session's live state and never dials anything itself, so opening it is
 free.
 
-Do not confuse it with `/integrations`, which is the opposite direction:
-that is where keryx ITSELF is registered into an editor's MCP config.
+Do not confuse it with `/integrate`, which is the opposite direction:
+that is where keryx ITSELF is registered into an editor's MCP config. (The
+CLI `integrations` verb, one letter different, is a separate command: it
+installs Keryx's own hooks/instructions into another coding agent, not MCP
+wiring.)
 `/mcp` meant the installer before this release and now means the
 consumer, matching what `keryx mcp` has meant on the command line since
 the rename.

@@ -319,7 +319,7 @@ export const USAGE_BODY = `Usage:
   keryx integrate [--remove] <cursor|claude|opencode|vscode|generic|all> [--dry-run]
   keryx integrations install --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
   keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
-  keryx integrations doctor --runtime <id>[,<id>...|all] [--json]
+  keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]
   keryx integrations matrix [--check] [--write] [--json] [--file <path>]
   keryx mcp serve [--http] ...                  # retired: use keryx serve-mcp
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
@@ -347,9 +347,11 @@ export const USAGE_BODY = `Usage:
   keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
                                                Run one hook once against a synthetic or captured payload
   keryx hooks enable <id> [--user]              Flip a hook's enabled state (project file, or --user for ~/.keryx/hooks.json)
-  keryx hooks disable <id> [--user]
+  keryx hooks trust [--yes]                     Show every command in .metaproject/hooks.json and trust exactly that version
+  keryx hooks untrust                           Withdraw trust; project command hooks stop running
+  keryx hooks disable <id> [--user] [--acknowledge-gate-risk]
   keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]
-  keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--dry-run] [--json]
+  keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run] [--json]
   keryx bundle import <catalog-dir> --external [--dry-run] [--json]
   keryx bundle inspect <bundle> [--target-scope <scope>] [--json]
   keryx bundle verify <bundle> [--json]
@@ -391,7 +393,7 @@ Commands:
   providers Providers this operator has configured, and cross-family review eligibility
   auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
   orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
-  agents    Manage optional global agent bootstrap instructions
+  agents    Manage optional global agent bootstrap instructions, and the agent catalog (list/show/export/verify/generate)
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
   wiki      Manage the local project knowledge base
@@ -418,7 +420,7 @@ Commands:
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
-  hooks     Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration
+  hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
   learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune
 `;
@@ -465,6 +467,49 @@ export function helpRequestedFor(rest: readonly string[]): boolean {
 const DEEP_HELP_GROUPS: ReadonlySet<string> = new Set(["agents", "shell"]);
 
 /**
+ * Verbs whose BARE `--help`/`-h` (no subcommand token) is already a pure
+ * print, identical to running the verb with no arguments at all —
+ * `skillsCommand`/`memoryCommand`/`securityCommand` each special-case a
+ * leading `--help`/`-h` as their own `!command` branch. Only the bare case is
+ * blanket-safe; a subcommand of these verbs is NOT automatically safe (most
+ * of `keryx skills`'s subcommands do not check `--help` at all, and
+ * `install` writes files) — see {@link SAFE_SUBCOMMAND_HELP} for the
+ * per-subcommand allowlist.
+ */
+const HELP_SAFE_VERBS: ReadonlySet<string> = new Set(["skills", "memory", "security"]);
+
+/**
+ * `<verb> <subcommand> --help` pairs whose subcommand handler checks
+ * `--help`/`-h` itself and does nothing else on that path (R700-07) — the
+ * same safety bar {@link DEEP_HELP_GROUPS} documents, applied per-subcommand
+ * rather than to the whole verb, since most of these verbs' OTHER
+ * subcommands (`skills install`, `memory new`, …) do not check `--help` and
+ * must keep going through the generic interception below.
+ */
+const SAFE_SUBCOMMAND_HELP: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["skills", new Set(["doctor", "uninstall", "scout", "eval", "judge-check", "stocktake"])],
+  ["memory", new Set(["handoff"])],
+  ["security", new Set(["audit-harness", "impact-evidence"])],
+]);
+
+/**
+ * Should `<command> <rest…>` be answered by the command's OWN handler
+ * instead of the generic interception guard below? True for a bare
+ * `<verb> --help` on a {@link HELP_SAFE_VERBS} entry (matches the verb's own
+ * no-args output), and for a `<verb> <subcommand> --help` pair listed in
+ * {@link SAFE_SUBCOMMAND_HELP} (the subcommand's own handler prints its own
+ * help and does nothing else on that path). Pure.
+ */
+function isKnownSafeHelp(command: string, rest: readonly string[]): boolean {
+  const first = rest[0];
+  if (first === "--help" || first === "-h") {
+    return HELP_SAFE_VERBS.has(command);
+  }
+  const subcommands = SAFE_SUBCOMMAND_HELP.get(command);
+  return subcommands !== undefined && first !== undefined && subcommands.has(first);
+}
+
+/**
  * Groups whose `--help` STAYS intercepted (the guard above never lets a
  * mutating subcommand see a stray `--help` and run) but whose printed TEXT
  * is the group's own handler help — not `groupUsage`'s slice of the static
@@ -498,7 +543,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, () => void> = new Map([
  * cmd --help` is the CHILD's question.
  */
 export function shouldInterceptHelp(command: string, rest: readonly string[]): boolean {
-  return !DEEP_HELP_GROUPS.has(command) && helpRequestedFor(rest);
+  return !DEEP_HELP_GROUPS.has(command) && !isKnownSafeHelp(command, rest) && helpRequestedFor(rest);
 }
 
 export function groupUsage(command: string, usage: string = USAGE_BODY): string | undefined {
