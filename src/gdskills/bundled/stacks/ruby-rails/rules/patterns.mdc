@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*.rb"]
+paths: ["**/*.rb", "**/*.erb"]
 metadata:
   origin: authored
 ---
@@ -69,8 +69,8 @@ Rails application design and its common anti-patterns. Applies only to
 
 ## Background jobs
 
-- An `ActiveJob` should be idempotent — Rails' queue adapters guarantee
-  at-least-once delivery, so a retried or duplicated job run must not
+- An `ActiveJob` should be idempotent — most production queue adapters
+  (Sidekiq, SQS, Resque) are at-least-once, so a retried or duplicated job run must not
   double-charge, double-send, or otherwise corrupt state; guard with a
   uniqueness check, an idempotency key, or an upsert instead of assuming
   `perform` runs exactly once.

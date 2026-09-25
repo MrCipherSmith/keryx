@@ -158,6 +158,17 @@ Rule body.
     expect(findings).toEqual([]);
   });
 
+  // R1 review (M2, flow 337): ruby-rails' security/patterns rules cover ERB
+  // output-escaping (raw/html_safe XSS), which only ever fires on .erb
+  // template files -- STACK_EXTENSIONS.ruby-rails must allow that glob, and
+  // a rule scoped to it must lint clean, not just *.rb.
+  test("ruby-rails' allowed extensions include erb, and a **/*.erb glob lints clean for it", () => {
+    expect(STACK_EXTENSIONS["ruby-rails"]).toContain("erb");
+    const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/*.rb", "**/*.erb"]');
+    const findings = lintStackRule(content, { path: "/tmp/pack/rules/security.mdc", allowedExtensions: STACK_EXTENSIONS["ruby-rails"]! });
+    expect(findings).toEqual([]);
+  });
+
   test("STACK_EXTENSIONS covers the five named stacks", () => {
     expect(STACK_EXTENSIONS.python).toEqual(["py", "pyi"]);
     expect(STACK_EXTENSIONS["ts-js-node"]).toEqual(["ts", "tsx", "js", "jsx", "mjs", "cjs"]);

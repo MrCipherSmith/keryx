@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*.rb"]
+paths: ["**/*.rb", "**/*.erb"]
 metadata:
   origin: authored
 ---
@@ -76,7 +76,7 @@ instead. Applies only to `*.rb` files.
 ## Background jobs
 
 - An `ActiveJob` must tolerate being run more than once for the same
-  logical unit of work (Rails' at-least-once delivery guarantee) —
+  logical unit of work (most production queue adapters are at-least-once) —
   guard non-idempotent side effects (charging a card, sending an email)
   with a uniqueness check or an idempotency key rather than assuming
   single delivery.

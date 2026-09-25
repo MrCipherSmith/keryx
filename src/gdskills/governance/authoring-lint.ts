@@ -251,8 +251,15 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   mobx: ["ts", "tsx"],
   // Wave 4 batch 5 (flow 337)
   "php-laravel": ["php"],
-  "ruby-rails": ["rb"],
-  "c-cpp": ["c", "h", "cpp", "cc", "cxx", "hpp", "hxx"],
+  // R1 review (M2): "erb" added -- security.mdc/patterns.mdc cover ERB
+  // output-escaping (raw/html_safe XSS), which only ever fires on .erb
+  // template files, not .rb source.
+  "ruby-rails": ["rb", "erb"],
+  // R1 review (minor 5): the extra C++ extensions this ecosystem actually
+  // uses -- .hh (an alternate header extension), .ipp/.inl/.tpp (template
+  // implementation files included from a .hpp), .cppm/.ixx (C++20 module
+  // interface units, Clang/MSVC respectively).
+  "c-cpp": ["c", "h", "cpp", "cc", "cxx", "hpp", "hxx", "hh", "ipp", "inl", "tpp", "cppm", "ixx"],
   "sql-db": ["sql"],
 };
 
