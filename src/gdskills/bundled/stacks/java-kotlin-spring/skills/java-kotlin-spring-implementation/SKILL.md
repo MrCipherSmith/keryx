@@ -1,9 +1,9 @@
 ---
 name: java-kotlin-spring-implementation
-description: "Use when writing new endpoint, service, or repository code in a Java or Kotlin backend built on Spring Boot -- wiring dependencies through a class's own constructor, splitting request handling across layers, marshaling a request payload into a validated object, deciding where a transaction boundary starts, and authoring a new Spring Data repository method. Covers new/extended code, not an existing diff's risks (that's the pack's own review skill) or fixing a broken build (that's its own build-fix skill)."
+description: "Use when writing a controller, service, or repository class in a Java or Kotlin backend built on Spring Boot -- wiring dependencies through a class's own constructor, splitting request handling across layers, marshaling a request payload into a validated object, deciding where a transaction boundary starts, and authoring a Spring Data repository method. Covers writing/extending production code, not an existing diff's risks (that's the pack's own review skill) or fixing a broken build (that's its own build-fix skill)."
 triggers:
   - "implement this feature in a Spring Boot service"
-  - "add a new REST endpoint to this Java Spring controller"
+  - "add a REST route to this Java Spring controller"
   - "add a Kotlin Spring service that calls this repository"
   - "wire this DTO with jakarta.validation annotations"
   - "add a @Transactional method to this Spring service"

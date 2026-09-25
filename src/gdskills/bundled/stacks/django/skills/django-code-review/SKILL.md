@@ -1,11 +1,11 @@
 ---
 name: django-code-review
-description: "Use when reviewing Django changes for correctness and safety risks -- checks N+1 queries missing select_related/prefetch_related, mark_safe/|safe on user-traceable data, raw()/extra() built by string interpolation, @csrf_exempt on a session-authenticated view, missing/hand-edited migrations, and settings.py security misconfiguration. Read-only: reports findings, does not edit code."
+description: "Use when reviewing Django changes for correctness and injection-class risks -- checks N+1 queries missing select_related/prefetch_related, mark_safe/|safe applied to user-traceable data, raw()/extra() built by string interpolation, @csrf_exempt on a session-authenticated view, missing/hand-edited migrations, and settings.py misconfiguration (DEBUG, SECRET_KEY, ALLOWED_HOSTS). Read-only: reports findings, does not edit code."
 triggers:
   - "review this django diff"
-  - "check this django pr for bugs"
+  - "check this django change before merging"
   - "review django code changes"
-  - "audit this django view for security issues"
+  - "audit this django view for csrf or xss gaps"
   - "check this django model change for N+1"
   - "review this django migration"
 metadata:

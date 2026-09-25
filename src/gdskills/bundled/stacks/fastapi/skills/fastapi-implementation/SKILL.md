@@ -1,15 +1,15 @@
 ---
 name: fastapi-implementation
-description: "Use when implementing or extending a FastAPI path operation, dependency, or Pydantic schema -- covers async vs. sync path operations and FastAPI's threadpool behavior, Depends()-based dependency injection, Pydantic v2 request/response models, response_model filtering, background tasks, and OpenAPI/router conventions. FastAPI projects are Python projects; for generic Python idiom (typing, resource management, asyncio.TaskGroup) not specific to FastAPI's own request lifecycle, use python-implementation."
+description: "Use when implementing or extending a FastAPI path operation, dependency, or Pydantic schema -- covers async vs. sync path operations and FastAPI's threadpool behavior, Depends()-based dependency injection, Pydantic v2 request/response models, response_model filtering, background tasks, and OpenAPI/router conventions. Scoped to FastAPI's own request-handling surface, not general-purpose Python application code with no HTTP layer."
 triggers:
   - "add a FastAPI path operation for..."
-  - "implement this endpoint in FastAPI"
+  - "implement this route handler in FastAPI"
   - "write a Pydantic model that validates..."
   - "add a FastAPI dependency for the current user"
-  - "add background task support to this FastAPI endpoint"
+  - "add background task support to this FastAPI route"
   - "create a new APIRouter for this resource"
   - "implement OAuth2 login in FastAPI"
-  - "add response_model filtering to this endpoint"
+  - "add response_model filtering to this path operation"
 metadata:
   origin: authored
   category: implement

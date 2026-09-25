@@ -3,9 +3,9 @@ name: java-kotlin-spring-code-review
 description: "Use when reviewing a Java or Kotlin Spring Boot change for framework-specific risks -- field injection, @Transactional self-invocation, entities leaked across the API boundary, N+1 query patterns, missing Bean Validation, and overly permissive Spring Security configuration. Read-only, no edits."
 triggers:
   - "review this Spring Boot diff for field injection"
-  - "check this Spring service for @Transactional self-invocation bugs"
+  - "audit this Spring service for a @Transactional self-invocation pitfall"
   - "review this Spring controller for entity leakage"
-  - "check this Spring Data JPA repository for N+1 queries"
+  - "audit this Spring Data JPA repository for N+1 queries"
   - "review this Kotlin Spring change for missing validation"
   - "review this Spring Security configuration"
 metadata:

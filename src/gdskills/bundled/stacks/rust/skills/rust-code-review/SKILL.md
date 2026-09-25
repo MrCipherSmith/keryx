@@ -4,10 +4,11 @@ description: "Use when reviewing a Rust change for ownership, panic, and safety 
 triggers:
   - "review this Rust diff for unwrap panics"
   - "check this Rust change for unsafe block safety"
-  - "review this Rust pull request for blocking calls in async fn"
+  - "review this Rust patch for blocking calls in async fn"
   - "any unnecessary clones in this Rust change"
   - "check this Rust code for integer overflow on untrusted input"
   - "review this Rust diff for error handling that drops the source"
+  - "audit this Rust module for a panic reachable from untrusted input"
 metadata:
   origin: authored
   category: review

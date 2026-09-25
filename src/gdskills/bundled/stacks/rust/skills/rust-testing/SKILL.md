@@ -1,14 +1,14 @@
 ---
 name: rust-testing
-description: "Use when a Rust crate's test suite needs writing, extending, or fixing -- #[cfg(test)] unit tests, tests/ integration tests, table-style cases, #[tokio::test] async tests joined properly, proptest/quickcheck, cargo fuzz, and criterion benchmarks."
+description: "Use when a Rust crate's own test suite needs writing, extending, or fixing with cargo test -- #[cfg(test)] unit tests, tests/ integration tests, multi-case assertions built as a Vec of structs, #[tokio::test] async tests joined properly, proptest/quickcheck property-based checks on a Rust struct or enum, and criterion benchmarks."
 triggers:
-  - "write Rust tests for this module"
+  - "write Rust unit tests for this module with cargo test"
   - "add unit tests in a #[cfg(test)] block"
-  - "fix this failing cargo test"
-  - "add a proptest for this Rust parser"
-  - "write a criterion benchmark for this function"
-  - "test this async fn with #[tokio::test]"
-  - "add integration tests under tests/ for this crate"
+  - "fix this failing cargo test in the crate"
+  - "add a proptest for this Rust struct's invariants"
+  - "write a criterion benchmark for this Rust function"
+  - "test this Rust async fn with #[tokio::test]"
+  - "add integration tests under tests/ for this Rust crate"
 metadata:
   origin: authored
   category: test

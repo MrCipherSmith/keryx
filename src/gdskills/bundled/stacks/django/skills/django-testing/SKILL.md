@@ -1,10 +1,10 @@
 ---
 name: django-testing
-description: "Use when writing Django TestCase/SimpleTestCase classes, driving the Django test Client against views, wiring pytest-django fixtures (db, client, django_user_model), building factory_boy model factories, or asserting on permission/form/queryset behavior in a Django app's own test suite. Django-specific: ORM assertions, migration-aware test databases, and DRF serializer/view test clients -- a plain pytest module with no Django import belongs to python-testing instead."
+description: "Use when writing Django TestCase/SimpleTestCase classes, simulating browser requests against a view with Django's own request-simulation helper, wiring pytest-django fixtures (db, django_user_model), building factory_boy model factories, or asserting on permission/form/queryset behavior in a Django app's own test suite. Django-specific: ORM assertions, migration-aware test databases, and DRF serializer/view tests, scoped to code that actually imports Django."
 triggers:
   - "write a django test for..."
   - "add pytest-django coverage for this view"
-  - "fix this failing django test"
+  - "fix this failing django test after a model field rename"
   - "test this django model's clean method"
   - "write a factory_boy factory for..."
   - "test this django rest framework endpoint"

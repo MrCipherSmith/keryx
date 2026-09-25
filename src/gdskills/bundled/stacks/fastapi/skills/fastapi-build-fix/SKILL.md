@@ -1,14 +1,14 @@
 ---
 name: fastapi-build-fix
-description: "Use when a FastAPI app fails to start, import, type-check, or lint -- resolves app-startup/router-registration failures, dependency-injection wiring errors (Depends() on the wrong callable, a missing sub-dependency), Pydantic v1/v2 model errors, mypy/pyright errors on path operations and schemas, and ruff failures, with the smallest root-cause fix. For a generic Python ModuleNotFoundError/packaging/dependency-resolver failure not specific to FastAPI's own app wiring, use python-build-fix."
+description: "Use when a FastAPI app itself fails to start, import, or register a router -- app-startup failures, dependency-injection wiring errors (Depends() on the wrong callable, a missing sub-dependency), Pydantic v1/v2 model/validation errors, and a checker flagging a path-operation signature or response_model specifically, with the smallest root-cause fix. For a generic Python ModuleNotFoundError/packaging/dependency-resolver failure not specific to FastAPI's own app wiring, use python-build-fix."
 triggers:
   - "fix this FastAPI app startup error"
-  - "our FastAPI app fails to import"
+  - "the FastAPI app fails to import after adding a new router"
   - "this Depends() dependency is failing to resolve"
-  - "mypy is failing on this FastAPI path operation"
-  - "ruff check is failing on our FastAPI project"
-  - "this Pydantic model is raising a validation error I don't understand"
-  - "fix this FastAPI router registration error"
+  - "this FastAPI path operation's response_model is rejecting valid data"
+  - "the linter flags this FastAPI router file specifically"
+  - "this Pydantic model keeps raising an unexpected validation error"
+  - "fix this FastAPI router registration error causing a 404"
 metadata:
   origin: authored
   category: build-fix

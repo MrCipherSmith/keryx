@@ -1,13 +1,13 @@
 ---
 name: fastapi-testing
-description: "Use when you write, extend, or fix a FastAPI project's test suite -- covers TestClient/httpx.AsyncClient requests against the real app, app.dependency_overrides for auth/DB fixtures, asserting response status codes and response_model filtering, and mocking external HTTP calls. Not for testing plain Python functions with no HTTP layer (see python-testing) or auditing test conventions without changing files (see review-testing-practices)."
+description: "Use when you write, extend, or fix a FastAPI project's test suite -- driving synchronous or async HTTP requests against the running app in-process, app.dependency_overrides for auth/DB fixtures, asserting response status codes and response_model filtering, and mocking an external HTTP call. Scoped to a project that actually has a FastAPI HTTP layer under test, not a generic Python test suite with none."
 triggers:
   - "write a pytest test for this FastAPI endpoint"
-  - "test this FastAPI route with TestClient"
+  - "drive an in-process request against this FastAPI route in a test"
   - "add dependency_overrides for the current user in this test"
-  - "test that this endpoint returns a 422 on bad input"
+  - "test that this endpoint rejects a malformed request body with a 422"
   - "mock the external API call in this FastAPI test"
-  - "add test coverage for this FastAPI router"
+  - "write tests for this FastAPI router's additional endpoints"
 metadata:
   origin: authored
   category: test

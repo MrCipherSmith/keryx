@@ -1,12 +1,12 @@
 ---
 name: fastapi-code-review
-description: "Use when reviewing FastAPI changes for correctness and safety risks -- checks blocking calls inside async def path operations/dependencies, request bodies accepted as dict/Any instead of Pydantic models, missing response_model filtering, missing or misplaced auth dependencies, unsafe CORS configuration, and hard-coded secrets. Read-only: reports findings, does not edit code. For generic Python-level review (mutable defaults, broad except, resource leaks) not specific to FastAPI's own request lifecycle, use python-code-review."
+description: "Use when reviewing FastAPI changes for correctness and safety risks -- checks a synchronous driver or library call left in a route handler's coroutine, request bodies accepted as dict/Any instead of Pydantic models, missing response_model filtering, missing or misplaced auth dependencies, unsafe CORS configuration, and hard-coded secrets. Read-only: reports findings, does not edit code, and is scoped to FastAPI's own request lifecycle rather than general-purpose backend correctness."
 triggers:
   - "review this FastAPI diff"
-  - "check this FastAPI pull request for bugs"
-  - "review this FastAPI endpoint for security issues"
+  - "audit this FastAPI branch before merging"
+  - "review this FastAPI endpoint for an unsafe CORS or auth misconfiguration"
   - "audit this FastAPI router"
-  - "review this async FastAPI code for blocking calls"
+  - "review this FastAPI path operation for a blocking database driver call"
   - "check this FastAPI code for missing response_model"
 metadata:
   origin: authored

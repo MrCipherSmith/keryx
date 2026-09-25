@@ -7,7 +7,7 @@ triggers:
   - "propagate this Rust error with the ? operator"
   - "add a thiserror error enum for this Rust module"
   - "write this as an async fn in Rust without blocking the runtime"
-  - "design this Rust trait for the consumer that needs it"
+  - "design this Rust trait so callers can't over-implement it"
   - "implement this Rust struct with a builder pattern"
 metadata:
   origin: authored
