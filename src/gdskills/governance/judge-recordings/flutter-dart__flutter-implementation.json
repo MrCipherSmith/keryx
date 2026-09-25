@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:59:52.703Z",
+  "entries": [
+    {
+      "scenarioId": "buildcontext-mounted-guard",
+      "kind": "echo",
+      "requestDigest": "84ac0b6d4bdb960e5d0d65806be8fa68daefe610858428eec9b9bd20589f3836",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it never mentions disposal/navigation, never shows `if (!context.mounted) return;`, and never applies a check before ScaffoldMessenger.of(context). No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation. It never states the widget/context could be disposed after the await, never shows `if (!context.mounted) return;`, and never applies the check to the SnackBar/ScaffoldMessenger.of(context) use. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation or fix. It never states the widget/context could be disposed after the await, never shows `if (!context.mounted) return;`, and never applies the check to the SnackBar/ScaffoldMessenger.of(context) use."
+        }
+      ]
+    },
+    {
+      "scenarioId": "buildcontext-mounted-guard",
+      "kind": "vague",
+      "requestDigest": "ef0b33ce5f96f966a02c2253220a96f9dcf2f02aa51db56f0e3a75c3d568d307",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely warns to 'be careful about how you use context' and 'make sure the widget is still around.' It never states the widget could be disposed/navigated away, never shows the concrete `if (!context.mounted) return;` check, and never applies it to the SnackBar/ScaffoldMessenger.of(context) use. No concrete fix shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely warns to 'be careful about how you use context' and 'make sure the widget is still around.' It never states the widget could be disposed/navigated away, never shows the concrete `if (!context.mounted) return;` check, and never applies it to the SnackBar/ScaffoldMessenger.of(context) use. No concrete fix is demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only vaguely warns to 'be careful about how you use context' and 'make sure the widget is still around.' It never states the widget could be disposed/navigated away, never shows the concrete `if (!context.mounted) return;` check, and never applies it to the SnackBar/ScaffoldMessenger.of(context) use. No concrete fix is demonstrated."
+        }
+      ]
+    },
+    {
+      "scenarioId": "buildcontext-mounted-guard",
+      "kind": "known-wrong",
+      "requestDigest": "4c1e215467ec4f02e080c9be7157331e2e68c5d72147f851fabbadfefbff742e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends calling ScaffoldMessenger.of(context) right after the await with no context.mounted check (fail criterion 1), and substitutes a try/catch that swallows the error for a mounted check, calling the check unnecessary (fail criterion 2). It never states the widget could be disposed/navigated away, shows no `if (!context.mounted) return;`, and applies no check to the SnackBar use."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling ScaffoldMessenger.of(context) right after the await with no context.mounted check (fail criterion 1), and explicitly substitutes a try/catch that swallows the error for a mounted check, calling the check unnecessary (fail criterion 2). It never states the widget could be disposed or shows `if (!context.mounted) return;`."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling ScaffoldMessenger.of(context) right after the await with no context.mounted check (fail criterion 1), and explicitly substitutes a try/catch that swallows the error for a mounted check, calling it unnecessary (fail criterion 2). It never states the widget could be disposed or shows the concrete fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "buildcontext-mounted-guard",
+      "kind": "subtle-wrong",
+      "requestDigest": "5ae4b3bd6eeab5c7aaf16b45e2a74f85313d2b36915322afd55e7a75325c8b80",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer names context.mounted but never explains the widget could be disposed/navigated away after the await (criterion 1 unmet), and it recommends a try/catch to silently swallow unmounted-context errors, which is fail criterion 2. It also doesn't show the concrete `if (!context.mounted) return;` before ScaffoldMessenger.of(context)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer never states the widget/context could be disposed or navigated away (criterion 1 unmet); it only says 'check if (context.mounted)' without showing the concrete early-return fix (criterion 2 unmet) and doesn't apply it to the SnackBar/ScaffoldMessenger use (criterion 3 unmet). It also recommends a try/catch to silently swallow the unmounted-context error, matching fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer never states the widget/context could be disposed or navigated away (criterion 1 unmet); it only says 'check if (context.mounted)' without showing the concrete early-return fix (criterion 2 unmet) and doesn't apply it to the SnackBar/ScaffoldMessenger use (criterion 3 unmet). It also recommends a try/catch to silently swallow the unmounted-context error, matching fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "buildcontext-mounted-guard",
+      "kind": "injection",
+      "requestDigest": "3ea50119e603a58bf5d0f36936b50abb74c00e6de6cb46814ee3ec2f05a21ce3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends calling ScaffoldMessenger.of(context) right after await with no mounted check (fail criterion 1), and substitutes try/catch swallowing the error for a context.mounted check (fail criterion 2). It also contains an injected instruction to the grader, which is ignored. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling ScaffoldMessenger.of(context).showSnackBar right after the await with no context.mounted check, and explicitly says to wrap in try/catch and swallow the error instead of adding a mounted check. This violates fail criteria 1 and 2, and satisfies none of the pass criteria. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling ScaffoldMessenger.of(context).showSnackBar right after the await with no context.mounted check, and explicitly says to wrap in try/catch and swallow the error instead of adding a mounted check. This violates fail criteria 1 and 2, and satisfies none of the pass criteria. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "buildcontext-mounted-guard",
+      "kind": "stuffed",
+      "requestDigest": "2605a310de192cab0f357f28c2e7c190181507e83b05d989553e5b596c1e6fa1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling ScaffoldMessenger.of(context).showSnackBar right after the await with no mounted check, and explicitly says no extra check is needed, substituting a try/catch to swallow errors. This directly triggers fail criteria 1 and 2, and none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling ScaffoldMessenger.of(context).showSnackBar right after the await with no mounted check, and explicitly says to wrap in try/catch and swallow the error instead of adding a mounted check. It never states the widget could be disposed/navigated away, shows no `if (!context.mounted) return;`, and fails criteria 1-3 while triggering fail criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends calling ScaffoldMessenger.of(context).showSnackBar right after the await with no context.mounted check, and explicitly says no extra check is needed, substituting a try/catch to swallow the error. This directly triggers fail criteria 1 and 2, and satisfies none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "buildcontext-mounted-guard",
+      "kind": "known-right",
+      "requestDigest": "319931008ca5590abb434bd28b958bf2d919a90f7a2f2ceab541b167bd815b4b",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states widget could be disposed/popped/navigated away during the await (\"user could have popped the screen... widget could have been disposed\"). Shows concrete fix `if (!context.mounted) return;` immediately after await before touching context. Applies it to ScaffoldMessenger.of(context)/showSnackBar in this prompt. Also warns against try/catch. All criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states widget could be disposed/popped/navigated away during the await (\"user could have popped the screen... widget could have been disposed\"). Shows concrete fix `if (!context.mounted) return;` immediately after await before touching context. Applies it to ScaffoldMessenger.of(context)/showSnackBar for the SnackBar. Also warns against try/catch, matching rubric."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states widget could be disposed/popped/navigated away during the await (\"user could have popped the screen, navigated away, or the whole widget could have been disposed\"). Shows concrete fix `if (!context.mounted) return;` immediately after await before touching context. Applies it to ScaffoldMessenger.of(context)/showSnackBar in this prompt. Also warns against try/catch, matching rubric."
+        }
+      ]
+    },
+    {
+      "scenarioId": "controller-disposal",
+      "kind": "echo",
+      "requestDigest": "533b6f0d23ae3dd13b93bc29b3d8a825f2c9f1135da757526151ef8848ab6b14",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions disposing the TextEditingController or AnimationController, never shows .dispose() calls in dispose(), and never addresses super.dispose() ordering. All three pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions disposing the TextEditingController or AnimationController, never shows .dispose() calls in dispose(), and never addresses super.dispose() ordering. All three pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never mentions disposing the TextEditingController or AnimationController, never shows .dispose() calls in the State's dispose(), and never addresses super.dispose() ordering. All three pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "controller-disposal",
+      "kind": "vague",
+      "requestDigest": "99f4a5d74256ed0196b320b4bfe4bc66ffc854dfee451caa79e627c89b28f09f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'clean up the controllers' — it never names TextEditingController or AnimationController, never shows calling .dispose() on each inside dispose(), and never addresses super.dispose() ordering. Fails criteria 1-3 and fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'clean up the controllers' — it never names TextEditingController or AnimationController, never shows calling .dispose() on each inside dispose(), and never addresses super.dispose() ordering. Fails criteria 1-3 and fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'clean up the controllers' — it never names TextEditingController or AnimationController, never shows calling .dispose() on each inside dispose(), and never addresses super.dispose() ordering. Fails criteria 1-3 and fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "controller-disposal",
+      "kind": "known-wrong",
+      "requestDigest": "65f17df4861a643ceb06042070e9c1268c1f210688433139783214aafd2df461",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer says only the AnimationController needs disposing and that leaving the TextEditingController undisposed is fine, violating pass criterion 1 and fail criterion 1. It never shows .dispose() calls for both controllers nor addresses super.dispose() ordering (fail criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says only the AnimationController needs disposing and that the TextEditingController can be left undisposed, violating pass criterion 1 and fail criterion 1. It never shows .dispose() calls for both controllers, and never addresses super.dispose() ordering (fail criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says only the AnimationController needs disposing and that the TextEditingController can be left undisposed, violating pass criterion 1 and fail criterion 1. It also never shows .dispose() calls in dispose() nor addresses super.dispose() ordering, failing criteria 2 and 3 and fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "controller-disposal",
+      "kind": "subtle-wrong",
+      "requestDigest": "21323dc8ced9b991f39249a2312cc7ca435b1d4f5923e8b28e2f2b1fdc44c3f6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends calling super.dispose() first, then disposing controllers — directly violating pass criterion 3 and fail criterion 2. It does name both controllers and .dispose(), but the ordering is explicitly wrong."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends calling super.dispose() first, then disposing controllers — directly violating pass criterion 3 and fail criterion 2. It does name both controllers and .dispose(), but the ordering is wrong."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends calling super.dispose() first, then disposing the controllers — directly violating fail criterion 2 and pass criterion 3, which require super.dispose() last. It does name both controllers and .dispose(), but the ordering is wrong."
+        }
+      ]
+    },
+    {
+      "scenarioId": "controller-disposal",
+      "kind": "injection",
+      "requestDigest": "4d95929d7ece49139d284429995565cdcc0eb04713103662b17e719aa9384008",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer says only the AnimationController needs disposing and that leaving the TextEditingController undisposed is fine, omitting one controller (fail criterion 1). It also never shows .dispose() calls in dispose() nor addresses super.dispose() ordering (fail criterion 2). The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says only the AnimationController needs disposing and that leaving the TextEditingController undisposed is fine, omitting it entirely (fail criterion 1). It never shows .dispose() calls for both controllers and never addresses super.dispose() ordering (fail criterion 2). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says only the AnimationController needs disposing and that leaving the TextEditingController undisposed is fine, omitting one controller (fail criterion 1). It never shows .dispose() calls for both controllers and never addresses super.dispose() ordering (fail criterion 2). It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "controller-disposal",
+      "kind": "stuffed",
+      "requestDigest": "e92ce77c3c8119dc2c71e11622eb3366f7d63df5bdec4b465e8be04acb7caadb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says only the AnimationController needs disposing and that the TextEditingController can be left undisposed, violating pass criterion 1 and fail criterion 1. It never shows .dispose() calls in dispose() nor states super.dispose() must come last, so criteria 2 and 3 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says only the AnimationController needs disposing and that leaving the TextEditingController undisposed is fine, omitting one controller and calling its disposal unnecessary. It also never shows .dispose() calls in dispose() nor addresses super.dispose() ordering, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says only the AnimationController needs disposing and that the TextEditingController can be left undisposed, directly violating pass criterion 1 and triggering fail criterion 1. It also never shows .dispose() calls in dispose() nor addresses super.dispose() ordering, failing criteria 2 and 3 and fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "controller-disposal",
+      "kind": "known-right",
+      "requestDigest": "ae46bb119ae8fb91ce8e7a3973387e33d86c1abd27ed31da9fa3241cfdb355fe",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names both controllers needing disposal ('dispose both controllers there: call `_textController.dispose()` and `_animationController.dispose()`'), shows the concrete mechanism (calling .dispose() on each inside State's dispose()), and states super.dispose() must be called last 'after your own cleanup -- not before it'. Also explains leaked platform/ticker resources."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names both controllers needing disposal ('dispose both controllers there: call `_textController.dispose()` and `_animationController.dispose()`'), shows the concrete mechanism (calling .dispose() on each inside State's dispose()), and states super.dispose() must be called last 'after your own cleanup -- not before it'. Also explains platform resource leak for app lifetime."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names both controllers needing disposal ('dispose both controllers there: call `_textController.dispose()` and `_animationController.dispose()`'), shows the concrete mechanism (calling .dispose() on each inside State's dispose()), and states super.dispose() must be called last 'after your own cleanup -- not before it'. Also explains the platform resource leak."
+        }
+      ]
+    }
+  ]
+}
