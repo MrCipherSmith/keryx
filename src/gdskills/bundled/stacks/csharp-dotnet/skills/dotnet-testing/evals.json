@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Cover this validator class with unit tests",
+      "This validator has zero test coverage right now, can you add some?",
       "I need Moq set up for this class's HTTP dependency",
       "What should this xUnit suite mock and what should it exercise for real?",
       "Add TestCase rows for the different discount tiers in NUnit",
       "This dotnet test keeps failing intermittently, help me stabilize it",
-      "Write async test methods for this repository class",
+      "None of the async methods on this repository class are tested -- can you take care of that?",
       "Set up NSubstitute for the payment gateway interface in this test"
     ],
     "negative": [
@@ -69,7 +69,9 @@
         "vague": "Wait for the background operation properly instead of guessing how long it takes before you assert.",
         "subtle_wrong": "Wire up a `TaskCompletionSource` that the hosted service completes when its work finishes, and `await tcs.Task` in the test -- that's the real join point. If it's still flaky occasionally, add a small `Task.Delay(100)` right after the await too, just as a bit of extra insurance before the assertions run."
       },
-      "anti_patterns": ["Task.Delay"]
+      "anti_patterns": [
+        "Task.Delay"
+      ]
     }
   ]
 }
