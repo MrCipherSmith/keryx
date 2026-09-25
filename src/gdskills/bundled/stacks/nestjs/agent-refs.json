@@ -1,3 +1,6 @@
 {
-  "agents": []
+  "agents": [
+    "nestjs-code-auditor",
+    "nestjs-build-fixer"
+  ]
 }

@@ -505,7 +505,7 @@
       ],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "experimental"
+      "stability": "stable"
     },
     "nestjs-skills": {
       "kind": "skill",
@@ -522,7 +522,7 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "experimental"
+      "stability": "stable"
     },
     "vue-rules": {
       "kind": "rule",
@@ -573,7 +573,7 @@
       ],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "experimental"
+      "stability": "stable"
     },
     "angular-skills": {
       "kind": "skill",
@@ -590,7 +590,7 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "experimental"
+      "stability": "stable"
     },
     "nextjs-nuxt-rules": {
       "kind": "rule",
@@ -643,7 +643,7 @@
       ],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "experimental"
+      "stability": "stable"
     },
     "mobx-skills": {
       "kind": "skill",
@@ -660,7 +660,7 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "experimental"
+      "stability": "stable"
     }
   },
   "components": {

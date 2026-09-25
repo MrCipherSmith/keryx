@@ -257,8 +257,12 @@ describe("generateStackAgentPair", () => {
     const gateCleared = stackIds.filter((id: string) => checkStackPackGateCleared(path.join(stacksRoot, id)).cleared).sort();
 
     // Pin the shipped, honest-gate outcome explicitly: go and python clear
-    // the gate; react and ts-js-node still fail it.
-    expect(gateCleared).toEqual(["go", "python"]);
+    // the gate (flow 314/316/317, Wave 4 batch 1); react and ts-js-node
+    // still fail it; angular, mobx, and nestjs clear it (flow 318, Wave 4
+    // batch 2, T13's honest DeepSeek runner+judge trials=10 gate run);
+    // nextjs-nuxt and vue still fail it (see their own agent-refs.json
+    // `note` for the specific failing scenario/collision).
+    expect(gateCleared).toEqual(["angular", "go", "mobx", "nestjs", "python"]);
 
     // Direction 1: every gate-cleared pack that carries an `agentProfile`
     // regenerates to exactly what is on disk — the byte-identical
@@ -291,10 +295,11 @@ describe("generateStackAgentPair", () => {
       expect(gateCleared).toContain(origin.sourceRef);
     }
 
-    // Explicit, not implied by the loop above: exactly 4 generated files
-    // ship — the go and python code-auditor/build-fixer pairs.
-    expect(gateCleared).toEqual(["go", "python"]);
-    expect(generatedFileCount).toBe(4);
+    // Explicit, not implied by the loop above: exactly 10 generated files
+    // ship — the go/python (flow 314-317) and angular/mobx/nestjs (flow
+    // 318) code-auditor/build-fixer pairs.
+    expect(gateCleared).toEqual(["angular", "go", "mobx", "nestjs", "python"]);
+    expect(generatedFileCount).toBe(10);
   });
 
   // R2-4: the byte-identical regeneration path (Direction 1 above) has

@@ -1,3 +1,6 @@
 {
-  "agents": []
+  "agents": [
+    "mobx-code-auditor",
+    "mobx-build-fixer"
+  ]
 }

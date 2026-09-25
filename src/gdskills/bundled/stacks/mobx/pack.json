@@ -2,16 +2,25 @@
   "id": "mobx",
   "family": "framework",
   "extends": "react",
-  "modules": ["mobx-rules", "mobx-skills"],
-  "detectionMarkers": ["mobx"],
+  "modules": [
+    "mobx-rules",
+    "mobx-skills"
+  ],
+  "detectionMarkers": [
+    "mobx"
+  ],
   "provenance": {
     "origin": "authored",
     "sourceRef": "flow 318, Wave 4 batch 2"
   },
-  "stability": "experimental",
+  "stability": "stable",
   "skills": {
-    "implement": ["mobx-store-implementation"],
-    "test": ["mobx-observable-testing"],
+    "implement": [
+      "mobx-store-implementation"
+    ],
+    "test": [
+      "mobx-observable-testing"
+    ],
     "review": [],
     "build-fix": [],
     "migrate": []

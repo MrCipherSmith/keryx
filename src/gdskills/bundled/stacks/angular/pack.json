@@ -2,18 +2,31 @@
   "id": "angular",
   "family": "framework",
   "extends": "ts-js-node",
-  "modules": ["angular-rules", "angular-skills"],
-  "detectionMarkers": ["angular"],
+  "modules": [
+    "angular-rules",
+    "angular-skills"
+  ],
+  "detectionMarkers": [
+    "angular"
+  ],
   "provenance": {
     "origin": "authored",
     "sourceRef": "flow 318, Wave 4 batch 2"
   },
-  "stability": "experimental",
+  "stability": "stable",
   "skills": {
-    "implement": ["angular-implementation"],
-    "test": ["angular-testing"],
-    "review": ["angular-code-review"],
-    "build-fix": ["angular-build-fix"],
+    "implement": [
+      "angular-implementation"
+    ],
+    "test": [
+      "angular-testing"
+    ],
+    "review": [
+      "angular-code-review"
+    ],
+    "build-fix": [
+      "angular-build-fix"
+    ],
     "migrate": []
   },
   "agentProfile": {

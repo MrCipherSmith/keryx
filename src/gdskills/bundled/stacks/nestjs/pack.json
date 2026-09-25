@@ -2,18 +2,29 @@
   "id": "nestjs",
   "family": "framework",
   "extends": "ts-js-node",
-  "modules": ["nestjs-rules", "nestjs-skills"],
-  "detectionMarkers": ["nestjs"],
+  "modules": [
+    "nestjs-rules",
+    "nestjs-skills"
+  ],
+  "detectionMarkers": [
+    "nestjs"
+  ],
   "provenance": {
     "origin": "authored",
     "sourceRef": "flow 318, Wave 4 batch 2"
   },
-  "stability": "experimental",
+  "stability": "stable",
   "skills": {
-    "implement": ["nestjs-implementation"],
-    "test": ["nestjs-testing"],
+    "implement": [
+      "nestjs-implementation"
+    ],
+    "test": [
+      "nestjs-testing"
+    ],
     "review": [],
-    "build-fix": ["nestjs-build-fix"],
+    "build-fix": [
+      "nestjs-build-fix"
+    ],
     "migrate": []
   },
   "agentProfile": {

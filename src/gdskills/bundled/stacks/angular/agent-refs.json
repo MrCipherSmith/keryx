@@ -1,3 +1,6 @@
 {
-  "agents": []
+  "agents": [
+    "angular-code-auditor",
+    "angular-build-fixer"
+  ]
 }

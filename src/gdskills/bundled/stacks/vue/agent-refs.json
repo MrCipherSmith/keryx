@@ -1,3 +1,4 @@
 {
-  "agents": []
+  "agents": [],
+  "note": "honest gate (flow 318, T13): vue-build-fix fails -- falsePositive=1 (a same-pack near-miss collision with vue-implementation) and its template-union-type-narrowing behavior scenario scores 0.4, below the 0.8 PACK_BEHAVIOR_PASS_FLOOR, even though every other vue skill (implementation, testing, code-review, vue2-to-vue3-migration) clears the gate cleanly. See src/gdskills/bundled/stacks/vue/governance/eval.json. Stays experimental; no generated agent pair."
 }
