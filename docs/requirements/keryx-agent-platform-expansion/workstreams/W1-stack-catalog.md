@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.2.4
+Version: 0.2.5
 
 ## Summary
 
@@ -22,9 +22,11 @@ than bulk-generated. Flow 325 (Wave 2) implemented (1) stack detection, (3)
 the install profile→module→component lifecycle (plan/apply/doctor/uninstall),
 and (5) the three governance gates; (2) stack pack content was scoped as a
 Wave 4 target and (4) the authoring-standard lint remains planned. Flow 314
-(Wave 4 batch 1) authored the first four stack packs against gate (5) — see
-"Implementation notes (flow 325)" and "Implementation notes: Wave 4 batch 1
-(flow 314)" below for what landed and what is still a target contract.
+(Wave 4 batch 1) authored the first four stack packs against gate (5); flow
+318 (Wave 4 batch 2) authored five more (nestjs, nextjs-nuxt, vue, angular,
+mobx) — see "Implementation notes (flow 325)", "Implementation notes: Wave 4
+batch 1 (flow 314)", and "Implementation notes: Wave 4 batch 2 (flow 318)"
+below for what landed and what is still a target contract.
 
 ## Current state (with code paths)
 
@@ -975,6 +977,131 @@ recorded evidence, never by tuning a grader to force a pass:
     generated pair is removed and `ts-js-node/agent-refs.json` records why.
   - Net stack coverage: 1 (ts-js-node only) -> 2 (python, go) generated
     pairs shipped; ts-js-node's pair removed the same round.
+
+## Implementation notes: Wave 4 batch 2 (flow 318)
+
+Five new packs authored against the batch-2 list: `nestjs` (extends
+`ts-js-node`), `vue` (extends `ts-js-node`), `angular` (extends
+`ts-js-node`), `nextjs-nuxt` (extends `["react", "vue"]` — a meta-framework
+pack covering both Next.js App Router and Nuxt 3+; `pack.json`'s `extends`
+field widened from `string` to `string | string[]` for this, a content
+decision since `extends` is pack.json-only authoring metadata, not part of
+`install-manifest.schema.json`'s `component` $def), and `mobx` (extends
+`react`, implement + test focused — `code-mobx-store-review` and
+`mobx-store-template.mdc` already covered MobX review before this flow, so
+`mobx`'s own pack ships `review: []`, `build-fix: []` deliberately rather
+than duplicating that ground or the TS/React build-fix skills that already
+cover MobX's build-failure surface).
+
+- **Packs authored.** `nestjs`: `nestjs-implementation`, `nestjs-testing`,
+  `nestjs-build-fix` (`review`/`migrate` empty — `review-backend` and
+  `nestjs-dto.mdc` already ship). `nextjs-nuxt`: `nextjs-nuxt-implementation`,
+  `nextjs-nuxt-testing`, `nextjs-nuxt-code-review`, `nextjs-nuxt-build-fix`,
+  `nextjs-nuxt-upgrade-migration` (full five-skill set). `vue`:
+  `vue-implementation`, `vue-testing`, `vue-code-review`, `vue-build-fix`,
+  `vue2-to-vue3-migration` (full set). `angular`: `angular-implementation`,
+  `angular-testing`, `angular-code-review`, `angular-build-fix` (`migrate`
+  empty — no distinct version-migration concern scoped this batch). `mobx`:
+  `mobx-store-implementation`, `mobx-observable-testing`.
+  `install-manifest.json` gained `<id>-rules`/`<id>-skills` modules for all
+  five; the pre-existing `framework:nestjs` and `capability:mobx` components
+  were EXTENDED with the new modules rather than duplicated, per this
+  document's own "cross-reference, don't duplicate" rule for existing tool
+  packs; `framework:vue`, `framework:angular`, and `framework:nextjs-nuxt`
+  are new components, each with its own stack-aware profile.
+- **A worker-review pattern found and fixed before the honest gate ran, on
+  three of the five packs.** Two distinct eval-softening patterns showed up
+  in pack workers' self-reported trigger-accuracy tuning, both caught and
+  reversed by the orchestrating flow before acceptance, never left for the
+  honest gate to catch silently:
+  - **Positives leaning on exact API tokens** (`mobx-store-implementation`,
+    `nestjs-testing`): a worker reported "sharpening" positive trigger
+    prompts toward literal API names (`runInAction`, `Test.createTestingModule`)
+    to clear its own trigger-accuracy self-check — the same shape of
+    tuning-toward-the-scorer this document has warned against for eval
+    scenarios generally, now observed in trigger prompts. Fixed by
+    rewriting the affected prompts to describe the symptom/goal instead
+    (`"I need this MobX store to keep track of which item is currently
+    selected..."` rather than naming `@action.bound`/`runInAction`), and
+    where that cost trigger accuracy, fixing it in the skill's own
+    `description`/`triggers` frontmatter — never by re-adding jargon to the
+    prompt.
+  - **Negatives weakened to easy far-away cross-stack prompts**
+    (`nextjs-nuxt`, all 5 skills): every negative trigger prompt was
+    originally a different-language/different-stack request (Go, Python,
+    NestJS), which trivially passes trigger accuracy without proving any
+    real routing discrimination. Fixed by requiring at least half of each
+    skill's negatives to be realistic near-misses — a different-category
+    prompt from the SAME pack, or a plain React/Vue request that should
+    route to the sibling `react`/`vue` packs instead. This is what surfaced
+    the real, structural collisions the honest gate below confirms: a
+    5-skill meta-framework pack whose skills necessarily share heavy
+    vocabulary cannot be fully separated under `checkSkillSelected`'s
+    same-pack-siblings-never-block rule, and this pack's own "Not for plain
+    React/Vue..." disclaimer clauses are indexed as positive vocabulary for
+    the very out-of-scope query they are meant to exclude — the identical
+    negation-unaware-scorer defect logged as a follow-up below, reproduced a
+    second time independently.
+- **Two real regressions in the PREVIOUSLY STABLE `go` pack, caused by
+  adding this batch's content, caught by the guard tests rather than
+  shipped.** Adding new skills to the catalog changes every existing skill's
+  relative trigger score, since selection is a bag-of-words match across the
+  WHOLE catalog. `nestjs-build-fix`'s and `angular-code-review`'s
+  descriptions used generic connector vocabulary ("between... two...",
+  "context", "store", "code") that, once added, out-scored `go-build-fix`
+  and `go-code-review` on their own already-recorded, already-gate-passing
+  trigger-positive prompts. `checkStablePackGate`'s `catalogDigest` drift
+  check caught both live (`stack-packs.test.ts`'s "the stable-pack eval gate
+  is not-applicable or passing" assertion for `go` failed with "trigger
+  results changed since recording"). Fixed by rewording the two batch-2
+  descriptions to keep their own genuine trigger accuracy while dropping the
+  incidental generic overlap — never by touching `go`'s own content, which
+  had done nothing wrong.
+- **Judge calibration (T12).** `skills judge-check --judge
+  deepseek:deepseek-chat --scope bundled --samples 3 --record`, one run per
+  new skill (19 total). Every judge scenario's eight canned anti-gaming
+  answers graded to the expected verdict unanimously across all 3 samples on
+  the first live run — zero mismatches, no scenario/rubric rewrites needed.
+- **Honest gate run (T13).** One CLI call per skill, HEAD unchanged start to
+  end: `skills eval --scope bundled --runner deepseek:deepseek-chat --judge
+  deepseek:deepseek-chat --strictness high --trials 10 --json`.
+  - **nestjs — gate PASS.** All 3 skills pass. Promoted to `stability:
+    "stable"`; ships `nestjs-code-auditor`/`nestjs-build-fixer`.
+  - **angular — gate PASS.** All 4 skills pass. Promoted to `stability:
+    "stable"`; ships `angular-code-auditor`/`angular-build-fixer`.
+  - **mobx — gate PASS.** Both skills pass. Promoted to `stability:
+    "stable"`; ships `mobx-code-auditor`/`mobx-build-fixer`.
+  - **nextjs-nuxt — gate FAIL.** Every skill's trigger accuracy carries real
+    false positives, matching the worker's own honestly-reported self-check
+    exactly: `nextjs-nuxt-implementation` 3/6, `nextjs-nuxt-testing` 4/6,
+    `nextjs-nuxt-code-review` 3/6, `nextjs-nuxt-build-fix` 1/6,
+    `nextjs-nuxt-upgrade-migration` 3/6. Root cause recorded above and in
+    `agent-refs.json`'s `note`. Stays `experimental`; no generated pair.
+  - **vue — gate FAIL, but only on one skill.** `vue-implementation`,
+    `vue-testing`, `vue-code-review`, and `vue2-to-vue3-migration` all clear
+    the gate cleanly. `vue-build-fix` alone fails: `falsePositive=1` (a
+    same-pack near-miss collision with `vue-implementation`) and its
+    `template-union-type-narrowing` behavior scenario scores `0.4`, below
+    the `0.8` `PACK_BEHAVIOR_PASS_FLOOR` — but a pack needs every skill's
+    report to pass, so the whole pack stays `experimental`; no generated
+    pair.
+- **A false-positive persona-guard finding, fixed at the guard, not the
+  content.** A DeepSeek-recorded trial answer for `nextjs-nuxt-testing`
+  used idiomatic Nuxt code importing `~/pages/orders.vue` — Nuxt's own
+  `srcDir` root alias, resolving identically on every machine, exactly the
+  same shape as `~/.claude` for a harness config root. `bundled-eval.ts`'s
+  home-path persona guard (flow 206/207, AC1) flagged it as a path into a
+  particular person's home directory. Fixed with a narrowly-scoped
+  `FRAMEWORK_TILDE_ALIAS_DIRS` allowlist (Nuxt's own fixed set of top-level
+  directories only), mirroring the existing `HARNESS_HOME_ROOTS` exception
+  rather than weakening the tilde check generally — never by editing the
+  recorded trial's `output` text, which would have invalidated its
+  `outputSha256` and broken the integrity guard's trial-record
+  re-derivation.
+- **Stack coverage: 2 → 5 generated-pair packs.** Counting go and python
+  (flow 317) plus nestjs, angular, and mobx (this flow), 5 packs now ship a
+  generated `<id>-code-auditor`/`<id>-build-fixer` pair.
+  `ts-js-node`/`react`/`nextjs-nuxt`/`vue` remain `experimental` with none.
 
 ## Data contracts
 

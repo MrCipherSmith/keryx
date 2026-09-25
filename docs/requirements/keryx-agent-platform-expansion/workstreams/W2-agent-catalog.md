@@ -1,5 +1,27 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.8
+Version: 0.1.9
+
+**Changelog (0.1.9, flow 318, Wave 4 batch 2):** two updates on top of the
+0.1.8 state below, which this document had not caught up to. First, a
+correction: flow 317 (`W1-stack-catalog.md`, "Implementation notes: flow 317
+(grader follow-ups)") re-ran the honest gate at `PACK_MIN_TRIALS=10` and
+changed batch 1's outcome again — `python` and `go` now clear the gate and
+ship generated pairs; `ts-js-node` was DEMOTED back to `stability:
+experimental` (its pair removed) after `no-ts-ignore-suppression` fell to
+6/10 at the higher trial count; `react` stayed `experimental`, unchanged.
+This document's 0.1.8 changelog line still describes the pre-317 state and
+was never updated — noted here rather than silently rewritten, since the
+actual on-disk state (verifiable via `keryx agents verify` /
+`src/agents/verify.test.ts`) is the source of truth either way. Second, this
+flow's own batch: `nestjs`, `angular`, and `mobx` (Wave 4 batch 2's honest
+DeepSeek `deepseek-chat` runner+judge gate, `--strictness high --trials 10
+--scope bundled`) each clear `checkStablePackGate` on every skill and now
+ship generated `<stack>-code-auditor`/`<stack>-build-fixer` pairs;
+`nextjs-nuxt` and `vue` fail it (see `W1-stack-catalog.md`, "Implementation
+notes: Wave 4 batch 2 (flow 318)" for the per-skill breakdown) and stay
+`stability: experimental` with no generated pair. Real, on-disk generated
+coverage as of this flow: `go`, `python`, `nestjs`, `angular`, `mobx` (5
+packs, 10 files); `ts-js-node`, `react`, `nextjs-nuxt`, `vue` have none.
 
 **Changelog (0.1.8, flow 316 fix attempt 1 / T25):** review round 1 (R1-4)
 found the live judge lenient on vague one-line answers; fix 1 hardened the
