@@ -49,7 +49,9 @@ directly with `Mockito.mock(...)`/MockK mocks passed to the constructor.
 
 **`@WebMvcTest`:** for a controller — loads only the web layer, use
 `MockMvc` to exercise request/response mapping, status codes, and
-validation errors, with the service layer mocked via `@MockBean`.
+validation errors, with the service layer mocked via `@MockitoBean`
+(Spring Boot's own `@MockBean` is deprecated as of Boot 3.4 and removed
+in 4.x -- use `@MockitoBean` unless the project is pinned below 3.4).
 
 **`@DataJpaTest`:** for a repository — loads only the JPA slice against
 an embedded/test database, verifies query methods (including
@@ -68,7 +70,8 @@ touches one, and any N+1-prone query path.
 1. Create/extend the test file at the project's own convention path.
 2. Construct the class under test directly when possible (Mockito
    `@Mock`/`@InjectMocks` or manual construction with mocks passed to the
-   constructor); reach for `@MockBean` only inside a Spring test slice.
+   constructor); reach for `@MockitoBean` only inside a Spring test slice
+   (`@MockBean` only on a project still pinned below Spring Boot 3.4).
 3. For a controller test, assert status code, response body shape, and
    that a Bean Validation failure returns the expected 400 response.
 4. For a repository test needing a real database, use Testcontainers

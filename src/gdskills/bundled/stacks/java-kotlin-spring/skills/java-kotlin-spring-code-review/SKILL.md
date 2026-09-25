@@ -46,9 +46,10 @@ are the rule set findings are checked against.
 
 **Transaction boundaries**
 - A call from one method to another `@Transactional` method on `this`
-  within the same class — flag as the self-invocation proxy pitfall; the
-  inner annotation is silently ignored. Fix direction: extract into a
-  separate, constructor-injected bean.
+  within the same class (e.g. `this.chargePayment()`) — flag as the
+  self-invocation proxy pitfall; the inner annotation is silently
+  ignored. Fix direction: extract into a separate, constructor-injected
+  bean.
 - A `@Transactional` method performing unrelated blocking I/O (an
   outbound HTTP call, file access) that holds the transaction open longer
   than necessary — flag as worth confirming.
@@ -84,12 +85,12 @@ For each finding: file:line, the pattern, why it matters (correctness,
 leak, security), and the fix direction — but do not apply it.
 
 ```
-src/main/java/order/OrderService.java:34 — placeOrder() calls
-  this.chargePayment() (also @Transactional) from inside another
+src/main/java/billing/InvoiceService.java:52 — generateInvoice() calls
+  this.applyLateFee() (also @Transactional) from inside another
   @Transactional method. Risk: proxy-based AOP means the inner
   @Transactional is silently ignored on a same-class call -- no separate
-  transaction/rollback boundary for chargePayment(). Fix direction:
-  extract chargePayment() into its own bean and call it through an
+  transaction/rollback boundary for applyLateFee(). Fix direction:
+  extract applyLateFee() into its own bean and call it through an
   injected reference.
 ```
 

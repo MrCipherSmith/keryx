@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*controller*.java", "**/*Controller*.java", "**/*controller*.kt", "**/*Controller*.kt", "**/*.java", "**/*.kt", "**/*.kts"]
+paths: ["**/*.java", "**/*.kt", "**/*.kts"]
 metadata:
   origin: authored
 ---

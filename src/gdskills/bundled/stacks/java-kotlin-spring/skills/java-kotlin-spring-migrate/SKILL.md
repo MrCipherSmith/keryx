@@ -99,9 +99,11 @@ Added: V12__add_order_status_index.sql
 
 ## Rules
 
-- NEVER edit an already-applied migration file — Flyway/Liquibase detect
-  a changed checksum on an applied migration and fail validation; add a
-  new migration instead, even to fix a mistake in an earlier one.
+- NEVER edit an already-applied migration file (e.g.
+  `V7__add_users_table.sql` once it has run in any environment) —
+  Flyway/Liquibase detect a changed checksum on an applied migration and
+  fail validation; add a new migration instead, even to fix a mistake in
+  an earlier one.
 - ALWAYS name/order a new migration so it sorts strictly after every
   already-applied migration, matching the project's existing numbering
   scheme.
@@ -117,7 +119,7 @@ Added: V12__add_order_status_index.sql
 
 | Rationalization | Why it is wrong |
 |---|---|
-| "I'll just edit V7__add_users_table.sql directly to fix the typo, it's a small change" | Editing an already-applied migration changes its checksum; Flyway/Liquibase will fail validation for every environment that already applied the old version. Add a new migration instead |
+| "I'll just edit V4__add_customer_table.sql directly to fix the typo, it's a small change" | Editing an already-applied migration changes its checksum; Flyway/Liquibase will fail validation for every environment that already applied the old version. Add a new migration instead |
 | "I'll rename the column directly with a single ALTER TABLE, it's simpler than expand-and-contract" | A direct rename breaks any code still deployed against the old column name during a rolling deploy; use expand-and-contract when the project needs zero-downtime compatibility |
 | "The SQL looks right, I don't need to actually run flywayMigrate" | A migration that looks correct can still fail on the real database (a constraint conflict, a syntax difference) -- verify against a real migration command before reporting done |
 | "I'll reuse V12 since the one I looked at didn't apply yet in this environment" | Migration numbering must be globally consistent across every environment the project ships to, not just the one you're looking at; always take the next unused number |

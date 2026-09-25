@@ -39,9 +39,12 @@ Spring Boot Test conventions, for both Java and Kotlin. Applies only to
 
 - Mock/stub only the collaborators the class under test actually depends
   on (Mockito's `@Mock`/`@InjectMocks`, or MockK for Kotlin) — do not
-  reach for `@MockBean`/`@SpringBootTest` just to avoid constructing a
+  reach for `@MockitoBean`/`@SpringBootTest` just to avoid constructing a
   plain dependency by hand when the class was designed for constructor
-  injection.
+  injection. `@MockitoBean` is the current annotation for mocking a bean
+  inside a Spring test slice; Spring Boot's own `@MockBean` is deprecated
+  since Boot 3.4 and removed in 4.x, so only reach for it on a project
+  still pinned below 3.4.
 - Assert on behavior/interactions relevant to the test (`verify(...)`),
   not on incidental implementation details that would make the test
   brittle to a harmless refactor.

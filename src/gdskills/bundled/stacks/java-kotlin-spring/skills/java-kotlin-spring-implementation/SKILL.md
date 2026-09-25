@@ -113,9 +113,10 @@ Implemented: OrderController, OrderService, OrderRepository, OrderRequest/OrderR
 - ALWAYS constructor-inject dependencies (`private final` in Java, `val`
   in Kotlin) — never add a field-level `@Autowired`.
 - ALWAYS expose a DTO at the API boundary, never a JPA `@Entity` directly.
-- NEVER call another `@Transactional` method on `this` from inside a
-  `@Transactional` method and rely on the annotation firing — the
-  self-invocation proxy pitfall means it will not.
+- NEVER call another `@Transactional` method on `this` (e.g.
+  `this.processPayment()`) from inside a `@Transactional` method and rely
+  on the annotation firing — the self-invocation proxy pitfall means it
+  will not.
 - NEVER access a lazy association in a loop without an `@EntityGraph`/
   `JOIN FETCH`/projection to avoid N+1.
 - ALWAYS annotate request DTO fields with `jakarta.validation`
@@ -126,7 +127,7 @@ Implemented: OrderController, OrderService, OrderRepository, OrderRequest/OrderR
 | Rationalization | Why it is wrong |
 |---|---|
 | "I'll just use field `@Autowired` here, it's quicker to write" | Field injection hides the dependency graph and prevents `final`/`val`; constructor injection costs one line more and makes the class testable without the Spring container |
-| "I'll call `this.processPayment()` from inside this `@Transactional` method, they're in the same class so it's fine" | Spring's declarative transactions are proxy-based; a same-class call bypasses the proxy and the inner `@Transactional` is silently a no-op |
+| "I'll call `this.applyDiscount()` from inside this `@Transactional` method, they're in the same class so it's fine" | Spring's declarative transactions are proxy-based; a same-class call bypasses the proxy and the inner `@Transactional` is silently a no-op |
 | "This lazy collection is small in practice, I won't bother with @EntityGraph" | "Small in practice" during development is exactly what N+1 looks like once the collection grows in production; fix the fetch strategy at write time |
 | "I'll just return the entity from the controller, mapping to a DTO is extra work" | An entity leaks persistence internals and lazy proxies into the HTTP response, and can throw `LazyInitializationException` outside the transaction |
 
