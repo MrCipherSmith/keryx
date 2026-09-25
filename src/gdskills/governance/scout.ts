@@ -126,8 +126,126 @@ function stemLite(token: string): string {
   return token;
 }
 
+/**
+ * Tokenizes `text` for scoring, with exclusion-clause text removed first
+ * (flow 334, `stripExclusionClauses` below) — applied uniformly to BOTH
+ * sides of a comparison. An entry's own description/triggers obviously need
+ * this (that is the leak this flow fixes — see the section comment below).
+ * A QUERY needs it too whenever the query itself is (or contains) a skill's
+ * own description — `scoutSkill`'s and `nearestSkills`'s self-identification
+ * checks, and `keryx skills scout` run against a candidate's own drafted
+ * description, both pass a skill description as the query. Without this, a
+ * skill whose description names ANOTHER skill in its own "not for" clause
+ * (`quality/pr`: "... NOT for rewriting the body of a pull request ... (use
+ * `pr-issue-documenter`)") would have that sibling's name still counted as
+ * QUERY intent even though it is no longer counted as the ENTRY's own
+ * evidence — inflating the sibling's score and, in the observed case,
+ * making it outrank the skill whose own description was the query. An
+ * ordinary live user query essentially never opens a sentence with "not
+ * for"/"do not use for" or starts a sentence with "never", so this has no
+ * observed effect on normal routing queries.
+ */
 function lexicalTokens(text: string): Set<string> {
-  return new Set([...routeTokens(normalizeRouteText(text))].map(stemLite));
+  return new Set([...routeTokens(normalizeRouteText(stripExclusionClauses(text)))].map(stemLite));
+}
+
+// ---------------------------------------------------------------------------
+// Negation-aware token extraction (flow 334)
+//
+// PROBLEM: `entryLexicalTokens` used to tokenize a catalog entry's WHOLE
+// description+triggers text as one undifferentiated bag of words. A skill
+// that writes the exclusion clause the authoring convention recommends —
+// "Use when X. NOT for Y (use `Z` instead)." — got Y's (and Z's) tokens
+// counted as ordinary POSITIVE evidence for itself, because the scorer
+// cannot tell a disclaimer from a claim. Concrete measured case (flow 334
+// journal): `ts-js-node/nodejs-implementation`'s description ends "Not for
+// UI markup/rendering code (use the matching UI framework pack) or
+// writing/fixing tests (use nodejs-testing)." — before this fix, the query
+// "write vitest tests for this service" scored 0.682 against
+// `nodejs-implementation` (rank 3, only narrowly avoiding `selected: true`)
+// purely from "writing"/"tests" tokens sitting inside that disclaimer.
+// Authors have been working around this by stripping words out of
+// descriptions instead of writing the clause the guide already recommends.
+//
+// FIX: split an entry's scored text into sentences and strip the tokens of
+// any EXCLUSION CLAUSE before they ever reach the entry's coverage-token
+// set. A survey of the bundled catalog (`keryx ctx rg`, flow 334 journal)
+// found the convention lives almost entirely in the `description:` field as
+// "NOT for <clause>[, and NOT for <clause>]* (use `<x>` instead)." — that
+// survey drove the opener list below.
+//
+// SCOPE OF THE FIX, DELIBERATELY NARROW:
+//   - `lexicalTokens` (the one function both `entryLexicalTokens` and
+//     `rankCatalog`'s query tokenization call) strips exclusion clauses
+//     uniformly, so ENTRY text and QUERY text are treated the same way —
+//     see `lexicalTokens`'s own doc comment for why the query side needs
+//     this too (self-identification queries built from a skill's own
+//     description carry the same clauses an entry does). An ordinary live
+//     routing query essentially never opens with "not for"/"never", so this
+//     has no observed effect on normal queries; it only matters when the
+//     query itself is (or quotes) a skill description.
+//   - Excluded tokens are DROPPED, not counted as negative evidence. A
+//     negative-weight scheme risks penalizing a skill for a topic it
+//     explicitly disclaims (`push`'s "NOT for creating the commits" clause
+//     names "commit" — that should not make `push` score WORSE against an
+//     unrelated query that happens to say "commit" in passing) — trading
+//     one silent bias (over-counting) for a different one (under-counting)
+//     with no calibration data to justify where to set that weight. See
+//     the flow 334 journal for the full reasoning.
+//   - `src/lib/route-tokens.ts` (the shared tokenizer both the scorer and
+//     the live router use) is untouched — negation handling is layered on
+//     top of it here, in the one place that reads ENTRY definitions.
+// ---------------------------------------------------------------------------
+
+/** Sentence-level exclusion-clause openers, matched case-insensitively at any position within a sentence. Anchored on the multi-word phrasing the survey found (`not for`, `do not use for`) so an unrelated, legitimate "not" elsewhere in a sentence (e.g. "figures out why the build is not passing") is never swept up. */
+const EXCLUSION_SENTENCE_OPENERS: readonly RegExp[] = [/\bnot\s+for\b/i, /\bdo\s+not\s+use\s+for\b/i];
+
+/** A sentence that itself OPENS with "Never …" is treated as a whole exclusion clause (flow parameters name "Never X" explicitly). Restricted to sentence-initial position — unlike `not for`, a bare `never` appearing later in an otherwise-positive sentence is common ordinary English ("a fix that never widens beyond the failure") and would over-trigger if matched anywhere. */
+const LEADING_NEVER = /^\s*never\b/i;
+
+/** `(not …)`/`(never …)` parenthetical asides anywhere in the text — e.g. "(not the CLI form)" — stripped independent of sentence splitting, since a parenthetical is not reliably sentence-delimited by `.`/`!`/`?`. */
+const NEGATED_PARENTHETICAL = /\(\s*(?:not|never)\b[^)]*\)/gi;
+
+/** A "use `<x>` instead" redirect: `<x>` names ANOTHER skill, not this one's own topic, so it must not count as this entry's evidence even inside an otherwise-kept sentence (e.g. a bare "Use `pr-issue-documenter` instead." redirect with no "not for" wrapper). Scoped to `use … instead` so it never matches the extremely common "Use when …" description opener (which has no "instead"). */
+const USE_INSTEAD_PHRASE = /\buse\b[^.!?()]*?\binstead\b/gi;
+
+/** Splits `text` into sentences on `.`/`!`/`?` followed by whitespace — good enough for the short, plainly-punctuated frontmatter prose this scores; a missed split only widens what one sentence-level strip removes, it never causes a clause to be missed entirely (the parenthetical and "use…instead" patterns run independently of sentence boundaries too). */
+function splitSentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.trim().length > 0);
+}
+
+/**
+ * Removes exclusion-clause text from `text`, returning what is left to
+ * score as POSITIVE evidence. Exported for direct unit testing (flow 334)
+ * — the entry-scoring pipeline (`entryLexicalTokens`) is the only other
+ * caller.
+ */
+export function stripExclusionClauses(text: string): string {
+  const withoutParentheticals = text.replace(NEGATED_PARENTHETICAL, " ");
+
+  const kept: string[] = [];
+  for (const sentence of splitSentences(withoutParentheticals)) {
+    let cutAt = -1;
+    for (const opener of EXCLUSION_SENTENCE_OPENERS) {
+      const match = opener.exec(sentence);
+      opener.lastIndex = 0; // these openers are not /g, but exec on a shared regex literal is otherwise stateless here — reset defensively
+      if (match !== null && (cutAt === -1 || match.index < cutAt)) cutAt = match.index;
+    }
+    if (LEADING_NEVER.test(sentence)) {
+      const neverIndex = sentence.search(/\bnever\b/i);
+      if (neverIndex >= 0 && (cutAt === -1 || neverIndex < cutAt)) cutAt = neverIndex;
+    }
+
+    if (cutAt >= 0) {
+      kept.push(sentence.slice(0, cutAt));
+      continue; // the whole exclusion clause (through sentence end) is dropped
+    }
+
+    // No sentence-level opener: still strip a standalone "use X instead"
+    // redirect inside an otherwise-kept sentence.
+    kept.push(sentence.replace(USE_INSTEAD_PHRASE, " "));
+  }
+  return kept.join(" ");
 }
 
 /**
@@ -154,7 +272,7 @@ function lexicalTokens(text: string): Set<string> {
  */
 export type LexicalField = "full" | "description-only";
 
-/** `name + description` (+ `triggers` when `field` is `"full"`), tokenized and stemmed — the text an entry is scored on. */
+/** `name + description` (+ `triggers` when `field` is `"full"`), tokenized and stemmed (via `lexicalTokens`, which strips exclusion-clause text first — flow 334) — the text an entry is scored on. */
 function entryLexicalTokens(entry: CatalogEntry, field: LexicalField): Set<string> {
   const parts = field === "full" ? [entry.name, entry.description, ...entry.triggers] : [entry.name, entry.description];
   return lexicalTokens(parts.join(" "));
