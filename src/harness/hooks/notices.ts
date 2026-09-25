@@ -8,6 +8,7 @@
 // `LoadHookConfigResult` into the lines every surface (TUI, readline, ACP,
 // serve, trigger-dispatch/-agent-task) prints, so the wording lives in one
 // place instead of drifting per call site.
+import { terminalSafe } from "../../lib/terminal-safe";
 import type { HookConfigDiagnostic, LoadHookConfigResult } from "./config";
 
 export type HookNoticeSurface = "terminal" | "headless";
@@ -16,9 +17,16 @@ function pluralHooks(n: number): string {
   return n === 1 ? "hook" : "hooks";
 }
 
+// R1-02 (flow 319 review round 1): `h.id` comes from a hooks file. The `id`
+// schema pattern (`^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`) already excludes
+// control/bidi/zero-width characters today, but `terminalSafe` is applied
+// here too as a defence that does not depend on that schema never loosening
+// — the notice is the one place EVERY surface (TUI, readline, ACP, serve,
+// trigger-dispatch) shows the same text, so getting it right once covers
+// them all.
 function describeIds(hooks: readonly { id: string; event: string; runsIn: "sandbox" | "unsandboxed" }[]): string {
   return hooks
-    .map((h) => `${h.id} (${h.event}${h.runsIn === "unsandboxed" ? ", unsandboxed" : ""})`)
+    .map((h) => `${terminalSafe(h.id).text} (${h.event}${h.runsIn === "unsandboxed" ? ", unsandboxed" : ""})`)
     .join(", ");
 }
 
@@ -60,6 +68,23 @@ export function formatHookLoadNotices(
       } command ${pluralHooks(enabledHooks.length)} did not run: ${enabledHooks.map((h) => h.id).join(", ")}`,
     );
     lines.push(trustHint(opts.surface, opts.projectRoot));
+  }
+
+  // R1-04 (flow 319 review round 1): a USER-scope hook needs no trust — "the
+  // operator wrote that file themselves, on this machine" — but an
+  // unsandboxed one still runs with full user permissions at every session
+  // start, and until now nothing said so unless it also happened to disable
+  // a built-in gate. Listed once per session, alongside the trust/warning
+  // lines above, so it stays visible even though there is nothing to trust.
+  const unsandboxedUserHooks = result.registrations.filter(
+    (r) => r.scope === "user" && r.runsIn === "unsandboxed" && r.enabled,
+  );
+  if (unsandboxedUserHooks.length > 0) {
+    lines.push(
+      `keryx hooks: ${unsandboxedUserHooks.length} user hook(s) from ${opts.userFile} run UNSANDBOXED: ${unsandboxedUserHooks
+        .map((h) => terminalSafe(h.id).text)
+        .join(", ")}.`,
+    );
   }
 
   for (const w of result.warnings) {

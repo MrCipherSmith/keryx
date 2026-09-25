@@ -156,13 +156,36 @@ unsandboxed, then asks you to confirm exactly that version. `--yes` skips
 the prompt for scripted use; with no terminal to ask in and no `--yes`,
 `hooks trust` refuses and writes nothing. `keryx hooks untrust` withdraws
 trust for the project, so its command hooks stop running again until you
-trust it again.
+trust it again. Every id, argv token, `cwd`, and env key/value shown is
+rendered with control, escape, bidi-override, and zero-width characters
+replaced by a visible `\xHH`/`\uHHHH` escape rather than passed through raw —
+a committed hooks file is attacker-controlled, and printing those bytes
+unescaped would let it repaint your terminal at the exact moment you decide
+whether to trust it. When anything needed escaping, the display adds a line
+saying so.
+
+**Trust covers the command line, not what it runs.** What you are approving
+is the command line itself — argv, cwd, env, `runsIn`, and the other fields
+`keryx hooks trust` prints — never the bytes of any script or binary that
+command line executes. A hook like `argv: ["/bin/sh", "scripts/deploy.sh"]`
+stays trusted, with no new prompt, even after `scripts/deploy.sh` is
+rewritten to something else entirely — the digest does not cover file
+contents, only the command definition. When an argv token resolves to a real
+file inside the project, `keryx hooks trust` adds a line naming it, so you
+know to go read that file too before trusting. Prefer an inline command
+(`argv: ["/bin/sh", "-c", "..."]`) when the whole thing is short enough to
+read here, or review whatever script a hook calls out to, the same way you
+would review a build step pulled in from the repository.
 
 **The session-start notice.** Opening a project whose `.metaproject/hooks.json`
 defines command hooks that are not trusted — or that changed since you last
 trusted them — prints a line at session start naming the hooks that did not
 run and how to review and trust them. This is not silent: a hook you expect
-never firing is exactly the thing this notice exists to surface.
+never firing is exactly the thing this notice exists to surface. When your
+own `~/.keryx/hooks.json` (user scope, no trust needed) has an enabled hook
+with `runsIn: "unsandboxed"`, the same notice names it too — user-scope
+hooks skip the trust prompt by design, so this line is the only thing that
+keeps one running with your full permissions visible at every session.
 
 **Headless surfaces fail closed and say so.** There is no terminal to ask
 "trust this?" in over ACP, a `keryx serve` remote turn, or a scheduled

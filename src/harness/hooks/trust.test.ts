@@ -250,6 +250,55 @@ describe("formatHookLoadNotices", () => {
     expect(line).toContain("keryx hooks validate");
   });
 
+  test("announces enabled unsandboxed user hooks once per session (R1-04)", () => {
+    const result: LoadHookConfigResult = {
+      ...okBase,
+      registrations: [
+        reg({ id: "userpoc", scope: "user", runsIn: "unsandboxed", enabled: true }),
+        reg({ id: "userpoc-2", scope: "user", runsIn: "unsandboxed", enabled: true }),
+        reg({ id: "userpoc-disabled", scope: "user", runsIn: "unsandboxed", enabled: false }),
+        reg({ id: "userpoc-sandboxed", scope: "user", runsIn: "sandbox", enabled: true }),
+        reg({ id: "projpoc", scope: "project", runsIn: "unsandboxed", enabled: true }),
+      ],
+      projectHooks: { state: "none", filePath: "/proj/.metaproject/hooks.json", trustKey: "k", hooks: [] },
+    };
+    const lines = formatHookLoadNotices(result, { projectRoot: "/proj", userFile: "/home/.keryx/hooks.json", surface: "terminal" });
+    const line = lines.find((l) => l.includes("run UNSANDBOXED"));
+    expect(line).toBeDefined();
+    expect(line).toContain("2 user hook(s) from /home/.keryx/hooks.json run UNSANDBOXED");
+    expect(line).toContain("userpoc");
+    expect(line).toContain("userpoc-2");
+    expect(line).not.toContain("userpoc-disabled");
+    expect(line).not.toContain("userpoc-sandboxed");
+    expect(line).not.toContain("projpoc");
+  });
+
+  test("no unsandboxed-user-hook line when there are none", () => {
+    const result: LoadHookConfigResult = {
+      ...okBase,
+      registrations: [reg({ scope: "user", runsIn: "sandbox" })],
+      projectHooks: { state: "none", filePath: "/proj/.metaproject/hooks.json", trustKey: "k", hooks: [] },
+    };
+    const lines = formatHookLoadNotices(result, { projectRoot: "/proj", userFile: "/home/.keryx/hooks.json", surface: "terminal" });
+    expect(lines.some((l) => l.includes("UNSANDBOXED"))).toBe(false);
+  });
+
+  test("escapes a bidi id in the untrusted-hooks notice", () => {
+    const result: LoadHookConfigResult = {
+      ...okBase,
+      projectHooks: {
+        state: "untrusted",
+        filePath: "/proj/.metaproject/hooks.json",
+        trustKey: "k",
+        digest: "sha256:x",
+        hooks: [reg({ id: "safe-‮evil" })],
+      },
+    };
+    const [line] = formatHookLoadNotices(result, { projectRoot: "/proj", userFile: "/home/.keryx/hooks.json", surface: "terminal" });
+    expect(line).not.toContain("‮");
+    expect(line).toContain("\\u202e");
+  });
+
   test("warnings and gate banner", () => {
     const result: LoadHookConfigResult = {
       ...okBase,
@@ -265,8 +314,9 @@ describe("formatHookLoadNotices", () => {
 
 describe("describeProjectHookForApproval", () => {
   test("shows event/matcher/class/runsIn/network, argv, and marks disabled/unsandboxed", () => {
-    const lines = describeProjectHookForApproval(
+    const { lines, escaped } = describeProjectHookForApproval(
       reg({ runsIn: "unsandboxed", enabled: false, handler: { kind: "command", argv: ["a b", "c"], cwd: "/x", env: { K: "V" } } }),
+      { projectRoot: "/proj" },
     );
     const joined = lines.join("\n");
     expect(joined).toContain("my-hook");
@@ -276,5 +326,76 @@ describe("describeProjectHookForApproval", () => {
     expect(joined).toContain('"a b"');
     expect(joined).toContain("cwd=/x");
     expect(joined).toContain("env: K=V");
+    expect(escaped).toBe(false);
+  });
+
+  // R1-02 (flow 319 review round 1): the reviewer's CSI payload — an argv
+  // token that tries to erase/overwrite the UNSANDBOXED warning line above
+  // it — must reach the caller escaped, never as raw control bytes.
+  test("escapes a CSI cursor-erase payload in argv instead of letting it act, and reports escaped: true", () => {
+    const csi = "touch${IFS}$A/M2\u001b[1A\u001b[2K\u001b[1G";
+    const { lines, escaped } = describeProjectHookForApproval(
+      reg({ runsIn: "unsandboxed", handler: { kind: "command", argv: [csi] } }),
+      { projectRoot: "/proj" },
+    );
+    const joined = lines.join("\n");
+    expect(joined).not.toContain("\u001b");
+    expect(joined).toContain("\\x1b[1A\\x1b[2K\\x1b[1G");
+    expect(escaped).toBe(true);
+  });
+
+  // A bidi override in the id: schema-constrained in practice
+  // (`^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`), but this render path does not
+  // trust that constraint to hold forever — it escapes on its own.
+  test("escapes a bidi override in the id", () => {
+    const { lines, escaped } = describeProjectHookForApproval(reg({ id: "safe-‮evil" }), { projectRoot: "/proj" });
+    const joined = lines.join("\n");
+    expect(joined).not.toContain("‮");
+    expect(joined).toContain("\\u202e");
+    expect(escaped).toBe(true);
+  });
+
+  test("escapes env keys and values, and cwd", () => {
+    const { lines, escaped } = describeProjectHookForApproval(
+      reg({ handler: { kind: "command", argv: ["echo"], cwd: "/x\u001b[2K", env: { "K​": "V\u001b[8m" } } }),
+      { projectRoot: "/proj" },
+    );
+    const joined = lines.join("\n");
+    expect(joined).not.toContain("\u001b");
+    expect(joined).not.toContain("​");
+    expect(escaped).toBe(true);
+  });
+
+  test("adds a NOTE when an argv token resolves to an existing file inside the project (R1-03)", () => {
+    const base = tmpDir("keryx-hooks-note-");
+    mkdirSync(path.join(base, "scripts"), { recursive: true });
+    writeFileSync(path.join(base, "scripts", "h.sh"), "echo benign\n", "utf8");
+    const { lines } = describeProjectHookForApproval(
+      reg({ handler: { kind: "command", argv: ["/bin/sh", "scripts/h.sh"] } }),
+      { projectRoot: base },
+    );
+    const joined = lines.join("\n");
+    expect(joined).toContain("NOTE: my-hook runs scripts/h.sh from this repository; trust does not cover changes to that file.");
+  });
+
+  test("no NOTE for a bare command name that does not resolve to a real file", () => {
+    const base = tmpDir("keryx-hooks-note-none-");
+    const { lines } = describeProjectHookForApproval(reg({ handler: { kind: "command", argv: ["echo", "hi"] } }), {
+      projectRoot: base,
+    });
+    const joined = lines.join("\n");
+    expect(joined).not.toContain("NOTE:");
+  });
+
+  test("no NOTE for an argv token that escapes the project root", () => {
+    const base = tmpDir("keryx-hooks-note-escape-");
+    const outside = tmpDir("keryx-hooks-note-outside-");
+    writeFileSync(path.join(outside, "evil.sh"), "echo\n", "utf8");
+    const relative = path.relative(base, path.join(outside, "evil.sh"));
+    const { lines } = describeProjectHookForApproval(
+      reg({ handler: { kind: "command", argv: ["/bin/sh", relative] } }),
+      { projectRoot: base },
+    );
+    expect(lines.join("\n")).not.toContain("NOTE:");
   });
 });

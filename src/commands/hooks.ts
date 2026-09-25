@@ -14,6 +14,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { ContainedWriteError, mkdirContained, writeContained } from "../lib/contained-write";
 import { confirm as realConfirm } from "../lib/prompt";
+import { terminalSafe } from "../lib/terminal-safe";
 import { resolveHooksHomeDir, resolveHooksProjectRoot } from "./agent-hooks";
 import { bothStreamsAreATerminal } from "./mcp-servers";
 import {
@@ -199,18 +200,29 @@ function groupById(registrations: readonly HookRegistration[], profileId: Policy
   return [...byId.values()];
 }
 
+// R1-02 (flow 319 review round 1): `id`/`matcher`/argv all come straight out
+// of a hooks.json file — including an untrusted project row's, never
+// approved by the operator — so this text output runs every one of them
+// through `terminalSafe` before printing. The JSON output (`--json`) is left
+// alone: it is already JSON-escaped, so a control character there cannot
+// act on a terminal the way raw text can.
 function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileId): string {
   const lines = rows.map((row) => {
-    const command = row.handler.kind === "command" ? row.handler.argv.join(" ") : `builtin:${row.handler.name}`;
+    const command =
+      row.handler.kind === "command"
+        ? row.handler.argv.map((arg) => terminalSafe(arg).text).join(" ")
+        : `builtin:${row.handler.name}`;
+    const id = terminalSafe(row.id).text;
+    const matcher = terminalSafe(row.matcher).text;
     const trustLine =
       row.scope === "project"
         ? [`  scope=project trust=${row.trust === "changed" ? "changed since trusted" : (row.trust ?? "untrusted")} class=${row.class}`]
         : [];
     return [
-      `${row.id}`,
+      `${id}`,
       `  scope=${row.scope} class=${row.class} enabled=${String(row.enabled)} appliesToChildAgents=${String(row.appliesToChildAgents)}`,
       ...trustLine,
-      `  events=${row.events.join(",")} matcher=${row.matcher} timeoutMs=${row.timeoutMs}`,
+      `  events=${row.events.join(",")} matcher=${matcher} timeoutMs=${row.timeoutMs}`,
       `  runsIn=${row.runsIn}${row.refused ? " REFUSED (profile requires fail-closed isolation)" : ""} (effective under profile "${profileId}"; command hooks only)`,
       `  command: ${command}`,
     ].join("\n");
@@ -376,7 +388,10 @@ async function runValidate(args: readonly string[], deps: HooksCommandDeps): Pro
   console.log(`OK: ${loaded.registrations.length} hook registration(s) across both files loaded and validated.`);
   console.log(`Project hooks: ${loaded.projectHooks.state}`);
   for (const warning of argvWarnings) {
-    console.log(`WARNING: ${warning.hookId}: argv[0] "${warning.argv0}" did not resolve (absolute path or PATH lookup).`);
+    // R1-02: hookId and argv0 both come from the hooks file.
+    console.log(
+      `WARNING: ${terminalSafe(warning.hookId).text}: argv[0] "${terminalSafe(warning.argv0).text}" did not resolve (absolute path or PATH lookup).`,
+    );
   }
   for (const w of loaded.warnings) console.log(`WARNING: ${w.message}`);
 }
@@ -727,7 +742,8 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
     console.log(JSON.stringify(report, null, 2));
     return;
   }
-  console.log(`hook: ${report.hookId} (${report.event}, class ${report.class})`);
+  // R1-02: report.hookId comes from the hooks file (id).
+  console.log(`hook: ${terminalSafe(report.hookId).text} (${report.event}, class ${report.class})`);
   console.log(`decision: ${report.decision ?? "none"}`);
   if (report.runsIn !== undefined) console.log(`runsIn: ${report.runsIn} (effective under profile "${profileId}")`);
   if (report.exitCode !== undefined) console.log(`exitCode: ${String(report.exitCode)}`);
@@ -779,8 +795,21 @@ async function runTrust(args: readonly string[], deps: HooksCommandDeps): Promis
     `${filePath} in ${cwd} asks to run ${enabledCount} command ${pluralHook(enabledCount)} in every keryx session opened here:`,
     "",
   ];
+  // R1-02 (flow 319 review round 1): every field below is attacker-controlled
+  // (the committed hooks.json), so it is rendered through terminalSafe before
+  // it reaches the terminal — see describeProjectHookForApproval. `anyEscaped`
+  // tracks whether ANY hook needed escaping so the warning prints once, not
+  // per hook.
+  let anyEscaped = false;
   for (const reg of projectHooks.hooks) {
-    lines.push(...describeProjectHookForApproval(reg), "");
+    const described = describeProjectHookForApproval(reg, { projectRoot: cwd });
+    lines.push(...described.lines, "");
+    if (described.escaped) anyEscaped = true;
+  }
+  if (anyEscaped) {
+    lines.push(
+      "WARNING: this file contains control or invisible characters (shown escaped above). Do not trust it unless you understand why.",
+    );
   }
   if (unsandboxed.length > 0) {
     lines.push(`WARNING: ${unsandboxed.length} hook(s) run UNSANDBOXED, with your full user permissions: ${unsandboxed.map((h) => h.id).join(", ")}.`);
@@ -815,7 +844,16 @@ async function runTrust(args: readonly string[], deps: HooksCommandDeps): Promis
   if (!result.ok) {
     fail(result.error);
   }
-  console.log(`Trusted ${filePath} (${projectHooks.digest.replace("sha256:", "").slice(0, 12)}). Any change to its hooks needs a new \`keryx hooks trust\`.`);
+  // R1-03 (flow 319 review round 1): this used to say "any change to its
+  // hooks needs a new `keryx hooks trust`", which reads as covering
+  // everything a trusted hook does. It only covers the command line
+  // (argv/cwd/env/runsIn/etc.) — a repository can rewrite a script that
+  // argv points at (e.g. `scripts/h.sh`) without changing the digest at
+  // all, and the next session runs the new bytes with no re-trust. Prefer
+  // an inline command, or review whatever it calls.
+  console.log(
+    `Trusted ${filePath} (${projectHooks.digest.replace("sha256:", "").slice(0, 12)}). This covers the command line shown above (argv, cwd, env, and the other fields), not the contents of any script or binary it runs — a repository can change that later without revoking trust. Prefer an inline command, or review the scripts it calls. Any change to the command line itself needs a new \`keryx hooks trust\`.`,
+  );
 }
 
 async function runUntrust(_args: readonly string[], deps: HooksCommandDeps): Promise<void> {

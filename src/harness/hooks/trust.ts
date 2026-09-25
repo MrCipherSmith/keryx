@@ -25,7 +25,7 @@
 // USER-scope hooks (`~/.keryx/hooks.json`) need none of this: the operator
 // wrote that file themselves, on this machine.
 import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   ensureKeryxConfigDir,
@@ -34,6 +34,7 @@ import {
   readConfigFile,
   writeOwnerOnlyFileAtomic,
 } from "../../lib/config-dir";
+import { TerminalSafeTracker } from "../../lib/terminal-safe";
 import type { HookRegistration } from "./types";
 
 export const HOOKS_TRUST_FILENAME = "hooks-trust.json";
@@ -253,24 +254,82 @@ function quoteArg(arg: string): string {
 }
 
 /**
+ * R1-03 (flow 319 review round 1): trust is bound to argv/cwd/env/etc — the
+ * COMMAND LINE — never to the bytes of a script or binary that command line
+ * runs. A hook `argv: ["/bin/sh", "scripts/h.sh"]` stays digest-stable while
+ * `scripts/h.sh` is rewritten to anything, and the operator gets no re-trust
+ * prompt. When an argv token resolves to a real file inside the project,
+ * this surfaces that gap right where the operator is deciding to trust —
+ * one line per distinct matching token, using the RAW (unsanitised) token
+ * only to resolve/check existence; the printed form still goes through
+ * `safe.render`.
+ */
+function repoRelativeScriptNotes(reg: HookRegistration, projectRoot: string, safe: TerminalSafeTracker): string[] {
+  if (reg.handler.kind !== "command") return [];
+  const notes: string[] = [];
+  const seen = new Set<string>();
+  for (const token of reg.handler.argv) {
+    if (token.length === 0) continue;
+    const candidate = path.isAbsolute(token) ? path.resolve(token) : path.resolve(projectRoot, token);
+    const relativeToRoot = path.relative(projectRoot, candidate);
+    // Must land strictly inside projectRoot: not the root itself, and no
+    // ".." escape.
+    if (relativeToRoot === "" || relativeToRoot === ".." || relativeToRoot.startsWith(`..${path.sep}`)) continue;
+    if (path.isAbsolute(relativeToRoot)) continue;
+    if (seen.has(candidate)) continue;
+    let isFile: boolean;
+    try {
+      isFile = statSync(candidate).isFile();
+    } catch {
+      isFile = false;
+    }
+    if (!isFile) continue;
+    seen.add(candidate);
+    notes.push(
+      `    NOTE: ${safe.render(reg.id)} runs ${safe.render(token)} from this repository; trust does not cover changes to that file.`,
+    );
+  }
+  return notes;
+}
+
+/**
  * Lines describing one project hook for `keryx hooks trust`'s approval
  * display (§3 of the design). Never includes an env VALUE — only the keys —
  * for the same reason `describeForApproval` in `mcp-servers/trust.ts` omits
  * credential values: this text is shown at the exact moment the operator is
  * paying attention, and is the last place a secret should appear.
+ *
+ * R1-02 (flow 319 review round 1): every string below comes straight out of
+ * `.metaproject/hooks.json` — a committed file an attacker fully controls —
+ * and is rendered through `TerminalSafeTracker` before it ever reaches
+ * `console.log`. A token with no whitespace used to skip `quoteArg`'s
+ * JSON-quoting entirely and reach the terminal with raw control bytes
+ * (ESC/CSI, bidi overrides, zero-width characters) intact, letting it
+ * repaint the operator's screen at the exact moment they decide whether to
+ * trust the file. `escaped` on the result tells the caller whether anything
+ * needed escaping, so it can print the one-line warning that follows.
  */
-export function describeProjectHookForApproval(reg: HookRegistration): string[] {
-  if (reg.handler.kind !== "command") return [];
+export function describeProjectHookForApproval(
+  reg: HookRegistration,
+  opts: { projectRoot: string },
+): { lines: string[]; escaped: boolean } {
+  if (reg.handler.kind !== "command") return { lines: [], escaped: false };
+  const safe = new TerminalSafeTracker();
+  const id = safe.render(reg.id);
+  const matcher = safe.render(reg.matcher);
   const disabledSuffix = reg.enabled ? "" : "  (disabled)";
-  const header = `  ${reg.id}  ${reg.event} matcher=${reg.matcher}  class=${reg.class}  runsIn=${
+  const header = `  ${id}  ${reg.event} matcher=${matcher}  class=${reg.class}  runsIn=${
     reg.runsIn === "unsandboxed" ? "UNSANDBOXED" : "sandbox"
   }  network=${reg.network}${disabledSuffix}`;
-  const argvLine = `    ${reg.handler.argv.map(quoteArg).join(" ")}`;
+  const argvLine = `    ${reg.handler.argv.map((arg) => quoteArg(safe.render(arg))).join(" ")}`;
   const lines = [header, argvLine];
   const extras: string[] = [];
-  if (reg.handler.cwd !== undefined) extras.push(`cwd=${reg.handler.cwd}`);
+  if (reg.handler.cwd !== undefined) extras.push(`cwd=${safe.render(reg.handler.cwd)}`);
   const envEntries = sortedEnv(reg.handler.env);
-  if (envEntries.length > 0) extras.push(`env: ${envEntries.map(([k, v]) => `${k}=${v}`).join(", ")}`);
+  if (envEntries.length > 0) {
+    extras.push(`env: ${envEntries.map(([k, v]) => `${safe.render(k)}=${safe.render(v)}`).join(", ")}`);
+  }
   if (extras.length > 0) lines.push(`    ${extras.join("  ")}`);
-  return lines;
+  lines.push(...repoRelativeScriptNotes(reg, opts.projectRoot, safe));
+  return { lines, escaped: safe.escaped };
 }
