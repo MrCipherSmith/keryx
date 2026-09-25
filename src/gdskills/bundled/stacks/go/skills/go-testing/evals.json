@@ -51,13 +51,13 @@
       "expected_behavior": [
         {
           "grader": "judge",
-          "rubric": "A correct answer waits for the goroutine to finish using an actual synchronization primitive -- a sync.WaitGroup (Add/Done/Wait) or a channel send/receive -- before running assertions, never a fixed time.Sleep delay as a stand-in for or supplement to a real join.",
+          "rubric": "A correct answer waits for the goroutine to finish using an actual synchronization primitive -- a sync.WaitGroup (Add/Done/Wait) or a channel send/receive -- before running assertions, never a fixed time.Sleep delay as a stand-in for or supplement to a real join. A select against a deadline (time.After, context.WithTimeout) used purely as a non-blocking safety net alongside that join -- firing only if the goroutine hangs, never taken instead of or before the real join -- is a legitimate timeout guard, not the fixed-delay anti-pattern this scenario tests for.",
           "pass_criteria": [
             "Uses sync.WaitGroup (Add/Done/Wait) or a channel send/receive as the actual join mechanism before asserting, shown concretely (not just named in the abstract).",
             "Explains why this is reliable/deterministic compared to a fixed delay (e.g. it doesn't depend on how fast the goroutine happens to run)."
           ],
           "fail_criteria": [
-            "Recommends time.Sleep (or another fixed delay) anywhere in the wait step -- whether as the sole mechanism or as extra 'insurance' alongside a real join -- instead of relying solely on the join mechanism to know the goroutine is done."
+            "Recommends a fixed, unconditional wait before the join can be observed to have happened -- a time.Sleep taken before or instead of the join, or an explicit backoff/polling loop that sleeps between checks -- anywhere in the wait step, whether as the sole mechanism or as extra 'insurance' alongside a real join. This does NOT include a select's time.After/context.WithTimeout branch used only as a deadline safety net around the real join (it fires solely on a hang, and the join itself is what the assertion still actually waits on) -- do not fail an answer for that pattern alone."
           ]
         }
       ],

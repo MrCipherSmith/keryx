@@ -233,3 +233,46 @@ anti-gaming samples (`stack-pack-eval-integrity.test.ts`: 8 new failures,
 "no recorded judge verdict... re-record with judge-check --record"). This is
 exactly what FU7's re-record step exists for — not worked around here.
 `bun run typecheck`: exit 0. JSON validated with `python3 -c "json.load(...)"`.
+- 2026-09-25T05:02:56.484Z - task-done: T10: FU6: getter-accessor calibration variant
+- 2026-09-25T05:03:12.360Z - task-attempt: T11: started (attempt 1) — re-record calibration + honest gate run at trials=10
+
+## FU7 (T11), correction to FU2's no-sleep-sync conclusion
+
+FU2's "no defect found" conclusion for `go-testing#no-sleep-sync` was based
+on reading the STATIC rubric/calibration text only. While preparing FU7's
+honest re-run I read the actual RECORDED trial evidence from flow 316's own
+round-1 fix re-run (`W1-stack-catalog.md`, "Honest re-run under judge prompt
+v2 (T23)": "`go-testing`'s `no-sleep-sync` is a newly-observed 3/5: the
+judge failed one answer using a `select`/`time.After` timeout and one using
+a bounded `time.Sleep` poll") and the currently-committed
+`go/governance/eval.json`'s own trial records for this scenario:
+
+- Trial (bounded-poll Sleep): correctly failed — the answer used
+  `time.Sleep(time.Millisecond)` inside a backoff/polling loop as part of
+  the wait step. Fail criterion correctly applies.
+- Trial (select + `time.After(5*time.Second)`): the judge failed it,
+  reasoning "the channel example uses select with time.After... as a
+  timeout in the wait step, which is a fixed delay". But this is EXACTLY
+  the pattern the scenario's own `known_right` calibration text endorses
+  as legitimate ("pair the channel receive with a select against a short
+  deadline rather than sleeping first") — a non-blocking deadline GUARD
+  around a real join is not the same failure mode as a blocking
+  `time.Sleep` taken instead of or before the join. The old fail_criteria
+  wording ("time.Sleep (or another fixed delay) anywhere in the wait
+  step... as extra 'insurance'") was ambiguous enough for the judge to
+  read a `select`+`time.After` deadline as "another fixed delay," even
+  though the calibration's own known-right answer uses that exact shape.
+
+This IS a scenario/rubric defect (grades the pattern's structure
+ambiguously against the rubric's own worked example), not the "no defect"
+conclusion FU2 recorded. Corrected honestly rather than left standing:
+`go-testing/evals.json`'s `no-sleep-sync` rubric/fail_criteria now
+explicitly distinguish "a fixed wait taken before/instead of the join, or a
+sleeping backoff/poll loop" (fails) from "a select's time.After/
+context.WithTimeout branch used only as a deadline safety net around the
+real join" (does not fail, matching known_right). `pass_criteria` and
+`known_right`/`known_wrong`/`vague`/`subtle_wrong` are unchanged — only the
+ambiguous fail_criteria wording was tightened. Will be re-recorded
+(`judge-check --record`) alongside the honest gate run below, and the
+corrected scenario will be re-run as part of `go`'s pack in this flow's own
+honest run (not carried over from the pre-317 committed report).
