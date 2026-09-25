@@ -144,6 +144,85 @@ otuiTest("AC8: pick a doc, pick a target, run, and view clauses grouped by kind 
   }
 });
 
+otuiTest("stale-run race: a first run that resolves AFTER a second run never overwrites the second's result", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  let resolveFirst: (outcome: { ok: true; refPath: string; target: ConformTargetOption; clauses: readonly ConformClauseRow[] }) => void =
+    () => {};
+  let resolveSecond: (outcome: { ok: true; refPath: string; target: ConformTargetOption; clauses: readonly ConformClauseRow[] }) => void =
+    () => {};
+  let calls = 0;
+  const modal = openConform(otui.core, h.chrome, {
+    cwd: "/tmp/does-not-matter",
+    onKeypress: keypressSource(h.renderer),
+    loadSetup: async () => SETUP,
+    run: async (_cwd, _refPath, _target) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise((resolve) => {
+          resolveFirst = resolve as never;
+        });
+      }
+      return new Promise((resolve) => {
+        resolveSecond = resolve as never;
+      });
+    },
+    visibleRows: 12,
+  });
+  try {
+    expect(modal).toBeDefined();
+    await modal!.ready;
+
+    // Pick the first recent doc, land on the first target row (pr), and run it — call #1, never resolved yet.
+    await h.mockInput.pressEnter();
+    await settle(h);
+    await h.mockInput.pressArrow("down");
+    await settle(h);
+    await h.mockInput.pressArrow("down");
+    await settle(h);
+    await h.mockInput.pressEnter();
+    await settle(h);
+    expect(calls).toBe(1);
+    expect(modal!.visibleLines().join("\n")).toContain("Running conformance check");
+
+    // Back to Setup, move onto the SECOND target row (report), and run it — call #2.
+    // `setTab` directly (rather than emulating the tab keypress, which this
+    // renderer's raw input pipeline does not surface through the low-level
+    // "keypress" event `onKeypress` listens on) — `openConform`'s handle
+    // spreads the underlying `ModalHandle`, so this is the same call the
+    // modal's own `tab`-key handler makes.
+    modal!.setTab("setup");
+    await settle(h);
+    await h.mockInput.pressArrow("down");
+    await settle(h);
+    await h.mockInput.pressEnter();
+    await settle(h);
+    expect(calls).toBe(2);
+
+    // The SECOND (later-started) run resolves first — the realistic case, and
+    // the one that matters: its result must win.
+    resolveSecond({ ok: true, refPath: "docs/invented-a.md", target: TARGETS[1]!, clauses: [
+      { clause_id: "second-run-fresh", state_kind: "report", status: "satisfied", probability: 0.9, evidence: [] },
+    ] });
+    await modal!.settled();
+    let text = modal!.visibleLines().join("\n");
+    expect(text).toContain("second-run-fresh");
+
+    // The FIRST (stale) run resolves late. Without the run-token guard this
+    // overwrites the fresh result from call #2 with call #1's stale clauses.
+    resolveFirst({ ok: true, refPath: "docs/invented-a.md", target: TARGETS[0]!, clauses: [
+      { clause_id: "first-run-STALE", state_kind: "pr", status: "satisfied", probability: 0.9, evidence: [] },
+    ] });
+    await settle(h);
+    text = modal!.visibleLines().join("\n");
+    expect(text).toContain("second-run-fresh");
+    expect(text).not.toContain("first-run-STALE");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
 otuiTest("AC8: a run failure is shown, not swallowed", async () => {
   const otui = OTUI!;
   const h = await mountChrome(otui);

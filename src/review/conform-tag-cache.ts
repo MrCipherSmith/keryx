@@ -63,5 +63,7 @@ export async function writeClauseTagCache(
   const current = await readClauseTagCache(cwd);
   const existing = cachedTagsFor(current, docPath, contentHash) ?? {};
   const next: CacheFile = { ...current, [docPath]: { contentHash, tags: { ...existing, ...tags } } };
-  await writeFileAtomic(cacheFilePath(cwd), `${JSON.stringify(next, null, 2)}\n`);
+  // 0o600: this file names reference documents and their per-clause tags —
+  // other users on the same machine should not be able to read it.
+  await writeFileAtomic(cacheFilePath(cwd), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
 }

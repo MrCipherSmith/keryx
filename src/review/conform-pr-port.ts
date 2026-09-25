@@ -29,13 +29,68 @@ export interface ConformPrPort {
 
 export type ConformSpawn = (argv: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
-async function defaultConformSpawn(argv: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const proc = Bun.spawn(argv, { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+/** `gh pr view`/`gh pr diff` never legitimately run this long; a hang here must not hang the whole conformance check. */
+export const CONFORM_SPAWN_TIMEOUT_MS = 30_000;
+/** A pathological `gh pr diff` (a monster PR, or `gh` itself misbehaving) must not exhaust memory buffering the response. */
+export const CONFORM_SPAWN_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+
+/** Raised when `defaultConformSpawn`'s child was killed rather than exiting on its own — a timeout or the output cap, never a silent empty result. */
+export class ConformSpawnKilledError extends Error {
+  constructor(argv: readonly string[], signalCode: string) {
+    super(
+      `\`${argv.join(" ")}\` was killed (signal ${signalCode}) before it exited — likely the ` +
+        `${CONFORM_SPAWN_TIMEOUT_MS / 1000}s timeout or the ${CONFORM_SPAWN_MAX_BUFFER_BYTES} byte output cap ` +
+        `(defaultConformSpawn, src/review/conform-pr-port.ts).`,
+    );
+    this.name = "ConformSpawnKilledError";
+  }
+}
+
+/** The subset of `Bun.spawn`'s shape `defaultConformSpawn` uses — injectable so a test can simulate a timeout/maxBuffer kill without waiting one out for real. */
+export type BunSpawnFn = (
+  argv: string[],
+  options: {
+    stdin: "ignore";
+    stdout: "pipe";
+    stderr: "pipe";
+    timeout: number;
+    killSignal: string;
+    maxBuffer: number;
+  },
+) => {
+  readonly stdout: ReadableStream<Uint8Array> | undefined;
+  readonly stderr: ReadableStream<Uint8Array> | undefined;
+  readonly exited: Promise<number>;
+  readonly signalCode: string | null;
+};
+
+/**
+ * The live `Bun.spawn` call, with a hard ceiling on both wall-clock time and
+ * output size — native Bun.spawn options, not a wrapper (`timeout`,
+ * `killSignal`, `maxBuffer`; Bun kills the child with `killSignal` itself on
+ * either limit). `spawnImpl` defaults to `Bun.spawn` and exists only so a
+ * test can inject a fake that reports a kill deterministically.
+ */
+export async function defaultConformSpawn(
+  argv: string[],
+  spawnImpl: BunSpawnFn = Bun.spawn as unknown as BunSpawnFn,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = spawnImpl(argv, {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: CONFORM_SPAWN_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+    maxBuffer: CONFORM_SPAWN_MAX_BUFFER_BYTES,
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
+  if (proc.signalCode !== null) {
+    throw new ConformSpawnKilledError(argv, proc.signalCode);
+  }
   return { stdout, stderr, exitCode };
 }
 

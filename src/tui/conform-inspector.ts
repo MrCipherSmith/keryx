@@ -201,6 +201,17 @@ export function openConform(otui: unknown, chrome: unknown, options: ConformModa
   let bodyNode: { content: unknown } | undefined;
   let closed = false;
   let controller: AbortController | undefined;
+  // Bumped on every `runConform` call and captured by that call's own
+  // closure. `AbortController.abort()` cancels the underlying Jev call, but
+  // `options.run`'s returned promise can still settle after the abort (a
+  // fixture-backed or already-past-the-fetch run, for instance) — and it can
+  // settle AFTER a second run started in response to the same keypress that
+  // triggered the abort has already written its own (correct) result. Without
+  // this token, the first run's `.then` would overwrite that fresher result
+  // with stale data the moment it finally resolves. Comparing against the
+  // module-level counter, not a boolean, is what makes a THIRD run un-stale
+  // the second one correctly too.
+  let runToken = 0;
   const keys: { off?: () => void } = {};
   const host: { handle?: ModalHandle } = {};
 
@@ -249,12 +260,17 @@ export function openConform(otui: unknown, chrome: unknown, options: ConformModa
     if (refPath === undefined) return;
     controller?.abort();
     controller = new AbortController();
+    const token = ++runToken;
     running = true;
     runError = undefined;
     host.handle?.setTab("clauses");
     paint();
     inFlight = options.run(options.cwd, refPath, target, controller.signal).then((outcome) => {
-      if (closed) return;
+      // A later `runConform` call (a second target pressed before this one
+      // settled) bumped `runToken` past `token` — its own `.then` owns
+      // `clauses`/`running`/`runError` now, and this stale outcome, however
+      // it resolved, must never overwrite that fresher state.
+      if (closed || token !== runToken) return;
       running = false;
       if (outcome.ok) {
         clauses = outcome.clauses;

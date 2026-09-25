@@ -2,6 +2,9 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+// Through the security facade, not `security/redact` directly — same
+// discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
+import { redactSensitiveText } from "../security/service";
 import { learnProjectSkill } from "../gdskills/learn";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
@@ -1546,13 +1549,20 @@ async function resolveConformExplainModel(cwd: string): Promise<{ provider?: str
  * (`{[clause_id]: text}`) instead of calling a model at all — the wiring
  * under test is "the text ends up in the report, labelled advisory", not
  * `runModelTurn` itself, which has its own tests.
+ *
+ * `runTurn` is injectable (defaults to the real `runModelTurn`) so a test can
+ * assert on the exact `user` prompt sent — including that it never carries
+ * the full `refPath` — without `mock.module`-ing a shared provider module
+ * for the whole `bun test` process (see `health-truthful-gate.test.ts`'s
+ * comment on why that pattern was tried and rejected here).
  */
-async function explainConformVerdicts(
+export async function explainConformVerdicts(
   cwd: string,
   refPath: string,
   verdicts: readonly ConformVerdict[],
   threshold: number,
   fixturesDir: string | undefined,
+  runTurn: typeof runModelTurn = runModelTurn,
 ): Promise<Record<string, string>> {
   const toExplain = verdicts.filter((v) => v.status === "likely-violated" && v.probability !== undefined && v.probability < threshold);
   if (toExplain.length === 0) return {};
@@ -1566,7 +1576,7 @@ async function explainConformVerdicts(
   const { provider, model } = await resolveConformExplainModel(cwd);
   const explanations: Record<string, string> = {};
   for (const verdict of toExplain) {
-    const result = await runModelTurn({
+    const result = await runTurn({
       ...(provider !== undefined ? { provider } : {}),
       ...(model !== undefined ? { model } : {}),
       system:
@@ -1574,7 +1584,11 @@ async function explainConformVerdicts(
         "evidence given. This is ADVISORY analysis only — you are not writing a finding, not editing any file, and " +
         "nothing you say is posted anywhere automatically.",
       user: [
-        `Reference document: ${refPath}`,
+        // The full path is never sent — it can name a private project, a
+        // username, or other local filesystem detail with no bearing on the
+        // clause itself. Only the document's own filename, redacted like
+        // every other piece of state this command sends to Jev.
+        `Reference document: ${redactSensitiveText(path.basename(refPath))}`,
         `Clause ${verdict.clause_id} (kind: ${verdict.state_kind})`,
         `Jev's probability the state satisfies this clause: ${verdict.probability}`,
         "Deterministic evidence:",
@@ -1647,9 +1661,12 @@ async function runConform(args: string[]): Promise<void> {
 
   const clauses = await resolveConformClauseTags(cwd, refPath, docText, rawClauses, fetchFn, model, acc);
   // AC8 support: remember this reference document for the TUI picker's recents list.
+  // 0o600: this file names reference documents the operator has been reading —
+  // local filesystem paths other users on the same machine should not see.
   await writeFileAtomic(
     join(cwd, CONFORM_RECENTS_PATH),
     `${JSON.stringify(withRecentDoc(await readRecentConformDocs(cwd), refPath), null, 2)}\n`,
+    { mode: 0o600 },
   ).catch(() => {});
 
   const notCheckable = clauses.filter((c) => !c.checkable);

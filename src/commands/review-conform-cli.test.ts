@@ -3,10 +3,13 @@
 // real reference document's wording, name or path appears anywhere here.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { reviewCommand } from "./review";
+import { explainConformVerdicts, reviewCommand } from "./review";
+import type { ConformVerdict } from "../review/conform-jev";
+import type { ModelTurnInput, ModelTurnResult } from "../harness/provider/single-turn";
+import { CONFORM_RECENTS_PATH } from "../review/conform-report";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures", "conform");
 const REF_PATH = path.join(FIXTURES_DIR, "invented-ref.md");
@@ -191,6 +194,58 @@ describe("AC9: opt-in per project, and credential gating — both refuse before 
 
     expect(output()).toContain("OPENROUTER_API_KEY");
     expect(process.exitCode).toBe(1);
+  });
+});
+
+describe("AC7 privacy: --explain never sends the reference document's full path to the model", () => {
+  test("explainConformVerdicts sends only the redacted basename, not refPath", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    // A path deliberately shaped to carry two things that must never reach
+    // the model: a private-looking directory and a secret-shaped span.
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    const refPath = path.join(ROOT, "private-project", `notes-${secret}.md`);
+
+    const verdict: ConformVerdict = {
+      clause_id: "scope-1",
+      state_kind: "pr",
+      status: "likely-violated",
+      probability: 0.1,
+      factLines: ["a fact"],
+    };
+
+    let capturedUser: string | undefined;
+    const fakeRunTurn = async (input: ModelTurnInput): Promise<ModelTurnResult> => {
+      capturedUser = input.user;
+      return { provider: "fixture", model: "fixture", credentialAvailable: true, text: "explanation text" };
+    };
+
+    const explanations = await explainConformVerdicts(ROOT, refPath, [verdict], 0.5, undefined, fakeRunTurn);
+
+    expect(explanations["scope-1"]).toBe("explanation text");
+    expect(capturedUser).toBeDefined();
+    expect(capturedUser).not.toContain(ROOT);
+    expect(capturedUser).not.toContain("private-project");
+    expect(capturedUser).not.toContain(secret);
+    expect(capturedUser).toContain("[REDACTED:");
+    // The filename's non-secret part still gets through — only the secret
+    // span and the directory are stripped/omitted.
+    expect(capturedUser).toContain("notes-");
+  });
+});
+
+describe.skipIf(process.platform === "win32")("recent-docs.json is written owner-only (0o600)", () => {
+  test("after a successful --pr run", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", REF_PATH, "--pr", "999", "--fixtures", FIXTURES_DIR, "--json"]);
+
+    const mode = (await stat(path.join(ROOT, CONFORM_RECENTS_PATH))).mode & 0o777;
+    expect(mode).toBe(0o600);
   });
 });
 

@@ -39,7 +39,7 @@ describe("AC1: extractReferenceClauses — deterministic, no model call", () => 
   test("carries clause text with the explicit marker stripped", async () => {
     const clauses = extractReferenceClauses(await fixtureText());
     const scope2 = clauses.find((c) => c.clause_id === "scope-2");
-    expect(scope2?.text).toBe("Hand-written code in one PR stays under a 400 lines budget.");
+    expect(scope2?.text).toBe("Hand-written code in one PR stays under a 600 lines budget.");
     expect(scope2?.explicit).toEqual({ state_kind: "pr" });
   });
 
@@ -117,5 +117,15 @@ describe("AC2: tagging — explicit markers win outright, Jev choice is the fall
     const tagged = applyClauseTags(raw, new Map());
     expect(tagged[0]?.checkable).toBe(false);
     expect(tagged[0]?.reason).toBeDefined();
+  });
+
+  test("a secret planted in a clause's text never reaches buildClauseTagQuestions' instructions", () => {
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    const raw = extractReferenceClauses(`# H\n\n- Rotate AWS_ACCESS_KEY_ID=${secret} every 90 days.`);
+    const questions = buildClauseTagQuestions(raw);
+    const instructions = questions["h-1"]!.instructions;
+    expect(instructions).not.toContain(secret);
+    expect(instructions).toContain("[REDACTED:");
+    expect(instructions).toContain("Rotate AWS_ACCESS_KEY_ID");
   });
 });

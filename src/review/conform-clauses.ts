@@ -23,6 +23,12 @@
 // structurally with no import needed; `src/commands/review.ts` (an ADAPTER)
 // is where the two actually meet.
 
+// Through the security facade, not `security/redact` directly — the
+// import-policy ratchet (`src/lib/import-policy.live.test.ts`) is at its cap,
+// and every caller outside `src/security/` reaches redaction through
+// `src/security/service.ts` (its own file header explains why).
+import { redactSensitiveText } from "../security/service";
+
 export const REFERENCE_CLAUSE_STATE_KINDS = ["pr", "report", "hunk"] as const;
 export type ReferenceClauseStateKind = (typeof REFERENCE_CLAUSE_STATE_KINDS)[number];
 
@@ -198,7 +204,13 @@ export function extractReferenceClauses(docText: string): RawReferenceClause[] {
 // AC2: tagging — explicit markers first, Jev `choice` fallback otherwise.
 // ---------------------------------------------------------------------------
 
-/** One `choice` question per clause that has no explicit marker (AC2's Jev fallback). */
+/**
+ * One `choice` question per clause that has no explicit marker (AC2's Jev
+ * fallback). The clause's own text is embedded — that is the feature, opt-in
+ * via `review.jev.conform` — but only after `redactSensitiveText` strips any
+ * secret the reference document itself happens to contain, same floor every
+ * other piece of state sent to Jev already gets.
+ */
 export function buildClauseTagQuestions(
   clauses: readonly RawReferenceClause[],
 ): Readonly<Record<string, ConformChoiceQuestion>> {
@@ -211,7 +223,7 @@ export function buildClauseTagQuestions(
         `Classify this rule-document clause. Which kind of state would you check it against — "pr" (the pull ` +
         `request's own title/body/size), "report" (an existing review report/findings), or "hunk" (a code or test ` +
         `change)? If it names no gatherable artefact at all — a live/manual step such as "verified on a running ` +
-        `instance" or an obligation on the reviewer's own process — answer "not-checkable" instead.\n\nClause: ${clause.text}`,
+        `instance" or an obligation on the reviewer's own process — answer "not-checkable" instead.\n\nClause: ${redactSensitiveText(clause.text)}`,
       criteria: CLAUSE_TAG_CRITERIA_RECORD,
     };
   }

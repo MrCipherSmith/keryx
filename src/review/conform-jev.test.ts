@@ -57,6 +57,20 @@ describe("AC5: batchConformItems — same-kind clauses share state, split under 
   });
 });
 
+describe("secret redaction: clause text is scrubbed before it reaches a Jev question", () => {
+  test("an AWS access key planted in a clause's text never reaches batchConformItems' question body", () => {
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    const c = clause(`Rotate the credential AWS_ACCESS_KEY_ID=${secret} every 90 days.`);
+    const [batch] = batchConformItems([{ clause: c, facts: { factLines: [] } }], "shared redacted state");
+    const instructions = batch!.questions[c.clause_id]!.instructions;
+    expect(instructions).not.toContain(secret);
+    expect(instructions).toContain("[REDACTED:");
+    // The rest of the clause's wording is still sent — redaction strips only
+    // the secret span, not the clause itself (clause text IS the feature).
+    expect(instructions).toContain("Rotate the credential");
+  });
+});
+
 describe("AC6: verdict computation", () => {
   test("notCheckableVerdict carries the reason and no probability", () => {
     const raw = extractReferenceClauses("# H\n\n- Verified manually. [not-checkable: no artefact records this]");

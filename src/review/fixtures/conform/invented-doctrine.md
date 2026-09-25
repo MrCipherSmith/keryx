@@ -12,7 +12,7 @@ ladder, and an exit criterion.
 ## Scope
 
 1. Each pull request addresses exactly one concern. [not-checkable: no artefact records what the author considered in scope before opening the PR]
-2. Hand-written code in one PR stays under a 400 lines budget. [state:pr]
+2. Hand-written code in one PR stays under a 600 lines budget. [state:pr]
 3. The PR body names an explicit Out of Scope section. [state:pr]
 
 ## Review rounds

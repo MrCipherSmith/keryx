@@ -4,7 +4,7 @@
 
 ## Scope
 
-1. Hand-written code stays under a 400 lines budget. [state:pr]
+1. Hand-written code stays under a 600 lines budget. [state:pr]
 2. The PR body names an explicit Out of Scope section. [state:pr]
 
 ## Hunks

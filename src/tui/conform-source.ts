@@ -264,5 +264,8 @@ export async function runConformForTarget(
 async function writeRecentConformDoc(cwd: string, refPath: string): Promise<void> {
   const { writeFileAtomic } = await import("../lib/fs");
   const current = await readRecentConformDocs(cwd);
-  await writeFileAtomic(path.join(cwd, CONFORM_RECENTS_PATH), `${JSON.stringify(withRecentDoc(current, refPath), null, 2)}\n`).catch(() => {});
+  // 0o600: local filesystem paths other users on the same machine should not see.
+  await writeFileAtomic(path.join(cwd, CONFORM_RECENTS_PATH), `${JSON.stringify(withRecentDoc(current, refPath), null, 2)}\n`, {
+    mode: 0o600,
+  }).catch(() => {});
 }

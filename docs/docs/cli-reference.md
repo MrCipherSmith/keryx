@@ -3774,13 +3774,17 @@ keryx review conform --ref docs/review-doctrine.md --pr 999 --json
 | `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), every Jev call (`jev-response.json`), and (with `--explain`) the explanation pass (`explain-response.json`) — no real `gh` call, no real network. |
 | `--json` | Prints `{ref, target, threshold, clauses, usage}` instead of the human-readable report. |
 
-**Opt-in, and named as a privacy decision.** Disabled by default. A project
-enables it with `review.jev.conform: true` in
-`.metaproject/tasks.config.json` — PR text, report content and code hunks
-leave the machine to OpenRouter/TypeSafe. With the setting off, or with no
-OpenRouter credential, the command refuses before any read and makes no
-network call; every redacted state passes through `redactSensitiveText`
-first.
+**Opt-in, and named as a privacy decision.** Disabled by default. The
+document's clauses, PR text, report and diff are sent to Jev after secret
+redaction, and nothing leaves the machine unless `review.jev.conform` is on.
+A project turns it on with `review.jev.conform: true` in
+`.metaproject/tasks.config.json`. Sending the reference document's own clause
+text to Jev is the feature, not a leak — checking a clause requires the model
+to read it — and it is opt-in the same way the rest of this command is: only
+SECRETS inside that text (and inside the PR/report/diff state) are stripped
+first, by the same `redactSensitiveText` pass every other piece of state sent
+to Jev already gets. With the setting off, or with no OpenRouter credential,
+the command refuses before any read and makes no network call.
 
 **A checkable clause whose kind has no target this run is `not evaluated`**,
 never silently dropped — the same discipline `not-checkable` clauses get.

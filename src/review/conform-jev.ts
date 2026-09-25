@@ -13,6 +13,11 @@
 import { estimateTokens } from "./cost";
 import type { ReferenceClause } from "./conform-clauses";
 import type { ClauseStateFacts } from "./conform-state";
+// Through the security facade, not `security/redact` directly — the
+// import-policy ratchet (`src/lib/import-policy.live.test.ts`) is at its cap,
+// and every caller outside `src/security/` reaches redaction through
+// `src/security/service.ts` (its own file header explains why).
+import { redactSensitiveText } from "../security/service";
 
 /** A structural stand-in for `JevQuestion` (`type: "noul"`) — see the file header. */
 export interface ConformNoulQuestion {
@@ -37,12 +42,21 @@ export interface ConformBatch {
   readonly questions: Readonly<Record<string, ConformNoulQuestion>>;
 }
 
+/**
+ * The reference document's own clause text is embedded into the Jev question
+ * below — that is the feature (clause text IS sent to Jev), and it is opt-in
+ * via `review.jev.conform`. Only SECRETS inside that clause text are stripped
+ * first, the same `redactSensitiveText` pass every other piece of state
+ * (PR title/body, report markdown, hunk text) already gets before it leaves
+ * the machine — a reference document is operator-supplied text like any
+ * other, not something exempt from the redaction floor.
+ */
 function questionFor(clause: ReferenceClause): ConformNoulQuestion {
   return {
     type: "noul",
     instructions:
       `Given the state above (deterministic facts, then the redacted underlying content), does the state SATISFY ` +
-      `this clause from a reference document? Clause ${clause.clause_id}: ${clause.text}`,
+      `this clause from a reference document? Clause ${clause.clause_id}: ${redactSensitiveText(clause.text)}`,
   };
 }
 
