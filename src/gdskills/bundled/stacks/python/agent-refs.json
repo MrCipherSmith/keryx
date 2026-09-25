@@ -1,4 +1,3 @@
 {
-  "agents": [],
-  "note": "no pair — the python pack fails the honest stable-pack gate: python-implementation's trigger-positive \"Add a new feature to this Python service that logs each request with the logging module\" is not selected (6/7). Every python behavior scenario now clears 0.8. deepseek-chat judge gate run, flow 316."
+  "agents": ["python-code-auditor", "python-build-fixer"]
 }

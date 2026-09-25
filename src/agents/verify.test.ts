@@ -446,14 +446,17 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
   });
 
   test("every bundled shipped agent verifies ok against the real skill/bundled trees, with the per-stack packs' gate stubbed cleared", () => {
-    // Flow 316: the honest DeepSeek judge gate run cleared only
-    // `ts-js-node` (`stability: "stable"` now), so it ships a generated
-    // `<id>-code-auditor` / `<id>-build-fixer` pair; `react`, `go`, and
-    // `python` stay `experimental` and ship none. `stackPackGateCleared` is
-    // stubbed cleared anyway so this guard still proves everything OTHER
-    // than pack gate status (schema, tools, skills, drift) is clean,
-    // independent of gate state — see the R1-4 fixture tests above for the
-    // positive case of a gate-cleared pack's generated pair verifying clean.
+    // Flow 317: the trials=10 honest DeepSeek judge gate run cleared
+    // `python` and `go` (`stability: "stable"` now, each ships a generated
+    // `<id>-code-auditor` / `<id>-build-fixer` pair); `ts-js-node` DROPPED
+    // out (`no-ts-ignore-suppression` passRate 0.6 < 0.8 at the higher trial
+    // count — the marginal-at-the-floor fragility flow 316 review round 1
+    // predicted) and its generated pair was removed; `react` stays
+    // `experimental` and ships none. `stackPackGateCleared` is stubbed
+    // cleared anyway so this guard still proves everything OTHER than pack
+    // gate status (schema, tools, skills, drift) is clean, independent of
+    // gate state — see the R1-4 fixture tests above for the positive case
+    // of a gate-cleared pack's generated pair verifying clean.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {
       stackPackGateCleared: () => ({ cleared: true }),
     });
@@ -467,16 +470,17 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: zero problems (only ts-js-node is gate-cleared)", () => {
-    // Flow 316: ts-js-node is the only real, on-disk "stable" pack after the
-    // honest DeepSeek judge gate run, with a generated agent pair on disk
-    // whose gate status the default (non-stubbed) resolver checks for
-    // real — the catalog verifies clean because the pack is genuinely
-    // gate-cleared. react, go, and python stay "experimental" and ship no
-    // generated agent, so they contribute nothing here either way.
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (python and go are gate-cleared, flow 317)", () => {
+    // Flow 317: python and go are the real, on-disk "stable" packs after the
+    // trials=10 honest DeepSeek judge gate run, each with a generated agent
+    // pair on disk whose gate status the default (non-stubbed) resolver
+    // checks for real — the catalog verifies clean because both packs are
+    // genuinely gate-cleared. ts-js-node dropped back to "experimental"
+    // (its pair removed) and react stays "experimental" (never had one), so
+    // neither contributes anything here either way.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
     const withProblems = report.agents.filter((agent) => agent.problems.length > 0);
@@ -486,7 +490,7 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual(["ts-js-node-build-fixer", "ts-js-node-code-auditor"]);
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
   });
 
   // Flow 314 W4 T10 (W2 §"Initial catalogue": "a hand edit to a generated

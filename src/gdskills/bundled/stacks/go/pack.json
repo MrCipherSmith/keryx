@@ -7,7 +7,7 @@
     "origin": "authored",
     "sourceRef": "flow 314, Wave 4 batch 1"
   },
-  "stability": "experimental",
+  "stability": "stable",
   "skills": {
     "implement": ["go-implementation"],
     "test": ["go-testing"],

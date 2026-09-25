@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { CatalogEntry } from "../gdskills/governance/catalog-index";
+import { RUNNER_SYSTEM_NOTE } from "../gdskills/governance/eval";
 import type { ProviderFactory } from "../harness/provider/single-turn";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
 import { saveApiKey } from "../lib/shell-config";
@@ -127,7 +128,7 @@ describe("buildEvalRunner: build-time credential check honors saved auth.json ke
 });
 
 describe("buildEvalRunner: the built Runner", () => {
-  test("runs one single-turn completion with the skill's full SKILL.md as system and the scenario prompt as user", async () => {
+  test("runs one single-turn completion with the skill's full SKILL.md plus the runner system note as system, and the scenario prompt as user", async () => {
     const capture: { system?: string; user?: string } = {};
     const factory: ProviderFactory = () => stubProvider("the model said this", capture);
     const runner = buildEvalRunner("anthropic", { env: {}, providerFactory: factory });
@@ -135,7 +136,11 @@ describe("buildEvalRunner: the built Runner", () => {
     const result = await runner("does this handle empty input?", SKILL);
 
     expect(result).toEqual({ output: "the model said this" });
-    expect(capture.system).toBe(SKILL.body);
+    // Flow 317 (FU2): the system prompt is the skill's own body PLUS a
+    // uniform "answer in text, no tools" note (`RUNNER_SYSTEM_NOTE`) — see
+    // `eval.ts`'s doc comment for why (go-testing#table-driven-subtests was
+    // failing because the model emitted a tool/shell call instead of text).
+    expect(capture.system).toBe(`${SKILL.body}\n\n${RUNNER_SYSTEM_NOTE}`);
     expect(capture.user).toBe("does this handle empty input?");
   });
 

@@ -1,3 +1,378 @@
 # Flow Journal
 
 - 2026-09-25T04:36:22.847Z - flow created
+- 2026-09-25T04:40:43.196Z - task-done: T1: Collect remaining context
+- 2026-09-25T04:40:43.287Z - task-done: T2: Implement per plan
+- 2026-09-25T04:40:43.384Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-25T04:40:43.482Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-25T04:40:50.601Z - task-added: T5: FU1: diagnose+fix python-implementation trigger-positive-6
+- 2026-09-25T04:40:50.697Z - task-added: T6: FU2: runner answer-in-text system note + no-sleep-sync check
+- 2026-09-25T04:40:50.790Z - task-added: T7: FU3: live re-judge sampler (skills eval --reverify)
+- 2026-09-25T04:40:50.881Z - task-added: T8: FU4: PACK_MIN_TRIALS 5->10 + regression test
+- 2026-09-25T04:40:50.973Z - task-added: T9: FU5: react no-disable-hooks-lint defect check
+- 2026-09-25T04:40:51.063Z - task-added: T10: FU6: getter-accessor calibration variant
+- 2026-09-25T04:40:51.157Z - task-added: T11: FU7: re-record calibration + honest gate run at trials=10 + docs/agents
+- 2026-09-25T04:40:55.242Z - frozen: 9 criteria; checksum recorded
+- 2026-09-25T04:40:55.339Z - started
+- 2026-09-25T04:41:01.251Z - task-attempt: T5: started (attempt 1) — diagnosing python-implementation trigger-positive-6
+
+## FU1 (T5): python-implementation trigger-positive-6
+
+Diagnosed with `keryx skills scout "<trigger-positive-6 prompt>" --scope bundled --json`
+(offline, no model call): `go/go-implementation` outscored
+`python/python-implementation` (0.475 vs 0.466) purely on generic overlap
+(add/feature/log/module/service) — python-implementation's own description
+never used the word "service" and its logging mention was a single bare word,
+so `go-implementation`'s (also generic) "log/slog usage" + "service" wording
+won on IDF-weighted coverage even though the prompt names Python explicitly.
+This is a genuine under-description of the skill's own scope, not a prompt
+defect (the eval prompt is exactly the kind of task this skill is for) —
+fixed per plan.md/AC1: python-implementation's frontmatter `description` now
+says "...codebase or service..." and "...request/event logging with the
+standard logging module...", plus one new trigger "log requests in this
+python service". Never touched python-implementation/evals.json.
+
+Verified: `keryx skills scout` now ranks python-implementation first
+(0.779 vs go-implementation's 0.467); `skills eval python/python-implementation
+--scope bundled --json` shows trigger-positive-6 passRate 1. Regression check:
+a full bundled-catalog trigger-only pass (`scoreTriggerScenarios` over every
+skill shipping an authored evals.json, positives scored `field:"full"` since
+authored) shows 110/110 positives selected and 108/108 negatives correctly
+rejected — no other skill's trigger accuracy moved.
+
+`bun test src/gdskills/stack-packs.test.ts src/gdskills/stack-pack-eval-integrity.test.ts src/gdskills/governance`: 1483 pass, 0 fail.
+- 2026-09-25T04:43:35.832Z - task-done: T5: FU1: diagnose+fix python-implementation trigger-positive-6
+- 2026-09-25T04:43:41.046Z - task-attempt: T6: started (attempt 1) — runner answer-in-text system note
+
+## FU2 (T6): runner answer-in-text system note + no-sleep-sync check
+
+`go-testing#table-driven-subtests` (flow 316 journal T13) failed 3/5 because
+`buildEvalRunner` gives the model no tools at all, and the model tried one
+anyway instead of answering in text. Added a uniform runner-level system
+note, `RUNNER_SYSTEM_NOTE` (`eval.ts`), appended after `skill.body` in
+`buildEvalRunner` (`model-eval-runner.ts`) for EVERY skill/scenario alike —
+never a per-scenario prompt change. Added `RUNNER_PROMPT_VERSION` mirroring
+`JUDGE_PROMPT_VERSION`'s contract; the CLI (`evalCommand`) stamps
+`runnerPromptVersion` on the report alongside `runner`/`model` whenever
+`--runner` was used; `checkSkillReportForPackGate` now requires it to equal
+the current version for every report carrying a ran behavior scenario (every
+ran behavior scenario came from a `--runner` call, so this is unconditional,
+mirroring the judge check). `__fixtures__/gate-ready-report.ts` updated to
+stamp it too, and two new gate tests added (`eval.test.ts`: stale and
+missing `runnerPromptVersion` both fail the gate, naming the field).
+
+`no-sleep-sync` rubric review (owner ask: "review timeouts vs sleeps, fix
+only if defective"): read `go/go-testing/evals.json`'s rubric/pass_criteria/
+fail_criteria/calibration for `no-sleep-sync`. It already correctly
+distinguishes a fixed `time.Sleep` delay (fail, "whether as the sole
+mechanism or as extra 'insurance' alongside a real join") from an actual
+synchronization primitive (WaitGroup/channel), and `known_right` explicitly
+allows a `select` against a deadline as a legitimate additional safety net
+without being scored as a sleep — the `subtle_wrong` calibration answer
+(WaitGroup + an extra `time.Sleep` "insurance" line) exercises exactly the
+gap a weaker rubric would miss. No defect found; left unchanged. This is the
+honest result, not a silent skip: T13's own failure list never named
+`no-sleep-sync` as failing (only `table-driven-subtests` did) — it was
+already passing under the old grader and remains correctly specified now.
+
+`bun test src/gdskills/governance src/commands/model-eval-runner.test.ts
+src/commands/skills-governance.test.ts`: 289 pass, 0 fail; `bun run
+typecheck`: exit 0. Five REAL bundled-tree tests (ts-js-node's committed
+`governance/eval.json` predates `runnerPromptVersion`) now correctly fail
+the gate as stale evidence — expected, and resolved by FU7's honest re-run,
+not worked around here.
+- 2026-09-25T04:48:41.955Z - task-done: T6: FU2: runner answer-in-text system note + no-sleep-sync check
+- 2026-09-25T04:48:45.703Z - task-attempt: T7: started (attempt 1) — live re-judge sampler: skills eval --reverify
+
+## FU3 (T7): live re-judge sampler
+
+Added `keryx skills eval --reverify <pack-dir> [--sample N] --judge <provider>[:<model>]`
+(dispatched from `evalCommand` before the normal `<skill-id>` usage check,
+since `--reverify` takes a pack dir, not a skill id). Core logic is
+`reverifyPackSample` (`eval.ts`): reads the pack's `governance/eval.json`,
+collects every RAN behavior scenario's `trialRecords` that carry a judge
+verdict, samples up to `--sample` (default 10) of them WITHOUT replacement
+(Fisher-Yates, injectable RNG for deterministic tests), re-judges each
+sampled `output` live via `gradeScenarioAnswer` against the skill's CURRENT
+evals.json scenario (never the report's own stale copy), and reports every
+disagreement plus the disagreement rate. Exits non-zero when the rate
+exceeds `REVERIFY_DISAGREEMENT_THRESHOLD` (20%, documented in `eval.ts`'s
+doc comment: a live judge is not perfectly deterministic on identical input
+— flow 316 review round 1 — so one flaky sample among a few must not fail
+the check; a genuinely elevated rate should).
+
+This is a diagnostic, not a gate: it closes a gap the stable-pack gate
+structurally cannot (`regradeRecordedReport` proves a report is internally
+consistent — the SAME output really does produce the SAME deterministic/
+judge conclusion — but it cannot prove a recorded judge verdict was ever a
+genuine live grading, or that the judge provider's weights haven't drifted
+under a pinned model name). Documented in
+`docs/docs/cli-reference.md`'s eval/judge-check table with an explicit
+threat-model paragraph, next to `judge-check`'s own (which covers a
+different gap: hard-to-game rubrics, not judge-verdict provenance).
+
+Unit tests (`eval.test.ts`, nested inside "the hardened stable-pack gate" so
+they can reuse `writeGateFixture`): agreeing stub judge -> zero
+disagreements; disagreeing stub judge -> every trial flagged, rate 1.0,
+threshold exceeded; `--sample` caps the judge-call count at the sample size,
+never at totalEligible; a pack with no judge-graded scenarios never calls
+the judge and reports zero eligible/sampled. CLI-level tests
+(`skills-governance.test.ts`): usage/`--judge`/`--sample` validation errors,
+and one end-to-end success path against a real on-disk fixture pack via the
+`buildJudge` injection seam (no network).
+
+`bun test src/gdskills/governance/eval.test.ts src/commands/skills-governance.test.ts`:
+97 + 52 pass, 0 fail. `bun run typecheck`: exit 0. `bunx eslint` on all
+changed files: 0 problems (docs/*.md gets an expected "no matching config"
+warning, not an error).
+- 2026-09-25T04:56:40.822Z - task-done: T7: FU3: live re-judge sampler (skills eval --reverify)
+- 2026-09-25T04:56:46.214Z - task-attempt: T8: started (attempt 1) — PACK_MIN_TRIALS 5->10
+
+## FU4 (T8): PACK_MIN_TRIALS 5 -> 10
+
+Flow 316's own honest gate run (journal T13) landed several scenarios
+exactly at the `PACK_BEHAVIOR_PASS_FLOOR` (0.8) with only 5 trials:
+`no-ts-ignore-suppression` and `dirname-replacement` both 4/5,
+`no-disable-hooks-lint` and `no-mobx-scope` both 4/5. At 5 trials, 0.8 sits
+one flipped trial away from failing either direction — reasoning documented
+in `eval.ts`'s `PACK_MIN_TRIALS` doc comment. Bumped 5 -> 10; no
+grandfathering (`checkSkillReportForPackGate`'s existing `trials <
+PACK_MIN_TRIALS` check already covers this unconditionally, so this is a
+one-line constant change plus a new regression test).
+
+Added `eval.test.ts`: "PACK_MIN_TRIALS regression: a report recorded at the
+OLD minimum (5 trials) still fails the gate after the bump to 10" — pins
+`PACK_MIN_TRIALS === 10` and proves a 5-trial report (valid, gate-clearing
+under the old constant) now fails naming "below the pack minimum 10".
+
+Fixed two PRE-EXISTING tests whose honest fixtures hardcoded a `passes`
+count tuned to the OLD `PACK_MIN_TRIALS=5` denominator (`mixedTrialsReport`
+computes `verdict` from `passes/trials` against the 0.8 floor, so scaling
+the denominator without scaling the numerator silently flipped their
+"honest, floor-clearing" premise to a genuine failure): "a behavior
+scenario's OWN trials below PACK_MIN_TRIALS..." (5/5 -> now PACK_MIN_TRIALS/
+PACK_MIN_TRIALS, still 100%) and "passAtK disagreeing with (passes > 0 ? 1 :
+0)..." (4/5=0.8 -> now 8/10=0.8, same floor-clearing rate). Both are fixture
+math corrections to preserve the ORIGINAL test intent under the new
+denominator, not a weakening of what either test proves.
+
+`bun test src/gdskills/governance`: 233 pass, 0 fail. `bun run typecheck`:
+exit 0. `bunx eslint`: 0 problems. Five REAL bundled-tree tests
+(`stack-packs.test.ts`, `src/agents`, `agents-catalog-commands.test.ts` —
+same set FU2 already found stale, plus now also below the trials floor)
+remain red until FU7's honest re-run rebuilds the committed
+`governance/eval.json` files at trials=10 with the current runner/judge
+prompt versions — expected, not worked around here.
+- 2026-09-25T05:00:15.506Z - task-done: T8: FU4: PACK_MIN_TRIALS 5->10 + regression test
+- 2026-09-25T05:00:21.987Z - task-attempt: T9: started (attempt 1) — react no-disable-hooks-lint defect check
+
+## FU5 (T9): react no-disable-hooks-lint defect check
+
+Read `react-build-fix/evals.json`'s `no-disable-hooks-lint` rubric/pass_criteria/
+fail_criteria and every recorded trial output + judge reason from the
+committed `governance/eval.json` (3/5, trials 2 and 4 failed):
+
+- **Trial 2** presented `eslint-disable-next-line react-hooks/exhaustive-deps`
+  as one of "three legitimate fixes, in order of preference," with a
+  concrete example of writing the comment. The fail criterion is explicit
+  that mentioning eslint-disable "only as a caveat or aside without a
+  concrete named-dependency fix alongside it" does NOT fail — this answer
+  goes further than that: it recommends the disable comment as an actual
+  usable option, which the fail criterion's own wording (and the skill's
+  entire purpose — never recommend silencing the rule) squarely covers.
+  Correct judge verdict.
+- **Trial 4** asked the user to paste their `useEffect` code before giving a
+  fix, rather than delivering the concrete illustrative example pass
+  criterion 1 explicitly says is required "when the prompt itself shows no
+  code." It never explained the staleness consequence either (pass
+  criterion 2). Correct judge verdict — a promise to fix, once given more
+  info, is not a fix.
+
+Both failures are genuine answer defects, correctly caught by a rubric that
+already distinguishes "warns against eslint-disable" (allowed) from
+"presents eslint-disable as a usable option" (fails) — exactly the
+distinction flow 316's AC9 regrade (journal T13) showed the new judge gets
+right where the OLD regex grader could not. No scenario/rubric defect found.
+Left unchanged. This is the honest result: react's pack stays experimental
+for `no-disable-hooks-lint` until a higher trial count (FU4, FU7) shows
+whether 3/5 was a real ~60% rate or noise around the 0.8 floor — the fix for
+"unlucky trials" is more trials, not a rubric edit.
+
+- 2026-09-25T05:01:17.424Z - task-done: T9: FU5: react no-disable-hooks-lint defect check
+- 2026-09-25T05:01:21.538Z - task-attempt: T10: started (attempt 1) — getter-accessor calibration variant
+
+## FU6 (T10): getter-accessor calibration variant
+
+The schema (`validateEvalSpec` in `eval.ts`) requires `calibration.known_right`
+to be exactly one non-empty string — it does not support multiple known-right
+answers structurally, so per plan.md this is a rubric note, not a schema
+change (a schema change to support an array would ripple through
+`antiGamingAnswers`, `judge-check`, and every consumer of `ScenarioCalibration`
+for one scenario's benefit).
+
+Extended `ts-js-node/nodejs-build-fix/evals.json`'s `no-ts-ignore-suppression`:
+pass_criteria[0] now explicitly names the getter-accessor form (`get total():
+number`) as satisfying "adds a total property" alongside the plain-field and
+derived-value shapes already there; `known_right`'s prose gained a third
+paragraph describing the same shape. This documents what review round 2
+(R2-1, scratchpad/f316/review-r2.md) already found the judge correctly
+generalizing to — "a third concrete variant of the same two calibrated
+answers... not a bypass" — so a future prompt/rubric edit is tested against
+it too, per review round 3's own optional-follow-up note (decided-by:
+MrCipherSmith, owner, in chat).
+
+This is a scenario clarification, not tuning to force a pass: the judge
+already passed this shape correctly before the edit (R2-1's own finding);
+the edit only makes the calibration set match what the rubric already
+allows, so a future edit to either does not accidentally regress it.
+
+Expected consequence, confirmed: editing the rubric/known_right text changes
+`judgeRequestDigest` for this scenario, which invalidates the offline
+judge-recording replay for its known-right/vague/subtle-wrong/stuffed
+anti-gaming samples (`stack-pack-eval-integrity.test.ts`: 8 new failures,
+"no recorded judge verdict... re-record with judge-check --record"). This is
+exactly what FU7's re-record step exists for — not worked around here.
+`bun run typecheck`: exit 0. JSON validated with `python3 -c "json.load(...)"`.
+- 2026-09-25T05:02:56.484Z - task-done: T10: FU6: getter-accessor calibration variant
+- 2026-09-25T05:03:12.360Z - task-attempt: T11: started (attempt 1) — re-record calibration + honest gate run at trials=10
+
+## FU7 (T11), correction to FU2's no-sleep-sync conclusion
+
+FU2's "no defect found" conclusion for `go-testing#no-sleep-sync` was based
+on reading the STATIC rubric/calibration text only. While preparing FU7's
+honest re-run I read the actual RECORDED trial evidence from flow 316's own
+round-1 fix re-run (`W1-stack-catalog.md`, "Honest re-run under judge prompt
+v2 (T23)": "`go-testing`'s `no-sleep-sync` is a newly-observed 3/5: the
+judge failed one answer using a `select`/`time.After` timeout and one using
+a bounded `time.Sleep` poll") and the currently-committed
+`go/governance/eval.json`'s own trial records for this scenario:
+
+- Trial (bounded-poll Sleep): correctly failed — the answer used
+  `time.Sleep(time.Millisecond)` inside a backoff/polling loop as part of
+  the wait step. Fail criterion correctly applies.
+- Trial (select + `time.After(5*time.Second)`): the judge failed it,
+  reasoning "the channel example uses select with time.After... as a
+  timeout in the wait step, which is a fixed delay". But this is EXACTLY
+  the pattern the scenario's own `known_right` calibration text endorses
+  as legitimate ("pair the channel receive with a select against a short
+  deadline rather than sleeping first") — a non-blocking deadline GUARD
+  around a real join is not the same failure mode as a blocking
+  `time.Sleep` taken instead of or before the join. The old fail_criteria
+  wording ("time.Sleep (or another fixed delay) anywhere in the wait
+  step... as extra 'insurance'") was ambiguous enough for the judge to
+  read a `select`+`time.After` deadline as "another fixed delay," even
+  though the calibration's own known-right answer uses that exact shape.
+
+This IS a scenario/rubric defect (grades the pattern's structure
+ambiguously against the rubric's own worked example), not the "no defect"
+conclusion FU2 recorded. Corrected honestly rather than left standing:
+`go-testing/evals.json`'s `no-sleep-sync` rubric/fail_criteria now
+explicitly distinguish "a fixed wait taken before/instead of the join, or a
+sleeping backoff/poll loop" (fails) from "a select's time.After/
+context.WithTimeout branch used only as a deadline safety net around the
+real join" (does not fail, matching known_right). `pass_criteria` and
+`known_right`/`known_wrong`/`vague`/`subtle_wrong` are unchanged — only the
+ambiguous fail_criteria wording was tightened. Will be re-recorded
+(`judge-check --record`) alongside the honest gate run below, and the
+corrected scenario will be re-run as part of `go`'s pack in this flow's own
+honest run (not carried over from the pre-317 committed report).
+
+## FU7: honest gate run at trials=10, results and a second mid-run defect found
+
+Ran `skills eval <id> --strictness high --trials 10 --runner deepseek:deepseek-chat
+--judge deepseek:deepseek-chat --scope bundled --json` once per skill (18
+skills), HEAD unchanged from start to end
+(`scratchpad/f317/gate/run.meta`), raw output saved per skill. Results:
+
+- **python — gate PASS, every scenario 1.0/1.0** (`python-implementation`'s
+  trigger 7/7, confirming FU1's fix holds under the full live run too).
+  **Promoted to `stability: stable`.**
+- **go — go-testing PASS** (`table-driven-subtests` 8/10=0.8 after FU2's
+  runner note; `no-sleep-sync` 9/10=0.9, confirming this journal's earlier
+  no-sleep-sync fix). **go-build-fix FAILED at first**:
+  `no-nolint-suppression` scored 6/10 (below the 0.8 floor). Read the 4
+  failing trials' judge reasons: every one complains the answer "never
+  shows the actual flagged call site's fix" / "only states intent." Checked
+  the scenario's own prompt: `"golangci-lint is flagging an ignored error
+  return in my Go code. How should I fix it?"` — no code, no call site, the
+  SAME under-specified-prompt class flow 316 already fixed for python's
+  `mypy-error-no-blanket-suppress` (and the exact clause `no-disable-hooks-lint`
+  already carries: "when the prompt itself shows no code... a concrete
+  illustrative example... satisfies this requirement"). `known_right`
+  itself is illustrative/generic, not tied to a specific call site (none
+  exists) — so live answers were being held to a standard even the
+  calibration's own passing example doesn't meet. Genuine scenario defect,
+  not tuning: added the identical "prompt names no call site... a concrete
+  illustrative example... satisfies this requirement" clause to
+  `pass_criteria[1]`. Re-recorded calibration (green, including the
+  previously-passing `known-right` unaffected) and re-ran
+  `go/go-build-fix` alone at trials=10: **10/10 both scenarios.** `go`
+  pack now clears the gate fully. **Promoted to `stability: stable`.**
+- **react — gate FAIL**, confirming FU5's finding rather than contradicting
+  it: `no-disable-hooks-lint` scored 3/10 (0.3) — a LOWER rate than the 3/5
+  (0.6) at trials=5, not a floor-noise artifact. This is the honest result:
+  the model genuinely struggles with this scenario roughly 70% of the time.
+  No rubric defect (FU5's evidence-based review already checked this).
+  Stays `stability: experimental`, no generated pair.
+- **ts-js-node — gate FAIL, demoted from `stable`**: `no-ts-ignore-suppression`
+  scored 6/10 (0.6), below the floor it sat exactly on (4/5=0.8) at trials=5
+  — exactly the fragility R1-14 (flow 316 review round 1) predicted:
+  "consider trials >= 10 for graduation in a future pass... one more judge
+  flip on any of the three [scenarios at 4/5] would fail the pack." Checked
+  the 4 failing trials: every one gives a decision path / names the right
+  direction ("add `total: number` to OrderDraft" or "compute at call
+  site") but never shows the actual corrected declaration or access code —
+  unlike `go-build-fix` above, THIS prompt (`"tsc reports: Property 'total'
+  does not exist on type 'OrderDraft'. What's the right way to fix this?"`)
+  is concrete enough that "show the corrected code" is answerable, and the
+  calibration's own `known_right` DOES show it. A genuine, evidence-backed
+  model-answer-quality failure, not a rubric defect. Per the owner rule
+  (never edit a grader to force a pass; FU4's "no grandfathering"): **demoted
+  to `stability: experimental`**, generated `ts-js-node-code-auditor`/
+  `ts-js-node-build-fixer` pair removed. This is the first pack to move from
+  stable to experimental under this flow.
+
+Stack coverage: 1 -> 2 (python and go now stable and gated; ts-js-node
+demoted; react stays experimental). Net pack count with a generated pair:
+1 (ts-js-node) -> 2 (python, go) — ts-js-node's own pair removed the same
+round it would have been replaced by python/go's.
+
+## FU7 wrap-up: stability, agent pairs, docs
+
+- `pack.json` stability flipped for python/go (-> stable) and ts-js-node
+  (-> experimental); react unchanged (already experimental). Matching
+  `install-manifest.json` module entries (`python-rules`/`python-skills`,
+  `go-rules`/`go-skills` -> stable; `ts-js-node-rules`/`ts-js-node-skills`
+  -> experimental) updated together — the pack.json<->install-manifest
+  stability guard test (`stack-packs.test.ts`, flow 314 T13b) checks every
+  module in a pack's `modules` list individually.
+- `keryx agents generate --stack python|go` (real CLI, no stub): wrote
+  `python-code-auditor.md`/`python-build-fixer.md` and
+  `go-code-auditor.md`/`go-build-fixer.md`; `--check` confirms no drift.
+  `agents generate --stack ts-js-node` now correctly refuses
+  (`stack-pack-not-gate-cleared`). ts-js-node's two generated files removed
+  (`git rm`) and its `agent-refs.json` emptied with a note (matching the
+  existing pattern react's `agent-refs.json` already used).
+- Updated 4 pre-existing tests that hardcoded "only ts-js-node is
+  gate-cleared" (`src/agents/verify.test.ts` x2,
+  `src/commands/agents-catalog-commands.test.ts` x2,
+  `src/agents/generate.test.ts` x1) to the new gate-cleared set — each
+  still asserts against the REAL bundled tree, not a stub, so they prove
+  the shipped state matches what the honest run produced.
+- Docs: `W1-stack-catalog.md` (new "Implementation notes: flow 317" section
+  + FU3/FU4/FU6/FU7 status updates), `W2-agent-catalog.md` (batch-1 status
+  update), `docs/docs/guides/agent-catalog.md` (generated-pair section),
+  `docs/docs/guides/write-a-rubric-scenario.md` (PACK_MIN_TRIALS=10,
+  runnerPromptVersion, --reverify pointer — committed earlier alongside
+  FU2-FU4), `docs/docs/cli-reference.md` (`eval --reverify` row —
+  committed alongside FU3).
+
+Full verification: `bun run typecheck` exit 0; `bunx eslint` on every
+changed `.ts`/`.test.ts` file: 0 problems; `bun test src/gdskills src/agents
+src/commands/agents-catalog-commands.test.ts
+src/commands/skills-governance.test.ts src/commands/model-eval-runner.test.ts
+src/harness/provider/single-turn.test.ts`: 2467 pass, 1 fail — the 1 failure
+(`src/gdskills/install.test.ts`, a chmod/EACCES readonly-directory test) is
+in a file this flow never touched and reproduces in isolation from a stale
+temp-dir permission left by an unrelated earlier test run on this host, not
+from anything in this diff.

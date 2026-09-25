@@ -1,3 +1,4 @@
 {
-  "agents": ["ts-js-node-code-auditor", "ts-js-node-build-fixer"]
+  "agents": [],
+  "note": "pair removed — flow 317, trials=10 honest gate run: ts-js-node/nodejs-build-fix no-ts-ignore-suppression passRate 0.6 < 0.8 (was 4/5=0.8 at trials=5, the fragility flow 316 review round 1 (R1-14) predicted). Recorded trials named the right direction but never showed the corrected declaration/access code in 4 of 10 answers. deepseek-chat runner+judge gate run, flow 317."
 }

@@ -515,6 +515,106 @@ describe("flow 316: keryx skills eval --judge / judge-check", () => {
     });
   });
 
+  describe("eval --reverify (flow 317, FU3: the live re-judge sampler)", () => {
+    test("with no pack-dir argument is refused with usage", async () => {
+      await skillsGovernanceCommand(["eval", "--reverify"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("Usage: keryx skills eval --reverify"))).toBe(true);
+    });
+
+    test("with no --judge is refused", async () => {
+      await skillsGovernanceCommand(["eval", "--reverify", "/nonexistent-pack"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("--judge is required"))).toBe(true);
+    });
+
+    test("--judge with no value is refused", async () => {
+      await skillsGovernanceCommand(["eval", "--reverify", "/nonexistent-pack", "--judge"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("--judge requires a value"))).toBe(true);
+    });
+
+    test("--sample abc (non-numeric) is refused, not silently NaN", async () => {
+      await skillsGovernanceCommand(["eval", "--reverify", "/nonexistent-pack", "--judge", "deepseek", "--sample", "abc"]);
+      expect(process.exitCode).toBe(1);
+      expect(errors.some((line) => line.includes("--sample must be a positive integer"))).toBe(true);
+    });
+
+    test("a pack dir with no governance/eval.json fails with a named error, not a thrown exception", async () => {
+      const judge: Judge = async () => ({ verdict: "pass", reason: "unused" });
+      const dir = mkdtempSync(path.join(tmpdir(), "reverify-empty-pack-"));
+      try {
+        await skillsGovernanceCommand(["eval", "--reverify", dir, "--judge", "deepseek"], { buildJudge: fakeJudgeBuilder(judge) });
+        expect(process.exitCode).toBe(1);
+        expect(errors.length).toBeGreaterThan(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("a real fixture pack with agreeing verdicts exits 0 and reports zero disagreements", async () => {
+      const { buildGateReadyReport } = await import("../gdskills/governance/__fixtures__/gate-ready-report");
+      const logs: string[] = [];
+      const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+        logs.push(args.map(String).join(" "));
+      });
+      const dir = mkdtempSync(path.join(tmpdir(), "reverify-pack-"));
+      try {
+        const packId = "reverify-cli-pack";
+        const skillName = "sample-skill";
+        const packDir = path.join(dir, packId);
+        const skillDir = path.join(packDir, "skills", skillName);
+        mkdirSync(skillDir, { recursive: true });
+        const evalSpec = {
+          triggers: { positive: ["run the reverify fixture task"], negative: ["something entirely unrelated"] },
+          scenarios: [
+            {
+              id: "s1",
+              prompt: "do it",
+              strictness: "high" as const,
+              expected_behavior: [
+                {
+                  grader: "judge" as const,
+                  rubric: "must say ok",
+                  pass_criteria: ["says ok"],
+                },
+              ],
+              calibration: { known_right: "ok", known_wrong: "no", vague: "maybe ok-ish", subtle_wrong: "ok-adjacent but wrong" },
+            },
+          ],
+        };
+        writeFileSync(
+          path.join(skillDir, "SKILL.md"),
+          "---\nname: sample-skill\ndescription: fixture skill\ntriggers:\n  - run the reverify fixture task\n---\n\nBody.\n",
+          "utf8",
+        );
+        writeFileSync(path.join(skillDir, "evals.json"), JSON.stringify(evalSpec), "utf8");
+        mkdirSync(path.join(packDir, "governance"), { recursive: true });
+        writeFileSync(
+          path.join(packDir, "pack.json"),
+          JSON.stringify({ id: packId, family: "language", modules: [], stability: "stable", skills: { review: [skillName] } }),
+          "utf8",
+        );
+        const report = buildGateReadyReport({ packId, skillName, skillDir, evalSpec, trials: 3 });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [report] }), "utf8");
+
+        const agreeingJudge: Judge = async () => ({ verdict: "pass", reason: "stub: agrees" });
+        await skillsGovernanceCommand(["eval", "--reverify", packDir, "--judge", "deepseek", "--json"], {
+          buildJudge: fakeJudgeBuilder(agreeingJudge),
+        });
+        expect(process.exitCode).toBe(0);
+        const result = JSON.parse(logs.join("\n")) as { totalEligible: number; sampleSize: number; disagreements: unknown[]; thresholdExceeded: boolean };
+        expect(result.totalEligible).toBe(3);
+        expect(result.sampleSize).toBe(3);
+        expect(result.disagreements).toEqual([]);
+        expect(result.thresholdExceeded).toBe(false);
+      } finally {
+        logSpy.mockRestore();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   // A missing credential must fail closed — mirrors the existing `--runner
   // anthropic` R2-5 test (same rationale: never let a real, spend-incurring,
   // network-calling eval run inside a unit test regardless of the host env).

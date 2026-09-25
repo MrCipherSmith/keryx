@@ -11,7 +11,13 @@
 
 import path from "node:path";
 import { loadSkillCatalog, loadSkillCatalogWithDiagnostics, type CatalogScope } from "../gdskills/governance/catalog-index";
-import { evalSkill, readSkillEvalSpec, type EvalSpecFile } from "../gdskills/governance/eval";
+import {
+  evalSkill,
+  readSkillEvalSpec,
+  reverifyPackSample,
+  RUNNER_PROMPT_VERSION,
+  type EvalSpecFile,
+} from "../gdskills/governance/eval";
 import {
   antiGamingAnswers,
   gradeScenarioAnswer,
@@ -340,11 +346,21 @@ function isStrictness(value: string | undefined): value is "low" | "medium" | "h
 }
 
 async function evalCommand(args: readonly string[], deps: SkillsGovernanceDeps = {}): Promise<void> {
+  // Flow 317 (FU3): `--reverify <pack-dir>` is a distinct mode of `eval` —
+  // re-judging RECORDED trials live, never running a fresh eval — so it is
+  // dispatched before the normal `<skill-id>` usage check below (a pack
+  // directory path is not a skill id).
+  if (args[0] === "--reverify") {
+    await reverifyCommand(args.slice(1), deps);
+    return;
+  }
+
   const buildJudge = deps.buildJudge ?? buildEvalJudge;
   const skillId = args[0];
   if (skillId === undefined || skillId.startsWith("--")) {
     console.error(
-      "Usage: keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--judge <provider>[:<model>]] [--scope bundled|all] [--model-grader] [--json]",
+      "Usage: keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>] [--judge <provider>[:<model>]] [--scope bundled|all] [--model-grader] [--json]\n" +
+        "   or: keryx skills eval --reverify <pack-dir> [--sample N] --judge <provider>[:<model>] [--json]",
     );
     process.exitCode = 1;
     return;
@@ -505,7 +521,13 @@ async function evalCommand(args: readonly string[], deps: SkillsGovernanceDeps =
     let report = rawReport;
     if (runnerName !== undefined) {
       const { provider, model } = splitRunnerSpec(runnerName);
-      report = { ...report, runner: provider, model: model ?? defaultModelFor(provider), recordedAt: new Date().toISOString() };
+      report = {
+        ...report,
+        runner: provider,
+        model: model ?? defaultModelFor(provider),
+        runnerPromptVersion: RUNNER_PROMPT_VERSION,
+        recordedAt: new Date().toISOString(),
+      };
     }
     if (judgeName !== undefined) {
       const { provider, model } = splitRunnerSpec(judgeName);
@@ -533,6 +555,78 @@ async function evalCommand(args: readonly string[], deps: SkillsGovernanceDeps =
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
+}
+
+// ---------------------------------------------------------------------------
+// eval --reverify (flow 317, FU3: the live re-judge sampler)
+// ---------------------------------------------------------------------------
+
+const REVERIFY_DEFAULT_SAMPLE = 10;
+
+async function reverifyCommand(args: readonly string[], deps: SkillsGovernanceDeps = {}): Promise<void> {
+  const buildJudge = deps.buildJudge ?? buildEvalJudge;
+  const packArg = args[0];
+  if (packArg === undefined || packArg.startsWith("--")) {
+    console.error("Usage: keryx skills eval --reverify <pack-dir> [--sample N] --judge <provider>[:<model>] [--json]");
+    process.exitCode = 1;
+    return;
+  }
+
+  const judgeFlag = stringFlag(args, "--judge");
+  if (judgeFlag === "missing-value") {
+    console.error("--judge requires a value");
+    process.exitCode = 1;
+    return;
+  }
+  if (judgeFlag === undefined) {
+    console.error("--judge is required");
+    process.exitCode = 1;
+    return;
+  }
+
+  const sampleFlag = positiveIntegerFlag(args, "--sample");
+  if (sampleFlag === "invalid") {
+    console.error("--sample must be a positive integer");
+    process.exitCode = 1;
+    return;
+  }
+  const sampleSize = sampleFlag ?? REVERIFY_DEFAULT_SAMPLE;
+  const json = args.includes("--json");
+
+  const packDir = path.resolve(process.cwd(), packArg);
+  let judge: ReturnType<typeof buildEvalJudge>;
+  try {
+    judge = buildJudge(judgeFlag, { skillId: `reverify:${path.basename(packDir)}` });
+  } catch (error) {
+    console.error(error instanceof JudgeBuildError || error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
+
+  let result;
+  try {
+    result = await reverifyPackSample(packDir, judge, { sampleSize });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(
+      `Pack: ${result.packId}  eligible=${result.totalEligible}  sampled=${result.sampleSize}  disagreements=${result.disagreements.length} (${(result.disagreementRate * 100).toFixed(1)}%)`,
+    );
+    for (const d of result.disagreements) {
+      console.log(`  MISMATCH ${d.skillId} ${d.scenarioId}#${d.trialIndex}: recorded=${d.recordedVerdict} live=${d.liveVerdict} (${d.liveReason})`);
+    }
+    if (result.thresholdExceeded) {
+      console.log(`Disagreement rate exceeds the documented threshold (REVERIFY_DISAGREEMENT_THRESHOLD).`);
+    }
+  }
+
+  process.exitCode = result.thresholdExceeded ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------

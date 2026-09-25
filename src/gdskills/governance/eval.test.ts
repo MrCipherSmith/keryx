@@ -15,6 +15,7 @@ import {
   PACK_BEHAVIOR_PASS_FLOOR,
   PACK_MIN_TRIALS,
   regradeRecordedReport,
+  reverifyPackSample,
   scoreTriggerScenarios,
   type EvalReport,
   type EvalScenarioResult,
@@ -1160,6 +1161,30 @@ describe("R1-3/R1-4/R1-5 (flow 314 review round 1): pack-level gate fixtures", (
     }
   });
 
+  // Flow 317 (FU4): PACK_MIN_TRIALS was raised 5 -> 10. A report recorded at
+  // the OLD minimum (5 trials, `validateEvalReport`-valid on its own and
+  // clearing the pre-317 gate) must fail the CURRENT gate — there is no
+  // grandfathering for a pack that has not re-recorded at the new floor.
+  test("PACK_MIN_TRIALS regression: a report recorded at the OLD minimum (5 trials) still fails the gate after the bump to 10", () => {
+    expect(PACK_MIN_TRIALS).toBe(10); // pins the bumped value itself, so this test fails loudly if it regresses back down
+    const fx = buildPassingFixture();
+    try {
+      const doc = readJson(fx.governanceEvalPath);
+      const behaviorScenario = doc.reports[0].scenarios.find((s: any) => s.kind === "behavior");
+      doc.reports[0].trials = 5;
+      behaviorScenario.trials = 5;
+      behaviorScenario.trialRecords = Array.from({ length: 5 }, () => behaviorScenario.trialRecords[0]);
+      behaviorScenario.passes = 5;
+      behaviorScenario.passRate = 1;
+      writeJson(fx.governanceEvalPath, doc);
+      const result = checkStablePackGate(fx.packDir, "stable");
+      expect(result.status).toBe("fail");
+      expect(result.reason).toContain("below the pack minimum 10");
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+    }
+  });
+
   test("pack.json id != directory name: fails naming the mismatch, never silently trusts the id", () => {
     const fx = buildPassingFixture();
     try {
@@ -1870,6 +1895,33 @@ describe("flow 316: the judge grader", () => {
       }
     });
 
+    test("a stale runnerPromptVersion fails (flow 317 FU2 — every ran behavior scenario is runner-produced)", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(DETERMINISTIC_SPEC);
+      try {
+        const report = { ...buildGateReadyReport({ packId: "gate-pack", skillName: "gate-skill", skillDir, evalSpec: DETERMINISTIC_SPEC }), runnerPromptVersion: "0.0.0-stale" };
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [report] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("runnerPromptVersion");
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("a missing runnerPromptVersion fails the same way (an old report recorded before FU2's runner note existed)", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(DETERMINISTIC_SPEC);
+      try {
+        const base = buildGateReadyReport({ packId: "gate-pack", skillName: "gate-skill", skillDir, evalSpec: DETERMINISTIC_SPEC });
+        const { runnerPromptVersion: _drop, ...report } = base;
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [report] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("runnerPromptVersion");
+      } finally {
+        cleanup();
+      }
+    });
+
     test("missing trialRecords on the recorded report fails", () => {
       const { packDir, skillDir, cleanup } = writeGateFixture(DETERMINISTIC_SPEC);
       try {
@@ -2057,7 +2109,7 @@ describe("flow 316: the judge grader", () => {
     test("a behavior scenario's OWN trials below PACK_MIN_TRIALS fails the gate, even with a healthy top-level trials", () => {
       const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
       try {
-        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 5, PACK_MIN_TRIALS); // report.trials: 5 (>= PACK_MIN_TRIALS)
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", PACK_MIN_TRIALS, PACK_MIN_TRIALS); // report.trials: PACK_MIN_TRIALS, all passing (honestly clears the floor)
         const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
         const truncatedRecords = (behaviorScenario.trialRecords ?? []).slice(0, 4); // internally consistent among themselves: 4 records, 4 passes
         const forgedScenario: EvalScenarioResult = { ...behaviorScenario, trials: 4, trialRecords: truncatedRecords, passes: 4, passRate: 1, passAtK: 1 };
@@ -2074,7 +2126,7 @@ describe("flow 316: the judge grader", () => {
     test("passAtK disagreeing with (passes > 0 ? 1 : 0) fails the gate", () => {
       const { packDir, skillDir, cleanup } = writeGateFixture(MIXED_SPEC);
       try {
-        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 4, PACK_MIN_TRIALS); // 4/5, honestly clears the pack floor (0.8)
+        const honest = mixedTrialsReport(skillDir, "gate-pack", "gate-skill", 8, PACK_MIN_TRIALS); // 8/10, honestly clears the pack floor (0.8)
         const behaviorScenario = honest.scenarios.find((scenario) => scenario.kind === "behavior")!;
         const forgedScenario: EvalScenarioResult = { ...behaviorScenario, passAtK: 0 }; // passes (4) > 0, so the honest passAtK is 1
         const forged: EvalReport = { ...honest, scenarios: honest.scenarios.map((scenario) => (scenario.id === forgedScenario.id ? forgedScenario : scenario)) };
@@ -2189,7 +2241,111 @@ describe("flow 316: the judge grader", () => {
         rmSync(root, { recursive: true, force: true });
       }
     });
+
+    describe("reverifyPackSample (flow 317, FU3: the live re-judge sampler)", () => {
+    /** Deterministic RNG for tests: always returns 0, so `sampleWithoutReplacement`'s Fisher-Yates never swaps — the sample is always the first N eligible trials in insertion order. */
+    const noShuffle = (): number => 0;
+
+    test("re-judges every eligible trial when sampleSize >= totalEligible, and reports zero disagreements when the stub judge agrees with every recorded verdict", async () => {
+      const evalSpec = judgeEvalSpec();
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack", skillName: "sample-skill", skillDir, evalSpec, trials: 3 });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        // The fixture's own trialRecords are all `known_right` -> recorded
+        // verdict "pass" (see `fixtureAnswerFor` in `__fixtures__/gate-ready-report.ts`).
+        const agreeingJudge: Judge = async () => ({ verdict: "pass", reason: "stub: agrees" });
+        const result = await reverifyPackSample(packDir, agreeingJudge, { sampleSize: 10, random: noShuffle });
+
+        expect(result.packId).toBe("reverify-pack");
+        expect(result.totalEligible).toBe(3); // trials: 3, one judge-graded scenario
+        expect(result.sampleSize).toBe(3); // capped at totalEligible
+        expect(result.disagreements).toEqual([]);
+        expect(result.disagreementRate).toBe(0);
+        expect(result.thresholdExceeded).toBe(false);
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("reports a disagreement, and its rate, when the stub judge flips a recorded verdict", async () => {
+      const evalSpec = judgeEvalSpec();
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack-2", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack-2", skillName: "sample-skill", skillDir, evalSpec, trials: 4 });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        // Recorded verdict is "pass" for every trial (known_right fixture);
+        // a stub judge that always says "fail" disagrees with all 4 — rate 1.0,
+        // above the documented threshold.
+        const disagreeingJudge: Judge = async () => ({ verdict: "fail", reason: "stub: disagrees" });
+        const result = await reverifyPackSample(packDir, disagreeingJudge, { sampleSize: 10, random: noShuffle });
+
+        expect(result.totalEligible).toBe(4);
+        expect(result.sampleSize).toBe(4);
+        expect(result.disagreements).toHaveLength(4);
+        expect(result.disagreements[0]).toMatchObject({
+          skillId: "reverify-pack-2/sample-skill",
+          scenarioId: "s1",
+          trialIndex: 0,
+          recordedVerdict: "pass",
+          liveVerdict: "fail",
+        });
+        expect(result.disagreementRate).toBe(1);
+        expect(result.thresholdExceeded).toBe(true);
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("samples at most `sampleSize` of the eligible trials, never more", async () => {
+      const evalSpec = judgeEvalSpec();
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack-3", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack-3", skillName: "sample-skill", skillDir, evalSpec, trials: 8 });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        let calls = 0;
+        const countingJudge: Judge = async () => {
+          calls += 1;
+          return { verdict: "pass", reason: "stub" };
+        };
+        const result = await reverifyPackSample(packDir, countingJudge, { sampleSize: 3, random: noShuffle });
+
+        expect(result.totalEligible).toBe(8);
+        expect(result.sampleSize).toBe(3);
+        expect(calls).toBe(3); // the judge is called once per SAMPLED trial, never once per eligible trial
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("a pack with no judge-graded scenarios reports zero eligible/sampled and no disagreements, never throws", async () => {
+      const evalSpec: EvalSpecFile = {
+        triggers: { positive: ["run the gate fixture task"], negative: ["something entirely unrelated"] },
+        scenarios: [{ id: "s1", prompt: "do it", strictness: "high", expected_behavior: [{ grader: "contains", value: "ok" }] }],
+      };
+      const { packDir, skillDir, cleanup } = writeGateFixture(evalSpec, "reverify-pack-4", "sample-skill");
+      try {
+        const base = buildGateReadyReport({ packId: "reverify-pack-4", skillName: "sample-skill", skillDir, evalSpec });
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [base] }), "utf8");
+
+        const neverCalled: Judge = async () => {
+          throw new Error("must not be called — nothing is judge-graded");
+        };
+        const result = await reverifyPackSample(packDir, neverCalled, { sampleSize: 10, random: noShuffle });
+        expect(result.totalEligible).toBe(0);
+        expect(result.sampleSize).toBe(0);
+        expect(result.disagreements).toEqual([]);
+        expect(result.disagreementRate).toBe(0);
+        expect(result.thresholdExceeded).toBe(false);
+      } finally {
+        cleanup();
+      }
+    });
   });
+});
 });
 
 function tamperFirstTrialRecord(report: EvalReport, mutate: (record: TrialRecord) => TrialRecord): EvalReport {
