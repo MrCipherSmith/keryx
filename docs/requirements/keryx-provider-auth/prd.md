@@ -1,7 +1,11 @@
 # PRD: Keryx Provider Auth
-Version: 1.1.0
+Version: 1.2.0
 
 ## Problem
+
+The following describes the original motivation. Device login is now implemented;
+OpenAI API and ChatGPT / Codex are separate provider identities. Current usage
+and validation limits are recorded in [README.md](README.md).
 
 Two gaps, one of them embarrassing.
 
@@ -53,7 +57,7 @@ are in [decisions.md](decisions.md) §D-01.
 | Operator on a phone | Adds a provider supporting the device grant | Receives a short code and a verification URL, approves in the phone's browser; keryx obtains the token by polling. Nothing secret is in the chat. |
 | Operator on a phone | Adds a provider needing an API key | Told plainly that this provider needs a key and that entry requires the machine — rather than being handed a link that cannot open. |
 | Operator with SuperGrok | Wants Grok in keryx without an API key | `/provider` → xAI → SuperGrok device-code; usage from the subscription. |
-| Operator with ChatGPT Plus/Pro | Wants Codex models in keryx | ChatGPT OAuth (browser locally, device-style headless remotely), or a platform API key. |
+| Operator with ChatGPT Plus/Pro | Wants Codex models in keryx | ChatGPT / Codex device login completed in a browser; OpenAI API is a separate API-key provider. |
 | Operator with a Copilot subscription | Wants to use it | Authorizes through the device flow, which GitHub sanctions. |
 | Operator with a Claude Max subscription | Expects to authorize by link | Told that Anthropic's terms do not permit third-party subscription login, and pointed to a Console API key. Their account is not put at risk. |
 | Operator with Gemini / DeepSeek | Expects a Google or DeepSeek subscription login | Gemini: API key only (Google-account OAuth is Gemini CLI). DeepSeek: API key only; no consumer OAuth exists. |
@@ -72,7 +76,7 @@ are in [decisions.md](decisions.md) §D-01.
 | FR-05 | A method's presentation adapts to where the operator is. Remotely, `device-code` proceeds; `api-key` and `oauth-pkce-loopback` explain that they need the machine rather than issuing an unusable link. |
 | FR-06 | Obtained credentials — key, token, refresh token, expiry — are stored only in the existing user-global store at mode 0600. |
 | FR-07 | Tokens that expire are refreshed where the grant supports it; a refresh failure surfaces as an authorization error, never as a silent downgrade. |
-| FR-08 | Wave 1 subscription logins: xAI SuperGrok (`device-code` + `api-key`), OpenAI ChatGPT Plus/Pro (`oauth-pkce-loopback` / headless + `api-key`), GitHub Copilot (`device-code`). Gemini and DeepSeek stay `api-key`. Claude Pro/Max OAuth is not offered. |
+| FR-08 | Wave 1 subscription logins: xAI SuperGrok (`device-code` + `api-key`), OpenAI API (`openai`, `api-key`) and ChatGPT / Codex (`openai-codex`, `device-code`), GitHub Copilot (`device-code`). Gemini and DeepSeek stay `api-key`. Claude Pro/Max OAuth is not offered. |
 | FR-09 | A provider whose terms forbid third-party subscription login declares only the methods it permits. The registry never carries a method the vendor prohibits. |
 | FR-10 | Authorization state is inspectable: which providers are authorized, by which method, and when a grant expires — without revealing any secret. |
 

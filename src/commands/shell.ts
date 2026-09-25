@@ -899,6 +899,14 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     modelParams = picked.modelParams ?? {};
     provider = makeActive();
   };
+  const selectAndApply = async (options: { onlyProvider?: string; onlyConnected?: boolean }): Promise<void> => {
+    if (deps.selectProviderModel === undefined) return;
+    try {
+      applySelection(await deps.selectProviderModel(io, options));
+    } catch (cause) {
+      system(`${cause instanceof Error ? cause.message : "Provider selection failed"}\nKept the current session.\n`);
+    }
+  };
 
   for await (const line of io.lines) {
     io.onSafeBoundary?.();
@@ -1045,12 +1053,19 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           system("Interactive model selection is not available in this session.\n");
           continue;
         }
-        const picked = await deps.selectProviderModel(io, { onlyProvider: providerName });
-        applySelection(picked);
+        await selectAndApply({ onlyProvider: providerName });
         continue;
       }
       if (command === "/provider") {
         if (argument.length > 0) {
+          if (argument === "openai-codex") {
+            if (deps.selectProviderModel === undefined) {
+              system("Interactive subscription selection is not available. Run `keryx auth login openai-codex` and select an authorized model.\n");
+            } else {
+              await selectAndApply({ onlyProvider: "openai-codex" });
+            }
+            continue;
+          }
           // Explicit by-name switch (keeps the model + baseUrl selection).
           providerName = argument;
           provider = makeActive();
@@ -1061,8 +1076,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           continue;
         }
         // Pass an empty opts object (no `onlyProvider`) → full re-selection.
-        const picked = await deps.selectProviderModel(io, {});
-        applySelection(picked);
+        await selectAndApply({});
         continue;
       }
       if (command === "/connect") {
@@ -1070,8 +1084,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           system(CONNECT_GUIDANCE);
           continue;
         }
-        const picked = await deps.selectProviderModel(io, { onlyConnected: true });
-        applySelection(picked);
+        await selectAndApply({ onlyConnected: true });
         continue;
       }
       // A real command that belongs to the OTHER mode (`/expand`, `/think`,
@@ -1232,6 +1245,9 @@ export function realMakeProvider(write: (s: string) => void): ShellDeps["makePro
  * still wins: an operator who exported one is making a choice.
  */
 function oauthCredentialsFor(name: string): { credentials?: Record<string, string | undefined> } {
+  // Platform keys and ChatGPT OAuth are distinct authorities. The subscription
+  // factory resolves its grant per turn; neither belongs in API-key env slots.
+  if (name === "openai" || name === "openai-codex") return {};
   const definition = providerByName(name);
   const envKey = definition?.envKey;
   if (envKey === undefined) return {};

@@ -10,7 +10,7 @@ function printAuthHelp(): void {
   keryx auth logout <provider>
   keryx auth status <provider> [--json]
 
-Providers with a sanctioned subscription login: grok (SuperGrok), openai (ChatGPT Plus/Pro), github-copilot.
+Providers with a sanctioned subscription login: grok (SuperGrok), openai-codex (ChatGPT Plus/Pro), github-copilot.
 Claude Pro/Max, Gemini Google-account login, and DeepSeek OAuth are not offered.
 `);
 }
@@ -69,7 +69,8 @@ function runAuthList(args: string[]): void {
 }
 
 async function runAuthLogin(args: string[]): Promise<void> {
-  const provider = args[0];
+  const provider = args[0] === "openai" ? "openai-codex" : args[0];
+  if (args[0] === "openai") console.error("The OpenAI subscription login is now openai-codex; openai is API-key only.");
   if (provider === undefined || provider.length === 0) {
     console.error("Usage: keryx auth login <provider>");
     process.exitCode = 1;
@@ -81,14 +82,18 @@ async function runAuthLogin(args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  process.once("SIGINT", cancel);
   const result = await loginDeviceCode({
     provider,
+    signal: controller.signal,
     fetch: (input, init) => globalThis.fetch(input, init),
     onChallenge: (challenge) => {
       console.log(challenge.instructions);
       openVerificationUrl(challenge.verificationUriComplete ?? challenge.verificationUri);
     },
-  });
+  }).finally(() => process.removeListener("SIGINT", cancel));
   if (!result.ok) {
     console.error(result.error);
     process.exitCode = 1;
@@ -99,7 +104,8 @@ async function runAuthLogin(args: string[]): Promise<void> {
 }
 
 function runAuthLogout(args: string[]): void {
-  const provider = args[0];
+  const provider = args[0] === "openai" ? "openai-codex" : args[0];
+  if (args[0] === "openai") console.error("The OpenAI subscription login is now openai-codex; openai is API-key only.");
   if (provider === undefined || provider.length === 0) {
     console.error("Usage: keryx auth logout <provider>");
     process.exitCode = 1;
@@ -110,7 +116,8 @@ function runAuthLogout(args: string[]): void {
 }
 
 function runAuthStatus(args: string[]): void {
-  const provider = args[0];
+  const provider = args[0] === "openai" ? "openai-codex" : args[0];
+  if (args[0] === "openai") console.error("The OpenAI subscription login is now openai-codex; openai is API-key only.");
   if (provider === undefined || provider.length === 0) {
     console.error("Usage: keryx auth status <provider>");
     process.exitCode = 1;

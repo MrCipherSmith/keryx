@@ -1,12 +1,13 @@
 # Specification: Keryx Provider Auth
-Version: 1.1.0
+Version: 1.2.0
 
 ## Identity and status
 
 `keryx-provider-auth` extends the implemented provider registry
 (`src/commands/providers.ts`) with declared authentication methods per entry,
 and adds the OAuth 2.0 device authorization grant as a new method. It introduces
-no credential store, no provider adapter, and no runtime dependency. Subscription
+no new credential store or runtime dependency. The separate `openai-codex`
+subscription adapter reuses the native Responses stream parser. Subscription
 OAuth is not Grok-only: every vendor-sanctioned grant is in scope; every
 forbidden one is an explicit refusal. See [decisions.md](decisions.md) §D-01.
 
@@ -104,7 +105,8 @@ OAuth that needs a new adapter. Cloud credential chains stay deferred.
 |---|---|---|---|
 | **xAI Grok** | `device-code`, `api-key` | SuperGrok / X Premium | RFC 8628 against `auth.x.ai`. TUI: `/provider` → xAI → SuperGrok, not API key. |
 | **GitHub Copilot** | `device-code` | Copilot | GitHub's documented CLI device flow. New provider; no keryx adapter yet, added with this package. |
-| **OpenAI** | `oauth-pkce-loopback`, device-style headless, `api-key` | ChatGPT Plus/Pro (Codex) | Browser PKCE locally; Codex device-auth headless for remote/SSH. Platform key remains. |
+| **OpenAI API** (`openai`) | `api-key` | No | Platform API billing; independent of subscription credentials. |
+| **ChatGPT / Codex** (`openai-codex`) | `device-code` | ChatGPT subscription with Codex access | Browser-completed device login on local/remote machines; separate Codex Responses endpoint, account ID, token refresh and model discovery. |
 | Google Gemini | `api-key` | No | Native adapter already. Google-account OAuth is Gemini CLI only — refused, see D-01. |
 | DeepSeek | `api-key` | No | No consumer OAuth. Keep the existing key path. |
 | Anthropic | `api-key` | No | Claude Pro/Max OAuth is forbidden. Keep the native key path. |
@@ -194,5 +196,5 @@ It never prints a secret.
 | AC-18 | Given a local `none` provider, when no credential exists anywhere, then it remains fully usable and startup is unaffected. |
 | AC-19 | Given the whole suite, when it runs, then every flow is exercised against a fake authorization server with no live vendor endpoint and no real credential. |
 | AC-20 | Given the `grok` entry, when the picker lists auth methods, then SuperGrok `device-code` and `api-key` are both offered. |
-| AC-21 | Given the `openai` entry, when the picker lists auth methods, then ChatGPT Plus/Pro OAuth and `api-key` are both offered. |
+| AC-21 | Given the provider picker, both OpenAI API (`openai`, API key only) and ChatGPT / Codex (`openai-codex`, device-code only) are offered before login. Their credentials, connection state and disconnect actions are independent. |
 | AC-22 | Given Anthropic, Gemini, or DeepSeek, when the picker lists auth methods, then only `api-key` is offered, and a Claude Pro / Google-account / DeepSeek-subscription choice is not present. |

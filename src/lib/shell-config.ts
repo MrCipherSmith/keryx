@@ -39,6 +39,7 @@ export interface ShellConfig {
   oauthGrants?: Record<string, {
     method: "device-code" | "oauth-pkce-loopback";
     access: string;
+    accountId?: string;
     refresh?: string;
     expires?: number;
     obtainedAt: string;

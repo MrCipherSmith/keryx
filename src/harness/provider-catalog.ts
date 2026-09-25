@@ -22,6 +22,9 @@
 // Client zone (no TUI import — testable and usable without a renderer),
 // mirroring `./routing/table.ts`'s own "no TUI deps" posture.
 
+import { loadOAuthGrant } from "../lib/oauth/grants";
+import { envWithSavedApiKeys } from "../lib/shell-config";
+import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 import { detectProviders, type DetectedProvider, type DetectProvidersDeps } from "../commands/select";
 import {
   balanceCapableProvider,
@@ -103,12 +106,17 @@ async function buildCatalogEntry(
       ...(detected.label !== undefined ? { label: detected.label } : {}),
     };
   }
+  if (detected.name === "openai-codex") {
+    if (loadOAuthGrant("openai-codex", deps.dir) === undefined) return undefined;
+    const result = await fetchOpenAiCodexModels(deps.fetch, { ...(deps.dir !== undefined ? { configDir: deps.dir } : {}), timeoutMs: deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS });
+    return { name: detected.name, status: classifyModelsStatus(result), models: result.models, fallbackModels: [...detected.models], fetchedAt, label: detected.label ?? "ChatGPT / Codex" };
+  }
   const registry = providerByName(detected.name, deps.dir);
   if (registry === undefined) {
-    // Native anthropic/openai/gemini: `detectProviders()` includes one only
+    // Native anthropic/gemini: `detectProviders()` includes one only
     // when its API key is present in `deps.env` (the connectedness check for
     // a provider with no live listing endpoint — `describe().modelListing`
-    // is false for all three, see `select.ts`), so `detected.models` here IS
+    // is false for these providers, see `select.ts`), so `detected.models` here IS
     // the curated fallback a caller should show.
     return {
       name: detected.name,
@@ -125,7 +133,7 @@ async function buildCatalogEntry(
   // unconnected provider is excluded here and NEVER PROBED (AC1) rather than
   // inheriting `detected`'s "offer everything" posture.
   const requiresApiKey = registry.requiresApiKey ?? true;
-  const apiKey = providerApiKey(registry, deps.env) ?? registry.apiKey;
+  const apiKey = providerApiKey(registry, envWithSavedApiKeys(deps.env, deps.dir)) ?? registry.apiKey;
   if (requiresApiKey && (apiKey === undefined || apiKey.length === 0)) {
     return undefined;
   }
@@ -174,6 +182,7 @@ export async function refreshProviderCatalog(deps: ProviderCatalogDeps): Promise
   const detectDeps: DetectProvidersDeps = {
     fetch: deps.fetch,
     env: deps.env,
+    ...(deps.dir !== undefined ? { configDir: deps.dir } : {}),
     ...(deps.baseUrl !== undefined ? { baseUrl: deps.baseUrl } : {}),
     ...(deps.platform !== undefined ? { platform: deps.platform } : {}),
   };

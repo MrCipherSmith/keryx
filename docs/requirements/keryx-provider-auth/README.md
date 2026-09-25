@@ -1,5 +1,5 @@
 # Keryx Provider Auth
-Version: 1.1.0
+Version: 1.2.0
 
 ## Purpose
 
@@ -18,11 +18,13 @@ or in [Telegram](../keryx-telegram-transport/README.md).
 
 ## Status
 
-**Specification ready (future).** The provider registry it extends *is*
-implemented (`src/commands/providers.ts`, eight OpenAI-compatible entries plus
-native Anthropic and Ollama adapters). No new authentication method is
-implemented today: every current provider is a Bearer API key or a local
-endpoint.
+**Implemented locally; live subscription validation pending.** Device login is
+available for Grok, Copilot and ChatGPT / Codex. OpenAI uses two identities:
+`openai` for Platform API keys and `openai-codex` for subscription credentials.
+The subscription adapter uses Codex Responses streaming, account metadata and
+refreshable OAuth grants. See the [connection guide](../../docs/cli-reference.md#openai-api-and-chatgpt-subscriptions)
+and flow 342 for implementation and offline verification evidence. This does
+not claim a successful live login for any particular account.
 
 ## The finding that shapes this package
 
@@ -43,7 +45,7 @@ Subscription-based login is therefore adopted **only where the vendor sanctions
 third-party clients**. As of 1.1.0 that set is:
 
 - **xAI SuperGrok / X Premium** — RFC 8628 device-code; xAI published OpenCode support.
-- **OpenAI ChatGPT Plus/Pro (Codex)** — PKCE locally, device-style headless remotely.
+- **OpenAI ChatGPT Plus/Pro (Codex)** — device-code login completed in a browser, locally or remotely.
 - **GitHub Copilot** — GitHub's documented CLI device flow.
 
 Claude Pro/Max stays refused. Gemini Google-account OAuth stays refused (Gemini
@@ -55,9 +57,9 @@ CLI only). DeepSeek has no consumer OAuth. See [decisions.md](decisions.md) §D-
 - The **device authorization grant** (RFC 8628): keryx requests a code, the
   operator opens a verification URL on any device and approves, keryx polls for
   the token. No secret ever transits the transport, and no loopback is required.
-- An expanded method list: SuperGrok and ChatGPT Plus/Pro on the existing
-  Grok/OpenAI entries, GitHub Copilot as a new `device-code` provider, Gemini
-  and DeepSeek remaining `api-key`.
+- An expanded method list: SuperGrok on Grok; separate OpenAI API (`openai`)
+  and ChatGPT / Codex (`openai-codex`) entries; GitHub Copilot via `device-code`;
+  Gemini and DeepSeek remain `api-key`.
 - How each method is presented and completed over a remote transport.
 
 ## Non-goals

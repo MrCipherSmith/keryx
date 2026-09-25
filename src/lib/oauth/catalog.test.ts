@@ -8,10 +8,11 @@ import {
   PROVIDER_AUTH_CATALOG,
 } from "./catalog";
 
-test("grok, openai and github-copilot declare sanctioned subscription methods", () => {
+test("grok, openai-codex and github-copilot declare sanctioned subscription methods", () => {
   expect(catalogAllows("grok", "device-code")).toBe(true);
   expect(catalogAllows("grok", "api-key")).toBe(true);
-  expect(catalogAllows("openai", "device-code")).toBe(true);
+  expect(catalogAllows("openai", "device-code")).toBe(false);
+  expect(catalogAllows("openai-codex", "device-code")).toBe(true);
   expect(catalogAllows("openai", "api-key")).toBe(true);
   expect(catalogAllows("github-copilot", "device-code")).toBe(true);
 });

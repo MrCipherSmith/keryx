@@ -1,3 +1,4 @@
+import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
@@ -191,6 +192,7 @@ import {
   formatProfileSummarySuffix,
   modelsFailureLine,
   providerByName,
+  connectionProviderByName,
   resolveModelsForPicker,
   sharedCredentialWarning,
   testProviderConnection,
@@ -589,7 +591,13 @@ export async function filterConnectedDetectedProviders(
 
   const connected: DetectedProvider[] = [];
   for (const prov of detected) {
-    const registry = providerByName(prov.name);
+    if (prov.name === "openai-codex") {
+      if (oauthAccessToken(prov.name, options.configDir) === undefined) continue;
+      const result = await fetchOpenAiCodexModels(fetchFn, { ...(options.configDir !== undefined ? { configDir: options.configDir } : {}) });
+      if (result.source === "live" && result.models.length > 0) connected.push({ ...prov, models: result.models });
+      continue;
+    }
+    const registry = providerByName(prov.name, options.configDir);
     if (registry === undefined) {
       connected.push(prov);
       continue;
@@ -597,7 +605,7 @@ export async function filterConnectedDetectedProviders(
 
     const requiresApiKey = registry.requiresApiKey ?? true;
     const envKey = prov.envKey ?? registry.envKey;
-    const raw = envKey !== undefined ? env[envKey] : undefined;
+    const raw = envKey !== undefined ? env[envKey] ?? loadShellConfig(options.configDir).apiKeys?.[envKey] : undefined;
     if (requiresApiKey && (raw === undefined || raw.length === 0)) {
       continue;
     }
@@ -2451,7 +2459,7 @@ function pickAuthMethodStep(
   });
 }
 
-function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string, dir?: string): Promise<boolean> {
+function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string, dir?: string, fetchFn: typeof fetch = globalThis.fetch): Promise<boolean> {
   const r = stepRenderer(target);
   return new Promise((resolve) => {
     const controller = new AbortController();
@@ -2475,7 +2483,7 @@ function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string
     };
     void loginDeviceCode({
       provider,
-      fetch: (input, init) => globalThis.fetch(input, init),
+      fetch: (input, init) => fetchFn(input, init),
       signal: controller.signal,
       ...(dir !== undefined ? { dir } : {}),
       onChallenge: (challenge) => {
@@ -2488,7 +2496,7 @@ function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string
       }
       if (result.ok) {
         cleanup();
-        applyOAuthAccessToEnv();
+        applyOAuthAccessToEnv(dir);
         resolve(true);
         return;
       }
@@ -2510,9 +2518,9 @@ function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string
  */
 export async function modelsForPicker(
   prov: DetectedProvider,
-  deps: { fetch?: typeof fetch; env?: Record<string, string | undefined> } = {},
+  deps: { fetch?: typeof fetch; env?: Record<string, string | undefined>; configDir?: string } = {},
 ): Promise<ModelsResolveResult> {
-  return await resolveModelsForPicker(deps.fetch ?? globalThis.fetch, prov, deps.env ?? process.env);
+  return await resolveModelsForPicker(deps.fetch ?? globalThis.fetch, prov, deps.env ?? process.env, { ...(deps.configDir !== undefined ? { configDir: deps.configDir } : {}) });
 }
 
 /**
@@ -2799,7 +2807,7 @@ function pickConnectedProviderStep(
 
     async function runTest(name: string): Promise<void> {
       const block = rowBlocks.find((b) => b.name === name);
-      const provider = providerByName(name, opts.configDir);
+      const provider = connectionProviderByName(name, opts.configDir);
       if (block === undefined) return;
       if (provider === undefined) {
         block.status.content = otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`;
@@ -3006,6 +3014,7 @@ export function selectProviderModelInTui(
       ? filterConnectedDetectedProviders(detected, {
           ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
           ...(options.env !== undefined ? { env: options.env } : {}),
+          ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
         })
       : Promise.resolve(detected);
     void (async () => {
@@ -3076,7 +3085,7 @@ export function selectProviderModelInTui(
         // `/connect` only switches: never edit the endpoint or collect a key.
         // Copilot's API host comes from the token exchange (`endpoints.api`),
         // not from typing api.githubcopilot.com — that origin 404s on /v1/models.
-        const lockDiscoveredHost = prov.name === "github-copilot";
+        const lockDiscoveredHost = ["github-copilot", "openai", "openai-codex"].includes(prov.name);
         let selectedBaseUrl =
           options.onlyConnected || prov.baseUrl === undefined || lockDiscoveredHost
             ? prov.baseUrl
@@ -3099,12 +3108,12 @@ export function selectProviderModelInTui(
          * and the operator finally gets asked.
          */
         const collectCredential = async (notice?: string): Promise<"ok" | "back"> => {
-          if (options.onlyConnected || envKey === undefined) {
+          if (options.onlyConnected || (envKey === undefined && !catalogAllows(prov.name, "device-code"))) {
             return "ok";
           }
           if (notice === undefined) {
-            const existingKey = (options.env ?? process.env)[envKey];
-            const hasOauth = oauthAccessToken(prov.name, options.configDir) !== undefined;
+            const existingKey = envKey === undefined ? undefined : (options.env ?? process.env)[envKey] ?? loadShellConfig(options.configDir).apiKeys?.[envKey];
+            const hasOauth = prov.name !== "openai" && oauthAccessToken(prov.name, options.configDir) !== undefined;
             if ((existingKey !== undefined && existingKey.length > 0) || hasOauth) {
               return "ok";
             }
@@ -3120,7 +3129,7 @@ export function selectProviderModelInTui(
             }
           }
           if (method === "device-code") {
-            if (!(await runDeviceLoginInTui(otui, rOrChrome, prov.name, options.configDir))) {
+            if (!(await runDeviceLoginInTui(otui, rOrChrome, prov.name, options.configDir, options.fetch))) {
               return "back";
             }
             const saved = loadShellConfig(options.configDir).baseUrls?.[prov.name];
@@ -3130,8 +3139,9 @@ export function selectProviderModelInTui(
             }
             return "ok";
           }
+          if (envKey === undefined) return "back";
           const kr = await promptApiKeyStep(otui, rOrChrome, {
-            label,
+            label: prov.name === "openai" ? "OpenAI" : label,
             envKey,
             ...(notice === undefined ? {} : { notice }),
           });
@@ -3155,6 +3165,7 @@ export function selectProviderModelInTui(
         const modelDeps = {
           ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
           ...(options.env === undefined ? {} : { env: options.env }),
+          ...(options.configDir === undefined ? {} : { configDir: options.configDir }),
         };
         // Fetch AFTER key is available so live GET /models can authenticate.
         let models = await modelsForPicker(selectedProvider, modelDeps);
@@ -3172,6 +3183,7 @@ export function selectProviderModelInTui(
         // `endpointMayBeAtFault` for which kinds re-open the URL step and why.
         if (
           !options.onlyConnected
+          && !lockDiscoveredHost
           && selectedProvider.baseUrl !== undefined
           && endpointMayBeAtFault(models.failure)
         ) {
@@ -7793,7 +7805,7 @@ export async function launchTuiAgentShell(opts: {
             saveShellConfig({ reasoningEffort: wanted });
             io.onSystem?.(`Reasoning effort: ${wanted}\n`);
             const compatProvider = providerByName(currentSel.provider);
-            if (compatProvider !== undefined && compatProvider.reasoning === undefined) {
+            if (currentSel.provider !== "openai" && compatProvider !== undefined && compatProvider.reasoning === undefined) {
               io.onSystem?.(
                 `Note: ${currentSel.provider} is OpenAI-compatible with no "reasoning" entry — its reasoning ` +
                   "is configured per-provider in llm-providers.json (reasoning.requestParams); this setting has no effect for it.\n",
@@ -7893,7 +7905,9 @@ export async function launchTuiAgentShell(opts: {
                       }
                       if (name === currentSel.provider) {
                         io.onSystem?.(
-                          `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
+                          name === "openai-codex"
+                            ? `◇ ${name} disconnected — it stays selected, but the next turn requires a new login. Use /provider to reconnect or /connect to switch.\n`
+                            : `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
                         );
                       }
                     },
