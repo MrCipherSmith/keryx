@@ -326,6 +326,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/staledocs",
+    group: "Managed work",
+    summary: "List doc sections that likely went stale because of the working diff, with Jev.",
+  },
+  {
+    kind: "slash",
+    name: "/opencomments",
+    group: "Managed work",
+    summary: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>.",
+  },
+  {
+    kind: "slash",
     name: "/guard",
     group: "Managed work",
     summary: "Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on|off].",

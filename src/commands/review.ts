@@ -31,13 +31,16 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
 import { runImportReviewers } from "../review/import-reviewers";
-// flow 330/332: registration only. The command itself, and every helper it
-// needs, lives in `review-jev-rules.ts`/`review-jev-risk.ts`/
-// `review-jev-scenarios.ts` — NEW files, so no other flow's concurrent work
-// on this file collides with any of them.
+// flow 330/332/333: registration only. The command itself, and every helper
+// it needs, lives in `review-jev-rules.ts`/`review-jev-risk.ts`/
+// `review-jev-scenarios.ts`/`review-jev-docs.ts`/`review-jev-comments.ts` —
+// NEW files, so no other flow's concurrent work on this file collides with
+// any of them.
 import { runJevRules } from "./review-jev-rules";
 import { runJevRisk } from "./review-jev-risk";
 import { runJevScenarios } from "./review-jev-scenarios";
+import { runJevDocs } from "./review-jev-docs";
+import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -578,6 +581,17 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "jev-scenarios") {
       await runJevScenarios(args.slice(1));
+      return;
+    }
+    // flow 333: two more ADDITIONAL, CLI-driven reviewers — see
+    // `src/commands/review-jev-docs.ts`/`review-jev-comments.ts` for
+    // everything past registration.
+    if (command === "jev-docs") {
+      await runJevDocs(args.slice(1));
+      return;
+    }
+    if (command === "jev-comments") {
+      await runJevComments(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -1432,6 +1446,22 @@ async function runCommentsReply(args: string[]): Promise<void> {
   console.log(`posted: ${result.posted.length}`);
   console.log(`already answered (skipped): ${result.skipped.length}`);
   console.log(`backlog beyond the reply cap: ${result.backlog.length}${result.backlog.length === 0 ? "" : ` — ${result.backlog.join(", ")}`}`);
+  // flow 333, AC4: an ADDITIVE advisory-only hook — a comment's Jev label
+  // (from the most recent `keryx review jev-comments` run, when there is
+  // one) is printed for context beside comments this pass is still
+  // unanswered about. It never changes `pass`/`outcomes`/what gets posted
+  // above, and it never auto-replies or auto-resolves anything; a missing or
+  // unparsable label file prints nothing here, exactly as if this hook did
+  // not exist.
+  const advisoryLabels = await readCommentAdvisoryLabels(cwd, repo, number);
+  const stillUnanswered = unansweredComments(state).filter((comment) => advisoryLabels[comment.id] !== undefined);
+  if (stillUnanswered.length > 0) {
+    console.log("");
+    console.log("advisory (review-jev-comments labels, informational only):");
+    for (const comment of stillUnanswered) {
+      console.log(`  ${comment.id} (${comment.author}): ${advisoryLabels[comment.id]!.choice}`);
+    }
+  }
   if (result.escalated.length > 0) {
     console.error(
       `ESCALATE: ${result.escalated.length} comment(s) block progress rather than report a problem and were NOT replied to: ${result.escalated.join(
@@ -3630,6 +3660,19 @@ Usage:
                          An ADDITIONAL reviewer, engine: jev. Checks every changed hunk
                          against every applicable project rule clause. Opt-in via
                          review.jev.rules in .metaproject/tasks.config.json.
+  keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
+                        [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                        [--fixtures <dir>] [--include <glob>]... [--json]
+                        An ADDITIONAL reviewer, engine: jev. Finds doc sections that went
+                        stale because of the diff. Opt-in via review.jev.docs in
+                        .metaproject/tasks.config.json. Default corpus is user-facing docs
+                        only (docs/**, README*, gdwiki pages) — never CHANGELOG, skills, or
+                        rules; --include <glob> (repeatable) widens the corpus back out.
+  keryx review jev-comments --pr <n> --repo <owner/repo>
+                            [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+                            An ADDITIONAL reviewer, engine: jev. Checks whether open PR review
+                            comments (from the existing ledger) were addressed. Opt-in via
+                            review.jev.comments in .metaproject/tasks.config.json.
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]

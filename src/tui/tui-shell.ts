@@ -104,6 +104,11 @@ import { loadConformSetup, runConformForTarget } from "./conform-source";
 import { isJevRulesCommand, runJevRulesForShell } from "./jev-rules-command";
 import { isJevRiskCommand, runJevRiskForShell } from "./jev-risk-command";
 import { isJevScenariosCommand, runJevScenariosForShell } from "./jev-scenarios-command";
+// flow 333: registration only — everything else lives in
+// jev-docs-command.ts/jev-comments-command.ts so flow 326/330's concurrent
+// work never collides with either.
+import { isStaledocsCommand, runStaledocsForShell } from "./jev-docs-command";
+import { isOpencommentsCommand, runOpencommentsForShell } from "./jev-comments-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
 import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
@@ -7473,6 +7478,41 @@ export async function launchTuiAgentShell(opts: {
               io.onSystem?.(`${await runJevRulesForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-rules: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
+          return;
+        }
+        if (isStaledocsCommand(command.name)) {
+          // flow 333: a one-shot check on the working diff, not a modal —
+          // see `jev-docs-command.ts`'s own header for why.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-docs: checking the working diff against documentation…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runStaledocsForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-docs: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
+          return;
+        }
+        if (isOpencommentsCommand(command.name)) {
+          // flow 333: `/opencomments <owner/repo> <pr>` — a one-shot check,
+          // not a modal, same reasoning as `/staledocs`/`/jevrules`.
+          const cwd = inspectorCwd();
+          const argv = line.trim().split(/\s+/).slice(1);
+          const [repoArg, prArg] = argv;
+          const prNumber = prArg !== undefined ? Number(prArg) : Number.NaN;
+          if (repoArg === undefined || !Number.isInteger(prNumber) || prNumber <= 0) {
+            io.onSystem?.("Usage: /opencomments <owner/repo> <pr>\n");
+            return;
+          }
+          io.onSystem?.(`review-jev-comments: checking open comments on ${repoArg}#${prNumber}…\n`);
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runOpencommentsForShell(cwd, repoArg, prNumber)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-comments: ${error instanceof Error ? error.message : String(error)}\n`);
             }
           })();
           return;

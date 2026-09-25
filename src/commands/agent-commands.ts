@@ -243,6 +243,22 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 333 (AC6): stale-doc detection — links doc sections to changed
+    // code deterministically, then asks Jev whether each linked section is
+    // now inaccurate. TUI-only, same reasoning as `/conform`.
+    name: "/staledocs",
+    description: "List doc sections that likely went stale because of the working diff, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 333 (AC6): open PR review comment triage — reads the existing
+    // comment ledger and asks Jev a resolved-by-fix/still-open/not-
+    // actionable/needs-escalation choice per open comment. TUI-only.
+    name: "/opencomments",
+    description: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 329 (AC4/AC5): the opt-in turn guard — after a turn ends, checks
     // whether the request was done and catches a final message that
     // contradicts what the tools really did. TUI-only, same reasoning as

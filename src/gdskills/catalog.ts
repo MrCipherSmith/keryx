@@ -163,6 +163,24 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Dispatch specialized review passes conceptually or as separate skill loads.",
     "Report findings first, ordered by severity, with concrete file references.",
   ]),
+  // CLI-engine reviewers (flow 333): dispatched by review-orchestrator as a
+  // `keryx review jev-docs`/`keryx review jev-comments` command, never as an
+  // LLM sub-agent — see either SKILL.md's own header. Registered here like
+  // every other bundled skill so `keryx skills install` actually copies its
+  // directory; without an entry the directory exists in the shipped tree and
+  // is never installed for any profile.
+  skill("review-jev-docs", "review", ["recommended", "full"], "Find documentation sections that went stale because of a diff, scored by Jev.", [
+    "Split every discovered documentation source into sections by heading, deterministically.",
+    "Link a section to changed code by an explicit path/symbol/verb it mentions.",
+    "Ask Jev one noul question per linked section; keryx writes every word of the finding.",
+    "Flag a removed/renamed CLI flag still mentioned in docs with no Jev call at all.",
+  ]),
+  skill("review-jev-comments", "review", ["recommended", "full"], "Check whether open PR review comments were addressed, scored by Jev.", [
+    "Read open comments from the existing ledger, never re-collect from GitHub.",
+    "Compute commits-after-comment, thread-resolved, and reply facts deterministically.",
+    "Ask Jev one choice question per open comment; keryx writes every word of the finding.",
+    "Never post a reply or resolve a thread — the label is advisory only.",
+  ]),
   skill("review-logic", "review", ["recommended", "full"], "Review logic correctness, contracts, edge cases, nullability, and async behavior.", [
     "Trace behavior through call sites and affected context.",
     "Look for incorrect assumptions, missing branches, race conditions, and error paths.",
