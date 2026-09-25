@@ -1,6 +1,6 @@
 ---
 name: ci-pipeline-code-review
-description: "Use when reviewing a GitHub Actions workflow (.github/workflows/*.yml) or GitLab CI pipeline (.gitlab-ci.yml) change for security and structural risk -- pull_request_target combined with untrusted checkout, tag-pinned third-party actions, missing least-privilege permissions, script injection via unsanitized event/variable interpolation, and unprotected access to deploy secrets. Read-only, no edits."
+description: "Use when reviewing a GitHub Actions workflow (.github/workflows/*.yml) or GitLab CI pipeline (.gitlab-ci.yml) change for security and structural risk -- pull_request_target combined with untrusted checkout, tag-pinned third-party actions, a permissions: block that is not scoped tightly enough (missing least-privilege), script injection from an untrusted PR/MR title or other event field interpolated straight into a shell command, and unprotected access to deploy secrets. Read-only, no edits."
 triggers:
   - "review this GitHub Actions workflow diff for security issues"
   - "check this .gitlab-ci.yml change for exposed secrets"

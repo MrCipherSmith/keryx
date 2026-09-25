@@ -1,6 +1,6 @@
 ---
 name: docker-k8s-terraform-review
-description: "Use when reviewing a Dockerfile, Docker Compose file, Kubernetes/Helm manifest, or Terraform change for security and config-authoring risks -- root containers, unpinned base images, secrets baked into image layers, missing Kubernetes securityContext/NetworkPolicy, and Terraform state/secrets handling. Read-only, no edits."
+description: "Use when reviewing a Dockerfile, Docker Compose file, Kubernetes/Helm manifest, or Terraform change for security and config-authoring risks -- root containers, unpinned base images, secrets baked into image layers, missing Kubernetes securityContext/NetworkPolicy, and Terraform state/secrets handling. Read-only, no edits: never builds, deploys, or runs the image/manifest/plan itself (use the `deploy` quality skill for that)."
 triggers:
   - "review this Dockerfile for security issues"
   - "check this Kubernetes manifest before it ships"

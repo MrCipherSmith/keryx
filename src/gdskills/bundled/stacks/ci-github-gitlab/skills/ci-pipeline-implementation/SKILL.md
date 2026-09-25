@@ -1,6 +1,6 @@
 ---
 name: ci-pipeline-implementation
-description: "Use when authoring or extending a GitHub Actions workflow (.github/workflows/*.yml) or a GitLab CI pipeline (.gitlab-ci.yml) -- trigger and job design, reusable workflows/templates, caching, least-privilege permissions, and safe handling of untrusted pull-request/merge-request input."
+description: "Use when authoring or extending a GitHub Actions workflow (.github/workflows/*.yml) or a GitLab CI pipeline (.gitlab-ci.yml) -- trigger and job design, sharing the same steps across multiple repos via a reusable workflow/template, scoping the GITHUB_TOKEN's `permissions:` down from its default, keeping production deploy credentials out of feature-branch pipelines (GitLab protected variables, environment gates), caching, and safe handling of untrusted pull-request/merge-request input."
 triggers:
   - "add a GitHub Actions workflow that runs tests on every pull request"
   - "write a .gitlab-ci.yml pipeline with build, test, and deploy stages"
@@ -8,6 +8,8 @@ triggers:
   - "split this workflow into a reusable workflow other repos can call"
   - "add a permissions block to this GitHub Actions workflow"
   - "set up a GitLab CI pipeline with protected deploy variables"
+  - "scope down the default GITHUB_TOKEN permissions for this workflow"
+  - "restrict the production deploy variable to the protected branch only"
 metadata:
   origin: authored
   category: implement

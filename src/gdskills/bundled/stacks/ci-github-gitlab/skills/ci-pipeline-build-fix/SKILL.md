@@ -1,6 +1,6 @@
 ---
 name: ci-pipeline-build-fix
-description: "Use when a GitHub Actions workflow run or GitLab CI pipeline is failing at the pipeline-configuration level -- YAML syntax errors, an invalid trigger/job key, a missing or misscoped permissions block breaking a step, a job failing because a protected variable is unavailable on its branch, or a broken needs:/rules:/dependency graph -- with the smallest root-cause fix to the config itself, not the application code it builds."
+description: "Use when a GitHub Actions workflow run or GitLab CI pipeline is failing at the pipeline-configuration level -- YAML syntax errors, an invalid trigger/job key, a missing or misscoped permissions block breaking a step (including GitHub's own 'Resource not accessible by integration' error), a job failing because a protected variable is unavailable on its branch, or a broken needs:/rules:/dependency graph -- with the smallest root-cause fix to the config itself. Not for a failure in the application code the pipeline runs (a Python, TypeScript, Go, or other language compile/import/test error -- fix the code, or use that language's own build-fix skill), not for a Dockerfile/Kubernetes/Terraform build or validation failure (use docker-k8s-terraform-build-fix), and not for authoring a new workflow/pipeline from scratch (use ci-pipeline-implementation)."
 triggers:
   - "this GitHub Actions workflow fails to parse, what's wrong with the YAML"
   - "our deploy step lost access to a GitLab variable it needs"
@@ -8,6 +8,7 @@ triggers:
   - "the pipeline says invalid needs: reference, fix the job graph"
   - "GitLab CI says this job's rules: never match, why doesn't it run"
   - "actions/checkout is failing with an unrecognized input, fix the workflow"
+  - "the bot got a 403 posting a PR comment, resource not accessible by integration"
 metadata:
   origin: authored
   category: build-fix

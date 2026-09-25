@@ -1,6 +1,6 @@
 ---
 name: docker-k8s-terraform-build-fix
-description: "Use when a Docker build fails, a Kubernetes/Helm manifest is rejected by validation or the API server, or a Terraform validate/plan fails -- resolves the actual root cause (a bad COPY path, an ownership/permission mismatch after switching to a non-root USER, a schema-invalid manifest, a Terraform state/address mismatch) with the smallest fix, never a suppression."
+description: "Use when a Docker build fails, a Helm chart fails to render (a template/values lookup error), a Kubernetes manifest is rejected by validation or the API server, or a Terraform validate/plan fails -- resolves the actual root cause (a bad COPY path, an ownership/permission mismatch after switching to a non-root USER, a broken Helm values reference, a schema-invalid manifest, a Terraform state/address mismatch) with the smallest fix, never a suppression. Not for an application-code build failure unrelated to these config files (a Go/TypeScript/Python compile or test error) -- that is the language's own build-fix skill's territory, even when this pack's Dockerfile happens to build that language's code."
 triggers:
   - "docker build is failing"
   - "fix this Kubernetes manifest validation error"
@@ -8,6 +8,7 @@ triggers:
   - "terraform validate is failing"
   - "this Dockerfile permission denied error"
   - "kubectl apply is rejecting this manifest"
+  - "this Helm chart won't render"
 metadata:
   origin: authored
   category: build-fix
