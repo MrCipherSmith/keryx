@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "342",
+  "slug": "openai-api-and-chatgpt-subscription-as-s",
+  "title": "OpenAI API and ChatGPT subscription as separate working Shell providers",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T21:40:13.138Z",
+  "updatedAt": "2026-09-25T21:42:08.057Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:281c7a766b9dfa5e7a6ffafcbd540cc4826190bb9741babf861fa72ff2dc865e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Verify OAuth login to streamed subscription answer and tools offline",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Run typecheck lint build health and independent review",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Update provider usage and implementation documentation",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T21:40:13.138Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T21:41:17.106Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T21:41:17.428Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T21:41:59.019Z",
+      "event": "task-added",
+      "detail": "T5: Verify OAuth login to streamed subscription answer and tools offline"
+    },
+    {
+      "at": "2026-09-25T21:42:07.698Z",
+      "event": "task-added",
+      "detail": "T6: Run typecheck lint build health and independent review"
+    },
+    {
+      "at": "2026-09-25T21:42:08.057Z",
+      "event": "task-added",
+      "detail": "T7: Update provider usage and implementation documentation"
+    }
+  ]
+}
