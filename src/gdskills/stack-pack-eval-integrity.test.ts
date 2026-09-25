@@ -428,7 +428,19 @@ function collectRealPackSkills(): PackSkillFixture[] {
  * explicitly rather than silently: tracked as follow-up work for a future
  * flow, not exempted forever.
  */
-const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set(["nestjs", "nextjs-nuxt", "vue", "angular", "mobx"]);
+const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set([
+  "nestjs",
+  "nextjs-nuxt",
+  "vue",
+  "angular",
+  "mobx",
+  // Wave 4 batch 4 (flow 336) — authored after I11 existed, so enforced
+  // from the start rather than deferred like batch 1.
+  "csharp-dotnet",
+  "swift-ios",
+  "kotlin-android",
+  "flutter-dart",
+]);
 
 describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () => {
   const packSkills = collectRealPackSkills();
