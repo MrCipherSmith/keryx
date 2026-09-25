@@ -233,14 +233,22 @@ const PARENTHETICAL = /\(([^()]*)\)/g;
  * `bundle/external.ts:507`'s `scoutSkill` call over an external candidate's
  * (untrusted) name+description.
  *
- * Fixed shape: "use" immediately followed by exactly ONE identifier-shaped
- * token (optionally backtick/quote-wrapped — a bare word like `commit` or a
- * hyphenated skill id like `pr-issue-documenter`), then "instead" within a
- * few words. This cannot match "Use when implementing a new feature …
- * instead" (many words, not one identifier, between "use" and "instead")
- * and has no unbounded gap to backtrack over.
+ * ROUND 2 TIGHTENING (flow 334 review round 2 minor 1): the round-1 fix
+ * still allowed up to 3 filler words between the token and "instead"
+ * (`(?:\s+\S+){0,3}?`) and accepted ANY bare word as the token — which
+ * still matched short, harmless phrasings like "Use when fixing this
+ * instead of guessing" or "Use git bisect instead of a manual search",
+ * stripping ordinary positive content that names no other skill at all.
+ * Tightened to: "use" immediately followed by EITHER a backtick/quote-
+ * wrapped token (any word, e.g. `` `commit` ``) OR a bare HYPHENATED
+ * skill-id-shaped token (e.g. `pr-issue-documenter`, `nodejs-testing` — the
+ * shape every bundled skill id actually has), then "instead" with NOTHING
+ * in between. A bare single word with no hyphen and no quoting (`bisect`,
+ * `git`, `when`) never matches either branch, so "Use git bisect instead
+ * of a manual search" and "Use when fixing this instead of guessing" are
+ * both left untouched.
  */
-const USE_INSTEAD_PHRASE = /\buse\s+[`'"]?[a-z][\w-]{0,60}[`'"]?(?:\s+\S+){0,3}?\s+instead\b/gi;
+const USE_INSTEAD_PHRASE = /\buse\s+(?:[`'"][a-z][\w-]{0,60}[`'"]|[a-z][a-z0-9]{0,30}(?:-[a-z0-9]{1,30}){1,4})\s+instead\b/gi;
 
 /**
  * Splits `text` into sentences on `.`/`!`/`?` followed by whitespace —
@@ -346,8 +354,15 @@ export type LexicalField = "full" | "description-only";
  * sentence. Every bundled description observed ends in `.`/`!`/`?` already,
  * so this is a no-op there; it only matters for a future author who forgets
  * the period.
+ *
+ * Exported (flow 334 review round 2 minor 3) so `bundle/external.ts`'s
+ * candidate-vetting `scoutSkill` call — which joins an external (untrusted)
+ * candidate's own `name` and `description` the same way — gets the same
+ * sentence-boundary guard rather than a second, unguarded `\`${a} ${b}\``
+ * join that could let an unterminated exclusion clause in one field bleed
+ * into the other.
  */
-function joinAsSentences(parts: readonly string[]): string {
+export function joinAsSentences(parts: readonly string[]): string {
   return parts
     .filter((part) => part.length > 0)
     .map((part) => (/[.!?]$/.test(part.trim()) ? part : `${part}.`))

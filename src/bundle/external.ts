@@ -18,6 +18,7 @@ import { loadSkillCatalog } from "../gdskills/governance/catalog-index";
 import {
   auditSkillSnapshot,
   collectSkillDirectorySnapshot,
+  joinAsSentences,
   scoutSkill,
   type ScoutDecision,
   type SnapshotCollectFailureReason,
@@ -504,7 +505,11 @@ export async function vetExternalCatalog(opts: VetExternalCatalogOptions): Promi
     if (reasons.length === 0 && candidate.snapshot.ok && candidate.name !== undefined && candidate.description !== undefined) {
       for (const [rel, bytes] of candidate.snapshot.files) files[rel] = sha256Hex(bytes);
 
-      const scouted = scoutSkill(`${candidate.name} ${candidate.description}`, skillCatalog);
+      // flow 334 review round 2 minor 3: `joinAsSentences` (not a bare
+      // template-string join) so an unterminated exclusion clause in
+      // `candidate.name` can't bleed into `candidate.description` as the
+      // same sentence — the same guard `entryLexicalTokens` uses.
+      const scouted = scoutSkill(joinAsSentences([candidate.name, candidate.description]), skillCatalog);
       scoutResult = { decision: scouted.decision, topMatch: scouted.matches[0]?.skillId ?? null };
       if (scouted.decision === "use") reasons.push("scout-duplicate");
       else if (scouted.decision === "fork") reasons.push("scout-overlap");

@@ -669,15 +669,34 @@ describe("stripExclusionClauses (flow 334)", () => {
     expect(stripped).toMatch(/\bcontext\b/i);
   });
 
-  test("USE_INSTEAD_PHRASE is bounded — a crafted string with many repeated 'use' tokens does not hang or blow up quadratically", () => {
-    const crafted = `use ${"x ".repeat(20000)}instead`;
+  // flow 334 review round 2 minor 2: the round-1 timing test used
+  // `"use " + "x ".repeat(20000) + "instead"` — a SINGLE "use" at the
+  // start, one "instead" at the very end, which is actually the CHEAP case
+  // for a lazy `[^.!?()]*?` scan (one linear pass finds the match). The
+  // adversarial shape is `"use ".repeat(20000)` — MANY "use" starting
+  // positions with no "instead" anywhere, so a `/g` search under the OLD
+  // pattern must independently scan from EACH "use" to the end of the
+  // string before giving up: true O(n²). Measured directly against the
+  // pre-fix pattern reconstructed below (not imported — that pattern no
+  // longer exists in `scout.ts`): 1000 reps ~3ms, 2000 ~14ms, 4000 ~55ms,
+  // 8000 ~243ms, clean quadratic scaling; 20000 reps takes over a second,
+  // 200000 reps did not complete in 120s.
+  test("USE_INSTEAD_PHRASE is bounded — 'use '.repeat(20000) does not hang or blow up quadratically (confirmed slow against the pre-fix pattern)", () => {
+    const crafted = "use ".repeat(20000);
+
     const start = Date.now();
-    const stripped = stripExclusionClauses(crafted);
+    stripExclusionClauses(crafted);
     const elapsedMs = Date.now() - start;
     expect(elapsedMs).toBeLessThan(500);
-    // A single "use <token> instead" run at the very end is still a valid
-    // redirect shape and gets stripped; the important assertion is timing.
-    expect(stripped.length).toBeGreaterThan(0);
+
+    // The exact pre-round-1-fix pattern, reconstructed here only to prove
+    // this specific input WOULD have been slow against it — confirms the
+    // test is actually adversarial, not just asserting an arbitrary bound.
+    const PRE_FIX_USE_INSTEAD_PHRASE = /\buse\b[^.!?()]*?\binstead\b/gi;
+    const preFixStart = Date.now();
+    crafted.replace(PRE_FIX_USE_INSTEAD_PHRASE, " ");
+    const preFixElapsedMs = Date.now() - preFixStart;
+    expect(preFixElapsedMs).toBeGreaterThan(500);
   });
 });
 
@@ -868,5 +887,25 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   ])("restored via description edit: %s's %j still selects via checkSkillSelectedLeaveOneOut", (skillId, trigger) => {
     const result = checkSkillSelectedLeaveOneOut(trigger, skillId, catalog, trigger);
     expect(result.selected).toBe(true);
+  });
+
+  // Ratchet (flow 334 review round 2 requirement): the pinned cases above
+  // only cover the SPECIFIC triggers this flow's own diff is known to
+  // touch. Without a catalog-wide ceiling, a future scorer change could
+  // silently regress a trigger NOT in either pinned list and nothing here
+  // would catch it. 119 is the measured total after this flow (120
+  // pre-existing on `main`, minus the net +1 this flow's fix produces — see
+  // the journal for the full accounting); this asserts "at most", not
+  // "exactly", so a future genuine improvement lowering the count further
+  // does not itself fail this test — only a REGRESSION (more failures than
+  // this) does.
+  test("ratchet: no more than 119 of the 513 bundled triggers fail checkSkillSelectedLeaveOneOut", () => {
+    let failing = 0;
+    for (const entry of catalog) {
+      for (const trigger of entry.triggers) {
+        if (!checkSkillSelectedLeaveOneOut(trigger, entry.id, catalog, trigger).selected) failing++;
+      }
+    }
+    expect(failing).toBeLessThanOrEqual(119);
   });
 });
