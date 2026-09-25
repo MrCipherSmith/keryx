@@ -1436,6 +1436,77 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   chars) after translation — export never rewrites content past those
   limits.
 
+## Implementation notes: Wave 4 batch 5 (flow 337)
+
+Four new stack packs authored under `src/gdskills/bundled/stacks/`:
+`php-laravel`, `ruby-rails`, `c-cpp`, `sql-db` — the same shape as batches 1-2
+(`pack.json`, `rules/*.mdc`, `skills/*/SKILL.md` + `evals.json`,
+`governance/scout.json`, `agent-refs.json`). Every pack ships
+`stability: "experimental"`; the honest DeepSeek gate has not run for this
+batch yet (Phase B, gated on PR #719 and flow 334 landing on main first — see
+this flow's own `plan.md` for the pause point).
+
+- **Family/extends judgment calls.** The target-stack table's "extends:
+  lang:php"/"extends: lang:ruby" presuppose `lang:php`/`lang:ruby` packs that
+  do not exist yet in this batch (only `php-laravel`/`ruby-rails` were
+  scoped). Both ship as self-contained `family: "framework"` packs with no
+  `extends` field — general PHP/Ruby idiom lives alongside the
+  Laravel/Rails-specific content in the one pack, the same shape `ts-js-node`
+  had before `react` extended it. `c-cpp` is `family: "language"`,
+  standalone. `sql-db` is `family: "capability"`, standalone; its rules
+  narrow the existing generic `database-patterns.mdc` core rule in prose (not
+  via `extends`, since that rule is not itself a stack pack).
+- **Detection tags already existed.** `src/stack/detect.ts`'s
+  `STACK_DETECT_TAGS` already carried `php`, `laravel`, `ruby`, `rails`,
+  `c-cpp`, `sql` before this flow — no stack-detection code changes were
+  needed; each pack's `detectionMarkers` reuses these tag names directly.
+- **`sql-db`'s scope answers the "Open questions" note below in part**: this
+  batch ships `sql-db` covering Postgres and MySQL (generic SQL); Mongo is
+  out of scope (not a SQL engine). Per-engine marker detection in `keryx
+  stack detect` (rather than a manually declared component) remains an open
+  question, unchanged by this batch.
+- **`sql-db`'s `paths:` scope is `.sql` files only.** Framework-specific
+  migration files that are not literally `.sql` (Rails `.rb` migrations,
+  Laravel `.php` migrations, a Python ORM's `.py` migration scripts) are
+  covered by their own stack pack's rules, not `sql-db`'s — kept deliberately
+  narrow since `STACK_EXTENSIONS`' lint matches only a glob's trailing file
+  extension, never a directory name.
+- **`migrate` left empty in all four packs.** No pack found a
+  framework-major-version-upgrade concern distinct enough, at this batch's
+  effort budget, to match the bar `react-upgrade-migration` set. `sql-db` in
+  particular is *about* database migrations at the `implement`-skill level
+  already; the pack.json `migrate` lifecycle bucket is a different concept
+  (upgrading the stack/framework's own major version), which `sql-db` has no
+  analog of — not to be conflated with schema-migration authoring.
+- **A scout overlap between two new packs, unresolved by design.** `keryx
+  skills scout` recorded a `"use"` decision for `php-laravel-code-review`
+  against `ruby-rails-code-review` (0.58 overlap, shared risk vocabulary —
+  mass assignment, injection, N+1, CSRF/authorization gaps appear in both
+  packs' descriptions), with a justification recorded per the F21 policy.
+  This batch's scout scorer predates flow 334's negation-aware trigger
+  scorer; re-run `skills scout` for both packs' code-review skills after flow
+  334 lands and settle for real whether the overlap is a genuine
+  near-duplicate or coincidental shared vocabulary between two otherwise
+  unrelated stacks — tracked in this flow's journal, not resolved here.
+- **Offline verification (Phase A gate, not the honest model gate).** `bun
+  test src/gdskills/stack-packs.test.ts src/gdskills/governance/
+  authoring-lint.test.ts src/gdskills/governance/authoring-lint-guard.test.ts
+  src/gdskills/manifest/manifest.test.ts` are green for all four new packs
+  (a pre-existing, unrelated failure on `go`/`python`'s stable-pack gate
+  check predates this flow — see `stack-packs.test.ts`, introduced by PR
+  #700). `src/gdskills/stack-pack-eval-integrity.test.ts`'s I1-I9 checks
+  (frontmatter shape, no answer-key phrasing, `anti_patterns` agreement, no
+  negation-only fail criteria) all pass; only the AG (anti-gaming judge
+  recording) checks fail, expected, since `keryx skills judge-check --record`
+  is Phase B work.
+- **Shared wiring.** `install-manifest.json` gained `<id>-rules`/`<id>-skills`
+  modules, a `framework:php-laravel` / `framework:ruby-rails` / `lang:c-cpp`
+  / `capability:sql-db` component, and a `stackDetectionAware` profile per
+  pack (all `stability: "experimental"`), plus the `full` profile's module/
+  component lists. `STACK_EXTENSIONS` in `src/gdskills/governance/
+  authoring-lint.ts` gained `php-laravel: ["php"]`, `ruby-rails: ["rb"]`,
+  `c-cpp: ["c","h","cpp","cc","cxx","hpp","hxx"]`, `sql-db: ["sql"]`.
+
 ## Open questions
 
 - Should `keryx stack detect` walk `workspaces` globs at all (even bounded to

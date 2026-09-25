@@ -563,6 +563,20 @@ keryx agents generate --stack <id> [--check] [--json]
   alter the documented behavior of, `keryx agents bootstrap|external|monitor`
   (regression test against the existing `agent-commands.test.ts` suite).
 
+## Implementation notes: Wave 4 batch 5 (flow 337)
+
+Four new W1 stack packs authored (`php-laravel`, `ruby-rails`, `c-cpp`,
+`sql-db` — see `W1-stack-catalog.md`, "Implementation notes: Wave 4 batch 5
+(flow 337)"), all `stability: "experimental"`. Per each pack's
+`agent-refs.json`, `"agents": []` with a note that the honest gate has not
+run for this batch — no generated `<stack>-code-auditor`/`<stack>-build-fixer`
+pair ships for any of the four yet. `keryx agents generate --stack <id>`
+would refuse all four today (`stack-pack-not-gate-cleared`), which is
+correct: gate-clearing (Phase B — calibration, the honest 10-trial DeepSeek
+gate, `checkStablePackGate`) is explicitly out of scope for this flow's
+authoring phase and is picked up once PR #719 and flow 334 land on main and
+this branch rebases.
+
 ## Open questions
 
 - OQ-W2.1 — should `policy_profile` be a closed enum shared across all targets,

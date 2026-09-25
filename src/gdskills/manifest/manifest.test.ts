@@ -11,14 +11,18 @@ test("the bundled install-manifest.json validates against install-manifest.schem
   expect(manifest.schemaVersion).toBe("1.0.0");
   expect(Object.keys(manifest.profiles).sort()).toEqual([
     "angular",
+    "c-cpp",
     "core",
     "full",
     "go",
     "minimal",
     "nestjs",
     "nextjs-nuxt",
+    "php-laravel",
     "python",
     "react",
+    "ruby-rails",
+    "sql-db",
     "ts-js-node",
     "vue",
   ]);

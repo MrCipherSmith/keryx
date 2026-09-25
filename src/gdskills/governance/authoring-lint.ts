@@ -249,6 +249,11 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   // for the files it is actually about.
   "nextjs-nuxt": ["tsx", "jsx", "vue", "ts"],
   mobx: ["ts", "tsx"],
+  // Wave 4 batch 5 (flow 337)
+  "php-laravel": ["php"],
+  "ruby-rails": ["rb"],
+  "c-cpp": ["c", "h", "cpp", "cc", "cxx", "hpp", "hxx"],
+  "sql-db": ["sql"],
 };
 
 export interface LintStackRuleOptions {
