@@ -42,6 +42,35 @@ test("recordTurnTaskCostBestEffort is called inside the turn's .finally(), fired
   expect(call).toContain("inputTokens: turnInputTokens,");
   expect(call).toContain("outputTokens: turnOutputTokens,");
   expect(call).toContain("success: !turnFailed,");
+  expect(call).toContain('...(turnCategory !== undefined ? { category: turnCategory } : {}),');
+});
+
+// PR #737's routing classifier wiring: `turnCategory` is captured ONCE, from
+// `routingOutcome?.category`, UNCONDITIONALLY for the turn — after the
+// routed-only branch closes (so a `session-default` resolution, not only an
+// actual reroute, still sets it), and before the turn even dispatches.
+test("turnCategory is captured unconditionally from routingOutcome?.category, outside the routed-only branch, before the turn dispatches", () => {
+  const routingOutcomeDeclAt = SOURCE.indexOf("let routingOutcome: RoutingClassifierTurnResult | undefined;", FN_START);
+  expect(routingOutcomeDeclAt).toBeGreaterThan(FN_START);
+
+  const routedBranchAt = SOURCE.indexOf("if (routingOutcome?.routed !== undefined) {", routingOutcomeDeclAt);
+  expect(routedBranchAt).toBeGreaterThan(routingOutcomeDeclAt);
+  // The routed-only branch's own fail-closed catch — the last thing inside it.
+  const routedBranchFailClosedAt = SOURCE.indexOf(
+    "// fail-closed: a routed-deps build failure runs on the session's own model instead.",
+    routedBranchAt,
+  );
+  expect(routedBranchFailClosedAt).toBeGreaterThan(routedBranchAt);
+
+  const turnCategoryAt = SOURCE.indexOf(
+    "const turnCategory: RoutingCategory | undefined = routingOutcome?.category;",
+    FN_START,
+  );
+  // Declared AFTER the routed-only branch closes — unconditional, not nested inside it.
+  expect(turnCategoryAt).toBeGreaterThan(routedBranchFailClosedAt);
+
+  const dispatchAt = SOURCE.indexOf("void runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
+  expect(dispatchAt).toBeGreaterThan(turnCategoryAt);
 });
 
 test("the record call runs AFTER setMainAgent has already read turnFailed for this turn (ordering: outcome computed, THEN recorded)", () => {

@@ -1298,12 +1298,14 @@ function estimateTaskCostUsd(profile: ModelProfile | undefined, inputTokens: num
  * from the operator's stored model-profile pricing when known, and
  * `success` from the shell's existing `turnFailed` detector (the
  * `[error]`/`[budget]`/`[stopped]` system-line signal, computed once per
- * `runAgentTurn` dispatch above). Recorded under the `"default"` category —
- * the interactive main turn runs the session's own model unconditionally
- * (`SESSION_UNCHANGED_CATEGORIES`, `derive-default-table.ts`), so `"default"`
- * is the category that actually describes it; a future classifier (PR #737)
- * assigning a real category to this turn is a straightforward extension —
- * pass its result through instead.
+ * `runAgentTurn` dispatch above). Recorded under `input.category` when the
+ * turn's routing classifier (PR #737, `runRoutingClassifierForTurn`) named
+ * one, falling back to `"default"` otherwise — routing disabled, a non-
+ * operator turn, a pinned session model, or every classifier stage refused
+ * all leave `input.category` `undefined`, and `"default"` is the category
+ * that actually describes an unrouted turn (the session's own model runs
+ * unconditionally, `SESSION_UNCHANGED_CATEGORIES` /
+ * `derive-default-table.ts`).
  *
  * A `0`/`0` turn (aborted before any provider round ever reported usage) is
  * dropped, same guard `attachUsageIo` itself uses for the cumulative
@@ -1318,6 +1320,7 @@ export async function recordTurnTaskCostBestEffort(input: {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly success: boolean;
+  readonly category?: RoutingCategory;
   readonly userConfigDir?: string;
   readonly now?: () => number;
 }): Promise<void> {
@@ -1330,7 +1333,7 @@ export async function recordTurnTaskCostBestEffort(input: {
       {
         providerId: input.providerId,
         modelId: input.modelId,
-        category: "default",
+        category: input.category ?? "default",
         inputTokens: input.inputTokens,
         outputTokens: input.outputTokens,
         totalTokens: input.inputTokens + input.outputTokens,
@@ -8237,8 +8240,8 @@ export async function launchTuiAgentShell(opts: {
         // (source-text audits in `turn-guard-shell-wiring.test.ts` key off
         // it).
         let deps = sessionDeps;
+        let routingOutcome: RoutingClassifierTurnResult | undefined;
         if (routingEnabled && !sessionModelExplicit && origin === "operator" && line.trim().length > 0) {
-          let routingOutcome: RoutingClassifierTurnResult | undefined;
           try {
             routingOutcome = await runRoutingClassifierForTurn(line, {
               enabled: routingEnabled,
@@ -8276,6 +8279,14 @@ export async function launchTuiAgentShell(opts: {
             }
           }
         }
+        // Flow 341 (AC3, wired to PR #737's classifier): captured
+        // unconditionally, once per turn — whether or not the `if` above even
+        // ran, and whether the resolved assignment routed to another model or
+        // resolved to `session-default` (still a real classifier answer, just
+        // "run the session's own model"). `recordTurnTaskCostBestEffort`
+        // below falls back to `"default"` itself when this is `undefined`
+        // (routing off, not an operator turn, or every stage refused).
+        const turnCategory: RoutingCategory | undefined = routingOutcome?.category;
         // flow 329: starts collecting THIS turn's tool calls/final text fresh —
         // must run before `runAgentTurn` so no early tool call is missed.
         guardCollector.reset(line);
@@ -8352,6 +8363,7 @@ export async function launchTuiAgentShell(opts: {
           inputTokens: turnInputTokens,
           outputTokens: turnOutputTokens,
           success: !turnFailed,
+          ...(turnCategory !== undefined ? { category: turnCategory } : {}),
         });
         try {
           flushSessionCheckpoint();

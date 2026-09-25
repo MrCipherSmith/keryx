@@ -782,6 +782,60 @@ otuiTest("flow 341: a finished turn's summed tokens are recorded to the task-cos
   setup.renderer.destroy();
 });
 
+// Flow 341 continued (wired to PR #737's routing classifier) — a passed
+// `category` (the turn's classifier outcome, `tui-shell.ts`'s own
+// `turnCategory`) is recorded VERBATIM, under its own `(provider, model,
+// category)` key, never folded into the `"default"` bucket. A plain `test`,
+// not `otuiTest`: this proves `recordTurnTaskCostBestEffort` itself, no
+// rendering involved (the shell-side wiring that PRODUCES `turnCategory` is
+// pinned separately, in `task-cost-shell-wiring.test.ts`).
+test('recordTurnTaskCostBestEffort: a passed category is recorded verbatim, not folded into "default"', async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-category-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "scripted",
+      modelId: "m",
+      inputTokens: 100,
+      outputTokens: 20,
+      success: true,
+      category: "coding",
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const codingKey = taskCostKey("scripted", "m", "coding");
+    const defaultKey = taskCostKey("scripted", "m", "default");
+    expect(store[codingKey]).toHaveLength(1);
+    expect(store[codingKey]![0]).toMatchObject({ category: "coding", inputTokens: 100, outputTokens: 20, totalTokens: 120, success: true });
+    expect(store[defaultKey]).toBeUndefined();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// The `input.category ?? "default"` fallback (`tui-shell.ts`) — an omitted
+// category (routing off, a non-operator turn, every classifier stage
+// refused) still records, under `"default"`, exactly as before this flow's
+// `category` field existed.
+test('recordTurnTaskCostBestEffort: an omitted category still falls back to "default"', async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-category-undef-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "scripted",
+      modelId: "m",
+      inputTokens: 100,
+      outputTokens: 20,
+      success: true,
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const key = taskCostKey("scripted", "m", "default");
+    expect(store[key]).toHaveLength(1);
+    expect(store[key]![0]).toMatchObject({ category: "default", inputTokens: 100, outputTokens: 20 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // `/clear`|`/new` reset the session surface through `resetSessionSurface`, whose
 // ONLY usage-side call is `resetUsage` — so a sink it forgets stays populated
 // with the PREVIOUS session's numbers. The sidebar's `Usage` row
