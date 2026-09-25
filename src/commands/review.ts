@@ -31,10 +31,13 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
 import { runImportReviewers } from "../review/import-reviewers";
-// flow 330: registration only. The command itself, and every helper it
-// needs, lives in `review-jev-rules.ts` — a NEW file, so flow 326's
-// concurrent work on this file's conform parts never collides with it.
+// flow 330/332: registration only. The command itself, and every helper it
+// needs, lives in `review-jev-rules.ts`/`review-jev-risk.ts`/
+// `review-jev-scenarios.ts` — NEW files, so no other flow's concurrent work
+// on this file collides with any of them.
 import { runJevRules } from "./review-jev-rules";
+import { runJevRisk } from "./review-jev-risk";
+import { runJevScenarios } from "./review-jev-scenarios";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -564,6 +567,17 @@ export async function reviewCommand(args: string[]): Promise<void> {
     // `src/commands/review-jev-rules.ts` for everything past registration.
     if (command === "jev-rules") {
       await runJevRules(args.slice(1));
+      return;
+    }
+    // flow 332: two more ADDITIONAL, CLI-driven reviewers — see
+    // `src/commands/review-jev-risk.ts`/`review-jev-scenarios.ts` for
+    // everything past registration.
+    if (command === "jev-risk") {
+      await runJevRisk(args.slice(1));
+      return;
+    }
+    if (command === "jev-scenarios") {
+      await runJevScenarios(args.slice(1));
       return;
     }
     if (command === "learn") {

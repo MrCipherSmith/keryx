@@ -46,22 +46,28 @@ review: it is a fact about the review, not about the diff.
 
 ## CLI-engine reviewers — dispatched as a command, not a sub-agent
 
-`review-jev-rules` (flow 330) is an ADDITIONAL reviewer, never replacing any
-other, and its dispatch mechanism differs from every reviewer named in
-SKILL.md's Routing Table: there is no platform-native agent to invoke,
-because it is a deterministic **keryx program**. Run it with `keryx review
-jev-rules --scope <scope.json> --json` — the SAME `scope.json` every other
-Wave A/B reviewer's dispatch already reads, so it checks exactly the same
-hunks. Read its `--json` output as a `REVIEW_RESULT` and merge its `findings`
-into the consolidated array exactly like a sub-agent reviewer's: same
-Sub-Agent Report Quality Gate, same dedup, same Wave C verification.
+`review-jev-rules` (flow 330), `review-jev-risk` and `review-jev-scenarios`
+(both flow 332) are ADDITIONAL reviewers, never replacing any other, and
+their dispatch mechanism differs from every reviewer named in SKILL.md's
+Routing Table: there is no platform-native agent to invoke, because each is a
+deterministic **keryx program**. Run them with `keryx review jev-rules
+--scope <scope.json> --json`, `keryx review jev-risk --scope <scope.json>
+--json`, and `keryx review jev-scenarios --scope <scope.json> --json` — the
+SAME `scope.json` every other Wave A/B reviewer's dispatch already reads, so
+each checks exactly the same hunks. Read each `--json` output as a
+`REVIEW_RESULT` and merge its `findings` into the consolidated array exactly
+like a sub-agent reviewer's: same Sub-Agent Report Quality Gate, same dedup,
+same Wave C verification. `review-jev-risk` additionally emits `ranked` and
+`routingHints`; `review-jev-scenarios` additionally emits `checklist` — see
+each reviewer's own SKILL.md for what to do with its extra.
 
-Gate it BEFORE running the command, not after: skip it — recorded in `Skipped
-reviewers` with the reason, never silently absent — when `review.jev.rules`
-is not `true` in `.metaproject/tasks.config.json`, or when no Jev/OpenRouter
-credential is resolvable. Either gate failing means `keryx review jev-rules`
-itself would refuse before any read or network call, so checking first saves
-a doomed dispatch.
+Gate each BEFORE running its command, not after: skip it — recorded in
+`Skipped reviewers` with the reason, never silently absent — when its own
+opt-in (`review.jev.rules` / `review.jev.risk` / `review.jev.scenarios`) is
+not `true` in `.metaproject/tasks.config.json`, or when no Jev/OpenRouter
+credential is resolvable. Either gate failing means the command itself would
+refuse before any read or network call, so checking first saves a doomed
+dispatch. The three opt-ins are independent: any subset may be on.
 
 `keryx review reviewers --json` marks a CLI-engine reviewer with
 `"engine": "jev"` on its `bundled` entry — the field's presence, not its

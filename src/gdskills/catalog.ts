@@ -261,6 +261,16 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Fall back to confirming the class_scope sites exist; reasoning alone is capped at unverifiable.",
     "Emit one verdict per finding checked; never add a finding, raise a severity, or edit a finding's text.",
   ]),
+  skill("review-jev-risk", "review", ["recommended", "full"], "Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency.", [
+    "Score every retained hunk on security, data/migration, public-API, concurrency, and error-handling.",
+    "Emit a finding only above threshold and with no nearby test; severity capped at info/minor.",
+    "Feed a routing hint for review-security-code/review-highload when a hunk crosses threshold on that dimension.",
+  ]),
+  skill("review-jev-scenarios", "review", ["recommended", "full"], "Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario.", [
+    "Discover scenarios from gdwiki user-scenario pages, PRD requirement sections, and README/docs how-to sections.",
+    "Ask only scenarios whose linked code this diff touches.",
+    "Emit the ranked manual-check list, and a minor finding for a likely-affected scenario with no covering test.",
+  ]),
   skill("review-frontend-conventions", "review", ["recommended", "full"], "Review frontend code against repository-local frontend conventions and agent entrypoints.", [
     "Load local AGENTS.md/CLAUDE.md and matched frontend rules.",
     "Check component, state, styling, i18n, error, and Storybook conventions.",

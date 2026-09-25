@@ -39,11 +39,11 @@ export type BundledReviewer = {
   source: "bundled";
   path: string;
   /**
-   * `metadata.engine`, when the reviewer declares one (flow 330) — e.g.
+   * `metadata.engine`, when the reviewer declares one (flow 330/332) — e.g.
    * `"jev"` for a reviewer dispatched as a deterministic CLI engine call
    * (`keryx review <name> ...`) rather than an LLM sub-agent. Absent means
    * the default: an LLM sub-agent dispatch, exactly as every reviewer before
-   * flow 330 already worked.
+   * flow 330/332 already worked.
    */
   engine?: string;
 };
@@ -236,7 +236,7 @@ export async function collectReviewers(projectRoot: string): Promise<ReviewerInv
   const bundledRoot = path.join(projectRoot, ".metaproject", "skills", "gdskills", "review");
   const bundled: BundledReviewer[] = await Promise.all(
     (await skillDirs(bundledRoot)).map(async (name) => {
-      // `metadata.engine` (flow 330): read best-effort — a reviewer with no
+      // `metadata.engine` (flow 330/332): read best-effort — a reviewer with no
       // engine declared, or a SKILL.md that vanished between the directory
       // listing above and this read, is a plain LLM sub-agent reviewer.
       const engine = await readFile(path.join(bundledRoot, name, "SKILL.md"), "utf8")

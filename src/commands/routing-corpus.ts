@@ -214,8 +214,8 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 312;
-export const RANK1_TOTAL = 314;
+export const RANK1_FIRST = 320;
+export const RANK1_TOTAL = 322;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -544,6 +544,32 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "performance review of this diff", owner: "review-performance" },
       { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-jev-risk",
+    positives: [
+      "rank these hunks by how risky they are, security and concurrency especially",
+      "give me a hunk-by-hunk risk breakdown of this diff, ranked highest first",
+      "jev risk check on this PR",
+      "give me a risk map of this diff before I look at it myself",
+    ],
+    negatives: [
+      { prompt: "security review of this diff", owner: "review-security-code" },
+      { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-jev-scenarios",
+    positives: [
+      "which user scenarios does this PR change",
+      "walk me through what functional behavior this diff touches",
+      "jev scenarios check on this PR",
+      "functional review of what this change actually does for a user",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "give me a risk map of this diff before I look at it myself", owner: "review-jev-risk" },
     ],
   },
   {

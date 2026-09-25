@@ -98,9 +98,12 @@ import type { ProfileRefreshSummary } from "../harness/routing/model-profile";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
 import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
-// flow 330: registration only — everything else lives in jev-rules-command.ts
-// so flow 326's concurrent conform-* work never collides with it.
+// flow 330/332: registration only — everything else lives in
+// jev-rules-command.ts/jev-risk-command.ts/jev-scenarios-command.ts, so no
+// other flow's concurrent work collides with any of them.
 import { isJevRulesCommand, runJevRulesForShell } from "./jev-rules-command";
+import { isJevRiskCommand, runJevRiskForShell } from "./jev-risk-command";
+import { isJevScenariosCommand, runJevScenariosForShell } from "./jev-scenarios-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
 import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
@@ -7430,6 +7433,34 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isConformCommand(command.name)) {
           showConform();
+          return;
+        }
+        if (isJevRiskCommand(command.name)) {
+          // flow 332: a one-shot check on the working diff, not a modal —
+          // see `jev-risk-command.ts`'s own header for why.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-risk: scoring the working diff's hunks…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevRiskForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-risk: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
+          return;
+        }
+        if (isJevScenariosCommand(command.name)) {
+          // flow 332: a one-shot check on the working diff, not a modal —
+          // same shape as `/risk` immediately above.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-scenarios: checking likely-affected scenarios…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevScenariosForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-scenarios: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
           return;
         }
         if (isJevRulesCommand(command.name)) {
