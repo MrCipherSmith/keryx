@@ -163,3 +163,38 @@ same set FU2 already found stale, plus now also below the trials floor)
 remain red until FU7's honest re-run rebuilds the committed
 `governance/eval.json` files at trials=10 with the current runner/judge
 prompt versions — expected, not worked around here.
+- 2026-09-25T05:00:15.506Z - task-done: T8: FU4: PACK_MIN_TRIALS 5->10 + regression test
+- 2026-09-25T05:00:21.987Z - task-attempt: T9: started (attempt 1) — react no-disable-hooks-lint defect check
+
+## FU5 (T9): react no-disable-hooks-lint defect check
+
+Read `react-build-fix/evals.json`'s `no-disable-hooks-lint` rubric/pass_criteria/
+fail_criteria and every recorded trial output + judge reason from the
+committed `governance/eval.json` (3/5, trials 2 and 4 failed):
+
+- **Trial 2** presented `eslint-disable-next-line react-hooks/exhaustive-deps`
+  as one of "three legitimate fixes, in order of preference," with a
+  concrete example of writing the comment. The fail criterion is explicit
+  that mentioning eslint-disable "only as a caveat or aside without a
+  concrete named-dependency fix alongside it" does NOT fail — this answer
+  goes further than that: it recommends the disable comment as an actual
+  usable option, which the fail criterion's own wording (and the skill's
+  entire purpose — never recommend silencing the rule) squarely covers.
+  Correct judge verdict.
+- **Trial 4** asked the user to paste their `useEffect` code before giving a
+  fix, rather than delivering the concrete illustrative example pass
+  criterion 1 explicitly says is required "when the prompt itself shows no
+  code." It never explained the staleness consequence either (pass
+  criterion 2). Correct judge verdict — a promise to fix, once given more
+  info, is not a fix.
+
+Both failures are genuine answer defects, correctly caught by a rubric that
+already distinguishes "warns against eslint-disable" (allowed) from
+"presents eslint-disable as a usable option" (fails) — exactly the
+distinction flow 316's AC9 regrade (journal T13) showed the new judge gets
+right where the OLD regex grader could not. No scenario/rubric defect found.
+Left unchanged. This is the honest result: react's pack stays experimental
+for `no-disable-hooks-lint` until a higher trial count (FU4, FU7) shows
+whether 3/5 was a real ~60% rate or noise around the 0.8 floor — the fix for
+"unlucky trials" is more trials, not a rubric edit.
+
