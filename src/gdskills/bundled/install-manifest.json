@@ -116,6 +116,52 @@
       ],
       "stackDetectionAware": true
     },
+    "django": {
+      "description": "Common rules plus the Django-aware component set (extends `python`), installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:django",
+        "lang:python"
+      ],
+      "stackDetectionAware": true
+    },
+    "fastapi": {
+      "description": "Common rules plus the FastAPI-aware component set (extends `python`), installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:fastapi",
+        "lang:python"
+      ],
+      "stackDetectionAware": true
+    },
+    "rust": {
+      "description": "Common rules plus the Rust stack pack component (`rust-rules` + `rust-skills`, from src/gdskills/bundled/stacks/rust/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:rust"
+      ],
+      "stackDetectionAware": true
+    },
+    "java-kotlin-spring": {
+      "description": "Common rules plus the Java/Kotlin + Spring Boot stack pack component (`java-kotlin-spring-rules` + `java-kotlin-spring-skills`, from src/gdskills/bundled/stacks/java-kotlin-spring/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:java-kotlin-spring"
+      ],
+      "stackDetectionAware": true
+    },
     "full": {
       "description": "Every registered module and component, unconditionally.",
       "modules": [
@@ -146,7 +192,15 @@
         "angular-rules",
         "angular-skills",
         "nextjs-nuxt-rules",
-        "nextjs-nuxt-skills"
+        "nextjs-nuxt-skills",
+        "django-rules",
+        "django-skills",
+        "fastapi-rules",
+        "fastapi-skills",
+        "rust-rules",
+        "rust-skills",
+        "java-kotlin-spring-rules",
+        "java-kotlin-spring-skills"
       ],
       "components": [
         "lang:ts-js-node",
@@ -157,7 +211,11 @@
         "lang:go",
         "framework:vue",
         "framework:angular",
-        "framework:nextjs-nuxt"
+        "framework:nextjs-nuxt",
+        "framework:django",
+        "framework:fastapi",
+        "lang:rust",
+        "framework:java-kotlin-spring"
       ]
     }
   },
@@ -527,6 +585,40 @@
       "cost": "medium",
       "stability": "experimental"
     },
+    "django-rules": {
+      "kind": "rule",
+      "description": "Django stack pack rules (coding-style, patterns, security, testing; scoped to *.py/*.pyi, extends python) from src/gdskills/bundled/stacks/django/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/django/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "python-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "django-skills": {
+      "kind": "skill",
+      "description": "Django stack pack skills (implementation, testing, code review, build-fix, migrate) from src/gdskills/bundled/stacks/django/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/django/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "python-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
     "vue-rules": {
       "kind": "rule",
       "description": "Vue stack pack rules (coding-style, patterns, security, testing; scoped to *.vue) from src/gdskills/bundled/stacks/vue/rules/.",
@@ -539,6 +631,23 @@
       ],
       "dependencies": [
         "ts-js-node-rules"
+      ],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "fastapi-rules": {
+      "kind": "rule",
+      "description": "FastAPI stack pack rules (coding-style, patterns, security, testing; scoped to *.py/*.pyi, extends python) from src/gdskills/bundled/stacks/fastapi/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/fastapi/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "python-rules"
       ],
       "defaultInstall": true,
       "cost": "light",
@@ -561,6 +670,23 @@
       "cost": "medium",
       "stability": "experimental"
     },
+    "fastapi-skills": {
+      "kind": "skill",
+      "description": "FastAPI stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/fastapi/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/fastapi/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [
+        "python-skills"
+      ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
     "angular-rules": {
       "kind": "rule",
       "description": "Angular stack pack rules (coding-style, patterns, security, testing; scoped to *.ts/*.html) from src/gdskills/bundled/stacks/angular/rules/.",
@@ -578,6 +704,21 @@
       "cost": "light",
       "stability": "experimental"
     },
+    "rust-rules": {
+      "kind": "rule",
+      "description": "Rust stack pack rules (coding-style, patterns, security, testing; scoped to *.rs) from src/gdskills/bundled/stacks/rust/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/rust/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
     "angular-skills": {
       "kind": "skill",
       "description": "Angular stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/angular/skills/.",
@@ -591,6 +732,21 @@
       "dependencies": [
         "ts-js-node-skills"
       ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "rust-skills": {
+      "kind": "skill",
+      "description": "Rust stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/rust/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/rust/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
       "stability": "experimental"
@@ -613,6 +769,21 @@
       "cost": "light",
       "stability": "experimental"
     },
+    "java-kotlin-spring-rules": {
+      "kind": "rule",
+      "description": "Java/Kotlin + Spring Boot stack pack rules (coding-style, patterns, security, testing; scoped to *.java/*.kt/*.kts) from src/gdskills/bundled/stacks/java-kotlin-spring/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/java-kotlin-spring/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
     "nextjs-nuxt-skills": {
       "kind": "skill",
       "description": "Next.js/Nuxt meta-framework stack pack skills (implementation, testing, code review, build-fix, upgrade migration) from src/gdskills/bundled/stacks/nextjs-nuxt/skills/.",
@@ -627,6 +798,21 @@
         "react-skills",
         "vue-skills"
       ],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "java-kotlin-spring-skills": {
+      "kind": "skill",
+      "description": "Java/Kotlin + Spring Boot stack pack skills (implementation, testing, code review, build-fix, migrate) from src/gdskills/bundled/stacks/java-kotlin-spring/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/java-kotlin-spring/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
       "stability": "experimental"
@@ -791,6 +977,65 @@
       ],
       "provenance": {
         "origin": "authored"
+      }
+    },
+    "framework:django": {
+      "family": "framework",
+      "modules": [
+        "django-rules",
+        "django-skills"
+      ],
+      "detectionMarkers": [
+        "django"
+      ],
+      "provenance": {
+        "origin": "authored",
+        "sourceRef": "flow 335, Wave 4 batch 3"
+      }
+    },
+    "framework:fastapi": {
+      "family": "framework",
+      "modules": [
+        "fastapi-rules",
+        "fastapi-skills"
+      ],
+      "detectionMarkers": [
+        "fastapi"
+      ],
+      "provenance": {
+        "origin": "authored",
+        "sourceRef": "flow 335, Wave 4 batch 3"
+      }
+    },
+    "lang:rust": {
+      "family": "language",
+      "modules": [
+        "rust-rules",
+        "rust-skills"
+      ],
+      "detectionMarkers": [
+        "rust"
+      ],
+      "provenance": {
+        "origin": "authored",
+        "sourceRef": "flow 335, Wave 4 batch 3"
+      }
+    },
+    "framework:java-kotlin-spring": {
+      "family": "framework",
+      "modules": [
+        "java-kotlin-spring-rules",
+        "java-kotlin-spring-skills"
+      ],
+      "detectionMarkers": [
+        "spring-boot",
+        "spring",
+        "java",
+        "kotlin"
+      ],
+      "provenance": {
+        "origin": "authored",
+        "sourceRef": "flow 335, Wave 4 batch 3"
       }
     }
   }
