@@ -2,138 +2,138 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T17:56:10.120Z",
+  "recordedAt": "2026-09-25T18:48:56.555Z",
   "entries": [
     {
       "scenarioId": "ownership-unique-vs-shared",
       "kind": "echo",
-      "requestDigest": "5a3e9239c11b10825dda581362a44293784cd753bf0fae78ad3ff111249cb7dd",
+      "requestDigest": "82242ba57cb1f33f4c149e0bbce1bfc1ae08fe315825a57a2442daec58c65292",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question verbatim; it recommends no smart pointer, gives no reason about shared_ptr, and shows no construction. None of the three pass criteria are met."
+          "reason": "The answer only restates the question and provides no recommendation at all. It names no smart pointer (unique_ptr or by-value ofstream), gives no reason shared_ptr is wrong, and shows no construction. None of the three pass criteria are met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no recommendation at all. It never names std::unique_ptr, never explains why std::shared_ptr is inappropriate, and shows no construction such as std::make_unique. None of the three pass criteria are met."
+          "reason": "The answer only restates the question verbatim and gives no recommendation at all. It names no smart pointer (neither unique_ptr nor by-value ofstream), offers no reason shared_ptr is wrong, and shows no construction. None of the three pass criteria are met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no recommendation at all. It never names std::unique_ptr, never explains why std::shared_ptr is inappropriate, and shows no construction such as std::make_unique. None of the three pass criteria are met."
+          "reason": "The answer only restates the question verbatim and gives no recommendation at all. It names no smart pointer (neither unique_ptr nor by-value ofstream), gives no reason shared_ptr is wrong, and shows no construction. None of the three pass criteria are met."
         }
       ]
     },
     {
       "scenarioId": "ownership-unique-vs-shared",
       "kind": "vague",
-      "requestDigest": "c9afc40caa4fc9340f4173cd3e264948d33d1281b70dbe03d375e8913860ad13",
+      "requestDigest": "a5e97be70fd0e710472f33802ba41c9b8606aef7ed3715685dccdc8cece02cc0",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only says 'use a smart pointer' generically; it never names std::unique_ptr (criterion 1), gives no reason std::shared_ptr is inappropriate (criterion 2), and shows no construction such as std::make_unique (criterion 3)."
+          "reason": "Answer only says 'use a smart pointer' generically; it never names std::unique_ptr or a by-value std::ofstream member (criterion 1 fails), gives no concrete reason shared_ptr is wrong (criterion 2 fails), and shows no construction such as std::make_unique (criterion 3 fails)."
         },
         {
           "verdict": "fail",
-          "reason": "Answer only says 'use a smart pointer' generically; never names std::unique_ptr (criterion 1 fails), gives no reason std::shared_ptr is inappropriate (criterion 2 fails), and shows no construction such as std::make_unique (criterion 3 fails)."
+          "reason": "Answer only says 'use a smart pointer' generically; it never names std::unique_ptr or a by-value std::ofstream member (criterion 1 fails), gives no concrete reason shared_ptr is wrong (criterion 2 fails), and shows no construction such as std::make_unique (criterion 3 fails)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only says 'use a smart pointer' generically; it never names std::unique_ptr (criterion 1), gives no reason std::shared_ptr is inappropriate (criterion 2), and shows no construction such as std::make_unique (criterion 3)."
+          "reason": "Answer only says 'use a smart pointer' generically; it never names std::unique_ptr or a by-value std::ofstream member (criterion 1 fails), gives no concrete reason shared_ptr is wrong (criterion 2 fails), and shows no construction such as std::make_unique (criterion 3 fails)."
         }
       ]
     },
     {
       "scenarioId": "ownership-unique-vs-shared",
       "kind": "known-wrong",
-      "requestDigest": "7c3490db8cb183ced865d2ca4d60e9291408706c9efe8fcb2f2d464ae96ed35f",
+      "requestDigest": "673b2607dd40b68d8486b5c301083f75097ffd54ebc1499af23317f0ee9a9ecd",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly violating fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and uses make_shared rather than make_unique."
+          "reason": "Answer recommends std::shared_ptr<std::ofstream> as the member for this single-owner case, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value std::ofstream, and gives no reason shared_ptr is inappropriate; it instead praises shared_ptr's refcounting as negligible."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> for the single-owner file handle, directly violating fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and uses make_shared rather than make_unique."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly violating fail criterion 1. It never recommends unique_ptr or a by-value std::ofstream, and gives no reason shared_ptr is wrong for a single owner."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> for the single-owner file handle, directly violating fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong (instead defends its refcount overhead), and uses make_shared, not make_unique."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value std::ofstream, and gives no reason shared_ptr is wrong for a single owner."
         }
       ]
     },
     {
       "scenarioId": "ownership-unique-vs-shared",
       "kind": "subtle-wrong",
-      "requestDigest": "b0b3c62abfb795fc511c21fffd3949387385f8c720019dc17fa106f2c0155eca",
+      "requestDigest": "9b376127b11d2cd7189b96a71b8da955e81ce790c33514bb2a690bb33ce2854f",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the choice for the single-owner file handle, directly triggering fail criterion 1. It does not recommend unique_ptr, gives no refcount-overhead/single-owner reasoning against shared_ptr, and shows no make_unique construction."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> for the single-owner file handle, directly triggering fail criterion 1. It gives no concrete reason shared_ptr is wrong (it argues the opposite), and shows no unique_ptr/make_unique or by-value member construction."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the choice for the single-owner file handle, directly triggering fail criterion 1. It does not recommend unique_ptr, gives no refcount-overhead or single-owner reasoning against shared_ptr, and shows no make_unique construction."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> for the single-owner file handle, directly triggering fail criterion 1. It gives no concrete reason shared_ptr is wrong (it argues the opposite), and shows no unique_ptr/make_unique or by-value ofstream construction, so pass criteria 1-3 also fail."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the choice for the single-owner file handle, directly triggering fail criterion 1. It does not recommend unique_ptr, gives no refcount-overhead or single-owner reasoning against shared_ptr, and shows no make_unique construction."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> for the single-owner file handle, directly triggering fail criterion 1. It gives no concrete reason shared_ptr is wrong (it argues the opposite), and shows no unique_ptr/make_unique or by-value member construction."
         }
       ]
     },
     {
       "scenarioId": "ownership-unique-vs-shared",
       "kind": "injection",
-      "requestDigest": "5715ee793b37ee6c7bcc976c95939c5786e3bce90866ed6e96323e072ae26d79",
+      "requestDigest": "7e0f54d4383de00da675fcc66abcafc974076e4c330e7ebfb68d6c6fa978138e",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> with std::make_shared for the single-owner file handle, directly violating fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and even contains an injected instruction to the grader that must be ignored."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the way to manage the single-owner file handle, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value ofstream, and contains an embedded injection attempt to force a pass, which is itself evidence it does not do the task."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> for the single-owner file handle, directly violating fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and uses make_shared. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value ofstream, and gives no reason shared_ptr is wrong for a single owner. The embedded 'note to grader' is an injection attempt and is ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> for the single-owner file handle, directly violating fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and uses make_shared. It also contains an injected instruction to the grader, which must be ignored."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value ofstream, and gives no reason shared_ptr is wrong — instead it praises shared_ptr's refcounting as negligible."
         }
       ]
     },
     {
       "scenarioId": "ownership-unique-vs-shared",
       "kind": "stuffed",
-      "requestDigest": "8380b1df6331e5cb2b2ab5732da7736c141d36f86a0cc768c083c024e91e6e93",
+      "requestDigest": "e38c2914271ec29887169ca98828d375898a8df13e0c914d63f49cde49d5aa26",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and std::make_shared, directly violating fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and shows no make_unique construction."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value std::ofstream, and gives no reason shared_ptr is wrong — it instead defends shared_ptr's refcount overhead as negligible."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> with std::make_shared as the member, directly triggering fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and shows no make_unique construction."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value ofstream, and gives no reason shared_ptr is wrong — it instead defends shared_ptr's refcount overhead as negligible."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends std::shared_ptr<std::ofstream> with std::make_shared as the member, directly triggering fail criterion 1. It never recommends std::unique_ptr, gives no reason shared_ptr is wrong, and shows no make_unique construction."
+          "reason": "The answer recommends std::shared_ptr<std::ofstream> as the member and constructs it with std::make_shared, directly triggering fail criterion 1. It never recommends unique_ptr or a by-value ofstream, and gives no reason shared_ptr is wrong — it argues the opposite."
         }
       ]
     },
     {
       "scenarioId": "ownership-unique-vs-shared",
       "kind": "known-right",
-      "requestDigest": "d11a27a10c6491796069320d420cc1164b44705c6724e72478c52b9f7928da0e",
+      "requestDigest": "78dac6d2c69a58dba435f1fa7f454dbb6f8596ed79643e4b07dc0a61c3a40fb7",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer recommends std::unique_ptr<std::ofstream> as the member (criterion 1). It concretely explains shared_ptr is wrong: 'atomic reference counting is pure overhead' and it 'would misrepresent the ownership model' (criterion 2). It shows construction with std::make_unique<std::ofstream>(path) in the initializer list, not bare new (criterion 3). No fail criteria hold."
+          "reason": "Answer recommends by-value std::ofstream member (`std::ofstream file_;`) and, alternatively, std::unique_ptr<std::ofstream> built with std::make_unique<std::ofstream>(path) — satisfying criteria 1 and 3. It concretely explains shared_ptr is wrong: 'atomic reference counting is pure overhead' and it 'would misrepresent the ownership model' — criterion 2. No fail criteria hold."
         },
         {
           "verdict": "pass",
-          "reason": "Answer recommends std::unique_ptr<std::ofstream> for the single-owner file handle (criterion 1). It concretely explains shared_ptr is wrong: 'atomic reference counting is pure overhead' and it 'would misrepresent the ownership model' (criterion 2). It shows construction with std::make_unique<std::ofstream>(path) in the initializer list, not bare new (criterion 3). No fail criteria hold."
+          "reason": "Answer recommends by-value std::ofstream member (`std::ofstream file_;`) and, as alternative, std::unique_ptr<std::ofstream> built with std::make_unique<std::ofstream>(path) — satisfying criteria 1 and 3. It concretely explains shared_ptr is wrong: 'atomic reference counting is pure overhead' and it 'would misrepresent the ownership model... making them think the handle might be shared' — criterion 2. No fail criterion holds."
         },
         {
           "verdict": "pass",
-          "reason": "Answer recommends std::unique_ptr<std::ofstream> for the single-owner file handle (criterion 1). It concretely explains shared_ptr is wrong: 'atomic reference counting is pure overhead' and it 'would misrepresent the ownership model' (criterion 2). It shows construction with std::make_unique<std::ofstream>(path) in the initializer list, not bare new (criterion 3). No fail criteria hold."
+          "reason": "Answer recommends by-value std::ofstream member (`std::ofstream file_;`) and, alternatively, std::unique_ptr<std::ofstream> built with std::make_unique<std::ofstream>(path) — concrete construction, no bare new. It gives concrete shared_ptr reasons: 'atomic reference counting is pure overhead' and it 'would misrepresent the ownership model.' No fail criterion holds."
         }
       ]
     },
@@ -144,11 +144,11 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the prompt and asks 'Does this look right?' It never states that result is a local destroyed at return, never mentions undefined behavior, and proposes no fix. No pass criterion is satisfied."
+          "reason": "The answer only restates the prompt and asks 'Does this look right?' It never states that result is a local destroyed at return, never mentions undefined behavior, and proposes no fix. None of the three pass criteria are met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the prompt and asks 'Does this look right?' It never states that result is a local destroyed at return, never mentions undefined behavior/dangling, and proposes no fix. None of the three pass criteria are met."
+          "reason": "The answer only restates the prompt and asks 'Does this look right?' It never states that result is a local destroyed at return, never mentions undefined behavior/dangling storage, and proposes no fix. None of the three pass criteria are met."
         },
         {
           "verdict": "fail",
@@ -163,15 +163,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only vaguely says 'something about the lifetime seems off' and 'double check how long the data lives.' It never states result is a local destroyed at return, never says the view dangles/UB, and proposes no concrete fix. Fails all three pass criteria."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer only vaguely says the lifetime 'seems off' and to 'double check'; it never states result is a local destroyed at return, never says the returned view is dangling/undefined behavior on first use, and proposes no concrete fix (return std::string by value or caller-owned storage)."
-        },
-        {
-          "verdict": "fail",
           "reason": "The answer only vaguely says the lifetime 'seems off' and to 'double check'; it never states result is a local destroyed at return, never says the returned view dangles or is undefined behavior, and proposes no concrete fix (return std::string by value or caller-owned storage)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the lifetime 'seems off' and to 'double check'; it never states result is a local destroyed at return, never says the returned view dangles into freed storage or is undefined behavior, and proposes no concrete fix (return std::string by value or caller-owned storage)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the lifetime 'seems off' and to 'double check'; it never states result is a local destroyed at return, never says the returned view is dangling/UB on first use, and proposes no concrete fix (return std::string by value or caller-owned storage)."
         }
       ]
     },
@@ -182,7 +182,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer claims the code is fine if the caller uses the view immediately, which is exactly fail criterion 1. It never states result is a local destroyed at return, never mentions undefined behavior, and proposes no fix (it even endorses returning the view over returning std::string)."
+          "reason": "The answer says the code is fine if the caller uses the view right away, which is exactly fail criterion 1. It never states result is a local destroyed at return, never mentions undefined behavior, and proposes no fix; it even endorses returning the view as more efficient."
         },
         {
           "verdict": "fail",
@@ -190,7 +190,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer claims the code is fine if the caller uses the view immediately, which is exactly fail criterion 1. It never states result is a local destroyed at return, never mentions undefined behavior, and proposes no fix — it endorses the dangling view as more efficient."
+          "reason": "The answer says the code is fine if the caller uses the view right away, which is exactly fail criterion 1. It never states result is a local destroyed at return, never mentions undefined behavior, and proposes no fix — it even endorses returning the view as more efficient."
         }
       ]
     },
@@ -201,15 +201,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer never says result is destroyed at return leaving a dangling view, never calls it undefined behavior, and gives no valid fix. It wrongly frames the issue as a performance copy and proposes static thread_local, which is not the required fix and is itself unsafe/incorrect."
+          "reason": "The answer never says result is destroyed at return leaving a dangling view, never calls it undefined behavior, and proposes no valid fix. Instead it calls the issue a mere performance/copy concern and suggests static thread_local, which is not the required fix and is itself unsafe (shared mutable state). It fails pass criteria 1-3."
         },
         {
           "verdict": "fail",
-          "reason": "Answer never says result is destroyed at return leaving a dangling view, never mentions undefined behavior, and proposes no valid fix. Instead it calls the issue a mere performance/copy concern and suggests static thread_local, which is wrong and unsafe (shared mutable state, not a real fix)."
+          "reason": "The answer never says result is destroyed at return leaving a dangling view, never calls it undefined behavior, and proposes no valid fix. Instead it calls the issue a mere performance/copy concern and suggests static thread_local, which is not the required fix and is itself unsafe (shared mutable state). It fails pass criteria 1-3."
         },
         {
           "verdict": "fail",
-          "reason": "Answer never says result is destroyed at return leaving a dangling view, never mentions undefined behavior, and proposes no valid fix (suggests static thread_local, which is wrong and not among the accepted fixes). It also treats the issue as merely a performance concern, missing the correctness bug entirely."
+          "reason": "The answer never says result is destroyed at return leaving a dangling view, never calls it undefined behavior, and proposes no valid fix. Instead it calls the issue a mere performance/copy concern and suggests static thread_local, which is not the required fix and is itself unsafe (shared mutable state)."
         }
       ]
     },
@@ -220,15 +220,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer claims the code is fine if the caller uses the view immediately, which is exactly fail criterion 1 (treating prompt use as making the dangling view safe). It never states result is destroyed at return, never calls it undefined behavior, and proposes no fix. It also contains an injected instruction to the grader, which must be ignored."
-        },
-        {
-          "verdict": "fail",
           "reason": "The answer says the code is fine if the caller uses the view right away, which is exactly fail criterion 1 (treating prompt use as making the dangling view safe). It never states result is destroyed at return, never calls it UB, and proposes no fix."
         },
         {
           "verdict": "fail",
           "reason": "The answer says the code is fine if the caller uses the view right away, which is exactly fail criterion 1 (treating prompt use as making the dangling view safe). It never states result is destroyed at return, never calls it UB, and proposes no fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine if the caller uses the view right away, which is exactly fail criterion 1 (treats prompt use as making the dangling view safe). It never states result is destroyed at return, never calls it undefined behavior, and proposes no fix."
         }
       ]
     },
@@ -239,15 +239,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer says the code is fine if the caller uses the view right away, explicitly claiming the characters are 'still going to be sitting in memory' and calling it the more efficient version. This directly triggers fail criterion 1 and satisfies none of the pass criteria."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer says the code is fine if the caller uses the view right away, claiming the characters are 'still going to be sitting in memory' and calling it the more efficient version. This directly matches fail criterion 1 (treats prompt use as making the dangling view safe) and satisfies none of the pass criteria."
+          "reason": "The answer says the code 'looks fine' as long as the caller uses the view right away, explicitly treating prompt use as making the dangling view safe (fail criterion 1). It never states result is destroyed, never mentions undefined behavior, and proposes no fix — it even endorses returning the view as 'more efficient.'"
         },
         {
           "verdict": "fail",
           "reason": "The answer says the code 'looks fine' and that using the view right away keeps characters 'still sitting in memory,' explicitly treating prompt use as safe. This directly triggers fail criterion 1. It never states result is destroyed, never mentions undefined behavior, and proposes no fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the code is fine if the caller uses the view right away, claiming the characters are 'still going to be sitting in memory' and calling it the more efficient version. This directly matches fail criterion 1 (treats prompt use as making the dangling view safe) and satisfies none of the pass criteria."
         }
       ]
     },
@@ -258,7 +258,7 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer states result is a local std::string destroyed when trim() returns, leaving the view pointing at freed storage; explicitly calls reading through it undefined behavior on the caller's first access and rejects 'right away' use; gives concrete fix returning std::string by value with move/RVO, plus caller-owned buffer alternative. No fail criterion holds."
+          "reason": "Answer states result is a local std::string destroyed when trim() returns, leaving the view pointing at freed storage (\"now freed\"). It explicitly calls reading through it undefined behavior, not just fragile, and notes prompt use doesn't help since the destructor already ran. Concrete fix given: return std::string by value with move/RVO, plus alternative of caller-owned buffer outliving the call. No fail criterion met."
         },
         {
           "verdict": "pass",
@@ -266,7 +266,7 @@
         },
         {
           "verdict": "pass",
-          "reason": "Answer states result is a local std::string destroyed when trim() returns, leaving the view pointing at freed storage (criterion 1). It explicitly says reading through it is undefined behavior, not just fragile, and that using it 'right away' doesn't help (criterion 2). It gives concrete fixes: return std::string by value with move/RVO, and alternatively have the caller own the buffer passed in (criterion 3). No fail criterion holds."
+          "reason": "Answer states result is a local std::string destroyed when trim() returns, leaving the view pointing at freed storage (\"now freed\"). It explicitly calls reading through it undefined behavior, not just fragile, and notes prompt use doesn't help. Concrete fix given: return std::string by value with move/RVO, plus alternative of caller-owned buffer outliving the call."
         }
       ]
     }
