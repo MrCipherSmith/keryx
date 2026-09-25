@@ -1,0 +1,7 @@
+{
+  "cbe2e6dace7c40572d046c6c36828137023c7750": [
+    "src/commands/sandbox-net-forward.ts",
+    "src/commands/commands.ts",
+    "src/harness/process/sandbox/proxy-worker.ts"
+  ]
+}

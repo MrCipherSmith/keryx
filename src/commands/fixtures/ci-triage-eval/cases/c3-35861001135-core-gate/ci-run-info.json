@@ -1,0 +1,11 @@
+{
+  "runId": "35861001135",
+  "workflowName": "CI",
+  "headBranch": "docs/revision-onboarding",
+  "headSha": "cc7afcdceb7b84cf8332b3820126b07121ac8589",
+  "conclusion": "failure",
+  "jobs": [
+    { "name": "typecheck-and-tests", "conclusion": "failure", "status": "completed" },
+    { "name": "standard-baseline", "conclusion": "success", "status": "completed" }
+  ]
+}

@@ -175,7 +175,7 @@ test("setProvider re-fetches the NEW provider instead of the mount-time one", as
     const url = String(input);
     const total = url.includes("openrouter") ? "1.11" : "9.99";
     const body = url.includes("openrouter")
-      ? { credits: { total: Number(total), used: 0, currency: "USD" } }
+      ? { data: { limit: Number(total), usage: 0, limit_remaining: Number(total) } }
       : {
           is_available: true,
           balance_infos: [{ currency: "USD", total_balance: total, granted_balance: "0", topped_up_balance: total }],

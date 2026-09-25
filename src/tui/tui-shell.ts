@@ -89,6 +89,11 @@ import {
 } from "./inspector-sources";
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
+import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
+import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
+import { isConformCommand, openConform } from "./conform-inspector";
+import { loadConformSetup, runConformForTarget } from "./conform-source";
+import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -145,7 +150,7 @@ import {
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
-import { mountBalancePanel } from "./balance-panel";
+import { formatBalance, mountBalancePanel } from "./balance-panel";
 import type { DetectedProvider } from "../commands/select";
 import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
 import {
@@ -160,6 +165,13 @@ import {
   testProviderConnection,
 } from "../commands/providers";
 import { loadSessionLimits } from "../commands/model-limits";
+import {
+  describeCatalogStatus,
+  formatCatalogAge,
+  loadOrRefreshProviderCatalogFromDetected,
+  loadProviderCatalogCache,
+  type ProviderCatalog,
+} from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
@@ -168,7 +180,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -221,6 +233,7 @@ import {
 import { setAskUserHost } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
   buildSideWorkerPrompt,
@@ -2605,7 +2618,21 @@ function pickConnectedProviderStep(
     let rowBlocks: RowBlock[] = [];
 
     const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
-    const noteOf = (d: DetectedProvider): string => d.note ?? `${d.models.length} model(s)`;
+    // Flow 309 (AC6): decorate each row with the CACHED catalog's status,
+    // balance (when known) and reading age — read once, synchronously, when
+    // this step opens. Additive only: it never changes which providers are
+    // listed (that stays `filterConnectedDetectedProviders`'s live probe,
+    // called by this step's caller) or what `[Test]` does — a provider with
+    // no cache entry yet (never refreshed) just shows its plain note,
+    // unchanged from before this flow.
+    const catalogCache = loadProviderCatalogCache(opts.configDir);
+    const noteOf = (d: DetectedProvider): string => {
+      const base = d.note ?? `${d.models.length} model(s)`;
+      const entry = catalogCache?.providers[d.name];
+      if (entry === undefined) return base;
+      const balanceNote = entry.balance !== undefined ? ` · ${formatBalance(entry.balance)}` : "";
+      return `${base} · ${describeCatalogStatus(entry.status)}${balanceNote} · ${formatCatalogAge(entry.fetchedAt)}`;
+    };
 
     // flow 304 review finding #4: Esc while a Disconnect is armed used to
     // close the WHOLE step, even though the hint says "Esc to cancel" (of
@@ -3204,91 +3231,9 @@ export type PickModelOptions = {
   escLabel?: string;
 };
 
-/** What {@link mountFilterList} renders: `items`, narrowed by a typed filter. */
-interface FilterListSpec<T> {
-  idPrefix: string;
-  items: readonly T[];
-  toOption: (item: T) => { name: string; description: string };
-  /** `query` is already trimmed and lower-cased. */
-  matches: (item: T, query: string) => boolean;
-  /** The placeholder row when `items` itself is empty. */
-  emptyLabel: string;
-  /** Filter-line text while no filter is typed. */
-  idleHint: string;
-  filterHint: (filter: string, shown: number, total: number) => string;
-  showDescription: boolean;
-  width: number | "100%";
-  height: number;
-  /** Enter on a row: the item, or `undefined` on a placeholder row. */
-  onPick: (item: T | undefined) => void;
-}
-
-/**
- * The type-to-filter list both pickers share, in either host (the full-screen
- * overlay or a ModalHost tab body): a filter line over a focused
- * `SelectRenderable`. ↑/↓/Enter stay native to the select; the returned `onKey`
- * edits the filter on printable keys and Backspace. Esc belongs to the host.
- */
-function mountFilterList<T>(
-  otui: OpenTui,
-  r: Renderer,
-  parent: Box,
-  spec: FilterListSpec<T>,
-): { onKey: (key: KeypressEvent) => void } {
-  const filterLine = new otui.TextRenderable(r, { id: `${spec.idPrefix}-filter`, content: "" });
-  parent.add(filterLine);
-  const sel = new otui.SelectRenderable(r, {
-    id: `${spec.idPrefix}-sel`,
-    width: spec.width,
-    showDescription: spec.showDescription,
-    height: spec.height,
-    showScrollIndicator: true,
-    wrapSelection: true,
-    options: [],
-    ...selectThemeColors(getTheme()),
-  });
-  parent.add(sel);
-  sel.focus();
-
-  let filter = "";
-  let shown: readonly T[] = spec.items;
-  const apply = (): void => {
-    const q = filter.trim().toLowerCase();
-    shown = q.length > 0 ? spec.items.filter((item) => spec.matches(item, q)) : spec.items;
-    sel.options =
-      shown.length > 0
-        ? shown.map(spec.toOption)
-        : [{ name: spec.items.length === 0 ? spec.emptyLabel : "(no match)", description: "" }];
-    sel.selectedIndex = 0;
-    filterLine.content = otui.t`${dimChunk(otui, 
-      q.length > 0 ? spec.filterHint(filter, shown.length, spec.items.length) : spec.idleHint,
-    )}`;
-  };
-  apply();
-
-  sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
-    spec.onPick(shown[sel.getSelectedIndex()]);
-  });
-
-  return {
-    onKey: (key) => {
-      if (key.name === "backspace") {
-        filter = filter.slice(0, -1);
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      const ch = key.sequence;
-      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
-        filter += ch;
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-      }
-    },
-  };
-}
+// `FilterListSpec`/`mountFilterList` moved to `./filter-list` (flow 305, see
+// that file's header) — imported at the top of this file now, alongside the
+// rest of this module's imports.
 
 interface SessionPickerOption {
   value: string;
@@ -3825,7 +3770,21 @@ export async function launchTuiAgentShell(opts: {
     // for the rest of this very long function) and assigned inside it.
     let deps: AgentDeps;
     let chrome: ShellChrome;
+    // Flow 309 (AC2): the live provider catalog refresh — starts during THIS
+    // startup loading phase (the spinner names it below) and is never
+    // `await`ed inline, so a hung provider cannot delay the composer taking
+    // input (same non-blocking shape as `resolveFirstRunHelp` further down).
+    // `.catch` turns a genuinely unexpected throw into an empty catalog
+    // rather than an unhandled rejection outliving this function.
+    const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {
+      fetch: globalThis.fetch,
+      env: envWithSavedApiKeys(process.env),
+    }).catch((error: unknown) => {
+      debugEvent("provider-catalog.refresh-failed", { error: error instanceof Error ? error.message : String(error) });
+      return { fetchedAt: new Date().toISOString(), providers: {} } satisfies ProviderCatalog;
+    });
     try {
+      startupIndicator.setStep("checking providers…");
       startupIndicator.setStep("Loading agent tools and MCP servers…");
       deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
       liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
@@ -5464,6 +5423,28 @@ export async function launchTuiAgentShell(opts: {
       // The wordmark would sit under the read-only view it just rendered.
       splash.removeIfShown();
     }
+    // Flow 309 (AC6): a provider that fails at startup is surfaced ONCE, as a
+    // non-blocking notice — never a modal, never something the operator must
+    // dismiss before the composer is usable. `providerCatalogReady` was
+    // already dispatched (background, non-blocking) during the earlier
+    // loading phase; this only reacts once it resolves, whenever that is —
+    // attached here (after `announceStartupNotice` exists) rather than at the
+    // dispatch site, since a fresh cache can resolve on the very next
+    // microtask and `announceStartupNotice` is not safe to reference before
+    // this point in the function.
+    void providerCatalogReady.then((catalog) => {
+      // Same guard as the bus-join callbacks below (`isDestroyed: () =>
+      // destroyed`): this shell may already be torn down by the time the
+      // catalog refresh resolves — a slow/timed-out provider probe racing
+      // Esc/exit — and painting into a destroyed surface is a use-after-free
+      // of whatever `announceStartupNotice`/`splash`/`io` now point at.
+      if (destroyed) return;
+      for (const entry of Object.values(catalog.providers)) {
+        if (entry.status === "auth-failed" || entry.status === "unreachable" || entry.status === "timeout") {
+          announceStartupNotice(`${entry.label ?? entry.name}: ${describeCatalogStatus(entry.status)} — /connect to fix`);
+        }
+      }
+    });
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
 
@@ -5763,7 +5744,13 @@ export async function launchTuiAgentShell(opts: {
 
     paintSessionHeader();
 
-    const inspectorKeys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+    // Widened to the full `KeypressEvent` shape (flow 305): `/routing`'s flat
+    // model picker needs `ctrl`/`meta`/`preventDefault`/`stopPropagation` to
+    // drive `mountFilterList`'s type-to-filter key handling, the same way
+    // `pickModelInTui` already does when given a raw renderer/chrome. Every
+    // existing consumer's narrower `{name, sequence}` handler still type-checks
+    // against this (a handler that reads fewer fields than it is given).
+    const inspectorKeys = { onKeypress: (handler: (key: KeypressEvent) => void) => onKeypress(r, (key) => handler(key)) };
     const inspectorCwd = (): string => opts.session?.cwd ?? liveSession.summary.projectPath;
     const showSessionInfo = (): void => {
       void (async () => {
@@ -5857,6 +5844,41 @@ export async function launchTuiAgentShell(opts: {
           ...inspectorKeys,
         });
       })();
+    };
+    /** Flow 305 (AC4): `/routing` — the category -> model routing table modal. */
+    const showRouting = (): void => {
+      openRouting(otui, chrome, {
+        cwd: inspectorCwd(),
+        renderer: r,
+        ...inspectorKeys,
+      });
+    };
+    /** `/ci` (flow 306, AC12): failed CI runs/jobs of the current branch's PR, each with its triage. */
+    const showCiTriage = (): void => {
+      const cwd = inspectorCwd();
+      openCiTriage(otui, chrome, {
+        cwd,
+        load: loadCiTriageList,
+        // `runCiTriageForItem`'s `spawn`/`fetchFn` params sit before `signal` and
+        // default when omitted — this wrapper keeps the modal's own
+        // `(cwd, item, signal?)` contract without exposing those two.
+        triage: (cwd, item, signal) => runCiTriageForItem(cwd, item, undefined, undefined, signal),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...inspectorKeys,
+      });
+    };
+    /** `/conform` (flow 308, AC8): pick a reference document and a target, then walk its clauses. */
+    const showConform = (): void => {
+      const cwd = inspectorCwd();
+      openConform(otui, chrome, {
+        cwd,
+        loadSetup: loadConformSetup,
+        run: (cwd, refPath, target, signal) => runConformForTarget(cwd, refPath, target, signal),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...inspectorKeys,
+      });
     };
     /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
     const showBus = (): void => {
@@ -7230,6 +7252,10 @@ export async function launchTuiAgentShell(opts: {
           showReview();
           return;
         }
+        if (command.name === ROUTING_COMMAND) {
+          showRouting();
+          return;
+        }
         if (routeOpsCommand(line, false, ops)) {
           return;
         }
@@ -7242,6 +7268,14 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isMcpToolsCommand(command.name)) {
           showTools();
+          return;
+        }
+        if (isCiTriageCommand(command.name)) {
+          showCiTriage();
+          return;
+        }
+        if (isConformCommand(command.name)) {
+          showConform();
           return;
         }
         if (command.name === "/bus") {

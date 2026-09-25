@@ -37,6 +37,12 @@ import {
 } from "../lib/shell-config";
 import { optionValue } from "../lib/args";
 import { confirm as ttyConfirm } from "../lib/prompt";
+import {
+  classifyModelsStatus,
+  formatCatalogAge,
+  updateProviderCatalogEntry,
+  type ProviderCatalogEntry,
+} from "../harness/provider-catalog-cache";
 
 /** A hosted OpenAI-compatible provider offered in the picker. */
 export interface OpenAiCompatProvider {
@@ -315,8 +321,15 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "OPENROUTER_API_KEY",
     models: ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001", "qwen/qwen-2.5-7b-instruct", "meta-llama/llama-3.1-8b-instruct"],
     note: "hosted · 400+ models",
-    // GET /api/v1/credits -> { credits: { total, used, remaining, total_usd, ... } }
-    balancePath: "/api/v1/credits",
+    // GET /v1/key -> { data: { limit, limit_remaining, usage, ... } } (limit is
+    // null when the key has no spending cap — see `fetchProviderBalance`'s
+    // fallback to /v1/credits -> { data: { total_credits, total_usage } }).
+    // Verified live against openrouter.ai (2026-09-25) — the PREVIOUS
+    // `/api/v1/credits` path here 404'd against this `baseUrl` (which already
+    // ends in `/api`, same as `DEFAULT_MODELS_PATH` above), and the previous
+    // parser read `body.credits.{total,used,remaining}`, a shape neither live
+    // endpoint returns (flow 309 review, finding 1).
+    balancePath: "/v1/key",
     balanceKind: "openrouter",
   },
   {
@@ -607,6 +620,75 @@ export async function fetchOpenAiCompatModels(
 }
 
 /**
+ * Largest a `/models` response body may be before it is refused rather than
+ * parsed (flow 309, AC1 — the live catalog reuses this exact fetch and needs
+ * a response-size cap on it). 4 MB is far above any real gateway's model list
+ * (OpenRouter's ~700 KB today, 400+ models) and far below what would matter
+ * for memory.
+ *
+ * Guarded so it only engages against a REAL streamable `Response` (one with
+ * `.headers`/`.body`) — an injected test fake shaped `{ ok, json() }` with
+ * neither falls straight through to the unbounded `res.json()` path exactly
+ * as before this constant existed, so no existing caller's fake needs to grow
+ * a `headers`/`body` it never had.
+ */
+export const MODELS_RESPONSE_BODY_LIMIT_BYTES = 4_000_000;
+
+/**
+ * Parse a `/models` response as JSON, refusing a body over `maxBytes`. Reads
+ * a declared `content-length` first; absent or lower than the truth (chunked
+ * transfer), the stream is read incrementally and abandoned once it crosses
+ * the bound — so an unbounded/compressed body cannot be read to completion
+ * regardless of what its header claimed.
+ */
+async function boundedJsonBody(res: Response, maxBytes: number): Promise<{ ok: true; value: unknown } | { ok: false }> {
+  const headers = (res as { headers?: { get?: (name: string) => string | null } }).headers;
+  const declared = typeof headers?.get === "function" ? headers.get("content-length") : null;
+  if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
+    const body = (res as { body?: ReadableStream<Uint8Array> | null }).body;
+    if (body != null && typeof body.cancel === "function") {
+      await body.cancel().catch(() => {});
+    }
+    return { ok: false };
+  }
+  const body = (res as { body?: ReadableStream<Uint8Array> | null }).body;
+  if (body == null || typeof body.getReader !== "function") {
+    // No streamable body on this Response (an injected fake, or a runtime
+    // without ReadableStream support) — the unbounded fallback every caller
+    // already used before this cap existed.
+    try {
+      return { ok: true, value: await res.json() };
+    } catch {
+      return { ok: false };
+    }
+  }
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return { ok: false };
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
  * Same as {@link fetchOpenAiCompatModels} but reports whether the list came from
  * the live endpoint or the curated fallback (for UI status lines / tests).
  */
@@ -641,7 +723,11 @@ export async function fetchOpenAiCompatModelsDetailed(
       const kind = res.status === 401 || res.status === 403 ? "rejected" : "http";
       return fallback({ kind, status: res.status, ...(detail === undefined ? {} : { detail }) });
     }
-    const body = (await res.json()) as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
+    const bounded = await boundedJsonBody(res, MODELS_RESPONSE_BODY_LIMIT_BYTES);
+    if (!bounded.ok) {
+      return fallback({ kind: "http", status: res.status, detail: "response too large or malformed" });
+    }
+    const body = bounded.value as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
     const ids = Array.isArray(body?.data)
       ? body.data
           .map((m) => {
@@ -747,34 +833,94 @@ function parseDeepSeekBalance(body: unknown): ProviderBalance | undefined {
   return undefined;
 }
 
-function parseOpenRouterBalance(body: unknown): ProviderBalance | undefined {
+/**
+ * Parse `GET /v1/key`'s response: the spending LIMIT configured on the key
+ * actually in use, and how much of it remains. `data.limit` is `null` when
+ * the key has no cap ("unlimited") — there is then no per-key budget to
+ * report, and `undefined` here tells {@link fetchProviderBalance} to fall
+ * back to {@link parseOpenRouterCreditsBalance}.
+ *
+ * Verified live against openrouter.ai (2026-09-25): `{ data: { limit,
+ * limit_remaining, usage, ... } }` — no `credits` wrapper, and no `currency`
+ * field (OpenRouter is always USD). The PREVIOUS parser read
+ * `body.credits.{total,used,remaining}`, which matches neither this nor the
+ * `/v1/credits` shape below — it silently returned `undefined` on every real
+ * response (flow 309 review, finding 1).
+ */
+function parseOpenRouterKeyBalance(body: unknown): ProviderBalance | undefined {
   if (typeof body !== "object" || body === null) {
     return undefined;
   }
-  const credits = (body as { credits?: unknown }).credits;
-  if (typeof credits !== "object" || credits === null) {
+  const data = (body as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) {
     return undefined;
   }
-  const total = Number((credits as { total?: unknown }).total);
-  const used = Number((credits as { used?: unknown }).used);
-  if (!Number.isFinite(total)) {
+  const limit = (data as { limit?: unknown }).limit;
+  if (typeof limit !== "number" || !Number.isFinite(limit)) {
+    // null (unlimited) or absent — no per-key budget to report.
     return undefined;
   }
-  const usedField = Number.isFinite(used) ? { used } : {};
-  const remaining = Number.isFinite(used) ? total - used : undefined;
+  const usage = Number((data as { usage?: unknown }).usage);
+  const limitRemaining = Number((data as { limit_remaining?: unknown }).limit_remaining);
   return {
-    currency: String((credits as { currency?: unknown }).currency ?? "USD"),
-    total,
-    ...usedField,
+    currency: "USD",
+    total: limit,
+    ...(Number.isFinite(usage) ? { used: usage } : {}),
+    ...(Number.isFinite(limitRemaining) ? { remaining: limitRemaining } : {}),
+    exact: true,
+  };
+}
+
+/**
+ * Parse `GET /v1/credits`'s response: the account's total purchased credits
+ * and lifetime usage. Verified live (2026-09-25): `{ data: { total_credits,
+ * total_usage } }`. Used as OpenRouter's balance ONLY when the key has no
+ * spending limit — with no cap, the account's remaining funds ARE what
+ * "balance" means, since the key can spend all of it.
+ */
+function parseOpenRouterCreditsBalance(body: unknown): ProviderBalance | undefined {
+  if (typeof body !== "object" || body === null) {
+    return undefined;
+  }
+  const data = (body as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+  const totalCredits = Number((data as { total_credits?: unknown }).total_credits);
+  if (!Number.isFinite(totalCredits)) {
+    return undefined;
+  }
+  const totalUsage = Number((data as { total_usage?: unknown }).total_usage);
+  const remaining = Number.isFinite(totalUsage) ? totalCredits - totalUsage : undefined;
+  return {
+    currency: "USD",
+    total: totalCredits,
+    ...(Number.isFinite(totalUsage) ? { used: totalUsage } : {}),
     ...(remaining !== undefined ? { remaining } : {}),
     exact: true,
   };
 }
 
 /**
+ * Largest a balance-endpoint response body may be before it is refused
+ * rather than parsed — the same defence {@link MODELS_RESPONSE_BODY_LIMIT_BYTES}
+ * gives `/models` (flow 309 review, finding 5). A real balance payload here
+ * is well under 2 KB (OpenRouter's `/v1/key`/`/v1/credits`, DeepSeek's
+ * `/user/balance`); 1 MB is far above that and far below what would matter
+ * for memory.
+ */
+export const BALANCE_RESPONSE_BODY_LIMIT_BYTES = 1_000_000;
+
+/**
  * Fetch the current balance for a provider that exposes a balance endpoint.
  * Returns `undefined` for providers without one, on network error, or on a
- * non-2xx / malformed response. Never throws.
+ * non-2xx / malformed / oversized response. Never throws.
+ *
+ * OpenRouter is a two-call case (flow 309 review, finding 1): `/v1/key` (the
+ * registry's `balancePath`) is tried first for the key's own spending limit;
+ * only when that key has NO limit (`data.limit: null`) does this fall back
+ * to `/v1/credits` for the account's total funds. Every other `balanceKind`
+ * makes exactly one request, as before.
  */
 export async function fetchProviderBalance(
   fetchFn: typeof fetch,
@@ -785,28 +931,43 @@ export async function fetchProviderBalance(
   if (provider.balancePath === undefined || provider.balanceKind === undefined) {
     return undefined;
   }
-  const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.balancePath}`;
   const timeoutMs = opts?.timeoutMs ?? BALANCE_FETCH_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const init: RequestInit = { signal: controller.signal };
-    if (apiKey !== undefined && apiKey.length > 0) {
-      init.headers = { authorization: `Bearer ${apiKey}` };
-    }
-    const res = await fetchFn(url, init);
-    if (!res.ok) {
+  const fetchBalanceBody = async (balancePath: string): Promise<unknown | undefined> => {
+    const url = `${provider.baseUrl.replace(/\/+$/, "")}${balancePath}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const init: RequestInit = { signal: controller.signal };
+      if (apiKey !== undefined && apiKey.length > 0) {
+        init.headers = { authorization: `Bearer ${apiKey}` };
+      }
+      const res = await fetchFn(url, init);
+      if (!res.ok) {
+        return undefined;
+      }
+      const bounded = await boundedJsonBody(res, BALANCE_RESPONSE_BODY_LIMIT_BYTES);
+      return bounded.ok ? bounded.value : undefined;
+    } catch {
       return undefined;
+    } finally {
+      clearTimeout(timer);
     }
-    const body = (await res.json()) as unknown;
-    return provider.balanceKind === "deepseek"
-      ? parseDeepSeekBalance(body)
-      : parseOpenRouterBalance(body);
-  } catch {
+  };
+
+  const body = await fetchBalanceBody(provider.balancePath);
+  if (body === undefined) {
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
+  if (provider.balanceKind === "deepseek") {
+    return parseDeepSeekBalance(body);
+  }
+  const keyBalance = parseOpenRouterKeyBalance(body);
+  if (keyBalance !== undefined) {
+    return keyBalance;
+  }
+  // The key has no spending limit — fall back to the account's total funds.
+  const creditsBody = await fetchBalanceBody("/v1/credits");
+  return creditsBody === undefined ? undefined : parseOpenRouterCreditsBalance(creditsBody);
 }
 
 /** Resolve the API key for a provider from an env-like record. */
@@ -1072,6 +1233,10 @@ export async function providersCommand(args: string[], deps: ProvidersCommandDep
     runProvidersList(args.slice(1));
     return;
   }
+  if (command === "status") {
+    await runProvidersStatus(args.slice(1), deps);
+    return;
+  }
   if (command === "cross-family") {
     runCrossFamily(args.slice(1));
     return;
@@ -1108,6 +1273,29 @@ async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Pro
   const fetchFn = deps.fetch ?? globalThis.fetch;
   const result = await testProviderConnection(provider, fetchFn, env);
   const label = provider.label ?? provider.name;
+  // Flow 309 (AC3): `providers test`/the `[Test]` row button keep the SAME
+  // on-disk catalog cache `/routing`, `/connect` and `providers status` read
+  // current for THIS one provider, without a full re-refresh of every other
+  // connected provider. `updateProviderCatalogEntry` is itself best-effort
+  // (never throws) — awaited anyway so the write is deterministic rather
+  // than a fire-and-forget task that could outlive a caller's temp dir
+  // (tests) or the process (CLI).
+  const catalogStatus = classifyModelsStatus(result);
+  const apiKeyForBalance = providerApiKey(provider, env) ?? provider.apiKey;
+  const catalogBalance =
+    balanceCapableProvider(name) !== undefined
+      ? await fetchProviderBalance(fetchFn, provider, apiKeyForBalance, { timeoutMs: BALANCE_FETCH_TIMEOUT_MS }).catch(() => undefined)
+      : undefined;
+  const catalogEntry: ProviderCatalogEntry = {
+    name,
+    status: catalogStatus,
+    models: catalogStatus === "ok" ? result.models : [],
+    fallbackModels: [...provider.models],
+    fetchedAt: new Date().toISOString(),
+    ...(provider.label !== undefined ? { label: provider.label } : {}),
+    ...(catalogBalance !== undefined ? { balance: catalogBalance } : {}),
+  };
+  await updateProviderCatalogEntry(catalogEntry, dir);
   if (args.includes("--json")) {
     console.log(
       JSON.stringify(
@@ -1195,6 +1383,68 @@ async function runProvidersRemove(args: string[], deps: ProvidersCommandDeps): P
   console.log(
     `keryx providers remove: "${name}" disconnected (${result.kind}).${sharedNote !== undefined ? ` Note: ${sharedNote}.` : ""}${result.reason !== undefined ? ` ${result.reason}` : ""}`,
   );
+}
+
+/**
+ * `keryx providers status [--json] [--refresh]` (flow 309, AC7): the live
+ * provider catalog — per connected provider, its status, model count and
+ * balance (when known), and the age of that reading. `--refresh` forces a
+ * fresh probe of every connected provider (bypasses the cache's TTL,
+ * mirroring `providers test`'s single-provider probe but for all of them);
+ * without it, a fresh cache answers immediately and only a stale/missing one
+ * triggers a probe (AC3).
+ */
+async function runProvidersStatus(args: string[], deps: ProvidersCommandDeps): Promise<void> {
+  const dir = deps.dir;
+  const env = deps.env ?? envWithOAuthAccess(envWithSavedApiKeys(process.env, dir));
+  const fetchFn = deps.fetch ?? globalThis.fetch;
+  // Dynamic import: `../harness/provider-catalog.ts` imports THIS module
+  // (`fetchOpenAiCompatModelsDetailed`/`fetchProviderBalance`/…) to do the
+  // actual probing — a static import here would be a real circular edge.
+  // `provider-catalog-cache.ts` (statically imported above) has no such
+  // cycle, which is why `classifyModelsStatus`/`updateProviderCatalogEntry`
+  // come from there instead.
+  const { loadOrRefreshProviderCatalog } = await import("../harness/provider-catalog");
+  const catalog = await loadOrRefreshProviderCatalog(
+    { fetch: fetchFn, env, ...(dir !== undefined ? { dir } : {}) },
+    { force: args.includes("--refresh") },
+  );
+  const rows = Object.values(catalog.providers).sort((a, b) => a.name.localeCompare(b.name));
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ fetchedAt: catalog.fetchedAt, providers: rows }, null, 2));
+    return;
+  }
+
+  console.log("# provider catalog");
+  console.log("");
+  if (rows.length === 0) {
+    console.log("none — no provider is connected. Run `keryx providers list` to see what a credential would unlock.");
+    return;
+  }
+  for (const row of rows) {
+    const label = row.label ?? row.name;
+    const modelsNote =
+      row.status === "ok"
+        ? `${row.models.length} model(s)`
+        : row.status === "auth-failed"
+          ? "no models (credential rejected)"
+          : row.fallbackModels.length > 0
+            ? `${row.fallbackModels.length} model(s) (offline list)`
+            : "no models";
+    const balanceNote =
+      row.balance !== undefined ? ` · balance ${formatCatalogBalance(row.balance)}` : "";
+    console.log(`- ${row.name} (${label}): ${row.status} — ${modelsNote}${balanceNote} · fetched ${formatCatalogAge(row.fetchedAt)}`);
+  }
+}
+
+/** `$6.19` / `€12.00` — mirrors `src/tui/balance-panel.ts`'s `formatBalance` for the CLI's own text output (kept separate: that module lives in the TUI's client zone and this is an adapter command). */
+function formatCatalogBalance(balance: ProviderCatalogEntry["balance"]): string {
+  if (balance === undefined) return "—";
+  const amount = balance.remaining ?? balance.total;
+  const symbol =
+    balance.currency === "USD" ? "$" : balance.currency === "EUR" ? "€" : balance.currency === "GBP" ? "£" : `${balance.currency} `;
+  return `${symbol}${amount.toFixed(2)}`;
 }
 
 function runProvidersList(args: string[]): void {
@@ -1335,17 +1585,25 @@ function printProvidersHelp(): void {
 
 Usage:
   keryx providers list [--json]
+  keryx providers status [--json] [--refresh]
   keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
   keryx providers test <name> [--json]
   keryx providers remove <name> [--yes] [--json]
 
 Commands:
   list          Providers this operator has configured, and the family of each
+  status        The live catalog: per connected provider, its status (ok /
+                auth failed / unreachable / timed out / no live listing),
+                model count, balance when known, and how old that reading is.
+                A fresh cache (keryx shell startup, /routing, or /connect
+                already refreshed it) is used immediately; --refresh forces a
+                fresh probe of every connected provider now
   cross-family  Whether review can run on a different model family than authored
                 the change, and the record the round should carry
   test          Run this provider's live model-list probe and report ok/count
                 or the failure reason. Makes ONE network call — unlike list/
-                cross-family, not network-free
+                cross-family, not network-free. Also updates that provider's
+                entry the catalog "status" reads
   remove        Disconnect a provider: remove its saved API key, OAuth grant,
                 or custom-provider entry. Errors on an unknown name (exit 1)
                 before asking anything. Asks for confirmation on a terminal;

@@ -95,6 +95,13 @@ keryx auth login <provider>  # subscription login (device code / OAuth) or API k
 Inside a running session, `/provider` reopens the same add/reconfigure wizard
 and `/connect` switches between providers you already configured.
 
+Once you have more than one provider connected, `keryx routing` (and, inside a
+session, `/routing`) maps a task category — `review`, `subagents`, and a
+catalogue of others — to a specific model, so reviews and subagent spawns can
+run on a different (cheaper, or stronger) model than your main session without
+switching `/model` before every turn. See [the CLI
+reference](docs/docs/cli-reference.md#routing).
+
 ### Your first session
 
 ```bash

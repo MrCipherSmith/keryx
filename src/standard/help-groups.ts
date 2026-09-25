@@ -125,9 +125,21 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "providers",
     group: "Connect a model provider",
-    summary: "Providers this operator has configured, and cross-family review eligibility.",
+    summary: "Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility.",
+  },
+  {
+    kind: "cli",
+    name: "routing",
+    group: "Connect a model provider",
+    summary: "Category -> model routing table: list, set, unset (per-user default; --project for the project layer).",
   },
   { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
+  {
+    kind: "slash",
+    name: "/routing",
+    group: "Connect a model provider",
+    summary: "Route task categories to models — a flat, searchable list across every connected provider.",
+  },
   {
     kind: "slash",
     name: "/search-provider",
@@ -275,6 +287,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/review",
     group: "Managed work",
     summary: "Show project-wide items needing review (proposals, blocked sessions).",
+  },
+  {
+    kind: "slash",
+    name: "/ci",
+    group: "Managed work",
+    summary: "Failed CI runs/jobs of the current branch's PR, each with an advisory triage and its deterministic-signal evidence.",
+  },
+  {
+    kind: "slash",
+    name: "/conform",
+    group: "Managed work",
+    summary: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev.",
   },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {

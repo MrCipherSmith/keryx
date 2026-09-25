@@ -34,6 +34,73 @@ All notable changes to `keryx` are documented here. The format follows
   so a signal sent to a bypassing invocation reaches the real process the
   same way it would without the guard in the way.
 
+## [0.2.163] — 2026-09-25
+
+### Added
+- **A prompting rule for Claude Opus 5.5, loaded only by Claude.** Opus 5.5
+  reasons before every reply, so an instruction telling it to think is spent
+  context that buys nothing and can over-constrain how it breaks the work up.
+  `rules/core/opus-5-5-prompting.mdc` says to delete those instructions and
+  state a completion criterion instead, to give a task its finish line rather
+  than hand-written steps, to name the patterns to avoid instead of directing
+  in the abstract, to keep stopping rules and destructive-command prompts in
+  the entrypoint, to keep long-run state in a file because the early context is
+  summarized away, to verify a subagent's evidence rather than its claim, to
+  read blockers before the summary, and to attach finished artifacts instead of
+  paraphrasing them.
+  - **The rule is Claude-scoped by construction.** It is cited from `CLAUDE.md`
+    only, in a section outside the managed `keryx:index` block, so
+    `keryx rules sync` carries it into `.metaproject/rules/claude-md.md` at
+    high priority and leaves `agents-md.md` untouched — an agent that reads
+    only `AGENTS.md` never loads it. `agent_requires: ["claude"]` records the
+    same restriction in frontmatter, alongside the existing `stack_requires`
+    convention. It is deliberately absent from `.metaproject/index.md`, which
+    every agent reads.
+  - Its Output Contract puts output-format instructions, safety and permission
+    rules, and anything written for non-Claude agents out of scope, so a
+    cleanup pass driven by the rule cannot strip them.
+
+## [0.2.162] — 2026-09-25
+
+The first two pieces of the Jev plan: keryx can send each kind of task to a
+model the operator chose, and it can tell a flaky CI failure from a real
+one. Both designs are in `docs/requirements/keryx-jev-router/` and
+`docs/requirements/keryx-jev-review/`.
+
+### Added
+- **A routing table: each kind of task goes to the model you chose.** The
+  categories are default, review, subagents, quick, coding, planning, docs
+  and unattended; each points at a specific model, a provider's default
+  model, or the session's model. `/routing` edits it from one searchable
+  list of every connected provider's models, with no provider step first,
+  and `keryx routing list|set|unset|trust` does the same from the CLI.
+  A project's `routing.config.json` overrides the user's table, and an
+  explicit choice overrides both. Review and subagents read it now; the
+  other categories can be set and are wired in later releases.
+  - **A project's table takes effect only once you approve it.** A
+    checked-in `routing.config.json` could otherwise decide which model
+    reviews that project's own changes. `keryx routing trust`, or `t` then
+    `y` in `/routing`, shows every entry before recording approval, and any
+    edit to the file voids it. An unapproved table is ignored with a notice,
+    even when part of it fails validation.
+  - **An entry naming a provider or model you have not connected falls
+    through** to the next layer and says so.
+  - A subagent's routed model still passes every existing allowlist, trust
+    and classification gate; a routed review model is labelled routed.
+- **CI failure triage: flaky, infrastructure, or a real regression.**
+  `keryx review ci-triage --run <id>` and `/ci` in the shell read a failed
+  job's log and ask Jev, TypeSafe's structured-decision model, for the
+  probability of each, through OpenRouter. It only advises - it cannot
+  rerun, cancel or write a status. It is off until a project enables
+  `review.jev.ci_triage`, because the log leaves the machine; the excerpt,
+  the test name and the job name are redacted first, a request ends after
+  30 seconds, and a malformed answer is an error rather than a silent zero.
+
+### Notes
+- Jev's accuracy figures are the vendor's own. Its answers to a multi-option
+  question carry no documented per-option probabilities, so triage asks one
+  yes/no question per outcome.
+
 ## [0.2.161] — 2026-09-23
 
 A provider can be tested and disconnected from where it was connected.

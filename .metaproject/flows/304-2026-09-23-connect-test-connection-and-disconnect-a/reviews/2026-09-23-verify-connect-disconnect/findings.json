@@ -1,0 +1,226 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "major",
+    "problem": "Disconnecting a provider authenticated via a saved OAuth grant removed the grant from auth.json but left the provider's resolved credential sitting in process.env for the rest of the running process, so a later in-process read of that env var (or a later /connect re-listing) could still observe a token that had just been disconnected.",
+    "impact": "An operator who disconnected an OAuth-backed provider believing the credential was gone would have it silently keep working for anything reading process.env directly in the same process, and a later /connect listing built from the live environment could still report the provider as connected.",
+    "suggested_fix": "On the OAuth-grant branch of the remove path, delete the provider's resolved env var key from process.env (via a shared oauthEnvKeyFor(name) lookup) in addition to removing the grant from auth.json.",
+    "evidence": "Pre-fix, the OAuth-grant branch of the remove path called only logoutProvider (the auth.json grant delete) with no corresponding process.env delete, unlike the saved-api-key branch, which already cleared its own env-shaped state.",
+    "confidence": "high",
+    "file": "src/commands/providers.ts",
+    "line": null,
+    "quote": "oauthEnvKeyFor",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/providers.ts runProvidersRemove / disconnectProvider (OAuth-grant branch)",
+        "src/lib/oauth/grants.ts oauthEnvKeyFor"
+      ],
+      "enumeration_method": "grants.ts exports exactly one function that maps a provider name to the env var key its OAuth grant resolves through (oauthEnvKeyFor); the provider-remove path in providers.ts is the only site that deletes state for a disconnected OAuth provider - walked it end to end and found the one missing process.env delete."
+    },
+    "global_id": "2026-09-23-verify-connect-disconnect#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At commit e04715a20941f6d527a315be7bcce215670b9648 (PR #673 squash merge; tree-identical to head 5d203ec9925f83b60cb93441e09f0f01e871f882), src/commands/providers.ts:920-926 resolves envKey = oauthEnvKeyFor(name) on the OAuth-grant branch and deletes it from process.env before returning, in addition to calling logoutProvider(name, dir). src/commands/providers.disconnect.test.ts exercises the oauth-grant removal path and passes (32 pass / 0 fail in that file, run against e04715a20941f6d527a315be7bcce215670b9648's tree). The finding does not reproduce.",
+      "verifier": "flow-304 completion verifier (keryx-prov worktree, independent code read + test run)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "OAuth env-key clear added at src/commands/providers.ts:924 (oauthEnvKeyFor) in commit e04715a20941f6d527a315be7bcce215670b9648; merged to main via PR #673."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "major",
+    "problem": "zai and zai-coding resolve their credential from the same ZAI_API_KEY saved key. Disconnecting either one removed that single saved key, which silently disconnected the OTHER provider too, with no warning to the operator before or after the action.",
+    "impact": "An operator disconnecting zai because they no longer wanted THAT provider would also lose zai-coding without being told, and would only discover it was gone the next time they tried to use it - a surprising, silent side effect of an action that named only one provider.",
+    "suggested_fix": "Classify the credential BEFORE confirming, compute every other provider that resolves through the same env key (sharedWith), name them in the confirmation prompt, and name them again in the result line and the --json output.",
+    "evidence": "Pre-fix, the remove path resolved and deleted the named provider's credential with no lookup of other providers sharing the same env key, and neither the confirmation prompt nor the result mentioned a second provider being affected.",
+    "confidence": "high",
+    "file": "src/commands/providers.ts",
+    "line": 1359,
+    "quote": "sharedWith",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/providers.ts sharedCredentialWarning / classifyProviderConnection",
+        "src/tui/tui-shell.ts onDisconnected handler (row-button confirm/result path)"
+      ],
+      "enumeration_method": "enumerated every built-in provider pair declared against the same saved-key/env-key in the provider registry (zai/zai-coding is the one pair sharing ZAI_API_KEY today), then traced the CLI remove path and the TUI arm/confirm/result path - both now read and render sharedWith computed from that same classification, so the class of call sites (CLI result, CLI --json, TUI confirmation, TUI result) is fully covered."
+    },
+    "global_id": "2026-09-23-verify-connect-disconnect#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At commit e04715a20941f6d527a315be7bcce215670b9648, src/commands/providers.ts:867-870 defines sharedCredentialWarning(sharedWith, envKey) and classifyProviderConnection computes sharedWith before the confirmation is asked; the CLI result line, the --json output, and src/tui/tui-shell.ts's onDisconnected(name, sharedWith) callback (line 530) all read and render it. src/commands/providers.disconnect.test.ts and src/tui/connect-provider-buttons.test.ts (describe/test 'the result also reports sharedWith to the operator', line 431) both pass. Running `keryx providers remove zai` locally against a zai/zai-coding fixture prints '... this also disconnects zai-coding (same ZAI_API_KEY)'. The finding does not reproduce.",
+      "verifier": "flow-304 completion verifier (keryx-prov worktree, independent code read + test run)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "sharedCredentialWarning/sharedWith surfaced in CLI+TUI in commit e04715a20941f6d527a315be7bcce215670b9648; merged to main via PR #673."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "major",
+    "problem": "keryx providers remove <unknown-name> printed a success-shaped message and exited 0 for a provider name that did not exist, instead of reporting the name as unrecognised.",
+    "impact": "A typo'd or stale provider name in a script or an operator's shell history would report success without touching anything, so a caller checking only the exit code (or a human reading only the first line) would believe a disconnect happened when nothing did - the opposite of keryx providers test, which already validated the name first.",
+    "suggested_fix": "Validate the name the same way providers test does - providerByName(name, dir) === undefined - before doing anything else, including before asking for confirmation, and exit 1 with Unknown provider: <name> (or the JSON equivalent).",
+    "evidence": "Pre-fix, runProvidersRemove had no name-validation step ahead of the classify/confirm/remove path, unlike runProvidersTest, which already refused an unknown name with Unknown provider: <name> and process.exitCode = 1.",
+    "confidence": "high",
+    "file": "src/commands/providers.ts",
+    "line": null,
+    "quote": "providerByName",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/providers.ts runProvidersRemove (name validation, now first)",
+        "src/commands/providers.ts runProvidersTest (the existing sibling check the fix mirrors)"
+      ],
+      "enumeration_method": "walked every entry point that accepts a free-typed provider name for a destructive action: providers remove <name> is the only one (the /connect row Disconnect button cannot name an unknown provider by construction, since it only ever fires on a listed row) - the CLI path was the sole site missing the validation its sibling providers test already had."
+    },
+    "global_id": "2026-09-23-verify-connect-disconnect#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At commit e04715a20941f6d527a315be7bcce215670b9648, src/commands/providers.ts:1143-1151 checks providerByName(name, dir) === undefined FIRST in runProvidersRemove, before classification or confirmation, prints 'Unknown provider: <name>' (or the --json equivalent), and sets process.exitCode = 1. src/commands/providers.disconnect.test.ts:376 asserts errors.join('\\n') contains 'Unknown provider: not-a-real-provider' and passes. The finding does not reproduce.",
+      "verifier": "flow-304 completion verifier (keryx-prov worktree, independent code read + test run)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "providerByName validation moved first in runProvidersRemove in commit e04715a20941f6d527a315be7bcce215670b9648; merged to main via PR #673."
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "minor",
+    "problem": "Pressing Esc while a row's Disconnect action was armed (awaiting the disconnect confirmation) closed the WHOLE /connect picker in one keystroke, rather than only cancelling the arm - despite the on-screen hint reading Esc to cancel.",
+    "impact": "An operator who armed Disconnect by mistake and pressed Esc to back out, matching the hint text on screen, would instead be dropped out of /connect entirely, losing their place in the row list for no reason connected to what the hint promised.",
+    "suggested_fix": "Give Esc a first job: when a row's action is armed, the first Esc clears the arm and keeps the picker open; only a SECOND Esc (with nothing armed) leaves /connect, matching the queue dock's own escape-guard convention.",
+    "evidence": "Pre-fix, the picker's Esc handler treated every Esc as leave the picker, including while a row's Disconnect confirmation was armed, so the first Esc after arming closed /connect instead of clearing the arm the hint text described.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "armed",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-verify-connect-disconnect#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At commit e04715a20941f6d527a315be7bcce215670b9648, src/tui/connect-provider-buttons.test.ts:180-192 and :194-220 (both tagged 'flow 304 review finding #4') assert that a FIRST Esc while Disconnect is armed clears only the arm (the '[Disconnect]' row and the rest of the picker stay open, and the saved credential is untouched) and a SECOND Esc leaves the picker. Both tests pass (14 pass / 0 fail in that file). The finding does not reproduce.",
+      "verifier": "flow-304 completion verifier (keryx-prov worktree, independent code read + test run)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Esc escape-guard clearing only the arm added in commit e04715a20941f6d527a315be7bcce215670b9648; merged to main via PR #673."
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "minor",
+    "problem": "keryx --help (and bare keryx) did not list the new providers test/providers remove subcommands anywhere in the printed usage, even though they were real, working commands.",
+    "impact": "An operator reading keryx --help for the CLI surface of the new feature would not learn it existed from the command that exists specifically to tell them the command surface, and would only find it by reading source or the docs site.",
+    "suggested_fix": "Add keryx providers test <name> [--json] and keryx providers remove <name> [--yes] [--json] to the static USAGE_BODY string printHelp prints, and extend the flow-303 pin (the test asserting every subcommand a user should discover is present) to cover them.",
+    "evidence": "Pre-fix, USAGE_BODY listed providers list and providers cross-family but not providers test/providers remove, despite both being registered, working CLI commands.",
+    "confidence": "high",
+    "file": "src/cli.ts",
+    "line": null,
+    "quote": "USAGE_BODY",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-verify-connect-disconnect#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At commit e04715a20941f6d527a315be7bcce215670b9648, src/cli.ts:232-233 lists 'keryx providers test <name> [--json]' and 'keryx providers remove <name> [--yes] [--json]' inside USAGE_BODY. src/cli.test.ts:88-95 asserts both lines are present (comment: 'Flow 303: one in USAGE_BODY, one in the Commands: summary table'), and src/cli-reference-coverage.test.ts cross-checks USAGE_BODY against docs/docs/cli-reference.md. Both files pass (22 pass / 0 fail and part of a 32-pass run respectively). The finding does not reproduce.",
+      "verifier": "flow-304 completion verifier (keryx-prov worktree, independent code read + test run)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "providers test/remove added to USAGE_BODY and cli-reference coverage in commit e04715a20941f6d527a315be7bcce215670b9648; merged to main via PR #673."
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "minor",
+    "problem": "The credential files a disconnect writes to (auth.json via the shell-config path, and llm-providers.json) were written non-atomically, so a process interrupted mid-write (crash, kill, power loss) could leave a torn, partially-written file behind.",
+    "impact": "A torn auth.json or llm-providers.json after an interrupted disconnect could leave the operator's saved credentials in an unparseable or partially-deleted state, turning a routine disconnect into a corrupted config file that has to be repaired or restored by hand.",
+    "suggested_fix": "Route every write on these two files through the same owner-only ATOMIC write helper (writeOwnerOnlyFileAtomic: write to a temp file in the same directory, then rename) that other credential-bearing files in the config dir already use.",
+    "evidence": "Pre-fix, the provider-config and shell-config write paths wrote credential JSON directly rather than through an atomic temp-file-plus-rename helper, unlike other credential files in the same config directory (e.g. mcp-servers trust/store state) which already used one.",
+    "confidence": "medium",
+    "file": "src/lib/provider-config.ts",
+    "line": null,
+    "quote": "writeOwnerOnlyFileAtomic",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-verify-connect-disconnect#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At commit e04715a20941f6d527a315be7bcce215670b9648, src/lib/config-dir.ts:416 defines writeOwnerOnlyFileAtomic (temp-file-then-rename); src/lib/provider-config.ts:471 and :496 and src/lib/shell-config.ts:169 route their credential writes through it (imported at provider-config.ts:12 and shell-config.ts:12). src/lib/provider-config.test.ts (24 pass / 0 fail) and src/lib/shell-config.test.ts (18 pass / 0 fail) round-trip writes and reads through these paths and pass. The finding does not reproduce.",
+      "verifier": "flow-304 completion verifier (keryx-prov worktree, independent code read + test run)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "writeOwnerOnlyFileAtomic routed through provider-config.ts and shell-config.ts in commit e04715a20941f6d527a315be7bcce215670b9648; merged to main via PR #673."
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "minor",
+    "problem": "AC7 (disconnecting the provider the current session is using neither switches provider nor interrupts a turn, prints a one-line notice, and removes a keryx-saved key from THIS process's environment) was proven only by a source-text audit, with no behavioural test exercising the actual running-session path.",
+    "impact": "A source-text audit shows the code LOOKS right; it does not prove that disconnecting the provider a live session is using actually leaves the running turn alone, actually prints the notice, or actually clears the process env - any of which could regress silently with no test to catch it.",
+    "suggested_fix": "Add a behavioural test that starts a session against a provider, disconnects that same provider mid-session, and asserts: the running turn is not interrupted or switched, exactly one notice line naming the provider is printed, and the saved key is gone from process.env for that process.",
+    "evidence": "Pre-fix, AC7 had no dedicated test file; the claim that it held was supported only by reading the source, which is the class of unverified claim this flow's own review process exists to close.",
+    "confidence": "medium",
+    "file": "src/harness/provider/make-provider-disconnect.test.ts",
+    "line": null,
+    "quote": "AC7",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-23-verify-connect-disconnect#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At commit e04715a20941f6d527a315be7bcce215670b9648, src/harness/provider/make-provider-disconnect.test.ts exists as a dedicated behavioural test (requestId/parentRunId 'make-provider-disconnect-ac7') exercising AC7 end to end. Run directly: 1 pass / 0 fail, 6 expect() calls. The finding does not reproduce.",
+      "verifier": "flow-304 completion verifier (keryx-prov worktree, independent code read + test run)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "make-provider-disconnect.test.ts added for AC7 in commit e04715a20941f6d527a315be7bcce215670b9648; merged to main via PR #673."
+    }
+  }
+]

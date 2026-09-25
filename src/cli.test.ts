@@ -141,6 +141,24 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx learn graduate [--domain <d>] | graduate apply <proposal-id>\n",
     "  keryx learn prune [--dry-run] [--json]\n",
     "  learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune\n",
+    // Flow 309: `keryx providers status` — the live provider catalog (model
+    // list + balance per connected provider, `/routing`'s picker and
+    // `/connect` now read the same cache). A subcommand of an existing verb,
+    // so USAGE_BODY only — same shape as flow 304's `test`/`remove` above.
+    "  keryx providers status [--json] [--refresh]\n",
+    // Flow 305: the routing table (category -> model), `keryx routing`, plus
+    // its summary row — a brand-new verb, so both a USAGE_BODY block and a
+    // Commands: summary row were added (mirrors flow 303's `help`, not flow
+    // 304's `providers test`/`remove`, which were subcommands of an existing
+    // verb and needed only the USAGE_BODY lines).
+    "  keryx routing list [--json]\n",
+    "  keryx routing set <category> <provider>/<model> [--user|--project]\n",
+    "  keryx routing set <category> <provider> [--user|--project]\n",
+    "  keryx routing unset <category> [--user|--project]\n",
+    // Flow 305 review finding (AC11): `keryx routing trust` — approve a
+    // project routing.config.json's current content.
+    "  keryx routing trust\n",
+    "  routing   Category -> model routing table: list, set, unset (per-user default; --project for the project layer)\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

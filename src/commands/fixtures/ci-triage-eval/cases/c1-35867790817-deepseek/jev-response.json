@@ -1,0 +1,10 @@
+{
+  "id": "eval-c1",
+  "model": "jev-1.13",
+  "answers": {
+    "flaky": { "type": "noul", "noul": 0.35 },
+    "infra": { "type": "noul", "noul": 0.2 },
+    "real-regression": { "type": "noul", "noul": 0.45 }
+  },
+  "usage": { "input_tokens": 900, "output_tokens": 20, "cost": 0.000012 }
+}
