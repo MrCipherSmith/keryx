@@ -1,0 +1,367 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "the prompt gave both methods default @Transactional propagation, under which subtle_wrong's \"nothing to fix\" answer was essentially correct.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/java-kotlin-spring/skills/java-kotlin-spring-implementation/evals.json",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/java-kotlin-spring/skills/java-kotlin-spring-implementation/evals.json#transactional-self-invocation"
+      ],
+      "enumeration_method": "restated verbatim from 2026-09-25-ingest-main, via 2026-09-25-ingest-main-r05"
+    },
+    "global_id": "2026-09-25-ingest-main#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit c0ef2ec6: java-kotlin-spring-implementation#transactional-self-invocation rewritten to a Propagation.REQUIRES_NEW premise; subtle_wrong now genuinely wrong under Spring's proxy-bypass self-invocation semantics. Re-read the current file at c0ef2ec6 and confirm no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c0ef2ec6"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "subtle_wrong described the standard, legitimate post-rollout column-drop pattern.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/django/skills/django-migrate/evals.json",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/django/skills/django-migrate/evals.json#stage-destructive-column-drop"
+      ],
+      "enumeration_method": "restated verbatim from 2026-09-25-ingest-main, via 2026-09-25-ingest-main-r05"
+    },
+    "global_id": "2026-09-25-ingest-main#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit fa3bedc6 (refined further by commit 06650f3f): django-migrate#stage-destructive-column-drop's subtle_wrong and rubric rewritten to a genuinely unsafe pipeline-order-only premise, with the rubric/fail_criteria conflict from the first pass also closed. Re-read the current file and confirm no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit fa3bedc6, refined in commit 06650f3f"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "detectionMarkers included bare java/kotlin tags, firing on every kotlin-android project too.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/java-kotlin-spring/pack.json",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/java-kotlin-spring/pack.json#detectionMarkers",
+        "src/gdskills/bundled/install-manifest.json#components.framework:java-kotlin-spring.detectionMarkers"
+      ],
+      "enumeration_method": "restated verbatim from 2026-09-25-ingest-main, via 2026-09-25-ingest-main-r05"
+    },
+    "global_id": "2026-09-25-ingest-main#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 2d0c3158: java-kotlin-spring/pack.json and install-manifest.json both read detectionMarkers: [\"spring-boot\",\"spring\"], no bare java/kotlin marker remains. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 2d0c3158"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "worked examples reproduced their own pack's eval scenario content near-verbatim.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "java-kotlin-spring-code-review/SKILL.md",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/java-kotlin-spring/skills/java-kotlin-spring-code-review/SKILL.md",
+        "src/gdskills/bundled/stacks/java-kotlin-spring/skills/java-kotlin-spring-implementation/SKILL.md",
+        "src/gdskills/bundled/stacks/java-kotlin-spring/skills/java-kotlin-spring-migrate/SKILL.md",
+        "src/gdskills/bundled/stacks/fastapi/skills/fastapi-build-fix/SKILL.md",
+        "src/gdskills/bundled/stacks/django/skills/django-testing/SKILL.md"
+      ],
+      "enumeration_method": "restated verbatim from 2026-09-25-ingest-main, via 2026-09-25-ingest-main-r05"
+    },
+    "global_id": "2026-09-25-ingest-main#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commits c0ef2ec6, b67d6406, fa3bedc6, and e2c9c61c: all 5 named SKILL.md files now use worked examples independent of their own pack's evals.json identifiers; the fastapi-build-fix residual (tracked as F-016) is fixed in e2c9c61c. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commits c0ef2ec6, b67d6406, fa3bedc6, e2c9c61c"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "adding @field_validator to a class-Config-only model is a deprecation warning in Pydantic v2, not an error.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/fastapi/skills/fastapi-build-fix/evals.json",
+    "global_id": "2026-09-25-ingest-main#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit b67d6406: pydantic-mismatch-not-any's premise corrected to the genuinely-erroring class Config + model_config case, verified against Pydantic v2's real PydanticUserError behavior. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit b67d6406"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "clippy::needless_clone does not exist as a real lint.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/rust/skills/rust-build-fix/SKILL.md",
+    "global_id": "2026-09-25-ingest-main#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 9aebce7b: needless_clone replaced with the real clippy::redundant_clone lint, nursery/allow-by-default status stated accurately. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 9aebce7b"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "the two skills' descriptions pointed a Django major-version-upgrade request at each other in a loop.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/django/skills/django-implementation/SKILL.md",
+    "global_id": "2026-09-25-ingest-main#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit fa3bedc6: django-implementation and django-migrate descriptions now agree on a single owner for Django major-version upgrades, no loop. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit fa3bedc6"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "subtle_wrong used prefetch_related on the correct relation, which passes the stated fail_criteria.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/django/skills/django-implementation/evals.json",
+    "global_id": "2026-09-25-ingest-main#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit fa3bedc6 (refined further by commit 06650f3f): select-related-n1's subtle_wrong now targets the wrong relation confidently, genuinely failing the existing fail_criteria without self-diagnosing. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit fa3bedc6, refined in commit 06650f3f"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "no c-cpp near-miss negative existed for the cargo-vs-CMake/C++ collision; one positive trigger read awkwardly.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/rust/skills/rust-build-fix/evals.json",
+    "global_id": "2026-09-25-ingest-main#F-009",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 9aebce7b (refined further by commit 16d3e549): c-cpp near-miss negatives added to rust-build-fix/rust-implementation matching c-cpp's own real triggers, awkward positive trigger reworded, and the CMake negative's give-away clause later trimmed. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 9aebce7b, refined in commit 16d3e549"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "@MockBean is deprecated since Spring Boot 3.4 in favor of @MockitoBean.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/java-kotlin-spring/skills/java-kotlin-spring-testing/SKILL.md",
+    "global_id": "2026-09-25-ingest-main#F-010",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit c0ef2ec6: java-kotlin-spring-testing SKILL.md, rules/testing.mdc, and the narrowest-test-slice eval all consistently recommend @MockitoBean over the deprecated @MockBean. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c0ef2ec6"
+    }
+  },
+  {
+    "id": "F-016",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "the round-1 rewrite kept the exact pydantic-mismatch-not-any scenario, now sharing the NotificationSettings identifier too.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/fastapi/skills/fastapi-build-fix/SKILL.md",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/fastapi/skills/fastapi-build-fix/SKILL.md"
+      ],
+      "enumeration_method": "restated verbatim from 2026-09-25-ingest-main-r03, via 2026-09-25-ingest-main-r05"
+    },
+    "global_id": "2026-09-25-ingest-main-r03#F-016",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit e2c9c61c: fastapi-build-fix's Step 5 worked example replaced with a router-mounted-on-the-wrong-variable failure sharing no identifier with either scenario in this pack's evals.json. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit e2c9c61c"
+    }
+  },
+  {
+    "id": "F-017",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "subtle_wrong's own text named its mistake instead of presenting it with confidence.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/django/skills/django-implementation/evals.json",
+    "global_id": "2026-09-25-ingest-main-r03#F-017",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 06650f3f: select-related-n1's subtle_wrong rewritten to assert the wrong-relation fix confidently, no longer self-diagnosing its own error. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 06650f3f"
+    }
+  },
+  {
+    "id": "F-018",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "the rubric's permissive branch conflicted with fail_criteria's unconditional rejection.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/django/skills/django-migrate/evals.json",
+    "global_id": "2026-09-25-ingest-main-r03#F-018",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 06650f3f: stage-destructive-column-drop's rubric rewritten to require the separate release unconditionally, now consistent with fail_criteria. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 06650f3f"
+    }
+  },
+  {
+    "id": "F-019",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "the renamed ArticleDetailView still sat under a billing/tests/ path.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/django/skills/django-testing/SKILL.md",
+    "global_id": "2026-09-25-ingest-main-r03#F-019",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 06650f3f: django-testing's worked example path changed to blog/tests/test_views.py, coherent with the renamed ArticleDetailView. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 06650f3f"
+    }
+  },
+  {
+    "id": "F-020",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "the near-miss negative named the language distinction outright.",
+    "impact": "not recorded: derived from a markdown review report, which carried no impact field",
+    "suggested_fix": "not recorded: derived from a markdown review report, which carried no suggested_fix field",
+    "evidence": "not recorded: derived from a markdown review report, which carried no evidence field",
+    "confidence": "low",
+    "file": "src/gdskills/bundled/stacks/rust/skills/rust-build-fix/evals.json",
+    "global_id": "2026-09-25-ingest-main-r03#F-020",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 16d3e549: rust-build-fix's CMake near-miss negative trimmed to remove the trailing give-away clause. Confirmed no longer reproduces (also present at PR head a6164669e03c3f32f21b69a9ec0d7a6bc7cef560).",
+      "verifier": "review-round-2-opus"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 16d3e549"
+    }
+  }
+]
