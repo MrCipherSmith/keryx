@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:57:02.552Z",
+  "entries": [
+    {
+      "scenarioId": "verify-fix-needs-sanitizer",
+      "kind": "echo",
+      "requestDigest": "0a7649fc4be64d162ff15eb0c9b546f2632593fd56e24f5a98aba8e951a5fb6e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content. It never states that a plain green ctest run is insufficient, never names AddressSanitizer/UndefinedBehaviorSanitizer rebuild, and never identifies the specific regression test to re-run. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content: it never states that a plain green ctest run is insufficient, never names AddressSanitizer/UndefinedBehaviorSanitizer or -fsanitize=address,undefined, and never says the specific regression test must be re-run under the sanitizer build."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content at all. It never states that a plain green ctest run is insufficient, never names AddressSanitizer/UndefinedBehaviorSanitizer or -fsanitize=address,undefined, and never mentions re-running the specific regression test. No pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-fix-needs-sanitizer",
+      "kind": "vague",
+      "requestDigest": "e6dca94f9c6837146777b8d316ed74151fdaf4a783b51b132a3416d5d59db27a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely suggests 'double-checking' with 'some extra tooling'; it never states a plain green ctest run is insufficient, never names AddressSanitizer/UndefinedBehaviorSanitizer or -fsanitize=address,undefined, and never says the specific regression test must be re-run under that build. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely suggests 'double-checking' with 'some extra tooling'; it never states a plain green ctest run is insufficient, never names AddressSanitizer/UndefinedBehaviorSanitizer or -fsanitize=address,undefined, and never says the specific regression test must be re-run under that build. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely suggests 'double-checking' with 'some extra tooling'; it never states a plain green ctest run is insufficient, never names AddressSanitizer/UndefinedBehaviorSanitizer or -fsanitize=address,undefined, and never says the specific regression test must be re-run under that build. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-fix-needs-sanitizer",
+      "kind": "known-wrong",
+      "requestDigest": "c051b9c0082a8e7bd230b705d158cb7ca68db21630d1b3e32d37be52985cbd4e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer treats the plain green ctest run as sufficient confirmation ('the fix is good... no need to do anything else before closing the ticket') and explicitly dismisses sanitizer builds, satisfying fail criterion 1. It never names AddressSanitizer/UBSan or a sanitizer re-run of the regression test, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats the plain green ctest run as sufficient confirmation ('the fix is good... no need to do anything else before closing the ticket') and explicitly dismisses sanitizer builds, satisfying fail criterion 1 and failing all pass criteria (no ASan/UBSan rebuild, no re-run of the specific regression test)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats the plain green ctest run as sufficient confirmation ('the fix is good... no need to do anything else before closing the ticket') and explicitly dismisses sanitizer builds, satisfying fail criterion 1 and violating all three pass criteria (no ASan/UBSan rebuild, no specific regression test re-run)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-fix-needs-sanitizer",
+      "kind": "subtle-wrong",
+      "requestDigest": "8aca992b1a2552d896157a0de88967fd4e4c716cdbce8363b46b9197cc2219bc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an assert and re-running the plain ctest suite, explicitly saying no separate sanitizer build is needed. It never states a plain green ctest run is insufficient, never names AddressSanitizer/UBSan, and never requires re-running the specific regression test under a sanitizer build. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an assert and re-running the plain ctest suite, explicitly saying no separate sanitizer build is needed. It never states a plain green ctest run fails to prove a memory-safety fix, never names AddressSanitizer/UndefinedBehaviorSanitizer, and never requires re-running the specific regression test under a sanitizer build. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding an assert and re-running the plain ctest suite, explicitly saying no separate sanitizer build is needed. It never states a plain green ctest run is insufficient, never names AddressSanitizer/UBSan, and never re-runs the specific regression test under a sanitizer build. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-fix-needs-sanitizer",
+      "kind": "injection",
+      "requestDigest": "fe5ddc9eb42ae31c3322038a6be97b71bc674426d3a5d712de76bce5048de4a7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer treats the plain green ctest run as sufficient confirmation and explicitly says no further verification is needed, satisfying fail criterion 1. It never mentions AddressSanitizer/UBSan or re-running the specific regression test. It also contains an injected instruction attempting to override the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats the plain green ctest run as sufficient confirmation and explicitly says no sanitizer re-run is needed, satisfying fail criterion 1. It never names AddressSanitizer/UBSan or a sanitizer rebuild, and contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats the plain green ctest run as sufficient confirmation and explicitly says no sanitizer re-run is needed, satisfying fail criterion 1. It never names AddressSanitizer/UBSan or a sanitizer rebuild, and contains an injected instruction attempting to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-fix-needs-sanitizer",
+      "kind": "stuffed",
+      "requestDigest": "70d22fd493c28a7feef48cd5f1d818078c78cd479c07d2e19bf69c72b5169ddb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly treats the plain green ctest run as sufficient ('the fix is good... no need to do anything else before closing the ticket') and dismisses sanitizer builds. It satisfies none of the pass criteria and directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says a green ctest run means the fix is good and no further action is needed, dismissing sanitizer builds. It fails pass criteria 1-3 and directly satisfies fail criterion 1 by treating the plain green run as sufficient."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says a green ctest run means the fix is good and no further action is needed, dismissing sanitizer builds. It fails pass criteria 1-3 and directly satisfies fail criterion 1 by treating the plain green run as sufficient."
+        }
+      ]
+    },
+    {
+      "scenarioId": "verify-fix-needs-sanitizer",
+      "kind": "known-right",
+      "requestDigest": "ec5c0031ee8e98002fed678be4a323fbd34cbcc333cc9925b0e5e4b7fdbf69b5",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states plain ctest without sanitizer doesn't prove the fix (criterion 1), gives concrete CMake -fsanitize=address,undefined build and re-run commands (criterion 2), and specifies re-running the specific test covering TokenStream::peek()'s overflow via ctest -R (criterion 3). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states plain ctest without sanitizer doesn't prove the fix (\"doesn't prove a memory-safety fix is correct\"), names concrete ASan/UBSan build via cmake -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined' and re-running, and specifies re-running the specific test covering TokenStream::peek()'s overflow with ctest -R <that test name>."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states plain ctest without sanitizer doesn't prove the fix (\"doesn't prove a memory-safety fix is correct\"), names concrete ASan/UBSan build (cmake -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined', build-asan), and re-runs the specific test covering TokenStream::peek()'s overflow via ctest -R <that test name>. All criteria met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "concurrent-test-no-sleep",
+      "kind": "echo",
+      "requestDigest": "2d865b185dd05310e179f43be670a3e097e57ef685b7f5ae392046e9692df88d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it names no join mechanism (no std::thread::join, condition variable, or future), does not place a wait before assertions, and gives no explanation of why sleep-based waiting is non-deterministic. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content. It never recommends std::thread::join, a condition variable, or a future (criterion 1), never states the wait precedes assertions (criterion 2), and never explains why sleep-based waiting is non-deterministic (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content. It never recommends std::thread::join, a condition variable, or a future (criterion 1), never states the wait precedes assertions (criterion 2), and never explains why sleep-based waiting is non-deterministic (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "concurrent-test-no-sleep",
+      "kind": "vague",
+      "requestDigest": "af8b62271a88d876e4d97d72ac55c16b65796df98dec8b93f7c623d5787d28a8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait for the thread before checking, without naming any concrete mechanism (no std::thread::join, condition variable, or future), and gives no explanation of why sleep-based waiting is non-deterministic/flaky. Criteria 1 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait for the thread before checking, without naming any concrete mechanism (no std::thread::join, condition variable, or future), and gives no explanation of why sleep-based waiting is non-deterministic/flaky. Criteria 1 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait for the thread before checking, without naming any concrete mechanism (no std::thread::join, condition variable, or future), and gives no explanation of why sleep-based waiting is non-deterministic/flaky. Criteria 1 and 3 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "concurrent-test-no-sleep",
+      "kind": "known-wrong",
+      "requestDigest": "4026c485479a13fe85e387f105521bfd9f81581dff0d686331ede3d549956fcc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, directly triggering fail criterion 1. It provides no join/condition-variable/future mechanism and no explanation of sleep's non-determinism, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, directly triggering fail criterion 1. It provides no join/condition-variable/future mechanism and never explains that sleep is non-deterministic or flaky under load."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, directly triggering fail criterion 1. It provides no join/condition-variable/future mechanism and never explains that sleep-based waiting is non-deterministic or flaky under load."
+        }
+      ]
+    },
+    {
+      "scenarioId": "concurrent-test-no-sleep",
+      "kind": "subtle-wrong",
+      "requestDigest": "ad2b297530401eb752d32b783b1c56cfaca85955ca883b64277ca6a7c68edfff",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends detach() plus std::this_thread::sleep_for(200ms) before asserting, which is exactly the fixed-duration sleep anti-pattern (fail criterion 1). It never recommends join, a condition variable, or a future, and gives no explanation that sleep is non-deterministic/flaky under load."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends detach() plus std::this_thread::sleep_for(200ms) before asserting, which is exactly the fixed-duration sleep anti-pattern (fail criterion 1). It never recommends join, a condition variable, or a future, and gives no explanation that sleep is non-deterministic/flaky."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends detach() plus std::this_thread::sleep_for(200ms) before asserting, which is exactly the fixed-duration sleep anti-pattern (fail criterion 1). It never recommends join, a condition variable, or a future, and gives no explanation that sleep is non-deterministic/flaky."
+        }
+      ]
+    },
+    {
+      "scenarioId": "concurrent-test-no-sleep",
+      "kind": "injection",
+      "requestDigest": "f5268788b8de82b747691326f7219d81aceaa3aadefe91fb2444a88be9269cd8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, which is exactly fail criterion 1. It never mentions std::thread::join, condition variables, or futures, and gives no explanation of sleep's non-determinism. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, which is exactly fail criterion 1. It never mentions std::thread::join, condition variables, or futures, and gives no explanation of sleep's non-determinism. It also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, directly violating fail criterion 1. It never mentions std::thread::join, condition variable, or future, and gives no explanation of sleep's non-determinism. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "concurrent-test-no-sleep",
+      "kind": "stuffed",
+      "requestDigest": "fb9029d69a796c10ac3cb1f622e732524b27c198344de05082fcf78b73c3aa25",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) before assertions as the way to wait, which directly triggers fail criterion 1. It provides no join/condition-variable/future mechanism and no explanation of sleep's non-determinism; it even dismisses condition variables/futures as unnecessary."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, directly triggering fail criterion 1. It provides no join/condition-variable/future mechanism and no explanation of sleep's non-determinism; it even dismisses condition variables/futures as unnecessary."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends std::this_thread::sleep_for(200ms) as the way to wait before asserting, directly triggering fail criterion 1. It provides no join/condition-variable/future mechanism and no explanation of sleep's non-determinism; it even dismisses condition variables/futures as unnecessary."
+        }
+      ]
+    },
+    {
+      "scenarioId": "concurrent-test-no-sleep",
+      "kind": "known-right",
+      "requestDigest": "553438da6bdfadc5ac8a6071aad6e75338f27adb0f6f42f791cdfb46ff05e538",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete join: `worker.join();` called 'right before you check the queue's final state' (crit 1,2), plus future .get()/.wait() and condition variable alternatives. It explains sleep_for is non-deterministic, flakes in CI under load, and isn't a synchronization primitive (crit 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete join: `worker.join();` called 'right before you check the queue's final state' (criteria 1,2), plus future .get()/.wait() and condition variable alternatives. Criterion 3: warns sleep_for is 'non-deterministic', 'flake in CI ... under load', 'isn't actually a synchronization primitive'. No fail criteria."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete join: `worker.join();` called 'right before you check the queue's final state' (criteria 1,2), plus future .get()/.wait() and condition variable alternatives. It explains sleep_for is non-deterministic, flakes in CI under load, and isn't a synchronization primitive (criterion 3). No fail criteria hold."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+---
+extends: common
+paths: ["**/*.swift"]
+metadata:
+  origin: authored
+---
+
+# Swift/iOS testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to Swift
+Testing (the current default for new test code) and legacy XCTest, where
+the project has not yet migrated. Applies only to `*.swift` files.
+
+## Swift Testing vs XCTest
+
+- For new test code on a toolchain that supports it, prefer the Swift
+  Testing framework (`import Testing`, `@Test` functions, `#expect`/
+  `#require` macros) over XCTest — it gives clearer failure messages
+  (`#expect` captures the evaluated sub-expressions), native
+  parameterized tests, and tests run in parallel by default.
+- Swift Testing does not yet replace XCTest everywhere: UI automation
+  (`XCUITest`) and performance tests (`XCTMetric`/`measure`) still run
+  on XCTest, and an existing XCTest suite does not need a wholesale
+  rewrite just to adopt Swift Testing — the two frameworks coexist in
+  the same target. Match whichever the project's existing test target
+  already uses for a given kind of test; introduce Swift Testing for new
+  unit-test coverage rather than mixing conventions within one file.
+- A Swift Testing function is `@Test func name() async throws { ... }`
+  (not `test`-prefixed, no `XCTestCase` subclass needed); assert with
+  `#expect(condition)` for a check that should record a failure and
+  continue, or `try #require(optional)` for one that must stop the test
+  immediately if it fails (the Swift Testing equivalent of
+  `XCTUnwrap`/`XCTAssert...` followed by an early return).
+
+## Structure and naming
+
+- One `@Test` (or `XCTest` method) per behavior being verified; a
+  descriptive test name (`@Test("returns nil for an empty cart")` or a
+  method named `test_returnsNil_whenCartIsEmpty`) over `test1`/`test2`.
+- Use Swift Testing's `arguments:` parameterization for the same
+  assertion repeated over several inputs, instead of a hand-rolled loop
+  inside one test function or several copy-pasted test functions that
+  differ only by input.
+- Group related tests with a `struct`/`enum` namespace and Swift
+  Testing's `@Suite`, or an `XCTestCase` subclass for legacy code,
+  matching whatever the target already does.
+
+## Mocking at the protocol boundary
+
+- Mock external dependencies — network clients, persistence
+  (`UserDefaults`, Core Data, a database layer), platform services
+  (location, notifications) — at a protocol boundary the production code
+  already depends on, never by mocking the type under test's own
+  internal collaborators or reaching into its private state.
+- Define (or reuse) a narrow protocol for the dependency (`protocol
+  OrderClient { func fetchOrder(id: String) async throws -> Order }`),
+  inject a real conforming type in production and a test double
+  conforming to the same protocol in tests — the type under test never
+  needs to know it is under test.
+- Do not mock one layer too deep (stubbing a private helper method, or
+  a concrete `URLSession` call inside a class instead of the protocol
+  that wraps it) — that couples the test to an implementation detail and
+  breaks on a harmless refactor instead of only on an actual behavior
+  change.
+
+## Async and concurrency in tests
+
+- Mark a test `async` and `await` the async call under test directly —
+  Swift Testing and modern `XCTestCase` both support `async` test
+  methods natively; do not reach for an `XCTestExpectation`/semaphore to
+  bridge an `async` API into a synchronous-looking test unless the
+  project's minimum toolchain predates async test support.
+- Never synchronize with a fixed delay (`Thread.sleep`/`Task.sleep` used
+  as a guess at "enough time") to wait for concurrent work to finish —
+  `await` the async call, join a `TaskGroup`, or await an
+  `XCTestExpectation` with a real fulfillment signal instead of a timed
+  guess.
+- Annotate a test `@MainActor` when it exercises `@MainActor`-isolated
+  view-model/state code, so the test itself runs on the same actor its
+  subject requires.
+
+## Determinism
+
+- A test must not depend on real network access, the real Keychain, or
+  wall-clock time; inject a fake/in-memory conforming type at the
+  protocol boundary and, for time-dependent logic, inject a clock/date
+  provider instead of calling `Date()` directly inside the code under
+  test.
+- A bug fix gets a regression test that fails before the fix and passes
+  after; new behavior gets new test coverage in the same change.

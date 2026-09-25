@@ -34,6 +34,7 @@ import {
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
+  recordTurnTaskCostBestEffort,
   shouldAutoApproveReadOnlySpawn,
   pickSearchProviderStep,
   adaptiveSelectHeight,
@@ -63,6 +64,7 @@ import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
+import { readTaskCostStore, taskCostKey } from "../harness/routing/task-cost";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../harness/provider/types";
 import type { DetectedProvider } from "../commands/select";
 import { readSlate, writeSlate } from "../session/slate";
@@ -713,6 +715,125 @@ otuiTest("G-1: wrapping preserves the base hook's report-only-what-you-got guard
   expect(frame).toContain("↑5 tokens");
   expect(frame).not.toContain("↓");
   setup.renderer.destroy();
+});
+
+// Flow 341 (AC3) — a real finished turn's tokens land in the task-cost
+// store. Same scripted-provider shape as G-1 above, driven through the SAME
+// summing idiom the production `launchTuiAgentShell` dispatch uses (wrap
+// `io.onUsage`, sum THIS turn's tokens, call `recordTurnTaskCostBestEffort`
+// once the turn settles) — the wiring pin test in
+// `task-cost-shell-wiring.test.ts` proves the real closure does exactly this.
+otuiTest("flow 341: a finished turn's summed tokens are recorded to the task-cost store", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
+  const chrome = await createShellChrome(otui.core, setup.renderer, {
+    title: "keryx · agent",
+    status: "s/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  const io = createTuiAgentIo(otui.core, setup.renderer, chrome.transcript);
+  let turnInputTokens = 0;
+  let turnOutputTokens = 0;
+  const prevOnUsage = io.onUsage;
+  io.onUsage = (usage) => {
+    turnInputTokens += usage.inputTokens ?? 0;
+    turnOutputTokens += usage.outputTokens ?? 0;
+    prevOnUsage?.(usage);
+  };
+
+  const provider = scriptedProvider([
+    [
+      { kind: "usage_update", usage: { inputTokens: 400, outputTokens: 80 } },
+      { kind: "text_delta", text: "done" },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "cost?");
+
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-shell-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: deps.providerId,
+      modelId: deps.modelId,
+      inputTokens: turnInputTokens,
+      outputTokens: turnOutputTokens,
+      success: true,
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const key = taskCostKey("scripted", "m", "default");
+    expect(store[key]).toHaveLength(1);
+    expect(store[key]![0]).toMatchObject({ inputTokens: 400, outputTokens: 80, totalTokens: 480, success: true });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  chrome.destroy();
+  setup.renderer.destroy();
+});
+
+// Flow 341 continued (wired to PR #737's routing classifier) — a passed
+// `category` (the turn's classifier outcome, `tui-shell.ts`'s own
+// `turnCategory`) is recorded VERBATIM, under its own `(provider, model,
+// category)` key, never folded into the `"default"` bucket. A plain `test`,
+// not `otuiTest`: this proves `recordTurnTaskCostBestEffort` itself, no
+// rendering involved (the shell-side wiring that PRODUCES `turnCategory` is
+// pinned separately, in `task-cost-shell-wiring.test.ts`).
+test('recordTurnTaskCostBestEffort: a passed category is recorded verbatim, not folded into "default"', async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-category-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "scripted",
+      modelId: "m",
+      inputTokens: 100,
+      outputTokens: 20,
+      success: true,
+      category: "coding",
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const codingKey = taskCostKey("scripted", "m", "coding");
+    const defaultKey = taskCostKey("scripted", "m", "default");
+    expect(store[codingKey]).toHaveLength(1);
+    expect(store[codingKey]![0]).toMatchObject({ category: "coding", inputTokens: 100, outputTokens: 20, totalTokens: 120, success: true });
+    expect(store[defaultKey]).toBeUndefined();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// The `input.category ?? "default"` fallback (`tui-shell.ts`) — an omitted
+// category (routing off, a non-operator turn, every classifier stage
+// refused) still records, under `"default"`, exactly as before this flow's
+// `category` field existed.
+test('recordTurnTaskCostBestEffort: an omitted category still falls back to "default"', async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-category-undef-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "scripted",
+      modelId: "m",
+      inputTokens: 100,
+      outputTokens: 20,
+      success: true,
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const key = taskCostKey("scripted", "m", "default");
+    expect(store[key]).toHaveLength(1);
+    expect(store[key]![0]).toMatchObject({ category: "default", inputTokens: 100, outputTokens: 20 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 // `/clear`|`/new` reset the session surface through `resetSessionSurface`, whose
@@ -2430,7 +2551,9 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
     // Flow 274 T7 widened the `deps = {...}` rebuild above (busInbox/busAck
     // carry-over), pushing `balancePanel.setProvider` a bit further out.
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 1400);
+    // Flow 338 widened it again — `sessionModelExplicit = true;` is set at
+    // the top of `switchTo`, ahead of the rebuild.
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 1600);
     expect(switchToBlock).toContain("void balancePanel.setProvider(ns.provider)");
   });
 
@@ -2470,12 +2593,15 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   // `deps` for the first time (the earlier three all ran before any join
   // could possibly have finished). review r1 F9 then REMOVED `busClientRef`
   // from the side-worker call site (above), so exactly THREE real call sites
-  // now share `busClientRef`: the initial build, `switchTo`, and this
+  // shared `busClientRef`: the initial build, `switchTo`, and this
   // join-success rebuild (which passes `selAtJoin`, not `currentSel`,
-  // review r1 F7).
-  test("exactly three real call sites share busClientRef — not fewer, not more", () => {
+  // review r1 F7). Flow 338 added a FOURTH: the routing classifier's
+  // turn-scoped rebuild (`runRoutingClassifierForTurn`'s routed
+  // provider/model, inside the per-turn dispatch IIFE) — same live getters,
+  // so it shares `busClientRef` too.
+  test("exactly four real call sites share busClientRef — not fewer, not more", () => {
     const occurrences = fnBody.split(", liveSlateSession, busClientRef)").length - 1;
-    expect(occurrences).toBe(3);
+    expect(occurrences).toBe(4);
     expect(fnBody).not.toContain("() => slateSession)");
   });
 });

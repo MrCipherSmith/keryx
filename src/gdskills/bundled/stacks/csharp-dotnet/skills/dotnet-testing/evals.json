@@ -1,0 +1,77 @@
+{
+  "triggers": {
+    "positive": [
+      "This validator has zero test coverage right now, can you add some?",
+      "I need Moq set up for this class's HTTP dependency",
+      "What should this xUnit suite mock and what should it exercise for real?",
+      "Add TestCase rows for the different discount tiers in NUnit",
+      "This dotnet test keeps failing intermittently, help me stabilize it",
+      "None of the async methods on this repository class are tested -- can you take care of that?",
+      "Set up NSubstitute for the payment gateway interface in this test"
+    ],
+    "negative": [
+      "Write table-driven pytest cases for this Python function",
+      "Add Jest tests for this React component's rendering",
+      "Write Go tests for this package using t.Run subtests",
+      "Write XCTest cases for this Swift view model",
+      "Add Espresso/JUnit tests for this Kotlin Android activity",
+      "Write a Flutter widget test using WidgetTester for this screen",
+      "Implement this feature in C# using a Scoped DbContext",
+      "Review this C# diff for swallowed exceptions"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mock-external-not-internal",
+      "prompt": "I'm writing a unit test for OrderService.PlaceOrder. It calls IPaymentGateway.Charge (an interface wrapping an HTTP call to a payment provider) and also calls its own private method CalculateTotal to work out the amount to charge. What should this test mock?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer mocks IPaymentGateway (the HTTP-backed external seam PlaceOrder reaches through its interface) with Moq or NSubstitute, and does not mock CalculateTotal -- since that method is part of OrderService's own logic, it should run for real so the test actually verifies the calculated total, not just that a mock returns whatever value was configured.",
+          "pass_criteria": [
+            "States that IPaymentGateway should be mocked/stubbed (via Moq's Mock<IPaymentGateway> or NSubstitute's Substitute.For<IPaymentGateway>()), naming it as the external seam.",
+            "States that CalculateTotal should NOT be mocked and should run for real as part of the test, naming it specifically (not just 'internal logic' in the abstract).",
+            "Gives a reason for the distinction -- that IPaymentGateway crosses a network/external boundary while CalculateTotal is internal logic that is itself part of what the test needs to verify."
+          ],
+          "fail_criteria": [
+            "Recommends mocking or stubbing CalculateTotal (or any other internal collaborator that is part of OrderService's own logic) rather than exercising it directly."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Mock `IPaymentGateway` -- it's an interface wrapping an HTTP call out to a real payment provider, which is exactly the kind of external boundary a unit test should stub out with `Mock<IPaymentGateway>` (Moq) or `Substitute.For<IPaymentGateway>()` (NSubstitute), configuring it to return a known charge result so the test doesn't depend on network access or a real payment account. Don't mock `CalculateTotal`, though -- it's a private method that's part of `OrderService`'s own logic, and mocking it would mean the test never actually exercises the calculation it's supposed to verify; it would just prove that a mock returns whatever value you told it to. Let `CalculateTotal` run for real as part of calling `PlaceOrder`, and assert that `IPaymentGateway.Charge` was called with the amount you expect that real calculation to produce.",
+        "known_wrong": "Mock both -- set up `Mock<IPaymentGateway>` for the HTTP call, and since `CalculateTotal` is private, expose it as a virtual method or pull it behind its own interface (`ITotalCalculator`) just so you can mock it too and control exactly what value `PlaceOrder` sees. That way the `PlaceOrder` test is fully isolated from both the payment gateway and the total-calculation logic, and you don't need real order data that exercises the actual calculation to get the test passing.",
+        "vague": "Mock the external stuff and let the internal logic run normally so the test stays focused and realistic.",
+        "subtle_wrong": "Mock `IPaymentGateway` since that's the HTTP call, that part's clear. For `CalculateTotal`, since it's a bit fiddly to set up realistic order data that exercises every branch of the calculation, it's simpler to stub it too -- pull it behind a small `ITotalCalculator` interface and mock that to return a fixed total, then just assert `PlaceOrder` calls `IPaymentGateway.Charge` with that fixed value. That keeps the `PlaceOrder` test small and focused purely on the orchestration, and you can cover `CalculateTotal`'s own logic separately in its own test."
+      }
+    },
+    {
+      "id": "no-sleep-async-wait",
+      "prompt": "My xUnit test starts a background operation via an IHostedService and I want to wait for it to actually finish before running my assertions. What's the right way to do that in C#?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer waits for the background operation using a real completion signal -- awaiting the actual Task the operation returns, or a TaskCompletionSource/semaphore/other synchronization primitive set when the work finishes -- before running assertions, rather than a fixed Thread.Sleep or Task.Delay guess used as the wait mechanism.",
+          "pass_criteria": [
+            "Names a concrete synchronization mechanism (awaiting the operation's own Task, a TaskCompletionSource, or an equivalent signal) as the actual join point, shown concretely rather than just described in the abstract.",
+            "Explains why this is more reliable than a fixed delay -- it doesn't depend on guessing how long the background work takes."
+          ],
+          "fail_criteria": [
+            "Recommends a fixed Thread.Sleep or Task.Delay wait -- before, instead of, or added alongside/after a real completion signal as extra insurance -- as part of how the test waits for the background operation to finish. A real completion signal needs no delay bolted onto it; recommending one anyway, for any reason, is the anti-pattern this scenario is about. Mentioning Thread.Sleep/Task.Delay only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "If the background operation is something you can call and await directly in the test (e.g. the hosted service exposes the work as a method returning a Task), just await that Task before your assertions -- that's the most direct join point. If instead the work happens on a timer/background loop you can't call synchronously, wire up a `TaskCompletionSource` that the hosted service completes when it finishes a unit of work (pass it in via a test-only hook, or have the service raise an event/callback the test subscribes to and sets the TaskCompletionSource from), then `await tcs.Task` in the test before asserting. Either way, avoid `Thread.Sleep`/`Task.Delay` as the wait mechanism -- a fixed delay is a guess about how long the operation takes, and it either wastes time when it finishes early or flakes under CI load when it doesn't.",
+        "known_wrong": "The simplest way is to just add `await Task.Delay(500);` right after starting the hosted service, then run your assertions -- that gives the background operation enough time to finish in almost every run without needing to wire up a TaskCompletionSource or expose extra hooks just for the test. If it's still occasionally flaky in CI, bump it up to `Task.Delay(2000)`.",
+        "vague": "Wait for the background operation properly instead of guessing how long it takes before you assert.",
+        "subtle_wrong": "Wire up a `TaskCompletionSource` that the hosted service completes when its work finishes, and `await tcs.Task` in the test -- that's the real join point. If it's still flaky occasionally, add a small `Task.Delay(100)` right after the await too, just as a bit of extra insurance before the assertions run."
+      },
+      "anti_patterns": [
+        "Task.Delay"
+      ]
+    }
+  ]
+}

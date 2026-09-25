@@ -42,6 +42,7 @@ Review Orchestrator Progress:
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
 - [ ] Step 8: Dispatch selected reviewers in PARALLEL with reviewer-input schema
 - [ ] Step 9: Collect reviewer-finding schema results and handle NEEDS_CONTEXT
+- [ ] Step 9b: `jev-triage` — advisory, annotate-only severity/duplicate/verify-order annotations over the consolidated findings (opt-in `review.jev.triage`)
 - [ ] Step 10: Wave C — dispatch `review-verifier` over the consolidated findings
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
 - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
@@ -1168,7 +1169,7 @@ that already holds intent and diff side by side is this one.
 
 Run it on every round, not only the first. The drift the finding catches is
 created BY the rounds: the code moves to answer findings, the body does not, and
-whoever reads the merge commit a year later reads the body.
+whoever reads the merge commit a year later reads the body. When `review.jev.contract` is on, dispatch `review-jev-contract --pr` and read its `findings` as this comparison's scored result instead of judging it by eye; the by-eye judgement is the fallback when that opt-in is off — `SKILL.detail.md` § "CLI-engine reviewers".
 
 ---
 
@@ -1177,7 +1178,7 @@ whoever reads the merge commit a year later reads the body.
 Dispatch selected reviewers in parallel when independent. Use waves when token budget is tight or when one reviewer needs another result:
 
 1. Wave A - core correctness/risk reviewers: logic, architecture, security/highload when selected.
-2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files. `review-jev-rules` (flow 330), `review-jev-risk`/`review-jev-scenarios` (flow 332), `review-jev-docs`/`review-jev-comments` (flow 333) also run here, CLI-engine not sub-agent, `"engine": "jev"` in `keryx review reviewers --json`, gated on their own opt-in and a resolvable Jev/OpenRouter credential — `SKILL.detail.md` § "CLI-engine reviewers".
+2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files. `review-jev-rules` (flow 330), `review-jev-risk`/`review-jev-scenarios` (flow 332), `review-jev-docs`/`review-jev-comments` (flow 333), `review-jev-contract` (flow 335) also run here, CLI-engine not sub-agent, `"engine": "jev"` in `keryx review reviewers --json`, gated on their own opt-in and a resolvable Jev/OpenRouter credential — `SKILL.detail.md` § "CLI-engine reviewers".
 3. Wave C - **verification**: `review-verifier` over the consolidated findings, when blockers/majors
    exist, `--verify` is set, or the PR is high-risk. See below.
 
@@ -1691,8 +1692,7 @@ CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 If provided and the file exists, read the context document **before** running scope detection.
 Use it to understand:
 - Intentionally chosen libraries and patterns (do not flag as issues)
-- Architectural decisions already agreed upon
-- Acceptance criteria to drive the Stage 1 spec compliance gate
+- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
 
 If absent, proceed normally — context is optional and non-blocking.
 

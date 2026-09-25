@@ -1,0 +1,33 @@
+[
+  {
+    "query": "Use when implementing or extending a feature in a C#/.NET service or library -- DI registration and lifetimes, async/await (Task vs ValueTask, avoiding async void), nullable reference type annotations, records vs classes, EF Core query shape, and IDisposable/IAsyncDisposable cleanup.",
+    "decision": "fork",
+    "topMatch": "csharp-dotnet/dotnet-code-review",
+    "recordedAt": "2026-09-25T15:34:51.958Z",
+    "skillName": "dotnet-implementation",
+    "justification": "Top match dotnet-code-review is this same pack's read-only review skill (different intent, action verb, and workflow), not a real implementation-skill duplicate; no existing implement skill covers C#/.NET DI lifetimes, Task/ValueTask, nullable reference types, or EF Core query shape."
+  },
+  {
+    "query": "Use when a C#/.NET test project needs writing, extending, or fixing -- xUnit/NUnit Fact/Theory and InlineData/TestCase tables, async test methods, and disciplined Moq/NSubstitute mocking that stubs external seams (HTTP, repository, clock) rather than internal collaborators.",
+    "decision": "create",
+    "topMatch": "swift-ios/swift-testing",
+    "recordedAt": "2026-09-25T15:33:42.746Z",
+    "skillName": "dotnet-testing"
+  },
+  {
+    "query": "Use when reviewing a C#/.NET change for async and resource-safety risks -- async void outside event handlers, sync-over-async (.Result/.Wait()), swallowed/blanket exception catches, missing IDisposable/IAsyncDisposable cleanup, and nullable-annotation gaps. Read-only, no edits.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-code-review",
+    "recordedAt": "2026-09-25T15:34:52.239Z",
+    "skillName": "dotnet-code-review",
+    "justification": "Nearest match ts-js-node/nodejs-code-review (0.24-ish overlap) reviews TypeScript/Node concurrency and idiom, not C#'s async-void/sync-over-async/IDisposable vocabulary; no existing review skill covers .NET-specific async and resource-safety anti-patterns."
+  },
+  {
+    "query": "Use when dotnet build/dotnet test fails, or a NuGet restore is broken -- resolves package/target-framework mismatches, compiler errors, nullable-annotation warnings, analyzer/StyleCop findings, and a failing test, with the smallest root-cause fix rather than a suppression.",
+    "decision": "fork",
+    "topMatch": "kotlin-android/kotlin-android-build-fix",
+    "recordedAt": "2026-09-25T15:34:52.517Z",
+    "skillName": "dotnet-build-fix",
+    "justification": "Nearest match kotlin-android/kotlin-android-build-fix fixes Gradle/AGP/Kotlin compiler errors, not dotnet build/NuGet/target-framework/StyleCop findings; each build-fix skill is scoped to its own toolchain's specific failure surface, sharing only the generic 'root cause not suppression' framing."
+  }
+]

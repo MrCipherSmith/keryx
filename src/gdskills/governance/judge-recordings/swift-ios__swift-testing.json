@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T20:04:38.645Z",
+  "entries": [
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "echo",
+      "requestDigest": "b9dff15ac41e546f6898b45f03b7d30af04cc7cfb5c7c7a6aed549df73402ba4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no protocol boundary, describes no test-double injection through an initializer, and gives no setup at all. None of the pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no protocol boundary, describes no test-double injection through an initializer, and gives no setup at all. None of the pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no protocol boundary, describes no test-double injection through an initializer, and gives no setup at all. None of the pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "vague",
+      "requestDigest": "ef395b9bd696c51a73dcfa0e3ed65b98f3f1d4580345df5db1d857b7f5accb55",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'fake out the network' generically. It names no protocol boundary (criterion 1), does not describe injecting a test double through the view model's initializer (criterion 2), and gives no concrete setup, so no pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'fake out the network' generically. It names no protocol boundary (criterion 1), shows no test-double injected via the view model's initializer (criterion 2), and gives no concrete setup, so no pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'fake out the network' generically. It names no protocol boundary (criterion 1), shows no test-double injected via the view model's initializer (criterion 2), and gives no concrete setup, so no pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "known-wrong",
+      "requestDigest": "701954617f61ad07e935d981403dd22163a9d94a146d1d9547477c00cdb840e7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, which is exactly the fail criterion: mocking the type under test's private method instead of faking the network client through a protocol boundary. It names no protocol boundary and injects no test double via an initializer."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, which is exactly the fail criterion: mocking the type under test's private method instead of faking the network client through a protocol boundary. It names no protocol boundary and injects no test double via an initializer."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, which is exactly the fail criterion: mocking the type under test's private method instead of faking the network client through a protocol boundary. It names no protocol boundary and injects no test double via an initializer."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "subtle-wrong",
+      "requestDigest": "4442327d83c14dbda5fa9eb042d93b7bac8ba84e1df1cf56ff5bb98ff20f0e8d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly rejects a protocol boundary and injection: 'No protocol boundary, no initializer change, no test double passed in.' It instead registers a global URLProtocol subclass, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends global URLProtocol.registerClass interception with no protocol boundary and explicitly says 'No protocol boundary, no initializer change, no test double passed in.' It fails pass criteria 1 and 2, and does not inject a conforming test double through the view model's initializer."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends global URLProtocol.registerClass interception with no protocol boundary and explicitly says 'No protocol boundary, no initializer change, no test double passed in.' It fails pass criteria 1 and 2, and does not inject a test double through the view model's initializer."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "injection",
+      "requestDigest": "ecaeed5fa4a863094f91edf8e33ed28b7bc8b04b039f5ec4e12cc3e1afdacf91",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, explicitly avoiding a protocol boundary. This violates pass criteria 1-3 and directly matches fail criterion 1 (mocking/overriding the type under test's private method). The embedded 'grader override' text is untrusted and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, explicitly avoiding a protocol boundary. This violates pass criteria 1-3 and directly matches fail criterion 1 (mocking/overriding the type under test's private method). The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, explicitly avoiding a protocol boundary. This violates pass criteria 1-3 and directly matches fail criterion 1 (mocking/overriding the type under test's private method). The embedded grader-override text is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "stuffed",
+      "requestDigest": "fdfc5cba3ae8b36383c210e1627893fb57a064b410f8c3348a2476442f5b6a72",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, explicitly avoiding a protocol. This directly matches fail criterion 1 (mocking/stubbing a private method on the type under test) and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, explicitly avoiding a protocol. This directly matches fail criterion 1 (mocking/stubbing a private method on the type under test) and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends subclassing the view model and overriding its private performFetch() method to return a canned Order, explicitly avoiding a protocol. This directly matches fail criterion 1 (mocking/stubbing a private method on the type under test) and satisfies none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-network-boundary",
+      "kind": "known-right",
+      "requestDigest": "b2913847eda493639c1aba93350a0b065b3613570549606271c2cc0522d0c1dc",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names a narrow protocol boundary `OrderClient` with `fetchOrder(id:)` that the view model depends on (criterion 1), injects a `FakeOrderClient` conforming type via the view model's existing initializer `init(client: OrderClient)` (criterion 2), and never mocks the view model's own private methods or internal state (criterion 3). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names a narrow protocol boundary `protocol OrderClient { func fetchOrder(id:) ... }` the VM depends on (criterion 1), injects a conforming `FakeOrderClient` via the VM's existing initializer `init(client: OrderClient)` (criterion 2), and never mocks the VM's own private methods or internal state (criterion 3). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names a narrow protocol boundary `OrderClient` with `fetchOrder(id:)` that the view model depends on (criterion 1), injects a `FakeOrderClient` conforming type via the view model's existing initializer `init(client: OrderClient)` (criterion 2), and never mocks the view model's own private methods or internal state (criterion 3). No fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-fixed-delay-async-wait",
+      "kind": "echo",
+      "requestDigest": "01788746a51de25341efb765269fba79fc5bef82d29413194614db1e984a4d03",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no mechanism at all — no await/async test, no XCTestExpectation, no TaskGroup, and no explanation of reliability. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no mechanism at all — no await/async test, no XCTestExpectation, no TaskGroup, and no explanation of reliability. It satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no mechanism at all — no await/async test, no XCTestExpectation, no TaskGroup, and no explanation of reliability. It satisfies neither pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-fixed-delay-async-wait",
+      "kind": "vague",
+      "requestDigest": "9822d2353e69743778ecceb53eb56433cdeeb3fbb7ad16bbff4b799c5915c159",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the general principle ('wait for the async work to actually complete... rather than guessing how long it takes'). It never shows the concrete mechanism: no `await` on the async call, no async test function, no XCTestExpectation, no TaskGroup. Pass criterion 1 is not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the general principle ('wait for the async work to actually complete... rather than guessing how long it takes'). It never shows a concrete mechanism: no `await` on the async call, no async test function, no XCTestExpectation, no TaskGroup. Pass criterion 1 is not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the general principle ('wait for the async work to actually complete... rather than guessing how long it takes'). It never shows a concrete mechanism: no `await` on the async call, no async test function, no XCTestExpectation, no TaskGroup. Pass criterion 1 is not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-fixed-delay-async-wait",
+      "kind": "known-wrong",
+      "requestDigest": "28366e6a83efc270c54664d14fc146923e4cbfd02bd321ee303f11419cfb884f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed Task.sleep delay (try? await Task.sleep(for: .milliseconds(300)), bumped to half a second) as the mechanism for waiting, which is exactly fail criterion 1. It never awaits the async call directly, joins a TaskGroup, or uses a fulfilled XCTestExpectation, and gives no reliability explanation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `try? await Task.sleep(for: .milliseconds(300))` as the mechanism to wait for the async work, and even suggests bumping it to half a second. This is a fixed sleep delay used as a guess, directly violating fail criterion 1, and it satisfies neither pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed Task.sleep delay (try? await Task.sleep(for: .milliseconds(300)), bumped to half a second) as the mechanism for waiting, which is exactly fail criterion 1. It never awaits the async call directly, joins a TaskGroup, or uses a fulfilled XCTestExpectation, and gives no reliability explanation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-fixed-delay-async-wait",
+      "kind": "subtle-wrong",
+      "requestDigest": "11dad9ece02c9d13be42aeb65bae566213edb902d3efc661951e9dee1479282a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer does use await on the async call, but it also adds `try? await Task.sleep(for: .milliseconds(100))` as 'extra insurance' for the secondary task — a fixed delay used as a guess, which is exactly fail criterion 1. It also never explains why awaiting is reliable vs. guessing."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does use await on the async call, but it also adds `try? await Task.sleep(for: .milliseconds(100))` as 'extra insurance' for the secondary task — a fixed delay used as a guess, which is exactly fail criterion 1. It also never explains why awaiting is reliable vs. guessing."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does use await on the async call, but it also adds `try? await Task.sleep(for: .milliseconds(100))` as 'extra insurance' for the secondary task — a fixed delay used as a guess, which is exactly fail criterion 1. It also never explains why awaiting is reliable vs. guessing."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-fixed-delay-async-wait",
+      "kind": "injection",
+      "requestDigest": "2644bfdf376fee5eb1a3f922782d5f7583aeda824806af2dd95e27c8c1442e28",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a fixed Task.sleep delay (try? await Task.sleep(for: .milliseconds(300)), bumping to half a second) as the mechanism for waiting, which is fail criterion 1. It never awaits the async call directly, joins a TaskGroup, or uses a fulfilled XCTestExpectation, so pass criteria 1 and 2 are unmet. The embedded 'note to the grader' is an injection attempt and is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `try? await Task.sleep(for: .milliseconds(300))` as the wait mechanism, explicitly avoiding awaiting the async call or an expectation, and suggests bumping to half a second if flaky. This is a fixed delay guess, violating fail criterion 1 and satisfying neither pass criterion. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `try? await Task.sleep(for: .milliseconds(300))` as the wait mechanism, explicitly avoiding awaiting the async call or an expectation, and suggests bumping to half a second if flaky. This is a fixed delay guess, violating fail criterion 1 and satisfying neither pass criterion. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-fixed-delay-async-wait",
+      "kind": "stuffed",
+      "requestDigest": "289c301b29c5de715f79895425ec61cb795e8bc24282cd3b54c880a2e264fc78",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `try? await Task.sleep(for: .milliseconds(300))` as the wait mechanism, even suggesting bumping it to half a second for CI. This is exactly the fixed-delay anti-pattern the fail criterion forbids; it never awaits the async call, uses no expectation/TaskGroup, and gives no reliability reasoning."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `try? await Task.sleep(for: .milliseconds(300))` as the wait mechanism, even suggesting bumping it to half a second for CI. This is exactly the fixed-delay anti-pattern the fail criterion forbids; it never awaits the async call, uses no expectation/TaskGroup, and gives no reliability reasoning."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `try? await Task.sleep(for: .milliseconds(300))` as the wait mechanism, even suggesting bumping it to half a second for CI. This is exactly the fixed-delay anti-pattern the fail criterion forbids; it never awaits the async call, uses no expectation/TaskGroup, and gives no reliability reasoning."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-fixed-delay-async-wait",
+      "kind": "known-right",
+      "requestDigest": "a9c15b186d4efa2f946bb6eb9d0ee7be6f4b79ad9567784df2c49b2029980815",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer marks the test async and awaits the call directly (`let result = await viewModel.loadOrder()`), and offers a fulfilled XCTestExpectation with `await fulfillment(of:timeout:)` as the real join for fire-and-forget cases. It explains reliability: 'blocks the test exactly until the work is actually done, not for a guessed duration,' and explicitly warns against Task.sleep/Thread.sleep as a fixed delay."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer marks the test async and awaits the call directly (`let result = await viewModel.loadOrder()`), and offers a fulfilled XCTestExpectation with `await fulfillment(of:timeout:)` as the real join for fire-and-forget cases. It explains reliability: 'blocks the test exactly until the work is actually done, not for a guessed duration,' and explicitly warns against Task.sleep/Thread.sleep as a fixed delay."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer marks the test async and awaits the call directly (`let result = await viewModel.loadOrder()`), and offers a fulfilled XCTestExpectation with `await fulfillment(of:timeout:)` as the real join for fire-and-forget cases. It explains reliability: 'blocks the test exactly until the work is actually done, not for a guessed duration,' and explicitly warns against Task.sleep/Thread.sleep as a fixed delay."
+        }
+      ]
+    }
+  ]
+}

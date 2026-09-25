@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "I need coverage for this view model that talks to a backend, what's the right way to fake the network for it",
+      "Write a few test cases for this order validation function",
+      "This screen kicks off a background task and I want a deterministic way to wait for it in a test",
+      "Add coverage that exercises several different discount inputs for this pricing function",
+      "How do I fake persistence for this view model's tests without touching the real database",
+      "This async function needs test coverage, what does a good test for it look like",
+      "Set up test doubles for the networking layer in this feature's test suite"
+    ],
+    "negative": [
+      "Write instrumented UI tests with Android's Espresso for this screen",
+      "Add widget tests for this Flutter screen using WidgetTester",
+      "Write unit tests for this ASP.NET Core controller with xUnit",
+      "Add Jest tests for this React component's rendering",
+      "Implement this feature in SwiftUI with an async network call",
+      "Review this Swift diff for retain cycles",
+      "Write pytest fixtures for this Python service"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mock-network-boundary",
+      "prompt": "I have a view model that fetches an order from a backend client and I need to test it without hitting the real network. How should I set this up?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fakes the network dependency at a protocol boundary the view model already depends on (or a newly introduced narrow protocol) -- injecting a test-double conforming type through the view model's existing initializer -- rather than mocking the view model's own private methods, reaching into its internal state, or subclassing the concrete network client to override its behavior.",
+          "pass_criteria": [
+            "Names a protocol boundary for the network dependency (e.g. an `OrderClient` protocol) that the view model depends on, not the concrete network/URLSession type directly.",
+            "Describes injecting a test-double conforming type through the view model's existing initializer/dependency injection point.",
+            "Does not describe mocking the view model's own private methods or internal state to fake the network response."
+          ],
+          "fail_criteria": [
+            "Recommends mocking or stubbing a private method or internal property on the view model itself (the type under test) to fake the network response, instead of faking the network client it depends on through a protocol boundary."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Define a narrow protocol the view model depends on, e.g. `protocol OrderClient { func fetchOrder(id: String) async throws -> Order }`, and have the view model take one through its initializer (`init(client: OrderClient)`) instead of constructing a concrete `URLSession`-backed client itself. In production, inject the real `URLSessionOrderClient` conforming to that protocol; in the test, inject a `FakeOrderClient` that also conforms to `OrderClient` and returns a canned `Order` (or throws a canned error) without touching the network at all. The view model never has to know it's under test -- it just calls `client.fetchOrder(id:)` through the protocol either way. This keeps the test fast and deterministic, and it survives a refactor of how the real client is implemented internally (switching from `URLSession` to something else) without touching the test, since the fake only depends on the protocol's shape.",
+        "known_wrong": "The simplest way is to subclass the view model in the test target and override its private `performFetch()` method to return a canned `Order` directly, skipping the network call entirely. That way you don't need to introduce a whole protocol just for one test -- you're testing the view model's public behavior anyway, and overriding the internal fetch method gets you there with a lot less boilerplate than defining and injecting a fake client type.",
+        "vague": "Fake out the network so the test doesn't make a real request and can check the view model's behavior reliably.",
+        "subtle_wrong": "Register a custom `URLProtocol` subclass globally with `URLProtocol.registerClass(...)` in the test's setup to intercept every request in the process during the test run and return a canned order response -- that way the view model doesn't need any changes at all, and you don't need to inject anything into it, since interception happens underneath any `URLSession` including `URLSession.shared`. No protocol boundary, no initializer change, no test double passed in -- the fake just answers whatever request happens to go out."
+      },
+      "anti_patterns": []
+    },
+    {
+      "id": "no-fixed-delay-async-wait",
+      "prompt": "My test starts an async task in a view model and I want to wait for it to finish before asserting on the result. What's the right way to do this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer waits for the async work with a real synchronization mechanism -- awaiting the async call directly (marking the test async and using await), joining a TaskGroup, or awaiting a real fulfillment signal (an XCTestExpectation that is actually fulfilled by the code under test) -- never a fixed Task.sleep/Thread.sleep delay used as a guess at how long the work will take, whether alone or as extra insurance alongside a real await.",
+          "pass_criteria": [
+            "Uses `await` directly on the async call (marking the test function `async`), or an equivalent real join (a fulfilled `XCTestExpectation`, joining a `TaskGroup`), as the actual mechanism for knowing the work finished.",
+            "Explains why this is reliable compared to a fixed delay -- it does not depend on guessing how long the async work takes."
+          ],
+          "fail_criteria": [
+            "Recommends a fixed `Task.sleep`/`Thread.sleep` delay, anywhere in the wait step, as the mechanism (or as 'extra insurance' alongside a real await) for knowing the async work has finished before asserting."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Mark the test function `async` and `await` the call directly: `let result = await viewModel.loadOrder()` (or, if the work is triggered as a side effect rather than returned, `await` the view model's own async method that starts it). That blocks the test exactly until the work is actually done, not for a guessed duration, so it holds up whether the work finishes in a millisecond or takes longer under CI load. If the async work is truly fire-and-forget from a synchronous call site and you can't await it directly, use an `XCTestExpectation` that the code under test explicitly fulfills when the work completes, and `await fulfillment(of: [expectation], timeout: ...)` -- the timeout there is a safety net for a hang, not the thing the test is actually relying on to know the work finished. Avoid `Task.sleep`/`Thread.sleep` for this: a fixed delay either wastes time when the work finishes early or flakes when it doesn't finish inside the guessed window.",
+        "known_wrong": "Easiest way is to just add `try? await Task.sleep(for: .milliseconds(300))` right after triggering the async work, then run your assertions -- that gives it plenty of time to finish in almost every run without needing to restructure the test to await anything directly. If it's occasionally still flaky in CI, bump it up to half a second; that's a lot simpler than wiring up an expectation or making the whole call chain awaitable just for a test.",
+        "vague": "Wait for the async work to actually complete before you check the result, rather than guessing how long it takes.",
+        "subtle_wrong": "Mark the test `async` and `await viewModel.loadOrder()` directly, which is the right way to know the call itself finished. Since the view model also kicks off a secondary background task from inside that call, add a short `try? await Task.sleep(for: .milliseconds(100))` right after the awaited call too, just to be safe that the secondary task has also settled before asserting on the view model's full state."
+      },
+      "anti_patterns": ["Task.sleep"]
+    }
+  ]
+}

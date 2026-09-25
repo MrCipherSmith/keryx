@@ -1,0 +1,77 @@
+{
+  "triggers": {
+    "positive": [
+      "I need to add a required column to a table that already has millions of rows, what's the safe way to do this?",
+      "Design an index for a query that filters orders by status and sorts by created_at",
+      "I need a migration that adds a foreign key from payments.order_id to orders.id on a 20-million-row table, and it can't take the app down while it runs",
+      "This endpoint loops over orders and fetches the user for each one separately -- rewrite it as one query",
+      "I'm writing a query that filters by a value from an API request, how should I build it safely?",
+      "Add a unique constraint to this column and make sure it doesn't take the table down while it runs",
+      "Wrap these two related inserts into orders and wallets so a partial failure can't leave one without the other"
+    ],
+    "negative": [
+      "Write a Django migration that adds a required field to this model",
+      "Review this Rails ActiveRecord migration for safety before we merge it",
+      "Review this Go function for SQL injection risk",
+      "Implement a new REST endpoint in this Express app that lists orders",
+      "Write a MongoDB aggregation pipeline that joins two collections",
+      "Write a Prisma schema migration that adds this field to the model",
+      "Fix this failing pytest test for the order validator"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "safe-not-null-backfill",
+      "prompt": "I need to add a NOT NULL column to a Postgres table that already has millions of rows. What's the safe way to do this without an outage?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer takes one of two safe paths depending on whether every row can share one value. If a single constant works for every existing and future row, Postgres 11+ (and MySQL 8.0+ for an appended column) apply ADD COLUMN ... NOT NULL DEFAULT <constant> as a metadata-only change with no full-table rewrite -- that one step is safe on its own. If the value must instead be computed or backfilled per row (not one shared constant), the answer must add the column as nullable first, deploy application code that writes it on every insert/update, backfill existing rows in small batches rather than one large UPDATE, and only then enforce NOT NULL using a NOT VALID CHECK constraint followed by a separate VALIDATE CONSTRAINT step -- not a direct ALTER TABLE ... SET NOT NULL, which takes a blocking scan unless the NOT VALID/VALIDATE sequence was used first (or the constant-default fast path applies).",
+          "pass_criteria": [
+            "Either (a) recognizes that a single constant value can safely be added NOT NULL DEFAULT <constant> in one step on modern Postgres/MySQL because it is metadata-only (no table rewrite, no per-row backfill needed), or (b) -- when the value genuinely must be computed or backfilled per row -- states adding the column as nullable first, with application code writing it going forward, before any constraint is enforced.",
+            "If following path (b), describes backfilling existing rows in batches (not a single UPDATE touching every row at once); path (a) satisfies this automatically since it needs no backfill at all.",
+            "If following path (b), names the concrete non-blocking way to enforce NOT NULL afterward -- an ADD CONSTRAINT ... CHECK (col IS NOT NULL) NOT VALID followed by a separate VALIDATE CONSTRAINT -- rather than a plain SET NOT NULL; path (a) satisfies this automatically since the DEFAULT already guarantees no nulls exist."
+          ],
+          "fail_criteria": [
+            "Recommends a direct ALTER TABLE ... ALTER COLUMN ... SET NOT NULL on the large table (whether before or after a backfill) with no constant default and no prior NOT VALID+VALIDATE sequence -- neither safe path was followed.",
+            "Recommends backfilling millions of rows with a single unbatched UPDATE statement when the value is not a shared constant.",
+            "Claims a VOLATILE default (one that produces a different value per row/per evaluation, e.g. gen_random_uuid() or random()) gets the same metadata-only fast path as a constant -- only a genuinely constant or non-volatile (IMMUTABLE/STABLE) expression that evaluates to the same value across the statement qualifies (a STABLE function like now() does still get the fast path); a VOLATILE default still forces a full table rewrite."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This depends on whether every row can share one value. If the new column's value is the same constant for every row (e.g. a status defaulting to 'pending' for all existing orders), the fast path is safe on its own: `ALTER TABLE orders ADD COLUMN status text NOT NULL DEFAULT 'pending';` -- Postgres 11+ (and MySQL 8.0+ for an appended column) apply this as a metadata-only change, no table rewrite, no lock held for the duration of a scan. If instead the value has to be computed or backfilled per row -- say, derived from existing columns or an external lookup -- do it in stages: add the column as nullable (`ALTER TABLE orders ADD COLUMN status text;`, instant), deploy application code that writes `status` on every new insert/update, then backfill the existing rows in small batches, e.g. an UPDATE with a LIMIT/range predicate run repeatedly (`UPDATE orders SET status = compute_status(id) WHERE status IS NULL AND id BETWEEN :lo AND :hi`), not one UPDATE touching every row -- a single giant UPDATE holds locks and generates a huge amount of WAL, and can itself stall other writers. Once every row has a value, enforce NOT NULL without the usual full-table-scanning lock: `ALTER TABLE orders ADD CONSTRAINT orders_status_not_null CHECK (status IS NOT NULL) NOT VALID;` followed by `ALTER TABLE orders VALIDATE CONSTRAINT orders_status_not_null;` in a separate statement, which scans under a SHARE UPDATE EXCLUSIVE lock that doesn't block concurrent reads/writes the way a plain SET NOT NULL's scan does.",
+        "known_wrong": "Easiest way regardless of what the value is: `ALTER TABLE orders ADD COLUMN status text NOT NULL DEFAULT gen_random_uuid();` in one migration -- Postgres 11+ made ALTER TABLE ADD COLUMN NOT NULL DEFAULT metadata-only, so this is instant no matter what the default expression is, millions of rows or not, and there's no need to think about whether the value is a shared constant or computed per row. And if you ever do need to enforce NOT NULL after the fact on an existing column, just run `ALTER TABLE orders ALTER COLUMN status SET NOT NULL` directly -- on modern Postgres that's fast enough not to worry about NOT VALID/VALIDATE CONSTRAINT.",
+        "vague": "Add the column, backfill the values, and then enforce the constraint -- just be careful not to lock the table for too long while you do it.",
+        "subtle_wrong": "Add the column nullable, ship code that writes it on new rows, and backfill in batches of a few thousand rows at a time so you're not holding one giant lock -- that part matters. Once the backfill finishes and every row has a value, you're safe to just run `ALTER TABLE orders ALTER COLUMN status SET NOT NULL` directly -- since there are no nulls left at that point, the scan Postgres does to verify the constraint will be effectively instant, so there's no real need to bother with the NOT VALID/VALIDATE CONSTRAINT dance on top of the batched backfill you already did."
+      },
+      "anti_patterns": ["SET NOT NULL"]
+    },
+    {
+      "id": "parameterized-status-filter",
+      "prompt": "Write a query that filters orders by a status value that comes in from an API request.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer builds the query with a parameter placeholder (e.g. $1, ?, or a named bind parameter) for the status value and binds the value separately through the driver/query API, rather than building the query text by string concatenation or interpolation of the status value directly into the SQL string.",
+          "pass_criteria": [
+            "Shows the query text using a parameter placeholder (e.g. `$1`, `?`, or a named bind parameter) in place of the status value, not the literal value spliced into the SQL string.",
+            "Shows the status value passed as a bound parameter/argument to the query call, separate from the SQL text itself."
+          ],
+          "fail_criteria": [
+            "Builds the query text by string concatenation or interpolation of the status value directly into the SQL string (e.g. an f-string, template literal, or `.format()`/`%` splicing the value into the query) instead of using a placeholder."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Use a placeholder and bind the status value separately, never splice it into the query text: `SELECT id, user_id, status, created_at FROM orders WHERE status = $1;` (Postgres) or `SELECT id, user_id, status, created_at FROM orders WHERE status = ?;` (MySQL), then pass the incoming status value as the bound parameter through the driver's query call (e.g. `client.query(sql, [status])`), not interpolated into the string. This holds even if the value is going through an ORM's raw-SQL escape hatch -- pass it through that API's own parameter binding, not a template literal or `.format()` call that puts the value straight into the SQL text.",
+        "known_wrong": "Just build the query with string concatenation since it's a simple filter: `\"SELECT * FROM orders WHERE status = '\" + status + \"'\"` -- that's the fastest way to get the value from the request into the query, and status is just a short string so there's not much room for anything to go wrong.",
+        "vague": "Make sure you build the query safely so the status value from the request can't cause any problems.",
+        "subtle_wrong": "Use an f-string to build the query since it reads cleanly: `f\"SELECT id, user_id, status, created_at FROM orders WHERE status = '{status}'\"`. As long as you validate on the frontend that status can only be one of the known enum values before the request is sent, splicing it into the query text like this is fine -- the frontend validation already narrows what can end up in the string."
+      },
+      "anti_patterns": ["string concatenation"]
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { rm } from "node:fs/promises";
+import path from "node:path";
 import { describeEntry, describeOpenReservation, NETWORK_ON_WARNING, UNATTENDED_ROSTER_DESCRIPTION } from "../trigger/describe";
 import { formatModalFooter, MODAL_PANEL_INNER_WIDTH } from "./modal-host";
 import { GOVERNANCE_FOOTER } from "./governance-inspector";
@@ -69,10 +70,30 @@ async function fixture(): Promise<string> {
   return root;
 }
 
+/**
+ * Run the real `keryx trigger` CLI as a child process, pinned to its OWN
+ * isolated config dir under `root` rather than inheriting whatever
+ * `XDG_DATA_HOME`/`APPDATA` the parent `bun test` process happens to have —
+ * belt-and-braces on top of `test-preload.ts`'s own redirect, so this test
+ * never depends on that shared, run-wide temp root staying uncontended.
+ */
 function cli(root: string, ...args: string[]): string {
-  return execFileSync(process.execPath, [CLI, "trigger", ...args], { cwd: root, encoding: "utf8" });
+  const configDir = path.join(root, ".keryx-home");
+  return execFileSync(process.execPath, [CLI, "trigger", ...args], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, XDG_DATA_HOME: configDir, APPDATA: configDir },
+  });
 }
 
+// Two real `bun src/cli.ts …` child processes, unbundled (no prebuilt dist),
+// so each spawn pays real module-resolution/transpile cost on top of process
+// start — measured ~300ms/call on a quiet Linux box, and slower still on a
+// loaded macOS CI runner. `waitForFrame`-style pass budgets don't apply here
+// (no renderer at all); bun's 5s default test timeout is the only bound, and
+// two cold spawns plus fixture setup can run close enough to it under CI
+// contention to flake. Widened, justified by the real subprocess work above,
+// not lowered coverage.
 test("AC5: the CLI and the modal print the SAME descriptor for the same entry (shared formatter, not a copy)", async () => {
   const root = await fixture();
   const view = await loadTriggerLedgerView(root);
@@ -89,7 +110,7 @@ test("AC5: the CLI and the modal print the SAME descriptor for the same entry (s
   // The open reservation line, byte for byte.
   const reservation = view.openReservations[0]!;
   expect(status).toContain(`  ${describeOpenReservation(reservation)}\n`);
-});
+}, 20_000);
 
 test("AC5: detail — fire, action, hook, full dispatch posture with the NETWORK ON warning, runs with cost/refusal/denials, reservation with its resolve command", async () => {
   const root = await fixture();

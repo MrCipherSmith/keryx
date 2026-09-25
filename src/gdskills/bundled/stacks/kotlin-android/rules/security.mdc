@@ -1,0 +1,90 @@
+---
+extends: common
+paths: ["**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Kotlin/Android security
+
+Narrows `core-common-rules`' stack-agnostic security rules to Android-
+specific, OWASP Mobile-relevant risks. Applies only to `*.kt`/`*.kts`
+files.
+
+## Secrets and credential storage
+
+- Never store a credential, auth token, or API secret in plain
+  `SharedPreferences` — plain `SharedPreferences` is an unencrypted XML
+  file readable on a rooted device or via backup extraction. Prefer the
+  Android Keystore directly (generate/store the key in the Keystore, use
+  it to encrypt the value yourself) over `EncryptedSharedPreferences`
+  (Jetpack `androidx.security:security-crypto`) for new code — that
+  library has known, unresolved reliability issues (a corrupted-keyset
+  failure mode with no clean recovery path) and Google's own guidance has
+  moved toward not recommending it for new applications; verify the
+  library's current status in the Android docs before reaching for it in
+  an existing codebase that already depends on it.
+- Never hard-code an API key, client secret, or signing credential as a
+  Kotlin string literal or a `BuildConfig` field, whether the value is
+  committed or injected at build time from a local, untracked properties
+  file (`local.properties`) or a CI secret — either way, a `BuildConfig`
+  field is compiled into the APK exactly like a string literal and is
+  just as recoverable by decompiling it. Keeping the value out of source
+  control (via `local.properties`/a CI secret) only stops it leaking
+  through the repository; it does not keep it off the device. For a
+  value that must actually stay off the device, fetch it from a backend
+  at runtime instead of baking it into the build at all.
+- Generate and store cryptographic keys through `AndroidKeyStore`
+  (`KeyGenParameterSpec`) rather than deriving or hard-coding a key in
+  application code — the Keystore keeps key material out of the app's
+  own process memory and out of extractable storage.
+
+## Manifest and component exposure
+
+- Every `<activity>`, `<service>`, `<receiver>`, and `<provider>` in
+  `AndroidManifest.xml` that does not need to be reachable from other
+  apps should have `android:exported="false"` (or no `exported`
+  attribute with no intent-filter, matching the modern default); a
+  component left `exported="true"` with no permission check is callable
+  by any app on the device, including one crafted to pass malformed
+  input.
+- An exported component that must stay exported (a deep-link entry point,
+  a share target) validates every piece of the incoming `Intent` before
+  acting on it — never trusts an extra, a URI path segment, or a
+  `ContentProvider` query purely because the intent-filter matched.
+- Guard a `ContentProvider` and any exported component with a
+  signature-level custom permission when the caller is meant to be your
+  own other app, not "any app that asks."
+
+## Secure intent and deep-link handling
+
+- Treat every value pulled from an incoming `Intent` (extras, deep-link
+  URI segments/query params, a `ClipData` from a share) as untrusted
+  input — validate its shape and range before using it to navigate, query
+  a database, or construct a file path; do not assume it matches what
+  your own app would have sent.
+- Prefer an explicit `Intent` (naming the target component) for
+  inter-component communication within your own app; use an implicit
+  `Intent` only when you genuinely need another app to handle it, and
+  set the package (`setPackage`) when you only want your own app to
+  respond, to avoid intent interception by another installed app.
+- Validate a deep-link's scheme/host/path against an allowlist before
+  using any part of it to load content or trigger an action —
+  `App Links`/verified `https` deep links reduce but do not eliminate
+  this: a query parameter or path segment can still carry attacker-
+  controlled data even through a verified link.
+
+## Data and transport
+
+- Use `HttpsURLConnection`/an HTTP client configured to require TLS for
+  every network call carrying credentials or personal data; do not add a
+  custom `TrustManager`/`HostnameVerifier` that accepts all certificates
+  outside of a short-lived local debug build, and never ship one that
+  way.
+- Mark a view/field that must not appear in screenshots or the recent-
+  apps app-switcher preview (a PIN entry, payment details) with
+  `FLAG_SECURE` on the window, rather than relying on the OS default.
+- Avoid logging PII, tokens, or full request/response bodies with
+  `Log.d`/`Log.i` in release builds — strip or gate verbose logging
+  behind a debug-only build flag so production logs (which can be pulled
+  from a device or bug report) do not leak sensitive data.

@@ -1,0 +1,34 @@
+[
+  {
+    "query": "Use when implementing or extending a feature in a Kotlin/Android app with Jetpack Compose -- composable state hoisting, coroutine scopes (viewModelScope/lifecycleScope), StateFlow exposure from a ViewModel, and recomposition-safe side effects.",
+    "decision": "fork",
+    "topMatch": "kotlin-android/kotlin-android-code-review",
+    "recordedAt": "2026-09-25T15:35:02.929Z",
+    "skillName": "compose-implementation",
+    "justification": "Top match kotlin-android/kotlin-android-code-review is this same pack's read-only review skill (different intent, action verb, workflow), not a real implementation duplicate; no existing implement skill covers Compose state hoisting, coroutine scopes, or StateFlow exposure."
+  },
+  {
+    "query": "Use when a Kotlin/Android module's test suite needs writing, extending, or fixing -- runTest/TestDispatcher for suspend functions and ViewModels, ComposeTestRule semantics-based finders for UI tests, and MockK at the repository/data-source interface boundary.",
+    "decision": "fork",
+    "topMatch": "swift-ios/swift-testing",
+    "recordedAt": "2026-09-25T15:35:03.232Z",
+    "skillName": "kotlin-android-testing",
+    "justification": "Nearest match swift-ios/swift-testing tests Swift/XCTest/Swift Testing code with a different runtime and mocking library entirely; no existing test skill covers Kotlin coroutine test dispatchers, ComposeTestRule, or MockK."
+  },
+  {
+    "query": "Use when reviewing a Kotlin/Android change for coroutine, Compose, and null-safety risks -- GlobalScope usage, side effects fired directly in a composable body, forced-unwrap on external data, mutable state leaked from a ViewModel, and exported manifest components. Read-only, no edits.",
+    "decision": "fork",
+    "topMatch": "kotlin-android/compose-implementation",
+    "recordedAt": "2026-09-25T15:35:03.502Z",
+    "skillName": "kotlin-android-code-review",
+    "justification": "Top match kotlin-android/compose-implementation is this same pack's implementation skill (different intent: write code vs read-only review), not a real review duplicate; no existing review skill covers Kotlin GlobalScope, Compose recomposition, or Android manifest exposure risks."
+  },
+  {
+    "query": "Use when a Gradle Android build, ktlintCheck, detekt, or lint task fails, or a Kotlin compile/type error blocks the build -- resolves Gradle/AGP/Kotlin version mismatches, Compose Compiler mismatches, unresolved dependencies, and lint/detekt findings with the smallest root-cause fix.",
+    "decision": "fork",
+    "topMatch": "csharp-dotnet/dotnet-build-fix",
+    "recordedAt": "2026-09-25T15:35:03.780Z",
+    "skillName": "kotlin-android-build-fix",
+    "justification": "Nearest match csharp-dotnet/dotnet-build-fix fixes dotnet/NuGet/StyleCop errors, not Gradle/AGP/Kotlin/Compose Compiler/detekt findings; each build-fix skill is scoped to its own toolchain's specific failure surface."
+  }
+]

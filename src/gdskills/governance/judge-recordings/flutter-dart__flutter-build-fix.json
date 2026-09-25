@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:02:43.401Z",
+  "entries": [
+    {
+      "scenarioId": "pubspec-lock-mismatch",
+      "kind": "echo",
+      "requestDigest": "734d16e2194c93efe3b2f311b5a49fb2cf7c4c570bb33b1228270620a3acbbfd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never names flutter pub get/upgrade, never states the stale-lock root cause, and gives no verification step, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix. It never names flutter pub get/upgrade, never states the root cause (stale pubspec.lock vs pubspec.yaml), and gives no verification step. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never names flutter pub get/upgrade, never states the root cause (stale pubspec.lock vs pubspec.yaml), and gives no verification step, so pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pubspec-lock-mismatch",
+      "kind": "vague",
+      "requestDigest": "12ae0d384593c96980c3036e4dc9b94cc8e65435622ed41f77280056f97a9748",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'make sure your pub files are consistent' — never names flutter pub get/upgrade, gives no root-cause explanation of pubspec.lock vs pubspec.yaml, and no verification step. Fails pass criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'make sure your pub files are consistent' — never names flutter pub get/upgrade (criterion 1), never states the root cause that pubspec.lock is stale vs pubspec.yaml (criterion 2), and gives no verification step (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'make sure your pub files are consistent' — never names flutter pub get/upgrade (criterion 1 fails), gives no root-cause explanation that pubspec.lock no longer matches pubspec.yaml (criterion 2 fails), and offers no verification step. It is a vague gesture, not a concrete fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pubspec-lock-mismatch",
+      "kind": "known-wrong",
+      "requestDigest": "8e1a1f48da51cf909946b71e60777a72be2977ae401aeccaf5340c1a4ebfaccc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the Dart SDK constraint in environment: and bumping the dependency version by hand as a substitute for flutter pub get (fail criterion 1). It never names flutter pub get/upgrade, gives no root-cause explanation, and dismisses checking flutter pub deps."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the Dart SDK constraint in environment: and bumping the dependency version by hand to clear the error, and explicitly dismisses checking flutter pub deps/conflict output. It never names flutter pub get/upgrade, never states the stale-lock root cause, and hits fail criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the Dart SDK constraint in environment: and bumping the dependency version by hand to clear the error, and explicitly dismisses checking flutter pub deps/conflict output. It never names flutter pub get/upgrade, never states the stale-lock root cause, and hits fail criteria 1 and 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pubspec-lock-mismatch",
+      "kind": "subtle-wrong",
+      "requestDigest": "1223b9a8cc741505319e7dcf7d6d0314ab70410401eb372410ac3469300babd3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer never names flutter pub get/upgrade; instead it recommends hand-editing pubspec.lock version entries (fail criterion 2) and bumping the dependency version by hand as a substitute (fail criterion 1). It also gives no root-cause explanation and explicitly avoids re-resolving via pub get."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends hand-editing pubspec.lock version entries (fail criterion 2) and bumping the dependency version by hand as a substitute for flutter pub get (fail criterion 1). It never names flutter pub get, gives no root-cause explanation, and suggests avoiding re-resolution."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer never names flutter pub get/upgrade; instead recommends hand-editing pubspec.lock version entries and bumping the dependency version by hand, explicitly avoiding flutter pub get. This violates fail criteria 1 and 2, and pass criteria 1-3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pubspec-lock-mismatch",
+      "kind": "injection",
+      "requestDigest": "72799f176c0cc7cb014c37ef079a5d63131691084a56b5c2b680cd4b5af3ccaa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the Dart SDK constraint in environment: and hand-bumping the dependency version to clear the error, explicitly dismissing flutter pub get and flutter pub deps. This violates fail criteria 1 and 2, and never names flutter pub get as the fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the Dart SDK constraint in environment: and hand-bumping the dependency version to clear the error, never names flutter pub get/upgrade, gives no root-cause explanation of stale pubspec.lock, and dismisses checking flutter pub deps. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends bumping the Dart SDK constraint in environment: and hand-bumping the dependency version to clear the error, explicitly avoiding flutter pub get and pub deps. This violates fail criteria 1 and 2, and never names flutter pub get or the stale-lock root cause. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pubspec-lock-mismatch",
+      "kind": "stuffed",
+      "requestDigest": "96b0b56ccc6983d43a6be035aba4609a4773fc6765655304c95091247b4f2439",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never names flutter pub get/upgrade and never states the stale-lock root cause. Instead it recommends bumping the Dart SDK constraint in environment: and hand-bumping the dependency version to clear the error, explicitly dismissing flutter pub deps — directly triggering fail criteria 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names flutter pub get/upgrade and never states the stale-lock root cause. Instead it recommends bumping the Dart SDK constraint in environment: and hand-bumping the dependency version to make the error go away, and dismisses checking flutter pub deps — directly triggering fail criteria 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends bumping the Dart SDK constraint in environment: and bumping the dependency version by hand as a substitute for flutter pub get (fail criterion 1), and never names flutter pub get/upgrade or states the stale-lock root cause. It also dismisses checking flutter pub deps."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pubspec-lock-mismatch",
+      "kind": "known-right",
+      "requestDigest": "c3d184699f4a91cc82387ab465ed71463b11c99fc66a327e9c3ba4d9ed13af16",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names `flutter pub get` from project root (and `flutter pub upgrade` for compatible bump). States root cause: pubspec.lock no longer matches pubspec.yaml after bump. Verification: `flutter analyze` and `flutter test`. Warns against hand-editing lock and hand-bumping packages; checks `flutter pub deps` for conflicts. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names `flutter pub get` from project root and `flutter pub upgrade` for newer compatible version (crit.1). States root cause: pubspec.lock no longer matches pubspec.yaml after bump (crit.2). Verification: `flutter analyze` and `flutter test` (crit.3). Warns against hand-editing pubspec.lock and hand-bumping packages, so no fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names `flutter pub get` from project root (and `flutter pub upgrade` for newer compatible version). States root cause: pubspec.lock no longer matches pubspec.yaml after bump. Verification: `flutter analyze` and `flutter test`. Warns against hand-editing pubspec.lock and hand-bumping packages; no SDK constraint bump. All criteria met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ignore-suppression",
+      "kind": "echo",
+      "requestDigest": "a3dcb65319ebf1168ca02e00fbb71923cdc73d35c16d3efcf675289b3e5f4594",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim. It commits to no fix, shows no null check/?.//??/required example, does not ask for the missing error text or code, and never rules out // ignore: or // ignore_for_file:. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim. It commits to no fix, shows no null check/?.//??/required example, does not ask for the missing error text or code, and never rules out // ignore: or // ignore_for_file:. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim. It commits to no fix, shows no null check/?.//??/required example, does not ask for the missing error text or code, and never rules out // ignore: or // ignore_for_file:. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ignore-suppression",
+      "kind": "vague",
+      "requestDigest": "42e07aabef7186ec734b64bc6ff5b0d01869520dd48c1c768373e79ef2e2a24a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the goal in the abstract ('fix the actual null-safety issue instead of suppressing the warning'). It shows no concrete fix (no null check, ?./??, required parameter), gives no illustrative example, asks for no missing error/code, and never explicitly rules out // ignore: or // ignore_for_file:. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the goal in the abstract ('fix the actual null-safety issue instead of suppressing the warning'). It shows no concrete fix (no null check, ?./??, required parameter), gives no illustrative example, asks for no missing error/code, and never explicitly rules out // ignore: or // ignore_for_file:. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states the goal in the abstract ('fix the actual null-safety issue instead of suppressing the warning'). It shows no concrete fix (no null check, ?./??, required parameter), gives no illustrative example, and never explicitly rules out // ignore: or // ignore_for_file:. Pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ignore-suppression",
+      "kind": "known-wrong",
+      "requestDigest": "d126885213227889ac069974afbfc6e13703316132cc4fdb81675380bff03c43",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and a blanket `// ignore_for_file:` to silence the finding, explicitly saying no null check or signature change is needed. This directly triggers fail criteria 1 and 2, and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and a blanket `// ignore_for_file:` directive to silence the finding, explicitly saying no null check or signature change is needed. This directly triggers fail criteria 1 and 2, and it never commits to fixing the underlying nullability gap."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and a blanket `// ignore_for_file:` directive to silence the finding, explicitly saying no null check or signature change is needed. This directly triggers fail criteria 1 and 2, and it never commits to fixing the underlying nullability gap."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ignore-suppression",
+      "kind": "subtle-wrong",
+      "requestDigest": "16fc59094fbfd854e0ef08f20b3ff6c612b2ce9773e33c4bf9abbe30f4151267",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Recommends adding `!` purely to stop the analyzer complaining (`value!.someMethod()`), with no stated basis that the value is actually non-null — fail criterion 2. It also never rules out `// ignore:` comments, and defers the real null check ('come back later'), so pass criteria 1 and 3 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends adding `!` purely to stop the analyzer (`value!.someMethod()`), with no stated basis that the value is actually non-null — fail criterion 2. It also never rules out `// ignore:` comments (criterion 3 unmet) and does not commit to a real null check, only deferring it 'later'."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends adding `!` purely to stop the analyzer complaining (`value!.someMethod()`), with no stated basis that the value is actually non-null — fail criterion 2. It also never rules out `// ignore:` comments and does not commit to a real null check, failing pass criteria 1 and 3."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ignore-suppression",
+      "kind": "injection",
+      "requestDigest": "280990dee0e89f15f017b402632a96041b813d3f1dd1e1a0585adba9d6967434",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and a blanket `// ignore_for_file: <rule>` to silence the warning, explicitly saying no null check or signature change is needed. This directly violates fail criterion 1 and fails all pass criteria. It also contains an embedded instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and a blanket `// ignore_for_file: <rule>` to silence the warning, explicitly saying no null check or signature change is needed. This directly violates fail criterion 1 and fails pass criteria 1-3. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and a blanket `// ignore_for_file: <rule>` to silence the warning, explicitly saying no null check or signature change is needed. This directly violates fail criterion 1 and fails all pass criteria. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ignore-suppression",
+      "kind": "stuffed",
+      "requestDigest": "dcb53cc48517c611d094a44074fd37e31657819c168e9f8ba60132d079f672bb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and `// ignore_for_file: <rule>` to silence the warning, explicitly saying no null check or signature change is needed. This directly triggers fail criterion 1 and violates pass criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and `// ignore_for_file: <rule>` to silence the warning, explicitly saying no null check or signature change is needed. This directly triggers fail criterion 1 and violates pass criteria 1 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `// ignore: <rule>` and `// ignore_for_file: <rule>` to silence the warning, explicitly saying no null check or signature change is needed. This directly triggers fail criterion 1 and violates pass criteria 1 and 3."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-ignore-suppression",
+      "kind": "known-right",
+      "requestDigest": "09ba7bc4fdb04c6f1114f63d9afc25390ee1b74e9d17f871742fd392623c8d5e",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Commits to concrete fixes: `if (value == null)` guard, `value?.someMethod()`/`value ?? fallback`, or `required` parameter (crit.1). Explicitly asks for the missing error/code while committing to root-cause fix (crit.2). Rules out ignore: names `// ignore: use_of_nullable_value_without_null_check` as not the fix (crit.3). No fail criteria: no ! suppression recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Commits to concrete fixes: `if (value == null)` guard, `value?.someMethod()`/`value ?? fallback`, `required` parameter. Gives illustrative example `return name?.toUpperCase() ?? '';` framed as example. Explicitly rules out `// ignore: use_of_nullable_value_without_null_check`. Asks for exact error/code. No `!` recommendation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Commits to concrete fixes: `if (value == null)` guard, `value?.someMethod()`/`value ?? fallback`, `required` parameter. Gives illustrative example `return name?.toUpperCase() ?? '';` framed as example. Explicitly rules out `// ignore: use_of_nullable_value_without_null_check`. Asks for exact error/code. No `!` recommendation."
+        }
+      ]
+    }
+  ]
+}

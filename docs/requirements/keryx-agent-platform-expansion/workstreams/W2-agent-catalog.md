@@ -1,5 +1,62 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.11
+Version: 0.1.15
+
+**Changelog (0.1.15, flow 336, Wave 4 batch 4 — version renumbered from a
+0.1.12 collision with flow 338's own Phase A entry below, both branched from
+the same 0.1.11 base independently; this entry now sits above 0.1.14 as the
+latest on `main` after the two branches merged):** `csharp-dotnet`,
+`swift-ios`, `kotlin-android`, `flutter-dart` (4 new packs, 16 skills) each
+ran the honest DeepSeek `deepseek-chat` runner+judge gate
+(`--strictness high --trials 10 --scope bundled`), once per skill, after
+calibration (`judge-check --record`) cleared cleanly on the first attempt for
+all 16. Every behavior scenario across all 16 skills clears
+`PACK_BEHAVIOR_PASS_FLOOR`; every skill still fails the gate on trigger
+accuracy alone — see `W1-stack-catalog.md`, "Implementation notes: Wave 4
+batch 4 (flow 336)" for the full per-skill breakdown. No SKILL.md/evals.json
+content changed after seeing these numbers (the standing rule this flow
+recorded: a post-gate edit may only state a skill's real, general scope
+boundary, never restate a failing eval prompt's wording — no edit satisfying
+that constraint was found for any of the 16 misses). All four packs stay
+`stability: experimental`; none ships a generated pair. Real, on-disk
+generated coverage as of this flow: unchanged at `go`, `python` (2 packs, 4
+files); `angular`, `mobx`, `nestjs`, `ts-js-node`, `react`, `nextjs-nuxt`,
+`vue`, `docker-k8s-terraform`, `ci-github-gitlab`, `csharp-dotnet`,
+`swift-ios`, `kotlin-android`, `flutter-dart` are all `experimental` with
+none.
+
+**Changelog (0.1.14, flow 338, W4 batch 6, PR review round 1 correction):**
+the 0.1.13 line below recorded a SECOND gate run whose PASS verdicts for
+`ci-pipeline-implementation`/`ci-pipeline-code-review` were disqualified on
+PR review — the fix pass between the two runs restated several failing
+eval prompts near-verbatim inside `SKILL.md` description/triggers text
+(gaming the router, not fixing an honest scope gap). The disqualified
+run's `pass`/`fail` split is void. The FIRST run is the official result:
+all 5 skills fail on trigger accuracy (real routing ambiguity, mostly
+against sibling `*-build-fix`/review skills sharing generic vocabulary —
+see `W1-stack-catalog.md`'s Phase B review-round section for the
+per-scenario accounting). Both `docker-k8s-terraform` (0/2) and
+`ci-github-gitlab` (0/3) stay `stability: experimental`; no generated pair
+ships for either. No gate re-run was performed after the revert. Real,
+on-disk generated coverage unchanged by this batch: `go`, `python` only.
+
+**Changelog (0.1.13, flow 338, W4 batch 6, Phase B honest gate — SUPERSEDED
+by 0.1.14 above, kept for history):** the honest DeepSeek 10-trial gate ran
+for both packs. `ci-pipeline-implementation` and `ci-pipeline-code-review`
+(ci-github-gitlab) pass cleanly; `docker-k8s-terraform-review`,
+`docker-k8s-terraform-build-fix`, and `ci-pipeline-build-fix` each fail on
+trigger accuracy. **This was the second (gamed) run — see 0.1.14: those
+PASS verdicts do not stand.**
+
+**Changelog (0.1.12, flow 338, W4 batch 6, Phase A):** `docker-k8s-terraform`
+and `ci-github-gitlab` were authored (see `W1-stack-catalog.md`,
+"Implementation notes: Wave 4 batch 6 (flow 338)") with a real
+`agentProfile` block in each `pack.json` (the `auditFocus`/`buildCommands`/
+`fixGuardrails` shape `src/agents/generate.ts` reads), but neither pack has
+run through the honest behavioral gate yet — both ship `stability:
+experimental` and `agent-refs.json: {"agents": []}` with a note, same as
+every other pack's pre-gate state. No `<stack>-code-auditor`/
+`<stack>-build-fixer` pair is generated for either until Phase B's gate run
+decides it honestly.
 
 **Changelog (0.1.11, flow 318, review round 2 on PR #719):** corrects the
 0.1.10 line below, which recorded review round 1's outcome — superseded by
@@ -562,6 +619,27 @@ keryx agents generate --stack <id> [--check] [--json]
 - **W2-AC8** — `keryx agents list|show|export|verify` coexist with, and do not
   alter the documented behavior of, `keryx agents bootstrap|external|monitor`
   (regression test against the existing `agent-commands.test.ts` suite).
+
+## Implementation notes: Wave 4 batch 5 (flow 337)
+
+Four new W1 stack packs authored (`php-laravel`, `ruby-rails`, `c-cpp`,
+`sql-db` — see `W1-stack-catalog.md`, "Implementation notes: Wave 4 batch 5
+(flow 337)" and its Phase B follow-up), all `stability: "experimental"`.
+
+**Phase B outcome.** Calibration (`skills judge-check --record`) recorded
+clean for all 16 skills across the four packs. The honest 10-trial DeepSeek
+gate (`skills eval --runner deepseek:deepseek-chat --judge
+deepseek:deepseek-chat --strictness high --trials 10`) then ran for real and
+failed all 16 — every failure is trigger accuracy (behavior content passed
+at 0.8+ in every case but one, at 0.4). Per each pack's `agent-refs.json`,
+`"agents": []` with a note recording this actual outcome (not "gate not yet
+run" — the gate ran and the result is recorded). `keryx agents generate
+--stack <id>` refuses all four, confirmed directly, with
+`stack-pack-not-gate-cleared`. This matches batch 1's own first honest gate
+run (flow 314), which also failed all four of its packs before later fixes
+(flow 316, 317) cleared two of them — the same recovery path is available to
+this batch as a future flow, not attempted here per the standing rule
+against tuning content to a grader after seeing a result.
 
 ## Open questions
 

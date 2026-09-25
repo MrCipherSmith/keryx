@@ -1,0 +1,41 @@
+{
+  "id": "php-laravel",
+  "family": "framework",
+  "modules": ["php-laravel-rules", "php-laravel-skills"],
+  "detectionMarkers": ["php", "laravel"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 337, Wave 4 batch 5"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["php-laravel-implementation"],
+    "test": ["php-laravel-testing"],
+    "review": ["php-laravel-code-review"],
+    "build-fix": ["php-laravel-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "PHP / Laravel",
+    "auditFocus": [
+      "an Eloquent create/update fed straight from $request->all() instead of validated() or an explicit $fillable/$guarded allowlist -- mass-assignment risk",
+      "raw SQL string interpolation (DB::select/DB::statement with concatenated values) instead of parameter bindings or the query builder/Eloquent",
+      "a relationship accessed inside a loop with no eager load (with()/load()) on the collection it iterates -- N+1 queries",
+      "Blade {!! !!} unescaped output rendering a value that traces back to user input",
+      "a state-changing route (POST/PUT/PATCH/DELETE) missing CSRF protection or excluded from the VerifyCsrfToken middleware without a stated reason",
+      "a queue job with no idempotency handling (unique(), a dedupe key, or a check before side-effecting work) on a connection that can redeliver or retry it -- true of most production queue configurations"
+    ],
+    "buildCommands": [
+      "composer install",
+      "php artisan config:clear (when config/env-dependent errors appear)",
+      "./vendor/bin/phpstan analyse (when the project has a phpstan/larastan config)",
+      "php artisan test (or ./vendor/bin/pest / ./vendor/bin/phpunit)"
+    ],
+    "fixGuardrails": [
+      "Never silence a static-analysis finding with a blanket @phpstan-ignore or @psalm-suppress instead of fixing the root cause.",
+      "Never widen $fillable to a blanket guard-nothing allowlist, or swap $guarded to [] to make a mass-assignment error disappear.",
+      "Never disable CSRF verification for a route or add it to VerifyCsrfToken's except list just to make a failing request succeed.",
+      "Never delete or skip a failing test to reach a green build."
+    ]
+  }
+}

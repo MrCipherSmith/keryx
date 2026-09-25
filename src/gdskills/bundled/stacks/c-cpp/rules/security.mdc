@@ -1,0 +1,90 @@
+---
+extends: common
+paths: ["**/*.c", "**/*.h", "**/*.cpp", "**/*.cc", "**/*.cxx", "**/*.hpp", "**/*.hxx", "**/*.hh", "**/*.ipp", "**/*.inl", "**/*.tpp", "**/*.cppm", "**/*.ixx"]
+metadata:
+  origin: authored
+---
+
+# C / C++ security
+
+Narrows `core-common-rules`' stack-agnostic security rules to C/C++
+memory-safety and undefined-behavior risks, and the sanitizers/safe APIs
+to use instead. Applies to both C and C++ files.
+
+## Memory safety
+
+- Never dereference, write through, or `free` a pointer after it has been
+  freed or has gone out of scope (use-after-free) — set a freed pointer
+  to `NULL` when it could be read again, and never return a pointer or
+  reference to a stack-local object.
+- Never `free`/`delete` the same pointer twice (double-free) — a
+  freed-and-nulled pointer makes a second `free`/`delete` a harmless
+  no-op instead of heap corruption.
+- Bounds-check every array/buffer index and every pointer arithmetic
+  expression built from untrusted input before it is used to read or
+  write memory — an off-by-one or an unchecked length from user input is
+  the most common route to a buffer overflow.
+- Never use `strcpy`, `strcat`, `sprintf`, or `gets` on data whose length
+  is not already statically known to fit the destination — use
+  `snprintf`, a length-checked copy, or a `std::string`/`std::vector`
+  that manages its own capacity.
+
+## Undefined behavior
+
+- Signed integer overflow is undefined behavior in C/C++ (unlike
+  unsigned wraparound, which is well-defined modular arithmetic) — check
+  bounds before an addition/multiplication that could overflow a signed
+  type, or use an unsigned/wider type, or a checked-arithmetic helper,
+  for a bounds or size computation derived from untrusted input.
+- Never read an uninitialized local variable or heap allocation — value-
+  initialize (`Type x{};` in C++, an explicit `= 0`/`memset` in C) any
+  variable whose first use might be a read, and never rely on whatever
+  value happened to be left on the stack or heap.
+- Never access an object through a pointer of an incompatible type (a
+  strict-aliasing violation) — use `memcpy` for a type-punning copy, or
+  (C++20+) `std::bit_cast`, instead of reinterpreting a pointer's type
+  and dereferencing it.
+- Do not read past the end of an array via pointer arithmetic even when
+  the read "usually" lands in valid memory — an out-of-bounds read past
+  the last element is undefined behavior regardless of what happens to be
+  mapped there.
+
+## Concurrency
+
+- Every variable read from more than one thread while at least one thread
+  writes it is guarded by a mutex, or is a `std::atomic`/C11 `_Atomic`
+  type — an unsynchronized shared read/write is a data race, which is
+  undefined behavior in both C and C++, not merely "occasionally wrong."
+- Acquire locks in a consistent global order across the codebase to avoid
+  deadlock; prefer `std::lock_guard`/`std::scoped_lock` (which also
+  supports locking multiple mutexes deadlock-free in one call) over
+  manual `lock()`/`unlock()` pairs, since a manual pair skips the unlock
+  on an early return or exception.
+
+## Sanitizers
+
+- Build and run with AddressSanitizer + UndefinedBehaviorSanitizer
+  (`-fsanitize=address,undefined -fno-omit-frame-pointer -g`, Clang/GCC)
+  whenever investigating a memory-safety or UB bug report, or before
+  trusting a fix for one — ASan catches use-after-free, double-free,
+  buffer overflow, and heap corruption at the exact faulting access; UBSan
+  catches signed overflow, misaligned access, and other UB the compiler
+  is otherwise free to miscompile around silently.
+- Build and run with ThreadSanitizer (`-fsanitize=thread`) — built as a
+  separate binary from ASan/UBSan, the two runtimes are not composable in
+  one build — whenever investigating a suspected data race or before
+  trusting a fix for one.
+- A memory-safety, UB, or concurrency bug report is not actually verified
+  fixed until it has been reproduced and re-run under the relevant
+  sanitizer and comes back clean; a fix that only "looks right" by
+  inspection, or that only passes without a sanitizer attached, has not
+  been verified.
+
+## Dependency and input hygiene
+
+- Validate the length/format of any externally-sourced buffer (network,
+  file, IPC, command-line argument) before parsing it — do not assume a
+  length field in the input itself is trustworthy without a sanity check
+  against the buffer's actual size.
+- Never hard-code a credential, API key, or signing secret in source;
+  load it from environment/secret storage the project already uses.

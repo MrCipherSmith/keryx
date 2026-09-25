@@ -1,3 +1,5 @@
+import { DEFAULT_MODEL_CHOICE_BLOCK_INPUT, renderModelChoicePolicy, type ModelChoiceBlockInput } from "./model-choice";
+
 export type AgentEntrypointFileName = "AGENTS.md" | "CLAUDE.md";
 
 export function renderGlobalMetaprojectBootstrapBlock({
@@ -34,8 +36,18 @@ ${endMarker}
 
 export function renderProjectMetaprojectReferenceBlock({
   enableTasks,
+  modelChoice = DEFAULT_MODEL_CHOICE_BLOCK_INPUT,
 }: {
   enableTasks: boolean;
+  /**
+   * Flow 336 — model guidance, from the routing table plus the model tiers.
+   * Defaults to tier-words-only/enabled: a caller with no project I/O done
+   * yet (the bare scaffold `renderAgentEntrypoint` writes) gets the same safe
+   * default `ensureMetaprojectReference` would resolve from an unconfigured
+   * project, and its very next sync call overwrites this block with whatever
+   * the project's `routing.config.json` actually resolves.
+   */
+  modelChoice?: ModelChoiceBlockInput;
 }): string {
   const flowPolicy =
     "For starting, tracking, or finishing a managed piece of work (a flow), use the Metaproject flow skill for state/status commands. For non-trivial implementation through Task Manager, use the local gdskills flow-orchestrator first: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md. All flow state changes go through the keryx flow CLI.";
@@ -58,6 +70,7 @@ export function renderProjectMetaprojectReferenceBlock({
     "For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.",
     "For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.",
     ...(enableTasks ? [flowPolicy] : []),
+    ...(modelChoice.enabled ? [renderModelChoicePolicy(modelChoice.assignments)] : []),
   ];
 
   return `<!-- keryx:index -->

@@ -259,6 +259,24 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 335: a one-shot check of the working diff's PR-description
+    // claims (none, for a working diff — no PR body to read) plus a linked
+    // flow's frozen acceptance criteria, with Jev. TUI-only, same reasoning
+    // as `/risk`/`/scenarios`.
+    name: "/contract",
+    description: "Check PR-description claims and a linked flow's frozen acceptance criteria against the diff, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 340: an advisory, annotate-only pass over the latest review
+    // package's consolidated findings — severity calibration, duplicate-
+    // merge candidates, verifier queue order — with Jev. TUI-only, same
+    // reasoning as `/contract`.
+    name: "/triage",
+    description: "Advisory annotations (severity calibration, duplicate candidates, verifier order) over the latest review package, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 329 (AC4/AC5): the opt-in turn guard — after a turn ends, checks
     // whether the request was done and catches a final message that
     // contradicts what the tools really did. TUI-only, same reasoning as
@@ -267,6 +285,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // persists the per-user setting (default off).
     name: "/guard",
     description: "Opt-in turn guard: checks whether the request was done, catches contradictions — /guard [on|off]",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 338 (AC7): the routing classifier — sorts each request into a
+    // category (Jev when connected, else the main model) and routes it to
+    // that category's model (`keryx routing set`). Opt-in, default off.
+    // TUI-only: the per-turn tag and `sb-route` sidebar row are OpenTUI
+    // surfaces, same reasoning as `/guard`.
+    name: "/route",
+    description: "Opt-in routing classifier: sorts the request into a category and routes it to that model — /route [on|off]",
     modes: AGENT_ONLY,
   },
   {

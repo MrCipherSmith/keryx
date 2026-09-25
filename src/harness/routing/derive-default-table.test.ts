@@ -1,8 +1,10 @@
 // Flow 327 (Routing A2), AC10 (rewritten 2026-09-25) — `deriveDefaultTable`.
-// Pure — no fs/network.
+// Flow 341 (AC4/AC5) — the real-task-cost override on top of it, at the
+// bottom of this file. Pure — no fs/network.
 import { expect, test } from "bun:test";
 import { deriveDefaultTable, familyKey, parseModelVersion } from "./derive-default-table";
 import { PRIORITY_UNKNOWN_PRICE, profileKey, type ModelProfile } from "./model-profile";
+import { MIN_MEASURED_TASKS, type TaskCostLookup, type TaskCostStats } from "./task-cost";
 
 function profile(providerId: string, modelId: string, overrides: Partial<ModelProfile> = {}): ModelProfile {
   return {
@@ -481,4 +483,99 @@ test("deriveDefaultTable: tie-break falls to priority.value when neither candida
   };
   const table = deriveDefaultTable("prov", models, profiles, "claude-opus-flagship");
   expect(table.quick).toEqual({ kind: "model", providerId: "prov", modelId: "vendor-b" }); // higher priority.value wins
+});
+
+// ---------------------------------------------------------------------------
+// Flow 341 (AC4/AC5) — the cost override on the step-down categories. Same
+// worked example as above: an Opus 5.5 session, opus-5.5/opus-4.7/sonnet-5/
+// haiku-4.5 available. Structurally, subagents/docs/unattended step down to
+// sonnet-5; review/planning stay on opus-5.5 (nothing stronger). Every test
+// here supplies a `TaskCostLookup` built from a plain map, never touching disk.
+// ---------------------------------------------------------------------------
+
+const OPUS_SONNET_HAIKU_MODELS = ["claude-opus-5.5", "claude-opus-4.7", "claude-sonnet-5", "claude-haiku-4.5"];
+
+function opusSonnetHaikuProfiles(): Record<string, ModelProfile> {
+  return Object.fromEntries(OPUS_SONNET_HAIKU_MODELS.map((modelId) => [profileKey("anthropic", modelId), profile("anthropic", modelId)]));
+}
+
+function lookupFrom(entries: Readonly<Record<string, TaskCostStats>>): TaskCostLookup {
+  return (providerId, modelId, category) => entries[`${providerId}::${modelId}::${category}`];
+}
+
+function stats(overrides: Partial<Omit<TaskCostStats, "medianCostUsd">> & { medianCostUsd?: number } = {}): TaskCostStats {
+  const { medianCostUsd, ...rest } = overrides;
+  return {
+    providerId: "anthropic",
+    modelId: "x",
+    category: "subagents",
+    n: MIN_MEASURED_TASKS,
+    medianTokens: 1000,
+    successRate: 1,
+    ...rest,
+    ...(medianCostUsd !== undefined ? { medianCostUsd } : {}),
+  };
+}
+
+test("deriveDefaultTable: no taskCostLookup supplied — byte-identical to before flow 341 (subagents still steps down to sonnet)", () => {
+  const table = deriveDefaultTable("anthropic", OPUS_SONNET_HAIKU_MODELS, opusSonnetHaikuProfiles(), "claude-opus-5.5");
+  expect(table.subagents).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-sonnet-5" });
+});
+
+test("deriveDefaultTable: below the evidence bar (n < 20 on either side) — the step-down pick stands even though the lighter model's measured cost is HIGHER", () => {
+  const lookup = lookupFrom({
+    "anthropic::claude-sonnet-5::subagents": stats({ modelId: "claude-sonnet-5", n: MIN_MEASURED_TASKS - 1, medianCostUsd: 0.5 }), // lighter, but under-measured
+    "anthropic::claude-opus-5.5::subagents": stats({ modelId: "claude-opus-5.5", n: MIN_MEASURED_TASKS, medianCostUsd: 0.1 }), // stronger, cheaper — irrelevant, evidence bar not met
+  });
+  const table = deriveDefaultTable("anthropic", OPUS_SONNET_HAIKU_MODELS, opusSonnetHaikuProfiles(), "claude-opus-5.5", lookup);
+  expect(table.subagents).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-sonnet-5" });
+});
+
+test("deriveDefaultTable: at/above the bar, and the lighter model actually IS cheaper per task — the step-down pick stands", () => {
+  const lookup = lookupFrom({
+    "anthropic::claude-sonnet-5::subagents": stats({ modelId: "claude-sonnet-5", n: 25, medianCostUsd: 0.02 }),
+    "anthropic::claude-opus-5.5::subagents": stats({ modelId: "claude-opus-5.5", n: 30, medianCostUsd: 0.09 }),
+  });
+  const table = deriveDefaultTable("anthropic", OPUS_SONNET_HAIKU_MODELS, opusSonnetHaikuProfiles(), "claude-opus-5.5", lookup);
+  expect(table.subagents).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-sonnet-5" });
+});
+
+test("deriveDefaultTable: at/above the bar, and the lighter model's median cost per task is NOT lower — it loses to the stronger candidate (the operator's exact scenario: a lighter model burning more tokens ends up costing the same or more)", () => {
+  // Stats supplied for ALL THREE step-down categories — the override is
+  // evaluated PER CATEGORY (each has its own measured evidence), so proving
+  // it fires for more than one category means supplying more than one.
+  const lookup = lookupFrom({
+    "anthropic::claude-sonnet-5::subagents": stats({ modelId: "claude-sonnet-5", category: "subagents", n: 40, medianCostUsd: 0.12 }), // "lighter" but not cheaper
+    "anthropic::claude-opus-5.5::subagents": stats({ modelId: "claude-opus-5.5", category: "subagents", n: 40, medianCostUsd: 0.1 }),
+    "anthropic::claude-sonnet-5::docs": stats({ modelId: "claude-sonnet-5", category: "docs", n: 40, medianCostUsd: 0.12 }),
+    "anthropic::claude-opus-5.5::docs": stats({ modelId: "claude-opus-5.5", category: "docs", n: 40, medianCostUsd: 0.1 }),
+  });
+  const table = deriveDefaultTable("anthropic", OPUS_SONNET_HAIKU_MODELS, opusSonnetHaikuProfiles(), "claude-opus-5.5", lookup);
+  expect(table.subagents).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-opus-5.5" });
+  expect(table.docs).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-opus-5.5" });
+  // unattended has NO stats supplied — below the evidence bar (nothing
+  // recorded at all), so it keeps the structural step-down pick. This is the
+  // per-category independence itself: the override never leaks across
+  // categories that were not individually measured.
+  expect(table.unattended).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-sonnet-5" });
+  // review/planning were never candidates for this override — unaffected.
+  expect(table.review).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-opus-5.5" });
+});
+
+test("deriveDefaultTable: equal median cost — NOT strictly lower, so the lighter pick still loses (the AC's exact wording: 'is NOT lower')", () => {
+  const lookup = lookupFrom({
+    "anthropic::claude-sonnet-5::subagents": stats({ modelId: "claude-sonnet-5", n: 20, medianCostUsd: 0.1 }),
+    "anthropic::claude-opus-5.5::subagents": stats({ modelId: "claude-opus-5.5", n: 20, medianCostUsd: 0.1 }),
+  });
+  const table = deriveDefaultTable("anthropic", OPUS_SONNET_HAIKU_MODELS, opusSonnetHaikuProfiles(), "claude-opus-5.5", lookup);
+  expect(table.subagents).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-opus-5.5" });
+});
+
+test("deriveDefaultTable: cost unknown on either side — the override never fires, even with plenty of n", () => {
+  const lookup = lookupFrom({
+    "anthropic::claude-sonnet-5::subagents": stats({ modelId: "claude-sonnet-5", n: 100 }), // no medianCostUsd key at all — cost unknown
+    "anthropic::claude-opus-5.5::subagents": stats({ modelId: "claude-opus-5.5", n: 100, medianCostUsd: 0.1 }),
+  });
+  const table = deriveDefaultTable("anthropic", OPUS_SONNET_HAIKU_MODELS, opusSonnetHaikuProfiles(), "claude-opus-5.5", lookup);
+  expect(table.subagents).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-sonnet-5" });
 });

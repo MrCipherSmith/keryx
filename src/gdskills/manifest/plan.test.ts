@@ -451,4 +451,65 @@ describe("real bundled manifest (flow 309, W1 T14 — python stack pack destinat
     const second = await planInstall(input);
     expect(JSON.stringify(first)).toBe(JSON.stringify(second));
   });
+
+  // Flow 336 (Wave 4 batch 4) review round 1, M5: a Kotlin-DSL Spring/Ktor
+  // JVM project (build.gradle.kts with a spring-boot dependency, no Android
+  // Gradle plugin) sets `kotlin: true` and `spring: true` but `android:
+  // false` (src/stack/detect.ts's jvmManifestSignal adds the "kotlin" tag
+  // for ANY .kts filename or any file mentioning "kotlin", regardless of
+  // Android). `framework:kotlin-android`'s `detectionMarkers` used to be
+  // `["kotlin", "android", "gradle"]` -- besides "kotlin" alone wrongly
+  // including a non-Android JVM project, "gradle" was never a real
+  // `stack.json` tag at all (`resolveComponentInclusion` treats an unknown
+  // marker key as "missing", which fails OPEN -- included unconditionally,
+  // regardless of the other markers). Narrowed to `["android"]` only, the
+  // one tag `jvmManifestSignal` sets exclusively from the Android Gradle
+  // Plugin marker (`com.android.(application|library)`). Analogous fixes
+  // for `framework:swift-ios` (was `["swift", "ios", "xcode"]`, "xcode"
+  // never a real tag; narrowed to `["ios"]`, since `Package.swift` alone
+  // sets "swift" for any Swift package, iOS or not) and `framework:
+  // flutter-dart` (was `["flutter", "dart"]`; narrowed to `["flutter"]`,
+  // since `pubspec.yaml` alone sets "dart" for any Dart package, Flutter or
+  // not) are covered by symmetry, not repeated here.
+  test("kotlin-android is NOT pulled in for a Kotlin-DSL Spring/Ktor JVM project (kotlin+spring true, android false)", async () => {
+    const plan = await planInstall({
+      manifest,
+      profileId: "kotlin-android",
+      target: "claude",
+      repoRoot,
+      stack: { tags: { kotlin: true, spring: true, android: false }, uncertain: false },
+    });
+    expect(plan.ok).toBe(true);
+    const component = plan.components.find((c) => c.id === "framework:kotlin-android");
+    expect(component?.included).toBe(false);
+    const moduleIds = plan.modules.map((m) => m.id);
+    expect(moduleIds).not.toContain("kotlin-android-rules");
+    expect(moduleIds).not.toContain("kotlin-android-skills");
+  });
+
+  test("swift-ios is NOT pulled in for a non-iOS Swift package (swift true, ios false)", async () => {
+    const plan = await planInstall({
+      manifest,
+      profileId: "swift-ios",
+      target: "claude",
+      repoRoot,
+      stack: { tags: { swift: true, ios: false }, uncertain: false },
+    });
+    expect(plan.ok).toBe(true);
+    const component = plan.components.find((c) => c.id === "framework:swift-ios");
+    expect(component?.included).toBe(false);
+  });
+
+  test("flutter-dart is NOT pulled in for a non-Flutter Dart package (dart true, flutter false)", async () => {
+    const plan = await planInstall({
+      manifest,
+      profileId: "flutter-dart",
+      target: "claude",
+      repoRoot,
+      stack: { tags: { dart: true, flutter: false }, uncertain: false },
+    });
+    expect(plan.ok).toBe(true);
+    const component = plan.components.find((c) => c.id === "framework:flutter-dart");
+    expect(component?.included).toBe(false);
+  });
 });

@@ -1,0 +1,30 @@
+[
+  {
+    "query": "Use when writing SQL schema, migrations, or queries for Postgres/MySQL -- safe zero-downtime schema changes (adding NOT NULL, backfills), indexing (composite column order, covering/partial indexes), transaction discipline, and parameterized query design.",
+    "decision": "create",
+    "topMatch": "sql-db/sql-db-testing",
+    "recordedAt": "2026-09-25T15:30:40.157Z",
+    "skillName": "sql-db-implementation"
+  },
+  {
+    "query": "Use when writing or fixing tests for SQL migrations and queries -- transactional test wrapping with rollback, fixture/seed data design, testing a migration's up/down path on representative row counts, and asserting on actual query results and query counts rather than just 'no error'.",
+    "decision": "create",
+    "topMatch": "quality/fresh-eyes",
+    "recordedAt": "2026-09-25T15:30:44.924Z",
+    "skillName": "sql-db-testing"
+  },
+  {
+    "query": "Use when reviewing a migration or query diff for SQL/database-specific risk -- injection (string-built SQL, ORM raw-SQL escape hatches), missing/misordered indexes, an unsafe blocking NOT NULL or index-creation statement, N+1 query shape, and transactions left open across a slow call. Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "php-laravel/php-laravel-code-review",
+    "recordedAt": "2026-09-25T15:30:47.232Z",
+    "skillName": "sql-db-code-review"
+  },
+  {
+    "query": "Use when a migration fails to apply, a query planner regresses to a full table scan, or a constraint violation blocks a deploy -- resolves failed/broken migrations, missing-index query regressions, deadlocks, and NOT NULL/unique/foreign-key constraint violations with the smallest root-cause fix.",
+    "decision": "create",
+    "topMatch": "sql-db/sql-db-implementation",
+    "recordedAt": "2026-09-25T15:30:49.254Z",
+    "skillName": "sql-db-build-fix"
+  }
+]

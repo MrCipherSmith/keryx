@@ -414,6 +414,9 @@ describe("Flow 326, AC1: --explain sends one prompt per violated clause, not one
         clause_id: c.clause_id,
         state_kind: c.state_kind as ConformVerdict["state_kind"],
         status: h.status as ConformVerdict["status"],
+        // Not under test here — this test only cares about the worst-per-clause
+        // collapse, not tag provenance.
+        tag_source: "jev" as const,
         ...(h.probability !== undefined ? { probability: h.probability } : {}),
         factLines: h.evidence,
         ...(h.location !== undefined ? { location: h.location } : {}),
@@ -486,6 +489,7 @@ describe("AC7 privacy: --explain never sends the reference document's full path 
       status: "likely-violated",
       probability: 0.1,
       factLines: ["a fact"],
+      tag_source: "jev",
     };
 
     let capturedUser: string | undefined;

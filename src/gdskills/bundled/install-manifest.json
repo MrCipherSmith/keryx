@@ -162,6 +162,116 @@
       ],
       "stackDetectionAware": true
     },
+    "docker-k8s-terraform": {
+      "description": "Common rules plus the Docker/Kubernetes/Terraform tool pack component, installed when `keryx stack detect` finds a matching tag (docker, docker-compose, or terraform). Experimental: has not cleared the honest behavioral eval gate yet.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "tool:docker-k8s-terraform"
+      ],
+      "stackDetectionAware": true
+    },
+    "ci-github-gitlab": {
+      "description": "Common rules plus the CI (GitHub Actions & GitLab CI) tool pack component, installed when `keryx stack detect` finds a matching tag (github-actions or gitlab-ci). Experimental: has not cleared the honest behavioral eval gate yet.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "tool:ci-github-gitlab"
+      ],
+      "stackDetectionAware": true
+    },
+    "php-laravel": {
+      "description": "Common rules plus the PHP/Laravel stack pack component (`php-laravel-rules` + `php-laravel-skills`, from src/gdskills/bundled/stacks/php-laravel/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:php-laravel"
+      ],
+      "stackDetectionAware": true
+    },
+    "ruby-rails": {
+      "description": "Common rules plus the Ruby on Rails stack pack component (`ruby-rails-rules` + `ruby-rails-skills`, from src/gdskills/bundled/stacks/ruby-rails/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:ruby-rails"
+      ],
+      "stackDetectionAware": true
+    },
+    "c-cpp": {
+      "description": "Common rules plus the C/C++ stack pack component (`c-cpp-rules` + `c-cpp-skills`, from src/gdskills/bundled/stacks/c-cpp/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:c-cpp"
+      ],
+      "stackDetectionAware": true
+    },
+    "sql-db": {
+      "description": "Common rules plus the SQL/database stack pack component (`sql-db-rules` + `sql-db-skills`, from src/gdskills/bundled/stacks/sql-db/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "capability:sql-db"
+      ],
+      "stackDetectionAware": true
+    },
+    "csharp-dotnet": {
+      "description": "Common rules plus the C#/.NET stack pack component (`csharp-dotnet-rules` + `csharp-dotnet-skills`, from src/gdskills/bundled/stacks/csharp-dotnet/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:csharp-dotnet"
+      ],
+      "stackDetectionAware": true
+    },
+    "swift-ios": {
+      "description": "Common rules plus the Swift/iOS stack pack component (`swift-ios-rules` + `swift-ios-skills`, from src/gdskills/bundled/stacks/swift-ios/), installed when `keryx stack detect` finds a matching tag. Standalone pack: no `lang:swift` base exists yet (flow 336 description.md).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:swift-ios"
+      ],
+      "stackDetectionAware": true
+    },
+    "kotlin-android": {
+      "description": "Common rules plus the Kotlin/Android (Jetpack Compose) stack pack component (`kotlin-android-rules` + `kotlin-android-skills`), installed when `keryx stack detect` finds a matching tag. Standalone pack (flow 336 description.md).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:kotlin-android"
+      ],
+      "stackDetectionAware": true
+    },
+    "flutter-dart": {
+      "description": "Common rules plus the Flutter/Dart stack pack component (`flutter-dart-rules` + `flutter-dart-skills`), installed when `keryx stack detect` finds a matching tag. Standalone pack (flow 336 description.md).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:flutter-dart"
+      ],
+      "stackDetectionAware": true
+    },
     "full": {
       "description": "Every registered module and component, unconditionally.",
       "modules": [
@@ -200,7 +310,27 @@
         "rust-rules",
         "rust-skills",
         "java-kotlin-spring-rules",
-        "java-kotlin-spring-skills"
+        "java-kotlin-spring-skills",
+        "docker-k8s-terraform-rules",
+        "docker-k8s-terraform-skills",
+        "ci-github-gitlab-rules",
+        "ci-github-gitlab-skills",
+        "php-laravel-rules",
+        "php-laravel-skills",
+        "ruby-rails-rules",
+        "ruby-rails-skills",
+        "c-cpp-rules",
+        "c-cpp-skills",
+        "sql-db-rules",
+        "sql-db-skills",
+        "csharp-dotnet-rules",
+        "csharp-dotnet-skills",
+        "swift-ios-rules",
+        "swift-ios-skills",
+        "kotlin-android-rules",
+        "kotlin-android-skills",
+        "flutter-dart-rules",
+        "flutter-dart-skills"
       ],
       "components": [
         "lang:ts-js-node",
@@ -215,7 +345,17 @@
         "framework:django",
         "framework:fastapi",
         "lang:rust",
-        "framework:java-kotlin-spring"
+        "framework:java-kotlin-spring",
+        "tool:docker-k8s-terraform",
+        "tool:ci-github-gitlab",
+        "framework:php-laravel",
+        "framework:ruby-rails",
+        "lang:c-cpp",
+        "capability:sql-db",
+        "lang:csharp-dotnet",
+        "framework:swift-ios",
+        "framework:kotlin-android",
+        "framework:flutter-dart"
       ]
     }
   },
@@ -850,6 +990,306 @@
       "defaultInstall": true,
       "cost": "medium",
       "stability": "experimental"
+    },
+    "docker-k8s-terraform-rules": {
+      "kind": "rule",
+      "description": "Docker/Kubernetes/Terraform stack pack rules (coding-style, patterns, security, testing; scoped to Dockerfiles, compose YAML, k8s/Helm YAML, *.tf/*.tfvars) from src/gdskills/bundled/stacks/docker-k8s-terraform/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "docker-k8s-terraform-skills": {
+      "kind": "skill",
+      "description": "Docker/Kubernetes/Terraform stack pack skills (no implement skill per W1-stack-catalog.md -- config authoring lives in the deploy quality skill; review, build-fix) from src/gdskills/bundled/stacks/docker-k8s-terraform/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/docker-k8s-terraform/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "ci-github-gitlab-rules": {
+      "kind": "rule",
+      "description": "CI (GitHub Actions & GitLab CI) stack pack rules (patterns, security; scoped to .github/workflows/*.yml and .gitlab-ci.yml only) from src/gdskills/bundled/stacks/ci-github-gitlab/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ci-github-gitlab/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "ci-github-gitlab-skills": {
+      "kind": "skill",
+      "description": "CI (GitHub Actions & GitLab CI) stack pack skills (implementation, code review, build-fix) from src/gdskills/bundled/stacks/ci-github-gitlab/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ci-github-gitlab/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "php-laravel-rules": {
+      "kind": "rule",
+      "description": "PHP/Laravel stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/php-laravel/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/php-laravel/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "php-laravel-skills": {
+      "kind": "skill",
+      "description": "PHP/Laravel stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/php-laravel/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/php-laravel/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "ruby-rails-rules": {
+      "kind": "rule",
+      "description": "Ruby on Rails stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/ruby-rails/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ruby-rails/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "ruby-rails-skills": {
+      "kind": "skill",
+      "description": "Ruby on Rails stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/ruby-rails/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ruby-rails/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "c-cpp-rules": {
+      "kind": "rule",
+      "description": "C/C++ stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/c-cpp/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/c-cpp/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "c-cpp-skills": {
+      "kind": "skill",
+      "description": "C/C++ stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/c-cpp/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/c-cpp/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "sql-db-rules": {
+      "kind": "rule",
+      "description": "SQL/database stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/sql-db/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/sql-db/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "sql-db-skills": {
+      "kind": "skill",
+      "description": "SQL/database stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/sql-db/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/sql-db/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "csharp-dotnet-rules": {
+      "kind": "rule",
+      "description": "C#/.NET stack pack rules (coding-style, patterns, security, testing; scoped to *.cs) from src/gdskills/bundled/stacks/csharp-dotnet/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/csharp-dotnet/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "csharp-dotnet-skills": {
+      "kind": "skill",
+      "description": "C#/.NET stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/csharp-dotnet/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/csharp-dotnet/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "swift-ios-rules": {
+      "kind": "rule",
+      "description": "Swift/iOS stack pack rules (coding-style, patterns, security, testing; scoped to *.swift) from src/gdskills/bundled/stacks/swift-ios/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/swift-ios/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "swift-ios-skills": {
+      "kind": "skill",
+      "description": "Swift/iOS stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/swift-ios/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/swift-ios/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "kotlin-android-rules": {
+      "kind": "rule",
+      "description": "Kotlin/Android (Jetpack Compose) stack pack rules (coding-style, patterns, security, testing; scoped to *.kt/*.kts) from src/gdskills/bundled/stacks/kotlin-android/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/kotlin-android/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "kotlin-android-skills": {
+      "kind": "skill",
+      "description": "Kotlin/Android (Jetpack Compose) stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/kotlin-android/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/kotlin-android/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "flutter-dart-rules": {
+      "kind": "rule",
+      "description": "Flutter/Dart stack pack rules (coding-style, patterns, security, testing; scoped to *.dart) from src/gdskills/bundled/stacks/flutter-dart/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/flutter-dart/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "flutter-dart-skills": {
+      "kind": "skill",
+      "description": "Flutter/Dart stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/flutter-dart/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/flutter-dart/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
     }
   },
   "components": {
@@ -1036,6 +1476,142 @@
       "provenance": {
         "origin": "authored",
         "sourceRef": "flow 335, Wave 4 batch 3"
+      }
+    },
+    "tool:docker-k8s-terraform": {
+      "family": "tool",
+      "modules": [
+        "docker-k8s-terraform-rules",
+        "docker-k8s-terraform-skills"
+      ],
+      "detectionMarkers": [
+        "docker",
+        "docker-compose",
+        "terraform"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "tool:ci-github-gitlab": {
+      "family": "tool",
+      "modules": [
+        "ci-github-gitlab-rules",
+        "ci-github-gitlab-skills"
+      ],
+      "detectionMarkers": [
+        "github-actions",
+        "gitlab-ci"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:php-laravel": {
+      "family": "framework",
+      "modules": [
+        "php-laravel-rules",
+        "php-laravel-skills"
+      ],
+      "detectionMarkers": [
+        "php",
+        "laravel"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:ruby-rails": {
+      "family": "framework",
+      "modules": [
+        "ruby-rails-rules",
+        "ruby-rails-skills"
+      ],
+      "detectionMarkers": [
+        "ruby",
+        "rails"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "lang:c-cpp": {
+      "family": "language",
+      "modules": [
+        "c-cpp-rules",
+        "c-cpp-skills"
+      ],
+      "detectionMarkers": [
+        "c-cpp"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "capability:sql-db": {
+      "family": "capability",
+      "modules": [
+        "sql-db-rules",
+        "sql-db-skills"
+      ],
+      "detectionMarkers": [
+        "sql"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "lang:csharp-dotnet": {
+      "family": "language",
+      "modules": [
+        "csharp-dotnet-rules",
+        "csharp-dotnet-skills"
+      ],
+      "detectionMarkers": [
+        "csharp",
+        "dotnet"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:swift-ios": {
+      "family": "framework",
+      "modules": [
+        "swift-ios-rules",
+        "swift-ios-skills"
+      ],
+      "detectionMarkers": [
+        "ios"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:kotlin-android": {
+      "family": "framework",
+      "modules": [
+        "kotlin-android-rules",
+        "kotlin-android-skills"
+      ],
+      "detectionMarkers": [
+        "android"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:flutter-dart": {
+      "family": "framework",
+      "modules": [
+        "flutter-dart-rules",
+        "flutter-dart-skills"
+      ],
+      "detectionMarkers": [
+        "flutter"
+      ],
+      "provenance": {
+        "origin": "authored"
       }
     }
   }

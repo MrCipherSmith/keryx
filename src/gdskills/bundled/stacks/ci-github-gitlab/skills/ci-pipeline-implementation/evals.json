@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Set up a workflow so our test suite runs automatically on incoming pull requests",
+      "I need pipeline stages in .gitlab-ci.yml for building, testing, and shipping the app",
+      "This CI job reinstalls dependencies every run -- can we speed it up with caching?",
+      "Multiple repos need the same build steps -- can we share one workflow definition?",
+      "The GITHUB_TOKEN in this workflow currently has no explicit scope -- lock it down",
+      "How do I keep our production deploy credentials from leaking to feature-branch pipelines?"
+    ],
+    "negative": [
+      "Review this Dockerfile for insecure base image usage",
+      "Add a Kubernetes deployment manifest with resource limits",
+      "Run a general OWASP security review across this codebase",
+      "Edit this YAML config file to add a new logging field",
+      "Write unit tests for this Python function",
+      "Review this TypeScript diff for missing null checks"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "least-privilege-permissions",
+      "prompt": "I'm adding a new job to this GitHub Actions workflow that needs to comment on the pull request. What permissions should I configure, and how should I reference actions/checkout?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer scopes permissions at the job level to exactly what commenting needs (pull-requests: write, plus contents: read if the job also checks out code), explicitly rejects a workflow-level permissions: write-all or unscoped default, and states that actions/checkout should be pinned to a full commit SHA rather than a mutable tag.",
+          "pass_criteria": [
+            "States that permissions should be granted at the job level, naming pull-requests: write as the specific scope needed for commenting on the pull request.",
+            "Explicitly rejects a workflow-level permissions: write-all (or leaving permissions unscoped) as inappropriate for this change.",
+            "States that actions/checkout should be pinned to a full commit SHA, not a movable tag like @v4."
+          ],
+          "fail_criteria": [
+            "Recommends permissions: write-all (or an equivalent broad, unscoped grant) as the way to give the job comment access, instead of the specific job-level scope. Mentioning write-all only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Scope this at the job level, not the workflow level: add `permissions: { pull-requests: write, contents: read }` directly under this job (leave the workflow-level permissions at its narrower default, or permissions: {} if nothing else needs broader access) -- that grants exactly what commenting on the PR requires and nothing more for the rest of the file. For actions/checkout, reference it by its full commit SHA (e.g. `uses: actions/checkout@<40-char-sha>`, optionally with a `# v4.x.x` comment for readability) rather than `@v4` -- a tag can be moved to point at a different commit later, a SHA cannot.",
+        "known_wrong": "Easiest fix: set `permissions: write-all` at the top of the workflow so this job (and any future one) can comment, push, or do whatever it needs without you having to figure out the exact scope each time. Also fine to leave actions/checkout on @v4 since it's an official action.",
+        "vague": "You'll want to give the job the right permissions to comment and make sure the checkout action is pinned properly.",
+        "subtle_wrong": "Add `permissions: { contents: write, pull-requests: write }` at the workflow level since other jobs in this file might need similar access later and it's simpler to set once at the top; for actions/checkout, `@v4` is fine here since it's a first-party GitHub action maintained directly by GitHub, so the usual SHA-pinning concern about a compromised third party doesn't really apply."
+      },
+      "anti_patterns": ["write-all"]
+    },
+    {
+      "id": "safe-pr-trigger-choice",
+      "prompt": "This job builds and runs the test suite for incoming pull requests from any contributor, including forks. Which trigger should it use, and why?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer recommends pull_request rather than pull_request_target for a job that only builds/tests a contribution, explaining that pull_request runs with the contributor's own (typically read-only) token and cannot reach base-repo secrets, while pull_request_target runs in the base repository's context with its secrets and write-level access even for fork-originated pull requests.",
+          "pass_criteria": [
+            "Recommends pull_request, not pull_request_target, as the trigger for this build/test job.",
+            "Explains that pull_request_target runs with base-repo secrets and write-level GITHUB_TOKEN access, which this job does not need and should not have for fork-originated code.",
+            "States that pull_request runs with the contributor's own (typically read-only) token, so it cannot reach base-repo secrets even for an untrusted fork."
+          ],
+          "fail_criteria": [
+            "Recommends pull_request_target for this job, or fails to explain that doing so would expose base-repo secrets/write access to fork-originated code. Mentioning pull_request_target only to explain why it is the wrong choice here is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Use pull_request, not pull_request_target, for this job. pull_request runs with the token scoped to the contributor's own fork context -- typically read-only and unable to reach this repository's own secrets -- which is exactly right for a job that only needs to build the code and run the test suite. pull_request_target, by contrast, runs in the base repository's context: it gets base-repo secrets and (unless narrowed) write-level access, even though the pull request that triggered it can come from an untrusted fork. There's no reason to take on that exposure just to build and test.",
+        "known_wrong": "Use pull_request_target so the job has consistent access to our secrets and can be reused later for jobs that do need them, even though right now it's just building and running tests.",
+        "vague": "You should pick whichever trigger is the safer option for pull requests from forks.",
+        "subtle_wrong": "pull_request_target is fine here as long as we're careful -- since this job only builds and tests and doesn't check out the fork's head SHA directly for anything sensitive, the base-repo secrets it has access to shouldn't actually be reachable from the fork's code in practice."
+      },
+      "anti_patterns": ["pull_request_target"]
+    }
+  ]
+}

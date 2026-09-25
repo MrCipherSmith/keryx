@@ -1,0 +1,61 @@
+---
+extends: common
+paths: ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile", "**/*.dockerfile", "**/Containerfile", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "k8s/**/*.yaml", "k8s/**/*.yml", "manifests/**/*.yaml", "manifests/**/*.yml", "deploy/**/*.yaml", "deploy/**/*.yml", "overlays/**/*.yaml", "**/kustomization.yaml", "**/kustomization.yml", "helm/**/*.yaml", "helm/**/templates/*.yaml", "charts/**/*.yaml", "charts/**/templates/*.yaml", "charts/*/values.yaml", "**/*.tf", "**/*.tfvars"]
+metadata:
+  origin: authored
+---
+
+# Docker / Kubernetes / Terraform validation
+
+This pack ships no separate `test` skill yet (see `pack.json`'s
+`notes.test` — genuine test-writing concepts exist for this family,
+`terraform test`/`.tftest.hcl` and `helm test`/helm-unittest chief among
+them; the deferral is a scope decision for this batch, not a claim that no
+such concept exists). What this rule covers instead is VALIDATION: a
+static, tool-driven check that an existing file is well-formed and
+schema-correct, exercised from `docker-k8s-terraform-build-fix`'s own
+reproduce-and-classify step. This rule states what "validated" means for
+each file type so that step — and any manual check — has a concrete bar.
+
+## Dockerfile and Compose
+
+- `hadolint <Dockerfile>` when the project has hadolint configured (a
+  `.hadolint.yaml` present, or the tool available on PATH) — catches
+  missing pins, `apt-get` without `--no-install-recommends`, and other
+  Dockerfile-specific lint findings before a build is even attempted.
+- `docker build .` (or `docker compose build` for a multi-service project)
+  must exit 0 with no `--no-cache` needed to reproduce a passing state —
+  a build that only succeeds from a stale cache is not actually validated.
+- For a compose project, `docker compose config` validates the merged
+  Compose file parses and every referenced `.env` variable resolves,
+  before attempting `up`.
+
+## Kubernetes and Helm
+
+- `kubeconform -strict -summary <manifest-or-dir>` (or `kubeval`, whichever
+  the project already has configured) validates every manifest against the
+  Kubernetes API schema for the cluster's target version — a manifest that
+  parses as YAML can still fail this (unknown field, wrong type) and
+  should not be treated as validated on YAML-parse success alone.
+- `helm template <chart> | kubeconform -strict` for a Helm chart — template
+  rendering can itself fail (a missing `values.yaml` key with no default)
+  independently of the rendered manifests' own schema validity, so both
+  failure modes need to be distinguished when reporting a finding.
+- `kubectl apply --dry-run=server -f <manifest>` (or `--dry-run=client` when
+  no live cluster is reachable) catches a resource the API server would
+  reject that schema validation alone does not (an immutable field on an
+  existing resource, a missing CRD).
+
+## Terraform
+
+- `terraform fmt -check` and `terraform validate` are the syntax/internal-
+  consistency floor — both must pass before a `terraform plan` is
+  attempted, since `validate` catches type errors and missing required
+  arguments that `plan` would otherwise fail on less legibly.
+- `terraform plan` (never `apply` from this pack's skills) shows the actual
+  proposed change; a plan showing an unexpected destroy/replace on a
+  resource the change was not meant to touch is a validation failure in
+  its own right, not just a formality to skip past.
+- A policy check (`conftest`/OPA, or the project's own policy tool) when
+  one is configured — treat its findings the same as a schema-validator
+  finding, not as optional advice to skip under time pressure.

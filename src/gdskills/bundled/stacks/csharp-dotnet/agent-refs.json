@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "no pair -- honest DeepSeek deepseek-chat runner+judge gate (trials=10, strictness=high, flow 336) fails all 4 skills on trigger accuracy, never on behavior (every behavior scenario clears the 0.8 floor, mostly 1.0/1.0): dotnet-implementation TP 2/7 FP 1/8, dotnet-testing TP 4/7 FP 0/8, dotnet-code-review TP 3/7 FP 0/8, dotnet-build-fix TP 1/7 FP 0/8 (worst -- distinctive .NET vocabulary like NuGet/StyleCop/CS#### still did not route). Genuine routing weakness against an increasingly crowded catalog (12+ implement/test/review/build-fix category-mates across stacks), not an authoring defect -- stays experimental per flow 336's stack-pack-lessons.md rule against tuning descriptions to restate failing eval prompts."
+}

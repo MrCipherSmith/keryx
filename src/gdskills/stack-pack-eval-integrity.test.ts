@@ -434,10 +434,24 @@ const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set([
   "vue",
   "angular",
   "mobx",
+  // Wave 4 batch 3 (flow 335) — authored after I11 existed, enforced.
   "django",
   "fastapi",
   "rust",
   "java-kotlin-spring",
+  "docker-k8s-terraform",
+  "ci-github-gitlab",
+  // Wave 4 batch 4 (flow 336) — authored after I11 existed, so enforced
+  // from the start rather than deferred like batch 1.
+  "csharp-dotnet",
+  "swift-ios",
+  "kotlin-android",
+  "flutter-dart",
+  // Wave 4 batch 5 (flow 337) — authored against I11 from the start.
+  "php-laravel",
+  "ruby-rails",
+  "c-cpp",
+  "sql-db",
 ]);
 
 describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () => {

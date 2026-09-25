@@ -181,6 +181,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Ask Jev one choice question per open comment; keryx writes every word of the finding.",
     "Never post a reply or resolve a thread — the label is advisory only.",
   ]),
+  skill("review-jev-contract", "review", ["recommended", "full"], "Check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff, scored by Jev.", [
+    "Split the PR description into claims deterministically — bullets, and sentences carrying a verb cue.",
+    "Compute deterministic facts per claim first: named files/symbols/flags in the diff, tests touched, exported-symbol changes.",
+    "Ask Jev one noul per claim; a claim the facts CONTRADICT (e.g. \"no API change\" with an exported symbol touched) is major regardless of the answer.",
+    "Reuse flow 328's check-ac.ts (via runCheckAc) for the linked flow's frozen acceptance criteria — never reimplemented here.",
+  ]),
   skill("review-logic", "review", ["recommended", "full"], "Review logic correctness, contracts, edge cases, nullability, and async behavior.", [
     "Trace behavior through call sites and affected context.",
     "Look for incorrect assumptions, missing branches, race conditions, and error paths.",

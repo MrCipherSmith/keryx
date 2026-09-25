@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "TokenStream::peek() has zero test coverage right now -- can you set up GoogleTest scenarios covering its end-of-buffer behavior",
+      "Add a TEST_F fixture that covers the parser's error paths",
+      "CI shows three ParserTest cases going red after my last commit and I can't tell which line broke it",
+      "Constructor of ConfigLoader should abort if the path is empty -- how do I write a test that checks the process actually crashes there",
+      "How do I actually verify this reported heap-buffer-overflow fix is correct",
+      "Add a parameterized test that runs this case across several inputs",
+      "Write a regression test for the use-after-free that was just fixed"
+    ],
+    "negative": [
+      "Implement the new parser feature itself, not the tests",
+      "Review this C++ diff for memory safety issues",
+      "Fix the linker error in this CMake build",
+      "Write table-driven tests for this Go package",
+      "Add pytest cases for this Python module",
+      "Fix this failing Rust cargo test"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "verify-fix-needs-sanitizer",
+      "prompt": "Someone on the team says they fixed the reported heap-buffer-overflow in TokenStream::peek() by adding a bounds check. The plain `ctest --test-dir build` run is green. How do I actually confirm the fix is correct before we close the ticket?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer states that a plain green ctest run does not verify a memory-safety fix, and that confirming it requires rebuilding the test binary with AddressSanitizer (and UndefinedBehaviorSanitizer) enabled and re-running the specific regression test under that sanitizer build to see it pass clean -- not just re-reading the diff or trusting the unsanitized green run.",
+          "pass_criteria": [
+            "States explicitly that a plain (non-sanitized) green ctest run does not prove a memory-safety fix is correct.",
+            "Names rebuilding/re-running under AddressSanitizer (with UndefinedBehaviorSanitizer) specifically -- e.g. a CMake build configured with -fsanitize=address,undefined -- as the concrete verification step, not just 'run more tests'.",
+            "States that the specific regression test covering the original heap-buffer-overflow must be the one re-run under the sanitizer build, not an unrelated subset."
+          ],
+          "fail_criteria": [
+            "Treats the existing plain green ctest run as sufficient confirmation on its own, with no sanitizer re-run recommended."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "A plain ctest run without a sanitizer doesn't prove a memory-safety fix is correct -- ASan-catchable bugs frequently keep passing ordinary assertions right up until the exact byte layout of a future build shifts. Configure a separate sanitizer build (`cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer -g'`, then `cmake --build build-asan`), and re-run the specific test that covers TokenStream::peek()'s reported overflow (`ctest --test-dir build-asan -R <that test name> --output-on-failure`). Only once that sanitizer build reports the test clean -- no ASan/UBSan diagnostic printed -- is the bounds-check fix actually confirmed; if there's no existing regression test that exercises the original overflow, add one first so this verification is repeatable, not just a one-off manual check.",
+        "known_wrong": "If ctest is already green, the fix is good -- the bounds check they added is a standard pattern and the existing test suite already covers TokenStream pretty thoroughly, so there's no need to do anything else before closing the ticket. Sanitizer builds are mostly useful for catching new bugs during development, not for double-checking a fix someone already made and already tested locally.",
+        "vague": "Probably worth double-checking the fix a bit more thoroughly before trusting it, maybe with some extra tooling, just to be safe.",
+        "subtle_wrong": "Good instinct to double-check -- the right move is to add `assert(index < buffer.size())` right at the start of peek() in addition to the bounds check they already added, then re-run the existing ctest suite. If ctest stays green with the extra assert compiled in, that's a stronger signal than the original fix alone that the bounds are actually being respected on every code path, without needing a separate sanitizer build."
+      }
+    },
+    {
+      "id": "concurrent-test-no-sleep",
+      "prompt": "I have a GoogleTest case that starts a background thread to process a queue, and I want to assert on the queue's final state once it's done. What's the right way to wait for the thread before asserting?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer recommends joining the background thread explicitly (std::thread::join, or waiting on a condition variable/future signaled by the worker) before making assertions, and explains that sleeping for a fixed duration instead is non-deterministic and can flake under load rather than actually guaranteeing completion.",
+          "pass_criteria": [
+            "Recommends a concrete deterministic join mechanism -- std::thread::join, a condition variable wait, or a future/promise -- as the way to wait for the background thread.",
+            "States that the join/wait happens before the assertions run, not after or interleaved.",
+            "Explains why sleep-based waiting is wrong: it is non-deterministic / can flake under load, not a guarantee the thread has actually finished."
+          ],
+          "fail_criteria": [
+            "Recommends std::this_thread::sleep_for (or any fixed-duration sleep) as the way to wait for the background thread to finish before asserting. Mentioning sleep_for only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Join the thread explicitly before your assertions: keep the std::thread object around (`std::thread worker(&Queue::process, &queue);`), then call `worker.join();` right before you check the queue's final state -- join blocks until the thread has actually finished, so there's no window where the assertions could run against a still-processing queue. If the work is started some other way (a thread pool, an async task), wait on the matching primitive instead -- a std::future's `.get()`/`.wait()`, or a condition variable the worker signals when it's done. Don't reach for std::this_thread::sleep_for(100ms) 'to be safe' -- it's non-deterministic: it might pass on your machine and flake in CI the moment the worker takes even slightly longer under load, and it silently keeps working even when there's a real race, since it isn't actually a synchronization primitive at all.",
+        "known_wrong": "Easiest way is to add a `std::this_thread::sleep_for(std::chrono::milliseconds(200));` right after starting the thread and before your assertions -- that gives the worker plenty of time to finish processing the queue on any reasonable machine, and it's a lot less code than wiring up a condition variable or a future just for a test.",
+        "vague": "Make sure the test actually waits for the background thread to be done before checking anything, instead of just assuming it finished.",
+        "subtle_wrong": "Call `worker.detach()` instead of `worker.join()` right after starting the thread -- join() risks blocking your test indefinitely if the worker ever hangs, while a detached thread keeps running independently and your test doesn't have to wait on it directly. Just add a `std::this_thread::sleep_for(std::chrono::milliseconds(200))` before your assertions to give the detached worker enough time to finish processing the queue, then check the final state."
+      },
+      "anti_patterns": ["sleep_for"]
+    }
+  ]
+}

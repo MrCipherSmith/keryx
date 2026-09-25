@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "honest gate (DeepSeek deepseek-chat runner+judge, strictness high, trials 10, flow 337) ran and failed for all four skills -- trigger accuracy, not behavior content (every behavior scenario scored 0.9 or 1.0). No generated pair ships; pack stays stability: experimental. See governance/eval.json for the recorded reports and W1-stack-catalog.md's Wave 4 batch 5 implementation notes for the diagnosis."
+}

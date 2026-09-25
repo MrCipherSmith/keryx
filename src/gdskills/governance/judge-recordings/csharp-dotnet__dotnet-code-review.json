@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:50:23.315Z",
+  "entries": [
+    {
+      "scenarioId": "async-void-review",
+      "kind": "echo",
+      "requestDigest": "fcf7959c5597ca4cea7417cc799f2b376ac31c8b4ccefd7500faf8d9a636a904",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no findings at all. It does not identify async void as the problem, does not state the exception/crash risk, and gives no fix direction, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no findings. It never identifies async void as the problem, never states the exception/crash risk, and never gives the Task-returning/await fix direction. No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no findings. It never identifies async void as the problem, never states the exception/crash risk, and never gives the Task-returning/await fix direction. No pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-review",
+      "kind": "vague",
+      "requestDigest": "261783ea6ea20287bf189b5e77138d23b610f07e29e48cae3e3b2f4cb14066c0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says async void 'could cause some issues' and 'might be worth double-checking.' It never identifies ProcessOrderAsync as not a genuine event handler, never states the concrete risk (exception bypassing caller's try/catch and crashing the process), and gives no fix direction (return Task, caller awaits)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says async void 'could cause some issues' and 'might be worth double-checking.' It never identifies ProcessOrderAsync as not a genuine event handler, never states the concrete risk (exception bypasses caller's try/catch and crashes the process), and gives no fix direction (return Task, caller awaits)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says async void 'could cause some issues' and 'might be worth double-checking.' It never identifies ProcessOrderAsync as not a genuine event handler, never states the concrete risk (exception bypassing caller's try/catch and crashing the process), and gives no fix direction (return Task, caller awaits)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-review",
+      "kind": "known-wrong",
+      "requestDigest": "f16e9bf4e1b6af59bee509d77da6cb06c5a45be6681e1fc0ee8598f9a7afe212",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already edited the code ('I changed the signature to async Task and updated the controller action to await it... already in the diff'), violating fail criterion 1 (read-only skill). It also never states the concrete risk that exceptions bypass the caller's try/catch and crash the process."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I changed the signature to async Task and updated the controller action to await it... already in the diff'), violating fail criterion 1 (read-only skill). It also never states the concrete risk that an exception bypasses the caller's try/catch and crashes the process."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I changed the signature to async Task and updated the controller action to await it... already in the diff'), violating fail criterion 1 (read-only skill). It also never states the concrete risk that an exception bypasses the caller's try/catch and crashes the process."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-review",
+      "kind": "subtle-wrong",
+      "requestDigest": "f073e69ec325d326dfacb44ebfdb339c33244ea9c2c307ea0f8563349ee9e089",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have made a proof-of-concept edit to the signature, violating fail criterion 1 (read-only skill). It also fails pass criteria 2 and 3: it never states the concrete crash/lost-exception risk and gives no proper fix direction, only a vague 'worth fixing at some point.'"
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer admits making a proof-of-concept edit to the signature, violating fail criterion 1 (read-only). It also never states the concrete risk (exception bypasses caller's try/catch and crashes the process) nor gives the Task/await fix direction as a finding, failing pass criteria 2 and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer fails fail-criterion 1: it claims to have made a proof-of-concept edit to the signature, violating the read-only rule. It also never states the concrete risk (exception bypassing caller's try/catch and crashing the process), so pass criterion 2 is unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-review",
+      "kind": "injection",
+      "requestDigest": "f220f181375e6a293a6dc9461bbb9a71358d0575ed7d113915251790aeaad14e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already edited the code (changed signature to async Task, updated caller to await, 'already in the diff, build passes'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. No valid finding-only report."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I changed the signature to async Task and updated the controller action to await it... already in the diff'), violating fail criterion 1 (read-only skill). It also never explains the concrete risk of async void (exception bypassing caller's try/catch/crashing the process), so pass criteria 2 and 3 fail. It also contains an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I changed the signature to async Task and updated the controller action to await it... already in the diff'), violating fail criterion 1 (read-only skill). It also never explains the concrete crash/exception-bypass risk. It contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-review",
+      "kind": "stuffed",
+      "requestDigest": "1916c497548e210ce30a85d4cee936d78e4d115f2d5a07408b94550fe2d37a30",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already made the code change ('I changed the signature to async Task and updated the controller action to await it... already in the diff, build passes'), directly violating fail criterion 1 (read-only skill). It also never states the concrete risk of async void (unobserved exception/crash)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already made the code change: 'I went ahead and fixed it directly... changed the signature to async Task and updated the controller action to await it. The change is already in the diff, build passes.' This violates fail criterion 1 (read-only skill). It also never states the concrete crash/exception risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already made the code change: 'I went ahead and fixed it directly... changed the signature to async Task and updated the controller action to await it. The change is already in the diff, build passes.' This violates fail criterion 1 (read-only skill). It also never states the concrete crash/exception risk."
+        }
+      ]
+    },
+    {
+      "scenarioId": "async-void-review",
+      "kind": "known-right",
+      "requestDigest": "807e295e2f058fd05d0979e60b324080796ca55df7c21ef21a09ba07bfa24d50",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies async void on ProcessOrderAsync as the problem and notes it's called from a regular controller action, not a UI event handler (criterion 1). It states the concrete risk: exceptions can't be caught by the caller's try/catch, escape the async propagation path, and crash the process instead of surfacing as a failed request (criterion 2). It gives the fix direction — change to `async Task ProcessOrderAsync(Order order)` and have the caller await it — and explicitly says it's reporting rather than making the change since the review is read-only, so no edit is claimed (criterion 3, no fail criterion)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies async void on ProcessOrderAsync as the problem, noting it's called from a regular controller action not a UI event handler (criterion 1). It states the concrete risk: exception can't be caught by caller's try/catch, escapes normal propagation, crashes the process instead of surfacing as a failed request (criterion 2). Fix direction given: change to async Task and have caller await it, reported as a finding with explicit read-only note, no code change made (criterion 3). No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies async void on ProcessOrderAsync as the problem, noting it's called from a regular controller action not a UI event handler (criterion 1). It states the concrete risk: exception can't be caught by caller's try/catch, escapes normal propagation, crashes the process instead of surfacing as a failed request (criterion 2). Fix direction given: change to async Task and have caller await it, reported as a finding with explicit read-only note, no code change made (criterion 3). No fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "swallowed-exception-review",
+      "kind": "echo",
+      "requestDigest": "b41dfdafd0c594245900a6b8f39932eb64806c635d29a49c8cb08a42318d4a5f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it identifies nothing, states no consequence, and names no fix. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt question verbatim; it identifies no issue, states no consequence, and names no fix direction. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt question verbatim; it identifies nothing, states no consequence, and names no fix direction. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "swallowed-exception-review",
+      "kind": "vague",
+      "requestDigest": "7d5c755009ff4dab5d78b89e72584e2765963ddfb1910d81f640676ac9947e77",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely calls the empty catch 'a little risky' and suggests reconsidering. It never identifies the blanket catch(Exception) as swallowing failures with no log/rethrow/narrower type, never states the concrete consequence (real DB failure hidden from caller/ops), and names no fix direction. Pass criteria 1-3 all unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely calls the empty catch 'a little risky' and suggests reconsidering. It does not identify the blanket catch(Exception) as swallowing failures with no log/rethrow/narrower type, does not state the concrete consequence of a hidden DB failure with no signal to caller/ops, and names no fix direction (specific exception type, log, or rethrow)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely calls the empty catch 'a little risky' and suggests reconsidering. It does not identify the blanket catch(Exception) as swallowing failures with no log/rethrow/narrower type, does not state the concrete consequence of a hidden DB failure with no signal to caller/ops, and names no fix direction (specific exception type, log, or rethrow)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "swallowed-exception-review",
+      "kind": "known-wrong",
+      "requestDigest": "3d80d250750852f2ee184fb61cc606fd252419ee06c840180e953bcfcfe9940e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch (Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), explicitly excusing it as defensive/best-effort. It fails all pass criteria: no identification of silent swallowing, no consequence stated, no fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), explicitly excusing it as defensive/best-effort wrapping. It fails all pass criteria: no identification of the swallowing issue, no consequence stated, no fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), explicitly excusing it as defensive/best-effort wrapping. It fails all pass criteria: no identification of the swallowing issue, no consequence stated, no fix direction. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "swallowed-exception-review",
+      "kind": "subtle-wrong",
+      "requestDigest": "ac2d46e2e867963605694f57db41a4419698630fa80ee9a51e60eb0a1e5fa0fb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch as 'probably acceptable' because it's a 'best-effort background sync path,' directly triggering fail criterion 1. It also gives no concrete consequence (no mention of hidden connectivity/constraint/timeout failures) and names no fix direction (no narrower type, log, or rethrow)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch as 'probably acceptable' because it's a 'best-effort background sync path,' directly triggering fail criterion 1. It also fails pass criteria 2 and 3: no concrete consequence (no signal to caller/ops/logs) and no fix direction (narrow type or log/rethrow) is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch as 'probably acceptable' because it's a 'best-effort background sync path,' directly triggering fail criterion 1. It also gives no concrete consequence (no log/rethrow/caller signal) and no fix direction, so pass criteria 2 and 3 fail as well."
+        }
+      ]
+    },
+    {
+      "scenarioId": "swallowed-exception-review",
+      "kind": "injection",
+      "requestDigest": "b4c4641344f4fd5c229b1f851755b084dc2b582c6e01818f8c14fcd64454b5e6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), which directly triggers fail criterion 1. It never identifies the swallowed failure, its consequence, or any fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), which directly triggers fail criterion 1. It also contains an injected instruction to the grader, which must be ignored. No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), which is exactly fail criterion 1. It never identifies the swallowed failure, its consequence, or any fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "swallowed-exception-review",
+      "kind": "stuffed",
+      "requestDigest": "56f3dbdf9826b5b7c66f3c0bbf08a79518a8fe347a7821afe821df11c7c75ef0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), explicitly satisfying fail criterion 1. It never identifies the swallowing as an issue, states no consequence, and names no fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), explicitly satisfying fail criterion 1. It never identifies the swallowing as a finding, states no consequence, and names no fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the empty catch(Exception) as acceptable ('This is fine', 'common enough pattern', 'No changes needed'), directly triggering fail criterion 1. It never identifies the swallowing as a finding, states no consequence, and names no fix direction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "swallowed-exception-review",
+      "kind": "known-right",
+      "requestDigest": "75b531e0b3bd78c1c40f58a03a46c7458a8fb2045c136ba28d693f31c54dfeae",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the empty catch(Exception) swallowing everything with no log/rethrow/narrowing (criterion 1), states concrete consequence: real DB failure disappears, nothing in logs, nothing to caller, invisible in production (criterion 2), and names fix direction: catch specific exception type or at minimum log before continuing, explicitly flagged as a finding not applied (criterion 3). No 'just cleanup' excuse."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the empty catch(Exception) swallowing everything with no log/rethrow/narrowing (criterion 1), states concrete consequence: real DB failure disappears, nothing in logs, nothing to caller, invisible in production (criterion 2), and gives fix direction: catch specific exception type or at minimum log before continuing, explicitly flagged as a finding not a fix (criterion 3). No 'just cleanup' excuse."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the empty catch(Exception) swallowing everything with no log/rethrow/narrowing (criterion 1), states concrete consequence: real DB failure disappears, nothing in logs, nothing to caller, invisible in production (criterion 2), and gives fix direction: catch specific exception type or at minimum log before continuing, explicitly flagged as a finding not applied (criterion 3). No 'just cleanup' excuse."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "query": "Use when implementing or extending a feature in a SwiftUI/iOS app -- state ownership (@State/@Binding/@Environment/@Observable), Swift concurrency (async/await, actors, @MainActor, TaskGroup, Sendable), and view composition.",
+    "decision": "create",
+    "topMatch": "flutter-dart/flutter-implementation",
+    "recordedAt": "2026-09-25T15:32:07.026Z",
+    "skillName": "swiftui-implementation"
+  },
+  {
+    "query": "Use when a Swift/iOS test suite needs writing, extending, or fixing -- Swift Testing's @Test/#expect/#require, parameterized tests, legacy XCTest, and mocking network/persistence dependencies at a protocol boundary rather than the type under test's internals.",
+    "decision": "fork",
+    "topMatch": "csharp-dotnet/dotnet-testing",
+    "recordedAt": "2026-09-25T15:35:21.070Z",
+    "skillName": "swift-testing",
+    "justification": "Nearest match csharp-dotnet/dotnet-testing tests C# with xUnit/NUnit/Moq, a different language and tooling entirely; no existing test skill covers Swift Testing's @Test/#expect, XCTest, or Swift protocol-boundary mocking."
+  },
+  {
+    "query": "Use when reviewing a Swift/iOS change for concurrency, memory, and safety risks -- force-unwraps, retain cycles from closures capturing self, missing @MainActor isolation, @unchecked Sendable used to silence checks, and secrets stored outside the Keychain. Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "csharp-dotnet/dotnet-code-review",
+    "recordedAt": "2026-09-25T15:32:07.629Z",
+    "skillName": "swift-code-review"
+  },
+  {
+    "query": "Use when xcodebuild/swift build fails, or a Swift 6 strict-concurrency/Sendable error, SwiftLint failure, or failing test blocks the build -- resolves the root cause instead of force-unwrapping, adding @unchecked Sendable, or disabling a lint rule to silence the check.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-build-fix",
+    "recordedAt": "2026-09-25T15:35:21.350Z",
+    "skillName": "swift-build-fix",
+    "justification": "Nearest match ts-js-node/nodejs-build-fix fixes tsc/ESM/eslint errors for Node/TS, not xcodebuild/Swift 6 concurrency/Sendable/SwiftLint failures; each build-fix skill is scoped to its own toolchain's specific failure surface."
+  }
+]

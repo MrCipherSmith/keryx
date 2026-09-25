@@ -12,6 +12,11 @@
 // derivation is explicitly out of scope (PRD §Non-goals, PLAN.md open
 // question 8).
 //
+// Flow 341: the step-down pick (below) can be overridden by REAL measured
+// task cost, once there is enough of it — see `preferByMeasuredCost`'s own
+// doc for the exact rule and evidence bar. Everything else in this file is
+// unchanged by that addition.
+//
 // THE RANKING (rewritten AC10): a candidate is ranked by FAMILY SIZE CLASS
 // first — `rankModelId`/`MODEL_RANK_HINTS` (`../../gdskills/model-tier.ts`),
 // reused exactly as AC5 reuses it: opus > sonnet > haiku, flagship >
@@ -33,6 +38,7 @@
 // ranking — it just does not distinguish the tie.
 import { isNonChatModelId, isFreeVariantModelId, isProfileComparable, profileKey, type ModelProfile } from "./model-profile";
 import { MODEL_RANK_HINTS, rankModelId } from "../../gdskills/model-tier";
+import { MIN_MEASURED_TASKS, type TaskCostLookup } from "./task-cost";
 import { ROUTING_CATEGORIES, type CategoryAssignment, type RoutingCategory, type RoutingTable } from "./table";
 
 /** Categories anchored on "the strongest model not weaker than the session model" (PRD §6.3, rewritten). */
@@ -340,6 +346,60 @@ function pickStepDown(comparable: readonly ModelProfile[], sessionModelId: strin
   return modelAssignment(providerId, pick.modelId);
 }
 
+/**
+ * Flow 341 — real task cost overrides the structural step-down pick, but
+ * only past an evidence bar. `pickStepDown`'s rule ASSUMES a lighter model
+ * is cheaper per task; the operator's point motivating this override is that
+ * the assumption is not always true — a lighter model can burn MORE tokens
+ * finishing the same task than a stronger one, so a per-token price alone
+ * (which this module never even had — `pickStepDown` uses SIZE CLASS, not
+ * price) is not evidence about task cost either. Only a real measured median
+ * cost per task is.
+ *
+ * The rule (AC4/AC5, flow 341): the structural `lighter` pick stands
+ * UNCHANGED unless ALL of the following hold —
+ *
+ *   1. `lookup` is supplied (a caller with no stats simply gets the old
+ *      behavior — byte-identical when omitted, same posture every optional
+ *      parameter in this module keeps).
+ *   2. `lighter` and `stronger` are both concrete `"model"` assignments on
+ *      the SAME provider and actually differ (nothing to compare otherwise —
+ *      `pickStepDown` returning the session model itself when there is no
+ *      middle step is exactly this case, and is left alone).
+ *   3. BOTH candidates have `n >= MIN_MEASURED_TASKS` (20) recorded tasks in
+ *      THIS category — below that, a single unlucky run could flip the
+ *      choice; the structural, size-based rule is the more trustworthy
+ *      default until there is real volume.
+ *   4. BOTH candidates have a KNOWN median cost per task (`medianCostUsd`) —
+ *      a model whose price is unrecorded contributes no evidence either way,
+ *      never a guess from token counts alone.
+ *
+ * Only when every one of those holds is the comparison made at all, and even
+ * then the lighter model keeps its structural win when its own median cost
+ * per task IS strictly lower — this override only fires to correct the
+ * assumption, never to add a second, redundant reason to agree with it.
+ * `stronger` is the same candidate `STRONG_CATEGORIES` would route to —
+ * `pickPlanningReview`'s result — reused here as "the stronger one" the AC
+ * refers to, rather than inventing a second notion of strength.
+ */
+function preferByMeasuredCost(
+  lighter: CategoryAssignment,
+  stronger: CategoryAssignment,
+  category: RoutingCategory,
+  lookup: TaskCostLookup | undefined,
+): CategoryAssignment {
+  if (lookup === undefined) return lighter;
+  if (lighter.kind !== "model" || stronger.kind !== "model") return lighter;
+  if (lighter.providerId !== stronger.providerId || lighter.modelId === stronger.modelId) return lighter;
+  const lighterStats = lookup(lighter.providerId, lighter.modelId, category);
+  const strongerStats = lookup(stronger.providerId, stronger.modelId, category);
+  if (lighterStats === undefined || strongerStats === undefined) return lighter;
+  if (lighterStats.n < MIN_MEASURED_TASKS || strongerStats.n < MIN_MEASURED_TASKS) return lighter;
+  if (lighterStats.medianCostUsd === undefined || strongerStats.medianCostUsd === undefined) return lighter;
+  const lighterIsCheaper = lighterStats.medianCostUsd < strongerStats.medianCostUsd;
+  return lighterIsCheaper ? lighter : stronger;
+}
+
 /** quick: the globally smallest class present among comparable candidates. */
 function pickQuick(comparable: readonly ModelProfile[], sessionModelId: string, providerId: string): CategoryAssignment {
   const smallest = Math.min(...comparable.map((c) => sizeRank(c.modelId)));
@@ -369,8 +429,22 @@ function pickQuick(comparable: readonly ModelProfile[], sessionModelId: string, 
  * this "against available models only") — a caller building `models` from
  * `catalogToFlatPickerProviders`'s live list already gets this for free
  * (flow 309's live catalog only ever reports live-fetched ids).
+ *
+ * `taskCostLookup` (flow 341, optional and additive — omitted, every
+ * category's pick is byte-identical to before this parameter existed) is
+ * consulted ONLY for `STEP_DOWN_CATEGORIES`, and only past
+ * `preferByMeasuredCost`'s evidence bar — see that function's doc for the
+ * exact rule. Stats are passed in, already loaded by the caller
+ * (`taskCostLookupFrom`, `./task-cost.ts`); this function itself never
+ * touches disk, keeping it pure.
  */
-export function deriveDefaultTable(providerId: string, models: readonly string[], profiles: Readonly<Record<string, ModelProfile>>, sessionModelId: string): RoutingTable {
+export function deriveDefaultTable(
+  providerId: string,
+  models: readonly string[],
+  profiles: Readonly<Record<string, ModelProfile>>,
+  sessionModelId: string,
+  taskCostLookup?: TaskCostLookup,
+): RoutingTable {
   if (models.length === 0) return {};
   if (models.length === 1) {
     const only = models[0]!;
@@ -397,7 +471,9 @@ export function deriveDefaultTable(providerId: string, models: readonly string[]
   for (const category of STRONG_CATEGORIES) table[category] = planningReview;
 
   const stepDown = pickStepDown(comparable, sessionModelId, providerId);
-  for (const category of STEP_DOWN_CATEGORIES) table[category] = stepDown;
+  for (const category of STEP_DOWN_CATEGORIES) {
+    table[category] = preferByMeasuredCost(stepDown, planningReview, category, taskCostLookup);
+  }
 
   const quick = pickQuick(comparable, sessionModelId, providerId);
   for (const category of QUICK_CATEGORIES) table[category] = quick;

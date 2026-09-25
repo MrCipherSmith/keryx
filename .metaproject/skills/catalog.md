@@ -97,6 +97,7 @@ Resolution order:
 | review-frontend-conventions | review | Review frontend code against repository-local frontend conventions and agent entrypoints. | gdskills/review/review-frontend-conventions/SKILL.md |
 | review-highload | review | Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks. | gdskills/review/review-highload/SKILL.md |
 | review-jev-comments | review | Check whether open PR review comments were addressed, scored by Jev. | gdskills/review/review-jev-comments/SKILL.md |
+| review-jev-contract | review | Check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff, scored by Jev. | gdskills/review/review-jev-contract/SKILL.md |
 | review-jev-docs | review | Find documentation sections that went stale because of a diff, scored by Jev. | gdskills/review/review-jev-docs/SKILL.md |
 | review-jev-risk | review | Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency. | gdskills/review/review-jev-risk/SKILL.md |
 | review-jev-rules | review | Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx. | gdskills/review/review-jev-rules/SKILL.md |

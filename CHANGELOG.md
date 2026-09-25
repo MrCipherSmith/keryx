@@ -3,6 +3,99 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.3] — 2026-09-25
+
+A sixth Jev reviewer, Jev inside the review orchestrator, Jev-routed requests
+in the shell, routing by real task cost, model guidance for Claude Code and
+Codex, and a precision fix for the rules reviewer.
+
+### Added
+- **`keryx review jev-contract`: does the PR do what it says?** The
+  reviewer splits the PR description into claims ("adds", "fixes", "does not
+  change", "tests …"). keryx first checks each claim's named files, symbols
+  and flags against the diff, and checks "tests added" and "no API change"
+  claims deterministically. Jev then scores each claim.
+  - An unsupported claim is a `minor` finding. A claim the facts contradict
+    is `major`.
+  - `--flow <id>` also checks the flow's frozen acceptance criteria.
+  - Retrospective sections of the description ("Live", "Follow-ups",
+    "Notes", …) are not treated as promises.
+  - Batches are small, and an oversized batch is split in half and retried
+    once.
+  - In the review orchestrator it replaces the by-eye description-versus-diff
+    check. The model's check stays as the fallback.
+  - Shell: `/contract`. Opt-in: `review.jev.contract`.
+- **Routing classifier in `keryx shell`** (`/route on|off`, off by default).
+  Each request is sorted into a routing category and runs on that
+  category's model. The routing table decides the model, including the
+  automatic table: with nothing configured, quick tasks go to the smallest
+  model, subagents to one step down, and review and planning to the
+  strongest.
+  - Classification order: deterministic shortcuts first, then Jev
+    (`choice`), then the main model.
+  - Each stage has its own 3-second timeout, and the prompt never waits
+    longer.
+  - The turn shows the choice, e.g. `[quick → claude-haiku-4.5] (jev 92%)`.
+  - An explicit `/model` switch turns routing off for the session.
+  - The request text sent to Jev has secrets redacted.
+  - Measured on 20 held-out requests: 19/20. On the 20 used to tune the
+    confidence threshold: 20/20.
+- **Model choice for Claude Code and Codex.** The managed block in
+  `AGENTS.md` / `CLAUDE.md` now says which kind of model to use for which
+  work:
+  - the flagship tier for planning and review;
+  - one tier down for subagents, docs and unattended work;
+  - the smallest tier only for trivial work.
+
+  It names concrete models only where the project's trusted
+  `routing.config.json` resolves them. Personal settings never reach
+  committed files. Opt out with `modelGuidance.enabled: false`.
+
+- **`keryx review jev-triage` — Jev inside the review orchestrator.** The
+  orchestrator runs it on the consolidated findings, before Wave C. It is
+  annotate-only: it never drops, demotes or merges a finding. Three passes:
+  - a severity check on every blocker and major: does the finding name a
+    trigger and an observable outcome?
+  - duplicate-merge candidates among findings that share a file or overlap.
+    A pair at or above 0.5 flags the run for a closer look. It is a prompt to
+    check, never a merge: on this repository, pairs from the same file that
+    were not duplicates scored about 0.6.
+  - a verifier queue, with the least plausible evidence first.
+
+  Shell: `/triage`. Opt-in: `review.jev.triage`.
+- **Routing by real task cost.** A lighter model can burn more tokens, so
+  its per-token price is not what a task costs.
+  - Every `keryx shell` turn records tokens, cost and success under its
+    routing category.
+  - `keryx routing stats` shows the per-task median, and `/routing` shows
+    it next to each derived choice.
+  - Once both candidates have at least 20 measured tasks in a category, the
+    automatic table keeps the stronger model unless the lighter one is
+    actually cheaper per task.
+- **Claude Code subagents run on their tier.** keryx writes the Claude Code
+  subagent files it generates with `model: opus`, `sonnet` or `haiku`, from
+  the agent's tier (deep, standard, light), instead of `inherit`. Other
+  hosts are unchanged. Opt out with `modelGuidance.claudeSubagentAliases:
+  false`. Already exported files pick the alias up on the next
+  `keryx agents export` or integrations sync.
+
+### Changed
+- **`review-jev-rules` no longer checks process steps against code.**
+  - A deterministic pre-check marks steps like "Review the contract for
+    breaking changes" as not checkable before Jev is asked. It looks only at
+    the clause's own heading, requires a process verb, and rescues
+    code-property clauses such as "files MUST …".
+  - Tags it assigns are labelled `pre-classified`, not `explicit`.
+  - Across this repository's rules it drops 11 of 703 clauses, all genuine
+    process steps.
+  - The tag cache schema was bumped, so old tags are re-resolved.
+
+### Fixed
+- The `/connect` button tests wait for the model-profile refresh instead of
+  a fixed number of frames. They had failed intermittently on macOS since
+  the profile refresh was added.
+- `keryx review` help lists `jev-risk`, `jev-scenarios` and `jev-contract`.
+
 ## [0.3.2] — 2026-09-25
 
 Four more review reviewers on Jev, and the flow records for the Jev work in

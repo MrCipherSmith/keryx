@@ -1,0 +1,77 @@
+{
+  "triggers": {
+    "positive": [
+      "This ViewModel's loadProfile function needs test coverage before we merge",
+      "Add a test that clicking the retry button actually triggers a refetch",
+      "The repository call in this suspend function isn't covered by any test",
+      "Write a test for the error state shown when the network call fails",
+      "This screen's test keeps waiting forever, can you fix it",
+      "We need a test proving the save button disables itself while saving",
+      "Cover this list-filtering logic in the ViewModel with unit tests"
+    ],
+    "negative": [
+      "Write an XCTest for this SwiftUI view model's published property",
+      "Add a widget test for this Flutter StatefulWidget's local state",
+      "Write an xUnit test for this ASP.NET Core controller action",
+      "Add a React Testing Library test for this component's click handler",
+      "Write a pytest case for this FastAPI endpoint's validation logic",
+      "Review this Kotlin diff for exported manifest components before merge",
+      "Fix the failing Gradle build after this dependency version bump"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mock-repository-boundary",
+      "prompt": "I have a ViewModel with a `loadProfile()` function that calls `profileRepository.fetch()`, a suspend function declared on a `ProfileRepository` interface. I want to unit test what happens when that call fails. How should I set up the mock?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer mocks the ProfileRepository interface itself (with MockK, unless the project already standardizes on Mockito), stubbing its suspend fetch() function with a coroutine-aware form (e.g. coEvery { repository.fetch() } throws SomeException()) to simulate the failure, rather than reaching into the ViewModel under test to stub its own internal method or field.",
+          "pass_criteria": [
+            "Mocks the ProfileRepository interface (the collaborator/dependency), not the ViewModel under test's own internals.",
+            "Uses a coroutine-aware stubbing form for the suspend fetch() call (e.g. coEvery ... throws / coEvery ... returns), not the plain non-suspend every/when form.",
+            "States that the ViewModel is then exercised through its real loadProfile() call with the mocked repository injected, and the resulting error state is asserted."
+          ],
+          "fail_criteria": [
+            "Recommends stubbing or overriding a private method or field on the ViewModel under test itself instead of mocking the ProfileRepository dependency.",
+            "Uses a plain, non-coroutine-aware mocking call (e.g. every { repository.fetch() } ...) on a suspend function without a coroutine-aware form."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Mock the `ProfileRepository` interface, not the ViewModel: `val repository = mockk<ProfileRepository>()`, then stub the failure with the coroutine-aware form since `fetch()` is a suspend function -- `coEvery { repository.fetch() } throws IOException()`. Construct the ViewModel with that mocked repository injected, call `viewModel.loadProfile()` inside `runTest { }`, advance the test dispatcher, and assert the ViewModel's exposed state ended up in its error variant. The mock stays at the repository boundary the whole way through; the ViewModel's own internals are exercised for real, which is what actually proves the error-handling path works.",
+        "known_wrong": "Since `loadProfile()` is public but calls a private `handleFetch()` helper internally, just use MockK's `spyk` on the ViewModel itself and stub `every { viewModel invoke \"handleFetch\" }` (or override the private method via reflection) to throw the exception directly -- that way you don't need to worry about setting up the repository interface at all, you're testing exactly the branch you care about.",
+        "vague": "Mock the dependency so the failure path runs and check that the ViewModel ends up in an error state.",
+        "subtle_wrong": "Mock the repository, but since `fetch()` is just a regular function call from the test's point of view, stub it the normal way: `every { repository.fetch() } throws IOException()`. It compiles and the test passes locally, so the coroutine-specific stubbing form isn't really necessary here."
+      }
+    },
+    {
+      "id": "suspend-function-runtest",
+      "prompt": "I want to test a suspend function in this repository class that calls `delay(2000)` before returning a cached value if the network is slow. What's the right way to test that without the test actually taking two seconds?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "runTest" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer wraps the test body in kotlinx-coroutines-test's runTest { }, which runs on a virtual clock that skips real delay time, so the suspend function's delay(2000) resolves instantly inside the test instead of the test actually pausing for two seconds; it does not rely on Thread.sleep or reducing the delay value in production code to make the test fast.",
+          "pass_criteria": [
+            "Names runTest { } as the mechanism that makes the test not actually wait for the delay.",
+            "Explains that runTest's virtual/skipped time is what avoids the real two-second wait, not a change to the delay duration itself.",
+            "Does not require changing the production delay(2000) call just to make the test faster."
+          ],
+          "fail_criteria": [
+            "Recommends using Thread.sleep, a shortened delay in a test-only build variant, or otherwise altering production code's delay value to make the test run fast.",
+            "Recommends running the suspend function with runBlocking and simply accepting the real two-second wait as unavoidable."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Wrap the test body in `runTest { }` from `kotlinx-coroutines-test`. It runs the coroutine on a `TestScope` with a virtual clock, so when the code under test hits `delay(2000)`, the test doesn't actually pause for two real seconds -- the virtual clock just advances past it and the suspend function resumes immediately. Call the repository function directly inside `runTest { }`, e.g. `val result = repository.fetchWithCache()`, and assert on `result` right after; there's no need to touch the production `delay(2000)` call or introduce a test-only flag to shorten it, since `runTest` already makes the wait free without changing the code under test at all.",
+        "known_wrong": "Just run it under `runBlocking { }` like normal and accept that the test takes two seconds -- it's not a huge deal, and it's simpler than learning `runTest`'s virtual-time behavior. If it's really a problem, add a `testMode` flag to the repository that skips the `delay` call entirely when running under test, and set that flag from the test setup.",
+        "vague": "Use a coroutine test utility that lets the delay resolve fast instead of actually waiting.",
+        "subtle_wrong": "Use `runTest { }` for the test body, but also pass a shortened `delayMillis = 50` parameter into the repository function's signature for testing, since that guarantees the test is fast regardless of how `runTest` happens to handle the delay internally -- belt and suspenders."
+      }
+    }
+  ]
+}

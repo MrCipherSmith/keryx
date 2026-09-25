@@ -1,0 +1,96 @@
+---
+extends: common
+paths: ["**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Kotlin/Android patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+Kotlin coroutines and Jetpack Compose design. Applies only to
+`*.kt`/`*.kts` files.
+
+## Coroutines: structured concurrency
+
+- Launch a coroutine from a scope tied to the lifecycle that owns it —
+  `viewModelScope` inside a `ViewModel`, `lifecycleScope` inside an
+  `Activity`/`Fragment`, or a plain `coroutineScope { }`/`suspend`
+  function for work with no lifecycle owner. Never `GlobalScope.launch`/
+  `GlobalScope.async`: `GlobalScope` is unstructured — nothing cancels it
+  when the screen or the ViewModel goes away, so it outlives the UI it was
+  started for and can update state, navigate, or write to a destroyed
+  view.
+- When a function needs to run several suspend calls concurrently, wrap
+  them in `coroutineScope { }` and use `async`/`await`, not a `launch`
+  fired without an `await` point — `coroutineScope` waits for every child
+  to finish (or cancels the rest if one fails) before returning, so a
+  caller downstream never observes a half-finished fan-out.
+- Cancellation is cooperative: a long-running loop or CPU-bound block
+  inside a coroutine should call `ensureActive()`/check
+  `coroutineContext.isActive`, or use a cancellable suspending call
+  (`delay`, `yield`), so cancelling the parent scope actually stops it
+  instead of running to completion regardless.
+- Switch dispatcher with `withContext(Dispatchers.IO)` around a blocking
+  call (network client without its own suspend API, disk I/O), not by
+  launching a whole new coroutine on that dispatcher — `withContext`
+  keeps the call sequential and propagates cancellation and the result
+  back to the caller.
+
+## Compose: recomposition correctness
+
+- Strong skipping mode is the Compose compiler default since Kotlin 2.0.20:
+  every restartable composable is skippable even with an unstable
+  parameter (a plain `List`/`MutableList`, a mutable var-holding class with
+  no `@Stable`/`@Immutable` annotation) — the compiler compares unstable
+  parameters by instance identity instead of refusing to skip. Prefer
+  stable parameters anyway (a primitive, a `data class` of stable members,
+  an immutable collection) since identity comparison still recomposes on
+  every NEW instance (e.g. a `List` rebuilt each call), where a genuinely
+  stable/immutable type can compare equal and skip.
+- Hoist state to the nearest common ancestor that needs it (a caller, or
+  the owning `ViewModel`) instead of trapping it inside a leaf composable
+  when a sibling or the caller also needs to read or drive it; a leaf
+  composable with no external need for its state can still own it locally
+  via `remember`.
+- Use `remember { ... }` for state that should survive recomposition but
+  not process death or configuration change (a derived value, an
+  `Animatable`, a coroutine-backed helper); use `rememberSaveable { ... }`
+  when the value must survive activity recreation (rotation, process
+  death) — typically UI-only state a `ViewModel` does not already own.
+- Never call a suspend function, fire a one-off event (navigation,
+  `Toast`, analytics), or start a coroutine directly in a composable's
+  body — route it through `LaunchedEffect(key1, ...) { }` (re-runs when a
+  key changes) or `DisposableEffect(key) { onDispose { ... } }` (needs
+  cleanup), never as a bare statement that runs on every recomposition.
+- Under strong skipping mode (default since Kotlin 2.0.20), the compiler
+  auto-memoizes a lambda declared inside a composable by wrapping it in an
+  implicit `remember`, keyed on its captures — a lambda passed inline to a
+  hot list item no longer needs manual hoisting for identity stability in
+  the common case. Reach for `@DontMemoize` only to opt a specific lambda
+  out (e.g. one that must run fresh every recomposition), and still hoist
+  a lambda explicitly when it closes over a value from an outer scope that
+  changes on a schedule the auto-memoization's capture-based keying
+  wouldn't track correctly.
+
+## State exposure from a ViewModel
+
+- Expose state from a `ViewModel` as a read-only `StateFlow`/`SharedFlow`
+  backed by a private mutable holder — `private val _state =
+  MutableStateFlow(...)` with `val state = _state.asStateFlow()` — never
+  the mutable type itself, so only the `ViewModel` can drive state
+  changes and the UI layer can only observe.
+- Prefer `StateFlow` for "current value" UI state (a screen's latest
+  render state, always has a value) and `SharedFlow`/`Channel` for one-off
+  events (a snackbar, a navigation trigger) that should not replay a
+  stale value to a newly-subscribed collector.
+- `LiveData` is legacy for new Compose/coroutine-first code: prefer
+  `StateFlow`/`SharedFlow` exposed from the `ViewModel` and collected with
+  `collectAsStateWithLifecycle()` in Compose. Keep `LiveData` only where a
+  project has already standardized on it or where an unconverted
+  `View`-based screen still consumes it.
+- Collect a `ViewModel`'s flow in Compose with
+  `collectAsStateWithLifecycle()`, not a bare `collectAsState()` — the
+  lifecycle-aware variant stops collecting while the screen is stopped
+  instead of continuing to observe (and potentially update state) behind
+  a backgrounded UI.

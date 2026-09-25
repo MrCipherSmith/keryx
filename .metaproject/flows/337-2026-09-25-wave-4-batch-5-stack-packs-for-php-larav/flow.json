@@ -1,0 +1,520 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "337",
+  "slug": "wave-4-batch-5-stack-packs-for-php-larav",
+  "title": "Wave 4 batch 5: stack packs for php-laravel, ruby-rails, c-cpp, sql-db",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T15:14:49.978Z",
+  "updatedAt": "2026-09-25T18:24:50.796Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T18:24:48.632Z",
+      "note": "16 skills across 4 packs, each with pack.json/rules/skills/evals/governance; agent-refs.json note records the real gate outcome (commits b4dba877, 3080ce2a, 0d91d19b, 2a6c494a, plus 8f5111db updating the notes)"
+    },
+    "AC2": {
+      "at": "2026-09-25T18:24:48.941Z",
+      "note": "bun test src/gdskills/stack-packs.test.ts: 184 pass / 0 fail at HEAD"
+    },
+    "AC3": {
+      "at": "2026-09-25T18:24:49.238Z",
+      "note": "bun test authoring-lint.test.ts authoring-lint-guard.test.ts: 31 pass / 0 fail"
+    },
+    "AC4": {
+      "at": "2026-09-25T18:24:49.544Z",
+      "note": "bun test stack-pack-eval-integrity.test.ts: 3593 pass / 0 fail, I1-I11 and AG all clean for the four new packs"
+    },
+    "AC5": {
+      "at": "2026-09-25T18:24:49.851Z",
+      "note": "install-manifest.json wired (commit 6f21e366/2e42d27c); bun test manifest/manifest.test.ts manifest/plan.test.ts: pass"
+    },
+    "AC6": {
+      "at": "2026-09-25T18:24:50.173Z",
+      "note": "STACK_EXTENSIONS carries php-laravel/ruby-rails/c-cpp/sql-db entries (authoring-lint.ts)"
+    },
+    "AC7": {
+      "at": "2026-09-25T18:24:50.489Z",
+      "note": "W1-stack-catalog.md and W2-agent-catalog.md carry Wave 4 batch 5 Phase A and Phase B implementation notes (commits 6f21e366, 23926eb3)"
+    },
+    "AC8": {
+      "at": "2026-09-25T18:24:50.796Z",
+      "note": "each pack committed separately (b4dba877/3080ce2a/0d91d19b/2a6c494a), shared wiring separate, no stash/-A, gdgraph reverted after each commit, branch pushed to origin/flow/337-w4b5"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by per-stack tasks T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T10 offline verification"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T11 commit/push/return"
+    },
+    {
+      "id": "T5",
+      "title": "Implement php-laravel stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:09.567Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Implement ruby-rails stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:09.842Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement c-cpp stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:10.119Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Implement sql-db stack pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:10.375Z",
+            "outcome": "started",
+            "detail": "dispatch-337-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Offline verification: lint + integrity + manifest tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Commit packs separately, push branch, return READY_FOR_GATE",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T15:14:49.978Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T15:18:42.538Z",
+      "event": "task-added",
+      "detail": "T5: Implement php-laravel stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:42.799Z",
+      "event": "task-added",
+      "detail": "T6: Implement ruby-rails stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:43.065Z",
+      "event": "task-added",
+      "detail": "T7: Implement c-cpp stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:43.359Z",
+      "event": "task-added",
+      "detail": "T8: Implement sql-db stack pack"
+    },
+    {
+      "at": "2026-09-25T15:18:43.632Z",
+      "event": "task-added",
+      "detail": "T9: Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs"
+    },
+    {
+      "at": "2026-09-25T15:18:43.909Z",
+      "event": "task-added",
+      "detail": "T10: Offline verification: lint + integrity + manifest tests"
+    },
+    {
+      "at": "2026-09-25T15:18:44.186Z",
+      "event": "task-added",
+      "detail": "T11: Commit packs separately, push branch, return READY_FOR_GATE"
+    },
+    {
+      "at": "2026-09-25T15:18:50.973Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T15:18:51.230Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T15:18:51.492Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T15:18:55.978Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T15:19:04.395Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T15:19:04.688Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T15:19:09.567Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — dispatch-337-T5"
+    },
+    {
+      "at": "2026-09-25T15:19:09.842Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — dispatch-337-T6"
+    },
+    {
+      "at": "2026-09-25T15:19:10.120Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — dispatch-337-T7"
+    },
+    {
+      "at": "2026-09-25T15:19:10.375Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — dispatch-337-T8"
+    },
+    {
+      "at": "2026-09-25T15:30:32.937Z",
+      "event": "task-done",
+      "detail": "T5: Implement php-laravel stack pack"
+    },
+    {
+      "at": "2026-09-25T15:31:22.863Z",
+      "event": "task-done",
+      "detail": "T6: Implement ruby-rails stack pack"
+    },
+    {
+      "at": "2026-09-25T15:32:36.209Z",
+      "event": "task-done",
+      "detail": "T7: Implement c-cpp stack pack"
+    },
+    {
+      "at": "2026-09-25T15:32:57.987Z",
+      "event": "task-done",
+      "detail": "T8: Implement sql-db stack pack"
+    },
+    {
+      "at": "2026-09-25T15:36:19.040Z",
+      "event": "task-done",
+      "detail": "T9: Wire shared files: install-manifest.json, STACK_EXTENSIONS, W1/W2 docs"
+    },
+    {
+      "at": "2026-09-25T15:36:42.323Z",
+      "event": "task-done",
+      "detail": "T10: Offline verification: lint + integrity + manifest tests"
+    },
+    {
+      "at": "2026-09-25T15:37:12.806Z",
+      "event": "task-done",
+      "detail": "T11: Commit packs separately, push branch, return READY_FOR_GATE"
+    },
+    {
+      "at": "2026-09-25T18:24:35.869Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"Four pack directories exist under `src/gdskills/bundled/stacks/{php-laravel,ruby-rails,c-cpp,sql-db}/`, each with `pack.json`, `rules/*.mdc` (coding-style, patterns, security, testing), `skills/*/SKILL.md` + `evals.json` for every skill the pack.json declares, `governance/scout.json`, and `agent-refs.json` with `\"agents\": []` and a note (gate not yet run in this flow).\" -> \"Four pack directories exist under `src/gdskills/bundled/stacks/{php-laravel,ruby-rails,c-cpp,sql-db}/`, each with `pack.json`, `rules/*.mdc` (coding-style, patterns, security, testing), `skills/*/SKILL.md` + `evals.json` for every skill the pack.json declares, `governance/scout.json`, and `agent-refs.json` with `\"agents\": []` and a note recording the real gate outcome.\" (Phase B ran the honest gate; the original text's parenthetical (gate not yet run) is now stale)"
+    },
+    {
+      "at": "2026-09-25T18:24:48.632Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 16 skills across 4 packs, each with pack.json/rules/skills/evals/governance; agent-refs.json note records the real gate outcome (commits b4dba877, 3080ce2a, 0d91d19b, 2a6c494a, plus 8f5111db updating the notes) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:24:48.941Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun test src/gdskills/stack-packs.test.ts: 184 pass / 0 fail at HEAD (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:24:49.238Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: bun test authoring-lint.test.ts authoring-lint-guard.test.ts: 31 pass / 0 fail (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:24:49.544Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bun test stack-pack-eval-integrity.test.ts: 3593 pass / 0 fail, I1-I11 and AG all clean for the four new packs (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:24:49.851Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: install-manifest.json wired (commit 6f21e366/2e42d27c); bun test manifest/manifest.test.ts manifest/plan.test.ts: pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:24:50.173Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: STACK_EXTENSIONS carries php-laravel/ruby-rails/c-cpp/sql-db entries (authoring-lint.ts) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:24:50.489Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: W1-stack-catalog.md and W2-agent-catalog.md carry Wave 4 batch 5 Phase A and Phase B implementation notes (commits 6f21e366, 23926eb3) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:24:50.796Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: each pack committed separately (b4dba877/3080ce2a/0d91d19b/2a6c494a), shared wiring separate, no stash/-A, gdgraph reverted after each commit, branch pushed to origin/flow/337-w4b5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T18:24:48.632Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T18:24:48.941Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T18:24:49.238Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T18:24:49.544Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T18:24:49.851Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T18:24:50.173Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T18:24:50.489Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    },
+    {
+      "at": "2026-09-25T18:24:50.796Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:987e8e3f48805479252efff7f11ec6084f4b3e62b8c765264dea9cee18328bb1"
+    }
+  ]
+}

@@ -366,7 +366,9 @@ tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
+tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
+tui/task-cost-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3

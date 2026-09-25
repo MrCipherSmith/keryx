@@ -1,0 +1,89 @@
+---
+extends: common
+paths: ["**/*.cs"]
+metadata:
+  origin: authored
+---
+
+# C#/.NET testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to xUnit/NUnit
+convention and disciplined mocking with Moq/NSubstitute. Applies only to
+`*.cs` files.
+
+## Framework and layout
+
+- Match whichever test framework the project already uses (xUnit or
+  NUnit are both common; do not introduce a second one into a project
+  that has standardized on the other). xUnit: `[Fact]` for a single
+  case, `[Theory]` + `[InlineData(...)]`/`[MemberData(...)]` for
+  parameterized cases. NUnit: `[Test]` and `[TestCase(...)]` play the
+  same roles.
+- Tests live in a mirrored `*.Tests`/`*.Test` project (the standard .NET
+  convention: `Orders/` production code, `Orders.Tests/` its tests), not
+  inside the production project itself.
+- Name a test method for behavior, not implementation:
+  `MethodName_Scenario_ExpectedResult`
+  (`Validate_MissingOrderId_ThrowsArgumentException`) reads as a
+  specification; `Test1`/`ValidateTest` does not.
+
+## Table-driven (`Theory`/`TestCase`) tests
+
+- Use `[Theory]` + `[InlineData(...)]` (xUnit) or `[TestCase(...)]`
+  (NUnit) for a set of cases that exercise the same method with
+  different inputs/expected outputs, instead of copy-pasting a near-
+  identical `[Fact]`/`[Test]` per case — each data row becomes its own
+  reported test result, so a failure names exactly which input failed.
+- Reach for `[MemberData(nameof(Cases))]`/a `TestCaseSource` when a case
+  needs a non-primitive value (an object, a collection) that attribute
+  arguments cannot express directly.
+
+## Async tests
+
+- A test that exercises `async` production code is itself `async Task`
+  (`public async Task Validate_ValidOrder_ReturnsSuccess()`), and awaits
+  the call under test — never `async void` (the test runner cannot await
+  it, and any assertion failure or exception inside it is lost instead
+  of failing the test) and never a blocking `.Result`/`.Wait()` on the
+  Task under test as a substitute for `await`.
+
+## Mocking boundaries: mock the seam, not the internals
+
+- Mock/stub an **external dependency the unit under test talks to
+  through an interface** — an `HttpClient`-backed API client behind an
+  interface, a repository interface wrapping the database, a clock/time
+  provider, a message publisher — using Moq (`Mock<IThing>`) or
+  NSubstitute (`Substitute.For<IThing>()`).
+- Do **not** mock an internal collaborator that is itself part of what
+  the test is supposed to verify — a private helper method, a concrete
+  value object, a piece of the same class's own logic split into another
+  method for readability. Mocking one layer too deep proves only that
+  the mock returns what you told it to, not that the unit under test
+  actually behaves correctly; it also makes the test brittle to harmless
+  internal refactors that change nothing about observable behavior.
+- The question to ask before adding a mock: "does the real system cross
+  a process/network/disk boundary here (HTTP, database, filesystem,
+  clock, random), or am I mocking a class my own code owns and could
+  just construct for real?" Only the former earns a mock.
+- Verify a mock's interaction (`mock.Verify(...)`/
+  `receivedCall.Received()`) only for a call whose occurrence is itself
+  part of the contract being tested (e.g. "an email is sent exactly
+  once") — do not add interaction verification for calls that are
+  incidental implementation detail, which locks the test to today's
+  internal wiring.
+
+## Assertions and determinism
+
+- Use the project's already-adopted assertion style (xUnit's built-in
+  `Assert`, or FluentAssertions if already a dependency) — do not
+  introduce a second assertion library into a project that has
+  standardized on one.
+- Never synchronize with `Thread.Sleep`/`Task.Delay` to wait for an
+  async operation or background work to finish — await the actual
+  `Task`, or use a real synchronization primitive
+  (`TaskCompletionSource`, a cancellation-bounded wait) so the test is
+  deterministic and not flaky under load.
+- Reset/dispose any shared test fixture (`IClassFixture<T>`, a
+  `WebApplicationFactory<TEntryPoint>` for integration tests) between
+  cases that mutate shared state, so one test's leftovers cannot change
+  another's result depending on run order.

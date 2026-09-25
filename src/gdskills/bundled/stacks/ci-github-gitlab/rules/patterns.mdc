@@ -1,0 +1,77 @@
+---
+extends: common
+paths: [".github/workflows/*.yml", ".github/workflows/*.yaml", ".github/actions/**/action.yml", ".github/actions/**/action.yaml", ".gitlab-ci.yml", ".gitlab/**/*.yml", ".gitlab/**/*.yaml"]
+metadata:
+  origin: authored
+---
+
+# CI workflow patterns (GitHub Actions & GitLab CI)
+
+Narrows `core-common-rules`' stack-agnostic design guidance to workflow-YAML
+structure and reuse. Applies only to GitHub Actions workflow files under
+`.github/workflows/`, GitHub composite `action.yml`/`action.yaml` files
+under `.github/actions/`, `.gitlab-ci.yml`, and GitLab CI included config
+under `.gitlab/` — not to Kubernetes manifests,
+Docker Compose files, or any other YAML the `docker-k8s-terraform` pack
+already scopes to.
+
+## Trigger and concurrency shape
+
+- Scope `on:`/`rules:` to the events a workflow actually needs (a specific
+  branch, path filter, or event type) rather than firing on every push —
+  a broad trigger wastes runner minutes and widens the surface a
+  misconfigured job can affect.
+- Add a `concurrency:` group (GitHub Actions) or a `resource_group` (GitLab
+  CI) to any workflow that deploys or mutates shared state, so a second
+  push does not race an in-flight run against the same target — a
+  `resource_group` serializes/queues jobs targeting the same resource,
+  which is the property a deploy job needs. Do not reach for
+  `interruptible: true` here: that flag means the OPPOSITE (this job is
+  SAFE to auto-cancel when a newer pipeline starts), which is right for a
+  build/test job made obsolete by a newer commit, not for a deploy already
+  in flight.
+- Keep `pull_request` as the default trigger for anything that only builds
+  or tests untrusted contributions; reach for `pull_request_target` only
+  when the job genuinely needs base-repo secrets, and see
+  `rules/security.mdc` for what that requires.
+
+## Job structure and reuse
+
+- Give every job an explicit `name:` and a `timeout-minutes` (GitHub
+  Actions) or job-level `timeout` (GitLab CI) — an unbounded job can hang
+  a runner indefinitely on a stuck process or a flaky network call.
+- Factor a step sequence used by more than one workflow into a reusable
+  workflow (`workflow_call`) or composite action (GitHub Actions), or an
+  `include:`/`extends:` template (GitLab CI), instead of copy-pasting the
+  same steps into every workflow file — the copy drifts the moment one
+  copy gets a fix the others do not.
+- Pin a `runs-on`/`image:` to a specific, known runner or image tag rather
+  than a rolling `latest`, so a runner image update cannot silently change
+  build behavior underneath an unrelated change.
+- Use a job-level `needs:` (GitHub Actions) or `needs:`/stage ordering
+  (GitLab CI) to express real dependencies between jobs explicitly, rather
+  than relying on default stage ordering to imply an ordering the config
+  does not actually state.
+
+## Caching and artifacts
+
+- Key a cache (`actions/cache`, GitLab's `cache:key`) off the lockfile or
+  dependency manifest hash, not a static string — a static key serves a
+  stale cache forever and a hash-based key invalidates exactly when the
+  dependency set actually changes.
+- Scope `artifacts:`/`actions/upload-artifact` to the files a later job
+  actually consumes, with an explicit retention/expiry, rather than
+  uploading an entire working directory that balloons storage and
+  transfer time.
+
+## Anti-patterns to flag
+
+- A workflow that duplicates the same 10+ line step sequence across
+  multiple jobs or files instead of a reusable workflow, composite
+  action, or `include:`/`extends:` template.
+- A job with no `timeout-minutes`/`timeout` on a step that can hang (a
+  network call, a wait loop, an interactive prompt the runner cannot
+  answer).
+- A cache key that never changes (a literal string with no hash of the
+  lockfile), which either never invalidates or never actually caches
+  anything useful.

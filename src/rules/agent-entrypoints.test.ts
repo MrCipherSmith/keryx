@@ -205,3 +205,38 @@ describe("R3-F14: a dangling or cyclic entrypoint symlink refuses with a named r
     ).rejects.toThrow(SymlinkRefusedError);
   });
 });
+
+// Flow 336 — the Model choice policy is resolved from `options.root`, the
+// same project boundary the symlink check already gates on. No `root`: the
+// tier-words-only default (unchanged from before this flow — see the very
+// first test in this file, which calls `ensureMetaprojectReference` with no
+// options at all and still passes). `root` given: `.metaproject/tasks.config.json`
+// and `routing.config.json` are read from it.
+describe("Model choice: resolved from options.root when given", () => {
+  test("with root given but no config files present, the block carries tier words only", async () => {
+    const filePath = path.join(projectRoot, "CLAUDE.md");
+    await writeFile(filePath, "# Project\n\nSome human text.\n", "utf8");
+
+    await ensureMetaprojectReference(filePath, { root: projectRoot });
+
+    const after = await readFile(filePath, "utf8");
+    expect(after).toMatch(/flagship tier for planning and review/);
+  });
+
+  test("modelGuidance.enabled=false in .metaproject/tasks.config.json drops the policy from the written file", async () => {
+    await writeFile(
+      path.join(metaprojectRoot, "tasks.config.json"),
+      JSON.stringify({ modelGuidance: { enabled: false } }),
+      "utf8",
+    );
+    const filePath = path.join(projectRoot, "CLAUDE.md");
+    await writeFile(filePath, "# Project\n\nSome human text.\n", "utf8");
+
+    await ensureMetaprojectReference(filePath, { root: projectRoot });
+
+    const after = await readFile(filePath, "utf8");
+    expect(after).not.toMatch(/flagship tier for planning and review/);
+    // Every other managed line survives — only the one policy is gated.
+    expect(after).toContain("HARD GATE");
+  });
+});

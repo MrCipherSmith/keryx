@@ -53,6 +53,34 @@ async function pressEscapeAndSettle(h: { mockInput: { pressEscape: () => void };
   await h.flush();
 }
 
+/**
+ * Wait for a frame matching `predicate` against a real wall-clock deadline
+ * rather than `waitForFrame`'s render-PASS bound (a fixed number of scheduler
+ * ticks, not milliseconds). Two things on this file's paths can outrun that
+ * pass budget on a loaded CI runner (macOS in particular, observed on the
+ * `opentui native (darwin-*)` legs): flow 327's `[Test]` click, which now
+ * awaits a real file-locked read/write of `model-profiles.json` before the
+ * row repaints with its result; and a bare Esc, which only becomes a
+ * keypress once the legacy parser's own timer fires — a `pressEscapeAndSettle`
+ * fixed sleep races that timer instead of waiting for its actual effect. This
+ * is the same fix `provider-endpoint-retry.test.ts`'s own
+ * `waitForFrameAfterEscape` already applies (PR #662, for the Esc case);
+ * reused here for both.
+ */
+async function waitForFrameDeadline(
+  h: { flush: () => Promise<unknown>; captureCharFrame: () => string },
+  predicate: (frame: string) => boolean,
+  deadlineMs = 5_000,
+): Promise<string> {
+  const until = Date.now() + deadlineMs;
+  for (;;) {
+    await h.flush();
+    const frame = h.captureCharFrame();
+    if (predicate(frame) || Date.now() >= until) return frame;
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  }
+}
+
 /** Column of `needle` within the frame LINE that contains `rowNeedle`, or -1 if either is absent. */
 function columnOnRow(frame: string, rowNeedle: string, needle: string): { row: number; col: number } {
   const lines = frame.split("\n");
@@ -174,7 +202,9 @@ describe("AC2 — [Test] runs the live probe and shows ok/failure inline, withou
       const testBtn = columnOnRow(frame, "DeepSeek", "[Test]");
       const mouse = otui.testing.createMockMouse(h.renderer);
       await mouse.click(testBtn.col, testBtn.row);
-      const okFrame = await h.waitForFrame((f) => f.includes("ok — 2 model"));
+      // flow 327: the click now also awaits a file-locked model-profile
+      // write before repainting — a real deadline, not a render-pass count.
+      const okFrame = await waitForFrameDeadline(h, (f) => f.includes("ok — 2 model"));
       expect(okFrame).toContain("ok — 2 model");
       expect(calls).toBeGreaterThanOrEqual(2); // the connected-filter probe, then the Test click
 
@@ -229,7 +259,10 @@ describe("AC3 — rows and both buttons reach without a mouse", () => {
 
       h.mockInput.pressArrow("right"); // Label -> Test
       h.mockInput.pressEnter(); // fires Test
-      const okFrame = await h.waitForFrame((f) => f.includes("ok — 1 model"));
+      // flow 327: the click now also awaits a file-locked model-profile
+      // write (this test's own `configDir`) before repainting — a real
+      // deadline, not a render-pass count.
+      const okFrame = await waitForFrameDeadline(h, (f) => f.includes("ok — 1 model"));
       expect(okFrame).toContain("ok — 1 model");
 
       h.mockInput.pressArrow("right"); // Test -> Disconnect
@@ -240,7 +273,9 @@ describe("AC3 — rows and both buttons reach without a mouse", () => {
       // flow 304 review finding #4: Esc while armed cancels ONLY the arm —
       // the step stays open. A SECOND Esc is what finally leaves.
       await pressEscapeAndSettle(h);
-      const clearedFrame = h.captureCharFrame();
+      // Poll for the arm-cancel to actually land instead of capturing
+      // immediately after a fixed sleep (see `waitForFrameDeadline`'s doc).
+      const clearedFrame = await waitForFrameDeadline(h, (f) => !f.includes("disconnect 'DeepSeek'?") && f.includes("[Disconnect]"));
       expect(clearedFrame).not.toContain("disconnect 'DeepSeek'?");
       expect(clearedFrame).toContain("[Disconnect]"); // still here — the step did not close
       await pressEscapeAndSettle(h);
@@ -268,7 +303,9 @@ describe("AC3 — rows and both buttons reach without a mouse", () => {
       await h.waitForFrame((f) => f.includes("disconnect 'DeepSeek'?"));
 
       await pressEscapeAndSettle(h); // cancel the arm only
-      const afterOneEsc = h.captureCharFrame();
+      // Poll for the arm-cancel to actually land instead of capturing
+      // immediately after a fixed sleep (see `waitForFrameDeadline`'s doc).
+      const afterOneEsc = await waitForFrameDeadline(h, (f) => !f.includes("disconnect 'DeepSeek'?") && f.includes("DeepSeek"));
       expect(afterOneEsc).not.toContain("disconnect 'DeepSeek'?");
       expect(afterOneEsc).toContain("DeepSeek"); // row still here, step still open
       expect(loadShellConfig(configDir).apiKeys).toEqual({ DEEPSEEK_API_KEY: "sk-real" }); // untouched
@@ -323,7 +360,9 @@ describe("AC4 — [Disconnect] asks for confirmation; declining writes nothing",
 
       // DECLINE: click [Test] on the same row instead of confirming.
       await mouse.click(test.col, test.row);
-      await h.waitForFrame((f) => f.includes("ok — 2 model"));
+      // flow 327: the click now also awaits a file-locked model-profile
+      // write before repainting — a real deadline, not a render-pass count.
+      await waitForFrameDeadline(h, (f) => f.includes("ok — 2 model"));
 
       // Nothing was removed: the row is still here, onDisconnected never fired.
       expect(disconnected).toBeUndefined();

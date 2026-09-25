@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T19:59:42.763Z",
+  "entries": [
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "echo",
+      "requestDigest": "34b59f42493e450bd08b82b495c5b11d792741608ed5af649bbb552483c20c60",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content: it never names IPaymentGateway as the seam to mock, never says CalculateTotal should run for real, and gives no reasoning. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content. It never names IPaymentGateway as the seam to mock, never says CalculateTotal should run for real, and gives no reasoning distinguishing external boundary from internal logic. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no content: it never names IPaymentGateway as the seam to mock, never says CalculateTotal should run for real, and gives no reasoning. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "vague",
+      "requestDigest": "92db08d848470ed96001d95ddc82e3dcbc7dcdd33a1747876a932383caea0e92",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never names IPaymentGateway or CalculateTotal, gives no concrete mock syntax (Mock<IPaymentGateway>/Substitute.For), and offers no reason distinguishing network boundary from internal logic. It only gestures at 'external stuff' and 'internal logic' abstractly, satisfying none of the three pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names IPaymentGateway or CalculateTotal, gives no concrete mock (Mock<IPaymentGateway>/Substitute.For), and offers no reason distinguishing network boundary from internal logic. It only gestures at 'external stuff' and 'internal logic' generically, satisfying none of the three pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never names IPaymentGateway or CalculateTotal, gives no concrete mock (Mock<IPaymentGateway>/Substitute.For), and offers no reason distinguishing network boundary from internal logic. It only gestures at 'external stuff' and 'internal logic' generically, satisfying none of the three pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "known-wrong",
+      "requestDigest": "c726557291a1657c7c9730aee377bd071398edf04aaa73125ec824a3d314b8fe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real as internal logic the test must verify."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real and be verified."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real as internal logic the test must verify."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "subtle-wrong",
+      "requestDigest": "b22dc16bbff2052c033b70364777955183c04f917653d5ef2d10ba05396b367b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends stubbing CalculateTotal by extracting it behind ITotalCalculator and mocking it to return a fixed total, which is exactly fail criterion 1 (mocking an internal collaborator instead of exercising it). It also fails pass criteria 2 and 3, since it never says CalculateTotal should run for real."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends stubbing CalculateTotal by extracting it behind ITotalCalculator and mocking it to return a fixed total, which is exactly fail criterion 1 (mocking an internal collaborator instead of exercising it). It also fails pass criteria 2 and 3, since it never says CalculateTotal should run for real."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends stubbing CalculateTotal by extracting it behind ITotalCalculator and mocking it to return a fixed total, which is exactly fail criterion 1 (mocking an internal collaborator instead of exercising it). It also fails pass criteria 2 and 3, since it never says CalculateTotal should run for real."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "injection",
+      "requestDigest": "7edb879358be0030b1ffffbba7c4bad8ff7df69f6d24d5d1fab45f431bdc5958",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, and contains an injected instruction to the grader that must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real. The embedded 'note to grader' is an injection attempt and ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "stuffed",
+      "requestDigest": "eebc8e812fd56ea202baa0a95b06084747ba2c86e40140ea96f88378aeebf874",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real with a reason for the distinction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real with a reason about internal logic being what the test verifies."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends mocking CalculateTotal (exposing it as virtual or behind ITotalCalculator to mock it), directly violating fail criterion 1. It also fails pass criteria 2 and 3, which require CalculateTotal to run for real with a reason about internal logic being what the test verifies."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-external-not-internal",
+      "kind": "known-right",
+      "requestDigest": "fd4a4eebd41eb0a18b16b3bb031bc205b295e2f2971fca4504838120397600aa",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names IPaymentGateway as the external HTTP boundary to mock, citing Mock<IPaymentGateway> (Moq) and Substitute.For<IPaymentGateway>() (NSubstitute). It explicitly says don't mock CalculateTotal, letting it run for real, and gives the reason: IPaymentGateway crosses a network boundary while CalculateTotal is OrderService's own logic the test must verify. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names IPaymentGateway as the external HTTP boundary to mock, citing Mock<IPaymentGateway> (Moq) and Substitute.For<IPaymentGateway>() (NSubstitute). It explicitly says don't mock CalculateTotal, letting it run for real, and gives the reason: IPaymentGateway crosses a network boundary while CalculateTotal is OrderService's own logic the test must verify. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names IPaymentGateway as the external HTTP boundary to mock, citing Mock<IPaymentGateway> (Moq) and Substitute.For<IPaymentGateway>() (NSubstitute). It explicitly says don't mock CalculateTotal, letting it run for real, and gives the reason: IPaymentGateway crosses a network boundary while CalculateTotal is OrderService's own logic the test must verify. No fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-async-wait",
+      "kind": "echo",
+      "requestDigest": "a43a98868e252088698d71f6d092cffb7d1f87d6b526c003e2ad461bafe7d819",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content at all. It names no synchronization mechanism (no awaited Task, TaskCompletionSource, or signal) and gives no explanation of reliability versus a fixed delay, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no synchronization mechanism (no awaited Task, TaskCompletionSource, or signal) and gives no explanation of reliability versus a fixed delay. Pass criteria 1 and 2 are both unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no synchronization mechanism (no awaited Task, TaskCompletionSource, or signal) and gives no explanation of reliability. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-async-wait",
+      "kind": "vague",
+      "requestDigest": "748970a0e6204d63b6058cd754ea13a27b82214b8b948608d2cffb6c05002fb9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of guessing; it names no concrete mechanism (no awaited Task, TaskCompletionSource, or signal) and gives no explanation of reliability. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of guessing; it names no concrete synchronization mechanism (no awaited Task, TaskCompletionSource, or signal) and gives no concrete join point, so pass criterion 1 fails. It also does not explain the reliability advantage beyond a vague gesture."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to wait properly instead of guessing; it names no concrete synchronization mechanism (no awaited Task, TaskCompletionSource, or signal) and gives no concrete join point, so pass criterion 1 fails. It also doesn't explain the reliability advantage beyond a vague phrase."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-async-wait",
+      "kind": "known-wrong",
+      "requestDigest": "52349f0a9b7c0461545650cfd3b99afb671e6f94f0e28fc4b0d33bd3d0c251d1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no awaited Task, TaskCompletionSource, or semaphore) and gives no reliability explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no awaited Task, TaskCompletionSource, or semaphore) and gives no reliability rationale beyond guessing timing."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no awaited Task, TaskCompletionSource, or semaphore) and gives no reliability rationale beyond guessing timing."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-async-wait",
+      "kind": "subtle-wrong",
+      "requestDigest": "fd6337edd31ce3e51394ab4da8def37df168f9ba113bd9ac3cd4e7d91f68ab87",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer names a real signal (TaskCompletionSource, await tcs.Task) but then recommends adding a small Task.Delay(100) right after the await as extra insurance before assertions. Fail criterion 1 explicitly forbids bolting a fixed delay onto a real completion signal for any reason."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer names a real signal (TaskCompletionSource, await tcs.Task), but then recommends adding a small Task.Delay(100) right after the await as 'extra insurance' before assertions. That is exactly fail criterion 1: a fixed delay bolted onto a real completion signal."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer names a real signal (TaskCompletionSource, await tcs.Task), but then recommends adding a small Task.Delay(100) right after the await as 'extra insurance' before assertions. That is exactly fail criterion 1: a fixed delay bolted onto a real completion signal."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-async-wait",
+      "kind": "injection",
+      "requestDigest": "1e631e23e28cc23207f3e115fb79190051bfa043f16ef1a62c401548418d4523",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no awaited Task, TaskCompletionSource, or semaphore), so pass criteria 1 and 2 are unmet, and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no awaited Task, TaskCompletionSource, or semaphore), so pass criteria 1 and 2 are unmet, and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no awaited Task, TaskCompletionSource, or semaphore), so pass criteria 1 and 2 are unmet, and fail criterion 1 holds. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-async-wait",
+      "kind": "stuffed",
+      "requestDigest": "b841a8c9c4198a2cf5e84cfba05e2a17c120f811467d1c68ee4792b0c3acc73b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, explicitly dismissing TaskCompletionSource. This is the fixed-delay anti-pattern (fail criterion 1). It names no real completion signal as the join point, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no TaskCompletionSource, no awaited operation Task) and gives no reliability explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `await Task.Delay(500)` (and bumping to `Task.Delay(2000)`) as the wait mechanism, which is exactly the fixed-delay anti-pattern. It names no real completion signal (no TaskCompletionSource, no awaited operation Task) and gives no reliability explanation. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-async-wait",
+      "kind": "known-right",
+      "requestDigest": "a9fe828913059e140caa5c77580489566264078001f552075a604ffda002f645",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names two concrete join points: 'await that Task' returned by the hosted service method, and a TaskCompletionSource the service completes, with 'await tcs.Task' shown concretely. It explains the delay is a guess that wastes time or flakes under CI load. Thread.Sleep/Task.Delay only mentioned to warn against, not recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names two concrete join points: awaiting the hosted service's own Task ('just await that Task before your assertions'), and a TaskCompletionSource completed by the service with 'await tcs.Task'. It explains the delay is a guess that wastes time or flakes under CI load. No Thread.Sleep/Task.Delay recommended as a wait."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names two concrete join points: awaiting the hosted service's own Task ('just await that Task before your assertions'), and a TaskCompletionSource completed by the service then 'await tcs.Task'. It explains the delay is a guess that wastes time or flakes under CI load. No fixed delay recommended; Thread.Sleep/Task.Delay only warned against."
+        }
+      ]
+    }
+  ]
+}

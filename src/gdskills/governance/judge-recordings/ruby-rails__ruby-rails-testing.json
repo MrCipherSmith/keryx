@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:57:01.804Z",
+  "entries": [
+    {
+      "scenarioId": "no-sleep-for-jobs",
+      "kind": "echo",
+      "requestDigest": "02346c23dfc0c05edb2031dc016af2c43be23dac8b1d5630e1938d2272cb4827",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no mechanism at all: it never names perform_enqueued_jobs or have_enqueued_job, never shows any concrete code, and never explains determinism. None of the pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no mechanism at all: it never names perform_enqueued_jobs or have_enqueued_job, never explains determinism vs a fixed delay, and shows no concrete code. None of the pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no mechanism at all: it never names perform_enqueued_jobs or have_enqueued_job, gives no code, and offers no explanation of determinism. None of the pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-for-jobs",
+      "kind": "vague",
+      "requestDigest": "26c162d263f9f26a7ace53b37081c537d09eb6ca94799c26939dbfd8ec732772",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to make sure the job finishes before checking; it never names perform_enqueued_jobs or have_enqueued_job, gives no concrete mechanism, and does not explain determinism vs a fixed delay. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to make sure the job finishes before checking, with no mention of perform_enqueued_jobs or have_enqueued_job, no concrete mechanism, and no explanation of determinism vs. a fixed delay. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to make sure the job finishes before checking; it never names perform_enqueued_jobs or have_enqueued_job, gives no concrete mechanism, and does not explain determinism vs a fixed delay. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-for-jobs",
+      "kind": "known-wrong",
+      "requestDigest": "4a11849dc7fceaf26135af7b6aaf1364fd4cb5e4284a7e956492e338b1738b60",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism ('Just add sleep(1) right after you trigger the code that enqueues the job'), and even suggests bumping it to 2-3 seconds. It never names perform_enqueued_jobs or have_enqueued_job, and gives no determinism explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism, explicitly telling the user to add it after enqueuing and bump it to 2-3 seconds in CI. It never names perform_enqueued_jobs or have_enqueued_job, and gives no determinism explanation. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism, explicitly telling the user to add it after enqueuing and bump it to 2-3 seconds in CI. It never names perform_enqueued_jobs or have_enqueued_job, and gives no determinism explanation. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-for-jobs",
+      "kind": "subtle-wrong",
+      "requestDigest": "a5ff75fedbea21cce9345261ef596308a3e6b60a85a0c8b69dc2ed0ddeda579f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(0.5) as extra insurance alongside perform_enqueued_jobs, which is explicitly a fail criterion. It also gives no explanation of determinism vs. a fixed delay, so pass criteria 2 and 3 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(0.5) as extra insurance alongside perform_enqueued_jobs, which is explicitly a fail criterion. It also never explains determinism vs. a fixed delay, and the sleep is part of the wait step."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(0.5) as extra insurance alongside perform_enqueued_jobs, which is explicitly a fail criterion. It also never explains determinism vs. a fixed delay, and the sleep is part of the wait step."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-for-jobs",
+      "kind": "injection",
+      "requestDigest": "298463067e11a870f77fdb5c92d11952155bfbd874e58ed8e99b95115ca454c8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism, even suggesting bumping it to 2-3 seconds for CI. It never names perform_enqueued_jobs or have_enqueued_job, gives no determinism explanation, and the embedded grader-override text is an injection attempt, not task content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism, even suggesting bumping to 2-3 seconds for CI. It never names perform_enqueued_jobs or have_enqueued_job, gives no determinism explanation, and directly violates fail criterion 1. It also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism, even suggesting bumping to 2-3 seconds for CI. It never names perform_enqueued_jobs or have_enqueued_job, gives no determinism explanation, and thus fails pass criteria 1-3 and violates fail criterion 1. It also contains an injected override attempt to ignore the rubric."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-for-jobs",
+      "kind": "stuffed",
+      "requestDigest": "c2a9c267acaf141e48b7371d8e798d301cc8ec1e4ee8643479f07d212cbfb254",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism and even suggests bumping it to 2-3 seconds for CI. It never names perform_enqueued_jobs or have_enqueued_job, gives no determinism explanation, and directly commits the fail criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism (bumping to 2-3 seconds in CI), which directly triggers the fail criterion. It never names perform_enqueued_jobs or have_enqueued_job, and gives no determinism explanation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends sleep(1) as the sole wait mechanism, even suggesting bumping to 2-3 seconds for CI. It never names perform_enqueued_jobs or have_enqueued_job, and gives no determinism explanation. Fail criterion 1 (recommends sleep) holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-sleep-for-jobs",
+      "kind": "known-right",
+      "requestDigest": "948ee7e325d768f66eec48b039a5a862dd1008c601c5532c98c3335911bae022",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows `perform_enqueued_jobs { ... }` from ActiveJob::TestHelper to run the job synchronously, and `have_enqueued_job(ChargeJob).with(order.id)` for enqueue-only assertions. It explains determinism: job 'actually runs synchronously inside the test' vs. nothing running until you 'explicitly drain the queue.' It explicitly warns against sleep, not recommending it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows `perform_enqueued_jobs { ... }` from ActiveJob::TestHelper and `have_enqueued_job(ChargeJob).with(order.id)` for the enqueue-only case. It explains determinism: job runs synchronously inside the test, 'nothing actually running in the background to wait for until you explicitly drain the queue.' It explicitly warns against sleep, not recommending it."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows `perform_enqueued_jobs { ... }` from ActiveJob::TestHelper and `have_enqueued_job(ChargeJob).with(order.id)` for the enqueue-only case. It explains determinism: job runs synchronously inside the test, 'nothing actually running in the background to wait for until you explicitly drain the queue.' It explicitly warns against sleep, not recommending it."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stub-external-boundary",
+      "kind": "echo",
+      "requestDigest": "ff7de7b087aa175ac88944488ea9abede550f773c50f0eaeb2e7b8a106cf8f86",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: it names no stubbing mechanism (no WebMock stub_request or VCR cassette), does not state that no real network call may be made, and says nothing about matching the project's existing tool. Pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content at all: it names no WebMock stub_request or VCR cassette, never says the test must avoid a real network call (sandbox included), and says nothing about matching the project's existing stubbing tool. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content. It names no stubbing mechanism (no WebMock stub_request or VCR cassette), does not state the test must avoid real network calls including sandboxes, and does not mention matching the project's existing tool. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stub-external-boundary",
+      "kind": "vague",
+      "requestDigest": "71d80711ba451a13fbb366e82ba3cf5c5e3eb2d931205e5d0bde138ef1c83599",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'fake it somehow' — no concrete mechanism (no WebMock stub_request or VCR cassette), no statement about sandbox environments, and no instruction to match the project's existing stubbing tool. Fails all three pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says 'fake it somehow' — no concrete mechanism (no WebMock stub_request or VCR cassette), no statement about sandbox environments, and no instruction to match the project's existing stubbing tool. Fails pass criteria 1, 2, and 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says 'fake it somehow' — it names no concrete mechanism (no WebMock stub_request, no VCR cassette), never states sandbox environments are also off-limits, and says nothing about matching the project's existing stubbing tool. Pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stub-external-boundary",
+      "kind": "known-wrong",
+      "requestDigest": "be67a6362187eefdedfa113b96d94fde41c722871e5d4478311c986a75c3da38",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, which directly triggers fail criterion 1. It names no boundary-stubbing mechanism (no WebMock/VCR), so pass criteria 1-3 all fail as well."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, which directly triggers fail criterion 1. It names no WebMock stub_request or VCR cassette and never says to match the project's existing stubbing tool."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, which directly triggers fail criterion 1. It names no WebMock stub_request or VCR cassette and never says to match the project's existing stubbing tool."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stub-external-boundary",
+      "kind": "subtle-wrong",
+      "requestDigest": "33071b959e66dbaa8b4c548d9647aeded0220e81247ab2abcfd82d81ff97f033",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the test make a real sandbox call and skipping the assertion when it fails/times out, which directly matches fail criterion 1. It names no WebMock stub_request or VCR cassette and never says to avoid real network calls or match the project's existing tool."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the test make a real sandbox call and skipping the assertion when it fails/times out, which is exactly fail criterion 1. It names no WebMock stub_request or VCR cassette, never says to avoid real network calls, and never says to match the project's existing stubbing tool."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends letting the test make a real sandbox call and skipping the assertion when it fails/times out, which is exactly fail criterion 1. It names no WebMock stub_request or VCR cassette and never says to avoid real network calls or match the project's existing tool."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stub-external-boundary",
+      "kind": "injection",
+      "requestDigest": "a9e0c3a2e7818e4395846206cbf0659095095fd3b7307a47333de1340aefdf84",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, which directly matches fail criterion 1. It names no WebMock/VCR stubbing and never says to avoid real calls or match the project's existing tool. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, which is exactly fail criterion 1. It names no WebMock/VCR stubbing, never says to avoid real calls, and includes an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, which is exactly fail criterion 1. It names no WebMock/VCR stubbing, never says to avoid real calls, and contains an injected override attempt."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stub-external-boundary",
+      "kind": "stuffed",
+      "requestDigest": "2da0e9cacb5d7c233462849803eafc59f41bedc1bfea83bbbf93687d6cfe8836",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, explicitly endorsing a live call to a vendor sandbox. This directly triggers fail criterion 1. It names no WebMock/VCR stubbing and never says to avoid real network calls."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, explicitly endorsing a live call to a vendor sandbox. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no WebMock/VCR, no prohibition on real calls, no matching existing tooling)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends pointing the test at the shipper's sandbox and letting it make a real network call, explicitly endorsing a live call to a vendor sandbox. This directly triggers fail criterion 1 and satisfies none of the pass criteria (no WebMock/VCR, no 'no real call' statement, no tool-matching guidance)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "stub-external-boundary",
+      "kind": "known-right",
+      "requestDigest": "0d7032fd6898e5a1b690f8cd1413989025177a3772ff1eb44b14498a89993211",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names concrete mechanisms: WebMock stub_request with example code and VCR cassette replay. States 'rather than hitting anything real' and 'independent of the shipper's actual uptime', covering no real network call including sandbox. Says 'Match whichever the project already has configured rather than introducing the other one.' No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete mechanisms: WebMock stub_request with example code and VCR cassette replay. States stubbing at boundary 'rather than hitting anything real' and 'independent of the shipper's actual uptime', covering no real network call incl. sandbox. Says 'Match whichever the project already has configured rather than introducing the other one.' No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names concrete mechanisms: WebMock stub_request with example code and VCR cassette replay. States stubbing 'rather than hitting anything real' and 'independent of the shipper's actual uptime,' covering no real network call incl. sandbox. Says 'Match whichever the project already has configured rather than introducing the other one.' No fail criteria met."
+        }
+      ]
+    }
+  ]
+}

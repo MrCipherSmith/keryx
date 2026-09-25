@@ -23,7 +23,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `keryx auth` | Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status. |
 | `keryx providers` | Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility. |
-| `keryx routing` | Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set). |
+| `keryx routing` | Category -> model routing table (list, set, unset, trust), the model-profile catalogue (profile list, profile set), and real measured task cost (stats). |
 
 | Shell command | Summary |
 |---|---|
@@ -98,7 +98,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
 | `/staledocs` | List doc sections that likely went stale because of the working diff, with Jev. |
 | `/opencomments` | List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>. |
+| `/contract` | Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev. |
+| `/triage` | Advisory annotations — severity calibration, duplicate-merge candidates, verifier queue order — over the latest review package, with Jev. |
 | `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
+| `/route` | Opt-in routing classifier: each request runs on its routing category's model — /route [on\|off]. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
 
