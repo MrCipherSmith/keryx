@@ -37,6 +37,30 @@ function parseAndValidate(content: string) {
 }
 
 describe("generateStackAgentPair", () => {
+  // R1 review, PR #719 (minor): "A Angular-focused code auditor..." read as
+  // grammatically wrong for any vowel-starting displayName (Angular being
+  // the real, shipped example). Covers both directions: a vowel-starting
+  // name gets "An", a consonant-starting one keeps "A".
+  test("uses the correct indefinite article for a vowel-starting displayName ('An', not 'A')", () => {
+    const pair = generateStackAgentPair(
+      fixturePack({ id: "angular", agentProfile: { displayName: "Angular", auditFocus: ["a"], buildCommands: ["ng build"], fixGuardrails: ["g"] } }),
+    );
+    expect(pair.auditor!.content).toContain("An Angular-focused code auditor");
+    expect(pair.auditor!.content).not.toContain("A Angular-focused");
+    expect(pair.fixer!.content).toContain("An Angular build-and-test fixer");
+    expect(pair.fixer!.content).not.toContain("A Angular build-and-test");
+    expect(pair.fixer!.content).toContain("Reproduces and fixes an Angular build");
+  });
+
+  test("uses the correct indefinite article for a consonant-starting displayName ('A', not 'An')", () => {
+    const pair = generateStackAgentPair(
+      fixturePack({ id: "go", agentProfile: { displayName: "Go", auditFocus: ["a"], buildCommands: ["go build"], fixGuardrails: ["g"] } }),
+    );
+    expect(pair.auditor!.content).toContain("A Go-focused code auditor");
+    expect(pair.fixer!.content).toContain("A Go build-and-test fixer");
+    expect(pair.fixer!.content).toContain("Reproduces and fixes a Go build");
+  });
+
   test("is deterministic: the same pack input produces byte-identical content", () => {
     const a = generateStackAgentPair(fixturePack());
     const b = generateStackAgentPair(fixturePack());
@@ -277,15 +301,21 @@ describe("generateStackAgentPair", () => {
 
     // Pin the shipped, honest-gate outcome explicitly: go and python clear
     // the gate (flow 314/316/317, Wave 4 batch 1); react and ts-js-node
-    // still fail it; angular and mobx clear it (flow 318, Wave 4 batch 2).
-    // nestjs cleared the gate in T13's first honest run but was DEMOTED
-    // after the R1 review fix pass (PR #719): de-jargoning
-    // nestjs-implementation's exception-filter trigger prompt (it had
-    // named the internal APP_FILTER token unprompted) made that prompt
-    // honestly fail to route, and the final honest gate re-run reflects
-    // that. nextjs-nuxt and vue still fail it (see their own
-    // agent-refs.json `note` for the specific failing scenario/collision).
-    expect(gateCleared).toEqual(["angular", "go", "mobx", "python"]);
+    // still fail it. angular and mobx briefly cleared it too (flow 318,
+    // Wave 4 batch 2, T13) and nestjs cleared it with a build-fixer-only
+    // pair, but review round 1's realism sweep on PR #719 found several of
+    // angular/mobx/nestjs's positive trigger prompts were trigger-prefix
+    // near-copies or scorer-avoidant phrasing rather than genuinely
+    // independent requests. Rewritten honestly (never iterated against the
+    // router) across two review rounds, the final honest gate re-run
+    // demoted all three back to `experimental` — nestjs-implementation's
+    // de-jargoned exception-filter prompt, angular-implementation's and
+    // mobx-store-implementation's de-trigger-prefixed prompts, and
+    // angular-testing's honestly-restored e2e negative all now fail to
+    // route the way the original (gamed) versions did. nextjs-nuxt and vue
+    // still fail it for their own, unrelated reasons (see their own
+    // agent-refs.json `note`).
+    expect(gateCleared).toEqual(["go", "python"]);
 
     // Direction 1: every gate-cleared pack that carries an `agentProfile`
     // regenerates to exactly what is on disk — the byte-identical
@@ -318,14 +348,14 @@ describe("generateStackAgentPair", () => {
       expect(gateCleared).toContain(origin.sourceRef);
     }
 
-    // Explicit, not implied by the loop above: exactly 6 generated files
-    // ship — go/python/angular each get a full pair (3 packs x 2 files);
-    // mobx carries no agentProfile at all (R1 review PR #719 M1) so it
-    // contributes zero; nestjs was demoted after the R1 review fix pass
-    // (see the comment above `gateCleared`'s assertion) so its
-    // build-fixer.md is gone too. go(2) + python(2) + angular(2) = 6.
-    expect(gateCleared).toEqual(["angular", "go", "mobx", "python"]);
-    expect(generatedFileCount).toBe(6);
+    // Explicit, not implied by the loop above: exactly 4 generated files
+    // ship — go and python each get a full pair (2 packs x 2 files).
+    // angular, mobx, and nestjs all cleared the gate at some point in this
+    // flow and were all demoted again after the realism sweep (see the
+    // comment above `gateCleared`'s assertion), so none of them contribute
+    // a generated file anymore. go(2) + python(2) = 4.
+    expect(gateCleared).toEqual(["go", "python"]);
+    expect(generatedFileCount).toBe(4);
   });
 
   // R2-4: the byte-identical regeneration path (Direction 1 above) has

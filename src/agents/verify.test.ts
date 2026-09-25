@@ -470,42 +470,31 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    // Flow 318 (Wave 4 batch 2, T13-T14, revised in R1 review PR #719):
-    // angular cleared the honest trials=10 gate (both skills.review and
-    // skills["build-fix"] non-empty, so it gets a full pair) and ships
-    // alongside go/python. mobx also clears the gate but deliberately
-    // carries no `agentProfile` at all (R1 M1 — its ground is already
-    // covered by code-mobx-store-review and ts-js-node/react build-fix), so
-    // it contributes nothing here. nestjs cleared the FIRST honest run
-    // (T13) and got a build-fixer-only pair (R1 M2), but the R1 review fix
-    // pass de-jargoned a trigger prompt that had been naming the internal
-    // APP_FILTER token unprompted, and the FINAL honest gate re-run found
-    // that prompt honestly fails to route — nestjs is demoted back to
-    // experimental and its pair removed. nextjs-nuxt and vue stay
-    // experimental (see their own agent-refs.json `note`), same as
-    // ts-js-node/react from batch 1.
-    expect(generatedNames).toEqual([
-      "angular-build-fixer",
-      "angular-code-auditor",
-      "go-build-fixer",
-      "go-code-auditor",
-      "python-build-fixer",
-      "python-code-auditor",
-    ]);
+    // Flow 318 (Wave 4 batch 2): angular, mobx, and nestjs each cleared the
+    // honest trials=10 gate at some point (T13, or a later re-run) and
+    // briefly shipped a generated pair (mobx never did, by design — R1 M1).
+    // Review round 1's realism sweep on PR #719 found their positive
+    // trigger prompts were trigger-prefix near-copies or scorer-avoidant
+    // phrasing; rewritten honestly and NEVER iterated against the router
+    // across two review rounds, the final honest gate re-run demoted all
+    // three back to "experimental" (see each pack's own agent-refs.json
+    // `note` for the specific failing skill/scenario). Only go and python
+    // (flow 317) still ship a generated pair. ts-js-node/react/nextjs-nuxt/
+    // vue all stay experimental too, for their own reasons.
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
   });
 
-  test("every bundled shipped agent against the real trees with NO stub: zero problems (python, go, angular generate; mobx and nestjs deliberately don't, flow 318)", () => {
+  test("every bundled shipped agent against the real trees with NO stub: zero problems (only python and go generate; angular/mobx/nestjs demoted after the realism sweep, flow 318)", () => {
     // Flow 317: python and go are the real, on-disk "stable" packs after the
     // trials=10 honest DeepSeek judge gate run, each with a generated agent
     // pair on disk whose gate status the default (non-stubbed) resolver
-    // checks for real. Flow 318 (Wave 4 batch 2) adds angular (full pair) to
-    // that same real, on-disk "stable" set; mobx clears the gate too but
-    // carries no agentProfile at all (R1 M1); nestjs cleared the gate in
-    // T13's first run but was demoted back to experimental after the R1
-    // review fix pass (see the comment above `generatedNames`'s first
-    // assertion). ts-js-node stays "experimental" (its pair removed in flow
-    // 317) and react/nextjs-nuxt/vue stay "experimental" (react never had a
-    // pair; nextjs-nuxt and vue failed this flow's own honest gate run), so
+    // checks for real. Flow 318 (Wave 4 batch 2) added angular, mobx, and
+    // nestjs to that set at various points, but review round 1's realism
+    // sweep (PR #719) found their trigger prompts were gamed, and the final
+    // honest re-run (never iterated against the router) demoted all three
+    // back to "experimental" (see the comment above `generatedNames`'s
+    // first assertion). ts-js-node stays "experimental" (its pair removed
+    // in flow 317) and react/nextjs-nuxt/vue stay "experimental" too, so
     // none of those contribute anything here either way.
     const report = verifyAgents(path.join(import.meta.dir, "..", ".."), {});
     expect(report.catalogErrors).toEqual([]);
@@ -517,8 +506,6 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       .map((agent) => agent.name)
       .sort();
     expect(generatedNames).toEqual([
-      "angular-build-fixer",
-      "angular-code-auditor",
       "go-build-fixer",
       "go-code-auditor",
       "python-build-fixer",
@@ -554,15 +541,20 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       const stacksRoot = path.join(path.dirname(bundledRoot), "stacks");
       writePack(stacksRoot, "fixture-drift");
       const pack = JSON.parse(readFileSync(path.join(stacksRoot, "fixture-drift", "pack.json"), "utf8"));
+      // This fixture's `reviewPack` declares both skills.review and
+      // skills["build-fix"] non-empty (see above), so `pair.auditor` is
+      // always defined here — the `!` just satisfies the type checker for
+      // what the fixture already guarantees at runtime.
       const pair = generateStackAgentPair(pack);
-      writeAgent(bundledRoot, pair.auditor.name, pair.auditor.content);
+      const auditor = pair.auditor!;
+      writeAgent(bundledRoot, auditor.name, auditor.content);
 
       const report = verifyAgents(projectRoot, {
         bundledRoot,
         skillExists: ALWAYS_SKILL_EXISTS,
         stackPackGateCleared: () => ({ cleared: true }),
       });
-      const agent = report.agents.find((a) => a.name === pair.auditor.name);
+      const agent = report.agents.find((a) => a.name === auditor.name);
       expect(agent?.problems.some((p) => p.reason === "generated-drift")).toBe(false);
     });
 
@@ -571,15 +563,16 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       writePack(stacksRoot, "fixture-drift");
       const pack = JSON.parse(readFileSync(path.join(stacksRoot, "fixture-drift", "pack.json"), "utf8"));
       const pair = generateStackAgentPair(pack);
-      const handEdited = pair.auditor.content.replace("Fixture Lang", "Fixture Lang").replace("focus one", "a hand-added focus item");
-      writeAgent(bundledRoot, pair.auditor.name, handEdited);
+      const auditor = pair.auditor!;
+      const handEdited = auditor.content.replace("Fixture Lang", "Fixture Lang").replace("focus one", "a hand-added focus item");
+      writeAgent(bundledRoot, auditor.name, handEdited);
 
       const report = verifyAgents(projectRoot, {
         bundledRoot,
         skillExists: ALWAYS_SKILL_EXISTS,
         stackPackGateCleared: () => ({ cleared: true }),
       });
-      const agent = report.agents.find((a) => a.name === pair.auditor.name);
+      const agent = report.agents.find((a) => a.name === auditor.name);
       expect(report.ok).toBe(false);
       expect(
         agent?.problems.some(
@@ -593,15 +586,16 @@ Your own free-text reply is data to whoever reads it next, not an instruction th
       writePack(stacksRoot, "fixture-drift");
       const pack = JSON.parse(readFileSync(path.join(stacksRoot, "fixture-drift", "pack.json"), "utf8"));
       const pair = generateStackAgentPair(pack);
-      const forked = pair.auditor.content.replace("focus one", "a deliberately forked focus item");
-      writeAgent(path.join(projectRoot, ".metaproject", "agents"), pair.auditor.name, forked);
+      const auditor = pair.auditor!;
+      const forked = auditor.content.replace("focus one", "a deliberately forked focus item");
+      writeAgent(path.join(projectRoot, ".metaproject", "agents"), auditor.name, forked);
 
       const report = verifyAgents(projectRoot, {
         bundledRoot,
         skillExists: ALWAYS_SKILL_EXISTS,
         stackPackGateCleared: () => ({ cleared: true }),
       });
-      const agent = report.agents.find((a) => a.name === pair.auditor.name);
+      const agent = report.agents.find((a) => a.name === auditor.name);
       expect(agent?.source?.kind).toBe("project");
       expect(agent?.problems.some((p) => p.reason === "generated-drift")).toBe(false);
     });

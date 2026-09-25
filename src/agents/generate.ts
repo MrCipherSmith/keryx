@@ -158,6 +158,24 @@ function assertSafePack(pack: StackPackForAgentGeneration): void {
   for (const item of pack.agentProfile.fixGuardrails) assertNoControlChars("agentProfile.fixGuardrails item", item);
 }
 
+/**
+ * "a" or "an" for a pack's own `displayName` (R1 review, PR #719, minor:
+ * "A Angular-focused..." read wrong). Vowel-SOUND, not vowel-letter, is the
+ * actual English rule, but every display name this generator has ever seen
+ * (Go, Python, NestJS, Angular, Vue, React, MobX, ...) follows plain
+ * first-letter vowel/consonant, so that is what this checks — simple and
+ * correct for the real, bounded input space rather than a general English
+ * pronunciation engine.
+ */
+function indefiniteArticle(displayName: string): "a" | "an" {
+  return /^[aeiou]/i.test(displayName) ? "an" : "a";
+}
+
+/** Capitalized indefinite article, for starting a sentence ("An Angular...", "A Go..."). */
+function capitalizedIndefiniteArticle(displayName: string): "A" | "An" {
+  return indefiniteArticle(displayName) === "an" ? "An" : "A";
+}
+
 const STATUS_LINE =
   "The reply's first line is `STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED` per the subagent-result contract.";
 
@@ -179,7 +197,7 @@ function auditorDescription(pack: StackPackForAgentGeneration): string {
 
 function fixerDescription(pack: StackPackForAgentGeneration): string {
   return (
-    `Reproduces and fixes a ${pack.agentProfile.displayName} build, lint, type-check, or test failure with the ` +
+    `Reproduces and fixes ${indefiniteArticle(pack.agentProfile.displayName)} ${pack.agentProfile.displayName} build, lint, type-check, or test failure with the ` +
     `smallest root-cause change, isolated in a worktree. Dispatched after a ${pack.id} build/CI command fails and ` +
     `needs a targeted fix rather than a full implementation pass, always re-running the same commands to prove the ` +
     `fix actually holds.`
@@ -288,7 +306,7 @@ export function generateStackAgentPair(pack: StackPackForAgentGeneration): Gener
             name: auditorName,
             description: auditorDescription(pack),
             role:
-              `A ${pack.agentProfile.displayName}-focused code auditor who reads for this stack's known risk patterns ` +
+              `${capitalizedIndefiniteArticle(pack.agentProfile.displayName)} ${pack.agentProfile.displayName}-focused code auditor who reads for this stack's known risk patterns ` +
               "without editing anything, and ranks findings by real-world impact rather than listing every theoretical concern equally.",
             tools: AUDITOR_TOOLS,
             model_tier: "deep",
@@ -311,7 +329,7 @@ export function generateStackAgentPair(pack: StackPackForAgentGeneration): Gener
             name: fixerName,
             description: fixerDescription(pack),
             role:
-              `A ${pack.agentProfile.displayName} build-and-test fixer who reproduces the reported failure, finds the ` +
+              `${capitalizedIndefiniteArticle(pack.agentProfile.displayName)} ${pack.agentProfile.displayName} build-and-test fixer who reproduces the reported failure, finds the ` +
               "smallest root-cause fix, and proves the original commands pass again before reporting done.",
             tools: FIXER_TOOLS,
             model_tier: "standard",

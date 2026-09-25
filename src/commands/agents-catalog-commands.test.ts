@@ -184,19 +184,18 @@ describe("keryx agents verify", () => {
   // (`no-ts-ignore-suppression` passRate 0.6 < 0.8 at the higher trial
   // count — the marginal-at-the-floor fragility flow 316 review round 1
   // predicted) and its pair was removed; `react` stays `experimental` and
-  // ships none. Flow 318 (Wave 4 batch 2) adds `angular` (both auditor and
-  // fixer — its skills.review and skills["build-fix"] are both non-empty).
-  // `mobx` clears the gate too but deliberately carries no `agentProfile`
-  // at all (R1 review PR #719 M1 — code-mobx-store-review/ts-js-node+react
-  // build-fix already cover its ground), so it contributes nothing here.
-  // `nestjs` cleared the gate in T13's first honest run and briefly shipped
-  // a fixer-only pair (R1 review PR #719 M2), but the R1 review fix pass
-  // de-jargoned a trigger prompt that had named the internal APP_FILTER
-  // token unprompted, and the FINAL honest gate re-run found it honestly
-  // fails to route — nestjs is demoted back to experimental with no pair.
-  // The real, un-stubbed CLI path reports zero problems across the whole
-  // catalog, and exactly those six generated agent names are present.
-  test("the real bundled catalog verifies ok with zero problems (python, go, angular are gate-cleared with a generated pair; flow 318)", async () => {
+  // ships none. Flow 318 (Wave 4 batch 2) briefly added `angular`, `mobx`
+  // (design-decision-only, never a real pair — M1), and `nestjs` to the
+  // gate-cleared set at various points, but PR #719's review rounds found
+  // their positive trigger prompts were trigger-prefix near-copies or
+  // scorer-avoidant phrasing rather than genuinely independent requests.
+  // Rewritten honestly and never iterated against the router across two
+  // review rounds, the FINAL honest gate re-run demoted all three back to
+  // `experimental` (see each pack's own `agent-refs.json` `note` for the
+  // specific failing skill/scenario). The real, un-stubbed CLI path reports
+  // zero problems across the whole catalog, and exactly those four
+  // generated agent names (go + python) are present.
+  test("the real bundled catalog verifies ok with zero problems (only python and go are gate-cleared with a generated pair; flow 318)", async () => {
     const { lines, log, error } = collect();
     await agentsCatalogCommand("verify", ["--json"], { cwd: REPO_ROOT, log, error });
     const report = JSON.parse(lines.join("\n")) as {
@@ -211,14 +210,7 @@ describe("keryx agents verify", () => {
       .filter((agent) => agent.name.endsWith("-code-auditor") || agent.name.endsWith("-build-fixer"))
       .map((agent) => agent.name)
       .sort();
-    expect(generatedNames).toEqual([
-      "angular-build-fixer",
-      "angular-code-auditor",
-      "go-build-fixer",
-      "go-code-auditor",
-      "python-build-fixer",
-      "python-code-auditor",
-    ]);
+    expect(generatedNames).toEqual(["go-build-fixer", "go-code-auditor", "python-build-fixer", "python-code-auditor"]);
   });
 
   test("narrows to one agent by name", async () => {
@@ -486,13 +478,18 @@ describe("keryx agents generate", () => {
     // mobx is a real bundled stack directory with no `agentProfile` block
     // (W2 §"Initial catalogue": it extends react rather than getting its
     // own generated pair) — a real, on-disk negative case rather than a
-    // synthetic one.
+    // synthetic one. R1 review round 2 (PR #719, N-M1) also demoted mobx's
+    // own gate status to "experimental" — a SECOND, independent reason
+    // generation refuses it now, checked first in the CLI's own order. This
+    // test cares that generation refuses and produces no pair either way,
+    // not which of the two refusal reasons wins on the current tree.
     const mobxPackPath = path.join(REPO_ROOT, "src", "gdskills", "bundled", "stacks", "mobx", "pack.json");
     if (!existsSync(mobxPackPath)) return; // skip if this repo's stack layout ever changes
     const { errors, log, error } = collect();
     await agentsCatalogCommand("generate", ["--stack", "mobx"], { cwd: REPO_ROOT, log, error });
     expect(process.exitCode).toBe(1);
-    expect(errors.join("\n")).toContain("agentProfile");
+    const message = errors.join("\n");
+    expect(message.includes("agentProfile") || message.includes("stack-pack-not-gate-cleared")).toBe(true);
   });
 
   test("an unknown flag is refused rather than ignored", async () => {
