@@ -16,6 +16,7 @@ import {
   scoutImports,
   scoutSkill,
   scoutVetCandidate,
+  stripExclusionClauses,
 } from "./scout";
 
 // R1-F5/R2-F13 pattern (also used in src/memory/handoff.test.ts,
@@ -559,5 +560,136 @@ describe("auditSkillSnapshot (R2-I2)", () => {
     expect(result.reason).toContain("case-fold collision");
     expect(result.reason).toContain("reference.md");
     expect(result.reason).toContain("REFERENCE.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 334: negation-aware scoring — "Not for X"/"Never …"/"Do not use for
+// X"/"Use Y instead"/"(not X)" clauses in a catalog entry's own
+// description/triggers must stop counting as positive coverage evidence for
+// that entry. See scout.ts's own section comment above `stripExclusionClauses`
+// for the full design rationale and the flow 334 journal for the bundled-
+// catalog survey that drove the opener list.
+// ---------------------------------------------------------------------------
+
+describe("stripExclusionClauses (flow 334)", () => {
+  test("drops a 'NOT for X (use Y instead)' sentence entirely, keeping the rest", () => {
+    const stripped = stripExclusionClauses(
+      "Use when pushing the current branch to the remote. NOT for creating the commits themselves (use `commit`) or opening a pull request afterwards (use `pr`).",
+    );
+    expect(stripped).toContain("Use when pushing the current branch to the remote.");
+    expect(stripped).not.toMatch(/\bcommit\b/i);
+    expect(stripped).not.toMatch(/\bpull request\b/i);
+    expect(stripped).not.toMatch(/\bpr\b/i);
+  });
+
+  test("drops a 'Do not use for X' sentence", () => {
+    const stripped = stripExclusionClauses("Use when linting Go code. Do not use for formatting Python files.");
+    expect(stripped).toContain("Use when linting Go code.");
+    expect(stripped).not.toMatch(/\bpython\b/i);
+    expect(stripped).not.toMatch(/\bformatting\b/i);
+  });
+
+  test("drops a sentence that OPENS with 'Never …'", () => {
+    const stripped = stripExclusionClauses("Use when deploying a release. Never run this against a database migration.");
+    expect(stripped).toContain("Use when deploying a release.");
+    expect(stripped).not.toMatch(/\bdatabase\b/i);
+    expect(stripped).not.toMatch(/\bmigration\b/i);
+  });
+
+  test("does NOT drop a mid-sentence, non-clause 'never' (avoids over-triggering on ordinary English)", () => {
+    const stripped = stripExclusionClauses("Use when fixing a build; a correct fix never widens beyond what the failure requires.");
+    expect(stripped).toMatch(/\bwidens\b/i);
+    expect(stripped).toMatch(/\brequires\b/i);
+  });
+
+  test("drops a '(not X)' parenthetical wherever it appears", () => {
+    const stripped = stripExclusionClauses("Use when reviewing the backend (not the CLI form) for API design issues.");
+    expect(stripped).not.toMatch(/\bcli\b/i);
+    expect(stripped).toMatch(/\bapi\b/i);
+  });
+
+  test("drops a standalone 'use X instead' redirect with no 'not for' wrapper", () => {
+    const stripped = stripExclusionClauses("Use when the body of an existing PR needs updating. Use `pr-issue-documenter` instead.");
+    expect(stripped).not.toMatch(/\bpr-issue-documenter\b/i);
+    expect(stripped).toContain("Use when the body of an existing PR needs updating.");
+  });
+
+  test("does NOT drop the extremely common 'Use when X' description opener", () => {
+    const stripped = stripExclusionClauses("Use when implementing a new feature in a Node.js service.");
+    expect(stripped).toBe("Use when implementing a new feature in a Node.js service.");
+  });
+});
+
+describe("negation-aware scoring against the real bundled catalog (flow 334)", () => {
+  test("a testing query does not inherit score from an implementation skill's own 'Not for ... tests' disclaimer", () => {
+    // ts-js-node/nodejs-implementation's real, shipped description ends:
+    // "... Not for UI markup/rendering code (use the matching UI framework
+    // pack) or writing/fixing tests (use nodejs-testing)." Before flow 334,
+    // "writing"/"fixing"/"tests" in that disclaimer counted as ordinary
+    // positive evidence for nodejs-implementation, scoring 0.682 (rank 3)
+    // against a pure testing query.
+    const query = "write vitest tests for this service";
+    const testingResult = checkSkillSelected(query, "ts-js-node/nodejs-testing", catalog);
+    const implementationResult = checkSkillSelected(query, "ts-js-node/nodejs-implementation", catalog);
+
+    expect(testingResult.selected).toBe(true);
+
+    const implementationEntry = catalog.find((entry) => entry.id === "ts-js-node/nodejs-implementation");
+    expect(implementationEntry?.description ?? "").toMatch(/not for.*tests?/i);
+
+    // The fix does not have to drive the score to exactly zero (the entry's
+    // triggers legitimately share unrelated tokens like "write"/"service"
+    // with the query), but the disclaimer's own tokens ("test"/"tests"/
+    // "writing"/"fixing") must no longer be part of what matched.
+    const rankedScout = scoutSkill(query, catalog);
+    const implementationMatch = rankedScout.matches.find((m) => m.skillId === "ts-js-node/nodejs-implementation");
+    if (implementationMatch !== undefined) {
+      expect(implementationMatch.reason).not.toMatch(/\btest\b/);
+    }
+    expect(implementationResult.selected).toBe(false);
+  });
+
+  test("AC2: scoutSkill's use/fork overlap for a sibling named only in a 'Not for' clause is not inflated by that clause", () => {
+    // quality/pr's real, shipped description: "... NOT for rewriting the
+    // body of a pull request that already exists or its linked issue (use
+    // `pr-issue-documenter`)." Before flow 334, scoring PR's own description
+    // as a scout query (the exact shape `scoutSkill`'s self-identification
+    // check and `nearestSkills` use) let "pr-issue-documenter" — named only
+    // inside pr's own disclaimer — outscore `pr` itself.
+    const prEntry = catalog.find((entry) => entry.id === "quality/pr");
+    expect(prEntry).toBeDefined();
+    if (prEntry === undefined) return;
+    expect(prEntry.description).toMatch(/not for.*pr-issue-documenter/i);
+
+    const result = scoutSkill(prEntry.description, catalog);
+    expect(result.matches[0]?.skillId).toBe("quality/pr");
+    expect(result.matches[0]?.overlapScore).toBe(1);
+    expect(result.decision).toBe("use");
+  });
+
+  // AC4 regression coverage: every bundled skill's own trigger phrase that
+  // currently selects its own skill (via `checkSkillSelected`, the same
+  // grader `keryx skills eval`'s trigger-accuracy check and `stocktake`'s
+  // own-trigger-routes-back check use) must keep doing so after negation-
+  // aware scoring. Measured baseline (flow 334 journal): 512/513 bundled
+  // trigger phrases select correctly both BEFORE and AFTER this change —
+  // "quality/pr"'s "Make PR" trigger is a pre-existing, unrelated failure
+  // (score 0, no shared terms at all with pr's own description) that this
+  // flow did not introduce and is out of scope to fix here.
+  const KNOWN_PRE_EXISTING_FAILURES = new Set(["quality/pr::Make PR"]);
+
+  test("regression: every bundled skill's own trigger still selects that skill, except the recorded pre-existing failure", () => {
+    const newFailures: string[] = [];
+    for (const entry of catalog) {
+      for (const trigger of entry.triggers) {
+        const key = `${entry.id}::${trigger}`;
+        const result = checkSkillSelected(trigger, entry.id, catalog);
+        if (!result.selected && !KNOWN_PRE_EXISTING_FAILURES.has(key)) {
+          newFailures.push(`${key} -> score=${result.score.toFixed(3)} rank=${result.rank} outrankedBy=${result.outrankedBy ?? "-"}`);
+        }
+      }
+    }
+    expect(newFailures).toEqual([]);
   });
 });
