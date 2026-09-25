@@ -13,6 +13,7 @@ import {
   agentExportSupport,
   defaultAgentSupportLookup,
   planAgentExport,
+  readClaudeSubagentAliasesConfig,
   removeManagedAgentExports,
   removeManagedAgentExportsDetailed,
   writeAgentExport,
@@ -168,6 +169,111 @@ describe("planAgentExport / writeAgentExport lifecycle", () => {
     expect(plan.droppedTools).toEqual([]);
     const { written } = await writeAgentExport(root, plan);
     expect(written).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 339: claude-target model alias mapping and its opt-out.
+// ---------------------------------------------------------------------------
+
+describe("planAgentExport: claude model alias (flow 339)", () => {
+  test("default (no tasks.config.json): claude export carries the tier's own alias, not inherit", async () => {
+    const deepDefinition: AgentDefinition = { ...DEFINITION, name: "deep-agent", model_tier: "deep" };
+    const standardDefinition: AgentDefinition = { ...DEFINITION, name: "standard-agent", model_tier: "standard" };
+    const lightDefinition: AgentDefinition = { ...DEFINITION, name: "light-agent", model_tier: "light" };
+
+    const deepPlan = await planAgentExport(root, deepDefinition, "claude");
+    const standardPlan = await planAgentExport(root, standardDefinition, "claude");
+    const lightPlan = await planAgentExport(root, lightDefinition, "claude");
+
+    expect(deepPlan.content).toContain("model: opus");
+    expect(standardPlan.content).toContain("model: sonnet");
+    expect(lightPlan.content).toContain("model: haiku");
+  });
+
+  test("modelGuidance.claudeSubagentAliases: false restores model: inherit", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".metaproject", "tasks.config.json"),
+      JSON.stringify({ modelGuidance: { claudeSubagentAliases: false } }),
+      "utf8",
+    );
+    const plan = await planAgentExport(root, DEFINITION, "claude");
+    expect(plan.content).toContain("model: inherit");
+    expect(plan.content).not.toMatch(/model:\s*(opus|sonnet|haiku)\b/);
+  });
+
+  test("the opt-out is independent of modelGuidance.enabled (flow 336's key — a different feature)", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".metaproject", "tasks.config.json"),
+      JSON.stringify({ modelGuidance: { enabled: false } }),
+      "utf8",
+    );
+    // flow 336's `enabled: false` turns off the Model choice policy sentence
+    // rendered into CLAUDE.md/AGENTS.md. It must not also disable the claude
+    // export's own alias mapping — that is `claudeSubagentAliases` alone.
+    const plan = await planAgentExport(root, DEFINITION, "claude");
+    expect(plan.content).toContain("model: haiku");
+  });
+
+  test("a malformed tasks.config.json keeps aliasing on — the same default-on contract as absence", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(path.join(root, ".metaproject", "tasks.config.json"), "{ not json", "utf8");
+    const plan = await planAgentExport(root, DEFINITION, "claude");
+    expect(plan.content).toContain("model: haiku");
+  });
+
+  test("non-claude runtimes are unaffected by the opt-out — codex/kiro/opencode never carry a model alias", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".metaproject", "tasks.config.json"),
+      JSON.stringify({ modelGuidance: { claudeSubagentAliases: false } }),
+      "utf8",
+    );
+    for (const runtime of ["codex", "kiro", "opencode"] as const) {
+      const plan = await planAgentExport(root, DEFINITION, runtime);
+      expect(plan.content).not.toContain("opus");
+      expect(plan.content).not.toContain("sonnet");
+      expect(plan.content).not.toContain("haiku");
+    }
+  });
+});
+
+describe("readClaudeSubagentAliasesConfig", () => {
+  test("absent tasks.config.json is enabled by default", async () => {
+    const config = await readClaudeSubagentAliasesConfig(root);
+    expect(config.enabled).toBe(true);
+  });
+
+  test("modelGuidance.claudeSubagentAliases=false disables it", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".metaproject", "tasks.config.json"),
+      JSON.stringify({ modelGuidance: { claudeSubagentAliases: false } }),
+      "utf8",
+    );
+    const config = await readClaudeSubagentAliasesConfig(root);
+    expect(config.enabled).toBe(false);
+  });
+
+  test("a malformed tasks.config.json keeps the default enabled, with a note", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(path.join(root, ".metaproject", "tasks.config.json"), "{ not json", "utf8");
+    const config = await readClaudeSubagentAliasesConfig(root);
+    expect(config.enabled).toBe(true);
+    expect(config.note).toBeDefined();
+  });
+
+  test("modelGuidance.enabled=false (flow 336's key) does not disable claudeSubagentAliases", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".metaproject", "tasks.config.json"),
+      JSON.stringify({ modelGuidance: { enabled: false } }),
+      "utf8",
+    );
+    const config = await readClaudeSubagentAliasesConfig(root);
+    expect(config.enabled).toBe(true);
   });
 });
 
@@ -362,6 +468,18 @@ describe("every bundled agent x every host runtime", () => {
   });
 
   const runtimes: readonly AgentExportRuntime[] = ["claude", "codex", "kiro", "opencode"];
+
+  // Flow 339: claude's own `model:` frontmatter now carries the tier's alias
+  // (`opus`/`sonnet`/`haiku`) or `inherit` by default — a fixed, version-free
+  // vocabulary Claude Code itself documents, not a literal model name. The
+  // check below still forbids a concrete/versioned id (`claude-…`, `gpt-…`,
+  // `o[0-9]…`) for every runtime including claude, and still forbids a bare
+  // tier word for every OTHER runtime unconditionally; only claude's own
+  // exact `model: opus|sonnet|haiku|inherit` line is exempted, and only for
+  // claude — same narrowing, same rationale, as `compile.model-tier.test.ts`.
+  const CLAUDE_MODEL_ALIAS_LINE = /^model: (?:opus|sonnet|haiku|inherit)$/m;
+  const FORBIDDEN_MODEL_DECLARATION = /model\s*[:=]\s*"?(claude|gpt|opus|sonnet|haiku|gemini|o[0-9])/i;
+
   for (const runtime of runtimes) {
     test(`${runtime}: every bundled agent's export contains the baseline verbatim once, the sentinel, and no model name`, async () => {
       for (const agent of catalog.agents) {
@@ -371,10 +489,12 @@ describe("every bundled agent x every host runtime", () => {
         const baselineOccurrences = content.split(PROMPT_DEFENSE_BASELINE).length - 1;
         expect(baselineOccurrences).toBe(1);
         expect(content).toContain("keryx-managed: keryx agents export (");
-        // No literal model name — omitted entirely, or `model: inherit`/no
-        // `model` field at all. `model_tier` VALUES ("light"/"standard"/
-        // "deep") are not model names.
-        expect(content).not.toMatch(/model\s*[:=]\s*"?(claude|gpt|opus|sonnet|haiku|gemini|o[0-9])/i);
+        // No literal model name — omitted entirely, `model: inherit`, no
+        // `model` field at all, or (claude only) the tier's own alias
+        // (`model: opus|sonnet|haiku`). `model_tier` VALUES ("light"/
+        // "standard"/"deep") are not model names.
+        const scanned = runtime === "claude" ? content.replace(CLAUDE_MODEL_ALIAS_LINE, "") : content;
+        expect(scanned).not.toMatch(FORBIDDEN_MODEL_DECLARATION);
       }
     });
   }

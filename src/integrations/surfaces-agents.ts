@@ -179,12 +179,14 @@ function agentsSurface(params: {
 /**
  * Claude Code — https://code.claude.com/docs/en/sub-agents — VERIFIED (T1's
  * docs check): `.claude/agents/<name>.md`, documented YAML frontmatter,
- * `model: inherit` accepted. This is the one host `compile.ts`'s
- * `renderClaudeExport` fully implements against a confirmed shape, so its
- * surface (unlike codex/kiro/opencode below) carries `confidence:
- * "verified"` — which, per `matrix.ts`'s `classifySurfaceState`, is what
- * makes the matrix report this surface `native` (host-hook adapter +
- * verified + `customInstall` present).
+ * `model: opus|sonnet|haiku|inherit` accepted (flow 339: `renderClaudeExport`
+ * maps the definition's `model_tier` onto one of the three named aliases by
+ * default; `inherit` is what the `modelGuidance.claudeSubagentAliases: false`
+ * opt-out restores). This is the one host `compile.ts`'s `renderClaudeExport`
+ * fully implements against a confirmed shape, so its surface (unlike codex/
+ * kiro/opencode below) carries `confidence: "verified"` — which, per
+ * `matrix.ts`'s `classifySurfaceState`, is what makes the matrix report this
+ * surface `native` (host-hook adapter + verified + `customInstall` present).
  */
 export const AGENTS_CLAUDE: SurfaceAdapter = agentsSurface({
   runtime: "claude",
