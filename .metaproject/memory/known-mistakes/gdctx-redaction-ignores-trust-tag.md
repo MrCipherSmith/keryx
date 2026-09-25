@@ -28,7 +28,7 @@ A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a reda
 
 ## Provenance
 
-- Source: flow 304 (W7 gdgraph/gdctx correctness)
+- Source: flow 320 (W7 gdgraph/gdctx correctness)
 - Link: docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2)
 - Confirmed-By: Reproduced this session via `keryx ctx read README.md --mode full`
 - Created: 2026-09-24

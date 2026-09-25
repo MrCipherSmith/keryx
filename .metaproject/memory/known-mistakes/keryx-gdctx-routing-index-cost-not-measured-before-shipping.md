@@ -35,7 +35,7 @@ This is a **design defect, not a code bug** — the rule is necessary, but its i
 
 ## Provenance
 
-- Source: flow 304 (W7 gdgraph/gdctx correctness)
+- Source: flow 320 (W7 gdgraph/gdctx correctness)
 - Link: docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md
 - Confirmed-By: Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
 - Created: 2026-09-24

@@ -30,7 +30,7 @@ A per-flag string allowlist that doesn't expand POSIX-bundled short flags reject
 
 ## Provenance
 
-- Source: flow 304 (W7 gdgraph/gdctx correctness)
+- Source: flow 320 (W7 gdgraph/gdctx correctness)
 - Link: docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-3)
 - Confirmed-By: Reproduced this session via `keryx ctx rg -il "todo" src`
 - Created: 2026-09-24

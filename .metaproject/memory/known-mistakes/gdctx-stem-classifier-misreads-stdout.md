@@ -28,7 +28,7 @@ This causes ordinary English in commit messages, documentation, or code comments
 
 ## Provenance
 
-- Source: flow 304 (W7 gdgraph/gdctx correctness)
+- Source: flow 320 (W7 gdgraph/gdctx correctness)
 - Link: docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-1)
 - Confirmed-By: Reproduced this session via `keryx ctx run -- printf 'refuse this\n'`
 - Created: 2026-09-24

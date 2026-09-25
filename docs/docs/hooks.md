@@ -376,7 +376,7 @@ first.
   whenever the active security profile's isolation is
   `required-fail-closed`.
 - **Built-in command hooks run unsandboxed off `required-fail-closed`**
-  (flow 306, W6, T15): `keryx.ctx-guard`, `keryx.security-check-input` and
+  (flow 322, W6, T15): `keryx.ctx-guard`, `keryx.security-check-input` and
   `keryx.security-check-output` spawn the running `keryx` binary itself —
   the same trust domain and containment as the Keryx process that spawns
   them, not an untrusted third-party command, so wrapping them in the OS

@@ -5,7 +5,7 @@ Source: agent-platform-expansion program, Wave 1 (docs/requirements/keryx-agent-
 
 ## Problem
 
-W5-a (flow 305) unified the three host-hook registries into `src/integrations/`, but the registry still
+W5-a (flow 321) unified the three host-hook registries into `src/integrations/`, but the registry still
 covers only the harnesses that existed before the workstream. Gemini CLI, Kiro and GitHub Copilot agent have
 no entry at all; Zed is registered as an empty `instruction-only` row although Keryx already enforces a
 deny-by-default permission mapping when it runs as Zed's ACP agent (`src/acp/permission.ts`). There is no

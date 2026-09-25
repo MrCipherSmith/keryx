@@ -105,7 +105,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // one Commands: summary row, same shape as flow 307's `integrations`.
     "  keryx stack detect [--cwd <dir>] [--json] [--no-write]\n",
     "  stack     Deterministic, offline stack detection (keryx stack detect)\n",
-    // Flow 306 (W6, T8): the new `keryx hooks` verb — five USAGE_BODY lines
+    // Flow 322 (W6, T8): the new `keryx hooks` verb — five USAGE_BODY lines
     // (one wraps onto a continuation line) plus its Commands: summary row.
     "  keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)\n",
     "  keryx hooks validate [--json] [--ci]          Validate .metaproject/hooks.json and ~/.keryx/hooks.json\n",

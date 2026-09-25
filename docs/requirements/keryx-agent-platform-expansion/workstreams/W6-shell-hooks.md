@@ -1,7 +1,7 @@
 # W6 — Keryx shell lifecycle hooks
 Version: 0.1.3
 
-Implemented in flow 306. See "Implementation notes" below for where the shipped
+Implemented in flow 322. See "Implementation notes" below for where the shipped
 runtime deviates from (or fills a gap left open by) this design; user-facing
 documentation lives at [docs/docs/hooks.md](../../../docs/hooks.md).
 
@@ -392,13 +392,13 @@ review or W1 stocktake can find silently-failing hooks without grepping raw logs
   input through `decide()` as if it were the original call, with the substitution itself a
   non-suppressible session event) would make `updatedInput` safe enough to reconsider?
 
-## Implementation notes (flow 306)
+## Implementation notes (flow 322)
 
-The runtime, CLI, and `keryx shell` wiring described above shipped in flow 306
+The runtime, CLI, and `keryx shell` wiring described above shipped in flow 322
 (`src/harness/hooks/`, `src/commands/hooks.ts`, `src/commands/agent-hooks.ts`).
 User-facing documentation is at
 [docs/docs/hooks.md](../../../docs/hooks.md). Decisions D1–D6 below are the
-plan's own record (`.metaproject/flows/306-.../plan.md`); the rest are
+plan's own record (`.metaproject/flows/322-.../plan.md`); the rest are
 deviations or gaps this design left open, found while implementing and
 documenting it.
 
