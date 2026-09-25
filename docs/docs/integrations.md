@@ -7,7 +7,7 @@ actually driving. This page describes the unified **registry** those installs
 come from, the `keryx integrations` command family, install-state and
 `doctor` drift detection, the generated **capability matrix**, and the
 per-harness notes — including the honest experimental caveats for the
-harnesses added in flow 307 (Gemini CLI, Kiro, GitHub Copilot agent, Zed).
+harnesses added in flow 323 (Gemini CLI, Kiro, GitHub Copilot agent, Zed).
 
 This is a distinct namespace from `keryx harness run|exec|extension|wave`
 (Keryx's own agent runtime — see [harness.md](./harness.md)); `keryx
@@ -141,7 +141,7 @@ file that lacked a final newline may gain one, and a pre-existing empty (or
 whitespace-only) file that install wrote the block into is removed on
 uninstall along with it, the same as a file install created outright.
 
-## Per-harness notes (new in flow 307 / W5-b)
+## Per-harness notes (new in flow 323 / W5-b)
 
 These four harnesses had zero entries in any registry before this flow. Every
 new adapter below ships at `confidence: "experimental"` with non-empty

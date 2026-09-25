@@ -18,12 +18,12 @@ languages/frameworks Keryx has none for today, (3) an install
 profile→module→component model with plan/state/doctor/uninstall commands, (4)
 an authoring standard aligned to the public Agent Skills format, and (5)
 governance gates (scout, eval, stocktake) so catalog growth is checked rather
-than bulk-generated. Flow 309 (Wave 2) implemented (1) stack detection, (3)
+than bulk-generated. Flow 325 (Wave 2) implemented (1) stack detection, (3)
 the install profile→module→component lifecycle (plan/apply/doctor/uninstall),
 and (5) the three governance gates; (2) stack pack content was scoped as a
 Wave 4 target and (4) the authoring-standard lint remains planned. Flow 314
 (Wave 4 batch 1) authored the first four stack packs against gate (5) — see
-"Implementation notes (flow 309)" and "Implementation notes: Wave 4 batch 1
+"Implementation notes (flow 325)" and "Implementation notes: Wave 4 batch 1
 (flow 314)" below for what landed and what is still a target contract.
 
 ## Current state (with code paths)
@@ -419,18 +419,18 @@ history is inspectable without guessing from a git blame.
 
 | Command | Status | Purpose |
 |---|---|---|
-| `keryx stack detect [--cwd <dir>] [--json] [--no-write]` | implemented (flow 309, Wave 2) | Deterministic stack detection, writes `.metaproject/data/stack/stack.json` |
-| `keryx skills install --profile <p> [--with/--without <component>] [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]` | implemented (flow 309, Wave 2) | Resolve profile→modules→components into an install plan/apply |
-| `keryx skills doctor [--target <id>] [--json]` | implemented (flow 309, Wave 2) | Compare install-state to disk; report ok/drifted/missing/orphaned |
-| `keryx skills uninstall --target <id> [--module <id>] [--force] [--json]` | implemented (flow 309, Wave 2) | Remove only Keryx-managed, recorded files |
-| `keryx skills scout <name-or-description> [--include-imports] [--record <pack-dir>] [--candidate <dir>] [--scope bundled\|all] [--json]` | implemented (flow 309, Wave 2) | Pre-creation dedupe gate |
-| `keryx skills eval <skill-id> [--strictness ...] [--trials N] [--runner <provider>] [--model-grader] [--json]` | implemented (flow 309, Wave 2) | Behavioral compliance eval, trigger-accuracy + pass-rate |
-| `keryx skills stocktake [--scope bundled\|all] [--quick] [--json]` | implemented (flow 309, Wave 2) | Periodic keep/improve/update/retire/merge verdicts |
+| `keryx stack detect [--cwd <dir>] [--json] [--no-write]` | implemented (flow 325, Wave 2) | Deterministic stack detection, writes `.metaproject/data/stack/stack.json` |
+| `keryx skills install --profile <p> [--with/--without <component>] [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]` | implemented (flow 325, Wave 2) | Resolve profile→modules→components into an install plan/apply |
+| `keryx skills doctor [--target <id>] [--json]` | implemented (flow 325, Wave 2) | Compare install-state to disk; report ok/drifted/missing/orphaned |
+| `keryx skills uninstall --target <id> [--module <id>] [--force] [--json]` | implemented (flow 325, Wave 2) | Remove only Keryx-managed, recorded files |
+| `keryx skills scout <name-or-description> [--include-imports] [--record <pack-dir>] [--candidate <dir>] [--scope bundled\|all] [--json]` | implemented (flow 325, Wave 2) | Pre-creation dedupe gate |
+| `keryx skills eval <skill-id> [--strictness ...] [--trials N] [--runner <provider>] [--model-grader] [--json]` | implemented (flow 325, Wave 2) | Behavioral compliance eval, trigger-accuracy + pass-rate |
+| `keryx skills stocktake [--scope bundled\|all] [--quick] [--json]` | implemented (flow 325, Wave 2) | Periodic keep/improve/update/retire/merge verdicts |
 | `keryx skills create <target> --module <module> --name <skill-name>` | existing (`src/commands/skills.ts`) | Unchanged; scout-log presence becomes a prerequisite guard for stack-pack skills |
 | `keryx skills verify <skill-or-target>` | existing | Unchanged freshness classification (`skill-lifecycle.mdc`) |
 | `keryx skills export/sync --runtime ...` | existing | Unchanged format translation; consumed by W5 harness installs |
 
-## Implementation notes (flow 309)
+## Implementation notes (flow 325)
 
 - **Module locations.** Stack detection lives under `src/stack/` (CLI surface
   `src/commands/stack.ts`). The install profile→module→component lifecycle
@@ -523,7 +523,7 @@ history is inspectable without guessing from a git blame.
   capability is configured (`--runner`), rather than failing or being
   skipped silently — the eval's `verdict` reflects only scenarios that
   actually ran.
-- **Stack-pack content was deferred to Wave 4** at flow 309 time, per this
+- **Stack-pack content was deferred to Wave 4** at flow 325 time, per this
   document's original scope, with one exception: `src/gdskills/bundled/
   install-manifest.json` registered a `python` profile and a
   `python-pack-module` component marked `stability: experimental` that
@@ -538,7 +538,7 @@ history is inspectable without guessing from a git blame.
 
 - **Packs authored.** Four stack packs now exist under
   `src/gdskills/bundled/stacks/<id>/`: `ts-js-node` and `go` (new, authored in
-  flow 314), `python` (started in flow 309 as an empty-file placeholder,
+  flow 314), `python` (started in flow 325 as an empty-file placeholder,
   completed in flow 314), and `react` (new, `extends: ts-js-node`). Each pack
   carries `pack.json`, per-skill `SKILL.md` + `evals.json` under `skills/`,
   and a pack-level `governance/eval.json`. Skill names (from each pack's

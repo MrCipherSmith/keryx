@@ -3,7 +3,7 @@ Version: 0.1.4
 
 > **Status (W5-a, flow 321):** the unified registry has landed in `src/integrations/` for the runtimes that existed before this workstream (claude, codex, cursor, windsurf, antigravity, opencode, zed as unsupported, generic-mcp). `HarnessAdapter.surfaces` is a list rather than a per-flag record, because Claude already carries two `block` surfaces in one file (the ctx guard and security check-output). New adapters, the `keryx integrations` CLI and the generated matrix remain W5-b.
 >
-> **Status (W5-b, flow 307):** adapters for gemini-cli, kiro, and
+> **Status (W5-b, flow 323):** adapters for gemini-cli, kiro, and
 > github-copilot-agent have landed in `src/integrations/surfaces-w5b.ts`, each
 > at `confidence: "experimental"` with non-empty `risk_notes`/`source_docs`
 > (`block` via a host-hook settings file, plus an `instructions` surface).

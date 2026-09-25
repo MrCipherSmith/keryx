@@ -1,0 +1,61 @@
+# Flow Journal
+
+- 2026-09-24T00:56:53.608Z - flow created
+- 2026-09-24T01:02:27.197Z - task-added: T5: Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes
+- 2026-09-24T01:02:27.275Z - task-added: T6: Integrations installer core with per-target install-state; legacy installers delegate to it
+- 2026-09-24T01:02:27.352Z - task-added: T7: Generated capability matrix, checked-in artifact, schema validation, guard test and CI step
+- 2026-09-24T01:02:27.430Z - task-added: T8: keryx integrations install|doctor|uninstall|matrix CLI, help and command registry
+- 2026-09-24T01:02:27.516Z - task-added: T9: Docs: integrations page, W5 spec status, matrix artifact reference
+- 2026-09-24T01:02:27.602Z - task-added: T10: Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)
+- 2026-09-24T01:02:27.683Z - task-added: T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified
+- 2026-09-24T01:02:32.926Z - frozen: 8 criteria; checksum recorded
+- 2026-09-24T01:02:33.006Z - started
+- 2026-09-24T01:02:33.084Z - task-done: T2: Implement per plan
+- 2026-09-24T01:05:53.530Z - task-done: T10: Verify keryx harness run|exec|extension|wave help and behavior unchanged (pinning test)
+- 2026-09-24T01:06:16.305Z - task-done: T1: Collect remaining context
+- 2026-09-24T01:20:23.122Z - task-done: T5: Register gemini-cli, kiro, github-copilot-agent, zed (ACP) and keryx-shell adapters with codecs, instructions surfaces and probes
+- 2026-09-24 - completion_outcome create-pr-and-merge from dispatch (operator_confirmed by MrCipherSmith via program brief); stacked addendum: PR base stack/wave0, no merge by agent.
+- 2026-09-24 - T1 research (sonnet) DONE_WITH_CONCERNS: Gemini default-enabled flag/version not found; Kiro stdin field names + shell tool name third-party only; Copilot sessionStart/userPromptSubmitted injection not confirmed. Decision: all new host-hook surfaces experimental with these gaps in riskNotes; no inject-context surfaces added for new harnesses.
+- 2026-09-24 - Decision: MCP client-config ownership (src/mcp/client-config.ts, keryx integrate) not moved — W5 spec does not require it; follow-up.
+- 2026-09-24 - Decision: new block surfaces use subsystem ctx-guard so keryx ctx hook <id> serves them with no handler change; ctx install-hook --runtime all now also covers gemini-cli/kiro/github-copilot-agent (experimental warning), same pattern as antigravity/opencode.
+- 2026-09-24 - T10 DONE (harness namespace pin test, 13 pass). T5 DONE (adapters; src/integrations 152 pass; tsc clean). Local-only failures in src/ctx/orient.test.ts + src/commands/ctx.test.ts: global git commit hook rejects the fake test author (env, pre-existing, untouched files).
+- 2026-09-24T01:36:13.050Z - task-done: T7: Generated capability matrix, checked-in artifact, schema validation, guard test and CI step
+- 2026-09-24T01:39:32.432Z - task-done: T6: Integrations installer core with per-target install-state; legacy installers delegate to it
+- 2026-09-24T01:39:32.509Z - task-done: T9: Docs: integrations page, W5 spec status, matrix artifact reference
+- 2026-09-24T01:55:40.671Z - task-done: T8: keryx integrations install|doctor|uninstall|matrix CLI, help and command registry
+- 2026-09-24 - T6 DONE (installer core + install-state; legacy suites 317/317 unmodified). T7 DONE (matrix + artifact + guard test; no validator change needed). T9 DONE (docs/docs/integrations.md, W5 spec 0.1.4). T8 DONE (CLI, cli-reference, mkdocs nav, CI step 'Harness capability matrix drift gate (W5)'; fixed zed riskNote duplicate and alias table to use surface ids).
+- 2026-09-24 - T11 e2e: temp project with .metaproject — integrations install --runtime all wrote every surface; zed instructions fails without AGENTS.md (by design: managed by keryx init/update); doctor all ok; 10 install-state files; uninstall --runtime all left only empty JSON residues ({} / {"version":...}) and removed markdown blocks. git diff vs stack/wave0 touches no pre-existing test except src/integrations/registry.test.ts (W5-a registry enumeration).
+- 2026-09-24 - T3 checks: tsc exit 0; eslint on changed ts exit 0; targeted tests 286 pass 0 fail (src/integrations, commands/integrations, harness pin, ctx hook-install, orient-runtimes, security/agent-hooks, cli-reference-coverage, acp/permission).
+- 2026-09-24T01:56:55.527Z - task-done: T11: End-to-end: integrations install/doctor/uninstall on a temp project for every runtime, legacy alias tests unmodified
+- 2026-09-24T01:56:55.612Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-24T01:57:33.474Z - task-attempt: T4: started (attempt 1) — review round 1 (opus) on PR #677
+- 2026-09-24 - Review round 1 (opus) on PR #677: 3 major, 7 minor, 4 info (reviews/round-1.md). keryx review ingest refused (majors need class_scope enumeration) — round recorded in reviews/round-1.md and T4 attempt 1 instead. Fixes: worker A (F1,F2,F6,F8,F9) and worker B (F2,F3,F4,F5,F7,F10,F11,F13,F14) — both DONE; F12 left (riskNote covers it).
+- 2026-09-24T02:24:23.624Z - task-attempt: T4: failed (attempt 2) — round 1: 3 major 7 minor fixed in 2 commits
+- 2026-09-24T02:45:39.739Z - task-attempt: T4: started (attempt 3) — review round 2 (opus) after fixes ad1c5158+cacd6f12
+- 2026-09-24T03:09:29.056Z - task-attempt: T4: started (attempt 3) — review round 2 (opus) — re-recorded: a fix worker reverted uncommitted flow.json, dropping the original entry
+- 2026-09-24T03:09:29.138Z - task-attempt: T4: failed (attempt 4) — round 2: 7 minor (F4,F7,F13,N1,N2,N4 + CI commands-by-task) fixed; 2 info fixed
+- 2026-09-24 - Review round 2 (opus): round-1 majors confirmed fixed; 4 new minor + 3 partial (reviews/round-2.md); CI failed on commands-by-task.md. One fix worker fixed all + CI (422 targeted pass). Incident: that worker reverted the uncommitted flow.json (dropping the round-2 'started' attempt); re-recorded via keryx flow task attempt. Lesson: commit flow.json before dispatching workers.
+- 2026-09-24T03:09:44.609Z - task-attempt: T4: started (attempt 5) — review round 3 (opus) on e826d83f
+- 2026-09-24T03:14:28.321Z - task-attempt: T4: failed (attempt 6) — round 3: 3 minor (M1 markdown round trip, M2 presence check, M3 doctor abort)
+- 2026-09-24 - Review round 3 (opus): round-2 items fixed; 3 new minor (M1 markdown-block round trip edge cases incl. created-file marker leaking and user front matter stripped; M2 strip-diff presence check misreports; M3 doctor --runtime all aborts on one corrupt file). Third attempt not clean → re-plan per flow-orchestrator: the markdown-block cause is an over-ambitious 'byte-exact restore' design that keeps growing heuristics (markers, prefix detection). New strategy: simpler contract — no created-file marker; front matter only written when install creates the file; uninstall removes exactly the block plus the single separator line install adds and deletes the file only when the remainder is empty or equals exactly Keryx's own front matter (EOL-insensitive); pre-existing files are never given front matter. Documented normalization: a file whose trailing whitespace install had to extend may differ only in trailing newlines after uninstall. M2: presence = this surface's own sentinel-tagged group exists (managedGroups/isManagedBy), not strip-diff. M3: liveStatusOf catches parse errors into live 'invalid'. Round 4 review follows as the post-replan verification.
+- 2026-09-24T03:30:25.497Z - task-attempt: T4: started (attempt 7) — review round 4 (opus): post-replan verification of e3752a36
+- 2026-09-24T03:39:32.420Z - task-attempt: T4: failed (attempt 8) — round 4: 1 minor (R4-1) fixed in follow-up commit and verified by repro; no open finding >= minor
+- 2026-09-24 - Review round 4 (opus, post-replan): M1-M3 fixed; one pre-existing minor R4-1 (unclosed code fence) fixed by a narrow follow-up and verified by orchestrator repro + 303 targeted tests; remaining findings info only (R4-2, R4-3, F12, I1, I2). Review loop closed at threshold minor.
+- 2026-09-24 - CI all green on 62e88ad4 (typecheck-and-tests incl. the matrix drift gate, client matrix, standard, mkdocs, ...). Review clean at threshold minor. T4 left open: awaiting owner merge of PR #677 (stacked on stack/wave0; retarget to feat/agent-platform-expansion after #674/#675 merge). Flow close (implemented / ac confirm / complete) deferred to after the merge.
+- 2026-09-24T04:09:14.478Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/677 (warning: PR is not a draft)
+- 2026-09-24T04:10:19.677Z - ac-confirmed: AC1: src/integrations/surfaces-w5b.ts + registry.ts: gemini-cli/kiro/github-copilot-agent block+instructions surfaces, experimental, first-party URLs (context.md) + riskNotes; pinned by src/integrations/w5b-adapters.test.ts (merged fa5bff8a, 340 targeted pass)
+- 2026-09-24T04:10:19.767Z - ac-confirmed: AC2: zed adapterKind policy-travels-with-agent; acp-permission block surface verified, no settings file, sourceDocs src/acp/permission.ts + permission.test.ts; asserted in w5b-adapters.test.ts
+- 2026-09-24T04:10:19.855Z - ac-confirmed: AC3: w5b-adapters.test.ts pins every pre-existing adapter/surface confidence and opencode/antigravity UNSUPPORTED_ORIENT reasons; matrix shows both experimental with inject-context unsupported
+- 2026-09-24T04:10:19.943Z - ac-confirmed: AC4: src/integrations/matrix.ts generates schema-valid matrix incl. keryx-shell; docs/integrations/harness-capability-matrix.json; matrix --check exit 0; guard test harness-capability-matrix.test.ts in test:core; CI step 'Harness capability matrix drift gate (W5)' green on PR #677
+- 2026-09-24T04:10:20.030Z - ac-confirmed: AC5: src/integrations/installer.ts + install-state.ts; installer.test.ts loops every runtime (install/doctor/uninstall, schema-valid state, drift, probes, experimental warnings); src/commands/integrations.test.ts; manual e2e on temp project
+- 2026-09-24T04:10:20.116Z - ac-confirmed: AC6: src/ctx/hook-install.ts, src/ctx/orient-runtimes.ts, src/security/agent-hooks.ts delegate to installer core; hook-install/orient-runtimes/agent-hooks tests unmodified and passing; src/ctx/hook.ts unchanged
+- 2026-09-24T04:10:20.202Z - ac-confirmed: AC7: src/commands/harness-namespace-pin.test.ts pins harness usage/help, dispatch set run/exec/extension/wave/replay and that install/doctor/uninstall/matrix are not routed
+- 2026-09-24T04:10:20.288Z - ac-confirmed: AC8: harness-capability-matrix.test.ts: schema parses (2020-12) and validator rejects an entry missing each required field, plus native+experimental and empty risk_notes
+- 2026-09-24T04:10:20.392Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-24T04:10:24.322Z - completing
+- 2026-09-24T04:10:31.765Z - completion-failed: review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against fa5bff8a0686471191f7897270330eaff8b6b72d, but the PR head is d2f1e3f1be46ef77f2b773fd065dfdc0cf187b3c. A clean round against a stale SHA proves nothing about what will merge — re-run the round.
+- 2026-09-24T04:10:58.252Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/677 (warning: PR is not a draft)
+- 2026-09-24T04:10:58.344Z - completing
+- 2026-09-24T04:11:05.146Z - done: all gates passed
+- 2026-09-24 - PR #677 rebased onto feat/agent-platform-expansion and squash-merged by the program orchestrator as fa5bff8a. Close on branch flow/307-close: implemented --pr #677; clean verification round recorded at the PR head d2f1e3f1 (reviews/round-5-merged-head.md; first ingest at fa5bff8a was rejected by the head-commit condition, so implemented was re-run after the gate returned the flow to in-progress); health run pass; PR comments collected (0 unanswered); AC1-AC8 confirmed; T4 done; flow complete DONE.
+- 2026-09-25T12:03:32.355Z - renumbered: 307 -> 323: id collided with main's flow 307 (CI triage v2: history and diff signals); allocation was per working copy

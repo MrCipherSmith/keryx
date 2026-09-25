@@ -88,7 +88,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
   // `providers test`/`providers remove` subcommands — both added here, in
   // USAGE_BODY only (they are subcommands of an existing verb, so no new
   // Commands: summary row is needed, unlike flow 303's brand-new `help` verb).
-  // Flow 307 (W5-b): brand-new `integrations` verb, same shape as flow 303's
+  // Flow 323 (W5-b): brand-new `integrations` verb, same shape as flow 303's
   // `help` — one USAGE_BODY line per subcommand (it has four: install,
   // uninstall, doctor, matrix) plus one Commands: summary row.
   const NEW_LINES = [
@@ -101,8 +101,8 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]\n",
     "  keryx integrations matrix [--check] [--write] [--json] [--file <path>]\n",
     "  integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix\n",
-    // Flow 309 (W1 Lane A): brand-new `stack` verb — one USAGE_BODY line plus
-    // one Commands: summary row, same shape as flow 307's `integrations`.
+    // Flow 325 (W1 Lane A): brand-new `stack` verb — one USAGE_BODY line plus
+    // one Commands: summary row, same shape as flow 323's `integrations`.
     "  keryx stack detect [--cwd <dir>] [--json] [--no-write]\n",
     "  stack     Deterministic, offline stack detection (keryx stack detect)\n",
     // Flow 322 (W6, T8): the new `keryx hooks` verb — five USAGE_BODY lines
