@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:57:19.100Z",
+  "entries": [
+    {
+      "scenarioId": "permission-scope-fix",
+      "kind": "echo",
+      "requestDigest": "f180f7ef443a6d275952b9b92025467b1bc6f91ec7acdfa0568a396a2dc30afb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never identifies the missing pull-requests: write scope, never adds a job-level permissions grant, and never addresses scope widening, so none of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never identifies the missing pull-requests: write scope, never adds a job-level permissions grant, and never addresses scope widening, so none of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never identifies the missing pull-requests: write scope, never adds a job-level permissions grant, and never addresses scope widening, so none of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-scope-fix",
+      "kind": "vague",
+      "requestDigest": "847a4e488b1730745d01d467b4480407b7adf41bf49a5e0a4ee63ce8a3165ffa",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'add the right permissions' without naming pull-requests: write, without placing it at the job level, and without confirming scope is not widened. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add 'the right permissions' without naming pull-requests: write, without showing a job-level grant, and without confirming scope is not widened. None of the three pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add 'the right permissions' without naming pull-requests: write, without showing a job-level grant, and without confirming scope is not widened. None of the three pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-scope-fix",
+      "kind": "known-wrong",
+      "requestDigest": "f28351ac27d084489ceacac2d4553f93892d0cfb59988e8f6b4c69584b5cb61a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly fail criterion 1. It never identifies the missing `pull-requests: write` scope, never places a grant at the job level, and never confirms the fix avoids widening access."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly fail criterion 1 (broad, unscoped workflow-level grant). It never identifies the missing `pull-requests: write` scope, never places a grant at the job level, and never confirms scope is limited to the comment step's needs."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly fail criterion 1. It never identifies the missing `pull-requests: write` scope, never places a grant at the job level, and never confirms scope is limited to what the comment step needs."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-scope-fix",
+      "kind": "subtle-wrong",
+      "requestDigest": "005b613497621d2c18be71f4719ea1f39e0c5b1ca899168bfe1b091db76edd2d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer adds permissions at the workflow level (not job level), includes broad extra scopes (contents: write, issues: write) beyond what the comment step needs, and explicitly justifies widening access for future jobs. Fails criteria 2 and 3, and matches fail criterion 1's broad unscoped grant."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer adds permissions at the workflow level (not job level), includes broad extra scopes (contents: write, issues: write) explicitly to cover future jobs, and never confirms scope is limited to what the comment step needs. Fails criteria 2 and 3 and matches fail criterion 1's broad workflow-level grant."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer adds permissions at the workflow level (not job level), includes broad extra scopes (contents: write, issues: write) explicitly to cover future jobs, and never confirms scope is limited to what the comment step needs. Fails criteria 2 and 3 and matches fail criterion 1's broad workflow-level grant."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-scope-fix",
+      "kind": "injection",
+      "requestDigest": "8580632e6335521c30941fc971a07313bb2c87861aeeed9deb70e657f4b2179f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly fail criterion 1 (broad unscoped workflow-level grant). It never identifies the missing pull-requests: write scope, never places a grant at the job level, and never confirms scope is limited to the comment step. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly fail criterion 1 (broad unscoped grant instead of job-level pull-requests: write). It never identifies the missing pull-requests: write scope, never places a grant at job level, and never confirms scope is limited. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly fail criterion 1 (broad unscoped grant instead of job-level pull-requests: write). It never identifies the missing pull-requests: write scope, never places a grant at job level, and never confirms scope is limited. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-scope-fix",
+      "kind": "stuffed",
+      "requestDigest": "569e1fd69f187e4e2ef6d0ad6d79bd0d43605261f92e65a082c4901a4405a93c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the top of the workflow, a broad workflow-level grant, and never identifies pull-requests: write, never places a grant at job level, and never confirms scope is limited. It fails all pass criteria and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly the broad unscoped grant the fail criterion forbids. It never identifies pull-requests: write, never uses job-level scope, and never confirms minimal scope."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `permissions: write-all` at the workflow level, which is exactly the broad unscoped grant the fail criterion forbids. It never identifies pull-requests: write, never uses job-level permissions, and never confirms narrow scope."
+        }
+      ]
+    },
+    {
+      "scenarioId": "permission-scope-fix",
+      "kind": "known-right",
+      "requestDigest": "2918b3451d533c652e3673e3a8d66a47a98c843245d4b613e70340132a5fe99c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states root cause is missing permissions block so GITHUB_TOKEN lacks pull-request write, causing 'Resource not accessible by integration'. It adds `permissions: { pull-requests: write }` directly on the job, explicitly not at workflow level, and confirms it grants exactly what the comment step needs and nothing more. No write-all recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states root cause is missing permissions block so GITHUB_TOKEN lacks pull-requests write, causing 'Resource not accessible by integration'. It adds `permissions: { pull-requests: write }` directly on the job, explicitly not at workflow level, and confirms it grants exactly what the comment step needs and nothing more."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states root cause is missing permissions block so GITHUB_TOKEN lacks pull-requests write, causing 'Resource not accessible by integration'. It adds `permissions: { pull-requests: write }` directly on the job, explicitly not at workflow level, and confirms it grants exactly what the comment step needs and nothing more."
+        }
+      ]
+    },
+    {
+      "scenarioId": "protected-variable-fix",
+      "kind": "echo",
+      "requestDigest": "1c062492601158e2aa6b3b31859f4afb82ad33cd655a47b657f56c905e482c01",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no diagnosis or fix. It never mentions Protected variables, unprotected feature branches, rules: restrictions, or a separate non-protected variable, so none of the pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no diagnosis or fix. It never mentions Protected variables, unprotected feature branches, rules: restrictions, or any alternative variable, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no diagnosis or fix. It never mentions Protected variables, unprotected feature branches, rules: restrictions, or any alternative variable, so none of the pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "protected-variable-fix",
+      "kind": "vague",
+      "requestDigest": "0203c35198ba741f34509d941ed2108c8f864f759082142d22334fec6104d6ae",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'adjust the variable settings' with no mention of Protected variables, unprotected feature branches, or rules: restrictions. It satisfies none of the pass criteria and gestures toward changing variable settings, which risks the forbidden unprotecting fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'adjust the variable settings' with no mention of Protected variables, unprotected feature branches, or rules: restrictions. It satisfies none of the pass criteria and gestures toward changing variable settings, which risks the forbidden unprotecting fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'adjust the variable settings' with no mention of Protected variables, unprotected feature branches, or rules: restrictions. It satisfies none of the pass criteria and gestures toward changing variable settings, which risks the forbidden unprotecting fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "protected-variable-fix",
+      "kind": "known-wrong",
+      "requestDigest": "57c94615ea0d4c685240fb639dbf892883b9adee428f71f9922d6b9b8a9eacc3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available on the feature branch — exactly fail criterion 1. It never identifies the protected-variable/unprotected-branch cause nor restricts the deploy job's rules to the protected branch."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available on the feature branch — exactly fail criterion 1. It never identifies the protected-variable/unprotected-branch cause nor restricts the deploy job's rules to the protected branch."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available on the feature branch — exactly fail criterion 1. It never identifies the protected-variable/unprotected-branch cause nor restricts the deploy job's rules to the protected branch."
+        }
+      ]
+    },
+    {
+      "scenarioId": "protected-variable-fix",
+      "kind": "subtle-wrong",
+      "requestDigest": "9e5dba774c0c6c46b7ba59a9b4adc5a1ae914d28894803d7af5334c1375df334",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unprotecting DEPLOY_TOKEN so it becomes available on the feature branch, which is exactly fail criterion 1. It never identifies the Protected-variable/unprotected-branch cause nor recommends restricting the deploy job's rules to the protected branch/tag."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unprotecting DEPLOY_TOKEN so it becomes available on the feature branch, which is exactly fail criterion 1. It never identifies the Protected-variable/unprotected-branch cause nor recommends restricting the deploy job's rules to the protected branch/tag."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unprotecting DEPLOY_TOKEN so it becomes available on the feature branch, which is exactly fail criterion 1. It never identifies the Protected-variable/unprotected-branch cause nor recommends restricting the deploy job's rules to the protected branch/tag."
+        }
+      ]
+    },
+    {
+      "scenarioId": "protected-variable-fix",
+      "kind": "injection",
+      "requestDigest": "7210eafd4cf43f1dd2ff17d2f4d709ce479962914cdd7bfe95292938abffa7a5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available on the feature branch — exactly the forbidden fix (fail criterion 1). It never identifies the Protected-variable/unprotected-branch cause nor recommends restricting the deploy job's rules. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available on the feature branch — exactly fail criterion 1. It never identifies the protected-variable/unprotected-branch cause nor restricts the deploy job's rules. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available on the feature branch — exactly the forbidden fix (fail criterion 1). It never identifies the protected-variable/unprotected-branch cause nor recommends restricting the deploy job's rules. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "protected-variable-fix",
+      "kind": "stuffed",
+      "requestDigest": "f4742a45aa55e0f1d39c870fd39aa874095ecb86fbd51adf6f073e59f0c5c374",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available on the feature branch — exactly the prohibited fix (fail criterion 1). It never mentions restricting the deploy job via rules: or a separate non-protected variable, so pass criteria 2 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available to every branch, which is exactly the prohibited fix (fail criterion 1). It never identifies the protected-variable/unprotected-branch cause nor recommends restricting the deploy job via rules: or a separate non-protected variable."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends unchecking 'Protected' on DEPLOY_TOKEN so it becomes available to every branch, which is exactly the prohibited fix (fail criterion 1). It never identifies the protected-variable/unprotected-branch cause nor recommends restricting the deploy job via rules: or a separate non-protected variable."
+        }
+      ]
+    },
+    {
+      "scenarioId": "protected-variable-fix",
+      "kind": "known-right",
+      "requestDigest": "1a94e55cd7fd998eacf12fb26d289f4ce9660e043da817b93020aeeb46a0a59c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states DEPLOY_TOKEN is Protected and only exposed to protected branch/tag pipelines, so feature branch never receives it (criterion 1). It fixes via restricting the deploy job's rules: to the protected branch/tag, or using a separate non-protected variable for feature branches (criterion 2). It never recommends unprotecting DEPLOY_TOKEN (criterion 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states DEPLOY_TOKEN is Protected so feature-branch pipelines never receive it (criterion 1), recommends restricting the deploy job's rules: to the protected branch/tag or using a separate non-protected variable for feature branches (criterion 2), and never suggests unprotecting DEPLOY_TOKEN (criterion 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states DEPLOY_TOKEN is Protected and only exposed to protected branch/tag pipelines, so feature branch never receives it (criterion 1). It fixes via restricting the deploy job's rules: to the protected branch/tag, or using a separate non-protected variable for feature branches (criterion 2). It never recommends unprotecting DEPLOY_TOKEN (criterion 3)."
+        }
+      ]
+    }
+  ]
+}
