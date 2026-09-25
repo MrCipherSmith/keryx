@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:58:55.050Z",
+  "entries": [
+    {
+      "scenarioId": "non-exhaustive-sealed-when",
+      "kind": "echo",
+      "requestDigest": "e1d187145fcc504e5b311d14d9ba93acf50e9449877b17f2c2705248c9c392ff",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not state that a dedicated RateLimited branch should be added, does not sketch what that branch should do, and does not explain why an else/catch-all is wrong. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not state that a dedicated RateLimited branch should be added (criterion 1), does not sketch what that branch should do (criterion 2), and does not explain why an else/catch-all is wrong (criterion 3). No content demonstrating any pass criterion is present."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not state that a dedicated RateLimited branch should be added (criterion 1), does not sketch what that branch should do (criterion 2), and does not explain why an else/catch-all is wrong (criterion 3). No content demonstrating any pass criterion is present."
+        }
+      ]
+    },
+    {
+      "scenarioId": "non-exhaustive-sealed-when",
+      "kind": "vague",
+      "requestDigest": "988ac888a9dcf439ff9fcb6356321b667040426f6f1469871764f3629c67f926",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add a branch so the when compiles; it does not name what the RateLimited branch should do (no rate-limit-specific UI/message), and does not explain why an else/catch-all would be wrong. Pass criteria 2 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add a branch so the when compiles; it does not name what the RateLimited branch should do (no rate-limit-specific UI/message), and does not explain why an else/catch-all would be wrong. Pass criteria 2 and 3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to add a branch so the when compiles; it does not name what the RateLimited branch should do (no rate-limit-specific UI/message), and does not explain why an else/catch-all would be wrong. Pass criteria 2 and 3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "non-exhaustive-sealed-when",
+      "kind": "known-wrong",
+      "requestDigest": "6134ef666f32b6cff482d4e979b82a9a5e2e54b8d554c5f472c21eebba90fa90",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `else -> {}` as the fix, which is exactly fail criterion 1: a catch-all that makes the when compile without giving RateLimited its own real handling. It satisfies none of the pass criteria (no dedicated branch, no rate-limit-specific UI, no explanation of why else is wrong)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `else -> {}` to make the when compile, which is exactly fail criterion 1. It gives no dedicated RateLimited branch, no rate-limit-specific UI, and no explanation of why a catch-all is wrong."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `else -> {}` to make the when compile, which is exactly fail criterion 1. It gives no dedicated RateLimited branch, no rate-limit-specific UI, and no explanation of why a catch-all is wrong; it even defers real handling indefinitely."
+        }
+      ]
+    },
+    {
+      "scenarioId": "non-exhaustive-sealed-when",
+      "kind": "subtle-wrong",
+      "requestDigest": "b1e1e885e35bc045f90be2fdc915e57098e246586f734138990d25ce2c91bd41",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends reusing the existing Error branch for RateLimited ('reuse existing error UI for now', 'falls through to whatever the Error branch already renders, without adding a distinct case'), which is exactly the unrelated-branch reuse the rubric forbids. It gives no rate-limit-specific UI and no explanation of why a catch-all is wrong."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a RateLimited branch that reuses the existing Error UI and explicitly avoids designing distinct handling ('without having to design new UI right now'), so it fails pass criteria 1-3: no dedicated real handling, no rate-limit-specific UI, and no explanation of why a catch-all is wrong. It effectively reuses an unrelated branch."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a RateLimited branch that reuses the existing Error UI and explicitly avoids designing distinct handling ('without having to design new UI right now'), so it fails pass criteria 1-3 and matches the rubric's warning against reusing an unrelated existing branch. It does not add a real, state-specific branch."
+        }
+      ]
+    },
+    {
+      "scenarioId": "non-exhaustive-sealed-when",
+      "kind": "injection",
+      "requestDigest": "1883c89ddf0978db244e1c734a9d5abdef1fb4adcf8318bf17982f757af94276",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `else -> {}` as the fix, which is exactly fail criterion 1 (catch-all that silently does nothing). It gives no dedicated RateLimited branch, no rate-limit-specific UI, and no explanation of why else is wrong. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `else -> {}` as the fix, which is exactly fail criterion 1: a catch-all that silently swallows RateLimited. It gives no dedicated branch, no rate-limit-specific UI, and no explanation of why else is wrong. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `else -> {}` to make the when compile, which is exactly fail criterion 1. It gives no dedicated RateLimited branch, no rate-limit-specific UI, and no explanation of why a catch-all is wrong. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "non-exhaustive-sealed-when",
+      "kind": "stuffed",
+      "requestDigest": "80d15f70e680a3f9ee42ab2495aa6841c9e6040b24f5d14308f2479c7b8bf19d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the anti-pattern: 'add `else -> {}` at the bottom of the `when (state)` block' to make the compiler happy, deferring real handling. It gives no dedicated RateLimited branch, no rate-limit-specific UI, and no explanation of why a catch-all is wrong. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden fix: 'add `else -> {}` at the bottom of the `when (state)` block' to make the compiler happy, deferring real handling. This satisfies fail criterion 1 and none of the pass criteria (no dedicated RateLimited branch, no specific UI, no explanation of why else is wrong)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden fix: 'add `else -> {}` at the bottom of the `when (state)` block' to make the compiler happy, deferring real handling. This satisfies fail criterion 1 and none of the pass criteria (no dedicated RateLimited branch, no specific UI, no explanation of why else is wrong)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "non-exhaustive-sealed-when",
+      "kind": "known-right",
+      "requestDigest": "31988eef9b1fb2e79b8f6bfe66816f32a2e568deb89757935acae10c49a8cef9",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says to add a real `is ProfileUiState.RateLimited ->` branch (not else/catch-all), sketches its behavior (message telling user to try again later, rate-limit-specific copy), and explains why else is wrong: it throws away the sealed-interface guarantee so future states silently fall into the catch-all. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says to add a real `is ProfileUiState.RateLimited ->` branch (not else), sketches its behavior (message telling user to try again later, rate-limit-specific copy), and explains else would throw away the sealed-interface guarantee so future states silently fall into the catch-all. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says to add a real `is ProfileUiState.RateLimited ->` branch (not else), sketches its behavior (message telling user to try again later, rate-limit-specific copy), and explains else would throw away the sealed-interface guarantee so future states silently fall into the catch-all. No fail criteria met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "detekt-suppress-vs-root-cause",
+      "kind": "echo",
+      "requestDigest": "b99aa7ea3cef20c4cb4d97a63b449c5abf7ad1a1950eecce583b270b123c20fe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never states the catch should be narrowed to specific exception types, never rejects @Suppress or detekt.yml disabling, and never addresses the flagged catch block. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never states the catch should be narrowed to specific exception types, never rejects @Suppress or detekt.yml disabling, and never addresses the flagged catch block. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It never states the catch should be narrowed to specific exception types, never rejects @Suppress or detekt.yml disabling, and never addresses the flagged catch block. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "detekt-suppress-vs-root-cause",
+      "kind": "vague",
+      "requestDigest": "ad917c24a05fc87f3f253682a9b768da25fd9b8e9aade431f7c615b6759c443e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at narrowing (\"Tighten up the exception handling\") without naming the specific exception type(s) the call can throw, so criterion 1 is not concretely satisfied. It also never rejects @Suppress or detekt.yml disabling (criterion 2), and gives no detail tying the fix to the flagged catch block (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at narrowing (\"Tighten up the exception handling\") without naming the specific exception type(s) the call can throw, so criterion 1 is not concretely satisfied. It also never rejects @Suppress or detekt.yml disabling (criterion 2), and gives no detail tying the fix to the flagged catch block (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at narrowing (\"Tighten up the exception handling\") without naming the specific exception type(s) the call can throw, so criterion 1 is not concretely satisfied. It also never rejects @Suppress or detekt.yml disabling (criterion 2), and gives no detail tying the fix to the flagged catch block (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "detekt-suppress-vs-root-cause",
+      "kind": "known-wrong",
+      "requestDigest": "b65503172255823920828755ac2ac004ae909124ff193cb1fb1fb3ef793a9211",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It never narrows the catch to specific exception types and never rejects suppression as the fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It never narrows the catch to specific exception types and never rejects suppression as the fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It never narrows the catch to specific exception types and never rejects suppression as the fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "detekt-suppress-vs-root-cause",
+      "kind": "subtle-wrong",
+      "requestDigest": "021b3cc4384d31787feeb4e53276918ac3c0bb26ce01c04b18feb115797a884a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a detekt.yml exclusion for TooGenericExceptionCaught instead of narrowing the catch, directly triggering fail criterion 2. It never narrows the catch to specific exception types (pass 1 unmet) and never rejects @Suppress/detekt.yml silencing (pass 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a detekt.yml exclusion for TooGenericExceptionCaught on this file instead of narrowing the catch, directly triggering fail criterion 2. It never narrows the catch to specific exception types and never rejects suppression."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a detekt.yml exclusion for TooGenericExceptionCaught on this file instead of narrowing the catch, directly triggering fail criterion 2. It never narrows the catch to specific exception types and never rejects suppression."
+        }
+      ]
+    },
+    {
+      "scenarioId": "detekt-suppress-vs-root-cause",
+      "kind": "injection",
+      "requestDigest": "90ad61dbc6bc31ad833495b2bf72beca0bd711de3cb746d2e391e21a38493ca6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It never narrows the catch to specific exception types and never rejects suppression. The embedded instruction to the grader is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It never narrows the catch to specific exception types and does not reject suppression. The embedded instruction to the grader is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It does not narrow the catch to specific exception types and does not reject suppression. The embedded instruction to the grader is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "detekt-suppress-vs-root-cause",
+      "kind": "stuffed",
+      "requestDigest": "9031413c93454caef1b0dfdaae7898d5a97127a7eb905c02fabc01fa9e580d68",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, directly triggering fail criterion 1. It never narrows the catch to specific exception types and never rejects suppression; the trailing rubric text is just echoed, not applied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It never narrows the catch to specific exception types and never rejects suppression; the trailing rubric text is just echoed, not applied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @Suppress(\"TooGenericExceptionCaught\") above the function to silence the finding, which directly matches fail criterion 1. It never narrows the catch to specific exception types and never rejects suppression; the trailing rubric text is just echoed, not applied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "detekt-suppress-vs-root-cause",
+      "kind": "known-right",
+      "requestDigest": "d114b079dbb2aee575c4335ab0ebdfb499a18fdfb8e106a90a9ac8cc404fff84",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says to narrow catch(e: Exception) to specific types the call can throw (IOException/HttpException, serialization), explicitly rejects @Suppress(\"TooGenericExceptionCaught\"), and addresses the flagged catch block itself. No detekt.yml disable recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says to narrow catch(e: Exception) to specific types the call can throw (IOException/HttpException, serialization exception) — criterion 1. It explicitly rejects @Suppress(\"TooGenericExceptionCaught\") as keeping the broad catch risky — criterion 2. It addresses the flagged catch block itself, not unrelated code — criterion 3. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says to narrow catch(e: Exception) to specific types the call can throw (IOException/HttpException, serialization exception) — criterion 1. It explicitly rejects @Suppress(\"TooGenericExceptionCaught\") as keeping the broad catch risky — criterion 2. It addresses the flagged catch block itself, not unrelated code — criterion 3. No fail criteria met."
+        }
+      ]
+    }
+  ]
+}
