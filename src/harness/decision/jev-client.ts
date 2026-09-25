@@ -69,6 +69,74 @@ export const JEV_TOKEN_BUDGET = 64_000;
  */
 export const DEFAULT_JEV_TIMEOUT_MS = 30_000;
 
+/**
+ * Total attempts a single logical `callJevSystemOne` call makes before
+ * giving up — 1 initial try plus up to 2 retries. Seen live: `keryx review
+ * jev-rules` died outright on a single transient `HTTP 503: upstream
+ * connect error ... Connection refused` from OpenRouter's `/api/v1/systemone`
+ * endpoint, and a rerun seconds later passed — a bounded retry here turns
+ * that class of failure into a brief pause instead of a dead review run,
+ * for every caller of this client (review-jev-* commands, conform,
+ * ci-triage, the routing classifier).
+ */
+export const JEV_MAX_ATTEMPTS = 3;
+
+/**
+ * Backoff before retry N (index 0 = delay before the 2nd attempt, index 1 =
+ * delay before the 3rd). Short on purpose — this is a "transient blip"
+ * retry, not a queueing mechanism — and the last entry repeats if
+ * {@link JEV_MAX_ATTEMPTS} ever grows past this array's length.
+ */
+const JEV_RETRY_BACKOFF_MS: readonly number[] = [500, 1500];
+
+/**
+ * A vendor `Retry-After` is honoured (it knows its own rate limit better
+ * than a guess does) but capped here — a vendor asking for minutes must not
+ * turn a "wait briefly and try the same request again" retry into a long,
+ * silent hang.
+ */
+export const JEV_RETRY_AFTER_CAP_MS = 5_000;
+
+/**
+ * Retried: 429 (rate limit) and the 5xx family, which vendors use for
+ * exactly the class of blip this retry targets (a 503 "upstream connect
+ * error ... connection refused" is the live case this fixes). NOT retried:
+ * any other 4xx — 400 is a caller's own oversized-request/`max_tokens`
+ * problem (`review-jev-docs`'s own split-retry already owns that), 401/403
+ * are credential problems no retry fixes.
+ */
+const JEV_RETRYABLE_STATUSES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504]);
+
+/** Injectable so tests never actually wait out a backoff. */
+export type JevSleepFn = (ms: number) => Promise<void>;
+
+function defaultJevSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function jevBackoffMs(attemptJustFailed: number): number {
+  return JEV_RETRY_BACKOFF_MS[attemptJustFailed - 1] ?? JEV_RETRY_BACKOFF_MS[JEV_RETRY_BACKOFF_MS.length - 1] ?? 500;
+}
+
+/**
+ * Parses a `Retry-After` header (seconds, or an HTTP-date) into a capped
+ * millisecond delay. `null`/unparsable/non-positive -> `undefined`, so the
+ * caller falls back to the plain backoff schedule.
+ */
+function retryAfterMsFromHeader(headerValue: string | null): number | undefined {
+  if (headerValue === null || headerValue.trim().length === 0) return undefined;
+  const seconds = Number(headerValue);
+  if (Number.isFinite(seconds)) {
+    return seconds > 0 ? Math.min(seconds * 1000, JEV_RETRY_AFTER_CAP_MS) : undefined;
+  }
+  const dateMs = Date.parse(headerValue);
+  if (!Number.isNaN(dateMs)) {
+    const deltaMs = dateMs - Date.now();
+    if (deltaMs > 0) return Math.min(deltaMs, JEV_RETRY_AFTER_CAP_MS);
+  }
+  return undefined;
+}
+
 export type JevQuestionType = "noul" | "choice";
 
 export interface JevQuestion {
@@ -149,15 +217,42 @@ export class JevBudgetError extends Error {
  * was rejected (some gateways do this for "invalid key" responses); without
  * this, that credential would land verbatim in an Error message a CLI
  * printer or a TUI panel could show, or that could be logged.
+ *
+ * `attempts` (default 1) is how many times this exact request was tried
+ * before this error was raised — > 1 only when every attempt hit a
+ * transient status (429/500/502/503/504, see {@link JEV_RETRYABLE_STATUSES})
+ * and the bounded retry still ran out. Named in the message so a rerun after
+ * "it failed after 3 attempts" reads as informative as the pre-retry message
+ * did after a single failed attempt.
  */
 export class JevRequestError extends Error {
   constructor(
     readonly status: number,
     body: string,
+    readonly attempts: number = 1,
   ) {
     const redactedBody = redactSensitiveText(body);
-    super(`Jev request to ${JEV_ENDPOINT} failed: HTTP ${status}${redactedBody.length > 0 ? ` — ${redactedBody.slice(0, 500)}` : ""}`);
+    const attemptsNote = attempts > 1 ? ` after ${attempts} attempts` : "";
+    super(`Jev request to ${JEV_ENDPOINT} failed: HTTP ${status}${attemptsNote}${redactedBody.length > 0 ? ` — ${redactedBody.slice(0, 500)}` : ""}`);
     this.name = "JevRequestError";
+  }
+}
+
+/**
+ * Every attempt threw before a response ever came back (`fetch` itself
+ * rejected — connection refused, DNS failure, socket reset — never an
+ * abort, which is {@link JevTimeoutError}'s job). Retried exactly like a
+ * transient HTTP status, bounded by the same {@link JEV_MAX_ATTEMPTS}; this
+ * is only raised once every attempt has failed this way.
+ */
+export class JevNetworkError extends Error {
+  constructor(
+    readonly attempts: number,
+    readonly cause: unknown,
+  ) {
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    super(`Jev request to ${JEV_ENDPOINT} failed after ${attempts} attempt(s): ${causeMessage}`);
+    this.name = "JevNetworkError";
   }
 }
 
@@ -348,6 +443,58 @@ function validatedAnswer(key: string, question: JevQuestion, raw: unknown): JevA
   return { type: "choice", choice };
 }
 
+/** One `fetch` attempt's outcome — never throws; the caller decides what each outcome means for retrying. */
+type JevAttemptOutcome =
+  | { readonly kind: "timeout" }
+  | { readonly kind: "network-error"; readonly cause: unknown }
+  | { readonly kind: "response"; readonly status: number; readonly ok: boolean; readonly text: string; readonly retryAfterHeader: string | null };
+
+/**
+ * A single `POST /api/v1/systemone` attempt, wired for both the internal
+ * `timeoutMs` ceiling and an external `signal` — split out of
+ * `callJevSystemOne` so the retry loop below can call it once per attempt
+ * without re-deriving the abort wiring each time.
+ */
+async function attemptJevRequest(
+  fetchFn: typeof fetch,
+  apiKey: string,
+  body: unknown,
+  timeoutMs: number,
+  external: AbortSignal | undefined,
+): Promise<JevAttemptOutcome> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let onExternalAbort: (() => void) | undefined;
+  if (external !== undefined) {
+    if (external.aborted) {
+      controller.abort();
+    } else {
+      onExternalAbort = () => controller.abort();
+      external.addEventListener("abort", onExternalAbort);
+    }
+  }
+  try {
+    const res = await fetchFn(JEV_ENDPOINT, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    return { kind: "response", status: res.status, ok: res.ok, text, retryAfterHeader: res.headers.get("retry-after") };
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      return { kind: "timeout" };
+    }
+    return { kind: "network-error", cause };
+  } finally {
+    clearTimeout(timer);
+    if (onExternalAbort !== undefined) {
+      external?.removeEventListener("abort", onExternalAbort);
+    }
+  }
+}
+
 /**
  * `POST /api/v1/systemone`. AC1: injectable `fetch` (default
  * `globalThis.fetch`), `{model, state, questions}` in, parsed `{answers,
@@ -357,12 +504,33 @@ function validatedAnswer(key: string, question: JevQuestion, raw: unknown): JevA
  * when the caller passes no `signal` at all — a CLI invocation gets a bound
  * with zero extra wiring. `signal`, when given, aborts the SAME request: a
  * caller (the TUI closing its modal) can cancel early without waiting out
- * the timeout. Either firing raises {@link JevTimeoutError}.
+ * the timeout. Either firing raises {@link JevTimeoutError} — an abort is
+ * never retried, so the total wall clock a caller waits stays bounded by
+ * roughly `JEV_MAX_ATTEMPTS * timeoutMs` plus the (short, capped) backoff
+ * between attempts.
+ *
+ * A transient failure — HTTP 429/500/502/503/504, or `fetchFn` itself
+ * throwing (connection refused, reset, DNS) — is retried up to
+ * {@link JEV_MAX_ATTEMPTS} times with a short backoff (`opts.sleepFn`,
+ * default a real `setTimeout`, so tests never wait it out), honouring a
+ * vendor `Retry-After` when present, capped at {@link JEV_RETRY_AFTER_CAP_MS}.
+ * Any other non-2xx (400, 401, 403, ...) fails on the first attempt, exactly
+ * as before this retry existed — a caller's own split-retry for HTTP 400
+ * still sees that error the same way it always did. Only the successful
+ * attempt's `usage` is ever returned, so cost/token accounting still counts
+ * exactly one call per `callJevSystemOne` invocation regardless of how many
+ * attempts it took underneath.
  */
 export async function callJevSystemOne(
   fetchFn: typeof fetch = globalThis.fetch,
   input: JevRequestInput,
-  opts?: { env?: Readonly<Record<string, string | undefined>>; dir?: string; signal?: AbortSignal; timeoutMs?: number },
+  opts?: {
+    env?: Readonly<Record<string, string | undefined>>;
+    dir?: string;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    sleepFn?: JevSleepFn;
+  },
 ): Promise<JevResult> {
   const keyResolution = resolveJevApiKeyResolution(opts?.env ?? process.env, opts?.dir);
   const apiKey = keyResolution.key;
@@ -378,53 +546,55 @@ export async function callJevSystemOne(
   };
 
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_JEV_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const external = opts?.signal;
-  let onExternalAbort: (() => void) | undefined;
-  if (external !== undefined) {
-    if (external.aborted) {
-      controller.abort();
-    } else {
-      onExternalAbort = () => controller.abort();
-      external.addEventListener("abort", onExternalAbort);
-    }
-  }
+  const sleepFn = opts?.sleepFn ?? defaultJevSleep;
 
-  let text: string;
-  let status: number;
-  let ok: boolean;
-  try {
-    const res = await fetchFn(JEV_ENDPOINT, {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    status = res.status;
-    ok = res.ok;
-    text = await res.text();
-  } catch (cause) {
-    if (controller.signal.aborted) {
+  let text = "";
+  let status = 0;
+  let attempt = 0;
+  for (;;) {
+    attempt += 1;
+    const outcome = await attemptJevRequest(fetchFn, apiKey, body, timeoutMs, external);
+
+    if (outcome.kind === "timeout") {
+      // Never retried (flow 306 review's timeout ceiling already bounds this
+      // request; retrying an abort would just double the wait for no gain).
       throw new JevTimeoutError(timeoutMs);
     }
-    throw cause;
-  } finally {
-    clearTimeout(timer);
-    if (onExternalAbort !== undefined) {
-      external?.removeEventListener("abort", onExternalAbort);
-    }
-  }
 
-  if (!ok) {
+    if (outcome.kind === "network-error") {
+      if (attempt >= JEV_MAX_ATTEMPTS) {
+        throw new JevNetworkError(attempt, outcome.cause);
+      }
+      await sleepFn(jevBackoffMs(attempt));
+      continue;
+    }
+
+    if (outcome.ok) {
+      text = outcome.text;
+      break;
+    }
+
+    status = outcome.status;
+    text = outcome.text;
+
+    if (JEV_RETRYABLE_STATUSES.has(status) && attempt < JEV_MAX_ATTEMPTS) {
+      const retryAfterMs = retryAfterMsFromHeader(outcome.retryAfterHeader);
+      await sleepFn(retryAfterMs ?? jevBackoffMs(attempt));
+      continue;
+    }
+
     // AC7: a 401 means OpenRouter rejected THIS credential specifically —
     // named by source, with a prefix check, rather than the generic
-    // "request failed" text every other non-2xx status gets.
+    // "request failed" text every other non-2xx status gets. Reached either
+    // on the first attempt (a non-retryable status) or once retries for a
+    // retryable one are exhausted.
     if (status === 401) {
       throw new JevAuthRejectedError(keyResolution.source, status, text, looksLikeOpenRouterKey(apiKey));
     }
-    throw new JevRequestError(status, text);
+    throw new JevRequestError(status, text, attempt);
   }
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
