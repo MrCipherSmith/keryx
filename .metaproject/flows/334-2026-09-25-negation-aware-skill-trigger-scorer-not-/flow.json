@@ -8,14 +8,14 @@
   "id": "334",
   "slug": "negation-aware-skill-trigger-scorer-not-",
   "title": "Negation-aware skill trigger scorer: Not-for clauses stop counting as evidence",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-25T14:52:23.218Z",
-  "updatedAt": "2026-09-25T14:52:39.058Z",
+  "updatedAt": "2026-09-25T14:55:48.754Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:8608845eb00965482dce00b07804c6f9a50ce8499c2491e5172aebbf88b4554b",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -32,7 +32,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -40,14 +40,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -55,13 +57,48 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by more specific T5-T10 breakdown"
+    },
+    {
+      "id": "T5",
+      "title": "Survey exclusion-clause conventions in bundled SKILL.md files",
+      "kind": "context",
       "status": "todo",
       "dependsOn": [],
       "attempts": {
@@ -73,10 +110,65 @@
       "budget": {}
     },
     {
-      "id": "T4",
-      "title": "Self-review and prepare draft PR",
+      "id": "T6",
+      "title": "Implement negation-aware token extraction in scout.ts (entry side)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Unit + regression tests for negation-aware scoring",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Before/after trigger-accuracy measurement + stable pack gate re-check",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Docs: exclusion clauses are safe to write",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "PR, review/fix loop, CI, merge sequencing",
       "kind": "review",
-      "origin": "scaffold",
       "status": "todo",
       "dependsOn": [],
       "attempts": {
@@ -97,6 +189,65 @@
       "at": "2026-09-25T14:52:39.058Z",
       "event": "renumbered",
       "detail": "326 -> 334: ids 326-333 are taken by the parallel Jev programme session (flow packages not pushed yet); allocation is per working copy"
+    },
+    {
+      "at": "2026-09-25T14:55:30.646Z",
+      "event": "task-added",
+      "detail": "T5: Survey exclusion-clause conventions in bundled SKILL.md files"
+    },
+    {
+      "at": "2026-09-25T14:55:30.909Z",
+      "event": "task-added",
+      "detail": "T6: Implement negation-aware token extraction in scout.ts (entry side)"
+    },
+    {
+      "at": "2026-09-25T14:55:31.165Z",
+      "event": "task-added",
+      "detail": "T7: Unit + regression tests for negation-aware scoring"
+    },
+    {
+      "at": "2026-09-25T14:55:31.421Z",
+      "event": "task-added",
+      "detail": "T8: Before/after trigger-accuracy measurement + stable pack gate re-check"
+    },
+    {
+      "at": "2026-09-25T14:55:31.681Z",
+      "event": "task-added",
+      "detail": "T9: Docs: exclusion clauses are safe to write"
+    },
+    {
+      "at": "2026-09-25T14:55:31.934Z",
+      "event": "task-added",
+      "detail": "T10: PR, review/fix loop, CI, merge sequencing"
+    },
+    {
+      "at": "2026-09-25T14:55:45.620Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T14:55:45.888Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T14:55:46.144Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T14:55:46.396Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T14:55:48.498Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T14:55:48.754Z",
+      "event": "started"
     }
   ]
 }
