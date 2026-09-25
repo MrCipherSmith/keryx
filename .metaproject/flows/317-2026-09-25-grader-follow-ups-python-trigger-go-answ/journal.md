@@ -276,3 +276,63 @@ ambiguous fail_criteria wording was tightened. Will be re-recorded
 (`judge-check --record`) alongside the honest gate run below, and the
 corrected scenario will be re-run as part of `go`'s pack in this flow's own
 honest run (not carried over from the pre-317 committed report).
+
+## FU7: honest gate run at trials=10, results and a second mid-run defect found
+
+Ran `skills eval <id> --strictness high --trials 10 --runner deepseek:deepseek-chat
+--judge deepseek:deepseek-chat --scope bundled --json` once per skill (18
+skills), HEAD unchanged from start to end
+(`scratchpad/f317/gate/run.meta`), raw output saved per skill. Results:
+
+- **python — gate PASS, every scenario 1.0/1.0** (`python-implementation`'s
+  trigger 7/7, confirming FU1's fix holds under the full live run too).
+  **Promoted to `stability: stable`.**
+- **go — go-testing PASS** (`table-driven-subtests` 8/10=0.8 after FU2's
+  runner note; `no-sleep-sync` 9/10=0.9, confirming this journal's earlier
+  no-sleep-sync fix). **go-build-fix FAILED at first**:
+  `no-nolint-suppression` scored 6/10 (below the 0.8 floor). Read the 4
+  failing trials' judge reasons: every one complains the answer "never
+  shows the actual flagged call site's fix" / "only states intent." Checked
+  the scenario's own prompt: `"golangci-lint is flagging an ignored error
+  return in my Go code. How should I fix it?"` — no code, no call site, the
+  SAME under-specified-prompt class flow 316 already fixed for python's
+  `mypy-error-no-blanket-suppress` (and the exact clause `no-disable-hooks-lint`
+  already carries: "when the prompt itself shows no code... a concrete
+  illustrative example... satisfies this requirement"). `known_right`
+  itself is illustrative/generic, not tied to a specific call site (none
+  exists) — so live answers were being held to a standard even the
+  calibration's own passing example doesn't meet. Genuine scenario defect,
+  not tuning: added the identical "prompt names no call site... a concrete
+  illustrative example... satisfies this requirement" clause to
+  `pass_criteria[1]`. Re-recorded calibration (green, including the
+  previously-passing `known-right` unaffected) and re-ran
+  `go/go-build-fix` alone at trials=10: **10/10 both scenarios.** `go`
+  pack now clears the gate fully. **Promoted to `stability: stable`.**
+- **react — gate FAIL**, confirming FU5's finding rather than contradicting
+  it: `no-disable-hooks-lint` scored 3/10 (0.3) — a LOWER rate than the 3/5
+  (0.6) at trials=5, not a floor-noise artifact. This is the honest result:
+  the model genuinely struggles with this scenario roughly 70% of the time.
+  No rubric defect (FU5's evidence-based review already checked this).
+  Stays `stability: experimental`, no generated pair.
+- **ts-js-node — gate FAIL, demoted from `stable`**: `no-ts-ignore-suppression`
+  scored 6/10 (0.6), below the floor it sat exactly on (4/5=0.8) at trials=5
+  — exactly the fragility R1-14 (flow 316 review round 1) predicted:
+  "consider trials >= 10 for graduation in a future pass... one more judge
+  flip on any of the three [scenarios at 4/5] would fail the pack." Checked
+  the 4 failing trials: every one gives a decision path / names the right
+  direction ("add `total: number` to OrderDraft" or "compute at call
+  site") but never shows the actual corrected declaration or access code —
+  unlike `go-build-fix` above, THIS prompt (`"tsc reports: Property 'total'
+  does not exist on type 'OrderDraft'. What's the right way to fix this?"`)
+  is concrete enough that "show the corrected code" is answerable, and the
+  calibration's own `known_right` DOES show it. A genuine, evidence-backed
+  model-answer-quality failure, not a rubric defect. Per the owner rule
+  (never edit a grader to force a pass; FU4's "no grandfathering"): **demoted
+  to `stability: experimental`**, generated `ts-js-node-code-auditor`/
+  `ts-js-node-build-fixer` pair removed. This is the first pack to move from
+  stable to experimental under this flow.
+
+Stack coverage: 1 -> 2 (python and go now stable and gated; ts-js-node
+demoted; react stays experimental). Net pack count with a generated pair:
+1 (ts-js-node) -> 2 (python, go) — ts-js-node's own pair removed the same
+round it would have been replaced by python/go's.

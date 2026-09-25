@@ -54,7 +54,7 @@
           "rubric": "A correct answer fixes the actual ignored error return -- checks it, wraps it with %w and returns/propagates it, or explicitly discards it with a comment explaining why -- instead of suppressing the linter finding with `//nolint` or a blank `_ =` discard, and instead of merely logging it without propagation.",
           "pass_criteria": [
             "Checks the error explicitly with an `if err != nil` branch (or equivalent) rather than leaving it dropped.",
-            "Shows the concrete fix: wraps and returns the error to the caller (e.g. `return fmt.Errorf(\"...: %w\", err)`), or explicitly discards it with a comment naming why that specific discard is safe -- not merely a statement that the error 'should be handled'.",
+            "Shows the concrete fix: wraps and returns the error to the caller (e.g. `return fmt.Errorf(\"...: %w\", err)`), or explicitly discards it with a comment naming why that specific discard is safe -- not merely a statement that the error 'should be handled'. The prompt itself names no call site or code, so a concrete illustrative example in either shape (a wrap-and-return snippet, or a `_ = ... // reason` discard snippet) satisfies this requirement; it does not require identifying an 'actual flagged call site' the prompt never supplied.",
             "Does not rely on `//nolint` or a bare `_ =` discard as the fix for the flagged finding."
           ],
           "fail_criteria": [
