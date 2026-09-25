@@ -338,6 +338,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/contract",
+    group: "Managed work",
+    summary: "Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev.",
+  },
+  {
+    kind: "slash",
     name: "/guard",
     group: "Managed work",
     summary: "Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on|off].",

@@ -164,6 +164,7 @@ const CEILINGS_BY_KEY = {
   "review/review-frontend-conventions": 213,
   "review/review-highload": 550,
   "review/review-jev-comments": 184,
+  "review/review-jev-contract": 193,
   "review/review-jev-docs": 189,
   "review/review-jev-risk": 190,
   "review/review-jev-rules": 267,

@@ -3679,8 +3679,11 @@ left off and the gate reports it as unobserved.
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
 | `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
+| `jev-risk` | ADDITIONAL orchestrator reviewer (`engine: jev`): a deterministic risk map of every changed hunk, ranked, with a routing hint. See below. |
+| `jev-scenarios` | ADDITIONAL orchestrator reviewer (`engine: jev`): which user scenarios a diff likely changes. See below. |
 | `jev-docs` | ADDITIONAL orchestrator reviewer (`engine: jev`): find doc sections that went stale because of a diff. See below. |
 | `jev-comments` | ADDITIONAL orchestrator reviewer (`engine: jev`): check whether open PR review comments were addressed. See below. |
+| `jev-contract` | ADDITIONAL orchestrator reviewer (`engine: jev`): check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
 | `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
@@ -4405,6 +4408,56 @@ Jev is redacted first (`src/security/service.ts`). With the setting off, with
 no OpenRouter credential, or with no comment ledger yet collected for
 `--repo`/`--pr`, the command refuses before any read and makes no network
 call.
+
+### `review jev-contract`
+
+Flow 335. An ADDITIONAL orchestrator reviewer — never replacing any other —
+that checks a PR DESCRIPTION's own CLAIMS, and (when a flow is linked) that
+flow's FROZEN acceptance criteria, against the diff. Claims are extracted
+deterministically from the description: every bullet/numbered-list item, plus
+every prose sentence carrying a verb cue (adds, fixes, removes, "does not
+change", tests). For each claim, keryx computes deterministic facts FIRST —
+named files/symbols/flags present in the diff, test files touched (for a
+"tests added" claim), exported-symbol changes anywhere in the diff (for a "no
+API change" claim) — then asks Jev exactly one `noul`: "does the diff support
+this claim?". A claim the facts CONTRADICT (e.g. "no API change" with an
+exported symbol touched) is `major`, with `class_scope`, regardless of the
+`noul` answer; an unsupported claim below threshold is `minor`. The linked-flow
+track reuses flow 328's `check-ac.ts` wholesale (via `runCheckAc`) — no
+criterion-checking logic is reimplemented. Like `review jev-risk`, this is
+dispatched by `review-orchestrator` itself (Wave B), as a CLI call rather than
+an LLM sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
+When the opt-in is on, it replaces the orchestrator's by-eye Stage 1
+"description vs diff" judgement; the by-eye check is the fallback when it is
+off.
+
+```bash
+keryx review jev-contract --pr 712 --repo MrCipherSmith/keryx --json
+keryx review jev-contract --pr 712 --flow 335 --repo MrCipherSmith/keryx --json
+keryx review jev-contract --diff HEAD~1 --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <ref>` \| `--pr <n>` | Exactly one is required. `--diff` has no PR description, so the claims track reports zero claims. |
+| `--flow <id>` | Optional. When given, that flow's frozen acceptance criteria are checked against the same diff, reusing `keryx flow check-ac`'s own pipeline. |
+| `--max-calls <n>` | Caps how many claims are scored by Jev, default 30. Anything beyond is reported dropped (`budget.claimsSkipped`), never silently. |
+| `--threshold <0..1>` | Below this Jev probability an unsupported claim is reported. Default `0.5`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-contract"`, `summary`, `findings`, `stats`, plus `claims`, `budget`, `tokens`, and — when `--flow` was given — `acCheck`) conforming to `reviewer-finding.schema.json`. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.contract: true` in
+`.metaproject/tasks.config.json`. Every claim and matched hunk sent to Jev is
+redacted first (`src/security/service.ts`). With the setting off, or with no
+OpenRouter credential, the command refuses before any read and makes no
+network call.
+
+The `/contract` slash command runs the same claim check over the working diff
+(no PR description, so zero claims) and prints the result into the
+transcript.
 
 ### `review conform`
 
