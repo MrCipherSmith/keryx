@@ -549,8 +549,7 @@ export async function callJevSystemOne(
   const external = opts?.signal;
   const sleepFn = opts?.sleepFn ?? defaultJevSleep;
 
-  let text = "";
-  let status = 0;
+  let text: string;
   let attempt = 0;
   for (;;) {
     attempt += 1;
@@ -575,7 +574,7 @@ export async function callJevSystemOne(
       break;
     }
 
-    status = outcome.status;
+    const status = outcome.status;
     text = outcome.text;
 
     if (JEV_RETRYABLE_STATUSES.has(status) && attempt < JEV_MAX_ATTEMPTS) {
