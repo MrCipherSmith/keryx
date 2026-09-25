@@ -49,6 +49,19 @@ test("formatCiTriageDetailLines: no selection, idle, triaging, error and done st
   expect(done).toContain("top: flaky");
 });
 
+test("flow 307 AC4: the detail view shows the signal lines as evidence, verdict still labelled advisory", () => {
+  const verdict = computeCiTriageVerdict({ flaky: { noul: 0.7 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.2 } });
+  const done = formatCiTriageDetailLines(ITEMS[0], {
+    kind: "done",
+    verdict,
+    signalLines: ["rerun: 0 prior attempt(s) checked; no earlier attempt of this job passed.", "log markers: none detected."],
+  }).join("\n");
+  expect(done).toContain("ADVISORY ONLY");
+  expect(done).toContain("evidence (computed signals, before Jev):");
+  expect(done).toContain("rerun: 0 prior attempt(s) checked");
+  expect(done).toContain("log markers: none detected.");
+});
+
 test("flow 306 review item 1: a timeout state reads distinctly from a generic error, in both the list row and the detail", () => {
   const listLine = formatCiTriageListLines(ITEMS, new Map([["1:typecheck-and-tests", { kind: "timeout" as const }]]), 0);
   expect(listLine[0]).toContain("timed out — r to retry");

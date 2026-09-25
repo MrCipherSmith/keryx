@@ -1,0 +1,5 @@
+macOS real-host legs — OS sandbox + TUI pty launch	Install dependencies	bun install v1.4.2 (744846f84)
+macOS real-host legs — OS sandbox + TUI pty launch	Install dependencies	error: failed to enqueue lifecycle scripts for protobufjs: ParserError
+macOS real-host legs — OS sandbox + TUI pty launch	Install dependencies	error: Unexpected
+macOS real-host legs — OS sandbox + TUI pty launch	Install dependencies	    at /Users/runner/work/keryx/keryx/node_modules/protobufjs/package.json:1:1
+macOS real-host legs — OS sandbox + TUI pty launch	Install dependencies	##[error]Process completed with exit code 1.

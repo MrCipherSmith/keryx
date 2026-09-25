@@ -1,0 +1,8 @@
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	##[group]src/tui/provider-endpoint-retry.test.ts:
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	1 tests failed:
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	(fail) REGRESSION — an unreachable endpoint re-opens the URL step > Esc at the re-opened URL step goes back to the provider list, not onward [5000.76ms]
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	  ^ this test timed out after 5000ms.
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	 1162 pass
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	 1 fail
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	 1 error
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	##[error]Process completed with exit code 1.

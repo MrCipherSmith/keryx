@@ -1,0 +1,7 @@
+{
+  "CI": [
+    { "runId": "35841246003", "conclusion": "failure", "createdAt": "2026-09-23T09:09:13Z", "headBranch": "feat/sandbox-allowlist-network" },
+    { "runId": "35856434575", "conclusion": "failure", "createdAt": "2026-09-23T11:45:54Z", "headBranch": "fix/schedule-tests-hermetic" },
+    { "runId": "35857024808", "conclusion": "success", "createdAt": "2026-09-23T11:52:03Z", "headBranch": "fix/schedule-tests-hermetic" }
+  ]
+}

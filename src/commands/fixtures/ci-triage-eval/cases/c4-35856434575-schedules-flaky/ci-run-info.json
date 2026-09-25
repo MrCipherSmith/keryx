@@ -1,0 +1,11 @@
+{
+  "runId": "35856434575",
+  "workflowName": "CI",
+  "headBranch": "fix/schedule-tests-hermetic",
+  "headSha": "20a82db4094e18842b17d3a16d25b22a85a177bb",
+  "conclusion": "failure",
+  "jobs": [
+    { "name": "opentui native (linux-x64)", "conclusion": "failure", "status": "completed" },
+    { "name": "typecheck-and-tests", "conclusion": "success", "status": "completed" }
+  ]
+}

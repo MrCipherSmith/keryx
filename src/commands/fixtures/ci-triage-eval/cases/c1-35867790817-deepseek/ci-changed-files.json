@@ -1,0 +1,7 @@
+{
+  "50ae7ea403d048f518f7c6d2333de22869decf59": [
+    "src/commands/help.ts",
+    "src/tui/help-modal.ts",
+    "docs/docs/cli-reference.md"
+  ]
+}

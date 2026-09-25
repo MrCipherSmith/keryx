@@ -1,0 +1,8 @@
+{
+  "CI": [
+    { "runId": "35867790817", "conclusion": "failure", "createdAt": "2026-09-23T13:32:35Z", "headBranch": "feat/help-command" },
+    { "runId": "35865793959", "conclusion": "failure", "createdAt": "2026-09-23T13:15:15Z", "headBranch": "main" },
+    { "runId": "35862796645", "conclusion": "success", "createdAt": "2026-09-23T12:48:07Z", "headBranch": "main" },
+    { "runId": "35916271230", "conclusion": "success", "createdAt": "2026-09-23T20:29:17Z", "headBranch": "main" }
+  ]
+}

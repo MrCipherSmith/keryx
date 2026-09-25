@@ -1,0 +1,10 @@
+{
+  "runId": "35865793959",
+  "workflowName": "CI",
+  "headBranch": "main",
+  "headSha": "5b6eb8105a866e26d2b2004d22d54f70e97f34fb",
+  "conclusion": "failure",
+  "jobs": [
+    { "name": "typecheck-and-tests", "conclusion": "failure", "status": "completed" }
+  ]
+}

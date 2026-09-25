@@ -47,14 +47,15 @@ export interface CiTriageListRead {
 }
 
 export type CiTriageRunResult =
-  | { readonly ok: true; readonly verdict: CiTriageVerdict; readonly testName?: string }
+  /** `signalLines` (flow 307, AC4): the same deterministic-signal evidence lines the CLI prints. */
+  | { readonly ok: true; readonly verdict: CiTriageVerdict; readonly testName?: string; readonly signalLines?: readonly string[] }
   /** `timedOut` (flow 306 review, items 1/3): the request was aborted — by the client's own default timeout, or by this modal closing mid-request. */
   | { readonly ok: false; readonly reason: string; readonly timedOut?: boolean };
 
 type ItemState =
   | { readonly kind: "idle" }
   | { readonly kind: "triaging" }
-  | { readonly kind: "done"; readonly verdict: CiTriageVerdict; readonly testName?: string }
+  | { readonly kind: "done"; readonly verdict: CiTriageVerdict; readonly testName?: string; readonly signalLines?: readonly string[] }
   | { readonly kind: "error"; readonly reason: string }
   | { readonly kind: "timeout" };
 
@@ -127,6 +128,7 @@ export function formatCiTriageDetailLines(item: CiTriageJobItem | undefined, sta
     jobName: item.jobName,
     ...(s.testName !== undefined ? { testName: s.testName } : {}),
     verdict: s.verdict,
+    ...(s.signalLines !== undefined && s.signalLines.length > 0 ? { signalLines: s.signalLines } : {}),
   }).split("\n");
 }
 
@@ -197,7 +199,12 @@ export function openCiTriage(otui: unknown, chrome: unknown, options: CiTriageMo
       states.set(
         key,
         result.ok
-          ? { kind: "done", verdict: result.verdict, ...(result.testName !== undefined ? { testName: result.testName } : {}) }
+          ? {
+              kind: "done",
+              verdict: result.verdict,
+              ...(result.testName !== undefined ? { testName: result.testName } : {}),
+              ...(result.signalLines !== undefined && result.signalLines.length > 0 ? { signalLines: result.signalLines } : {}),
+            }
           : result.timedOut === true
             ? { kind: "timeout" }
             : { kind: "error", reason: result.reason },
