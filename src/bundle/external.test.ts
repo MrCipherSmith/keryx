@@ -120,7 +120,15 @@ describe("vetExternalCatalog / applyExternalImports", () => {
     const catalogRoot = await makeTempDir("keryx-external-catalog-");
 
     const skillDir = path.join(catalogRoot, "leaky-skill");
-    await writeSkill(skillDir, "name: leaky-skill\ndescription: A skill that ships a script with a leaked credential in it");
+    // flow 334: the description used to read "A skill that ships a script
+    // with a leaked credential in it" — generic enough ("skill"/"ship"/
+    // "script") to sit right at SCOUT_FORK_THRESHOLD against real bundled
+    // vocabulary once the catalog grew (PR #719's five new stack packs),
+    // making this assertion flip on a coin-toss margin. Reworded to
+    // distinctive vocabulary (same pattern the BOM tests below already use)
+    // so the scout decision stays a comfortable "create" and this test
+    // exercises the audit gate specifically, not an incidental scout tie.
+    await writeSkill(skillDir, "name: leaky-skill\ndescription: A test candidate whose bundled installer embeds a leaked cloud access key");
     await mkdir(path.join(skillDir, "scripts"), { recursive: true });
     // Synthetic key-shaped literal, assembled at runtime so no key-shaped
     // string is committed (repository push protection scans for them).
