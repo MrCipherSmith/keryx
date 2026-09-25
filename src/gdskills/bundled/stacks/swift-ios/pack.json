@@ -2,7 +2,7 @@
   "id": "swift-ios",
   "family": "framework",
   "modules": ["swift-ios-rules", "swift-ios-skills"],
-  "detectionMarkers": ["swift", "ios", "xcode"],
+  "detectionMarkers": ["ios"],
   "provenance": { "origin": "authored", "sourceRef": "flow 336, Wave 4 batch 4" },
   "stability": "experimental",
   "skills": {

@@ -38,12 +38,16 @@ files.
   concurrently — its methods are implicitly isolated, so the compiler
   (not a convention) prevents unsynchronized access, the same guarantee
   a manual lock only provides by discipline.
-- Mark any type whose state SwiftUI reads or mutates `@MainActor` — view
-  models, `@Observable` stores, anything a `View`'s `body` touches —
-  since UIKit/SwiftUI rendering must happen on the main actor. Isolate at
-  the type level (`@MainActor final class ...`) rather than sprinkling
-  `@MainActor` on individual methods, unless only some of the type's
-  methods genuinely need main-actor isolation.
+- Since the iOS 18 SDK, `View` conformance is itself `@MainActor`-isolated
+  — a view's own `body` and any `@State`/`@Binding` kept directly on the
+  view struct are already main-actor-isolated automatically, with no
+  explicit annotation needed. That isolation does NOT extend to a
+  SEPARATE type: mark any standalone type whose state SwiftUI reads or
+  mutates `@MainActor` explicitly — view models, `@Observable` stores, or
+  any other type outside the `View` struct itself that a `body` touches.
+  Isolate at the type level (`@MainActor final class ...`) rather than
+  sprinkling `@MainActor` on individual methods, unless only some of the
+  type's methods genuinely need main-actor isolation.
 - Cross an actor boundary explicitly with `await`; do not reach for
   `@unchecked Sendable` or `nonisolated(unsafe)` to make a boundary
   error disappear — either the type's state genuinely needs no
