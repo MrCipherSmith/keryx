@@ -300,6 +300,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Managed work",
     summary: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev.",
   },
+  {
+    kind: "slash",
+    name: "/jevrules",
+    group: "Managed work",
+    summary: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule.",
+  },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {
     kind: "slash",

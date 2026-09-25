@@ -216,6 +216,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 330 (AC7): a one-shot check of the working diff's hunks against
+    // every applicable project rule clause, with Jev, printed grouped by
+    // rule. TUI-only, same reasoning as `/ci`/`/conform`.
+    name: "/jevrules",
+    description: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule",
+    modes: AGENT_ONLY,
+  },
+  {
     // P2 flipped this, as the entry it replaces said it would: `/mcp` was
     // "Deprecated alias of /integrations", kept pointing at the installer
     // only because the consumer view did not exist and a slash command

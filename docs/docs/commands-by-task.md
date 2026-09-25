@@ -92,6 +92,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/review` | Show project-wide items needing review (proposals, blocked sessions). |
 | `/ci` | Failed CI runs/jobs of the current branch's PR, each with an advisory triage and its deterministic-signal evidence. |
 | `/conform` | Check a PR, a review report, or a diff against a reference document's clauses, with Jev. |
+| `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
 

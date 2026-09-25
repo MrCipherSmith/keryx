@@ -4161,6 +4161,55 @@ accordingly regardless of `--top`. See the flow 307 journal
 (`.metaproject/flows/307-*/journal.md`) for the full per-case breakdown and
 the evidence behind each of the eight labels.
 
+### `review jev-rules`
+
+Flow 330. An ADDITIONAL orchestrator reviewer — never replacing any other —
+that checks every changed hunk against every applicable clause of every
+discovered project rule, scored by Jev's `noul` "does this hunk VIOLATE this
+clause?" and written up entirely by keryx: Jev supplies only a probability,
+never prose. Unlike `review conform`, this is dispatched by
+`review-orchestrator` itself (Wave B), as a CLI call rather than an LLM
+sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
+
+```bash
+keryx review jev-rules --scope scope.json --json
+keryx review jev-rules --pr 712 --repo MrCipherSmith/keryx --rules rules/core --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <ref>` \| `--pr <n>` \| `--scope <scope.json>` | Exactly one is required. `--scope` takes the whole `keryx review scope --json` document (the same file every other reviewer's dispatch reads) — the orchestrator's own path. `--diff`/`--pr` build the scope themselves via `hunkRegionsFromDiff`. |
+| `--rules <paths>` | Comma-separated extra rule files/directories, checked in addition to auto-discovery (`.metaproject/rules/**`, `rules/**`, and any project-skill/installed gdskill whose name or `metadata.category` marks it a coding convention). |
+| `--max-calls <n>` | Caps how many `(hunk, rule clause)` pairs are scored, default 150. Selection order is deterministic (regions in input order, rules sorted by path, clauses in extraction order); anything beyond the cap is reported dropped, never silently. |
+| `--threshold <0..1>` | Below this Jev probability a pair is not reported. Default `0.5`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`, a JSON array consumed in call order) from files on disk — no real `gh` call, no real network. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-rules"`, `summary`, `findings`, `stats`, plus `tokens`/`selection`/`ruleSources`) conforming to `reviewer-finding.schema.json`. |
+
+**Finding synthesis is deterministic.** `problem` quotes the violated clause;
+`impact` is the rule's own stated rationale (its first clause under a
+heading naming rationale/why/purpose/reason) or a fixed template when the
+rule states none; `suggested_fix` names the clause to bring the hunk in line
+with; `evidence` carries every hunk location and Jev's probability. Severity
+is capped at `minor` unless the clause itself declares a higher one
+(`[severity: major]`, trailing on the clause text) — the same marker syntax
+`review conform`'s `[state:pr]` already uses. One finding per `(rule clause,
+file)`, deduped across every hunk of that file with a hunk list, never one
+finding per hunk.
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.rules: true` in `.metaproject/tasks.config.json`.
+Every hunk and every rule-clause sent to Jev is redacted first
+(`src/security/service.ts`), the same floor `review conform`/`review
+ci-triage` already apply. With the setting off, or with no OpenRouter
+credential, the command refuses before any read and makes no network call.
+
+**A results cache**, keyed on the clause text and hunk location, lives at
+`.metaproject/data/review-jev-rules/violation-cache.json` (gitignored, mode
+`0600`) — a re-run over unchanged hunks and unchanged rules costs zero
+additional Jev calls.
+
 ### `review ci-triage --eval`
 
 ```bash

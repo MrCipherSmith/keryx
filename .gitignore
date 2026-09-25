@@ -123,3 +123,9 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # outside the `keryx:begin`/`keryx:end` managed block above, since a hand
 # edit inside that block is regenerated away by the next `keryx update`.
 .metaproject/data/review-conform/
+
+# `keryx review jev-rules` (flow 330): the violation-probability cache is
+# keyed on rule-clause text and hunk location — project-local runtime state,
+# not something to commit. Written 0o600. Same reasoning, same placement, as
+# the `review-conform/` entry just above.
+.metaproject/data/review-jev-rules/

@@ -93,6 +93,9 @@ import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
 import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
+// flow 330: registration only — everything else lives in jev-rules-command.ts
+// so flow 326's concurrent conform-* work never collides with it.
+import { isJevRulesCommand, runJevRulesForShell } from "./jev-rules-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
@@ -7276,6 +7279,20 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isConformCommand(command.name)) {
           showConform();
+          return;
+        }
+        if (isJevRulesCommand(command.name)) {
+          // flow 330: a one-shot check on the working diff, not a modal —
+          // see `jev-rules-command.ts`'s own header for why.
+          const cwd = inspectorCwd();
+          io.onSystem?.("review-jev-rules: checking the working diff against project rules…\n");
+          void (async () => {
+            try {
+              io.onSystem?.(`${await runJevRulesForShell(cwd)}\n`);
+            } catch (error) {
+              io.onSystem?.(`review-jev-rules: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          })();
           return;
         }
         if (command.name === "/bus") {
