@@ -249,6 +249,11 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   // for the files it is actually about.
   "nextjs-nuxt": ["tsx", "jsx", "vue", "ts"],
   mobx: ["ts", "tsx"],
+  // Wave 4 batch 4 (flow 336).
+  "csharp-dotnet": ["cs"],
+  "swift-ios": ["swift"],
+  "kotlin-android": ["kt", "kts"],
+  "flutter-dart": ["dart"],
   // Wave 4 batch 5 (flow 337)
   "php-laravel": ["php"],
   // R1 review (M2): "erb" added -- security.mdc/patterns.mdc cover ERB

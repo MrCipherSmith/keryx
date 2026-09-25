@@ -180,7 +180,15 @@
         "c-cpp-rules",
         "c-cpp-skills",
         "sql-db-rules",
-        "sql-db-skills"
+        "sql-db-skills",
+        "csharp-dotnet-rules",
+        "csharp-dotnet-skills",
+        "swift-ios-rules",
+        "swift-ios-skills",
+        "kotlin-android-rules",
+        "kotlin-android-skills",
+        "flutter-dart-rules",
+        "flutter-dart-skills"
       ],
       "components": [
         "lang:ts-js-node",
@@ -197,7 +205,11 @@
         "framework:php-laravel",
         "framework:ruby-rails",
         "lang:c-cpp",
-        "capability:sql-db"
+        "capability:sql-db",
+        "lang:csharp-dotnet",
+        "framework:swift-ios",
+        "framework:kotlin-android",
+        "framework:flutter-dart"
       ]
     },
     "php-laravel": {
@@ -241,6 +253,50 @@
       ],
       "components": [
         "capability:sql-db"
+      ],
+      "stackDetectionAware": true
+    },
+    "csharp-dotnet": {
+      "description": "Common rules plus the C#/.NET stack pack component (`csharp-dotnet-rules` + `csharp-dotnet-skills`, from src/gdskills/bundled/stacks/csharp-dotnet/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:csharp-dotnet"
+      ],
+      "stackDetectionAware": true
+    },
+    "swift-ios": {
+      "description": "Common rules plus the Swift/iOS stack pack component (`swift-ios-rules` + `swift-ios-skills`, from src/gdskills/bundled/stacks/swift-ios/), installed when `keryx stack detect` finds a matching tag. Standalone pack: no `lang:swift` base exists yet (flow 336 description.md).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:swift-ios"
+      ],
+      "stackDetectionAware": true
+    },
+    "kotlin-android": {
+      "description": "Common rules plus the Kotlin/Android (Jetpack Compose) stack pack component (`kotlin-android-rules` + `kotlin-android-skills`), installed when `keryx stack detect` finds a matching tag. Standalone pack (flow 336 description.md).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:kotlin-android"
+      ],
+      "stackDetectionAware": true
+    },
+    "flutter-dart": {
+      "description": "Common rules plus the Flutter/Dart stack pack component (`flutter-dart-rules` + `flutter-dart-skills`), installed when `keryx stack detect` finds a matching tag. Standalone pack (flow 336 description.md).",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:flutter-dart"
       ],
       "stackDetectionAware": true
     }
@@ -928,6 +984,126 @@
       "defaultInstall": true,
       "cost": "medium",
       "stability": "experimental"
+    },
+    "csharp-dotnet-rules": {
+      "kind": "rule",
+      "description": "C#/.NET stack pack rules (coding-style, patterns, security, testing; scoped to *.cs) from src/gdskills/bundled/stacks/csharp-dotnet/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/csharp-dotnet/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "csharp-dotnet-skills": {
+      "kind": "skill",
+      "description": "C#/.NET stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/csharp-dotnet/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/csharp-dotnet/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "swift-ios-rules": {
+      "kind": "rule",
+      "description": "Swift/iOS stack pack rules (coding-style, patterns, security, testing; scoped to *.swift) from src/gdskills/bundled/stacks/swift-ios/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/swift-ios/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "swift-ios-skills": {
+      "kind": "skill",
+      "description": "Swift/iOS stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/swift-ios/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/swift-ios/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "kotlin-android-rules": {
+      "kind": "rule",
+      "description": "Kotlin/Android (Jetpack Compose) stack pack rules (coding-style, patterns, security, testing; scoped to *.kt/*.kts) from src/gdskills/bundled/stacks/kotlin-android/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/kotlin-android/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "kotlin-android-skills": {
+      "kind": "skill",
+      "description": "Kotlin/Android (Jetpack Compose) stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/kotlin-android/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/kotlin-android/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "flutter-dart-rules": {
+      "kind": "rule",
+      "description": "Flutter/Dart stack pack rules (coding-style, patterns, security, testing; scoped to *.dart) from src/gdskills/bundled/stacks/flutter-dart/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/flutter-dart/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "flutter-dart-skills": {
+      "kind": "skill",
+      "description": "Flutter/Dart stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/flutter-dart/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/flutter-dart/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
     }
   },
   "components": {
@@ -1135,6 +1311,59 @@
       ],
       "detectionMarkers": [
         "sql"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "lang:csharp-dotnet": {
+      "family": "language",
+      "modules": [
+        "csharp-dotnet-rules",
+        "csharp-dotnet-skills"
+      ],
+      "detectionMarkers": [
+        "csharp",
+        "dotnet"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:swift-ios": {
+      "family": "framework",
+      "modules": [
+        "swift-ios-rules",
+        "swift-ios-skills"
+      ],
+      "detectionMarkers": [
+        "ios"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:kotlin-android": {
+      "family": "framework",
+      "modules": [
+        "kotlin-android-rules",
+        "kotlin-android-skills"
+      ],
+      "detectionMarkers": [
+        "android"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:flutter-dart": {
+      "family": "framework",
+      "modules": [
+        "flutter-dart-rules",
+        "flutter-dart-skills"
+      ],
+      "detectionMarkers": [
+        "flutter"
       ],
       "provenance": {
         "origin": "authored"

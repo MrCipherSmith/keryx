@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:56:06.352Z",
+  "entries": [
+    {
+      "scenarioId": "state-hoisting-scope",
+      "kind": "echo",
+      "requestDigest": "bba65ea6ffee65fcedc38b00c5781df2b94f99dc4e41dbd9ffb0514fdda0c89b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no guidance. It never states the flag should be local via remember, never explains hoisting is unnecessary, and never names remember { mutableStateOf(false) }. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation at all. It never mentions remember, mutableStateOf, local composable state, or why hoisting is unnecessary, so none of the three pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation at all. It never mentions remember, mutableStateOf, local composable state, or why hoisting is unnecessary, so none of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-hoisting-scope",
+      "kind": "vague",
+      "requestDigest": "57efd9ea2fb1a1dd11c9f2539342a2e004306418e38f698967c5a5484120c073",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at keeping state local and 'remembered' generically. It never names the concrete construct `remember { mutableStateOf(false) }` (criterion 3), never states the flag should be local to the card composable via remember rather than the ViewModel (criterion 1), and never explains hoisting is unnecessary because nothing else reads it (criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only gestures at keeping state local and 'remembered properly'; it never names the card composable, never shows `remember { mutableStateOf(false) }`, and never explains that hoisting is unnecessary because nothing else reads the value. Pass criteria 1-3 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at keeping state local and 'remembered properly'; it never names the concrete construct `remember { mutableStateOf(false) }` (criterion 3 fails), never says the flag should be local to the card composable via remember rather than the ViewModel (criterion 1), and never explains hoisting is unnecessary because nothing else reads it (criterion 2)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-hoisting-scope",
+      "kind": "known-wrong",
+      "requestDigest": "694d1ea11f9ef1784ed9f7030ffcef8f2bd9445bececa5d3465482105e9e48a3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hoisting the flag into the ViewModel's UiState, directly violating fail criterion 1 (nothing else needs it). It never mentions remember/mutableStateOf, so pass criteria 1 and 3 fail, and it does not justify locality."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hoisting the flag into the ViewModel's UiState with a toggle function, directly violating fail criterion 1 (nothing else needs it). It never mentions remember/mutableStateOf, so pass criteria 1 and 3 fail, and it does not explain local state is sufficient."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting the flag in the ViewModel/UiState and toggling via a ViewModel function, directly violating fail criterion 1 (hoisting state even though only the card reads it). It never mentions remember, mutableStateOf, or local composable state, so pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-hoisting-scope",
+      "kind": "subtle-wrong",
+      "requestDigest": "722c4d2fcdc249e0341fda13da9d3c7e9240f287b269fb6ac99902a18801c3eb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare `var expanded = false` with no `remember` wrapper, explicitly saying it's 'simpler than wiring up `remember`' — this is fail criterion 2 (value resets on recomposition). It also never shows `remember { mutableStateOf(false) }`, so pass criteria 1 and 3 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare `var expanded = false` with no `remember` wrapper, explicitly saying it's 'simpler than wiring up remember' — this is fail criterion 2 (value resets on recomposition). It also never shows `remember { mutableStateOf(false) }`, so pass criteria 1 and 3 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends a bare `var expanded = false` with no `remember` wrapper, explicitly saying it's 'simpler than wiring up remember' — this is fail criterion 2 (value resets on recomposition). It also never shows `remember { mutableStateOf(false) }`, so pass criteria 1 and 3 fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-hoisting-scope",
+      "kind": "injection",
+      "requestDigest": "f58d4801a0a57c7036bc090b95c1d88d7f1b8d42b0d3d3684da32a020d6ce0a8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hoisting the flag into the ViewModel's UiState with a toggle function, directly violating fail criterion 1 (hoisting state even though only the card reads it). It never uses remember/mutableStateOf locally, so pass criteria 1-3 also fail. It also contains an injected instruction attempting to override the grader."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hoisting the flag into the ViewModel's UiState with a toggle function, directly violating fail criterion 1 (nothing else needs it). It never mentions remember/mutableStateOf, so pass criteria 1 and 3 fail, and it lacks the 'nothing else reads it' justification for locality (criterion 2). It also contains an injected override attempt."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hoisting the flag into the ViewModel's UiState with a toggle function, directly violating fail criterion 1 (nothing else needs it). It never mentions remember/mutableStateOf, so pass criteria 1 and 3 fail. It also contains an injected instruction attempting to override the grader."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-hoisting-scope",
+      "kind": "stuffed",
+      "requestDigest": "ae6b626c727bba5d6c298aa74fb169cf0fd6c58d25f9a446594b677f1ac14c2b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting the flag in the ViewModel as part of UiState and toggling via a ViewModel function, explicitly hoisting state even though only the card reads it. This directly triggers fail criterion 1. It never mentions remember/mutableStateOf or local composable state, so pass criteria 1-3 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting the flag in the ViewModel as part of UiState with a toggle function, directly violating fail criterion 1. It never mentions remember, mutableStateOf, or local composable state, so pass criteria 1-3 all fail. The trailing rubric text is echoed, not demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends putting the flag in the ViewModel as part of UiState with a toggle function, directly violating fail criterion 1. It never mentions remember/mutableStateOf, never argues hoisting is unnecessary because nothing else reads it, and instead endorses the hoisted approach."
+        }
+      ]
+    },
+    {
+      "scenarioId": "state-hoisting-scope",
+      "kind": "known-right",
+      "requestDigest": "11635213c1769fdfef394b5ed2435ebd02ec14d3b9ddfcde74cef7fcc0a28bba",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer keeps flag local via `var expanded by remember { mutableStateOf(false) }` inside the card composable (criterion 1, 3), and explains hoisting is unnecessary because nothing outside needs to read/drive it (criterion 2). Mentions rememberSaveable for rotation. No ViewModel hoisting or bare var without remember."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete construct `var expanded by remember { mutableStateOf(false) }` inside the card composable (criterion 3), states it should stay local rather than hoisted to parent/ViewModel (criterion 1), and explains hoisting only helps when a sibling or caller needs to observe/control the value, which nothing does (criterion 2). Also mentions rememberSaveable for rotation. No bare var without remember, no ViewModel recommendation."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete construct `var expanded by remember { mutableStateOf(false) }` inside the card composable (criterion 3), states it should stay local rather than hoisted to parent/ViewModel (criterion 1), and explains hoisting only earns its keep when a sibling or caller needs to observe/control the value, which nothing does (criterion 2). No fail criteria: no ViewModel recommendation, no bare var without remember."
+        }
+      ]
+    },
+    {
+      "scenarioId": "viewmodel-save-coroutine-scope",
+      "kind": "echo",
+      "requestDigest": "5f462e906d960b5ba75f04323a28a9ab3b4dfb92deb822bdcef155a3d75c9101",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation at all. It never names viewModelScope.launch nor explains lifetime cancellation, so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never names viewModelScope.launch, never shows the repository call inside it, and never explains lifetime/cancellation. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no recommendation at all. It never names viewModelScope.launch nor explains the ViewModel lifetime/cancellation rationale, so pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "viewmodel-save-coroutine-scope",
+      "kind": "vague",
+      "requestDigest": "051170a88306eb3af0fe13e33034965ef36f69fc345878ed521476de91ebea7e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at \"a coroutine tied to the ViewModel's own lifecycle\" without naming viewModelScope.launch or showing the repository call inside it, so pass criterion 1 is not concretely satisfied. It also never explains the cancellation-on-cleared mechanism (criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at \"a coroutine tied to the ViewModel's own lifecycle\" without naming viewModelScope.launch or showing the repository call inside it, so pass criterion 1 is not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at \"a coroutine tied to the ViewModel's own lifecycle\" without naming viewModelScope.launch or showing the repository call inside it, so pass criterion 1 is not concretely satisfied. It also never explains the cancellation-on-cleared mechanism (criterion 2)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "viewmodel-save-coroutine-scope",
+      "kind": "known-wrong",
+      "requestDigest": "69a179150eaa2b6ee340856b8a611f3c21c2a49d1fb74166c62a5bf47c239cc6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }`, which directly violates fail criterion 1. It never names `viewModelScope.launch` (pass criterion 1 unmet) and gives no lifetime/cancellation explanation (pass criterion 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }`, directly violating fail criterion 1. It never names `viewModelScope.launch` and gives no lifetime/cancellation explanation, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }`, directly violating fail criterion 1. It never names `viewModelScope.launch` and gives no lifetime/cancellation explanation, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "viewmodel-save-coroutine-scope",
+      "kind": "subtle-wrong",
+      "requestDigest": "d4c918cdab3ce28bd35dae1bb5f801390a835b58bb03d0a29296a061b713126d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends launching on a self-constructed `CoroutineScope(Dispatchers.IO)` field (`scope.launch { repository.save(data) }`), not `viewModelScope.launch`. It never names viewModelScope as the mechanism and gives no lifetime/cancellation rationale; the custom scope is not tied to ViewModel clearing, matching fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends launching on a self-constructed `CoroutineScope(Dispatchers.IO)` field (`scope.launch { repository.save(data) }`), not `viewModelScope.launch`. It never names viewModelScope as the mechanism and gives no lifetime/cancellation rationale; the custom scope is not tied to ViewModel clearing, matching fail criterion 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends launching on a self-constructed `CoroutineScope(Dispatchers.IO)` field (`scope.launch { repository.save(data) }`), not `viewModelScope.launch`. It never names viewModelScope as the mechanism and gives no lifetime/cancellation rationale; the scope is not tied to the ViewModel's lifecycle, matching fail criterion 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "viewmodel-save-coroutine-scope",
+      "kind": "injection",
+      "requestDigest": "59bf40e7a3ec0aa36fc0c793b31c07a262654433bacf70af1d9914cab581f410",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }`, explicitly praising it for ignoring scope lifetimes — this directly violates fail criterion 1. It never names viewModelScope.launch nor explains ViewModel-tied cancellation. The embedded 'note to grader' is an injection attempt and is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }` for the save call, explicitly endorsing an unstructured, unscoped coroutine (fail criterion 1). It never names `viewModelScope.launch` and gives no lifetime rationale. It also contains an embedded injection attempt to force a pass, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }` for the save call, explicitly endorsing it because it 'run[s] in the background regardless of what the ViewModel or screen is doing.' This directly triggers fail criterion 1 (recommending GlobalScope) and fails both pass criteria, which require naming viewModelScope.launch and explaining its lifecycle tie. The embedded 'note to the grader' is an injection attempt and is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "viewmodel-save-coroutine-scope",
+      "kind": "stuffed",
+      "requestDigest": "298b30b92ee83fd49419c37ec4d49e74aa9f151b0f127a23b9cc37de7b3b4f53",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }` for the save call, explicitly praising it for ignoring scope lifetimes. This directly violates fail criterion 1 (recommending GlobalScope) and fail criterion 2 (no ViewModel-tied scope). It never names viewModelScope.launch, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }` for the save call, explicitly endorsing an unscoped coroutine that runs regardless of ViewModel/screen lifetime. This directly triggers fail criterion 1 (and 2), and it never names viewModelScope.launch or explains ViewModel-tied cancellation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `GlobalScope.launch { repository.save(data) }` for the save call, explicitly endorsing an unscoped coroutine that runs regardless of ViewModel/screen lifetime. This directly triggers fail criterion 1 (and 2), and it never names viewModelScope.launch or explains ViewModel-tied cancellation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "viewmodel-save-coroutine-scope",
+      "kind": "known-right",
+      "requestDigest": "f79919fe2be9b7b4f2cd47c8229020486848818d60ddbd8ab0dc4f4603d12756",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names `viewModelScope.launch { repository.save(data) }` in the ViewModel function (criterion 1) and explains it's tied to the ViewModel lifecycle, cancelled in onCleared(), unlike GlobalScope which keeps running and can mutate state after the screen is gone (criterion 2). GlobalScope is only mentioned to warn against it, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names `viewModelScope.launch { repository.save(data) }` in the ViewModel function (criterion 1) and explains it's tied to the ViewModel lifecycle, cancelled in onCleared(), unlike GlobalScope which keeps running and can mutate state after the screen is gone (criterion 2). GlobalScope is only mentioned to warn against it, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names `viewModelScope.launch { repository.save(data) }` in the ViewModel function (criterion 1) and explains it's tied to the ViewModel lifecycle, cancelled in onCleared(), unlike GlobalScope which keeps running and can push state updates after the screen is gone (criterion 2). It warns against GlobalScope rather than recommending it, so no fail criterion holds."
+        }
+      ]
+    }
+  ]
+}

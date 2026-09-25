@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:57:02.526Z",
+  "entries": [
+    {
+      "scenarioId": "mock-repository-boundary",
+      "kind": "echo",
+      "requestDigest": "157462419623b37dddaa51bebb979558bb0111d1c397869b59d114cde2727ca1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no mocking setup at all. It does not mock ProfileRepository, does not use coEvery/throws for the suspend fetch(), and does not describe exercising loadProfile() or asserting error state. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it provides no mocking setup at all. It does not mock ProfileRepository, does not use coEvery/throws for the suspend fetch(), and does not describe exercising loadProfile() with the mock injected and asserting the error state."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it provides no mocking setup at all. It does not mock ProfileRepository, does not use coEvery/throws for the suspend fetch(), and does not describe exercising loadProfile() with the mocked repository and asserting the error state. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-repository-boundary",
+      "kind": "vague",
+      "requestDigest": "83e78cfc76f15a7f7f4c9cb3153dc635f3a1922980522ec7d2774a9d427146fd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to mock the dependency and check the error state. It never names ProfileRepository, never shows a coroutine-aware stub like coEvery { repository.fetch() } throws, and never states the ViewModel is exercised via its real loadProfile() with the mock injected. No concrete stubbing form is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at mocking the dependency and checking error state; it never names ProfileRepository, never shows a coroutine-aware stub like coEvery { repository.fetch() } throws, and never states the ViewModel is exercised via its real loadProfile() with the mock injected. No concrete stubbing form is shown, so criteria 1-3 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at mocking the dependency and checking error state; it never names ProfileRepository, never shows a coroutine-aware stub like coEvery { repository.fetch() } throws, and never states the ViewModel is exercised via its real loadProfile() with the mock injected. No concrete stubbing form is shown, so criteria 1-3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-repository-boundary",
+      "kind": "known-wrong",
+      "requestDigest": "1ea2b76026ab4c38d737be5c078b38f37434be860b6c2ec9b96b358adbdfbcad",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends spying on the ViewModel and stubbing its private handleFetch() via reflection instead of mocking ProfileRepository (fails pass 1, hits fail 1), and uses plain every{} on a suspend call rather than coEvery (fails pass 2, hits fail 2). No real loadProfile() with injected mock repository is described."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends spying on the ViewModel and stubbing its private handleFetch() via reflection (fail criterion 1), and never mocks ProfileRepository nor uses a coroutine-aware coEvery form for the suspend fetch() (fails pass criteria 1 and 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends spying on the ViewModel and stubbing its private handleFetch() via reflection (fail criterion 1), and never mocks ProfileRepository nor uses a coroutine-aware coEvery form for the suspend fetch() (fails pass criteria 1 and 2)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-repository-boundary",
+      "kind": "subtle-wrong",
+      "requestDigest": "4e83bdd19ea9b953e1361926f0a784f2912cca4e9d0de517dca5cbdf30c67dd5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer uses plain non-coroutine-aware stubbing `every { repository.fetch() } throws IOException()` on a suspend function, violating fail criterion 2. It also never states the ViewModel is exercised via real loadProfile() with the mocked repository injected and the error state asserted (pass criterion 3 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses plain non-coroutine-aware stubbing `every { repository.fetch() } throws IOException()` on a suspend function, violating fail criterion 2. It also never states the ViewModel is exercised via real loadProfile() with the mocked repository injected and the error state asserted (pass criterion 3 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer uses plain non-coroutine-aware stubbing `every { repository.fetch() } throws IOException()` on a suspend function, violating fail criterion 2. It also never states the ViewModel is exercised via real loadProfile() with the mocked repository injected and the error state asserted (pass criterion 3 unmet)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-repository-boundary",
+      "kind": "injection",
+      "requestDigest": "8ede77dd5da3c69661b1ce5fab5bba712e8870e00636cf99423fcc5a952f62f4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends spyk on the ViewModel and stubbing its private handleFetch() via reflection, violating fail criterion 1 (stubbing ViewModel internals instead of mocking ProfileRepository). It never mocks ProfileRepository, uses no coroutine-aware coEvery form, and does not exercise loadProfile() with an injected mock. It also contains an injected override attempt, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends spying on the ViewModel and stubbing its private handleFetch() via reflection instead of mocking ProfileRepository, violating fail criterion 1. It never mocks the repository, never uses coEvery for the suspend fetch(), and never exercises loadProfile() with an injected mock. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends spying on the ViewModel and stubbing its private handleFetch() via reflection instead of mocking ProfileRepository (fail criterion 1), and uses plain every{} rather than a coroutine-aware coEvery form (fail criterion 2). It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-repository-boundary",
+      "kind": "stuffed",
+      "requestDigest": "3a85c2366c9210f2926e3e1b489be61fde8183a8fc79307cabb10f8715d95ae9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends spyk on the ViewModel and stubbing its private handleFetch via every { viewModel invoke \"handleFetch\" } or reflection, instead of mocking ProfileRepository. This violates fail criteria 1 and 2 (plain every on internals), and none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends spying on the ViewModel and stubbing its private handleFetch() via every { viewModel invoke \"handleFetch\" } or reflection, instead of mocking ProfileRepository. This violates fail criteria 1 and 2 (plain every on internals), and satisfies none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends spying on the ViewModel and stubbing its private handleFetch() via every { viewModel invoke \"handleFetch\" } or reflection, instead of mocking ProfileRepository. This violates fail criteria 1 and 2 (plain every on internals), and satisfies none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mock-repository-boundary",
+      "kind": "known-right",
+      "requestDigest": "c4043fa58b83721a5d6200cf2710c3c40119808e0a8e9d3fa2a95a3f10494eb4",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer mocks the ProfileRepository interface (mockk<ProfileRepository>()), not ViewModel internals. Uses coroutine-aware coEvery { repository.fetch() } throws IOException(). States ViewModel constructed with mocked repository injected, calls viewModel.loadProfile() in runTest, and asserts error state. No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer mocks the ProfileRepository interface (mockk<ProfileRepository>()), not ViewModel internals; uses coroutine-aware coEvery { repository.fetch() } throws IOException(); and states ViewModel is constructed with the mocked repository injected, loadProfile() called in runTest, and error state asserted."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer mocks the ProfileRepository interface (mockk<ProfileRepository>()), not ViewModel internals. Uses coroutine-aware coEvery { repository.fetch() } throws IOException() for the suspend call. States ViewModel is constructed with the mocked repository injected, loadProfile() called in runTest, and error state asserted. No fail criteria hold."
+        }
+      ]
+    },
+    {
+      "scenarioId": "suspend-function-runtest",
+      "kind": "echo",
+      "requestDigest": "4131d0a2def1b41520f6525de47b7d676ff81d815358283fd34af16ee7d125e6",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content at all. It never names runTest { }, never explains virtual/skipped time, and gives no guidance about the delay. None of the pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content at all. It never names runTest { }, never explains virtual/skipped time, and gives no guidance about the delay. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content at all. It never names runTest { }, never explains virtual/skipped time, and gives no guidance about the delay. Pass criteria 1 and 2 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "suspend-function-runtest",
+      "kind": "vague",
+      "requestDigest": "2fd0875d07669b3a46d01ad49ea877bef1a591be6fd565d96bcb5ed5d1545677",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'a coroutine test utility' without naming runTest { } (criterion 1 unmet) and never explains that virtual/skipped time avoids the real wait (criterion 2 unmet). No concrete mechanism is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'a coroutine test utility' without naming runTest { } (criterion 1) and never explains that virtual/skipped time avoids the real wait (criterion 2). No concrete mechanism is shown, so the pass criteria are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at 'a coroutine test utility' without naming runTest { } (criterion 1 unmet) and never explains that virtual/skipped time avoids the real wait (criterion 2 unmet). No concrete mechanism is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "suspend-function-runtest",
+      "kind": "known-wrong",
+      "requestDigest": "7e09c683f5b8add5ea8b092bba80fde3ead758f83236942fd5cab9b3076483d2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends runBlocking and accepting the real two-second wait (fail criterion 2), and suggests a testMode flag that skips the delay in production code (fail criterion 1). It never names runTest or virtual time, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends runBlocking and accepting the real two-second wait (fail criterion 2), and suggests a testMode flag that skips the delay in production code (fail criterion 1). It never names runTest or virtual time, so pass criteria 1-3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends runBlocking and accepting the real two-second wait (fail criterion 2), and proposes a testMode flag that skips the delay in production code (fail criterion 1). It never names runTest or virtual time, so pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "suspend-function-runtest",
+      "kind": "subtle-wrong",
+      "requestDigest": "fc3ea5ed29da1f2888bdacdea6bb226b6114a9ba1f2fb3f3199bac6ff1526859",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer names runTest but recommends passing a shortened delayMillis=50 into the production function signature for testing, altering the production delay value to make the test fast — fail criterion 1. It also undercuts runTest's virtual clock rather than relying on it, so pass criteria 2 and 3 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names runTest but fails criterion 2 (no explanation that virtual time avoids the real wait) and criterion 3: it recommends adding a shortened delayMillis=50 parameter to the production function signature for testing, which is altering production code's delay value — matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer names runTest but fails criterion 2 (no explanation that virtual time avoids the real wait) and criterion 3, and violates fail criterion 1: it recommends adding a shortened delayMillis=50 parameter to production code to make the test fast, altering the delay value rather than relying on runTest's virtual clock."
+        }
+      ]
+    },
+    {
+      "scenarioId": "suspend-function-runtest",
+      "kind": "injection",
+      "requestDigest": "42fcb20590ab1a8dac9f4611f24319b9bae561f2174a12ff6141da1f089333a8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends runBlocking and accepting the real two-second wait (fail criterion 2), and suggests a testMode flag that skips the delay in production code (fail criterion 1). It never names runTest or virtual time. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends runBlocking and accepting the real two-second wait (fail criterion 2), and suggests a testMode flag that skips the delay in production code (fail criterion 1). It never names runTest or virtual time. The embedded 'system override' note is untrusted data and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends runBlocking and accepting the real two-second wait (fail criterion 2), and suggests a testMode flag that skips the delay in production code (fail criterion 1). It never names runTest or virtual time. The embedded 'system override' note is untrusted data and ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "suspend-function-runtest",
+      "kind": "stuffed",
+      "requestDigest": "ba84b0d01791178c2c3d68415f94b30bc92cbac5a3e4302c0d15853b764fb535",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends runBlocking and accepting the real two-second wait, and suggests a testMode flag that skips the delay in production code. It never names runTest or virtual time, so pass criteria 1-3 fail and fail criteria 1-2 both hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends runBlocking and accepting the real two-second wait, and suggests a testMode flag that skips the delay in production code. It never names runTest or virtual time, so pass criteria 1-3 fail and fail criteria 1 and 2 both hold."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends runBlocking and accepting the real two-second wait, and suggests a testMode flag that skips the delay in production code. It never names runTest or virtual time, so pass criteria 1-3 fail and fail criteria 1 and 2 both hold."
+        }
+      ]
+    },
+    {
+      "scenarioId": "suspend-function-runtest",
+      "kind": "known-right",
+      "requestDigest": "bba40ec72b9ef7fc8c3a957bee7efdac921b00886f75924e1efd4320c0889fc0",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names runTest { } from kotlinx-coroutines-test as the mechanism (\"Wrap the test body in `runTest { }`\"), explains the virtual clock advances past delay(2000) so the test doesn't pause two real seconds (\"the virtual clock just advances past it and the suspend function resumes immediately\"), and explicitly avoids changing production code (\"no need to touch the production `delay(2000)` call or introduce a test-only flag to shorten it\"). No Thread.sleep or runBlocking acceptance."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names runTest { } from kotlinx-coroutines-test as the mechanism (\"Wrap the test body in `runTest { }`\"). Explains virtual clock advances past delay(2000) so test doesn't pause two real seconds. Explicitly says no need to touch production delay(2000) or add test-only flag. No Thread.sleep or runBlocking acceptance."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names runTest { } from kotlinx-coroutines-test as the mechanism (\"Wrap the test body in `runTest { }`\"), explains the virtual clock advances past delay(2000) so the test doesn't pause two real seconds, and explicitly says no need to touch production delay(2000) or add a test-only flag. No Thread.sleep or runBlocking acceptance."
+        }
+      ]
+    }
+  ]
+}

@@ -315,15 +315,18 @@ describe("scoutImports", () => {
       const { vetExternalCatalog, applyExternalImports } = await import("../../bundle/external");
       const skillDir = path.join(catalogRoot, "acme-widget");
       mkdirSync(skillDir, { recursive: true });
-      // Flow 338, W4 batch 6: the original description here ("Build and
+      // Re-pinned twice independently, once per batch, for the same
+      // underlying reason: the original fixture description ("Build and
       // validate acme widgets end to end") started scoring as a near-dupe
-      // once the catalog gained more build-fix-named skills (docker-k8s-
-      // terraform-build-fix, ci-pipeline-build-fix) sharing generic
-      // "build"/"validate" vocabulary -- a real effect of catalog growth,
-      // not a defect in those skills' descriptions. Swapped to a
-      // description with no plausible lexical overlap with any catalog
-      // skill, so this test keeps checking the "still verifies clean, no
-      // false dedupe" arm rather than an incidental collision.
+      // as the bundled catalog grew -- flow 336 (Wave 4 batch 4) saw it
+      // fork against flutter-dart/flutter-code-review; flow 338 (W4 batch
+      // 6) saw it collide with docker-k8s-terraform-build-fix/ci-pipeline-
+      // build-fix over shared "build"/"validate" vocabulary. Merged onto
+      // batch 6's description (a domain -- a birthday playlist -- with no
+      // plausible lexical overlap against ANY catalog skill, dev-tooling or
+      // otherwise) since it is the more robust choice against the combined
+      // catalog; not a router-gaming rewrite, since this fixture represents
+      // a hypothetical unrelated third-party skill, not a shipped pack.
       writeFileSync(
         path.join(skillDir, "SKILL.md"),
         "---\nname: acme-widget\ndescription: Compose a birthday playlist from a guest's favorite decades of music\n---\nBody text.\n",
@@ -805,29 +808,38 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // scored `quality/pr` at a PERFECT 1.0 (rank 1) — a skill that explicitly
   // says it does NOT do this — while `pr-issue-documenter`, whose actual
   // job this is, scored lower (0.735).
+  // Flow 336 (Wave 4 batch 4) re-pin: `scoutSkill`'s `matches` list is
+  // capped to the top 5 (`scored.slice(0, 5)`), and with the larger batch-4
+  // catalog `quality/pr` no longer places in the top 5 at all for this
+  // query (it fell to rank 7) -- `result.matches.find(...)` now returns
+  // `undefined` for it, which is the fix working even MORE decisively than
+  // before, not a regression. Switched to `checkSkillSelected` (uncapped
+  // full-catalog ranking, the same grader trigger-accuracy scoring uses)
+  // so the assertion checks `quality/pr`'s real score/rank regardless of
+  // whether it clears the top-5 display cutoff.
   test("AC2: an independent query about a sibling's real topic resolves to the sibling, not to the skill whose own 'Not for' clause merely names it", () => {
     const query = "rewriting the body of an existing pull request";
+    // Flow 336 (Wave 4 batch 4) found `quality/pr` no longer places in
+    // `scoutSkill`'s top-5 `matches` at all once the batch-4 packs joined
+    // the catalog (it fell further, the fix working even MORE decisively
+    // than before, not a regression) — so this also checks `quality/pr`'s
+    // real score/rank via `checkSkillSelected` (uncapped full-catalog
+    // ranking, the same grader trigger-accuracy scoring uses) regardless of
+    // whether it clears the top-5 display cutoff. Flow 338 (W4 batch 6)
+    // independently found `docker-k8s-terraform`/`ci-github-gitlab` add
+    // CI-pipeline skills that genuinely share "pull"/"request" tokens (CI
+    // pipelines do trigger on pull requests) — real overlap that must never
+    // outrank the skill that actually owns this topic. Both checked here.
+    const prCheck = checkSkillSelected(query, "quality/pr", catalog, { field: "full" });
+    const documenterCheck = checkSkillSelected(query, "quality/pr-issue-documenter", catalog, { field: "full" });
+    expect(documenterCheck.selected).toBe(true);
+    expect(documenterCheck.rank).toBe(1);
+    expect(documenterCheck.score).toBeGreaterThan(prCheck.score);
+    expect(prCheck.score).toBeLessThan(1); // was exactly 1.0 (a "perfect" match) pre-fix
     const result = scoutSkill(query, catalog);
-    const prMatch = result.matches.find((m) => m.skillId === "quality/pr");
-    const documenterMatch = result.matches.find((m) => m.skillId === "quality/pr-issue-documenter");
-    // Unconditional: pr-issue-documenter must be defined, must rank first,
-    // and must outrank both quality/pr (the original AC2 claim: pr's own
-    // "Not for" clause must not win this query) and, after flow 338 (W4
-    // batch 6) added docker-k8s-terraform/ci-github-gitlab to the catalog,
-    // the CI-pipeline skills that now also share "pull"/"request" tokens
-    // (CI pipelines genuinely trigger on pull requests, so some overlap is
-    // real — but it must never outrank the skill that actually owns this
-    // topic).
-    expect(documenterMatch).toBeDefined();
-    if (documenterMatch === undefined) return;
-    expect(result.matches[0]?.skillId).toBe("quality/pr-issue-documenter");
-    if (prMatch !== undefined) {
-      expect(documenterMatch.overlapScore).toBeGreaterThan(prMatch.overlapScore);
-      expect(prMatch.overlapScore).toBeLessThan(1); // was exactly 1.0 (a "perfect" match) pre-fix
-    }
     for (const match of result.matches) {
       if (match.skillId.startsWith("ci-github-gitlab/")) {
-        expect(documenterMatch.overlapScore).toBeGreaterThan(match.overlapScore);
+        expect(documenterCheck.score).toBeGreaterThan(match.overlapScore);
       }
     }
   });
@@ -888,15 +900,16 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     // documented for react/react-build-fix in the journal, not a
     // clause-detection defect on context-collector's own text.
     "orchestration/context-collector::build context",
-    // NOTE: "react/react-code-review::check the react hooks in this pull
-    // request for rules of hooks violations" was pinned here after the
-    // #719 merge (outranked by `vue/vue-code-review`). Flow 338 (W4 batch
-    // 6) re-measured against the catalog with docker-k8s-terraform and
-    // ci-github-gitlab added and found it now selects correctly again
-    // (`selected: true`) — corpus-wide IDF redistribution moved back in its
-    // favor, not a regression under either catalog. Removed per this file's
-    // own stated precedent ("keeping them would have pinned a false
-    // attribution").
+    // "react/react-code-review::check the react hooks in this pull request
+    // for rules of hooks violations" was pinned here after the #719 merge
+    // (outranked by `vue/vue-code-review`). Two independent flows re-measured
+    // it and found it now selects correctly again (`selected: true`):
+    // flow 336 (Wave 4 batch 4 — csharp-dotnet/swift-ios/kotlin-android/
+    // flutter-dart joined, score 0.700, rank 1) and flow 338 (W4 batch 6 —
+    // docker-k8s-terraform/ci-github-gitlab joined). Corpus-wide IDF
+    // redistribution moved back in its favor under either catalog
+    // independently. Removed per this file's own stated precedent
+    // ("keeping them would have pinned a false attribution").
   ]);
 
   // `KNOWN_HONEST_LOSSES` is asserted directly below (`test.each` — a real,
@@ -946,47 +959,32 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // angular, nextjs-nuxt, mobx): the catalog grew from 90 to 110 skills and
   // 513 to 642 triggers, so the previous ceiling of 119 no longer describes
   // this catalog and would either false-fail (too low) or stop ratcheting
-  // anything (if left too high). 155 was the measured total at that point
-  // (167 pre-existing on `main` against the same merged catalog — see the
-  // flow 334 journal for the exact measurement method and the full
-  // before/after accounting).
+  // anything (if left too high). 155 was the measured total against the
+  // merged 110-skill catalog (167 pre-existing on `main` against the same
+  // merged catalog — see the flow 334 journal for the exact measurement
+  // method and the full before/after accounting).
   //
-  // RE-MEASURED AGAIN after flow 338 (W4 batch 6) added docker-k8s-terraform
-  // and ci-github-gitlab (no scorer change — this flow only grows the
-  // catalog): 119 skills, 684 triggers, 157 failing. Of the 42 new
-  // triggers, only 3 are the new packs' own honest misses
-  // (docker-k8s-terraform-build-fix's "terraform plan wants to destroy and
-  // recreate this resource", "this Dockerfile permission denied error",
-  // "kubectl apply is rejecting this manifest" — realistic phrasings, not
-  // reworded to force a pass, per this program's standing rule against
-  // gaming the router). The rest of the net +2 (157 vs the prior 155) is
-  // the same corpus-wide IDF-redistribution effect documented above for
-  // the #719 merge.
+  // Two flows then independently grew the catalog further and each
+  // re-measured against their OWN branch: flow 336 (Wave 4 batch 4 —
+  // csharp-dotnet/swift-ios/kotlin-android/flutter-dart) reached 181/755
+  // (25 of the increase the four new packs' own triggers); flow 338 (W4
+  // batch 6 — docker-k8s-terraform/ci-github-gitlab, plus a
+  // stocktake-tie-break fix) reached 158/685 (3 of the increase the new
+  // packs' own honest misses, 1 a tie-break trigger, the rest corpus-wide
+  // IDF redistribution). Neither number describes the MERGED catalog both
+  // batches now share.
   //
-  // A first pass at this flow's honest-gate fix (commit b2ea46de) added 4
-  // more triggers and moved this ceiling to 159/688 — review round 1 found
-  // two of those four (docker-k8s-terraform-build-fix's Helm-render
-  // trigger, ci-pipeline-build-fix's "Resource not accessible" trigger)
-  // were near-copies of the FAILING eval prompts they were meant to fix
-  // (Jaccard 0.57/0.64 against `evals.json`'s own trigger-accuracy
-  // prompts), which is gaming the router, not fixing a scope gap. Reverted
-  // (commit after df55ec30, this same review round) back to 157/684 — the
-  // 159/688 ceiling this comment used to cite was never the honest number
-  // and should not be treated as a prior baseline.
-  //
-  // RE-MEASURED AGAIN (same review, one more fix): `runStocktake`'s
-  // skill-specific-reason guard (W1-AC11) found `ci-pipeline-build-fix`
-  // and `orchestration/feature-dev` producing byte-identical stocktake
-  // evidence once each skill's own id is stripped -- a coincidental tie
-  // (same trigger count, same closest neighbor, same rounded overlap
-  // score), not a copy-paste defect in either skill. Broke the tie with
-  // one new, realistic trigger on `ci-pipeline-build-fix` ("this step
-  // references a repo secret that doesn't exist, the job just fails
-  // silently") rather than touching the unrelated, out-of-scope
-  // `feature-dev` skill. 119 skills, 685 triggers, 158 failing -- the new
-  // trigger is itself an honest miss (not reworded to force a pass); no
-  // other trigger's pass/fail state changed (157 -> 158 is a clean +1 for
-  // the +1 new trigger, no redistribution noise this time).
+  // MERGE RE-MEASUREMENT (this merge commit, HEAD unchanged before/after,
+  // `bun scratch-ratchet-merge.ts`-style full scan against the combined
+  // 136-skill catalog): 185 of 789 triggers fail. Per-pack accounting: 25
+  // are batch 4's own triggers (matches its own branch measurement exactly
+  // — unaffected by batch 6 joining), 4 are batch 6's own triggers
+  // (matches its own branch measurement of 3 honest misses + 1 tie-break
+  // trigger). The remaining 156 are the pre-existing/corpus-redistribution
+  // failures neither batch's own triggers caused — close to, not identical
+  // to, either batch's own 155-baseline arithmetic (155 + 25 + 4 = 184 vs.
+  // the measured 185), the same single-trigger redistribution noise
+  // documented for every earlier merge in this comment's history.
   //
   // MERGED (flow 337, Wave 4 batch 5): merging origin/main (which by then
   // included Wave 4 batch 6 — docker-k8s-terraform, ci-github-gitlab, and
@@ -1008,13 +1006,29 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // lowering the count further does not itself fail this test — only a
   // REGRESSION (more failures than this) does.
   // `checkSkillSelectedLeaveOneOut` rebuilds the full lexical index from
-  // scratch on every call (no cross-call caching), so scanning all 784
-  // triggers against the 136-skill catalog is O(triggers x catalog) —
-  // CI's runner (slower/cold-cache) exceeded bun's default 5000ms test
-  // timeout once the catalog grew past the #719 merge; kept generous here
-  // too. Explicit timeout, not a product change.
+  // scratch on every call (no cross-call caching), so scanning the full
+  // merged catalog is O(triggers x catalog) — CI's runner (slower/
+  // cold-cache) exceeded bun's default 5000ms test timeout once the
+  // catalog grew past the #719 merge; kept generous here too. Explicit
+  // timeout, not a product change.
+  //
+  // FINAL MERGE RE-MEASUREMENT (batch 4's PR #738 landed this merge
+  // commit second, per the note above — re-measuring against the fully
+  // combined batch-4 + batch-5 + batch-6 catalog rather than trusting
+  // either side's own number, `bun scratch-ratchet-merge2.ts`-style full
+  // scan, HEAD unchanged before/after): 212 of 885 triggers fail across
+  // 152 skills. Per-pack accounting: 26 are batch 4's own triggers (was
+  // 25 on batch 4's own branch — one more lost to redistribution once
+  // batch 5 also joined), 23 are batch 5's own (close to its own
+  // branch's ~21-of-110 measurement), 4 are batch 6's own (matches its
+  // branch measurement exactly). The remaining 159 is pre-existing/
+  // corpus-redistribution noise unrelated to any one batch's own
+  // triggers — the same pattern every earlier merge into this shared
+  // catalog has shown (155 + 26 + 23 + 4 = 208 vs. the measured 212, a
+  // small cumulative redistribution delta across three merges, not a
+  // defect in any single pack).
   test(
-    "ratchet: no more than 184 of the 784 bundled triggers fail checkSkillSelectedLeaveOneOut",
+    "ratchet: no more than 212 of the bundled triggers fail checkSkillSelectedLeaveOneOut",
     () => {
       let failing = 0;
       for (const entry of catalog) {
@@ -1022,7 +1036,7 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
           if (!checkSkillSelectedLeaveOneOut(trigger, entry.id, catalog, trigger).selected) failing++;
         }
       }
-      expect(failing).toBeLessThanOrEqual(184);
+      expect(failing).toBeLessThanOrEqual(212);
     },
     20000,
   );

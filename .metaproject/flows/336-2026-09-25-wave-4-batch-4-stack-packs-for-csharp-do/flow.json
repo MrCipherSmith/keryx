@@ -1,0 +1,509 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "336",
+  "slug": "wave-4-batch-4-stack-packs-for-csharp-do",
+  "title": "Wave 4 batch 4: stack packs for csharp-dotnet, swift-ios, kotlin-android, flutter-dart",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T15:14:46.872Z",
+  "updatedAt": "2026-09-25T18:47:35.891Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T18:47:26.831Z",
+      "note": "4 pack.json files verified: id/family/modules/detectionMarkers/provenance/stability experimental/skills/agentProfile all present (stack-packs.test.ts 184/184 pass)"
+    },
+    "AC2": {
+      "at": "2026-09-25T18:47:27.121Z",
+      "note": "authoring-lint.test.ts + authoring-lint-guard.test.ts 31/31 pass; every rule paths: glob scoped to .cs/.swift/.kt,.kts/.dart with extends: common"
+    },
+    "AC3": {
+      "at": "2026-09-25T18:47:27.396Z",
+      "note": "STACK_EXTENSIONS entries added for all 4 ids in src/gdskills/governance/authoring-lint.ts"
+    },
+    "AC4": {
+      "at": "2026-09-25T18:47:27.675Z",
+      "note": "stack-pack-eval-integrity.test.ts I1-I11 all pass for the 16 skills; each evals.json has >=6 positives/>=6 negatives with sibling near-misses"
+    },
+    "AC5": {
+      "at": "2026-09-25T18:47:27.965Z",
+      "note": "Phase A shipped agents:[] for all 4 packs; superseded post-gate by real reasons in the same field, still agents:[] since none cleared the gate"
+    },
+    "AC6": {
+      "at": "2026-09-25T18:47:34.740Z",
+      "note": "install-manifest.json: 4 module pairs, 4 components, 4 profiles, full profile updated; validates against install-manifest.schema.json"
+    },
+    "AC7": {
+      "at": "2026-09-25T18:47:35.033Z",
+      "note": "stack-pack-eval-integrity.test.ts 3579/3579, stack-packs.test.ts 184/184, authoring-lint*.test.ts 31/31, broader catalog guard suite 487/487, all green"
+    },
+    "AC8": {
+      "at": "2026-09-25T18:47:35.310Z",
+      "note": "diff vs origin/main confirmed clean: only flow package, 4 pack dirs, install-manifest.json, authoring-lint.ts, stack-pack-eval-integrity.test.ts, judge-recordings, W1/W2 docs; no package.json/CHANGELOG.md release-section edit"
+    },
+    "AC9": {
+      "at": "2026-09-25T18:47:35.598Z",
+      "note": "16 skills each ran skills eval once, HEAD unchanged start to end; all 4 packs stability stays experimental, agent-refs.json agents:[] with real per-skill numbers"
+    },
+    "AC10": {
+      "at": "2026-09-25T18:47:35.891Z",
+      "note": "W1-stack-catalog.md Implementation notes section and W2-agent-catalog.md 0.1.12 changelog entry both committed (46382387)"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:21:24.988Z",
+            "outcome": "started",
+            "detail": "dispatching 4 parallel sonnet workers, one per stack pack"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:38:24.986Z",
+            "outcome": "started",
+            "detail": "running offline integrity/lint guard tests scoped to the 4 new packs and shared wiring"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:39:09.538Z",
+            "outcome": "started",
+            "detail": "runner self-review: diff scope, stability/agents, offline checks all green"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T15:14:46.872Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T15:20:56.639Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T15:21:00.881Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T15:21:04.524Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T15:21:24.988Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — dispatching 4 parallel sonnet workers, one per stack pack"
+    },
+    {
+      "at": "2026-09-25T15:38:19.945Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T15:38:24.986Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — running offline integrity/lint guard tests scoped to the 4 new packs and shared wiring"
+    },
+    {
+      "at": "2026-09-25T15:38:25.275Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T15:39:09.538Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — runner self-review: diff scope, stability/agents, offline checks all green"
+    },
+    {
+      "at": "2026-09-25T15:39:09.813Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T18:46:25.727Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 4 pack.json files verified: id/family/modules/detectionMarkers/provenance/stability experimental/skills/agentProfile all present (stack-packs.test.ts 184/184 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:26.021Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: authoring-lint.test.ts + authoring-lint-guard.test.ts 31/31 pass; every rule paths: glob scoped to .cs/.swift/.kt,.kts/.dart with extends: common (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:26.352Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: STACK_EXTENSIONS entries added for all 4 ids, commit 05c24a71 parent (authoring-lint.ts edit committed pre-rebase, merged post-rebase) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:33.356Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: stack-pack-eval-integrity.test.ts I1-I11 all pass for the 16 skills (only expected pending-Phase-B AG failures before calibration, now cleared); each evals.json has >=6 positives/>=6 negatives with sibling near-misses (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:33.689Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Phase A shipped agents:[] for all 4 packs; superseded post-gate by real reasons in the same field, still agents:[] since none cleared the gate (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:34.023Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: install-manifest.json: 4 module pairs, 4 components, 4 profiles, full profile updated; verified valid against install-manifest.schema.json (stack-packs.test.ts manifest-parse step) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:39.509Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: stack-pack-eval-integrity.test.ts 3579/3579, stack-packs.test.ts 184/184, authoring-lint*.test.ts 31/31, plus broader catalog guard suite 487/487, all green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:46:39.803Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: diff vs 335f730c/origin/main confirmed clean: only flow package, 4 pack dirs, install-manifest.json, authoring-lint.ts, stack-pack-eval-integrity.test.ts, judge-recordings, and W1/W2 docs; no package.json/CHANGELOG.md release-section edit (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:13.597Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"(new)\" -> \"The honest 10-trial DeepSeek gate (skills eval --scope bundled --runner deepseek:deepseek-chat --judge deepseek:deepseek-chat --strictness high --trials 10) has run once per skill with HEAD unchanged start to end, and each pack's final stability/agent-refs.json reflects exactly what that recorded run showed -- never inflated by a mid-run edit.\" (AC9's original line used a parenthetical before the colon (\"AC9 (Phase B, ...):\"), which the freeze parser's - ACn: pattern never matched, so it silently dropped from the frozen set at 8 criteria. Fixing the format now that Phase B has real gate results to record.)"
+    },
+    {
+      "at": "2026-09-25T18:47:19.380Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"(new)\" -> \"W1-stack-catalog.md and W2-agent-catalog.md gain an Implementation notes: Wave 4 batch 4 (flow 336) section (or equivalent changelog entry) recording what landed, matching the style of the flow 314/316/317/318 sections already in W1.\" (Same parenthetical-before-colon formatting bug as AC9; fixing now that the docs update has landed.)"
+    },
+    {
+      "at": "2026-09-25T18:47:19.672Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(new)\" -> \"A PR is opened against main, an adversarial Opus review using the stack-pack-lessons.md checklist finds 0 blocker/major findings (minors may be deferred per the standing rule), and CI is green before merge.\" (Same parenthetical-before-colon formatting bug as AC9/AC10; fixing before opening the PR.)"
+    },
+    {
+      "at": "2026-09-25T18:47:26.831Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 4 pack.json files verified: id/family/modules/detectionMarkers/provenance/stability experimental/skills/agentProfile all present (stack-packs.test.ts 184/184 pass) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:27.121Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: authoring-lint.test.ts + authoring-lint-guard.test.ts 31/31 pass; every rule paths: glob scoped to .cs/.swift/.kt,.kts/.dart with extends: common (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:27.396Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: STACK_EXTENSIONS entries added for all 4 ids in src/gdskills/governance/authoring-lint.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:27.675Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: stack-pack-eval-integrity.test.ts I1-I11 all pass for the 16 skills; each evals.json has >=6 positives/>=6 negatives with sibling near-misses (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:27.965Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Phase A shipped agents:[] for all 4 packs; superseded post-gate by real reasons in the same field, still agents:[] since none cleared the gate (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:34.740Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: install-manifest.json: 4 module pairs, 4 components, 4 profiles, full profile updated; validates against install-manifest.schema.json (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:35.033Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: stack-pack-eval-integrity.test.ts 3579/3579, stack-packs.test.ts 184/184, authoring-lint*.test.ts 31/31, broader catalog guard suite 487/487, all green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:35.311Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: diff vs origin/main confirmed clean: only flow package, 4 pack dirs, install-manifest.json, authoring-lint.ts, stack-pack-eval-integrity.test.ts, judge-recordings, W1/W2 docs; no package.json/CHANGELOG.md release-section edit (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:35.598Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: 16 skills each ran skills eval once, HEAD unchanged start to end; all 4 packs stability stays experimental, agent-refs.json agents:[] with real per-skill numbers (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T18:47:35.891Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: W1-stack-catalog.md Implementation notes section and W2-agent-catalog.md 0.1.12 changelog entry both committed (46382387) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T18:46:25.727Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:46:26.021Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:46:26.352Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:46:33.356Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:46:33.688Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:46:34.023Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:46:39.509Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:46:39.803Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:e1bc68d2c40595a1329100c4970d6f1faf75d25a22c3bd48f6729fe0d8f8f8bc"
+    },
+    {
+      "at": "2026-09-25T18:47:26.831Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:27.121Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:27.396Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:27.675Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:27.965Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:34.740Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:35.033Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:35.310Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:35.598Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    },
+    {
+      "at": "2026-09-25T18:47:35.891Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:1038da5651df4030c36926ec2f6395da09d9e47e91a4819b02ec14fc124a9b89"
+    }
+  ]
+}

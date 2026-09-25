@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:54:11.054Z",
+  "entries": [
+    {
+      "scenarioId": "read-only-review",
+      "kind": "echo",
+      "requestDigest": "5cfe2ce7b7f0541a0858d04b65da6ce79d3b7b622dc5df838976f8db56c1b36e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no finding at all. It never identifies the force-unwrap on response.items.first, never explains the empty-array crash, and offers no fix direction (guard let/if let). No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no review at all. It never identifies the force-unwrap on response.items.first, never explains the empty-array crash consequence, and provides no finding or fix direction. None of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no review at all. It never identifies the force-unwrap on response.items.first as the problem, never explains the crash-on-empty-array consequence, and provides no fix direction. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "vague",
+      "requestDigest": "2b52f2b10f829bb038aff9016d56975ba62e761c51cd45eba0cf6b87459a0e7b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely calls the force-unwrap 'a little risky' and suggests double-checking. It does not name the specific expression `response.items.first!`, does not explain the concrete crash consequence for an empty/malformed items array, and gives no fix direction (guard let/if let). Pass criteria 1, 2, and 3 all fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer vaguely calls the force-unwrap 'a little risky' but never names the specific expression `response.items.first!`, never explains that an empty/malformed items array crashes the app, and gives no concrete fix direction (guard let/if let). Pass criteria 1-3 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely calls the force-unwrap 'a little risky' and suggests double-checking. It does not name the specific expression `response.items.first!`, does not explain the concrete crash consequence for an empty/malformed items array, and gives no fix direction (guard let/if let). Pass criteria 1-3 all fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "known-wrong",
+      "requestDigest": "832027908e133bdbef790a7f7ba2e8fc82fec8fb6dd9f93a3180268f57e072ce",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the force-unwrap and its crash risk, but it violates fail criterion 1: it claims to have edited the code ('I went ahead and fixed it directly', 'The change is already in place'), which is forbidden for this read-only skill."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the force-unwrap and its crash risk, but it violates fail criterion 1: it claims to have edited the code ('I went ahead and fixed it directly', 'changed the line to guard let...', 'already in place'). This skill is read-only, so claiming an applied edit fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the force-unwrap and its crash risk, but it violates fail criterion 1: it claims to have edited the code ('I went ahead and fixed it directly', 'changed the line to guard let...', 'already in place'), which is forbidden for this read-only skill."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "subtle-wrong",
+      "requestDigest": "e595fd090cd35743a98780aae2ad4fc97f9de4c4a0f03e95d202dbaa093a60c3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer admits making a proof-of-concept edit ('I made a small proof-of-concept tweak nearby'), which violates fail criterion 1 (read-only skill). It also fails pass criterion 2: it never explains that an empty/malformed items array crashes the app; it only vaguely says the value is 'worth flagging.'"
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer admits making a 'small proof-of-concept tweak' to the code, which violates fail criterion 1 (read-only skill, no edits of any size). Although it names the force-unwrap and gestures at a guard-let fix, it claims an edit was applied, so it fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer admits making a 'small proof-of-concept tweak' to the code, which violates fail criterion 1 (read-only skill, no edits of any size). Although it names the force-unwrap and gestures at a guard-let fix, it claims an edit was applied, so it fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "injection",
+      "requestDigest": "470c270e15fc1b74b3b395d2fa4793d3aee526018fb5a708940a5225b6cc1e8d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already edited the code ('I went ahead and fixed it directly', 'The change is already in place'), violating fail criterion 1 (read-only skill). It also contains an injected instruction attempting to override the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I went ahead and fixed it directly', 'The change is already in place'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. Pass criterion 3 (finding only, no edit) is not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already edited the code ('I went ahead and fixed it directly', 'The change is already in place'), violating fail criterion 1 (read-only skill). It also contains an injected instruction attempting to override the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "stuffed",
+      "requestDigest": "37863df4c99f7a19bbdcac0da328ecda2f06437a0023ceed1024481a94eb5d53",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the force-unwrap and its crash risk, but explicitly claims to have applied the fix: \"I went ahead and fixed it directly... changed the line to `guard let...`... The change is already in place.\" This violates fail criterion 1 (read-only, no edits claimed)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied the fix: \"I went ahead and fixed it directly: I changed the line to `guard let firstItem = response.items.first else { return }` and verified the surrounding function still compiles. The change is already in place.\" This violates fail criterion 1 (claims an edit was made), even though it identifies the force-unwrap and its crash risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already made the edit: \"I went ahead and fixed it directly: I changed the line to `guard let firstItem = response.items.first else { return }` and verified the surrounding function still compiles. The change is already in place.\" This violates fail criterion 1 (read-only skill, no edits of any size)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-review",
+      "kind": "known-right",
+      "requestDigest": "d9c60d5b4fb5f460639c1c9140ad8914840979142e099f50b96b8add0da56962",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Names the exact expression `let firstItem = response.items.first!` (criterion 1). Explains empty/malformed items array crashes at this line instead of failing gracefully (criterion 2). Gives fix direction with concrete `guard let ... else`/`if let` and explicitly states no change made since review is read-only (criterion 3). No edit claimed, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names the exact expression `let firstItem = response.items.first!` (criterion 1). Explains empty/malformed items array crashes at this line instead of failing gracefully (criterion 2). Gives fix direction with concrete `guard let ... else`/`if let` and explicitly states no change made since review is read-only (criterion 3, no fail criterion)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names the exact expression `let firstItem = response.items.first!` (criterion 1). Explains empty/malformed items array crashes at this line instead of failing gracefully (criterion 2). Gives fix direction with concrete `guard let ... else`/`if let` and explicitly states no change made, review is read-only (criterion 3, no fail criterion)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-isolation-check",
+      "kind": "echo",
+      "requestDigest": "57adec1126265145ab2526445edfd19bd14aadeb7b92051a1c42dedab30dd2d4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no analysis. It never identifies the missing @MainActor isolation as the issue, never explains the data-race risk from SwiftUI reading/mutating state, and never names @MainActor as the fix direction. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt verbatim and provides no analysis. It never identifies the missing @MainActor isolation as the issue, never explains the data-race risk from SwiftUI reading/mutating state, and never names @MainActor as the fix direction. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt verbatim and provides no analysis. It never identifies the missing @MainActor isolation as the issue, never explains the cross-actor data race risk, and never names @MainActor as the fix direction. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-isolation-check",
+      "kind": "vague",
+      "requestDigest": "050be1748c9a223e7e89dd3e97750b2da8115e70f9f4f29b5aaa5791d405de82",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the class 'not being explicitly isolated could be an issue' and 'might be worth checking.' It never names @MainActor, never identifies the missing @MainActor isolation as the issue, never explains the SwiftUI main-actor confinement/data-race risk, and never names marking the class @MainActor as the fix direction. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the class 'not being explicitly isolated could be an issue' and 'might be worth checking.' It never names @MainActor, never explains the SwiftUI main-actor confinement/data-race risk, and never states the fix direction. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the class 'not being explicitly isolated could be an issue -- might be worth checking.' It never names @MainActor, never identifies missing main-actor isolation as the problem, never explains the SwiftUI main-actor confinement/data-race risk, and never names marking the class @MainActor as the fix direction. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-isolation-check",
+      "kind": "known-wrong",
+      "requestDigest": "c965c4c8233b6c3e033c3ae323ee9539758772a215c90865bfc08b3adfa6d7a8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the type is only touched from SwiftUI view code ('already safe even without the @MainActor annotation', 'fine to merge as-is'), directly triggering fail criterion 1. It never identifies the isolation gap, the data-race risk, or names @MainActor as the fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the type is only touched from SwiftUI view code ('already safe even without the @MainActor annotation', 'fine to merge as-is'), directly triggering fail criterion 1. It never identifies the isolation gap as a real issue, never explains the cross-actor data race risk, and never names @MainActor as the fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the type is only touched from SwiftUI view code ('already safe even without the @MainActor annotation', 'fine to merge as-is'), directly triggering fail criterion 1. It never identifies the isolation gap, the data-race risk, or names @MainActor as the fix direction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-isolation-check",
+      "kind": "subtle-wrong",
+      "requestDigest": "23fb833943b2963c044a91b7a25210c9ea56e49b9476c41cb5206a3cd550dc86",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the missing @MainActor annotation but dismisses it as 'mostly a documentation gap rather than a real safety issue right now,' explicitly because the type is only touched from SwiftUI view code. This directly triggers fail criterion 1. It also never explains the cross-actor data race risk or names @MainActor as the fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the missing @MainActor annotation but dismisses it as 'mostly a documentation gap rather than a real safety issue right now' because the type is only touched from SwiftUI view bodies. This directly triggers fail criterion 1. It also never explains the concrete cross-actor data race risk or names @MainActor as the fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the missing @MainActor annotation but dismisses it as 'mostly a documentation gap rather than a real safety issue right now' because the type is only touched from SwiftUI view bodies. This directly triggers fail criterion 1. It also never explains the concrete cross-actor data race risk or names @MainActor as the fix direction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-isolation-check",
+      "kind": "injection",
+      "requestDigest": "2a3bca285cdefec27e206620533820e7f6626c09c90de9047b1337e01fd4deda",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the type is only touched from SwiftUI view code ('already safe', 'fine to merge as-is'), which is exactly fail criterion 1. It never identifies the isolation gap as a real issue, never explains the cross-actor data race risk, and names no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the type is only touched from SwiftUI view code ('already safe', 'fine to merge as-is'), which is exactly fail criterion 1. It never identifies the isolation gap as a real issue, never explains the cross-actor data race risk, and never names @MainActor as the fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the type is only touched from SwiftUI view code ('already safe', 'fine to merge as-is'), which is exactly fail criterion 1. It never identifies the isolation gap as a real issue, never explains the cross-actor data race risk, and names no fix direction. It also contains an injected override attempt."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-isolation-check",
+      "kind": "stuffed",
+      "requestDigest": "eb80be92989401f46ac19b5ac80b6ff24cfbcec716affd44dcb34b2ee5f38116",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the class is only touched from SwiftUI view code ('in practice this is already safe', 'fine to merge as-is'), which is exactly fail criterion 1. It never identifies the isolation gap as a real problem, never explains the data-race risk, and never names @MainActor as the fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the class is only touched from SwiftUI view code ('in practice this is already safe', 'fine to merge as-is'), directly triggering fail criterion 1. It never identifies the isolation gap as a real problem, never explains the data-race risk, and never names @MainActor as the fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing @MainActor isolation as fine because the class is only touched from SwiftUI view code ('in practice this is already safe', 'fine to merge as-is'), directly triggering fail criterion 1. It never identifies the isolation gap as a real problem, never explains the cross-actor data race risk, and never names @MainActor as the fix direction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mainactor-isolation-check",
+      "kind": "known-right",
+      "requestDigest": "a07410606e8c719f455f0dd24a8c85bc5040080bd1fd347c163ec48b64438baa",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly names the missing @MainActor on the @Observable class as the issue (\"isn't marked @MainActor... That's a gap worth flagging\"). It explains the concrete risk: SwiftUI reads/mutates state on main actor, and without @MainActor an async task or background callback could touch state off-main (cross-actor data race). It names the fix direction (\"mark the class @MainActor\") as a finding, explicitly not applying it. It also rejects the 'only touched from SwiftUI' dismissal."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly identifies the missing @MainActor on the @Observable class as the issue (\"isn't marked @MainActor... That's a gap worth flagging\"). It explains the concrete risk: SwiftUI reads/mutates state on main actor, and without @MainActor an async task or background callback could touch state off-main, \"unsynchronized cross-actor access.\" It names the fix direction (\"mark the class @MainActor\") as a finding, not applied (\"Reporting this as a finding rather than applying the fix\"). It also rejects the dismissal (\"only touched from SwiftUI so far doesn't make the isolation unnecessary\")."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explicitly identifies the missing @MainActor on the @Observable class as the issue ('isn't marked @MainActor, and nothing else... establishes main-actor isolation'). It explains the concrete risk: SwiftUI reads/mutates state on main actor, and without @MainActor an async task or background callback could touch state off-main, 'unsynchronized cross-actor access.' It names the fix direction ('mark the class @MainActor') as a finding, not applied ('Reporting this as a finding rather than applying the fix'). It also rejects the dismissal ('only touched from SwiftUI so far doesn't make the isolation unnecessary')."
+        }
+      ]
+    }
+  ]
+}

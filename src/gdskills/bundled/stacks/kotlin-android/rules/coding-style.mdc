@@ -1,0 +1,89 @@
+---
+extends: common
+paths: ["**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Kotlin/Android coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern
+Kotlin/Android idiom. Applies only to `*.kt`/`*.kts` files — everything
+not Kotlin-specific still comes from the common rules this file `extends`.
+
+## Naming and structure
+
+- `PascalCase` for classes, objects, and composables (a `@Composable`
+  function that emits UI is named as a noun, `UserProfileCard`, not a verb);
+  `camelCase` for functions, properties, and local variables; `SCREAMING_SNAKE_CASE`
+  only for `const val` compile-time constants.
+- A `@Composable` function that returns a value instead of emitting UI
+  (e.g. `rememberX`) still reads as a normal function name, not a noun —
+  reserve the noun-style name for functions that actually emit UI.
+- Keep a file's top-level surface small: one primary class/object per
+  file named after it, with small private helpers colocated rather than
+  scattered into a shared `Utils.kt`.
+- Package names are all lowercase, no underscores, matching the directory
+  layout (`com.example.feature.profile`, not `com.example.Feature.Profile`).
+
+## Data classes vs regular classes
+
+- Use `data class` for a type whose identity is its held values (a DTO, a
+  UI state holder, a value object needing `equals`/`hashCode`/`copy`) —
+  never a `data class` for something with real identity or mutable
+  reference semantics (an Android `Activity`, a repository, a singleton
+  manager).
+- Prefer `copy()` with named parameters to produce a modified instance
+  over building a fresh constructor call by hand; it keeps every unrelated
+  field unchanged and the diff at a call site small when a new field is
+  added later.
+- A `data class` holding UI state should default every field to a sane
+  initial value so `State()` (or `UiState()`) alone is a valid starting
+  point.
+
+## Null-safety idiom
+
+- Prefer a safe call (`?.`) or the Elvis operator (`?:`) over `!!`; a
+  forced-unwrap should be reserved for a value the type system cannot
+  express as non-null but that a prior check (or the language, e.g. inside
+  a `requireNotNull` block) has already proven non-null at that point —
+  never as a shortcut past a compiler nullability warning.
+- Use `let` for a null-checked scope over a nullable receiver
+  (`value?.let { ... }`) when the block needs the unwrapped value once;
+  avoid chaining several `?.let` calls where a single `if (value != null)`
+  smart-cast reads more clearly.
+- Prefer `requireNotNull(x) { "why x must be non-null here" }` over `x!!`
+  at a boundary (constructor, public function entry) — it fails with a
+  message that explains the invariant instead of a bare
+  `NullPointerException`.
+- Model "value or absent" with a nullable type or a sealed result type,
+  not a sentinel value (`-1`, `""`) that callers have to remember to check
+  for.
+
+## Sealed classes/interfaces for state modeling
+
+- Model a UI or domain state with a `sealed interface`/`sealed class`
+  hierarchy (`Loading`, `Success(data)`, `Error(throwable)`) rather than a
+  single class with several nullable fields and a separate `isLoading`
+  boolean — the compiler then forces an exhaustive `when` at every call
+  site, so a new state can't be silently unhandled.
+- Prefer a `sealed interface` over `sealed class` when a variant needs no
+  shared state or behavior; reach for `sealed class` only when the
+  variants share a common property or method implementation.
+- Keep a sealed hierarchy's variants in the same file (or a `sealed`-file
+  group) as the parent — Kotlin does not require this, but scattering
+  variants across files makes the exhaustiveness check hard to audit by
+  reading.
+
+## Extension functions
+
+- Add an extension function to attach behavior to a type this module does
+  not own (or to keep a small, focused helper out of a growing class) —
+  not to route around giving a type a proper method when the type is
+  already yours to edit.
+- Keep an extension's receiver type narrow and its name unambiguous
+  (`String.toDisplayDate()`, not a generic `Any.format()`); an extension
+  with a vague name invites collisions and surprises at the call site.
+- Avoid extension-function sprawl on core types (`String`, `Int`, `List`)
+  for one-off, feature-specific logic — a feature-scoped extension on a
+  feature-scoped type keeps the change's blast radius visible.

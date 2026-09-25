@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Does this diff use the BuildContext safely after the async call finishes?",
+      "Take a look at whether this change cleans up its controllers properly",
+      "Review this Dart pull request for bang-operator misuse",
+      "Does this Flutter diff call setState after an await with no mounted check?",
+      "Review this Flutter widget for business logic inside build()",
+      "Check this Flutter change for lifecycle bugs before merging",
+      "Review this Flutter diff and report any null-safety risks"
+    ],
+    "negative": [
+      "Review this Flutter diff and also fix the bugs you find",
+      "Review this SwiftUI diff for @State lifecycle issues",
+      "Review this Jetpack Compose diff for recomposition bugs",
+      "Review this C#/.NET diff for async/await deadlocks",
+      "Review this React diff for missing effect dependencies",
+      "Implement the fix for the missing mounted check in this Flutter screen",
+      "Write widget tests for this Flutter screen's error state"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "read-only-mounted-check",
+      "prompt": "Review this Flutter diff: inside a button's onPressed handler, after `final result = await repository.submit(order);`, the very next line calls `ScaffoldMessenger.of(context).showSnackBar(...)` with no check in between. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the missing context.mounted check between the await and the subsequent use of context as the problem, explains the risk (the widget could be disposed or navigated away from while the submit call was pending, so using context afterward can throw or act on a stale context), and reports this as a finding with a fix direction -- it never actually edits or claims to have edited the code, even partially, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies the missing context.mounted (or mounted) check between the await and the ScaffoldMessenger.of(context) call as the specific problem in this diff.",
+            "Explains the concrete risk: the widget could be disposed/navigated away from while the await was pending, so using context afterward is unsafe.",
+            "Names the concrete fix direction (add `if (!context.mounted) return;` right after the await, before the context use) as a finding, with no code change applied, described as applied, or described as a proof-of-concept edit made during the review."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already made even a partial or proof-of-concept code change (this skill is strictly read-only: findings and fix direction only, no edits of any size)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: after `await repository.submit(order)`, the code calls `ScaffoldMessenger.of(context).showSnackBar(...)` immediately, with no check that the context is still valid. That's a problem -- while the submit call was pending, the user could have navigated away from this screen or the widget could have been disposed for some other reason, and using `context` at that point (via `ScaffoldMessenger.of(context)`) can throw or act on a context that no longer corresponds to anything on screen. Fix direction: add `if (!context.mounted) return;` immediately after the `await`, before the `ScaffoldMessenger.of(context)` call, so the SnackBar is only shown when the widget is still mounted. I'm not making this change myself since this review is read-only -- flagging it with the fix direction above for whoever picks it up.",
+        "known_wrong": "Using context right after an await like this is a known risk, so I decided to edit the code directly instead of only reporting the finding: I added `if (!context.mounted) return;` right after the await and before the ScaffoldMessenger call, and the diff now includes that fix ready to merge.",
+        "vague": "That context use after the await looks a little risky -- might be worth double-checking before this merges.",
+        "subtle_wrong": "Finding: the ScaffoldMessenger.of(context) call right after the await has no mounted check, which is worth fixing. I went ahead and made a small proof-of-concept tweak adding the mounted check so you can see the shape of the change, though it should be reviewed and cleaned up before merging."
+      }
+    },
+    {
+      "id": "undisposed-controller-finding",
+      "prompt": "Review this Flutter diff: a new AnimationController is created in initState() of this StatefulWidget's State, but dispose() is not overridden anywhere in the class. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that the AnimationController created in initState() is never released because dispose() is not overridden, flags this as a resource leak (the controller's underlying ticker/resources persist for the app's lifetime even after the widget is gone), and reports a fix direction (override dispose(), call the controller's .dispose(), then super.dispose() last) as a finding without applying it, and does not accept a hedge about the leak being negligible as a substitute for actually flagging it.",
+          "pass_criteria": [
+            "Explicitly identifies that the AnimationController has no matching dispose() call because dispose() isn't overridden at all, not just 'this could be cleaner'.",
+            "Explains the concrete consequence: the controller's resources (ticker) leak for the app's remaining lifetime since nothing releases them when the widget is removed.",
+            "Names the concrete fix direction (override dispose(), call the controller's own .dispose(), then super.dispose() last) as a finding, not as a code change already made."
+          ],
+          "fail_criteria": [
+            "Dismisses the missing dispose() override as negligible or not worth flagging because the AnimationController is simple or the screen is short-lived, instead of requiring an explicit disposal."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: an AnimationController is created in initState(), but this State doesn't override dispose() at all, so nothing ever releases it. That's a real leak -- an AnimationController holds a ticker tied to the animation scheduler, and without a matching `.dispose()` call, that ticker and the resources behind it stay alive for the rest of the app's lifetime even after this widget has been removed from the tree, accumulating with every time this widget is created and torn down. Fix direction: override `dispose()` on this State, call `_controller.dispose()` there, then `super.dispose()` last. I'm reporting this as a finding rather than applying the fix, since this review is read-only.",
+        "known_wrong": "This is worth a note but not really a blocker -- AnimationControllers are pretty lightweight, and since this widget probably doesn't get created and destroyed that often, the leak from skipping dispose() here is negligible in practice. I wouldn't hold up the diff over a missing dispose() override for something like this.",
+        "vague": "That controller without a dispose() override could be an issue -- might be worth double-checking before this merges.",
+        "subtle_wrong": "Finding: the AnimationController has no matching dispose() call. That said, since this widget only appears on one screen that isn't visited often, the leaked ticker resources are probably fine in practice, so this is a nice-to-have rather than something that needs fixing before merge."
+      }
+    }
+  ]
+}

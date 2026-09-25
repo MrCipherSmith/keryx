@@ -1,0 +1,89 @@
+---
+extends: common
+paths: ["**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Kotlin/Android testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to Kotlin
+coroutine testing, Compose UI testing, and idiomatic mocking on Android.
+Applies only to `*.kt`/`*.kts` files.
+
+## Coroutine test dispatchers
+
+- Test a `suspend` function or a `ViewModel`'s coroutine-driven behavior
+  with `kotlinx-coroutines-test`'s `runTest { }`, not a real `delay` or a
+  blocking sleep — `runTest` runs on a `TestScope` whose virtual clock
+  skips real delay time, so a function that internally waits still runs
+  the test instantly.
+- Inject a `TestDispatcher` (`StandardTestDispatcher`/
+  `UnconfinedTestDispatcher`) in place of `Dispatchers.Main`/
+  `Dispatchers.IO` for the code under test rather than letting it resolve
+  the real platform dispatcher — set `Dispatchers.setMain(testDispatcher)`
+  in a `@Before` and `Dispatchers.resetMain()` in an `@After` (or a JUnit
+  rule that wraps this) so `viewModelScope`/`Dispatchers.Main` resolves to
+  the test dispatcher instead of throwing or running on a background
+  thread the test cannot observe.
+- Prefer `StandardTestDispatcher` (queues work, you advance it explicitly
+  with `advanceUntilIdle()`/`runCurrent()`) when a test needs to assert an
+  intermediate state (e.g. a loading state before a result arrives); use
+  `UnconfinedTestDispatcher` when the test only cares about the end state
+  and wants dispatched work to run eagerly.
+- Never synchronize a coroutine test with `Thread.sleep`/a fixed `delay`
+  in the test body waiting for background work to finish — that is
+  exactly what `runTest`'s virtual time and `advanceUntilIdle()` replace.
+
+## Compose UI testing
+
+- Drive Compose UI assertions through a `ComposeTestRule`
+  (`createComposeRule()` for a standalone composable, or
+  `createAndroidComposeRule<Activity>()` when the test needs a hosting
+  Activity) — never reach into the underlying `View` tree.
+- Find nodes with semantics-based finders
+  (`onNodeWithText`, `onNodeWithContentDescription`,
+  `onNodeWithTag(testTag)`) rather than a fragile structural/index-based
+  query; add an explicit `Modifier.testTag("...")` to a composable that
+  has no stable text/content-description to key off.
+- Call `composeTestRule.waitUntil { ... }` (or
+  `composeTestRule.awaitIdle()`/`mainClock.advanceTimeUntil { }` under
+  manual clock control) to wait for an async UI update instead of a
+  fixed-duration sleep in the test.
+- Assert both structure and behavior: a node's presence/text via a
+  semantics finder, and an interaction's effect (`performClick()` then
+  assert the resulting state/text), not just that a composable rendered
+  without throwing.
+
+## Mocking at the interface boundary
+
+- Mock a `Repository`/`ApiService`/`DataSource` interface (or another
+  clearly-owned collaborator boundary) that the class under test depends
+  on — never reach inside the class under test to stub its own private
+  methods or fields; a test that mocks internals stops testing real
+  behavior and breaks on any internal refactor.
+- Prefer MockK for Kotlin code under test — it understands Kotlin
+  constructs Mockito's Java-first API handles awkwardly (`final` classes
+  by default, coroutines via `coEvery`/`coVerify`, extension functions,
+  object mocks via `mockkObject`) — unless a project has already
+  standardized on Mockito with `mockito-kotlin`; match what the project
+  already uses rather than introducing a second mocking library.
+- Use `coEvery { repo.fetch() } returns result` /
+  `coVerify { repo.fetch() }` (MockK's coroutine-aware variants) for a
+  suspend function on a mock, not the plain `every`/`verify` forms, which
+  do not handle a `suspend` member correctly.
+- Fake network/database responses at the repository or data-source
+  interface (a fake or mocked implementation returning canned data), not
+  by hitting a real network or an on-device database from a unit test —
+  reserve a real backing store for an instrumented/integration test.
+
+## Layout and lifecycle
+
+- Unit tests for a `ViewModel`/plain Kotlin class live under
+  `src/test/`; instrumented tests needing an Android context or a real
+  device/emulator (Compose UI tests, `Instrumentation`-backed tests) live
+  under `src/androidTest/` — match whichever the project's existing
+  layout uses, do not invent a third location.
+- Use JUnit rules (`MainDispatcherRule` for coroutines,
+  `createComposeRule()` for Compose) to keep dispatcher/UI setup and
+  teardown out of every individual test method.

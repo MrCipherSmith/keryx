@@ -1,0 +1,107 @@
+---
+extends: common
+paths: ["**/*.cs"]
+metadata:
+  origin: authored
+---
+
+# C#/.NET patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to
+idiomatic C#/.NET design and its common anti-patterns: async/await,
+dependency injection, LINQ, and disposal. Applies only to `*.cs` files.
+
+## Async/await
+
+- Never use `async void` except for an actual event handler
+  (`private async void Button_Click(object sender, EventArgs e)`) — any
+  exception an `async void` method throws cannot be awaited or caught by
+  its caller and crashes the process instead. Every other async method
+  returns `Task` or `Task<T>`.
+- Return `Task`/`Task<T>` for a method whose async work is on the common,
+  usually-awaited path; return `ValueTask`/`ValueTask<T>` only for a
+  hot-path method that frequently completes synchronously (a cache hit),
+  where avoiding the `Task` allocation is measured to matter — a
+  `ValueTask` must be awaited (or converted) exactly once and never
+  stored, unlike a `Task`.
+- In library code that does not need to resume on a captured context
+  (UI thread, ASP.NET classic `SynchronizationContext`), call
+  `.ConfigureAwait(false)` on an awaited `Task` to avoid an unnecessary
+  context-capture and reduce deadlock risk. Modern ASP.NET Core has no
+  such `SynchronizationContext`, so application-level request-handling
+  code in an ASP.NET Core project does not need it — match what the
+  project's own code already does.
+- Never call `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()` on a
+  `Task` from otherwise-synchronous code to "call an async method
+  synchronously" — this is sync-over-async and can deadlock when the
+  awaited call needs to resume on a context the blocking thread is
+  itself occupying. Make the calling method `async` and `await` instead;
+  if the call truly cannot become async (a legacy synchronous interface
+  boundary), that is a design problem to flag, not to paper over.
+
+## Dependency injection
+
+- Register a service at the narrowest lifetime that is correct:
+  `Singleton` for stateless or thread-safe shared state, `Scoped` for
+  per-request/per-unit-of-work state (a `DbContext`, a request-scoped
+  cache), `Transient` for cheap, stateless, or intentionally
+  non-shared instances. Never inject a `Scoped` service into a
+  `Singleton` by capturing it directly — that captures the first
+  request's instance for the app's lifetime; resolve it per-use via
+  `IServiceScopeFactory`/`IServiceProvider.CreateScope()` instead.
+- Depend on an interface (`IOrderRepository`), not a concrete
+  implementation, at a constructor boundary that DI resolves — this is
+  what makes the type unit-testable without a real database/HTTP call.
+- Prefer constructor injection for required dependencies; reserve
+  property injection for genuinely optional dependencies with a working
+  default, which is uncommon.
+
+## LINQ efficiency
+
+- Materialize a query with `.ToList()`/`.ToArray()` before enumerating it
+  more than once (in a loop that also iterates it, or across a
+  `.Count()` followed by a `foreach`) — an `IEnumerable<T>` built from a
+  `IQueryable<T>`/deferred LINQ chain re-runs the whole query (or, worse,
+  a whole database round trip) on every enumeration unless it is
+  materialized once.
+- Avoid stacking multiple `.Where()`/`.Select()` passes over the same
+  large sequence when one combined pass would do — each pass is a full
+  additional enumeration for an in-memory `IEnumerable<T>`.
+- On an `IQueryable<T>` backed by a database (EF Core), keep filtering
+  (`.Where`) and projection (`.Select`) in the query itself so they
+  translate to SQL, rather than calling `.ToList()` early and then
+  filtering in memory — the latter pulls the whole table across the wire
+  first.
+- Use `.Any()` to check for existence, never `.Count() > 0`, which forces
+  a full count when a short-circuiting existence check would do.
+
+## Disposal patterns
+
+- Any local or field holding an `IDisposable` is wrapped in a `using`
+  statement/declaration (`using var conn = new SqlConnection(...);`) or
+  disposed in a `Dispose()`/`finally` block — never left for the
+  finalizer, which is non-deterministic and, for something like an open
+  connection or file handle, holds the resource far longer than needed.
+- Use `await using` for an `IAsyncDisposable` (most modern EF Core/
+  streaming/channel types expose one) so disposal itself is awaited
+  instead of blocking a thread on synchronous `Dispose()`.
+- A class that owns one or more `IDisposable`/`IAsyncDisposable`
+  fields implements `IDisposable`/`IAsyncDisposable` itself and disposes
+  them in its own `Dispose`/`DisposeAsync`, rather than requiring every
+  caller to know which of its fields need cleanup.
+
+## Anti-patterns to flag
+
+- A "god service"/"utils" static class that accumulates unrelated
+  helper methods instead of being split along what the code actually
+  does — the same smell as a Go "god package," expressed as a static
+  class here.
+- Catching `Exception` broadly and continuing as if nothing happened,
+  instead of catching the specific exception type a call can throw (or
+  letting an unexpected one propagate) — see `rules/security.mdc` and
+  `dotnet-code-review`'s focus list for the review-time version of this
+  check.
+- Exposing a mutable `List<T>`/collection field directly as a public
+  property instead of `IReadOnlyList<T>`/`IReadOnlyCollection<T>` (or a
+  defensive copy), which lets any caller mutate internal state through a
+  reference they were only meant to read.

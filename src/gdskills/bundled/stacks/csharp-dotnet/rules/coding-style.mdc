@@ -1,0 +1,100 @@
+---
+extends: common
+paths: ["**/*.cs"]
+metadata:
+  origin: authored
+---
+
+# C#/.NET coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern C#
+idiom (new project templates enable nullable reference types by
+default since .NET 6/C# 10 — the language itself still defaults
+annotations/warnings off, so an existing project may need `<Nullable>
+enable</Nullable>` added explicitly; primary constructors and
+collection expressions since C# 12/.NET 8).
+Applies only to `*.cs` files — everything not C#-specific still comes
+from the common rules this file `extends`.
+
+## Naming and structure
+
+- `PascalCase` for types, methods, properties, and public/protected
+  members; `camelCase` for locals and parameters; a private field is
+  `_camelCase` with a leading underscore, not `m_field` or bare
+  `camelCase` that can collide with a parameter name.
+- Interfaces are prefixed `I` (`IOrderRepository`), never suffixed
+  (`OrderRepositoryInterface`).
+- One public type per file, file named after the type
+  (`OrderService.cs` for `class OrderService`), unless the type is a
+  small private nested/support type used only inside its owner.
+- File-scoped namespaces (`namespace Orders;`) instead of a nested
+  block, unless the project's existing files already use block-scoped
+  namespaces — match what is there.
+
+## Records, classes, and immutability
+
+- Prefer a `record`/`record class` for a type whose identity is its
+  value (a DTO, a command, an event, an immutable snapshot) — it gets
+  structural equality and a `with` expression for free. Reach for `class`
+  when the type has identity beyond its data, mutable state that changes
+  over its lifetime, or entity semantics an ORM tracks by reference/key.
+- Use `record struct` for a small, frequently-allocated value type where
+  avoiding heap allocation matters; default to a reference `record`
+  otherwise.
+- Favor `init`-only properties (or a primary constructor) over a
+  public setter on anything that should not change after construction —
+  a mutable public setter on a "value" type invites accidental aliasing
+  bugs.
+
+## Pattern matching and modern idiom
+
+- Prefer pattern matching (`is`, `switch` expressions, property patterns,
+  list patterns) over a chain of `if`/`else if` type checks or casts —
+  `if (shape is Circle { Radius: > 0 } c)` reads its own intent; a cast
+  followed by a separate null/type check does not.
+- Use a primary constructor (`class OrderService(IOrderRepository repo)`)
+  for a type whose constructor only assigns its parameters to fields —
+  it removes the boilerplate field-and-assignment block. Fall back to an
+  explicit constructor body once it needs validation, logic, or more than
+  trivial assignment.
+- Use collection expressions (`int[] xs = [1, 2, 3];`, `List<T> ys = [];`)
+  for new collection-literal code instead of `new[] { ... }`/
+  `new List<T> { ... }`, unless the project's existing style has not
+  adopted them yet — match what is there rather than mixing both styles
+  in one file.
+- Expression-bodied members (`public int Total => Items.Sum(i => i.Price);`)
+  for a single-expression method/property/operator; keep a full block
+  body once the member needs more than one statement or local reasoning
+  step — do not force multi-statement logic into one expression via `;`
+  chaining or nested ternaries.
+
+## Nullable reference types
+
+- New projects have the nullable annotation and warning contexts on by
+  default (`<Nullable>enable</Nullable>` in the project file) — keep it
+  on; do not add `<Nullable>disable</Nullable>` or a blanket
+  `#nullable disable` to make warnings go away.
+- A parameter, property, or return type that can genuinely be absent is
+  annotated `?` (`string? middleName`); a public member with no `?` is a
+  promise to callers that it is never null — do not violate that promise
+  with a hidden `null` return "just this once."
+- Use `ArgumentNullException.ThrowIfNull(value)` at a public API's entry
+  point for a reference-typed parameter that must not be null, instead of
+  a hand-rolled `if (value is null) throw new ArgumentNullException(...)`.
+- Resolve a nullability warning by fixing the actual null path (a real
+  null check, a non-null initializer, restructuring so the compiler can
+  see the invariant) — never with the null-forgiving operator (`value!`)
+  as a substitute for an actual guard, except at a boundary where you can
+  state in a comment exactly why the value is provably non-null there.
+
+## `var` usage
+
+- Use `var` when the right-hand side already makes the type obvious
+  (`var order = new Order();`, `var items = order.Items.ToList();`) or
+  when the concrete type is long/generic and adds no clarity
+  (`var lookup = new Dictionary<string, List<OrderLine>>();`).
+- Use an explicit type when `var` would hide the type at a call site that
+  matters for reading correctness (`var result = Parse(input);` where
+  `Parse`'s return type is not obvious from the name) or when the
+  declared type differs meaningfully from the initializer's runtime type
+  (assigning a derived type but declaring the base).

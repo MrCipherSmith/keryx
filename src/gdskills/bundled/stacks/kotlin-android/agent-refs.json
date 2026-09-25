@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "no pair -- honest DeepSeek deepseek-chat runner+judge gate (trials=10, strictness=high, flow 336) fails all 4 skills on trigger accuracy alone, never on behavior (every behavior scenario clears the 0.8 floor, mostly 1.0/1.0): compose-implementation TP 3/7 FP 0/7, kotlin-android-testing TP 3/7 FP 0/7, kotlin-android-code-review TP 4/7 FP 0/7, kotlin-android-build-fix TP 4/7 FP 0/7 (this pack's best trigger recall of the four batch-4 packs, and zero false positives across all 4 skills, but still short of the pass bar). Genuine routing weakness against a crowded catalog, not an authoring defect -- stays experimental per flow 336's stack-pack-lessons.md rule against tuning descriptions to restate failing eval prompts."
+}

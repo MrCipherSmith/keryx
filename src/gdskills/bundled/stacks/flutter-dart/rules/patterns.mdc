@@ -1,0 +1,88 @@
+---
+extends: common
+paths: ["**/*.dart"]
+metadata:
+  origin: authored
+---
+
+# Flutter/Dart patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to Flutter's
+widget lifecycle, state handling, and async patterns. Applies only to
+`*.dart` files. Flutter has no single mandated state-management story —
+`Provider`, `Riverpod`, `Bloc`, and plain `StatefulWidget` all appear
+across real projects — so this rule gives lifecycle-correct guidance that
+applies regardless of which the project has chosen; match whichever one is
+already in use rather than introducing a second approach.
+
+## Widget lifecycle correctness
+
+- `initState()` is for one-time setup that needs `this` (subscribing to a
+  controller, starting a timer, reading an inherited widget via
+  `context.dependOnInheritedWidgetOfExactType` is not yet safe here — use
+  `didChangeDependencies()` for that); it must call `super.initState()`
+  first.
+- `dispose()` releases everything `initState()` (or a later lifecycle
+  method) acquired: cancel every `StreamSubscription`, call `.dispose()`
+  on every `TextEditingController`/`AnimationController`/`FocusNode`/
+  `ScrollController` the `State` created, and call `super.dispose()` last,
+  not first. A controller created in `initState` and never disposed leaks
+  its underlying resources for the life of the app.
+- `didUpdateWidget(oldWidget)` is where a `StatefulWidget` reacts to a
+  changed constructor parameter from its parent (e.g. re-subscribing to a
+  different id) — comparing `oldWidget.someId != widget.someId` there,
+  not inside `build()`, keeps that reaction from re-running on every
+  rebuild.
+
+## setState and BuildContext after an async gap
+
+- After any `await` inside a `State` method, check `mounted` (the
+  `State`'s own property) before calling `setState()` — a `State` can be
+  disposed while the `Future` was pending, and calling `setState()` on a
+  disposed `State` throws.
+- After any `await` inside a callback that holds a `BuildContext` (a
+  button's `onPressed`, a `Future` continuation), check `context.mounted`
+  before using that `context` again — for showing a dialog/SnackBar,
+  reading `Theme.of(context)`/`Navigator.of(context)`, or anything else —
+  never assume the widget that owns it is still in the tree just because
+  the `Future` completed. This applies whether the context came from a
+  `StatefulWidget`'s own `State` or from a `StatelessWidget`'s `build`
+  parameter.
+- An early-return `if` check on `context.mounted` (or `mounted` inside
+  `State`) immediately after the `await`, before the first subsequent use
+  of `context`/`setState`, is the fix — not a `try`/`catch` around the
+  eventual error, and not skipping the check because the async call
+  "usually" resolves quickly.
+
+## Async patterns
+
+- Prefer `async`/`await` over chained `.then()` for anything beyond a
+  single continuation — sequential `await` reads top-to-bottom and
+  composes with `try`/`catch` the same way synchronous code does.
+- For a value that arrives over time rather than once, use a `Stream` and
+  a `StreamBuilder` (or the state-management approach's own stream/async
+  listener), not a `Future` polled on a timer.
+- Cancel a `StreamSubscription` created outside `StreamBuilder` (i.e. one
+  the `State` subscribes to manually) in `dispose()` — `StreamBuilder`
+  itself manages its subscription's lifecycle and needs no manual cancel.
+- Guard a `FutureBuilder`/`StreamBuilder`'s `snapshot.connectionState`
+  before reading `snapshot.data` — a `ConnectionState.waiting` or
+  `.none` snapshot with a stale or null `data` rendered as if it were
+  ready is a common source of a flashed empty/error state on first frame.
+
+## Anti-patterns to flag
+
+- A `TextEditingController`/`AnimationController`/`StreamSubscription`/
+  `FocusNode` created in `initState` with no matching release in
+  `dispose()`.
+- `BuildContext` or `setState()` used after an `await` with no
+  `context.mounted`/`mounted` check immediately before that use.
+- Business logic (network calls, parsing, validation) written directly
+  inside a `build()` method instead of a controller/view-model/state
+  object the widget merely reads from — `build()` can be called many
+  times for reasons unrelated to data changing, so anything with a side
+  effect or real cost does not belong there.
+- Mixing state-management approaches in the same feature (e.g. a
+  `Riverpod` provider read via `ref` next to an ad hoc
+  `InheritedWidget`/`setState` for the same piece of state) instead of
+  following whichever one the project has already standardized on.

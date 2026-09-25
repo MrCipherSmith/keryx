@@ -1,0 +1,38 @@
+{
+  "id": "csharp-dotnet",
+  "family": "language",
+  "modules": ["csharp-dotnet-rules", "csharp-dotnet-skills"],
+  "detectionMarkers": ["csharp", "dotnet", "c#"],
+  "provenance": { "origin": "authored", "sourceRef": "flow 336, Wave 4 batch 4" },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["dotnet-implementation"],
+    "test": ["dotnet-testing"],
+    "review": ["dotnet-code-review"],
+    "build-fix": ["dotnet-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "C#/.NET",
+    "auditFocus": [
+      "async void used outside an event handler, swallowing any exception the method throws",
+      "a blocking `.Result`/`.Wait()` call on a Task from synchronous code, risking a sync-over-async deadlock",
+      "a public API returning a nullable-looking reference type with nullable annotations disabled, or an unannotated parameter that is dereferenced without a null check",
+      "IDisposable/IAsyncDisposable fields or locals not wrapped in `using`/`await using`, leaking unmanaged resources or connections",
+      "SQL built by string interpolation/concatenation into SqlCommand.CommandText instead of parameterized queries",
+      "a unit test mocking an internal collaborator (a private helper, a concrete implementation detail) instead of the external seam (HTTP client, repository interface, database)"
+    ],
+    "buildCommands": [
+      "dotnet build",
+      "dotnet test",
+      "dotnet format --verify-no-changes",
+      "dotnet build /p:TreatWarningsAsErrors=true /p:EnforceCodeStyleInBuild=true"
+    ],
+    "fixGuardrails": [
+      "never add `#pragma warning disable` or `[SuppressMessage]` to silence a compiler/analyzer warning without fixing or explaining the underlying issue",
+      "never downgrade or disable nullable reference types (`<Nullable>disable</Nullable>` or a blanket `#nullable disable`) just to make a nullability warning disappear",
+      "never pin or downgrade a NuGet package to route around a real incompatibility without saying so in the report",
+      "fix the smallest root cause; do not refactor unrelated code while resolving a build/test/analyzer failure"
+    ]
+  }
+}

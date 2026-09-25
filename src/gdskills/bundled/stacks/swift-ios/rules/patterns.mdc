@@ -1,0 +1,112 @@
+---
+extends: common
+paths: ["**/*.swift"]
+metadata:
+  origin: authored
+---
+
+# Swift/iOS patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+Swift concurrency and SwiftUI state ownership. Applies only to `*.swift`
+files.
+
+## Swift concurrency: async/await and structured concurrency
+
+- Prefer `async`/`await` over completion-handler callbacks for new
+  asynchronous code — it reads linearly and composes with structured
+  concurrency instead of nesting closures.
+- Start concurrent child work with `async let` (a small, fixed number of
+  parallel tasks) or `TaskGroup`/`withThrowingTaskGroup` (a dynamic or
+  unbounded set of child tasks); both guarantee every child task is
+  awaited or cancelled before the parent scope exits, unlike a bare
+  unstructured `Task {}` with no owner to join it. (`Task {}` is
+  "unstructured" — it inherits the creating context's actor and priority
+  but nothing tracks its lifetime; `Task.detached {}` is a stronger,
+  rarely-needed form that inherits neither — do not use the two names
+  interchangeably.)
+- SwiftUI's `.task { }` modifier closure is already async — it is the
+  boundary, not a place to wrap another `Task {}` inside it. Reach for a
+  bare `Task {}` only at a genuine synchronous-to-async boundary with no
+  async closure already available (a button action's `Void`-returning
+  handler, a delegate callback); give it an explicit reason it does not
+  need to be joined. Prefer `.task { }` directly on a SwiftUI view over a
+  manually created `Task` when the work should be tied to the view's
+  lifetime (it is cancelled automatically when the view disappears).
+- Respect cancellation in long-running async work: check
+  `Task.isCancelled`/call `try Task.checkCancellation()` in a loop, so a
+  cancelled parent actually stops the child's work instead of running to
+  completion regardless.
+
+## Actors and @MainActor
+
+- Use `actor` to protect mutable state that multiple tasks touch
+  concurrently — its methods are implicitly isolated, so the compiler
+  (not a convention) prevents unsynchronized access, the same guarantee
+  a manual lock only provides by discipline.
+- Since the iOS 18 SDK, `View` conformance is itself `@MainActor`-isolated
+  — a view's own `body` and any `@State`/`@Binding` kept directly on the
+  view struct are already main-actor-isolated automatically, with no
+  explicit annotation needed. That isolation does NOT extend to a
+  SEPARATE type: mark any standalone type whose state SwiftUI reads or
+  mutates `@MainActor` explicitly — view models, `@Observable` stores, or
+  any other type outside the `View` struct itself that a `body` touches.
+  Isolate at the type level (`@MainActor final class ...`) rather than
+  sprinkling `@MainActor` on individual methods, unless only some of the
+  type's methods genuinely need main-actor isolation.
+- Cross an actor boundary explicitly with `await`; do not reach for
+  `@unchecked Sendable` or `nonisolated(unsafe)` to make a boundary
+  error disappear — either the type's state genuinely needs no
+  isolation (make that case explicitly, with a comment), or it needs a
+  real actor/lock, not a suppression.
+
+## Sendable conformance
+
+- A value crossing a concurrency boundary (passed into a `Task`, an
+  actor method, or a `TaskGroup` child) must be `Sendable`: a `struct`
+  or `enum` with only `Sendable` members is `Sendable` for free; a
+  `final class` with only immutable (`let`) stored properties can
+  declare conformance explicitly.
+- Do not slap `@unchecked Sendable` on a class to silence a
+  strict-concurrency diagnostic without actually auditing and
+  documenting why its mutable state cannot race — that trades a
+  compile-time guarantee for an unchecked promise, which is exactly the
+  class of bug Swift 6's data-race safety exists to catch.
+- Under the Swift 6 language mode, treat a "Sendable" or "actor
+  isolation" compiler error as a real potential data race to fix at the
+  root (add an actor, make the type immutable, or copy the value before
+  crossing), not friction to suppress.
+
+## SwiftUI state ownership
+
+- `@State` owns a value the view itself creates and is the sole owner
+  of — a simple value type, or (iOS 17+) an `@Observable` reference type
+  the view instantiates directly (`@State private var model = Model()`,
+  not `@StateObject` for `@Observable` types).
+- `@Binding` is for a child view that needs to both read and mutate a
+  value it does not own — the parent passes `$value`, and the child
+  writes through the binding instead of receiving a copy it cannot
+  propagate changes from.
+- `@Environment` is for values that are ambient to a whole subtree
+  (theme, a shared service, a feature flag) rather than threaded
+  explicitly through every initializer; do not reach for it as a
+  shortcut to avoid passing an explicit dependency that only one or two
+  views actually need.
+- A view that receives an `@Observable` model from a parent and needs to
+  pass a binding to one of its properties down further uses `@Bindable`,
+  not a manually reconstructed `Binding(get:set:)`.
+
+## Anti-patterns to flag
+
+- A retain cycle from a closure (completion handler, Combine `sink`,
+  stored callback) that captures `self` strongly when the closure
+  outlives the call that created it — use `[weak self]` and unwrap, or
+  `[unowned self]` only when `self`'s lifetime is provably guaranteed to
+  exceed the closure's.
+- Lifting a value into `@State`/`@StateObject` at the view that merely
+  displays it, when a parent further up actually owns and mutates it —
+  that duplicates state instead of using `@Binding`/`@Observable`
+  references, and the two copies drift.
+- A massive view or view-model type that owns navigation, networking,
+  and persistence together — split by responsibility the same way a
+  "god package"/"god object" is flagged in any other stack.

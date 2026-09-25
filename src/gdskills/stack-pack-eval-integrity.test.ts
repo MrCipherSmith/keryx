@@ -436,6 +436,12 @@ const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set([
   "mobx",
   "docker-k8s-terraform",
   "ci-github-gitlab",
+  // Wave 4 batch 4 (flow 336) — authored after I11 existed, so enforced
+  // from the start rather than deferred like batch 1.
+  "csharp-dotnet",
+  "swift-ios",
+  "kotlin-android",
+  "flutter-dart",
   // Wave 4 batch 5 (flow 337) — authored against I11 from the start.
   "php-laravel",
   "ruby-rails",

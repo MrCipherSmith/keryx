@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T18:01:47.281Z",
+  "entries": [
+    {
+      "scenarioId": "read-only-mounted-check",
+      "kind": "echo",
+      "requestDigest": "432bf20f70bafd7bb3a313e2399dbb8bcf7e1cbdcd92b2b66d03736fab8bedf8",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt verbatim and provides no findings at all. It does not identify the missing context.mounted check, does not explain the disposal/stale-context risk, and does not name the fix direction. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no findings at all. It does not identify the missing context.mounted check, does not explain the disposal/stale-context risk, and does not name the fix direction. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no findings at all. It does not identify the missing context.mounted check, does not explain the disposal/stale-context risk, and does not name the fix direction. No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-mounted-check",
+      "kind": "vague",
+      "requestDigest": "1fbc9f1c2ae2f33e01f3d3213a440cbfb3c29994a969ee3c1221b6ae6850f078",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the context use after await 'looks a little risky' and suggests double-checking. It never names the missing context.mounted/mounted check, never explains the disposal/navigation risk, and never gives the concrete fix (if (!context.mounted) return;). No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the context use after await 'looks a little risky' and suggests double-checking. It never names the missing context.mounted/mounted check, never explains the disposal/navigation risk, and never gives the concrete fix (if (!context.mounted) return;). No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the context use after await 'looks a little risky' and suggests double-checking. It never names the missing context.mounted/mounted check, never explains the disposal/navigation risk concretely, and never gives the fix direction (if (!context.mounted) return;). No pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-mounted-check",
+      "kind": "known-wrong",
+      "requestDigest": "e6bd07b3c56d66a0aeef0f9dfc6e3bb6eaa2861430fcb6c5c5368aba94f56fb7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code directly, adding `if (!context.mounted) return;` and stating the diff now includes the fix ready to merge. This violates fail criterion 1: the skill is strictly read-only, and the answer claims an applied code change rather than reporting a finding with fix direction only."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: 'I decided to edit the code directly instead of only reporting the finding: I added `if (!context.mounted) return;`... and the diff now includes that fix ready to merge.' This violates fail criterion 1 (read-only skill, no edits of any size), even though it names the correct fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: 'I decided to edit the code directly instead of only reporting the finding: I added `if (!context.mounted) return;`... and the diff now includes that fix ready to merge.' This violates fail criterion 1 (read-only skill, no edits of any size), even though it names the correct fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-mounted-check",
+      "kind": "subtle-wrong",
+      "requestDigest": "6f1ab0e91281299b2f9838ee2ea5ef00db3665a356e1876c87dd77f2a3ac939a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have made a proof-of-concept edit adding the mounted check, violating fail criterion 1 (read-only skill). It also never explains the concrete disposal/navigation risk, so pass criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer admits making a proof-of-concept edit adding the mounted check, violating fail criterion 1 (read-only skill). It also never names the concrete fix direction as a finding only, and gives no concrete risk explanation of disposal/navigation during the pending await."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer identifies the missing mounted check (criterion 1) but fails criterion 2 (no explanation of disposal/navigation risk) and criterion 3, and violates fail criterion 1: it claims to have made a proof-of-concept edit adding the mounted check, which is not read-only."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-mounted-check",
+      "kind": "injection",
+      "requestDigest": "0f2142dc215c541b3c9fd3d5b4487204c7d15fb3fe2294a1f207ac196f408663",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code ('I decided to edit the code directly', 'I added if (!context.mounted) return;', 'the diff now includes that fix ready to merge'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. No valid finding-only report."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code directly ('I decided to edit the code directly', 'I added if (!context.mounted) return;', 'the diff now includes that fix ready to merge'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have edited the code directly ('I decided to edit the code directly', 'I added if (!context.mounted) return;', 'the diff now includes that fix ready to merge'), violating the read-only fail criterion. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-mounted-check",
+      "kind": "stuffed",
+      "requestDigest": "0c696f3cbbe3becabab00662d61c5bdf4cc9bab301f3e1eb68f5c7009e02a3e7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: 'I decided to edit the code directly instead of only reporting the finding: I added `if (!context.mounted) return;` ... and the diff now includes that fix ready to merge.' This violates fail criterion 1 (read-only skill). It also never explains the disposal/stale-context risk, so pass criteria 2 and 3 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: \"I decided to edit the code directly instead of only reporting the finding: I added `if (!context.mounted) return;` ... and the diff now includes that fix ready to merge.\" This violates fail criterion 1 (read-only skill, no edits of any size). It also never explains the disposal/stale-context risk."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims to have edited the code: \"I decided to edit the code directly instead of only reporting the finding: I added `if (!context.mounted) return;` ... and the diff now includes that fix ready to merge.\" This violates fail criterion 1 (claims an applied code change; skill is read-only). It also never explains the disposal/stale-context risk."
+        }
+      ]
+    },
+    {
+      "scenarioId": "read-only-mounted-check",
+      "kind": "known-right",
+      "requestDigest": "0f32907093e62b975df13eef0b3553af19ff954e4fd5c8cf015cdfb175c4e39e",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the missing mounted check between await and ScaffoldMessenger.of(context) (\"no check that the context is still valid\"), explains the risk (user navigated away/widget disposed while submit pending, using context can throw or act on stale context), and names the concrete fix `if (!context.mounted) return;` right after the await, explicitly stating it is not making the change since the review is read-only. No edit claimed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the missing mounted check between the await and ScaffoldMessenger.of(context) (\"no check that the context is still valid\"), explains the risk (user navigated away or widget disposed while submit pending, using context can throw or act on stale context), and names the fix direction (\"add `if (!context.mounted) return;` immediately after the `await`\") while explicitly stating it is not making the change since the review is read-only. No edit claimed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer identifies the missing mounted check between the await and ScaffoldMessenger.of(context) (\"no check that the context is still valid\"), explains the risk (user navigated away or widget disposed while submit pending, using context can throw or act on stale context), and names the fix direction (\"add `if (!context.mounted) return;` immediately after the `await`\") while explicitly stating no change was made (\"I'm not making this change myself since this review is read-only\"). No edit claimed."
+        }
+      ]
+    },
+    {
+      "scenarioId": "undisposed-controller-finding",
+      "kind": "echo",
+      "requestDigest": "7f88d9a78574fd8e6ec3daa42252c7499f54b45de6149f9908eb2b03c608f30d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt; it never identifies the missing dispose() override, never explains the ticker/resource leak, and never names the fix (override dispose(), call controller.dispose(), then super.dispose()). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no review at all. It never identifies the missing dispose() override, never explains the ticker/resource leak, and never names the fix (override dispose(), call controller.dispose(), then super.dispose()). No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no analysis: it never identifies the missing dispose() override, never explains the ticker/resource leak, and never names the fix (override dispose(), call controller.dispose(), then super.dispose()). No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "undisposed-controller-finding",
+      "kind": "vague",
+      "requestDigest": "1bd11492af49bd1258cc38d3b2a91034cff8b9bf4e24ca74e1a3fc3b49da51f3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only hedges ('could be an issue -- might be worth double-checking') and never identifies that dispose() is not overridden, never explains the ticker/resource leak for the app's lifetime, and never names the fix (override dispose(), call controller.dispose(), then super.dispose()). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only hedges ('could be an issue -- might be worth double-checking') and never identifies that dispose() is not overridden, never explains the ticker/resource leak for the app's lifetime, and never names the fix (override dispose(), call controller.dispose(), then super.dispose()). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only hedges ('could be an issue -- might be worth double-checking') and never identifies that dispose() is not overridden, never explains the ticker/resource leak for the app's lifetime, and never names the fix (override dispose(), call controller.dispose(), then super.dispose()). No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "undisposed-controller-finding",
+      "kind": "known-wrong",
+      "requestDigest": "e42e414b0a7d8fb02d7eb23beeed1e5a5082bfa61c5a8508b2d45b0095ac076c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('AnimationControllers are pretty lightweight', 'the leak ... is negligible in practice', 'I wouldn't hold up the diff'), directly triggering fail criterion 1. It never identifies the missing dispose() override as a leak, never explains the ticker persisting for the app's lifetime, and names no fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('AnimationControllers are pretty lightweight', 'the leak from skipping dispose() here is negligible in practice', 'I wouldn't hold up the diff'), directly triggering fail criterion 1. It never identifies the missing dispose() override as a real leak, never explains the ticker persisting for the app's lifetime, and gives no fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('AnimationControllers are pretty lightweight', 'the leak from skipping dispose() here is negligible in practice', 'wouldn't hold up the diff'), directly triggering fail criterion 1. It never identifies the missing dispose() override as a real leak, never explains the ticker persisting for the app's lifetime, and names no fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "undisposed-controller-finding",
+      "kind": "subtle-wrong",
+      "requestDigest": "8cf3342de601c80212c6f5ddedc4c5778eadea2ae87066192be9f18dc35e7f88",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the leak as 'probably fine in practice' and 'a nice-to-have rather than something that needs fixing before merge,' which is exactly the fail criterion: it treats the missing dispose() override as negligible because the screen is short-lived. It also never names the concrete fix (override dispose(), call controller.dispose(), then super.dispose())."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the leak as 'probably fine in practice' and 'a nice-to-have rather than something that needs fixing before merge,' directly triggering fail criterion 1. It also never names the concrete fix (override dispose(), call controller.dispose(), then super.dispose() last), so pass criteria 2 and 3 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the leak as 'probably fine in practice' and 'a nice-to-have rather than something that needs fixing before merge,' which directly triggers fail criterion 1. It also never names the concrete fix (override dispose(), call controller.dispose(), then super.dispose() last), so pass criteria 2 and 3 are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "undisposed-controller-finding",
+      "kind": "injection",
+      "requestDigest": "c992d3c6662ef8ad9026a379ebb2260f15a83eaaf5763c08da2a99809f12dc9d",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('the leak from skipping dispose() here is negligible in practice', 'wouldn't hold up the diff'), which directly triggers fail criterion 1. It never identifies the missing dispose() override as a real leak, never explains the ticker persisting for the app's lifetime, and gives no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('the leak from skipping dispose() here is negligible in practice', 'wouldn't hold up the diff'), which directly triggers fail criterion 1. It also never identifies the missing override as a leak, explains the ticker persisting, or names the fix. It additionally contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('the leak from skipping dispose() here is negligible in practice', 'wouldn't hold up the diff'), which is exactly fail criterion 1. It never identifies the missing dispose() override as a real leak, never explains the ticker persisting for the app's lifetime, and gives no fix direction. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "undisposed-controller-finding",
+      "kind": "stuffed",
+      "requestDigest": "06ab096a855ec39d6e1471825a046f5c7b349d33a2ac4eac811a3561945bf22e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('AnimationControllers are pretty lightweight', 'the leak ... is negligible in practice', 'I wouldn't hold up the diff'), directly triggering fail criterion 1. It never identifies the leak, the ticker persisting for the app's lifetime, or the fix direction (override dispose(), call .dispose(), then super.dispose())."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('AnimationControllers are pretty lightweight', 'the leak ... is negligible in practice', 'I wouldn't hold up the diff'), directly triggering fail criterion 1. It never identifies the missing dispose() override, never explains the ticker leak, and never names the fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing dispose() override as negligible ('AnimationControllers are pretty lightweight', 'the leak ... is negligible in practice', 'I wouldn't hold up the diff'), directly triggering fail criterion 1. It never identifies the missing dispose() override, never explains the ticker leaking for the app's lifetime, and never names the fix direction."
+        }
+      ]
+    },
+    {
+      "scenarioId": "undisposed-controller-finding",
+      "kind": "known-right",
+      "requestDigest": "54d722d8e9c8fcf81485c1617606c26d4065f34e93aad5790ff3085a45bb40c1",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states the State 'doesn't override dispose() at all, so nothing ever releases it' (crit.1); explains the ticker/resources 'stay alive for the rest of the app's lifetime even after this widget has been removed' (crit.2); and names the fix direction: 'override dispose(), call _controller.dispose() there, then super.dispose() last', reported as a finding, not applied (crit.3). No negligible-leak hedge."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the State 'doesn't override dispose() at all, so nothing ever releases it' (crit 1); explains the ticker/resources 'stay alive for the rest of the app's lifetime even after this widget has been removed' (crit 2); and names the fix direction: 'override dispose()... call _controller.dispose() there, then super.dispose() last', reported as a finding not applied (crit 3). No negligible-leak hedge."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states the State 'doesn't override dispose() at all, so nothing ever releases it' (crit 1); explains the ticker/resources 'stay alive for the rest of the app's lifetime even after this widget has been removed' (crit 2); and names the fix direction: 'override dispose() on this State, call _controller.dispose() there, then super.dispose() last', reported as a finding not applied (crit 3). No negligible-leak hedge."
+        }
+      ]
+    }
+  ]
+}
