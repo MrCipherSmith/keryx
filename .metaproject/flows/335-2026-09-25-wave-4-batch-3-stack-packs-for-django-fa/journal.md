@@ -135,3 +135,74 @@ accepted outcome per the standing rule, not a defect left unresolved.
 trigger was edited after this gate run. The only file changes after the
 honest gate run are the four `governance/eval.json` files themselves
 (verbatim raw-output assembly) and this journal entry.
+
+## Phase B continued: merge origin/main (batches 4/5/6), BLOCKED
+
+Origin/main moved again while Phase B ran: Wave 4 batch 4
+(csharp-dotnet/swift-ios/kotlin-android/flutter-dart, PR #738), batch 5
+(php-laravel/ruby-rails/c-cpp/sql-db, PR #735), and batch 6
+(docker-k8s-terraform/ci-github-gitlab, PR #733) all merged into main.
+Merged origin/main into flow/335-w4b3 with an explicit merge commit (not
+rebase), resolving 5 conflicted shared files additively: `install-
+manifest.json` (union, no real conflicts in either side's entries),
+`authoring-lint.ts` `STACK_EXTENSIONS` (union), `manifest.test.ts`
+profile allowlist (union), `stack-pack-eval-integrity.test.ts`
+`I11_ENFORCED_PACKS` (union), and `scout.test.ts`'s `KNOWN_HONEST_LOSSES`
++ ratchet, re-measured against the fully combined catalog: 170 skills,
+1006 triggers, 231 failing `checkSkillSelectedLeaveOneOut` (up from
+flow 335's own 169/775 pre-merge measurement). Two of flow 335's six
+honest losses (`python-code-review::"check for python security issues"`
+and `dependency-update::"upgrade packages"`) no longer reproduce against
+the larger combined catalog and were removed rather than carried forward
+as stale pins; the remaining four still reproduce (outranker identities
+shifted again, as expected — corpus redistribution is not a one-time
+event). Full targeted suite re-run post-merge: `tsc --noEmit` clean;
+`stack-packs.test.ts` + `scout.test.ts` + `manifest.test.ts` +
+`stack-pack-eval-integrity.test.ts` — 6591 pass, 1 fail.
+
+**The 1 failure: a stable-pack-protection collision I could not honestly
+fix.** `checkStablePackGate('python', 'stable')` now fails:
+`python/python-testing`'s own trigger-positive-1 ("Write pytest tests for
+the new widgets module") no longer routes to itself — outranked by
+`flutter-dart/flutter-testing` (shared "widget" token, unrelated to any
+flow-335 content) at score 0.4848 vs. python-testing's own 0.4736.
+
+Diagnosis, done rigorously before concluding this is unfixable:
+1. Confirmed the loss is caused by this merge, not pre-existing:
+   excluding flow 335's four packs from the catalog restores python's win
+   (score 0.4893, rank 1) — so it IS attributable to this flow's merge,
+   not something flutter-dart alone already broke on main.
+2. Identified the mechanism: `django-testing` and `fastapi-testing` both
+   legitimately use "test"/"pytest"/"write" vocabulary (inherent to being
+   testing skills), and their mere PRESENCE in the catalog lowers the
+   global IDF weight for those tokens (document-frequency-based: how many
+   skills contain the token at least once, not how many times). This
+   lets `flutter-dart/flutter-testing`'s rarer "widget" token edge out
+   python's now-cheaper "test"/"pytest"/"write" match.
+3. Tested whether rewording could fix it, per the "fix it in YOUR pack's
+   description/triggers" instruction: rewrote `django-testing`'s and
+   `fastapi-testing`'s most generic triggers and description clauses to
+   remove/reduce "test"/"write"/"pytest" repetition — re-measured after
+   each edit, INCLUDING a full rewrite of every fastapi-testing trigger.
+   Zero score movement, at any step. Root cause: IDF is binary per-skill
+   document frequency, not per-occurrence — as long as EITHER skill
+   contains the word "test" even once anywhere in its indexed text
+   (description + all triggers), the document frequency (and therefore
+   the IDF weight) is unchanged. Only fully eliminating "test" as a word
+   from both skills' entire indexed text would move this number, which
+   is not a real scope statement for two testing skills — that would be
+   gaming the scorer by hollowing out real content, exactly what the
+   standing rule forbids. Reverted both experimental edits (`git checkout
+   --` on the two SKILL.md files) rather than leave ineffective, disallowed
+   changes in the tree.
+4. Per the explicit instruction ("if the collision can't be fixed
+   honestly, report it and stop"): stopping here. django, fastapi, rust,
+   java-kotlin-spring content is otherwise complete, tested, and
+   committed (this merge commit included). Did not push. Did not open the
+   PR. Awaiting the orchestrator's decision: possibilities include
+   accepting python's demotion to `stability: experimental` (this merge
+   commit's catalog genuinely no longer clears python's own stable-pack
+   gate, the same kind of finding that demoted ts-js-node in flow 317's
+   precedent) as a cross-cutting decision outside this flow's authority,
+   or another resolution the orchestrator prefers. Never touched
+   `python/`'s own files.
