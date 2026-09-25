@@ -950,7 +950,6 @@
         "swift-ios-skills"
       ],
       "detectionMarkers": [
-        "swift",
         "ios"
       ],
       "provenance": {
@@ -964,7 +963,6 @@
         "kotlin-android-skills"
       ],
       "detectionMarkers": [
-        "kotlin",
         "android"
       ],
       "provenance": {
@@ -978,8 +976,7 @@
         "flutter-dart-skills"
       ],
       "detectionMarkers": [
-        "flutter",
-        "dart"
+        "flutter"
       ],
       "provenance": {
         "origin": "authored"
