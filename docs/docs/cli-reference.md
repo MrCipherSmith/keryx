@@ -143,7 +143,7 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
             [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
-            [--tui|--no-tui] [--debug] [--name <name>]
+            [--tui|--no-tui] [--debug] [--name <name>] [--guard]
 ```
 
 | Flag | Description |
@@ -159,6 +159,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
 | `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
+| `--guard` | Turn on the turn guard for this session only (TUI, agent mode; off by default). `/guard on` turns it on for every future session too. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
@@ -178,6 +179,25 @@ both together, or either with `-c`.
 If a TUI session stops reacting to the keyboard and mouse while it still draws
 (spinner and timer running), run `kill -USR2 <keryx pid>` from another
 terminal: every session re-arms its terminal input on `SIGUSR2`.
+
+**Turn guard** (opt-in, off by default). After an agent turn ends with a final
+message, the guard checks — advisory only, never blocking — whether the
+request looks done and whether the message contradicts what the tools really
+did (a claimed passing test suite when the last test run failed, a failure
+never mentioned). A likely-incomplete or contradicted turn prints one compact
+notice line; `/guard` opens a modal with this session's history, each entry's
+deterministic facts, Jev's probabilities when it was asked, and the reason.
+Deterministic contradictions are caught even without a Jev credential. Turn on
+for one session with `--guard`, or persist it with `/guard on` (`/guard off`
+turns it back off); the setting lives in `ShellConfig.turnGuard.enabled`
+(`~/.local/share/keryx/auth.json`). A turn with no tool calls and a short
+reply to a short question is skipped without asking Jev. When the guard IS
+asked (i.e. no deterministic contradiction already decided the turn and it
+was not skipped as trivial), the turn's user request, the final assistant
+reply, and the deterministic facts (tools called and failures, files
+written/edited, commands run and their exit status, tests run and their
+pass/fail counts) are sent — redacted through the same security service every
+other Jev-backed review command uses — to Jev on OpenRouter.
 
 ---
 
