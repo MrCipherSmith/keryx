@@ -2,6 +2,9 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+// Through the security facade, not `security/redact` directly — same
+// discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
+import { redactSensitiveText } from "../security/service";
 import { learnProjectSkill } from "../gdskills/learn";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
@@ -43,6 +46,9 @@ import {
   type ReviewScope,
 } from "../review/scope";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
+import { loadRoutingConfig } from "../harness/routing/config";
+import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
+import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
@@ -126,6 +132,68 @@ import {
   type ReviewTargetKind,
   type VerificationSource,
 } from "../review/types";
+import {
+  applyDeterministicOverride,
+  buildCiTriageQuestions,
+  buildCiTriageState,
+  computeCiSignals,
+  computeCiTriageVerdict,
+  extractFailingTestName,
+  readCiTriageEnabled,
+  renderCiTriageAdvisory,
+  type CiSignalsPrecomputed,
+  type CiTriageCriterion,
+  type CiTriageVerdict,
+} from "../review/ci-triage";
+import {
+  createFixtureCiPort,
+  createGhCiPort,
+  type CiAttemptJobs,
+  type CiJobSummary,
+  type CiPort,
+  type CiRunHistoryEntry,
+  type CiRunInfo,
+} from "../review/ci-port";
+import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey, resolveJevApiKeyResolution, type JevUsage } from "../harness/decision/jev-client";
+import {
+  applyClauseTags,
+  buildClauseTagQuestions,
+  clauseTagFromChoice,
+  extractReferenceClauses,
+  type ReferenceClause,
+} from "../review/conform-clauses";
+import { cachedTagsFor, hashConformDocContent, readClauseTagCache, writeClauseTagCache } from "../review/conform-tag-cache";
+import {
+  computePrConformFacts,
+  computeReportConformFacts,
+  hunkClauseFacts,
+  hunkRedactedStateText,
+  hunkRegionsFromDiff,
+  prClauseFacts,
+  prRedactedStateText,
+  reportClauseFacts,
+  reportRedactedStateText,
+  type ReportFindingLike,
+} from "../review/conform-state";
+import {
+  batchConformItems,
+  DEFAULT_CONFORM_THRESHOLD,
+  evaluatedVerdict,
+  notCheckableVerdict,
+  notEvaluatedVerdict,
+  type ConformBatchItem,
+  type ConformVerdict,
+} from "../review/conform-jev";
+import { createFixtureConformPrPort, createGhConformPrPort } from "../review/conform-pr-port";
+import {
+  conformResultToJson,
+  readConformEnabled,
+  renderConformMarkdown,
+  withRecentDoc,
+  CONFORM_RECENTS_PATH,
+  type ConformTarget,
+} from "../review/conform-report";
+import { runModelTurn } from "../harness/provider/single-turn";
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -219,6 +287,40 @@ const COMMENTS_REPLY_FLAGS = [
 ] as const;
 
 const LOOP_FLAGS = ["--flow", "--task"] as const;
+
+/**
+ * Flow 306/307: `keryx review ci-triage`. `--fixtures <dir>` answers BOTH the
+ * CI read port and the Jev call from files on disk (`ci-run-info.json`,
+ * `ci-failed-log.txt`, optional `ci-history.json`/`ci-attempts.json`/
+ * `ci-changed-files.json`/`ci-runs-by-head-sha.json`, `jev-response.json`) —
+ * the same "no real network in any test" discipline `--fixtures` already
+ * gives `review comments`. `--eval <file>` (AC5/AC6) replaces `--run`/`--job`
+ * with a labelled-case manifest; `--live` (only meaningful with `--eval`)
+ * replays it against the real `gh`/Jev instead of each case's fixtures.
+ */
+const CI_TRIAGE_FLAGS = ["--run", "--job", "--test", "--repo", "--model", "--fixtures", "--json", "--eval", "--live"] as const;
+
+/**
+ * Flow 308: `keryx review conform`. `--pr` runs `pr`-kind AND `hunk`-kind
+ * clauses (the PR's own diff supplies the hunk regions); `--report` runs
+ * `report`-kind clauses; `--diff` alone runs `hunk`-kind clauses only —
+ * mutually exclusive, matching the frozen AC6 usage line exactly.
+ * `--fixtures <dir>` answers the pr-kind port, the tagging/scoring Jev calls,
+ * and (with `--explain`) the explanation pass, all from files on disk — no
+ * real `gh` call, no real network, same discipline as `ci-triage`.
+ */
+const CONFORM_FLAGS = [
+  "--ref",
+  "--pr",
+  "--report",
+  "--diff",
+  "--repo",
+  "--explain",
+  "--threshold",
+  "--model",
+  "--fixtures",
+  "--json",
+] as const;
 
 /**
  * No `--authors` and no `--skill`.
@@ -415,6 +517,14 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "comments") {
       await runComments(args.slice(1));
+      return;
+    }
+    if (command === "ci-triage") {
+      await runCiTriage(args.slice(1));
+      return;
+    }
+    if (command === "conform") {
+      await runConform(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -764,17 +874,101 @@ async function runBudget(args: string[]): Promise<void> {
  * own model. When the caller names nothing, the block is adaptive: the tier
  * plus `inherit: true`, and the host picks its own model for that tier.
  */
+/**
+ * Flow 305 (Flow A), AC5 — resolve the `review` category (`src/harness/routing`)
+ * ahead of / alongside `assignTier`'s own live-detection ranking. When the
+ * category resolves to an explicit `{kind:"model"}` (per-project or per-user
+ * `routing.config.json`/shell config — `cwd` is both the project-config
+ * directory and the per-user config dir override, i.e. the caller's real cwd
+ * in production), that provider/model REPLACES the decision's own. When
+ * nothing is configured for `review` (`session-default`, the state with an
+ * empty routing table) the decision is returned completely UNCHANGED — same
+ * object identity is not required, but every field is byte-identical, which
+ * is what the regression test pins (AC5's "byte-identical to pre-Flow-A").
+ *
+ * `routed: true` marks a routing-table override on the RESULT rather than
+ * forcing `tier_resolution: "discovered"` (review finding, AC11d): the two
+ * questions are independent — `tier_resolution` says how `assignTier`
+ * resolved a MODEL FOR THE TIER, `routed` says whether the routing table then
+ * REPLACED that model outright. Conflating them mislabels a routed pick as
+ * "discovered" (tier-ranked), which is exactly the confusion AC11(d) flags —
+ * and would have required a fourth `TierResolutionSource` member to fix
+ * honestly, touching `model-tier.ts`'s public contract for a distinction the
+ * dispatch schema does not otherwise need.
+ *
+ * Flow 305 review findings, additive to AC5:
+ *  - AC10: the resolved assignment is checked against `catalog` (the same
+ *    provider/model list already fetched for tier ranking — no NEW network
+ *    call). An assignment naming an unconnected provider/model falls through
+ *    exactly as `resolveCategoryDetailed` documents; `notices` carries the
+ *    fallback line for the caller to print.
+ *  - AC11(b): a malformed or unapproved project `routing.config.json` is
+ *    surfaced in `notices` (never silently swallowed) rather than only
+ *    logged nowhere the operator can see it.
+ *  - item 4: a `provider-default` assignment is resolved the same way
+ *    `subagents` already does (`resolveProviderDefaultModelId`), not ignored.
+ */
+interface ReviewRoutingResult {
+  readonly decision: DispatchModelDecision;
+  readonly routed: boolean;
+  /** Human-readable lines to surface alongside the tier output — never silent. */
+  readonly notices: readonly string[];
+}
+
+async function applyReviewRoutingCategory(
+  decision: DispatchModelDecision,
+  cwd: string,
+  catalog: readonly DiscoveredProvider[],
+): Promise<ReviewRoutingResult> {
+  const location = { cwd };
+  const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
+  const notices: string[] = [];
+  for (const layer of [project, user]) {
+    if (layer.error !== undefined) notices.push(layer.error);
+  }
+  const connected = connectedPredicateFrom(catalog);
+  const resolved = resolveCategoryDetailed("review", { project: project.table, user: user.table }, connected);
+  if (resolved.rejected !== undefined) {
+    notices.push(describeFallbackNotice(resolved.rejected.assignment, resolved.assignment));
+  }
+  const { assignment } = resolved;
+  if (assignment.kind === "model") {
+    return { decision: { ...decision, provider: assignment.providerId, model: assignment.modelId }, routed: true, notices };
+  }
+  if (assignment.kind === "provider-default") {
+    const modelId = resolveProviderDefaultModelId(assignment.providerId);
+    if (modelId !== undefined) {
+      return { decision: { ...decision, provider: assignment.providerId, model: modelId }, routed: true, notices };
+    }
+  }
+  return { decision, routed: false, notices };
+}
+
 async function runTier(args: string[]): Promise<void> {
   rejectUnknownFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
-  const decision = decideDispatchModel(session, signals, catalog);
-  const block = dispatchModelBlock(decision);
+  const { decision, routed, notices } = await applyReviewRoutingCategory(
+    decideDispatchModel(session, signals, catalog),
+    process.cwd(),
+    catalog,
+  );
+  // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s
+  // `pinsModel`-gated provider/model — that path exists for the TIER's own
+  // "discovered" resolution. `routed: true` is an ADDITIVE field on top of
+  // the same block shape, not a replacement for `tier_resolution`.
+  const block = routed
+    ? { ...dispatchModelBlockRouted(decision), routed: true }
+    : dispatchModelBlock(decision);
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ model: block }, null, 2));
+    console.log(JSON.stringify({ model: block, ...(notices.length > 0 ? { notices } : {}) }, null, 2));
     return;
+  }
+
+  for (const notice of notices) {
+    console.error(`routing: ${notice}`);
   }
 
   const discovery = decision.model_discovery;
@@ -786,7 +980,11 @@ async function runTier(args: string[]): Promise<void> {
   // Printed rather than assumed: `inherit` is an answer, and saying "not
   // resolved" would read as a failure — the next thing a reader does with a
   // failure is pick a model by hand.
-  if (pinsModel(decision)) {
+  if (routed) {
+    console.log(`provider: ${decision.provider}`);
+    console.log(`model: ${decision.model}`);
+    console.log(`routed: true (from the routing table's "review" category — not tier-discovered)`);
+  } else if (pinsModel(decision)) {
     console.log(`provider: ${decision.provider}`);
     console.log(`model: ${decision.model}`);
   } else {
@@ -805,6 +1003,18 @@ async function runTier(args: string[]): Promise<void> {
   console.log("```json");
   console.log(JSON.stringify({ model: block }, null, 2));
   console.log("```");
+}
+
+/** `dispatchModelBlock`'s shape, but unconditionally naming `provider`/`model` — used only when `routed` (AC11d), where `pinsModel`'s own tier-based gate does not apply. */
+function dispatchModelBlockRouted(decision: DispatchModelDecision): Record<string, unknown> {
+  return {
+    tier: decision.tier,
+    tier_reasons: decision.tier_reasons,
+    provider: decision.provider,
+    model: decision.model,
+    tier_resolution: decision.tier_resolution,
+    model_discovery: decision.model_discovery,
+  };
 }
 
 /** The §4.4 signals, read from flags an orchestrator already has the answers to. */
@@ -1132,6 +1342,729 @@ async function resolvePort(args: string[]): Promise<GitHubPort> {
     }
   }
   return createFixturePort(files);
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review ci-triage` — flow 306. Advisory-only flaky/infra/real-
+// regression triage for one failed CI run's job, over a redacted, bounded log
+// excerpt. See `src/review/ci-triage.ts` (the core logic) and
+// `src/review/ci-port.ts` (the CI read port) for why each piece lives where
+// it does; this function is the ADAPTER that glues the core-zone triage logic
+// to the client-zone Jev client — the one place both may legally meet.
+// ---------------------------------------------------------------------------
+
+/**
+ * `--fixtures <dir>`: the CI port answered from `ci-run-info.json`/
+ * `ci-failed-log.txt`/`ci-history.json`, plus flow 307's signal files — all
+ * optional; a fixtures dir built for flow 306 (none of them present) still
+ * triages, just with every signal reading "not checked".
+ *
+ * `ci-related-runs.json` (optional: `{runs: {...}, logs: {...}}`, keyed by
+ * run id) answers `runInfo`/`failedLog` for the OTHER runs a signal read
+ * asks about — flow 307's cross-branch-history signal (AC1(b)) needs a
+ * second run's own job list and log, not just the one under triage.
+ */
+async function fixtureCiPort(dir: string): Promise<CiPort> {
+  const runInfo = JSON.parse(await readFile(join(dir, "ci-run-info.json"), "utf8")) as CiRunInfo;
+  const log = await readFile(join(dir, "ci-failed-log.txt"), "utf8").catch(() => "");
+  const history = await readFile(join(dir, "ci-history.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly CiRunHistoryEntry[]>)
+    .catch(() => ({}) as Record<string, readonly CiRunHistoryEntry[]>);
+  const attempts = await readFile(join(dir, "ci-attempts.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly CiAttemptJobs[]>)
+    .catch(() => ({}) as Record<string, readonly CiAttemptJobs[]>);
+  const changedFiles = await readFile(join(dir, "ci-changed-files.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly string[]>)
+    .catch(() => ({}) as Record<string, readonly string[]>);
+  const runsByHeadSha = await readFile(join(dir, "ci-runs-by-head-sha.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly CiRunHistoryEntry[]>)
+    .catch(() => ({}) as Record<string, readonly CiRunHistoryEntry[]>);
+  const related = await readFile(join(dir, "ci-related-runs.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as { runs?: Record<string, CiRunInfo>; logs?: Record<string, string> })
+    .catch(() => ({}) as { runs?: Record<string, CiRunInfo>; logs?: Record<string, string> });
+  return createFixtureCiPort({
+    runs: { [runInfo.runId]: runInfo, ...related.runs },
+    logs: { [runInfo.runId]: log, ...related.logs },
+    history,
+    attempts,
+    changedFiles,
+    runsByHeadSha,
+  });
+}
+
+/** `--fixtures <dir>`: the Jev call answered from `jev-response.json`, verbatim, as a canned `Response`. No network call. */
+async function fixtureJevFetch(dir: string): Promise<typeof fetch> {
+  const body = await readFile(join(dir, "jev-response.json"), "utf8");
+  const fn = async (): Promise<Response> => new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+  return fn as unknown as typeof fetch;
+}
+
+/** One job's full triage result — shared by the default `--run` path and the `--eval` harness. */
+interface CiTriageJobResult {
+  readonly runId: string;
+  readonly job: string;
+  readonly testName: string;
+  readonly verdict: CiTriageVerdict;
+  readonly signalLines: readonly string[];
+  readonly usage: JevUsage;
+}
+
+/**
+ * Flow 307: the shared pipeline — compute signals (AC1) when `useSignals`,
+ * build `state`/`questions` accordingly (AC2), ask Jev, apply the
+ * deterministic override (AC8). `useSignals: false` reproduces the flow 306
+ * pipeline byte-for-byte, which is exactly what `--eval`'s "before" column
+ * needs to stay an honest comparison.
+ *
+ * `rawLog` is a REQUIRED input, not read here (flow 307 review, item 2): the
+ * failed-step log is a property of the RUN, not of the job, so a caller
+ * triaging several jobs of the same run reads it once and passes the same
+ * string to every call — `runCiTriage` below does exactly that. `precomputed`
+ * is the matching run-level `computeCiSignals` input (`priorAttempts`/
+ * `changedFiles`/`runsForHeadSha`), optional and only consulted when
+ * `useSignals` is true; omitted, `computeCiSignals` reads them itself
+ * exactly as it always did.
+ */
+async function triageOneJob(
+  ciPort: CiPort,
+  fetchFn: typeof fetch,
+  info: CiRunInfo,
+  job: CiJobSummary,
+  opts: {
+    readonly runId: string;
+    readonly rawLog: string;
+    readonly testNameOverride?: string | undefined;
+    readonly model?: string | undefined;
+    readonly useSignals: boolean;
+    readonly precomputed?: CiSignalsPrecomputed;
+  },
+): Promise<CiTriageJobResult> {
+  const rawLog = opts.rawLog;
+  const testName = opts.testNameOverride ?? extractFailingTestName(rawLog, job.name) ?? "(unknown test)";
+  const signals = opts.useSignals
+    ? await computeCiSignals(
+        ciPort,
+        {
+          runId: opts.runId,
+          jobName: job.name,
+          testName: testName === "(unknown test)" ? undefined : testName,
+          rawLog,
+          headSha: info.headSha,
+          workflowName: info.workflowName,
+        },
+        undefined,
+        opts.precomputed,
+      )
+    : undefined;
+  const signalLines = signals?.lines ?? [];
+  const state = buildCiTriageState({ testName, jobName: job.name, rawLog, ...(signalLines.length > 0 ? { signalLines } : {}) });
+  const questions = buildCiTriageQuestions(opts.useSignals);
+  const result = await callJevSystemOne(fetchFn, { model: opts.model ?? DEFAULT_JEV_MODEL, state, questions });
+  const rawVerdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
+  const verdict = signals !== undefined ? applyDeterministicOverride(rawVerdict, signals) : rawVerdict;
+  return { runId: opts.runId, job: job.name, testName, verdict, signalLines, usage: result.usage };
+}
+
+/** AC10: the opt-in + credential gate, shared by `--run` and `--eval --live` — both refuse before any read/network call. */
+async function refuseWithoutCiTriageGate(cwd: string): Promise<boolean> {
+  if (!(await readCiTriageEnabled(cwd))) {
+    console.error(
+      "`review.jev.ci_triage` is not enabled for this project (.metaproject/tasks.config.json: " +
+        '`{"review":{"jev":{"ci_triage":true}}}`). CI triage sends a redacted log excerpt to OpenRouter/TypeSafe, ' +
+        "so it is opt-in — nothing was read and no network call was made.",
+    );
+    process.exitCode = 1;
+    return true;
+  }
+  // AC7: the pre-flight message (no key at all) also names the two places a
+  // key could have come from, even though there is no rejected credential to
+  // attribute yet — consistent phrasing with the AC7 error the live call
+  // raises when OpenRouter itself rejects one.
+  const { key } = resolveJevApiKeyResolution(process.env);
+  if (key === undefined || key.length === 0) {
+    console.error(
+      "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config: CI triage needs a " +
+        "Jev/OpenRouter credential (from either source) and made no network call.",
+    );
+    process.exitCode = 1;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * How many failed jobs of one run `runCiTriage` will actually triage
+ * (flow 307 review, item 2). A run with an unbounded number of failed jobs
+ * previously triaged every one of them — one Jev call, and (with signals) up
+ * to `HISTORY_RUNINFO_CAP` extra `gh` reads, PER JOB, with no ceiling. Beyond
+ * this cap the remaining failed jobs are listed, in both the text and the
+ * `--json` output, as not triaged rather than silently triaged anyway or
+ * silently dropped — `--job <name>` still triages any one of them directly.
+ */
+export const MAX_JOBS_TRIAGED = 10;
+
+async function runCiTriage(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CI_TRIAGE_FLAGS, "ci-triage");
+  const cwd = process.cwd();
+  const evalFile = optionValue(args, "--eval");
+  if (evalFile !== undefined) {
+    await runCiTriageEval(cwd, args, evalFile);
+    return;
+  }
+  const runId = requiredOption(args, "--run", "ci-triage");
+  const repo = optionValue(args, "--repo");
+  const fixturesDir = optionValue(args, "--fixtures");
+
+  // AC10: opt-in per project, and refused before any network call — the log
+  // excerpt leaves the machine only when the project asked for that.
+  if (await refuseWithoutCiTriageGate(cwd)) {
+    return;
+  }
+
+  const ciPort: CiPort = fixturesDir === undefined ? createGhCiPort(undefined, repo) : await fixtureCiPort(fixturesDir);
+  const fetchFn: typeof fetch = fixturesDir === undefined ? globalThis.fetch : await fixtureJevFetch(fixturesDir);
+
+  const info = await ciPort.runInfo(runId);
+  const jobArg = optionValue(args, "--job");
+  // AC3: every failed job by default, one verdict per job; `--job` narrows to one.
+  const failedJobs = jobArg !== undefined ? info.jobs.filter((j) => j.name === jobArg) : info.jobs.filter((j) => j.conclusion === "failure");
+  if (failedJobs.length === 0) {
+    throw new Error(
+      `Run ${runId} has no ${jobArg !== undefined ? `job named "${jobArg}"` : "failed job"} to triage ` +
+        `(jobs: ${info.jobs.map((j) => `${j.name} [${j.conclusion ?? "unknown"}]`).join(", ") || "none"}).`,
+    );
+  }
+  const jobsToTriage = failedJobs.slice(0, MAX_JOBS_TRIAGED);
+  const notTriaged = failedJobs.slice(MAX_JOBS_TRIAGED).map((j) => j.name);
+  // `--test` only makes sense pinned to exactly one job; with several failed
+  // jobs in scope it is ignored rather than silently mislabeling every job
+  // with the same test name.
+  const testOverride = failedJobs.length === 1 ? optionValue(args, "--test") : undefined;
+  const model = optionValue(args, "--model");
+
+  // Flow 307 review, item 2: the failed-step log is a property of the RUN,
+  // not of the job — read it ONCE and reuse it for every job below, instead
+  // of re-fetching the same text per job. `priorAttempts`/`changedFiles`/
+  // `runsForHeadSha` likewise key on `runId`/`headSha`, never `jobName` — read
+  // once here and handed to every `triageOneJob` call as `precomputed`, each
+  // degrading to its own empty default on failure exactly as
+  // `computeCiSignals`'s own internal reads already did.
+  const rawLog = await ciPort.failedLog(runId);
+  const [priorAttempts, changedFiles, runsForHeadSha] = await Promise.all([
+    ciPort.priorAttempts(runId).catch(() => [] as readonly CiAttemptJobs[]),
+    info.headSha === "" ? Promise.resolve([] as readonly string[]) : ciPort.changedFiles(info.headSha).catch(() => [] as readonly string[]),
+    ciPort.runsForHeadSha(info.headSha, info.workflowName).catch(() => [] as readonly CiRunHistoryEntry[]),
+  ]);
+  // Flow 307 followups, item 4: one `runInfo` cache, shared across every job
+  // below (via `precomputed`) — the same "read once, reuse per job" already
+  // applied to `priorAttempts`/`changedFiles`/`runsForHeadSha` above, extended
+  // to `computeCiSignals`'s OWN `runInfo` reads of other runs (cross-branch
+  // history, same-head verification), which this precomputed object could not
+  // cover before: those reads are not values that answer identically for
+  // every job, they are lookups keyed on a DIFFERENT run id discovered while
+  // computing each job's signals, so only a shared cache — not a shared value
+  // — can de-duplicate them.
+  const runInfoCache = new Map<string, Promise<CiRunInfo>>();
+  const precomputed: CiSignalsPrecomputed = { priorAttempts, changedFiles, runsForHeadSha, runInfoCache };
+
+  const results: CiTriageJobResult[] = [];
+  for (const job of jobsToTriage) {
+    results.push(
+      await triageOneJob(ciPort, fetchFn, info, job, { runId, rawLog, testNameOverride: testOverride, model, useSignals: true, precomputed }),
+    );
+  }
+
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          results: results.map((r) => ({ runId: r.runId, job: r.job, testName: r.testName, verdict: r.verdict, usage: r.usage })),
+          notTriaged,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  console.log(
+    results
+      .map((r) => renderCiTriageAdvisory({ runId: r.runId, jobName: r.job, testName: r.testName, verdict: r.verdict, signalLines: r.signalLines }))
+      .join("\n\n"),
+  );
+  if (notTriaged.length > 0) {
+    console.log("");
+    console.log(`not triaged (cap ${MAX_JOBS_TRIAGED}; use --job): ${notTriaged.join(", ")}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review ci-triage --eval` — flow 307, AC5/AC6. A committed, labelled
+// evaluation set replayed either offline (each case's own fixtures, the
+// default) or live (`--live`: real `gh` + real Jev, budgeted, opt-in and
+// credential-gated exactly like `--run`). Reports "before" (flow 306: log
+// only) and "after" (flow 307: log + signals) accuracy side by side, so a
+// signals regression would show up as "after" reading worse than "before"
+// rather than disappearing into a single number.
+// ---------------------------------------------------------------------------
+
+interface CiTriageEvalCase {
+  readonly id: string;
+  readonly runId: string;
+  readonly job: string;
+  readonly truth: CiTriageCriterion;
+  /** Relative to the manifest file's own directory. Required unless `--live`. */
+  readonly fixturesDir?: string;
+}
+
+interface CiTriageEvalManifest {
+  readonly cases: readonly CiTriageEvalCase[];
+}
+
+interface CiTriageEvalCaseResult {
+  readonly id: string;
+  readonly runId: string;
+  readonly job: string;
+  readonly truth: CiTriageCriterion;
+  readonly predictedBefore: CiTriageCriterion;
+  readonly predictedAfter: CiTriageCriterion;
+  readonly correctBefore: boolean;
+  readonly correctAfter: boolean;
+  readonly usageBefore: JevUsage;
+  readonly usageAfter: JevUsage;
+}
+
+function accuracyOf(results: readonly CiTriageEvalCaseResult[], key: "correctBefore" | "correctAfter"): number {
+  return results.length === 0 ? 0 : results.filter((r) => r[key]).length / results.length;
+}
+
+function costOf(results: readonly CiTriageEvalCaseResult[], key: "usageBefore" | "usageAfter"): number {
+  return results.reduce((sum, r) => sum + (r[key].cost ?? 0), 0);
+}
+
+async function runCiTriageEval(cwd: string, args: string[], evalFile: string): Promise<void> {
+  const live = args.includes("--live");
+  const repo = optionValue(args, "--repo");
+  const model = optionValue(args, "--model");
+
+  if (live && (await refuseWithoutCiTriageGate(cwd))) {
+    return;
+  }
+
+  let manifest: CiTriageEvalManifest;
+  try {
+    manifest = JSON.parse(await readFile(evalFile, "utf8")) as CiTriageEvalManifest;
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- The file path is the actionable part; the cause is summarised inline.
+    throw new Error(`\`--eval ${evalFile}\` could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!Array.isArray(manifest.cases) || manifest.cases.length === 0) {
+    throw new Error(`\`--eval ${evalFile}\` has no "cases" array — nothing to evaluate.`);
+  }
+  const manifestDir = path.dirname(evalFile);
+
+  const results: CiTriageEvalCaseResult[] = [];
+  for (const c of manifest.cases) {
+    if (!live && c.fixturesDir === undefined) {
+      throw new Error(`case "${c.id}" has no "fixturesDir", and this is not a \`--live\` run — nothing to replay it from.`);
+    }
+    const caseDir = c.fixturesDir !== undefined ? path.join(manifestDir, c.fixturesDir) : undefined;
+    const ciPort: CiPort = live ? createGhCiPort(undefined, repo) : await fixtureCiPort(caseDir as string);
+    const jevFetch: typeof fetch = live ? globalThis.fetch : await fixtureJevFetch(caseDir as string);
+    const info = await ciPort.runInfo(c.runId);
+    const job = info.jobs.find((j) => j.name === c.job);
+    if (job === undefined) {
+      throw new Error(`case "${c.id}": run ${c.runId} has no job named "${c.job}".`);
+    }
+    // One job per case, so one `failedLog` read is already the minimum — read
+    // once and share it between the "before"/"after" passes rather than
+    // fetching it twice for the same run (flow 307 review, item 2).
+    const rawLog = await ciPort.failedLog(c.runId);
+    const before = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, rawLog, model, useSignals: false });
+    const after = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, rawLog, model, useSignals: true });
+    results.push({
+      id: c.id,
+      runId: c.runId,
+      job: c.job,
+      truth: c.truth,
+      predictedBefore: before.verdict.top,
+      predictedAfter: after.verdict.top,
+      correctBefore: before.verdict.top === c.truth,
+      correctAfter: after.verdict.top === c.truth,
+      usageBefore: before.usage,
+      usageAfter: after.usage,
+    });
+  }
+
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          live,
+          cases: results.length,
+          before: { accuracy: accuracyOf(results, "correctBefore"), costUsd: costOf(results, "usageBefore") },
+          after: { accuracy: accuracyOf(results, "correctAfter"), costUsd: costOf(results, "usageAfter") },
+          results,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  const pct = (n: number): string => `${Math.round(n * 100)}%`;
+  console.log(`# CI triage evaluation (${live ? "LIVE" : "fixtures"}) — ${results.length} case(s)`);
+  console.log("");
+  console.log(`before (flow 306, log only):     ${pct(accuracyOf(results, "correctBefore"))} correct, ~$${costOf(results, "usageBefore").toFixed(4)}`);
+  console.log(`after  (flow 307, log + signals): ${pct(accuracyOf(results, "correctAfter"))} correct, ~$${costOf(results, "usageAfter").toFixed(4)}`);
+  console.log("");
+  for (const r of results) {
+    const beforeMark = r.correctBefore ? "OK" : "X ";
+    const afterMark = r.correctAfter ? "OK" : "X ";
+    console.log(`  ${r.id}: truth=${r.truth}  before=${r.predictedBefore} [${beforeMark}]  after=${r.predictedAfter} [${afterMark}]`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review conform` — flow 308, reference-document conformance mode
+// (PRD.md Requirements 24-29 / PLAN.md Phase 2). Core logic lives in
+// `src/review/conform-*.ts`; this is the ADAPTER that reads the reference
+// document and the target off disk/`gh`, calls the client-zone Jev client,
+// and (with `--explain`) a single-turn model call — the one place all three
+// may legally meet, same shape as `ci-triage` above.
+// ---------------------------------------------------------------------------
+
+/** `--fixtures <dir>`: every Jev call in this command reads the SAME canned response, like `ci-triage`'s own `--fixtures`. */
+async function fixtureConformJevFetch(dir: string): Promise<typeof fetch> {
+  const body = await readFile(join(dir, "jev-response.json"), "utf8");
+  const fn = async (): Promise<Response> => new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+  return fn as unknown as typeof fetch;
+}
+
+/** `--fixtures <dir>`: the pr-kind port answered from `pr.json` (`{number,title,body,diff}`). */
+async function fixtureConformPrPortFrom(dir: string): Promise<ReturnType<typeof createFixtureConformPrPort>> {
+  const pr = JSON.parse(await readFile(join(dir, "pr.json"), "utf8")) as { number: number; title: string; body: string; diff: string };
+  return createFixtureConformPrPort({ pr });
+}
+
+interface ConformUsageAccumulator {
+  jevCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  sawUsage: boolean;
+}
+
+function accumulateJevUsage(acc: ConformUsageAccumulator, usage: { input_tokens?: number; output_tokens?: number; cost?: number }): void {
+  acc.jevCalls += 1;
+  if (usage.input_tokens !== undefined) {
+    acc.inputTokens += usage.input_tokens;
+    acc.sawUsage = true;
+  }
+  if (usage.output_tokens !== undefined) {
+    acc.outputTokens += usage.output_tokens;
+    acc.sawUsage = true;
+  }
+  if (usage.cost !== undefined) {
+    acc.costUsd += usage.cost;
+    acc.sawUsage = true;
+  }
+}
+
+/**
+ * AC2: resolve every raw clause's tag — explicit markers first (no Jev call),
+ * then the project's cache, then one `choice` question per remaining clause,
+ * batched into a single request (clause classification needs no per-clause
+ * state beyond the clause text itself, so it is never split by the 64k
+ * budget in practice — the questions alone would have to exceed it).
+ */
+async function resolveConformClauseTags(
+  cwd: string,
+  refPath: string,
+  docText: string,
+  rawClauses: ReturnType<typeof extractReferenceClauses>,
+  fetchFn: typeof fetch,
+  model: string,
+  acc: ConformUsageAccumulator,
+): Promise<ReferenceClause[]> {
+  const contentHash = hashConformDocContent(docText);
+  const cache = await readClauseTagCache(cwd);
+  const cachedTags = cachedTagsFor(cache, refPath, contentHash) ?? {};
+  const resolved = new Map<string, { source: "jev" | "cache"; tag: ReturnType<typeof clauseTagFromChoice> }>();
+  for (const [id, tag] of Object.entries(cachedTags)) {
+    resolved.set(id, { source: "cache", tag });
+  }
+  const needsTagging = rawClauses.filter((c) => c.explicit === undefined && cachedTags[c.clause_id] === undefined);
+  const tagQuestions = buildClauseTagQuestions(needsTagging);
+  if (Object.keys(tagQuestions).length > 0) {
+    const result = await callJevSystemOne(fetchFn, {
+      model,
+      state: "Reference-document clause classification — no additional state beyond each clause's own text.",
+      questions: tagQuestions,
+    });
+    accumulateJevUsage(acc, result.usage);
+    const freshTags: Record<string, ReturnType<typeof clauseTagFromChoice>> = {};
+    for (const [id, answer] of Object.entries(result.answers)) {
+      if (answer.type !== "choice") continue;
+      const tag = clauseTagFromChoice(answer.choice);
+      resolved.set(id, { source: "jev", tag });
+      freshTags[id] = tag;
+    }
+    if (Object.keys(freshTags).length > 0) {
+      await writeClauseTagCache(cwd, refPath, contentHash, freshTags);
+    }
+  }
+  return applyClauseTags(rawClauses, resolved);
+}
+
+/** AC5: score every checkable clause of one kind against its shared redacted state, batched under budget. */
+async function scoreConformClauses(
+  items: readonly ConformBatchItem[],
+  sharedRedactedText: string,
+  fetchFn: typeof fetch,
+  model: string,
+  threshold: number,
+  acc: ConformUsageAccumulator,
+): Promise<ConformVerdict[]> {
+  const verdicts: ConformVerdict[] = [];
+  for (const batch of batchConformItems(items, sharedRedactedText)) {
+    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: batch.questions });
+    accumulateJevUsage(acc, result.usage);
+    for (const item of batch.items) {
+      const answer = result.answers[item.clause.clause_id];
+      const probability = answer?.type === "noul" ? answer.noul : 0;
+      verdicts.push(evaluatedVerdict(item.clause, item.facts, probability, threshold));
+    }
+  }
+  return verdicts;
+}
+
+/** AC7: the `review`-category model (the session model when unset), same resolution `applyReviewRoutingCategory` uses, without the live provider-catalog probe a text explanation does not need. */
+async function resolveConformExplainModel(cwd: string): Promise<{ provider?: string; model?: string }> {
+  const location = { cwd };
+  const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
+  const { assignment } = resolveCategoryDetailed("review", { project: project.table, user: user.table });
+  if (assignment.kind === "model") return { provider: assignment.providerId, model: assignment.modelId };
+  if (assignment.kind === "provider-default") {
+    const modelId = resolveProviderDefaultModelId(assignment.providerId);
+    if (modelId !== undefined) return { provider: assignment.providerId, model: modelId };
+  }
+  return {};
+}
+
+/**
+ * AC7: explain every clause scored below `threshold` — citing the clause id
+ * and its evidence, labelled advisory, never written to `findings.json` or
+ * the PR (this function only returns text; nothing here has a write path).
+ * `--fixtures <dir>` answers from `explain-response.json`
+ * (`{[clause_id]: text}`) instead of calling a model at all — the wiring
+ * under test is "the text ends up in the report, labelled advisory", not
+ * `runModelTurn` itself, which has its own tests.
+ *
+ * `runTurn` is injectable (defaults to the real `runModelTurn`) so a test can
+ * assert on the exact `user` prompt sent — including that it never carries
+ * the full `refPath` — without `mock.module`-ing a shared provider module
+ * for the whole `bun test` process (see `health-truthful-gate.test.ts`'s
+ * comment on why that pattern was tried and rejected here).
+ */
+export async function explainConformVerdicts(
+  cwd: string,
+  refPath: string,
+  verdicts: readonly ConformVerdict[],
+  threshold: number,
+  fixturesDir: string | undefined,
+  runTurn: typeof runModelTurn = runModelTurn,
+): Promise<Record<string, string>> {
+  const toExplain = verdicts.filter((v) => v.status === "likely-violated" && v.probability !== undefined && v.probability < threshold);
+  if (toExplain.length === 0) return {};
+  if (fixturesDir !== undefined) {
+    try {
+      return JSON.parse(await readFile(join(fixturesDir, "explain-response.json"), "utf8")) as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
+  const { provider, model } = await resolveConformExplainModel(cwd);
+  const explanations: Record<string, string> = {};
+  for (const verdict of toExplain) {
+    const result = await runTurn({
+      ...(provider !== undefined ? { provider } : {}),
+      ...(model !== undefined ? { model } : {}),
+      system:
+        "You explain, in 2-4 sentences, why a reference-document clause looks violated, citing the clause id and the " +
+        "evidence given. This is ADVISORY analysis only — you are not writing a finding, not editing any file, and " +
+        "nothing you say is posted anywhere automatically.",
+      user: [
+        // The full path is never sent — it can name a private project, a
+        // username, or other local filesystem detail with no bearing on the
+        // clause itself. Only the document's own filename, redacted like
+        // every other piece of state this command sends to Jev.
+        `Reference document: ${redactSensitiveText(path.basename(refPath))}`,
+        `Clause ${verdict.clause_id} (kind: ${verdict.state_kind})`,
+        `Jev's probability the state satisfies this clause: ${verdict.probability}`,
+        "Deterministic evidence:",
+        ...verdict.factLines.map((line) => `- ${line}`),
+      ].join("\n"),
+    });
+    if (result.text.length > 0) explanations[verdict.clause_id] = result.text;
+  }
+  return explanations;
+}
+
+function parseThresholdFlag(args: string[]): number {
+  const raw = optionValue(args, "--threshold");
+  if (raw === undefined) return DEFAULT_CONFORM_THRESHOLD;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`--threshold must be a number between 0 and 1, got "${raw}".`);
+  }
+  return value;
+}
+
+async function readReportFindings(reportDir: string): Promise<readonly ReportFindingLike[]> {
+  try {
+    const raw = JSON.parse(await readFile(join(reportDir, "findings.json"), "utf8")) as unknown;
+    return Array.isArray(raw) ? (raw as ReportFindingLike[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function runConform(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CONFORM_FLAGS, "conform");
+  const cwd = process.cwd();
+  const refPath = requiredOption(args, "--ref", "conform");
+  const prArg = optionValue(args, "--pr");
+  const reportDir = optionValue(args, "--report");
+  const diffRef = optionValue(args, "--diff");
+  if ([prArg, reportDir, diffRef].filter((v) => v !== undefined).length !== 1) {
+    throw new Error("Usage: keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>) [--explain] [--json]");
+  }
+  const threshold = parseThresholdFlag(args);
+  const fixturesDir = optionValue(args, "--fixtures");
+  const explain = args.includes("--explain");
+
+  // AC9: opt-in per project, and refused before any network call.
+  if (!(await readConformEnabled(cwd))) {
+    console.error(
+      "`review.jev.conform` is not enabled for this project (.metaproject/tasks.config.json: " +
+        '`{"review":{"jev":{"conform":true}}}`). Conformance checking sends redacted PR/report/hunk text to ' +
+        "OpenRouter/TypeSafe, so it is opt-in — nothing was read and no network call was made.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const apiKey = resolveJevApiKey(process.env);
+  if (apiKey === undefined || apiKey.length === 0) {
+    console.error(
+      "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config: conformance checking " +
+        "needs a Jev/OpenRouter credential and made no network call.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const docText = await readFile(refPath, "utf8");
+  const rawClauses = extractReferenceClauses(docText);
+  const model = optionValue(args, "--model") ?? DEFAULT_JEV_MODEL;
+  const fetchFn: typeof fetch = fixturesDir === undefined ? globalThis.fetch : await fixtureConformJevFetch(fixturesDir);
+  const acc: ConformUsageAccumulator = { jevCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, sawUsage: false };
+
+  const clauses = await resolveConformClauseTags(cwd, refPath, docText, rawClauses, fetchFn, model, acc);
+  // AC8 support: remember this reference document for the TUI picker's recents list.
+  // 0o600: this file names reference documents the operator has been reading —
+  // local filesystem paths other users on the same machine should not see.
+  await writeFileAtomic(
+    join(cwd, CONFORM_RECENTS_PATH),
+    `${JSON.stringify(withRecentDoc(await readRecentConformDocs(cwd), refPath), null, 2)}\n`,
+    { mode: 0o600 },
+  ).catch(() => {});
+
+  const notCheckable = clauses.filter((c) => !c.checkable);
+  const checkable = clauses.filter((c) => c.checkable);
+
+  let target: ConformTarget;
+  let evaluated: ConformVerdict[] = [];
+  // AC6: a checkable clause whose kind has no state supplied this run is
+  // "not evaluated" — tracked per CLAUSE, not per kind, so a kind that DOES
+  // have a target this run but happens to produce zero regions (an empty
+  // diff, an empty report) still reports its clauses as not-evaluated rather
+  // than silently vanishing them.
+  const supplied = new Set<string>();
+
+  if (prArg !== undefined) {
+    const number = Number(prArg);
+    if (!Number.isInteger(number) || number <= 0) throw new Error(`--pr must be a positive integer, got "${prArg}".`);
+    const port = fixturesDir === undefined ? createGhConformPrPort(undefined, optionValue(args, "--repo")) : await fixtureConformPrPortFrom(fixturesDir);
+    const info = await port.pr(number);
+    target = { kind: "pr", label: `PR #${info.number} — ${info.title}` };
+    const facts = computePrConformFacts(info);
+    const redacted = prRedactedStateText(info);
+    const prClauses = checkable.filter((c) => c.state_kind === "pr");
+    for (const clause of prClauses) supplied.add(clause.clause_id);
+    const prItems: ConformBatchItem[] = prClauses.map((clause) => ({ clause, facts: prClauseFacts(clause, facts) }));
+    evaluated = evaluated.concat(await scoreConformClauses(prItems, redacted, fetchFn, model, threshold, acc));
+
+    const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
+    const regions = hunkRegionsFromDiff(info.diff);
+    if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
+    for (const region of regions) {
+      const hunkItems: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
+      evaluated = evaluated.concat(await scoreConformClauses(hunkItems, hunkRedactedStateText(region), fetchFn, model, threshold, acc));
+    }
+  } else if (reportDir !== undefined) {
+    target = { kind: "report", label: reportDir };
+    const reportMarkdown = await readFile(join(reportDir, "report.md"), "utf8").catch(() => "");
+    const findings = await readReportFindings(reportDir);
+    const facts = computeReportConformFacts(reportMarkdown, findings);
+    const redacted = reportRedactedStateText(reportMarkdown);
+    const reportClauses = checkable.filter((c) => c.state_kind === "report");
+    for (const clause of reportClauses) supplied.add(clause.clause_id);
+    const items: ConformBatchItem[] = reportClauses.map((clause) => ({ clause, facts: reportClauseFacts(clause, facts) }));
+    evaluated = await scoreConformClauses(items, redacted, fetchFn, model, threshold, acc);
+  } else {
+    const diff = await gitDiff(diffRef, DEFAULT_CONTEXT_LINES);
+    target = { kind: "diff", label: diffRef ?? "working diff" };
+    const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
+    const regions = hunkRegionsFromDiff(diff);
+    if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
+    for (const region of regions) {
+      const items: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
+      evaluated = evaluated.concat(await scoreConformClauses(items, hunkRedactedStateText(region), fetchFn, model, threshold, acc));
+    }
+  }
+
+  const notEvaluated = checkable.filter((c) => !supplied.has(c.clause_id)).map((c) => notEvaluatedVerdict(c));
+  const verdicts: ConformVerdict[] = [...evaluated, ...notEvaluated, ...notCheckable.map((c) => notCheckableVerdict(c))];
+
+  const explanations = explain ? await explainConformVerdicts(cwd, refPath, verdicts, threshold, fixturesDir) : undefined;
+
+  const result = {
+    refPath,
+    target,
+    threshold,
+    verdicts,
+    ...(explanations !== undefined && Object.keys(explanations).length > 0 ? { explanations } : {}),
+    usage: acc.sawUsage
+      ? { jevCalls: acc.jevCalls, inputTokens: acc.inputTokens, outputTokens: acc.outputTokens, costUsd: acc.costUsd }
+      : { jevCalls: acc.jevCalls },
+  };
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(conformResultToJson(result), null, 2));
+    return;
+  }
+  console.log(renderConformMarkdown(result));
+}
+
+async function readRecentConformDocs(cwd: string): Promise<readonly string[]> {
+  try {
+    const raw = JSON.parse(await readFile(join(cwd, CONFORM_RECENTS_PATH), "utf8")) as unknown;
+    return Array.isArray(raw) ? (raw as string[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -2396,6 +3329,11 @@ Usage:
                               --sha <head-sha> --final [--round <n>] [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                               [--flow-link <url>] [--fixtures <dir>]
+  keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
+                         [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+  keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                       [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                       [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
@@ -2468,6 +3406,62 @@ cross-family-review:
   authoring family, or naming a reviewer that was never a candidate).
   Omitted, the round records NOTHING, and \`status\` says \`not recorded\`.
   That is not \`single-family\`: nobody decided.
+
+ci-triage:
+  Advisory-only flaky/infra/real-regression triage for one failed CI run's job
+  (flow 306). Scores a redacted, bounded excerpt of the job's own log against
+  Jev (TypeSafe System One): three probabilities, one per bucket, printed with
+  the top pick and labelled ADVISORY — it never reruns a job, writes a status
+  check, or merges anything; that path does not exist in this command.
+  Opt-in per project: \`.metaproject/tasks.config.json\`'s
+  \`review.jev.ci_triage: true\`, absent by default, because the log excerpt
+  leaves the machine to OpenRouter/TypeSafe. With it off, or with no
+  OPENROUTER_API_KEY (env, or a saved \`openrouterKey\`), the command refuses
+  and makes no network call. \`--fixtures <dir>\` answers BOTH the CI read and
+  the Jev call from files on disk (\`ci-run-info.json\`, \`ci-failed-log.txt\`,
+  optional \`ci-history.json\`, \`jev-response.json\`) — no real \`gh\` call, no
+  real network, the same discipline \`--fixtures\` already gives \`comments\`.
+  Vendor-reported accuracy only: this classifier ships with no measured
+  precision/recall on this repository's own history (PLAN.md's Phase 7
+  evaluation is where that gets measured).
+
+conform:
+  Reference-document conformance mode (flow 308): a rules file, a skill, or a
+  project skill is split deterministically into clauses (no model call), each
+  tagged \`state_kind: pr|report|hunk\` and \`checkable\`. Every checkable clause
+  is scored by Jev against DETERMINISTIC FACTS keryx computes first (PR body
+  sections present/non-empty and hand-written size for \`pr\`; a report's
+  section order and whether every finding carries a severity/evidence/location
+  class for \`report\`; the hunk itself for \`hunk\`) placed above the redacted
+  state — this is what makes the answers useful, not raw text alone.
+  \`--pr <n>\` scores \`pr\`-kind clauses against that pull request's title/body,
+  AND \`hunk\`-kind clauses against its diff. \`--report <dir>\` scores
+  \`report\`-kind clauses against an existing review package's own
+  \`report.md\`/\`findings.json\` — no new artifact format. \`--diff <ref>\` scores
+  \`hunk\`-kind clauses against \`git diff <ref>\`. Exactly one of the three is
+  required. A clause whose kind has no matching target this run is reported
+  \`not evaluated\`; a \`not-checkable\` clause (a live/manual step, or a
+  reviewer-process obligation no artefact records) is ALWAYS listed, never
+  dropped, and never sent to Jev.
+  \`--explain\` sends every clause scored below \`--threshold\` (default 0.5) to
+  the model the routing table assigns the \`review\` category (the session
+  model when the table is empty), citing the clause id and the evidence. The
+  explanation is labelled ADVISORY and is never written to the PR or to
+  \`findings.json\` — this command has no write path to either.
+  Opt-in per project, and named as a privacy decision: PR text, report content
+  and code hunks leave the machine to OpenRouter/TypeSafe. Enable with
+  \`.metaproject/tasks.config.json\`'s \`review.jev.conform: true\`, absent by
+  default. With it off, or with no OpenRouter credential, the command refuses
+  before any read and makes no network call; every redacted state is passed
+  through \`redactSensitiveText\` before it is sent.
+  \`--fixtures <dir>\` answers the pr-kind read (\`pr.json\`), every Jev call
+  (\`jev-response.json\`), and (with \`--explain\`) the explanation pass
+  (\`explain-response.json\`) — no real \`gh\` call, no real network.
+  Honest limits: this mode is the least mechanical use of Jev in this
+  repository — deciding whether a PR body names an out-of-scope list is closer
+  to judgement than a styling checklist bullet. See flow 308's own journal
+  (.metaproject/flows/308-*/journal.md) for the measured usefulness and
+  limits of a live run against real pull requests and a real review package.
 
 complete:
   --finding/--disposition/--evidence record what became of a named finding, and

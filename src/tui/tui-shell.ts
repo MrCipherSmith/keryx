@@ -70,7 +70,13 @@ import { describeDetachedRuns } from "./trigger-run-now";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
-import { createSplashLifecycle, mountEmptyTranscriptSplash, playBootAnimation, type SplashLifecycle } from "./boot-animation";
+import {
+  createSplashLifecycle,
+  mountEmptyTranscriptSplash,
+  mountStartupIndicator,
+  playBootAnimation,
+  type SplashLifecycle,
+} from "./boot-animation";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -83,6 +89,11 @@ import {
 } from "./inspector-sources";
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
+import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
+import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
+import { isConformCommand, openConform } from "./conform-inspector";
+import { loadConformSetup, runConformForTarget } from "./conform-source";
+import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -109,6 +120,8 @@ import {
   openSessionInfo,
 } from "./session-info";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
+import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
+import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
@@ -137,17 +150,28 @@ import {
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
-import { mountBalancePanel } from "./balance-panel";
+import { formatBalance, mountBalancePanel } from "./balance-panel";
 import type { DetectedProvider } from "../commands/select";
 import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
 import {
   MODELS_FETCH_TIMEOUT_MS,
+  classifyProviderConnection,
+  disconnectProvider,
   fetchOpenAiCompatModelsDetailed,
   modelsFailureLine,
   providerByName,
   resolveModelsForPicker,
+  sharedCredentialWarning,
+  testProviderConnection,
 } from "../commands/providers";
 import { loadSessionLimits } from "../commands/model-limits";
+import {
+  describeCatalogStatus,
+  formatCatalogAge,
+  loadOrRefreshProviderCatalogFromDetected,
+  loadProviderCatalogCache,
+  type ProviderCatalog,
+} from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
@@ -156,7 +180,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -209,6 +233,7 @@ import {
 import { setAskUserHost } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
   buildSideWorkerPrompt,
@@ -225,8 +250,8 @@ import {
   editMainQueueItem,
   reinsertMainQueueItem,
 } from "./main-queue";
-import type { QueueNavAction } from "./queue-nav";
-import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
+import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
@@ -506,6 +531,16 @@ export interface SelectProviderModelOptions {
    * developer's Mac.
    */
   configDir?: string;
+  /**
+   * `onlyConnected` only (flow 304, AC7): called synchronously right after a
+   * successful Disconnect, before the row disappears from the list — so the
+   * `/connect` command handler can tell whether the just-disconnected
+   * provider was the CURRENT session's active one and print the "session
+   * keeps its loaded credential" line. This function has no session state of
+   * its own to compare against. `sharedWith` (flow 304 review finding #2)
+   * names every OTHER provider the same disconnect also affected.
+   */
+  onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
 }
 
 /**
@@ -2388,6 +2423,64 @@ export function modelPickerNotice(label: string, result: ModelsResolveResult): s
   return modelsFailureLine(label, result.failure);
 }
 
+/**
+ * Small styled label mimicking a clickable button — mirrors
+ * `composer-choice.ts`'s "small styled label" pattern (bold/colored
+ * `TextRenderable`, no border) rather than a bordered box: a bordered child
+ * box next to a plain-text label in the same row would need its own explicit
+ * height to avoid the row's cross-axis stretch fighting its border rows (see
+ * `.metaproject/memory/lessons/tui-alignself-height-collapse.md` — this file
+ * avoids `alignSelf` entirely for exactly that class of bug).
+ *
+ * The ONE button factory behind the queue dock's Force/Edit/Delete AND
+ * `/connect`'s Test/Disconnect (flow 304) — both call this, not a parallel
+ * copy, so "built the way `mainQueueButton` builds Force/Edit/Delete" is
+ * true by construction rather than by two implementations staying in sync.
+ */
+function smallActionButton(
+  otui: OpenTui,
+  r: Renderer,
+  label: string,
+  id: string,
+  color: string,
+  onMouseDown: () => void,
+): { box: Box; setActive: (active: boolean) => void } {
+  const box = new otui.BoxRenderable(r, {
+    id,
+    flexShrink: 0,
+    marginLeft: 1,
+    paddingLeft: 1,
+    paddingRight: 1,
+    onMouseDown: (event: { stopPropagation: () => void }) => {
+      // Part A (flow 170 T5 investigation): @opentui/core's
+      // Renderable.processMouseEvent fires this handler THEN, unless told
+      // otherwise, walks up .parent and fires every ancestor's onMouseDown
+      // too (confirmed against the bundled implementation,
+      // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
+      // processMouseEvent/onMouseDown setter pair) -- mouse events bubble by
+      // default. A row/dock above this button may have its own
+      // onMouseDown (queueDock's background click, or a row's label click
+      // here); without stopping it here, every button click would ALSO fire
+      // that ancestor handler as an unwanted bubbled side effect. Stop it at
+      // the deepest, most specific handler -- the button itself.
+      event.stopPropagation();
+      onMouseDown();
+    },
+  });
+  // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
+  // helpers) -- plain content + `.fg` is the same pattern
+  // `transcript-blocks.ts`'s block header already uses for theme colors.
+  const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
+  text.fg = color;
+  box.add(text);
+  const setActive = (active: boolean): void => {
+    box.backgroundColor = active ? getTheme().highlight : undefined;
+    text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
+    text.fg = color;
+  };
+  return { box, setActive };
+}
+
 /** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
 function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedProvider[]): Promise<DetectedProvider | undefined> {
   const r = stepRenderer(target);
@@ -2428,6 +2521,320 @@ function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedP
       cleanup();
       resolve(chosen === null ? undefined : detected.find((d) => labelOf(d) === chosen.name));
     });
+  });
+}
+
+/** {@link pickConnectedProviderStep}'s dependencies for the two row buttons. */
+interface ConnectedProviderStepOptions {
+  fetch?: typeof fetch;
+  env?: Record<string, string | undefined>;
+  configDir?: string;
+  /**
+   * Called synchronously right after a successful disconnect, before the row
+   * is removed from the list — so the caller can tell whether the CURRENT
+   * session's active provider was just disconnected (AC7) without this step
+   * knowing anything about session state itself. `sharedWith` (flow 304
+   * review finding #2) names every OTHER provider this same disconnect also
+   * affected (e.g. built-in `zai`/`zai-coding` sharing `ZAI_API_KEY`) — empty
+   * when none.
+   */
+  onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
+}
+
+/**
+ * `/connect`'s provider list (flow 304, AC1–AC3): one row per connected
+ * provider, drawn like the queue dock's rows — a label (Enter/click still
+ * selects the provider, unchanged from `pickProviderStep`'s old
+ * `SelectRenderable` behavior) plus `[Test]` and `[Disconnect]` buttons built
+ * by the SAME `smallActionButton` the queue dock uses. `/provider`'s own
+ * wizard keeps calling `pickProviderStep` unchanged — this step is used only
+ * for the `onlyConnected` (`/connect`) path in `selectProviderModelInTui`.
+ *
+ * Row/action navigation (AC3) reuses `stepQueueNavIndex`/`clampQueueNavIndex`
+ * verbatim for up/down, and the sibling `stepConnectNavAction` for left/right
+ * across Label/Test/Disconnect. No separate `chrome.addOverlaySource`
+ * registration is needed: this step already runs inside the caller's
+ * `chrome.withOverlay(...)` (see the `/connect` command handler), whose
+ * `overlayDepth` counter stays incremented for this step's entire lifetime —
+ * the same reason none of `pickProviderStep`/`promptApiKeyStep`/etc. register
+ * their own overlay source either.
+ */
+function pickConnectedProviderStep(
+  otui: OpenTui,
+  target: StepTarget,
+  detected: readonly DetectedProvider[],
+  opts: ConnectedProviderStepOptions,
+): Promise<DetectedProvider | undefined> {
+  const r = stepRenderer(target);
+  return new Promise((resolve) => {
+    let rows: DetectedProvider[] = [...detected];
+    let selectedIndex = 0;
+    let selectedAction: ConnectNavAction = "label";
+    let pendingDisconnect: string | undefined;
+    let resolved = false;
+    interface RowBlock {
+      name: string;
+      outer: Box;
+      label: Box;
+      labelText: InstanceType<OpenTui["TextRenderable"]>;
+      status: InstanceType<OpenTui["TextRenderable"]>;
+      test: { box: Box; setActive: (active: boolean) => void };
+      disconnect: { box: Box; setActive: (active: boolean) => void };
+    }
+    let rowBlocks: RowBlock[] = [];
+
+    const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
+    // Flow 309 (AC6): decorate each row with the CACHED catalog's status,
+    // balance (when known) and reading age — read once, synchronously, when
+    // this step opens. Additive only: it never changes which providers are
+    // listed (that stays `filterConnectedDetectedProviders`'s live probe,
+    // called by this step's caller) or what `[Test]` does — a provider with
+    // no cache entry yet (never refreshed) just shows its plain note,
+    // unchanged from before this flow.
+    const catalogCache = loadProviderCatalogCache(opts.configDir);
+    const noteOf = (d: DetectedProvider): string => {
+      const base = d.note ?? `${d.models.length} model(s)`;
+      const entry = catalogCache?.providers[d.name];
+      if (entry === undefined) return base;
+      const balanceNote = entry.balance !== undefined ? ` · ${formatBalance(entry.balance)}` : "";
+      return `${base} · ${describeCatalogStatus(entry.status)}${balanceNote} · ${formatCatalogAge(entry.fetchedAt)}`;
+    };
+
+    // flow 304 review finding #4: Esc while a Disconnect is armed used to
+    // close the WHOLE step, even though the hint says "Esc to cancel" (of
+    // the arm, an operator reasonably assumes). Registered BEFORE
+    // `openStepSurface` below, so it is called FIRST on every keypress
+    // (OpenTUI's `InternalKeyHandler.emit` walks `renderableHandlers` in
+    // registration order and stops at the first handler that calls
+    // `stopPropagation()` — confirmed against the bundled implementation,
+    // `node_modules/@opentui/core/chunk-bun-t2myhmwd.js`'s `emit`/`onInternal`
+    // pair, the same investigation technique `mainQueueButton`'s own mouse-
+    // bubbling comment used). When nothing is armed this does nothing and
+    // the key falls through to `openStepSurface`'s own Escape handler
+    // (`onEscape` below) unchanged — so a SECOND Esc still leaves, matching
+    // AC3's "Esc leaves" and this step's own footer.
+    const unsubEscapeGuard = onKeypress(r, (key) => {
+      if (resolved || key.name !== "escape" || pendingDisconnect === undefined) return;
+      clearPending();
+      applyHighlight();
+      key.preventDefault();
+      key.stopPropagation();
+    });
+
+    const surface = openStepSurface(otui, target, {
+      id: "connect-picker",
+      title: "Connected providers",
+      tab: "Providers",
+      hint: "(↑/↓ row · ←/→ Label/Test/Disconnect · Enter · Esc to cancel)",
+      footer: [
+        { key: "↑/↓", label: "row" },
+        { key: "←/→", label: "Label/Test/Disconnect" },
+        { key: "Enter", label: "select/run" },
+        { key: "esc", label: "cancel" },
+      ],
+      contentRows: selectBoxHeight(Math.max(rows.length, 1), true),
+      onEscape: () => finish(undefined),
+    });
+    const body = surface.body;
+
+    function finish(value: DetectedProvider | undefined): void {
+      if (resolved) return;
+      resolved = true;
+      unsubEscapeGuard();
+      unsub();
+      surface.close();
+      resolve(value);
+    }
+
+    /** Cancel an armed Disconnect confirmation on any OTHER action, so it never fires from a stale arm. */
+    function clearPending(): void {
+      if (pendingDisconnect === undefined) return;
+      const armed = rowBlocks.find((b) => b.name === pendingDisconnect);
+      pendingDisconnect = undefined;
+      if (armed !== undefined) armed.status.content = "";
+    }
+
+    function applyHighlight(): void {
+      for (let i = 0; i < rowBlocks.length; i++) {
+        const block = rowBlocks[i];
+        if (block === undefined) continue;
+        const active = i === selectedIndex;
+        block.outer.backgroundColor = active ? getTheme().highlight : undefined;
+        block.labelText.content = active && selectedAction === "label" ? otui.t`${boldChunk(otui, `${labelOf(rows[i]!)}`)}  ${dimChunk(otui, noteOf(rows[i]!))}` : otui.t`${labelOf(rows[i]!)}  ${dimChunk(otui, noteOf(rows[i]!))}`;
+        block.test.setActive(active && selectedAction === "test");
+        block.disconnect.setActive(active && selectedAction === "disconnect");
+      }
+    }
+
+    async function runTest(name: string): Promise<void> {
+      const block = rowBlocks.find((b) => b.name === name);
+      const provider = providerByName(name, opts.configDir);
+      if (block === undefined) return;
+      if (provider === undefined) {
+        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`;
+        return;
+      }
+      block.status.content = otui.t`${dimChunk(otui, "testing…")}`;
+      const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env);
+      // The row (or the whole step) may be gone by the time the probe
+      // resolves — a disconnect elsewhere repaints `rowBlocks`, and Esc/a
+      // label selection closes the step outright. Re-look-up by name rather
+      // than trusting the captured reference; write nothing if it's gone.
+      const current = rowBlocks.find((b) => b.name === name);
+      if (current === undefined || resolved) return;
+      current.status.content =
+        result.source === "live"
+          ? otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(result.models.length)} model(s)`
+          : otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(rows.find((d) => d.name === name) ?? { name, models: [] }), result.failure ?? { kind: "empty" })}`;
+    }
+
+    function armOrConfirmDisconnect(name: string): void {
+      const block = rowBlocks.find((b) => b.name === name);
+      if (block === undefined) return;
+      if (pendingDisconnect !== name) {
+        clearPending();
+        pendingDisconnect = name;
+        // flow 304 review finding #2: warn BEFORE the irreversible action
+        // when this provider shares its env var with another (e.g. built-in
+        // zai/zai-coding both reading ZAI_API_KEY) — classified fresh here,
+        // not reused from paint time, since the credential state could have
+        // changed since this row was last drawn.
+        const env = opts.env ?? process.env;
+        const classification = classifyProviderConnection(name, env, opts.configDir);
+        const warning = sharedCredentialWarning(classification.sharedWith, classification.envKey);
+        const label = labelOf(rows.find((d) => d.name === name) ?? { name, models: [] });
+        block.status.content =
+          warning === undefined
+            ? otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`
+            : otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${roleChunk(otui, "attention", `Note: ${warning}.`)} ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`;
+        return;
+      }
+      pendingDisconnect = undefined;
+      const result = disconnectProvider(name, opts.env ?? process.env, opts.configDir);
+      if (!result.ok) {
+        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} not removed — ${result.reason ?? "unknown reason"}`;
+        return;
+      }
+      opts.onDisconnected?.(name, result.sharedWith);
+      rows = rows.filter((d) => d.name !== name);
+      paint();
+    }
+
+    function paint(): void {
+      for (const block of rowBlocks) {
+        try {
+          body.remove(block.outer);
+        } catch {
+          // already detached
+        }
+      }
+      rowBlocks = [];
+      if (rows.length === 0) {
+        finish(undefined);
+        return;
+      }
+      selectedIndex = clampQueueNavIndex(selectedIndex, rows.length);
+      for (let i = 0; i < rows.length; i++) {
+        const d = rows[i]!;
+        const outer = new otui.BoxRenderable(r, { id: `cp-${d.name}`, width: "100%", flexDirection: "column" });
+        const row = new otui.BoxRenderable(r, { id: `cp-${d.name}-row`, width: "100%", flexDirection: "row" });
+        const labelText = new otui.TextRenderable(r, {
+          id: `cp-${d.name}-label-t`,
+          content: otui.t`${labelOf(d)}  ${dimChunk(otui, noteOf(d))}`,
+        });
+        const label = new otui.BoxRenderable(r, {
+          id: `cp-${d.name}-label`,
+          flexGrow: 1,
+          minWidth: 0,
+          onMouseDown: (event: { stopPropagation: () => void }) => {
+            event.stopPropagation();
+            clearPending();
+            selectedIndex = i;
+            selectedAction = "label";
+            finish(d);
+          },
+        });
+        label.add(labelText);
+        row.add(label);
+        const test = smallActionButton(otui, r, "Test", `cp-test-${d.name}`, getTheme().focus, () => {
+          clearPending();
+          selectedIndex = i;
+          selectedAction = "test";
+          applyHighlight();
+          void runTest(d.name);
+        });
+        const disconnect = smallActionButton(otui, r, "Disconnect", `cp-disc-${d.name}`, getTheme().error, () => {
+          selectedIndex = i;
+          selectedAction = "disconnect";
+          applyHighlight();
+          armOrConfirmDisconnect(d.name);
+        });
+        row.add(test.box);
+        row.add(disconnect.box);
+        outer.add(row);
+        const status = new otui.TextRenderable(r, { id: `cp-${d.name}-status`, content: "", marginLeft: 1 });
+        outer.add(status);
+        body.add(outer);
+        rowBlocks.push({ name: d.name, outer, label, labelText, status, test, disconnect });
+      }
+      applyHighlight();
+    }
+
+    const unsub = onKeypress(r, (key) => {
+      if (resolved) return;
+      if (key.name === "up") {
+        clearPending();
+        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "up");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "down") {
+        clearPending();
+        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "down");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "left") {
+        clearPending();
+        selectedAction = stepConnectNavAction(selectedAction, "left");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "right") {
+        clearPending();
+        selectedAction = stepConnectNavAction(selectedAction, "right");
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
+        const row = rows[selectedIndex];
+        if (row === undefined) return;
+        if (selectedAction === "label") {
+          clearPending();
+          finish(row);
+        } else if (selectedAction === "test") {
+          clearPending();
+          void runTest(row.name);
+        } else {
+          armOrConfirmDisconnect(row.name);
+        }
+        key.preventDefault();
+        key.stopPropagation();
+      }
+      // Escape is handled by `openStepSurface`'s own handler (`onEscape`
+      // above) — this step declares no interest in it, matching every other
+      // step in this file.
+    });
+
+    paint();
   });
 }
 
@@ -2482,7 +2889,18 @@ export function selectProviderModelInTui(
       // OpenAI-compat gateways return 401 without a Bearer key, and we would
       // otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
       while (true) {
-        const prov = await pickProviderStep(otui, rOrChrome, allCandidates);
+        // flow 304, AC1: `/connect` (`onlyConnected`) gets the row-list step
+        // with Test/Disconnect buttons; `/provider`'s fuller wizard (base-URL
+        // edit, credential prompt, "add custom provider") keeps the plain
+        // `SelectRenderable` picker unchanged.
+        const prov = options.onlyConnected
+          ? await pickConnectedProviderStep(otui, rOrChrome, allCandidates, {
+              ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
+              ...(options.env !== undefined ? { env: options.env } : {}),
+              ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
+              ...(options.onDisconnected !== undefined ? { onDisconnected: options.onDisconnected } : {}),
+            })
+          : await pickProviderStep(otui, rOrChrome, allCandidates);
         if (prov === undefined) {
           resolve(undefined);
           return;
@@ -2779,91 +3197,9 @@ export type PickModelOptions = {
   escLabel?: string;
 };
 
-/** What {@link mountFilterList} renders: `items`, narrowed by a typed filter. */
-interface FilterListSpec<T> {
-  idPrefix: string;
-  items: readonly T[];
-  toOption: (item: T) => { name: string; description: string };
-  /** `query` is already trimmed and lower-cased. */
-  matches: (item: T, query: string) => boolean;
-  /** The placeholder row when `items` itself is empty. */
-  emptyLabel: string;
-  /** Filter-line text while no filter is typed. */
-  idleHint: string;
-  filterHint: (filter: string, shown: number, total: number) => string;
-  showDescription: boolean;
-  width: number | "100%";
-  height: number;
-  /** Enter on a row: the item, or `undefined` on a placeholder row. */
-  onPick: (item: T | undefined) => void;
-}
-
-/**
- * The type-to-filter list both pickers share, in either host (the full-screen
- * overlay or a ModalHost tab body): a filter line over a focused
- * `SelectRenderable`. ↑/↓/Enter stay native to the select; the returned `onKey`
- * edits the filter on printable keys and Backspace. Esc belongs to the host.
- */
-function mountFilterList<T>(
-  otui: OpenTui,
-  r: Renderer,
-  parent: Box,
-  spec: FilterListSpec<T>,
-): { onKey: (key: KeypressEvent) => void } {
-  const filterLine = new otui.TextRenderable(r, { id: `${spec.idPrefix}-filter`, content: "" });
-  parent.add(filterLine);
-  const sel = new otui.SelectRenderable(r, {
-    id: `${spec.idPrefix}-sel`,
-    width: spec.width,
-    showDescription: spec.showDescription,
-    height: spec.height,
-    showScrollIndicator: true,
-    wrapSelection: true,
-    options: [],
-    ...selectThemeColors(getTheme()),
-  });
-  parent.add(sel);
-  sel.focus();
-
-  let filter = "";
-  let shown: readonly T[] = spec.items;
-  const apply = (): void => {
-    const q = filter.trim().toLowerCase();
-    shown = q.length > 0 ? spec.items.filter((item) => spec.matches(item, q)) : spec.items;
-    sel.options =
-      shown.length > 0
-        ? shown.map(spec.toOption)
-        : [{ name: spec.items.length === 0 ? spec.emptyLabel : "(no match)", description: "" }];
-    sel.selectedIndex = 0;
-    filterLine.content = otui.t`${dimChunk(otui, 
-      q.length > 0 ? spec.filterHint(filter, shown.length, spec.items.length) : spec.idleHint,
-    )}`;
-  };
-  apply();
-
-  sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
-    spec.onPick(shown[sel.getSelectedIndex()]);
-  });
-
-  return {
-    onKey: (key) => {
-      if (key.name === "backspace") {
-        filter = filter.slice(0, -1);
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      const ch = key.sequence;
-      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
-        filter += ch;
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-      }
-    },
-  };
-}
+// `FilterListSpec`/`mountFilterList` moved to `./filter-list` (flow 305, see
+// that file's header) — imported at the top of this file now, alongside the
+// rest of this module's imports.
 
 interface SessionPickerOption {
   value: string;
@@ -3335,6 +3671,12 @@ export async function launchTuiAgentShell(opts: {
     }
     // Persist the chosen provider/model (opencode-style) so the next launch reuses it.
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
+    // Flow 303 (AC14): from here until `createShellChrome` paints the header,
+    // transcript and focused composer below, the renderer's root would
+    // otherwise be empty — the reported "black screen" gap. Kept up across
+    // `opts.makeAgentDeps` (tool registry + MCP wiring), removed the moment
+    // the chrome exists.
+    const startupIndicator = mountStartupIndicator(otui, r, "Preparing your session…");
     // Mutable: `/connect` and `/model` rebuild these mid-session.
     let currentSel: TuiSelection = sel;
     // AC14 (flow 268): the next-step suggestion's in-flight request gate.
@@ -3357,8 +3699,6 @@ export async function launchTuiAgentShell(opts: {
     // at the write) rather than writing into it until the next heartbeat.
     const liveSlateSession = (): SlateSessionRef | undefined =>
       whilePersisting(slateSession, () => sessionLease.canPersist());
-    let deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
-    liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
     // Flow 268 T16 (AC11): local mirror of `opts.setReasoningOverride`'s
     // target, so the `/reasoning` no-arg status line can name the source
     // ("this session") without needing a getter back from `commands/shell.ts`.
@@ -3373,25 +3713,58 @@ export async function launchTuiAgentShell(opts: {
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
 
-    // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
-    // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard and
-    // copy-on-select. Everything below is agent-specific and mounts ON it.
-    const chrome = await createShellChrome(otui, r, {
-      title: `keryx · agent · ${sel.provider}/${sel.model}`,
-      status: `${sel.provider}/${sel.model}`,
-      footerHint: FOOTER_IDLE,
-      placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
-      commands: commandsForMode("agent"),
-      headerMeta: "↑0 ↓0",
-      // Closure-only: `permissionMode` is declared later in this function —
-      // TDZ is a call-time concern for a closure (the same pattern as the
-      // `() => slateSession` ref documented above).
-      permissionMode: () => permissionMode,
-      // The shared registry stays the single source of truth for the dropdown,
-      // resolved through THIS surface's mode so the wording is agent-mode's.
-      filterCommands: (query) => filterCommands(query, "agent"),
-      ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
+    // Flow 303 (AC14 follow-up, PR #669 review HIGH 2): `startupIndicator`
+    // must come down even if either await below throws — otherwise its
+    // `setInterval` keeps firing forever (the process never exits cleanly)
+    // and the spinner box is left mounted on screen while whatever error
+    // propagates. `deps`/`chrome` are declared OUTSIDE the try (both are read
+    // for the rest of this very long function) and assigned inside it.
+    let deps: AgentDeps;
+    let chrome: ShellChrome;
+    // Flow 309 (AC2): the live provider catalog refresh — starts during THIS
+    // startup loading phase (the spinner names it below) and is never
+    // `await`ed inline, so a hung provider cannot delay the composer taking
+    // input (same non-blocking shape as `resolveFirstRunHelp` further down).
+    // `.catch` turns a genuinely unexpected throw into an empty catalog
+    // rather than an unhandled rejection outliving this function.
+    const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {
+      fetch: globalThis.fetch,
+      env: envWithSavedApiKeys(process.env),
+    }).catch((error: unknown) => {
+      debugEvent("provider-catalog.refresh-failed", { error: error instanceof Error ? error.message : String(error) });
+      return { fetchedAt: new Date().toISOString(), providers: {} } satisfies ProviderCatalog;
     });
+    try {
+      startupIndicator.setStep("checking providers…");
+      startupIndicator.setStep("Loading agent tools and MCP servers…");
+      deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
+      liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+
+      // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
+      // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard
+      // and copy-on-select. Everything below is agent-specific and mounts ON it.
+      chrome = await createShellChrome(otui, r, {
+        title: `keryx · agent · ${sel.provider}/${sel.model}`,
+        status: `${sel.provider}/${sel.model}`,
+        footerHint: FOOTER_IDLE,
+        placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
+        commands: commandsForMode("agent"),
+        headerMeta: "↑0 ↓0",
+        // Closure-only: `permissionMode` is declared later in this function —
+        // TDZ is a call-time concern for a closure (the same pattern as the
+        // `() => slateSession` ref documented above).
+        permissionMode: () => permissionMode,
+        // The shared registry stays the single source of truth for the dropdown,
+        // resolved through THIS surface's mode so the wording is agent-mode's.
+        filterCommands: (query) => filterCommands(query, "agent"),
+        ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
+      });
+    } finally {
+      // Flow 303 (AC14): the chrome (header, transcript, focused composer) is
+      // now on screen, or the startup failed outright — either way the gap
+      // the indicator was covering is over.
+      startupIndicator.remove();
+    }
     mountedChrome = chrome;
     // Flow 170 T6, PRD FR-14: the composer has keyboard focus the moment the
     // shell finishes launching, no click required. `createShellChrome`
@@ -4530,27 +4903,45 @@ export async function launchTuiAgentShell(opts: {
       const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - SIDEBAR_WIDTH;
       return renderCommandHelp("agent", undefined, Math.max(HELP_MIN_COLS, mainWidth - TRANSCRIPT_CHROME_COLS));
     };
-    const openHelp = (): void => {
-      const content = helpText().trimEnd();
-      openModal(otui, chrome, {
-        title: "/help",
-        tabs: [{ id: "commands", label: "Commands" }],
-        initialTab: "commands",
-        footer: [
-          { key: "↑/↓", label: "scroll" },
-          { key: "esc", label: "close" },
-        ],
-        contentRows: Math.max(1, content.split("\n").length),
-        renderTab: (_tabId, body) => {
-          (body as Box).add(
-            new otui.TextRenderable(r, {
-              id: `help-${uid++}`,
-              content,
-            }),
-          );
-        },
+    // Flow 303 (AC6): `/help` opens the grouped, tabbed modal — one tab per
+    // onboarding group, ↑/↓ selects a command, Enter shows its detail, ←/→
+    // and Esc are `modal-host.ts`'s own. `initialGroupSlug` lets AC8's
+    // first-run wiring (below) open straight to "Connect a model provider".
+    const openHelp = (initialGroupSlug?: string): void => {
+      openHelpModal(otui, chrome, {
+        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...(initialGroupSlug !== undefined ? { initialGroupSlug } : {}),
       });
     };
+
+    // Flow 303 (AC8; HIGH 1 fix, PR #669 review): first-run onboarding —
+    // opens `/help` on the "Connect a model provider" tab exactly once, only
+    // when no provider is connected yet, and never again. Dispatched in the
+    // BACKGROUND, never `await`ed here: `filterConnectedDetectedProviders` is
+    // a real network probe, up to ~10s per configured provider, run
+    // sequentially — awaiting it inline used to delay every later step of
+    // this function (session load, sidebar mount, the composer actually
+    // taking input), not just the visual chrome. `resolveFirstRunHelp` marks
+    // the "shown" flag on every first run regardless of outcome (the bug this
+    // replaces: the marker used to be written only on the branch that opened
+    // the modal, so a user who already had a provider configured was marked
+    // NEVER — every later launch re-ran the same slow probe from scratch).
+    void resolveFirstRunHelp({
+      shown: helpFirstRunShown(),
+      probe: async () => (await filterConnectedDetectedProviders(opts.detected, { env: process.env })).length,
+      mark: markHelpFirstRunShown,
+    })
+      .then((tab) => {
+        // The probe can outlive the shell: never open a modal on a renderer the user already closed.
+        if (tab !== undefined && !destroyed) {
+          openHelp(tab);
+        }
+      })
+      .catch((error: unknown) => {
+        // Onboarding help is a courtesy — nothing here may end the shell as an unhandled rejection.
+        debugEvent("help.first-run-failed", { error: error instanceof Error ? error.message : String(error) });
+      });
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
@@ -4888,6 +5279,28 @@ export async function launchTuiAgentShell(opts: {
       // The wordmark would sit under the read-only view it just rendered.
       splash.removeIfShown();
     }
+    // Flow 309 (AC6): a provider that fails at startup is surfaced ONCE, as a
+    // non-blocking notice — never a modal, never something the operator must
+    // dismiss before the composer is usable. `providerCatalogReady` was
+    // already dispatched (background, non-blocking) during the earlier
+    // loading phase; this only reacts once it resolves, whenever that is —
+    // attached here (after `announceStartupNotice` exists) rather than at the
+    // dispatch site, since a fresh cache can resolve on the very next
+    // microtask and `announceStartupNotice` is not safe to reference before
+    // this point in the function.
+    void providerCatalogReady.then((catalog) => {
+      // Same guard as the bus-join callbacks below (`isDestroyed: () =>
+      // destroyed`): this shell may already be torn down by the time the
+      // catalog refresh resolves — a slow/timed-out provider probe racing
+      // Esc/exit — and painting into a destroyed surface is a use-after-free
+      // of whatever `announceStartupNotice`/`splash`/`io` now point at.
+      if (destroyed) return;
+      for (const entry of Object.values(catalog.providers)) {
+        if (entry.status === "auth-failed" || entry.status === "unreachable" || entry.status === "timeout") {
+          announceStartupNotice(`${entry.label ?? entry.name}: ${describeCatalogStatus(entry.status)} — /connect to fix`);
+        }
+      }
+    });
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
 
@@ -5187,7 +5600,13 @@ export async function launchTuiAgentShell(opts: {
 
     paintSessionHeader();
 
-    const inspectorKeys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+    // Widened to the full `KeypressEvent` shape (flow 305): `/routing`'s flat
+    // model picker needs `ctrl`/`meta`/`preventDefault`/`stopPropagation` to
+    // drive `mountFilterList`'s type-to-filter key handling, the same way
+    // `pickModelInTui` already does when given a raw renderer/chrome. Every
+    // existing consumer's narrower `{name, sequence}` handler still type-checks
+    // against this (a handler that reads fewer fields than it is given).
+    const inspectorKeys = { onKeypress: (handler: (key: KeypressEvent) => void) => onKeypress(r, (key) => handler(key)) };
     const inspectorCwd = (): string => opts.session?.cwd ?? liveSession.summary.projectPath;
     const showSessionInfo = (): void => {
       void (async () => {
@@ -5281,6 +5700,41 @@ export async function launchTuiAgentShell(opts: {
           ...inspectorKeys,
         });
       })();
+    };
+    /** Flow 305 (AC4): `/routing` — the category -> model routing table modal. */
+    const showRouting = (): void => {
+      openRouting(otui, chrome, {
+        cwd: inspectorCwd(),
+        renderer: r,
+        ...inspectorKeys,
+      });
+    };
+    /** `/ci` (flow 306, AC12): failed CI runs/jobs of the current branch's PR, each with its triage. */
+    const showCiTriage = (): void => {
+      const cwd = inspectorCwd();
+      openCiTriage(otui, chrome, {
+        cwd,
+        load: loadCiTriageList,
+        // `runCiTriageForItem`'s `spawn`/`fetchFn` params sit before `signal` and
+        // default when omitted — this wrapper keeps the modal's own
+        // `(cwd, item, signal?)` contract without exposing those two.
+        triage: (cwd, item, signal) => runCiTriageForItem(cwd, item, undefined, undefined, signal),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...inspectorKeys,
+      });
+    };
+    /** `/conform` (flow 308, AC8): pick a reference document and a target, then walk its clauses. */
+    const showConform = (): void => {
+      const cwd = inspectorCwd();
+      openConform(otui, chrome, {
+        cwd,
+        loadSetup: loadConformSetup,
+        run: (cwd, refPath, target, signal) => runConformForTarget(cwd, refPath, target, signal),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...inspectorKeys,
+      });
     };
     /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
     const showBus = (): void => {
@@ -5704,58 +6158,13 @@ export async function launchTuiAgentShell(opts: {
       setRowActive: (active: boolean) => void;
       buttons: Record<QueueNavAction, { box: Box; setActive: (active: boolean) => void }>;
     }> = [];
-    /**
-     * Small styled label mimicking a clickable button \u2014 mirrors
-     * `composer-choice.ts`'s "small styled label" pattern (bold/colored
-     * `TextRenderable`, no border) rather than a bordered box: a bordered
-     * child box next to a plain-text label in the same row would need its own
-     * explicit height to avoid the row's cross-axis stretch fighting its
-     * border rows (see `.metaproject/memory/lessons/
-     * tui-alignself-height-collapse.md` \u2014 this file avoids `alignSelf`
-     * entirely for exactly that class of bug).
-     */
-    const mainQueueButton = (
-      label: string,
-      id: string,
-      color: string,
-      onMouseDown: () => void,
-    ): { box: Box; setActive: (active: boolean) => void } => {
-      const box = new otui.BoxRenderable(r, {
-        id,
-        flexShrink: 0,
-        marginLeft: 1,
-        paddingLeft: 1,
-        paddingRight: 1,
-        onMouseDown: (event: { stopPropagation: () => void }) => {
-          // Part A (flow 170 T5 investigation): @opentui/core's
-          // Renderable.processMouseEvent fires this handler THEN, unless
-          // told otherwise, walks up .parent and fires every ancestor's
-          // onMouseDown too (confirmed against the bundled implementation,
-          // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
-          // processMouseEvent/onMouseDown setter pair) -- mouse events
-          // bubble by default. queueDock (T6) will get its own onMouseDown
-          // to enter queue-nav on a background click; without stopping it
-          // here, every button click would ALSO re-enter queue-nav as an
-          // unwanted bubbled side effect (AC9/AC10 both depend on the button
-          // click NOT merely focusing the dock). Stop it at the deepest,
-          // most specific handler -- the button itself.
-          event.stopPropagation();
-          onMouseDown();
-        },
-      });
-      // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
-      // helpers) -- plain content + `.fg` is the same pattern
-      // `transcript-blocks.ts`'s block header already uses for theme colors.
-      const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
-      text.fg = color;
-      box.add(text);
-      const setActive = (active: boolean): void => {
-        box.backgroundColor = active ? getTheme().highlight : undefined;
-        text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
-        text.fg = color;
-      };
-      return { box, setActive };
-    };
+    // Small styled label mimicking a clickable button -- `smallActionButton`
+    // (module level, beside `pickProviderStep`) holds the actual
+    // implementation now; `/connect`'s row-list step (flow 304) builds its
+    // Test/Disconnect buttons the SAME way, off the SAME function, rather
+    // than a parallel copy.
+    const mainQueueButton = (label: string, id: string, color: string, onMouseDown: () => void) =>
+      smallActionButton(otui, r, label, id, color, onMouseDown);
     /** Repaint the queue-nav highlight only -- no rebuild, mirrors
      * composer-choice.ts's paintOptions() re-highlight-on-change shape. */
     const applyQueueNavHighlight = (): void => {
@@ -6232,17 +6641,14 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "help": {
-            transcript.add(
-              new otui.TextRenderable(r, {
-                id: `c${uid++}`,
-                content: otui.t`${roleChunk(otui, "accent", `❯ ${line}`)}`,
-                marginTop: 1,
-              }),
-            );
-            io.onSystem?.(
-              "Main agent is busy. Type a normal question to spawn a side worker " +
-                "(sees main status + recent context; read-only). /status и /flows still open info panels. /exit still works.\n",
-            );
+            // PR #669 review, LOW: `/help` is read-only, same reasoning as
+            // `session-info`/`flows`/`workspace`/`review` right below — a
+            // main turn in progress is exactly when an operator most wants
+            // to check what else they can do, and opening the modal never
+            // touches the turn. It used to print a busy notice instead
+            // (with a stray Cyrillic "и" where the sentence needed "and"),
+            // never actually showing the commands it named.
+            openHelp();
             return;
           }
           case "interrupt": {
@@ -6702,6 +7108,10 @@ export async function launchTuiAgentShell(opts: {
           showReview();
           return;
         }
+        if (command.name === ROUTING_COMMAND) {
+          showRouting();
+          return;
+        }
         if (routeOpsCommand(line, false, ops)) {
           return;
         }
@@ -6714,6 +7124,14 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isMcpToolsCommand(command.name)) {
           showTools();
+          return;
+        }
+        if (isCiTriageCommand(command.name)) {
+          showCiTriage();
+          return;
+        }
+        if (isConformCommand(command.name)) {
+          showConform();
           return;
         }
         if (command.name === "/bus") {
@@ -6872,7 +7290,34 @@ export async function launchTuiAgentShell(opts: {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const ns = await chrome.withOverlay(() =>
               command.name === "/connect"
-                ? selectProviderModelInTui(otui, chrome, detected, { onlyConnected: true, env: process.env })
+                ? selectProviderModelInTui(otui, chrome, detected, {
+                    onlyConnected: true,
+                    env: process.env,
+                    // flow 304 AC7: disconnecting the provider the session is
+                    // CURRENTLY using neither switches provider nor interrupts
+                    // a turn — this only reports it. The session keeps
+                    // whatever it already loaded into memory this run;
+                    // `disconnectProvider` has already cleared the env var
+                    // for THIS process when it was keryx-saved, so a LATER
+                    // `/connect` (or a fresh launch) no longer offers it.
+                    onDisconnected: (name, sharedWith) => {
+                      // flow 304 review finding #2: the RESULT must name
+                      // every other provider a shared env var also
+                      // disconnected (e.g. built-in zai/zai-coding sharing
+                      // ZAI_API_KEY) — the row-nav step's own confirmation
+                      // text already warned about this before the operator
+                      // confirmed; this is the durable, transcript-printed
+                      // follow-up.
+                      if (sharedWith.length > 0) {
+                        io.onSystem?.(`◇ ${name} disconnected — this also disconnected: ${sharedWith.join(", ")}.\n`);
+                      }
+                      if (name === currentSel.provider) {
+                        io.onSystem?.(
+                          `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
+                        );
+                      }
+                    },
+                  })
                 : selectProviderModelInTui(otui, chrome, detected),
             );
             if (ns !== undefined) {

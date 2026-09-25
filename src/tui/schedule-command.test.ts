@@ -72,6 +72,10 @@ function deps(answer: boolean): ScheduleSlashDeps {
     now: () => new Date(2026, 8, 23, 5, 7, 0),
     resolveProgram: (p) => fakeProgram(p),
     accountOf: async () => "MrCipherSmith",
+    // Flow 302: no model is ever called in this suite, so the two new draft-time checks
+    // are stubbed to stay out of its way; they get their own dedicated tests.
+    providerReportsUsage: () => true,
+    checkCredential: async () => ({ ok: true }),
   };
 }
 

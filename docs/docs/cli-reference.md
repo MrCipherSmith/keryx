@@ -52,6 +52,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 
 | Command | Purpose |
 |---|---|
+| `help` | Grouped command help by task — `keryx help [group|command]`. |
 | `shell` | Start the interactive TUI agent shell (sessions are per-project). |
 | `version` | Check whether the installed Keryx version has a newer npm release. |
 | `sessions` | List, fork, export, or locate agent sessions for the current project. |
@@ -96,6 +97,41 @@ example `memory index --embeddings` builds the lexical index only, and
 `security eval --with-model` silently uses the pure detector path). The single
 sanctioned exception is **`mcp serve`**, which hard-fails with an actionable
 message when the optional MCP SDK is not installed.
+
+---
+
+## help
+
+Grouped command help by task, added by flow 303. Separate from `--help`/`-h`
+and a bare `keryx`, which keep printing the flat usage block above unchanged.
+
+```
+keryx help [group|command]
+```
+
+- `keryx help` (no argument) prints every command group, in onboarding order
+  (Start here; Connect a model provider; Look and feel; Working in keryx
+  shell; Project knowledge; Managed work; Automation; External agents, ACP
+  and MCP; Maintenance and diagnostics), each with its commands and a
+  one-line summary.
+- `keryx help <group>` — a group slug (`start-here`, `connect`,
+  `look-and-feel`, `shell-work`, `project-knowledge`, `managed-work`,
+  `automation`, `external-agents`, `maintenance`) — prints just that group.
+- `keryx help <command>` prints that command's full usage: the same rich
+  help `keryx <command> --help` prints today (`flow`, `trigger`, `serve-mcp`
+  and `governance` keep their own richer help; every other verb gets its
+  `USAGE_BODY` usage block). `keryx help <slash-command>` (e.g.
+  `keryx help /theme`) explains a `keryx shell` command, since those have no
+  standalone CLI form.
+- An unknown group, command or slash-command name exits non-zero and
+  suggests the closest matches by edit distance.
+
+In the OpenTUI shell, `/help` opens a tabbed modal built on the same grouped
+table — one tab per group, arrow keys to move, Enter for a command's detail,
+Esc to close. The readline shell, `--no-tui`, and the ACP host print the
+same grouping as text, since a modal cannot render there. On a brand-new
+`keryx shell` with no model provider configured yet, the modal opens once,
+already on the "Connect a model provider" tab.
 
 ---
 
@@ -1131,18 +1167,38 @@ keryx auth status <provider> [--json]
 ## providers
 
 Report over the **provider configuration** — the built-in OpenAI-compatible
-registry plus the operator-defined entries in `llm-providers.json`. Read-only and
-network-free: it reads files and exits, and spends no tokens.
+registry plus the operator-defined entries in `llm-providers.json` — plus, since
+flow 304, `test` and `remove`: the CLI form of the `/connect` row buttons
+("Test connection" and "Disconnect"). `list` and `cross-family` stay read-only
+and network-free, exactly as before; `test` makes ONE network call (the live
+`/models` probe), `status` (flow 309) reads or refreshes the live model
+catalog, and `remove` writes to disk only after confirmation.
 
 ```
 keryx providers list [--json]
+keryx providers status [--json] [--refresh]
 keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
+keryx providers test <name> [--json]
+keryx providers remove <name> [--yes]
 ```
 
 | Subcommand | Flags | Description |
 |---|---|---|
-| `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. |
+| `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. Read-only, network-free. |
+| `status` | `--json`, `--refresh` | The **live provider catalog** (flow 309): per connected provider, its status (`ok` / `auth-failed` / `unreachable` / `timeout` / `not-supported`), its live model count (or the curated offline count, clearly marked, when the live fetch failed), its balance when the provider exposes one (OpenRouter, DeepSeek — never a guessed number), and how old that reading is. An unconnected provider is never probed and never listed. A fresh cache (already refreshed by `keryx shell` starting up, `/connect`, or `providers test`) answers immediately; `--refresh` forces a fresh probe of every connected provider now. |
 | `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--from-shell-config`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. The authoring session comes from the flags, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; the selection `keryx shell` persisted only with `--from-shell-config`. |
+| `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. Also updates that provider's entry in the `status` catalog. |
+| `remove` | `<name>`, `--yes` | **Disconnect** that provider: remove its saved API key, its OAuth grant, or its `llm-providers.json` entry (together with any saved base-URL/model-param override) — whichever one it actually has. Asks for confirmation on a terminal; refuses without one unless `--yes`. A provider whose only credential is an environment variable you exported yourself is refused outright — the command names the exact variable to `unset`. Disconnecting removes only keryx's LOCAL copy of the credential: an OAuth grant is deleted from `auth.json` with no vendor revoke call, and a removed API key simply stops being read (the key itself stays valid at the vendor until you revoke it there yourself). |
+
+### Live provider catalog
+
+`keryx shell` refreshes this catalog during startup loading (a "checking
+providers…" step that never blocks the first prompt — a hung provider just
+never fills in), and `/routing`'s flat model picker and `/connect` read the
+same cache instead of a stale, hardcoded model list. The cache lives at
+`provider-catalog.json` in the per-user keryx config directory, mode `0600`,
+and never carries a credential — only `name`/`status`/`models`/`balance`/
+`fetchedAt`.
 
 ### Cross-family review
 
@@ -1180,6 +1236,76 @@ A gateway (`openrouter`) or a local runner (`ollama`, `rapid-mlx`) is deliberate
 **not** classified as a family — it fronts many. Such a provider contributes
 candidates only through the specific models it lists, so a round is never
 recorded as cross-family when both sides in fact ran the same vendor.
+
+---
+
+## routing
+
+The **routing table** — flow 305 — maps a task category to a model, so
+different kinds of work land on different providers/models without running
+`/model` before every turn. Two config layers, same precedence pattern as
+`security.config.json`: **explicit per-call override > per-project
+`routing.config.json` > per-user entry (shell config) > session default**.
+
+Categories (PRD `docs/requirements/keryx-jev-router/PRD.md` §4): `default`,
+`review`, `subagents`, `quick`, `coding`, `planning`, `docs`, `unattended`.
+Only `review` (`keryx review tier`) and `subagents` (`spawn_subagent`) are
+**wired** in this release — resolved automatically at their call site; the
+rest are catalogue entries the table/CLI/`/routing` already support, ready for
+a later flow to wire up without a second migration.
+
+**Not connected falls through.** An assignment naming a provider the operator
+has not connected — or a model that provider does not list — is treated as
+unresolved at its layer and falls through to the next one (project -> user ->
+session default), at every call site (`review tier`, `spawn_subagent`,
+`keryx routing list`, `/routing`). "Connected" is the same notion `/connect`
+uses (configured/detected providers and their reported models) — never an
+extra live network probe on every resolution. `keryx routing list` and
+`/routing` show the rejected entry:
+
+```
+<provider>/<model> - not connected, falling back to <resolved>
+```
+
+**A project `routing.config.json` requires approval.** Because it is a
+COMMITTED file, a repository could otherwise silently steer which model
+reviews its own diff. A project entry takes effect only after the operator
+has approved its CURRENT content once — a content fingerprint recorded per
+user, keyed by project root (the same "approve the exact thing that will run"
+shape `.keryx/mcp-servers.json` project-scope trust already uses). Until then,
+and whenever the file changes afterward (a pure reformat does not count — the
+fingerprint is over the validated category table, not the raw bytes), its
+entries are ignored, with a visible notice in `keryx routing list`, `/routing`
+and `keryx review tier`'s output. `keryx routing trust` shows the file's
+entries and then approves it; a routed review model is printed with
+`routed: true`, never folded into `tier_resolution: "discovered"` (which
+means the TIER, not routing, picked the model).
+
+```
+keryx routing list [--json]
+keryx routing set <category> <provider>/<model> [--user|--project]
+keryx routing set <category> <provider> [--user|--project]
+keryx routing unset <category> [--user|--project]
+keryx routing trust
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` | `--json` | Every category, its resolved assignment (`session default`, `<provider>/<model>`, or `<provider> (provider default)`), which layer answered (`project`, `user`, or `default`), and — when applicable — the not-connected entry it fell back from. |
+| `set` | `<category> <provider>/<model>`, `--user`\|`--project` | Pin an exact model for a category. Default layer: `--user`. A `--project` write is not auto-approved — run `keryx routing trust` afterward. |
+| `set` | `<category> <provider>`, `--user`\|`--project` | Pin a provider's own default model for a category (no `/model` — the "provider default" form). |
+| `unset` | `<category>`, `--user`\|`--project` | Clear a category back to `session default`. Default layer: `--user`. |
+| `trust` | — | Print `routing.config.json`'s entries and approve its current content, so the project layer starts applying. |
+
+In the TUI, `/routing` opens a list+detail modal: the list side shows every
+category's current resolution (with a not-connected fallback notice inline,
+and an unapproved-project notice when relevant); selecting one opens a
+**flat** searchable model picker — one list spanning every connected
+provider's models (built on the same type-to-filter machinery `/model` uses),
+never a "pick a provider first" step — with a "provider default" row per
+connected provider and a "session default" row. A confirmed pick writes
+immediately to the per-user layer. `t` on the list side shows the project
+file's entries and arms an approval; `y` confirms, any other key cancels.
 
 ---
 
@@ -1638,6 +1764,17 @@ keryx schedule remove <name> [--yes]
 | `resume <name>` | Re-enable both. No new confirmation is asked, so resume first checks that the entry still carries this machine's signature and that every granted binary still matches its pin, and refuses with the reason otherwise. It reinstalls the keryx recorded when you confirmed the card, never the one running `resume`. |
 | `run <name>` | One pass now (`keryx trigger run --schedule <name>`: local schedules only). |
 | `remove <name>` | After a confirmation, uninstall the timer and delete the entry. keryx deletes only files that carry its `# keryx-managed <projecthash> <name>` header. Anything else found at those paths is left untouched and named. |
+
+**Drafting checks the provider before the card is even shown.** `add`, `/schedule`
+and the agent's `schedule_create` tool all draft through the same code, which
+refuses — before anything is written or installed — a provider that is not known
+to report token usage on every response (`anthropic`, `openai`, `gemini`, or a
+registry provider whose entry sets `streamUsage`, for example `grok` or
+`deepseek`; see [Dispatching flow-next](#dispatching-flow-next)), and a provider
+with no usable credential in this environment. Both use the same resolution the
+scheduled run itself would use, so a confirmed card cannot install a timer whose
+every fire is bound to refuse with `dispatch-refused (provider-usage-unknown)` or
+for want of a credential.
 
 **Cadence.** A five-field cron expression, or one of `every N hours` (a divisor of
 24), `every N minutes` (5, 10, 15, 20 or 30), `hourly`, `daily at HH:MM`,
@@ -3052,6 +3189,11 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
+                       [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                     [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                     [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
@@ -3095,6 +3237,8 @@ left off and the gate reports it as unobserved.
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
 | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
+| `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
+| `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
 | `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
@@ -3592,6 +3736,223 @@ what it already has in flight, which shrinks the effective wave; it is a
 declaration, not an observation, and nothing verifies it. The record therefore
 carries `holds_across_nesting: yes (against the declared count)` or `no`, rather
 than implying a guarantee that does not exist.
+
+### `review ci-triage`
+
+Advisory-only triage for a failed CI run's job(s): flaky, infra, or real
+regression, scored by Jev (TypeSafe System One) over a redacted, bounded
+excerpt of the job's own log **plus a small block of deterministic signals**
+computed before Jev is ever asked. Flow 306 (Jev client, opt-in gate,
+advisory rendering); flow 307 (signals, every-failed-job default, the
+evaluation harness, this section's measured-accuracy numbers).
+
+```bash
+keryx review ci-triage --run 36095133327 --json
+```
+
+| Flag | Description |
+|---|---|
+| `--run <id>` | Required (unless `--eval`). The CI run id (e.g. a GitHub Actions run id). |
+| `--job <name>` | Narrows to one of the run's jobs (reaches it directly even when it is beyond the `MAX_JOBS_TRIAGED` cap below). Omitted, **every job whose conclusion is `failure` is triaged** (flow 307, AC3), up to the cap — one verdict each. |
+| `--test <name>` | Override the failing test name instead of the best-effort extraction from the log excerpt. Only applied when exactly one job is in scope. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter; omitted, `gh` resolves the repository from the current checkout. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers BOTH the CI read and the Jev call from files on disk (`ci-run-info.json`, `ci-failed-log.txt`, optional `ci-history.json`, `ci-attempts.json`, `ci-changed-files.json`, `ci-runs-by-head-sha.json`, `ci-related-runs.json`, `jev-response.json`) — no real `gh` call, no real network call. |
+| `--json` | Prints `{results, notTriaged}`: `results` is an array, one entry per triaged job, each `{runId, job, testName, verdict, usage}`; `notTriaged` names any failed jobs beyond the `MAX_JOBS_TRIAGED` cap (empty when nothing was skipped). |
+| `--eval <file>` | Flow 307 (AC5/AC6). Replays a labelled evaluation manifest (JSON, `{cases: [{id, runId, job, truth, fixturesDir}]}`) and reports **before** (flow 306: log only) and **after** (flow 307: log + signals) accuracy and cost, plus a per-case line. Offline (fixtures) by default. See below. |
+| `--live` | Only with `--eval`: replay against the real `gh`/Jev instead of each case's `fixturesDir` — the opt-in gate and credential check both apply, same as a plain `--run`. |
+
+**A bounded number of jobs per run (flow 307 review, `MAX_JOBS_TRIAGED = 10`).**
+Without `--job`, at most 10 failed jobs of one run are triaged — each job costs
+one Jev call and (with signals) a bounded number of extra `gh` reads, so an
+unbounded number of failed jobs no longer means an unbounded number of calls.
+Jobs beyond the cap are listed rather than silently triaged or silently
+dropped: `notTriaged` in the `--json` output, and a
+`not triaged (cap 10; use --job)` line in the text output. `--job <name>`
+still reaches any one of them directly. The failed-step log and the
+run-level signals (`priorAttempts`/`changedFiles`/`runsForHeadSha`) are each
+read once per run and reused across every job triaged, rather than
+re-fetched per job.
+
+### `review conform`
+
+Reference-document conformance mode (flow 308): a rules file, a skill, or a
+project skill is split deterministically into clauses (no model call), each
+tagged `state_kind: pr|report|hunk` and `checkable`. Every checkable clause is
+scored by Jev against DETERMINISTIC FACTS keryx computes first — PR body
+sections present/non-empty and hand-written size (via `src/review/scope.ts`)
+for `pr`; a report's section order and whether every finding records the
+fields the document requires (e.g. severity, evidence, a file anchor) for `report`; the hunk itself for `hunk` —
+placed above the redacted state. A `not-checkable` clause (a live/manual step,
+or a reviewer-process obligation no artefact records) is always listed, never
+sent to Jev.
+
+```bash
+keryx review conform --ref docs/pipeline-contribution-policy.md --pr 999 --json
+```
+
+| Flag | Description |
+|---|---|
+| `--ref <doc>` | Required. Path to the reference document (a rules file, a skill, or a project skill). |
+| `--pr <n>` | Score `pr`-kind clauses against that pull request's title/body, and `hunk`-kind clauses against its diff. Exactly one of `--pr`/`--report`/`--diff` is required. |
+| `--report <dir>` | Score `report`-kind clauses against an existing review package's own `report.md`/`findings.json` — no new artifact format. |
+| `--diff <ref>` | Score `hunk`-kind clauses against `git diff <ref>`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`; omitted, `gh` resolves the repository from the current checkout. |
+| `--explain` | Sends every clause scored below `--threshold` to the model the routing table assigns the `review` category (the session model when unset), citing the clause id and the evidence. Labelled ADVISORY; never written to the PR or to `findings.json`. |
+| `--threshold <0..1>` | Below this Jev probability a clause is `likely-violated` (and, with `--explain`, explained). Default `0.5`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), every Jev call (`jev-response.json`), and (with `--explain`) the explanation pass (`explain-response.json`) — no real `gh` call, no real network. |
+| `--json` | Prints `{ref, target, threshold, clauses, usage}` instead of the human-readable report. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. The
+document's clauses, PR text, report and diff are sent to Jev after secret
+redaction, and nothing leaves the machine unless `review.jev.conform` is on.
+A project turns it on with `review.jev.conform: true` in
+`.metaproject/tasks.config.json`. Sending the reference document's own clause
+text to Jev is the feature, not a leak — checking a clause requires the model
+to read it — and it is opt-in the same way the rest of this command is: only
+SECRETS inside that text (and inside the PR/report/diff state) are stripped
+first, by the same `redactSensitiveText` pass every other piece of state sent
+to Jev already gets. With the setting off, or with no OpenRouter credential,
+the command refuses before any read and makes no network call.
+
+**A checkable clause whose kind has no target this run is `not evaluated`**,
+never silently dropped — the same discipline `not-checkable` clauses get.
+
+**Honest limits.** This mode is the least mechanical use of Jev in this
+repository: deciding whether a PR body names an out-of-scope list is closer
+to judgement than a styling checklist bullet. Measured against real pull
+requests and a real review package: Jev's `noul` scores hedge low rather than
+confidently discriminating (no score reached 0.8+ probability across a
+115-question live check, and only a handful crossed the 0.5 default
+threshold on ordinary small maintenance PRs) — read `likely-violated` as
+"worth a human glance," not a confirmed finding. See flow 308's own journal
+(`.metaproject/flows/308-*/journal.md`) for the full measurement.
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.ci_triage: true` in
+`.metaproject/tasks.config.json` — the log excerpt leaves the machine to
+OpenRouter/TypeSafe, so the mere presence of an `OPENROUTER_API_KEY` never
+implies consent. With the setting off, or with no OpenRouter credential
+(`OPENROUTER_API_KEY`, or a saved `openrouterKey`), the command refuses and
+makes **no network call** — neither the CI read port nor the Jev client is
+ever reached in that state. (`--eval` without `--live` needs neither: nothing
+it reads ever leaves the machine.)
+
+**Advisory only, by construction.** The CI read port (`src/review/ci-port.ts`)
+has exactly six read methods (three from flow 306, three flow 307 added for
+signals) and no write method at all — there is no rerun, status-check, or
+merge call anywhere on this path to call. The printed verdict is always
+labelled `ADVISORY ONLY`.
+
+**Per-option probability, not a single `choice` answer.** OpenRouter's own
+TypeSafe SDK guide documents no shape for a `choice` answer that carries a
+probability per option — only the chosen option. So this command asks one
+`noul` question per bucket (`flaky`, `infra`, `real-regression`) instead of
+one `choice` question, and reports the three probabilities together.
+
+**Deterministic signals, computed before Jev is asked (flow 307, AC1/AC2).**
+For every failed job, through `CiPort` and `git show` only — never a write:
+
+- **rerun** — did the SAME job pass on an EARLIER attempt of this SAME run
+  (a "re-run failed jobs"/"re-run all jobs" rerun)?
+- **history** — of a bounded window of this workflow's other recent runs
+  (last 50, at most 8 actually inspected, at most 5 logs actually fetched),
+  how many failed the SAME test on ANOTHER branch, and how many of those
+  later passed on that branch?
+- **diff proximity** — does this commit change the failing test file itself,
+  a file in its own directory, or (best-effort, via `git show <sha>:<path>`)
+  a file the test imports?
+- **log markers** — timeout/runner-lost/network/OOM/dependency-install-
+  corruption phrases in the log text itself.
+- **same head, later** — did a LATER run of the exact same commit (a manual
+  re-trigger, not a new push) have THIS SAME JOB conclude success? A later
+  run that is merely green AT RUN LEVEL does not prove this specific job
+  passed (the run could have skipped, dropped, or renamed it, or another job
+  in it could be the one still failing) — this is verified by reading that
+  later run's own job list through `CiPort.runInfo` and requiring a job of
+  the same name to have concluded `success`. When a later run is green at
+  run level but this job cannot be confirmed there, no deterministic
+  override is applied; the run is still mentioned as an advisory-only
+  evidence line.
+
+These are placed in Jev's `state` as a labelled block above the log excerpt
+(redacted the same as everything else, and counted against the same 64k
+budget), and the questions are rewritten to point at that block explicitly.
+Printed evidence lines mirror `state`'s signals block exactly.
+
+**Deterministic override (AC8).** When the rerun or same-head signal alone
+answers the question — the same job/test passed on another attempt, or a
+later run of the same commit passed — the verdict says `DETERMINISTIC` and
+names the reason, and **Jev's probabilities are still shown beside it**, not
+replaced: the signals decide `top`, not the numbers under it.
+
+**A known signal gap, found while building the evaluation set:** the
+cross-branch history signal matches candidate runs by JOB NAME. The SAME test
+failing under a DIFFERENT job-matrix leg (e.g. `opentui native (darwin-x64)`
+vs. `opentui native (linux-x64)` — the real `schedules-sidebar.test.ts` AC11
+flake did exactly this across two of this evaluation set's cases) is not
+picked up by that signal today. Diff proximity is also a heuristic that can
+point the wrong way on a PR whose OWN diff is the flakiness fix landing in
+the same commit as the failure (also observed in the evaluation set).
+
+**Another known signal gap, found in post-merge review:** the same-head
+job-level check above matches the later run's job by NAME too, and a later
+run can have more than one job sharing that name (a matrix leg, a reused
+workflow). When that happens the deterministic override is withheld — which
+one of them is "this job" cannot be told apart from the name alone — and the
+run is only mentioned as an advisory-only evidence line, the same degrade
+path a missing, skipped, or unreadable job already gets.
+
+**Measured accuracy (flow 307, AC6) — honestly, whatever it is.** A live run
+of `--eval` against the real runs of the eight cases in
+`src/commands/fixtures/ci-triage-eval/` (`gh`/Jev, not fixtures; 2026-09-25):
+
+| | accuracy | cost |
+|---|---|---|
+| before (flow 306: log only) | **4/8 = 50%** | $0.00077 |
+| after (flow 307: log + signals) | **4/8 = 50%** | $0.00083 |
+
+Raw top-1 accuracy did not move. Signals fixed one case (a thin log excerpt
+that Jev alone read as `infra`; the diff-proximity and cross-branch-history
+evidence correctly pointed at `real-regression`) and broke a different one
+(a job whose log said `timed out after 5000ms` — about as clear an `infra`/
+`flaky` marker as a log gets — that Jev alone got right and got wrong once
+the signals block and its more pointed question wording were added). The two
+runs of the identical underlying regression in this set (same test, same
+root cause, different CI runs) also got different verdicts from Jev BEFORE
+any signal was added, which is a reminder that the model's own answer is not
+perfectly stable run-to-run holding the failure fixed. **This classifier
+remains a hint, not a diagnosis** — treat a non-`DETERMINISTIC` verdict
+accordingly regardless of `--top`. See the flow 307 journal
+(`.metaproject/flows/307-*/journal.md`) for the full per-case breakdown and
+the evidence behind each of the eight labels.
+
+### `review ci-triage --eval`
+
+```bash
+keryx review ci-triage --eval src/commands/fixtures/ci-triage-eval/manifest.json
+keryx review ci-triage --eval src/commands/fixtures/ci-triage-eval/manifest.json --live --repo MrCipherSmith/keryx
+```
+
+The committed evaluation set
+(`src/commands/fixtures/ci-triage-eval/manifest.json` + `cases/`) is eight
+labelled failed CI jobs from this repository's own history (four real
+regressions, three flaky, one infra), each with the real run id, job name,
+head sha and head branch, and a truth label checked against `gh run view
+--json jobs` and the job's own `--log-failed` text before being recorded.
+Log excerpts are authored to be representative rather than a byte-exact copy
+(the same discipline `src/commands/fixtures/ci-triage/` already follows); no
+secret appears in any fixture file.
+
+Offline (the default) replays every case from its own `fixturesDir` — a
+canned `jev-response.json`, so `before`/`after` differ only where a case's
+fixtures carry deterministic evidence (none of the eight do today: every real
+fix in this set landed as a new commit, never an actual CI rerun, which is
+itself an honest finding about this repository's CI history). `--live`
+replays the SAME run/job pairs against the real `gh` and the real Jev
+endpoint instead, and is where `before` and `after` can actually differ,
+since the two passes ask Jev different questions.
 
 ### `review budget`
 

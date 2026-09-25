@@ -10,7 +10,9 @@ import {
   DEFAULT_BOOT_DURATION_MS,
   hardWrapLines,
   mountEmptyTranscriptSplash,
+  mountStartupIndicator,
   playBootAnimation,
+  SPLASH_HELP_HINT,
   SPLASH_HINT,
   type SplashHandle,
 } from "./boot-animation";
@@ -273,6 +275,237 @@ describe("splash wrapping (narrow-pane centring)", () => {
     expect(hardWrapLines("ab\n\ncd", 10)).toEqual(["ab", "", "cd"]);
     expect(hardWrapLines("x".repeat(9), 4)).toEqual(["xxxx", "xxxx", "x"]);
   });
+});
+
+// Flow 303 (AC13): a new user's start screen names `/help`.
+otuiTest("the start screen shows the /help hint, in the same theme colour as the existing hint, within the pane width", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 80, height: 30 });
+  const transcript = new otui.core.BoxRenderable(setup.renderer, { id: "transcript-fixture", width: "100%", flexDirection: "column" });
+  setup.renderer.root.add(transcript);
+
+  const splash = mountEmptyTranscriptSplash(otui.core, setup.renderer, transcript);
+  await setup.flush();
+
+  const frame = setup.captureCharFrame();
+  expect(frame).toContain(SPLASH_HELP_HINT);
+  expect(frame).toContain("/help");
+  for (const line of frame.split("\n")) {
+    expect(line.length).toBeLessThanOrEqual(80);
+  }
+
+  // Same styling as the existing hint (both `dimChunk`) — a real theme colour,
+  // not a hardcoded one, and consistent with the rest of the start screen.
+  type Node = { getChildren(): Node[]; content?: { chunks?: Array<{ text?: string; fg?: unknown }> } };
+  const findByText = (root: Node, needle: string): unknown => {
+    for (const chunk of root.content?.chunks ?? []) {
+      if (chunk.text?.includes(needle) === true) {
+        return chunk.fg;
+      }
+    }
+    for (const child of root.getChildren()) {
+      const found = findByText(child, needle);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  const root = setup.renderer.root as unknown as Node;
+  const hintColor = findByText(root, "type a message to start");
+  const helpHintColor = findByText(root, "/help");
+  expect(hintColor).toBeDefined();
+  expect(helpHintColor).toBeDefined();
+  expect(helpHintColor).toEqual(hintColor);
+
+  splash.remove();
+  setup.renderer.destroy();
+});
+
+// Flow 303 (AC14): the gap between the boot animation closing and the chrome
+// being ready never shows a blank screen — a loading indicator with a short
+// step label stays up instead, and a slow injected startup step proves it.
+describe("mountStartupIndicator (AC14)", () => {
+  otuiTest("shows the initial label immediately, in theme colours", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+    const ticks: Array<() => void> = [];
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Preparing your session…", {
+      setInterval: (fn) => {
+        ticks.push(fn);
+        return ticks.length;
+      },
+      clearInterval: () => {},
+    });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Preparing your session…");
+    handle.remove();
+    setup.renderer.destroy();
+  });
+
+  otuiTest("setStep replaces the label", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Preparing your session…", {
+      setInterval: () => 1,
+      clearInterval: () => {},
+    });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Preparing your session…");
+
+    handle.setStep("Loading agent tools and MCP servers…");
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    expect(frame).toContain("Loading agent tools and MCP servers…");
+    expect(frame).not.toContain("Preparing your session…");
+
+    handle.remove();
+    setup.renderer.destroy();
+  });
+
+  otuiTest("remove tears it down, and a second remove is a safe no-op", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+    const cleared: unknown[] = [];
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Starting…", {
+      setInterval: () => "timer-handle",
+      clearInterval: (h) => cleared.push(h),
+    });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Starting…");
+
+    handle.remove();
+    handle.remove();
+    await setup.flush();
+    expect(setup.captureCharFrame()).not.toContain("Starting…");
+    expect(cleared).toEqual(["timer-handle"]);
+    setup.renderer.destroy();
+  });
+
+  otuiTest("the spinner glyph advances on each injected tick, without waiting on real time", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+    let tick: (() => void) | undefined;
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Loading…", {
+      setInterval: (fn) => {
+        tick = fn;
+        return 1;
+      },
+      clearInterval: () => {},
+    });
+    await setup.flush();
+    const first = setup.captureCharFrame();
+    expect(first).toContain("Loading…");
+
+    tick?.();
+    await setup.flush();
+    const second = setup.captureCharFrame();
+    expect(second).toContain("Loading…");
+    // The spinner glyph itself changed, even though the label did not.
+    expect(second).not.toBe(first);
+
+    handle.remove();
+    setup.renderer.destroy();
+  });
+
+  // The literal AC14 test: "an injected slow startup step" proves the
+  // indicator is on screen while startup is pending and gone once it
+  // completes — the same mount/remove sequence `launchTuiAgentShell` wires
+  // around its own slow step (`opts.makeAgentDeps`).
+  otuiTest("is on screen while an injected slow startup step is pending, and gone once it resolves", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+
+    let resolveSlowStep: (() => void) | undefined;
+    const slowStartupStep = new Promise<void>((resolve) => {
+      resolveSlowStep = resolve;
+    });
+
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Loading agent tools and MCP servers…", {
+      setInterval: () => 1,
+      clearInterval: () => {},
+    });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Loading agent tools and MCP servers…");
+
+    const startupDone = slowStartupStep.then(() => {
+      handle.remove();
+    });
+
+    // Still pending: the indicator is still on screen — this is the exact
+    // regression the operator reported (a blank screen while this runs).
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Loading agent tools and MCP servers…");
+
+    resolveSlowStep?.();
+    await startupDone;
+    await setup.flush();
+    expect(setup.captureCharFrame()).not.toContain("Loading agent tools and MCP servers…");
+
+    setup.renderer.destroy();
+  });
+
+  // PR #669 review, HIGH 2: nothing guarded the region between mounting this
+  // indicator and the chrome existing — if a startup step threw, the
+  // `setInterval` kept firing forever and the spinner box stayed on screen.
+  // This proves the fix's SHAPE (try/…/finally { handle.remove() }), the
+  // exact pattern `launchTuiAgentShell` now wraps `opts.makeAgentDeps` and
+  // `createShellChrome` in.
+  otuiTest("a rejecting startup step still removes the indicator, stops its timer, and the error propagates", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+
+    const cleared: unknown[] = [];
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Loading agent tools and MCP servers…", {
+      setInterval: () => "timer-handle",
+      clearInterval: (h) => cleared.push(h),
+    });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Loading agent tools and MCP servers…");
+
+    const failingStep = Promise.reject(new Error("makeAgentDeps blew up"));
+
+    const run = async (): Promise<void> => {
+      try {
+        await failingStep;
+      } finally {
+        handle.remove();
+      }
+    };
+
+    await expect(run()).rejects.toThrow("makeAgentDeps blew up");
+    await setup.flush();
+
+    // The indicator is gone, not just logically removed — nothing left on screen.
+    expect(setup.captureCharFrame()).not.toContain("Loading agent tools and MCP servers…");
+    // Its timer was torn down — a leaked `setInterval` is exactly what used
+    // to keep the process from exiting.
+    expect(cleared).toEqual(["timer-handle"]);
+
+    setup.renderer.destroy();
+  });
+});
+
+// PR #669 review, HIGH 2: the real wiring in `launchTuiAgentShell` really
+// does wrap `opts.makeAgentDeps` and `createShellChrome` in try/finally —
+// pinned against the source, the same idiom `boot-animation.test.ts`
+// already uses for `createSplashLifecycle`'s call sites, because neither of
+// those two awaits is reachable from a test without driving the whole shell.
+test("tui-shell.ts wraps makeAgentDeps/createShellChrome in try/finally that always removes the startup indicator", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const mountIdx = source.indexOf("const startupIndicator = mountStartupIndicator(");
+  expect(mountIdx).toBeGreaterThan(-1);
+  const tryIdx = source.indexOf("try {", mountIdx);
+  const makeAgentDepsIdx = source.indexOf("await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);", mountIdx);
+  const createChromeIdx = source.indexOf("await createShellChrome(otui, r, {", mountIdx);
+  const finallyIdx = source.indexOf("} finally {", mountIdx);
+  const removeIdx = source.indexOf("startupIndicator.remove();", finallyIdx);
+
+  expect(tryIdx).toBeGreaterThan(mountIdx);
+  expect(makeAgentDepsIdx).toBeGreaterThan(tryIdx);
+  expect(createChromeIdx).toBeGreaterThan(makeAgentDepsIdx);
+  expect(finallyIdx).toBeGreaterThan(createChromeIdx);
+  expect(removeIdx).toBeGreaterThan(finallyIdx);
+  // Exactly one call site — no leftover unconditional `.remove()` outside the finally.
+  expect((source.match(/startupIndicator\.remove\(\);/g) ?? []).length).toBe(1);
 });
 
 otuiTest("a resize re-wraps the splash at the NEW width instead of leaving it clipped", async () => {

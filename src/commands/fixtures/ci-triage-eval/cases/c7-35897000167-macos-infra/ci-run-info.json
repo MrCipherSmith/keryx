@@ -1,0 +1,11 @@
+{
+  "runId": "35897000167",
+  "workflowName": "CI",
+  "headBranch": "main",
+  "headSha": "f4c72712f6f26a1f7af7f5fda24e5f9e1473bace",
+  "conclusion": "failure",
+  "jobs": [
+    { "name": "macOS real-host legs — OS sandbox + TUI pty launch", "conclusion": "failure", "status": "completed" },
+    { "name": "typecheck-and-tests", "conclusion": "success", "status": "completed" }
+  ]
+}

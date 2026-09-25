@@ -1,0 +1,20 @@
+keryx governance — spend, confirmations, signatures and gate outcomes, unified
+
+Usage:
+  keryx governance report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]
+  keryx governance show [--json]
+
+Reads what is already recorded — flow.json (owner, signatures, acConfirmed,
+completionAttempts), review package manifests (cost), and the trigger run
+ledger (.metaproject/data/trigger/runs.jsonl). Never re-runs a gate, never
+calls a model or a network service. A figure nobody recorded is reported as
+"not recorded", never as zero.
+
+`report` writes .metaproject/data/governance/artifacts/latest.md and
+latest.json (schema-versioned), then prints the report. `show` reprints the
+most recently written report without regenerating it.
+
+--all-projects also covers every project in the user-global registry
+(`keryx projects`); a registered project whose path is missing or unreadable
+is listed with a reason instead of failing the whole report.
+

@@ -190,6 +190,40 @@ export function providerReportsUsage(provider: string): boolean {
   return providerByName(provider)?.streamUsage === true;
 }
 
+/** `provider !== "fake"` and construction fell back to the offline `FakeProvider` — the one credential problem both `defaultMakeProvider` and `providerHasUsableCredential` report. */
+function credentialProblem(providerName: string, provider: ProviderPort): string | undefined {
+  if (provider instanceof FakeProvider && providerName !== "fake") {
+    return (
+      `provider "${providerName}" has no usable credential in this environment (it would fall back to the ` +
+      "offline fake provider) — refusing to start an unattended run that could do nothing but look successful."
+    );
+  }
+  return undefined;
+}
+
+/**
+ * Whether `provider`/`model` has a usable credential in this environment — the SAME
+ * construction `defaultMakeProvider` uses at run time, minus the usage-reporting gate
+ * (a caller that wants both, like `defaultMakeProvider` itself, checks
+ * `providerReportsUsage` separately, so the two problems are never reported twice for
+ * one refusal). Exported so `draftSchedule` (`src/trigger/schedules.ts`, core, flow
+ * 302) can inject it as its `checkCredential`, and a draft's refusal agrees with what a
+ * real dispatch would do — core may not import this module itself (RULE 1: a core
+ * owner never imports an adapter).
+ */
+export function providerHasUsableCredential(
+  dispatch: Pick<TriggerDispatch, "provider" | "model" | "baseUrl">,
+): { readonly ok: true } | { readonly ok: false; readonly reason: string } {
+  const env = envWithSavedApiKeys(process.env);
+  const provider = makeProvider(dispatch.provider, dispatch.model, {
+    fetch: globalThis.fetch,
+    env,
+    ...(dispatch.baseUrl !== undefined ? { baseUrl: dispatch.baseUrl } : {}),
+  });
+  const reason = credentialProblem(dispatch.provider, provider);
+  return reason === undefined ? { ok: true } : { ok: false, reason };
+}
+
 /** Default provider construction: fails closed on a missing credential and on unknown usage reporting. */
 export function defaultMakeProvider(dispatch: TriggerDispatch): ProviderPort | { error: string; code?: DispatchRefusalCode } {
   if (!providerReportsUsage(dispatch.provider)) {
@@ -207,13 +241,8 @@ export function defaultMakeProvider(dispatch: TriggerDispatch): ProviderPort | {
     env,
     ...(dispatch.baseUrl !== undefined ? { baseUrl: dispatch.baseUrl } : {}),
   });
-  if (provider instanceof FakeProvider && dispatch.provider !== "fake") {
-    return {
-      error:
-        `provider "${dispatch.provider}" has no usable credential in this environment (it would fall back to the ` +
-        "offline fake provider) — refusing to start an unattended run that could do nothing but look successful.",
-    };
-  }
+  const reason = credentialProblem(dispatch.provider, provider);
+  if (reason !== undefined) return { error: reason };
   return provider;
 }
 

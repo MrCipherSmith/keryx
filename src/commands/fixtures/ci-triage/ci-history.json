@@ -1,0 +1,12 @@
+{
+  "CI": [
+    { "runId": "36102265992", "conclusion": "success", "createdAt": "2026-09-25T06:18:19Z", "headBranch": "main" },
+    { "runId": "36101964164", "conclusion": "success", "createdAt": "2026-09-25T06:14:17Z", "headBranch": "docs/jev-prd" },
+    { "runId": "36101614548", "conclusion": "success", "createdAt": "2026-09-25T06:09:26Z", "headBranch": "feat/agent-platform-expansion" },
+    { "runId": "36101565078", "conclusion": "success", "createdAt": "2026-09-25T06:08:46Z", "headBranch": "feat/agent-platform-expansion" },
+    { "runId": "36101112491", "conclusion": "success", "createdAt": "2026-09-25T06:02:41Z", "headBranch": "flow/317-close" },
+    { "runId": "36100996082", "conclusion": "success", "createdAt": "2026-09-25T06:01:05Z", "headBranch": "feat/agent-platform-expansion" },
+    { "runId": "36095133327", "conclusion": "failure", "createdAt": "2026-09-25T04:36:33Z", "headBranch": "feat/agent-platform-expansion" },
+    { "runId": "36100535154", "conclusion": "success", "createdAt": "2026-09-25T05:54:29Z", "headBranch": "flow/317-grader-fu" }
+  ]
+}

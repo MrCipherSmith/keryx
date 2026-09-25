@@ -16,6 +16,7 @@ import { createInterface } from "node:readline/promises";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { runTriggerOnce } from "./trigger";
+import { providerHasUsableCredential, providerReportsUsage as dispatchProviderReportsUsage } from "./trigger-dispatch";
 import { readTriggerRuns } from "../trigger/record";
 import type { ScheduleBackend, ScheduleHost } from "../trigger/install";
 import {
@@ -31,6 +32,11 @@ import {
 } from "../trigger/schedules";
 import { GRANTED_TOOL_CATALOGUE } from "../trigger/granted-tools";
 
+/** Flow 302: the real checks, reused so a draft agrees with what `keryx trigger run` would do. Production's default; tests inject a fake to stay hermetic. */
+async function defaultCheckCredential(provider: string, model: string): ReturnType<NonNullable<DraftContext["checkCredential"]>> {
+  return providerHasUsableCredential({ provider, model });
+}
+
 /** Seams for tests. Production passes none. */
 export interface ScheduleCommandDeps {
   readonly host?: ScheduleHost;
@@ -38,6 +44,10 @@ export interface ScheduleCommandDeps {
   readonly confirm?: (question: string) => Promise<boolean>;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
+  /** Default: `providerReportsUsage` (`./trigger-dispatch`) — the same the dispatcher checks at run time. */
+  readonly providerReportsUsage?: DraftContext["providerReportsUsage"];
+  /** Default: `providerHasUsableCredential` (`./trigger-dispatch`) — the same construction the dispatcher uses at run time. */
+  readonly checkCredential?: DraftContext["checkCredential"];
   readonly cwd?: string;
   /** The environment to read the agent-shell marker from (default `process.env`). */
   readonly env?: Record<string, string | undefined>;
@@ -244,6 +254,8 @@ async function addSubcommand(cwd: string, args: string[], deps: ScheduleCommandD
   const drafted = await draftSchedule(request, {
     projectRoot: cwd,
     host,
+    providerReportsUsage: deps.providerReportsUsage ?? dispatchProviderReportsUsage,
+    checkCredential: deps.checkCredential ?? defaultCheckCredential,
     ...(deps.now !== undefined ? { now: deps.now } : {}),
     ...(deps.resolveProgram !== undefined ? { resolveProgram: deps.resolveProgram } : {}),
     ...(deps.accountOf !== undefined ? { accountOf: deps.accountOf } : {}),

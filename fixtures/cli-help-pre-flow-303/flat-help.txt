@@ -1,0 +1,182 @@
+keryx 0.2.158
+
+Usage:
+  keryx                                        Show CLI usage
+  keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
+                                               Start TUI agent shell (sessions are per-project)
+  keryx sessions list|fork <id>|export <id>|path
+                                               List / branch / export sessions for the current project
+  keryx acp [--provider <p>] [--model <m>] [--base-url <url>] [--data-dir <dir>]
+                                               Agent Client Protocol agent server over stdio
+  keryx bus list [--json] | log [--since <seq>] [--limit N] [--json] | send <@name|@all> [--kind <k>] [--reply-to <id>] <text> | prune
+                                               Agent bus: peers, events and messages shared across this clone's worktrees
+  keryx version check [--json]                 Check npm latest (advisory; never installs)
+  keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
+  keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
+                     [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask] -- <path> [args...]
+  keryx harness extension --spec <path>
+  keryx harness wave --spec <path>
+  keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>] [--json]
+                                               Validate a recorded run's log against a fixture (no re-execution)
+  keryx init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
+  keryx status
+  keryx modules [status | enable <name> | disable <name>]
+  keryx projects [list [--json] | register <path> | forget <id>]
+  keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
+  keryx serve status [--json]
+  keryx serve token issue | rotate | revoke
+  keryx serve config init|set|show
+  keryx update [--skip-runtime] [--hooks]
+  keryx dashboard build
+  keryx dashboard open
+  keryx dash
+  keryx rules sync
+  keryx sync [--apply]
+  keryx sync install-hooks | uninstall-hooks
+  keryx providers list [--json]
+  keryx providers cross-family [--opt-in] [--json]
+  keryx auth list [--json]
+  keryx auth login <provider>
+  keryx auth logout <provider>
+  keryx auth status <provider> [--json]
+  keryx health run [--strict] [--changed [--since <ref>]] [--scope <s>] [--source a,b]
+  keryx health status | gate [--strict-warn] | sources | trend
+  keryx health explain <file-or-module> [--narrate] [--json]
+  keryx health baseline update [--scope <s>]
+  keryx orient [<runtime>]
+  keryx orient install-hook [--runtime <id|all>] [--dry-run]
+  keryx agents bootstrap status --runtime <claude|opencode|zcode|codex|antigravity|all>
+  keryx agents bootstrap install --runtime <claude|opencode|zcode|codex|antigravity|all> [--dry-run]
+  keryx gdgraph build
+  keryx gdgraph query <cycles|orphans>
+  keryx gdgraph affected <file>
+  keryx ctx status
+  keryx wiki status
+  keryx wiki new <type> <slug> --title "<title>"
+  keryx wiki collect [--force] [--limit <n>]
+  keryx wiki index
+  keryx wiki check-links
+  keryx skills status
+  keryx skills list
+  keryx skills inspect <project-skill>
+  keryx skills route <query-or-target>
+  keryx skills catalog [--profile recommended]
+  keryx skills install [--profile recommended]
+  keryx skills create <target> --module <module> --name <skill-name>
+  keryx skills verify <skill-or-target>
+  keryx skills learn --from-review <path> --skill <module>/<skill>
+  keryx skills learn apply <proposal.json>
+  keryx skills export <project-skill> --runtime codex|claude|plugin
+  keryx skills sync --runtime codex|claude --target <dir>
+  keryx skill-verify-skill <skill-or-target>
+  keryx skills contracts validate <file> --schema subagent-result
+  keryx metrics status|collect|validate|latest|show|plan|benchmark
+  keryx test analyze
+  keryx test run [--changed]
+  keryx test status
+  keryx memory new <type> --title "<title>"
+  keryx memory search "<query>" [--status accepted]
+  keryx memory index
+  keryx memory ingest --from-review <path>
+  keryx flow init (--issue <url> | --title "<t>")
+  keryx flow list
+  keryx flow status <id>
+  keryx flow complete <id> [--comment]
+  keryx job init --name <slug> [--intent implement|analyze|review|custom] [--project <path>]
+  keryx job list [--json]
+  keryx job status <name> [--json]
+  keryx job step <name> <step-id> --status pending|in-progress|completed|skipped|failed [--reason "<text>"]
+  keryx job document <name> --type analysis|implementation-report|review|verification-report --file <path>
+  keryx job complete <name>
+  keryx review attach|start|ingest|status|complete
+  keryx standard validate
+  keryx standard doctor
+  keryx standard capabilities
+  keryx standard baseline --baseline <status> --pr <status>
+  keryx standard emit llms [--stdout]
+  keryx commands [--json] [--module <name>] [--intent "<phrase>"] [--intents]
+  keryx security status
+  keryx security scan <path> [--json]
+  keryx security scan-mcp <manifest|dir> [--json]
+  keryx security check-input [--source <kind>] [--file <path>]
+  keryx sandbox status [--json]
+                                               OS sandbox launcher availability + per-capability containment matrix (report, not a gate)
+  keryx security check-output [--target <kind>] [--file <path>]
+  keryx security redact <path> [--out <path>]
+  keryx security report [--since <ref>]
+  keryx security policy validate
+  keryx security incidents [--limit <n>]
+  keryx security hooks install --runtime <claude|cursor|windsurf|generic-mcp|all>
+  keryx security eval [--corpus <name|all>] [--with-model]
+  keryx serve-mcp [--http] [--read-only] [--cwd <project-root>]
+  keryx integrate [--remove] <cursor|claude|opencode|vscode|generic|all> [--dry-run]
+  keryx mcp serve [--http] ...                  # retired: use keryx serve-mcp
+  keryx workspace create --title <title> [--component <workspace-relative-ref>]
+  keryx workspace list|show|add-resource
+  keryx mcp install|uninstall --runtime ...     # retired: use keryx integrate
+  keryx retention status [--json]
+  keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
+                                               Bound gdctx raw/artifacts logs and owner write-conflict
+                                               sidecars; dry run by default, --apply removes
+  keryx forgetting trail [--limit <n>] [--json]
+  keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
+                                               Read the deletion trail: what was removed, when, at
+                                               whose request, on what basis
+  keryx trigger run <name>                      Perform exactly one pass of a declared trigger's
+                                               action (.metaproject/triggers.json)
+  keryx schedule add|list|show|pause|resume|run|remove
+                                               Scheduled agent tasks: confirm a card, keryx installs
+                                               a systemd --user timer (launchd/cron elsewhere)
+  keryx governance report [--flow <id>] [--owner <name>] [--since <iso>] [--until <iso>] [--all-projects] [--json]
+                                               Spend, confirmations, signatures and gate outcomes,
+                                               unified across flows; writes latest.md/latest.json
+  keryx governance show [--json]                Reprint the most recently written governance report
+  keryx --version
+
+Commands:
+  shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
+            Sessions: -c continue last in this project, -r [id] resume (per-project).
+  sessions  List or export per-project shell sessions
+  acp       Speak ACP v1 (newline-delimited JSON-RPC) over stdio, for an ACP client (e.g. an editor)
+  bus       Agent bus: list peers and leases, read the log, send a message, prune
+  version   Check whether a newer npm release is available
+  harness   Run a single provider turn (harness run) and print structured events
+  init      Initialize .metaproject in the current project
+  status    Show local Metaproject status
+  modules   View and toggle Metaproject modules (interactive)
+  projects  Inspect the user-global registry of initialized projects
+  serve     Loopback-bound authenticated HTTP entry (off by default; read-only routes)
+  update    Refresh managed service files without touching data artifacts
+  dashboard Build or open the project admin dashboard
+  dash      Rebuild and open .metaproject/keryx-dashboard.html
+  rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
+  sync      Reconcile graph/wiki/memory with the current code, and wire the git hooks
+  providers Providers this operator has configured, and cross-family review eligibility
+  auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
+  orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
+  agents    Manage optional global agent bootstrap instructions
+  gdgraph   Build and query code dependency graph
+  ctx       Run compact context commands and save raw output
+  wiki      Manage the local project knowledge base
+  skills    Manage bundled Metaproject working skills
+  health    Aggregate code quality signals and run the quality gate
+  test      Analyze testing context and normalize test reports
+  memory    Store and search long-term project memory
+  flow      Agent-first flow lifecycle (Task Manager)
+  job       Agent-first job packages (job-orchestrator state, steps, documents)
+  review    Managed review packages and lightweight report-only review mode
+  standard  Validate the workspace against the Metaproject Standard
+  commands  Agent-callable command registry (intents, args, output, model usage)
+  security  Policy-based scanning, redaction, guardrails and audit reports
+  sandbox   Report OS sandbox launcher availability and the per-capability containment matrix
+  serve-mcp Expose Metaproject services over the Model Context Protocol (opt-in)
+  integrate Wire this project into an editor or agent as an MCP server
+  mcp       Retired spelling of serve-mcp / integrate; still works, names its replacement
+  metrics   Provenance-aware execution observability: run records, baselines, benchmarks
+  workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
+  retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
+  forgetting Read the deletion trail — was this removed, or did it never exist?
+  trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
+  schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
+  governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
+

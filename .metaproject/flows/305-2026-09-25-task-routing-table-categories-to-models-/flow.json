@@ -1,0 +1,528 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "305",
+  "slug": "task-routing-table-categories-to-models-",
+  "title": "Task routing table: categories to models, /routing modal with one searchable model list, keryx routing CLI; review and subagents read it",
+  "status": "done",
+  "createdAt": "2026-09-25T06:18:30.539Z",
+  "updatedAt": "2026-09-25T08:22:08.295Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T08:20:42.221Z",
+      "note": "src/harness/routing/table.ts defines ROUTING_CATEGORIES (8 categories), CategoryAssignment union (session-default/model/provider-default), and resolveCategory/resolveCategoryDetailed applying override>project>user>default precedence, pure with no fs/network access. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/harness/routing/table.test.ts (run as part of a 4-file, 74-pass batch) green."
+    },
+    "AC2": {
+      "at": "2026-09-25T08:20:42.523Z",
+      "note": "src/harness/routing/config.ts's loadRoutingConfig/saveRoutingConfig share the project routing.config.json and per-user shell-config.ts entry through one loader; a malformed/unreadable file is a named, surfaced error (never a silent empty table), verified by config.test.ts's malformed-file tests. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331."
+    },
+    "AC3": {
+      "at": "2026-09-25T08:20:56.523Z",
+      "note": "src/commands/routing.ts implements keryx routing list [--json]/set/unset/trust mirroring providers.ts's subcommand dispatch shape, --user/--project selecting the write layer (default --user); list prints every category, resolution and source layer. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/commands/routing.test.ts green (part of the 74-pass batch); exercised keryx routing --help/list myself this session."
+    },
+    "AC4": {
+      "at": "2026-09-25T08:20:57.180Z",
+      "note": "/routing (ROUTING_COMMAND, src/tui/routing-inspector.ts) opens a modal-host list+detail modal; the list side shows every category and resolution, Enter opens a flat searchable picker built on mountFilterList (extracted to src/tui/filter-list.ts) fed every connected provider's models plus one provider-default row per provider and one session-default row; a confirmed pick writes immediately to the per-user layer. Proven by a real keyboard-driven modal test (routing-inspector.test.ts, otuiTest AC4) over a fixture multi-provider catalogue. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/tui/routing-inspector.test.ts -> 11 pass, 0 fail."
+    },
+    "AC5": {
+      "at": "2026-09-25T08:21:06.530Z",
+      "note": "runTier (src/commands/review.ts) resolves the review category via applyReviewRoutingCategory ahead of assignTier's own ranking; an explicit {kind:model} entry replaces the decision, session-default leaves it byte-identical (review.test.ts AC5 'with an EMPTY routing table' regression test), tagged routed:true (never tier_resolution: discovered) to avoid mislabeling. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/commands/review.test.ts -t 'flow 305' -> 14 pass, 0 fail."
+    },
+    "AC6": {
+      "at": "2026-09-25T08:21:06.828Z",
+      "note": "createSpawnSubagentTool (src/harness/tool/builtin/spawn-subagent-tool.ts) resolves the subagents category when the dispatcher supplied no model_tier (kind absent/inherit), constructing an explicit or tier ChildModelRequest via categoryAssignmentToChildModelRequest before calling resolveChildModel. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/harness/tool/builtin/spawn-subagent-tool.test.ts -> 22 pass, 0 fail (AC6 test: subagents resolves to an allowed provider/model and the child actually runs on it)."
+    },
+    "AC7": {
+      "at": "2026-09-25T08:21:16.080Z",
+      "note": "The category-resolved ChildModelRequest passes through resolveChildModel's G1/G2/G3 gates unmodified; traced end to end (spawn-subagent-tool.ts -> orchestrate.ts spawnSubagent -> spawn.ts -> model.ts resolveChildModel). Original G1-out-of-allowlist scenario became unreachable once AC10 (same detected-provider source as G1's allowlist) pre-filters it; replaced with an equivalent G3 (classifiable, checked against the static provider registry, independent of AC10) denial test proving the gate chain still runs unmodified, plus a dispatcher-tier-overrides-category test. model.test.ts is byte-for-byte unchanged from pre-flow-305 main (45df98bd) and green (31 pass). Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331."
+    },
+    "AC8": {
+      "at": "2026-09-25T08:21:16.377Z",
+      "note": "keryx routing is in COMMAND_DESCRIPTORS (src/standard/command-registry.ts) and HELP_GROUPS (src/standard/help-groups.ts, under Connect a model provider), /routing is in AGENT_SLASH_COMMANDS and the help modal; docs/docs/cli-reference.md and README.md describe the routing table, its two config layers, and explicit>project>user>default precedence, in English. command-registry.routing-categories.test.ts keeps the CLI's category enum in sync with ROUTING_CATEGORIES. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331."
+    },
+    "AC9": {
+      "at": "2026-09-25T08:21:23.799Z",
+      "note": "CI green (19 checks, per operator report on the squash-merged PR #705). keryx health run (run myself this session at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331): Code Health PASS, project score 94, no gate conditions triggered. spawn-subagent-tool.test.ts diff from pre-flow-305 main is additive-only (one import-line change, no existing assertion touched); review.test.ts diff is a pure addition block; model.test.ts is byte-for-byte unchanged. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331."
+    },
+    "AC10": {
+      "at": "2026-09-25T08:21:30.409Z",
+      "note": "resolveCategoryDetailed (src/harness/routing/table.ts) takes an optional ConnectedPredicate; every layer's assignment is checked in precedence order and an assignment naming an unconnected provider/model is treated as unresolved and falls through, all the way to session-default if needed. Wired at all four call sites (review tier, spawn_subagent, keryx routing list, /routing) via connectedPredicateFrom, each fed the same already-fetched provider-detection result (no new network probe); CLI/modal print '<provider>/<model> - not connected, falling back to <resolved>' via describeFallbackNotice. Tests cover each call site (table.test.ts, review.test.ts, spawn-subagent-tool.test.ts, routing.test.ts, routing-inspector.test.ts). Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; full routing test batch (74+22+11+14 = 121 tests) green."
+    },
+    "AC11": {
+      "at": "2026-09-25T08:21:38.314Z",
+      "note": "src/harness/routing/trust.ts (modelled on mcp-servers/trust.ts) fingerprints the validated project table (sha256, category- and key-sorted) and records per-user, per-project-root approvals in the operator's real global config dir (never under the project). loadRoutingConfig (config.ts) ignores an unapproved/changed project layer with a visible ROUTING_TRUST_NOTICE, surfaced in keryx routing list, /routing, and review tier output. keryx routing trust and /routing's t-then-y flow (armApproval/confirmApproval, routing-inspector.ts) both show every category via describeTableForApproval BEFORE recording approval. A routed review model is labelled routed: true, never tier_resolution: discovered. Round-2 review found and the operator fixed a real bypass (loadRoutingConfig skipped the trust check whenever the project file had any validation error, letting a valid-but-unapproved entry beside a malformed one take effect unapproved) in commit 97211c0ac30ffffdb593b454b5844fe3393942f8; verified fixed by reading that commit's diff and by running bun test src/harness/routing/config.test.ts -t 'a stray bad line never switches the gate off' (1 pass) and -t 'is refused, not carried along' (1 pass, the companion fix rejecting fields a kind does not define). Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/705"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read PRD/PLAN §4-§7/§9, .metaproject/index.md, and all touched source files (routing table precedence, shell-config, providers registry, resolveChildModel gates, review tier, modal-host/mountFilterList, help-groups/cli.ts help pins, import-policy ratchet)."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented table.ts/config.ts/provider-default.ts/child-model-request.ts, keryx routing CLI, /routing TUI modal (filter-list.ts extraction + routing-inspector.ts), review tier and spawn_subagent routing integration, CLI/HELP_GROUPS/command-registry/docs wiring."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added table/config/provider-default/child-model-request unit tests, routing CLI tests, routing-inspector modal test, additive review.test.ts (AC5) and spawn-subagent-tool.test.ts (AC6/AC7) tests, command-registry routing-categories sync test; fixed agent-commands.test.ts pinned order and command-registry.coverage.test.ts for the new verb; typecheck/eslint clean; opentui-tests-no-skips, test:client:terminal, test:client:runtime, test:core (2 pre-existing unrelated sandbox flakes only), skills verify --bundled, check:doc-links, flow check, keryx health run all green."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two rounds of adversarial review ran against PR #705 (feat/routing-table): round 1 found 8 issues (2 accepted as informational limits) and produced AC10/AC11; round 2 found the AC11 trust-gate bypass and the validateAssignment gap, both fixed in 97211c0ac30ffffdb593b454b5844fe3393942f8. PR squash-merged as 31bab00fc167bc19ea212cd3eaf7e208ec0ca331, CI green (19). Review package flow305-pr705-closure ingested and completed with 8 findings, all disposed acted-on."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T06:18:30.539Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T06:18:45.113Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T06:18:45.223Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T07:10:02.544Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T07:10:06.742Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T07:10:12.195Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T07:19:57.448Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"(new)\" -> \"An assignment at any layer that names a provider the operator has not connected (or a model that provider does not offer) is treated as unresolved at that layer and falls through to the next one, at every call site - `review tier`, `spawn_subagent`, `keryx routing list` and `/routing` - and the CLI and the modal show \"<provider>/<model> - not connected, falling back to <resolved>\"; tests cover each call site.\" (review of PR #705 (finding 1): the operator's fallback requirement from PRD section 5 was documented but not implemented and had not been carried into an AC)"
+    },
+    {
+      "at": "2026-09-25T07:19:57.559Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(new)\" -> \"A project `routing.config.json` takes effect only after the operator approves its current content once (a content hash recorded per user, like other project trust in keryx); until then, and whenever the file changes, its entries are ignored with a visible notice in `keryx routing list`, `/routing` and the review tier output, and `keryx routing trust` (or a confirmation in `/routing`) approves it; a routed review model is labelled as routed, never as discovered.\" (review of PR #705 (finding 2): a checked-in routing file could silently redirect the model that reviews the same diff)"
+    },
+    {
+      "at": "2026-09-25T08:19:32.710Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/705 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T08:19:36.556Z",
+      "event": "owner-set",
+      "detail": "not set -> altsay (flow 305 closure: coordinator (altsay) directed and confirmed the two review rounds and their fixes on PR #705)"
+    },
+    {
+      "at": "2026-09-25T08:20:42.221Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/routing/table.ts defines ROUTING_CATEGORIES (8 categories), CategoryAssignment union (session-default/model/provider-default), and resolveCategory/resolveCategoryDetailed applying override>project>user>default precedence, pure with no fs/network access. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/harness/routing/table.test.ts (run as part of a 4-file, 74-pass batch) green. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:20:42.523Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/harness/routing/config.ts's loadRoutingConfig/saveRoutingConfig share the project routing.config.json and per-user shell-config.ts entry through one loader; a malformed/unreadable file is a named, surfaced error (never a silent empty table), verified by config.test.ts's malformed-file tests. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:20:56.523Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/commands/routing.ts implements keryx routing list [--json]/set/unset/trust mirroring providers.ts's subcommand dispatch shape, --user/--project selecting the write layer (default --user); list prints every category, resolution and source layer. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/commands/routing.test.ts green (part of the 74-pass batch); exercised keryx routing --help/list myself this session. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:20:57.180Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: /routing (ROUTING_COMMAND, src/tui/routing-inspector.ts) opens a modal-host list+detail modal; the list side shows every category and resolution, Enter opens a flat searchable picker built on mountFilterList (extracted to src/tui/filter-list.ts) fed every connected provider's models plus one provider-default row per provider and one session-default row; a confirmed pick writes immediately to the per-user layer. Proven by a real keyboard-driven modal test (routing-inspector.test.ts, otuiTest AC4) over a fixture multi-provider catalogue. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/tui/routing-inspector.test.ts -> 11 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:06.530Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: runTier (src/commands/review.ts) resolves the review category via applyReviewRoutingCategory ahead of assignTier's own ranking; an explicit {kind:model} entry replaces the decision, session-default leaves it byte-identical (review.test.ts AC5 'with an EMPTY routing table' regression test), tagged routed:true (never tier_resolution: discovered) to avoid mislabeling. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/commands/review.test.ts -t 'flow 305' -> 14 pass, 0 fail. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:06.828Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: createSpawnSubagentTool (src/harness/tool/builtin/spawn-subagent-tool.ts) resolves the subagents category when the dispatcher supplied no model_tier (kind absent/inherit), constructing an explicit or tier ChildModelRequest via categoryAssignmentToChildModelRequest before calling resolveChildModel. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; bun test src/harness/tool/builtin/spawn-subagent-tool.test.ts -> 22 pass, 0 fail (AC6 test: subagents resolves to an allowed provider/model and the child actually runs on it). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:16.080Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: The category-resolved ChildModelRequest passes through resolveChildModel's G1/G2/G3 gates unmodified; traced end to end (spawn-subagent-tool.ts -> orchestrate.ts spawnSubagent -> spawn.ts -> model.ts resolveChildModel). Original G1-out-of-allowlist scenario became unreachable once AC10 (same detected-provider source as G1's allowlist) pre-filters it; replaced with an equivalent G3 (classifiable, checked against the static provider registry, independent of AC10) denial test proving the gate chain still runs unmodified, plus a dispatcher-tier-overrides-category test. model.test.ts is byte-for-byte unchanged from pre-flow-305 main (45df98bd) and green (31 pass). Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:16.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: keryx routing is in COMMAND_DESCRIPTORS (src/standard/command-registry.ts) and HELP_GROUPS (src/standard/help-groups.ts, under Connect a model provider), /routing is in AGENT_SLASH_COMMANDS and the help modal; docs/docs/cli-reference.md and README.md describe the routing table, its two config layers, and explicit>project>user>default precedence, in English. command-registry.routing-categories.test.ts keeps the CLI's category enum in sync with ROUTING_CATEGORIES. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:23.799Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: CI green (19 checks, per operator report on the squash-merged PR #705). keryx health run (run myself this session at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331): Code Health PASS, project score 94, no gate conditions triggered. spawn-subagent-tool.test.ts diff from pre-flow-305 main is additive-only (one import-line change, no existing assertion touched); review.test.ts diff is a pure addition block; model.test.ts is byte-for-byte unchanged. Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:30.409Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: resolveCategoryDetailed (src/harness/routing/table.ts) takes an optional ConnectedPredicate; every layer's assignment is checked in precedence order and an assignment naming an unconnected provider/model is treated as unresolved and falls through, all the way to session-default if needed. Wired at all four call sites (review tier, spawn_subagent, keryx routing list, /routing) via connectedPredicateFrom, each fed the same already-fetched provider-detection result (no new network probe); CLI/modal print '<provider>/<model> - not connected, falling back to <resolved>' via describeFallbackNotice. Tests cover each call site (table.test.ts, review.test.ts, spawn-subagent-tool.test.ts, routing.test.ts, routing-inspector.test.ts). Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331; full routing test batch (74+22+11+14 = 121 tests) green. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:38.314Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: src/harness/routing/trust.ts (modelled on mcp-servers/trust.ts) fingerprints the validated project table (sha256, category- and key-sorted) and records per-user, per-project-root approvals in the operator's real global config dir (never under the project). loadRoutingConfig (config.ts) ignores an unapproved/changed project layer with a visible ROUTING_TRUST_NOTICE, surfaced in keryx routing list, /routing, and review tier output. keryx routing trust and /routing's t-then-y flow (armApproval/confirmApproval, routing-inspector.ts) both show every category via describeTableForApproval BEFORE recording approval. A routed review model is labelled routed: true, never tier_resolution: discovered. Round-2 review found and the operator fixed a real bypass (loadRoutingConfig skipped the trust check whenever the project file had any validation error, letting a valid-but-unapproved entry beside a malformed one take effect unapproved) in commit 97211c0ac30ffffdb593b454b5844fe3393942f8; verified fixed by reading that commit's diff and by running bun test src/harness/routing/config.test.ts -t 'a stray bad line never switches the gate off' (1 pass) and -t 'is refused, not carried along' (1 pass, the companion fix rejecting fields a kind does not define). Confirmed present at merge commit 31bab00fc167bc19ea212cd3eaf7e208ec0ca331. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T08:21:44.705Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T08:21:48.907Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T08:21:52.876Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T08:21:52.877Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#705 was last collected against 31bab00fc167bc19ea212cd3eaf7e208ec0ca331 (round 1), but the PR head is 97211c0ac30ffffdb593b454b5844fe3393942f8. Everything anyone said after 31bab00fc167bc19ea212cd3eaf7e208ec0ca331 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 705 --sha <pr-head>`."
+    },
+    {
+      "at": "2026-09-25T08:22:04.156Z",
+      "event": "completing",
+      "detail": "merged commit: 31bab00fc167bc19ea212cd3eaf7e208ec0ca331"
+    },
+    {
+      "at": "2026-09-25T08:22:08.294Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-25T08:22:08.295Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "baseBranch": "main",
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-09-25T08:20:42.221Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:20:42.523Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:20:56.523Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:20:57.180Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:21:06.530Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:21:06.828Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:21:16.080Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:21:16.377Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:21:23.799Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:21:30.409Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:21:38.314Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:22:08.295Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b",
+      "headCommit": "31bab00fc167bc19ea212cd3eaf7e208ec0ca331"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T08:21:52.876Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "31bab00fc167bc19ea212cd3eaf7e208ec0ca331 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "31bab00fc167bc19ea212cd3eaf7e208ec0ca331 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#705 was last collected against 31bab00fc167bc19ea212cd3eaf7e208ec0ca331 (round 1), but the PR head is 97211c0ac30ffffdb593b454b5844fe3393942f8. Everything anyone said after 31bab00fc167bc19ea212cd3eaf7e208ec0ca331 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 705 --sha <pr-head>`."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    },
+    {
+      "at": "2026-09-25T08:22:08.294Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "31bab00fc167bc19ea212cd3eaf7e208ec0ca331 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "31bab00fc167bc19ea212cd3eaf7e208ec0ca331 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b"
+    }
+  ],
+  "merged": {
+    "commit": "31bab00fc167bc19ea212cd3eaf7e208ec0ca331",
+    "ref": "origin/main",
+    "at": "2026-09-25T08:22:08.295Z"
+  }
+}

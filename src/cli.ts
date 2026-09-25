@@ -41,6 +41,7 @@ import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
+import { routingCommand } from "./commands/routing";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
 import { forgettingCommand } from "./commands/forgetting";
@@ -48,6 +49,7 @@ import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
 import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
+import { helpCommand } from "./commands/help";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -70,10 +72,14 @@ const VERSION = packageJson.version;
  */
 export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void> = {
   init: initCommand,
+  // Flow 303 (AC10): grouped command help by task. `--help`/`-h`/bare `keryx`
+  // keep printing the flat USAGE_BODY below (AC5) — this is a SEPARATE verb.
+  help: helpCommand,
   status: statusCommand,
   modules: modulesCommand,
   projects: projectsCommand,
   providers: providersCommand,
+  routing: routingCommand,
   auth: authCommand,
   serve: serveCommand,
   update: updateCommand,
@@ -140,7 +146,13 @@ export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
 
-  if (command === "--help" || command === "-h" || command === "help" || !command) {
+  // `--help`, `-h` and bare `keryx` print the flat USAGE_BODY, unchanged
+  // (AC5, flow 303). `help` used to be a third alias of that same branch;
+  // it is now its own route (below, via CLI_ROUTES.help ->
+  // `commands/help.ts`) so `keryx help` with no args can print the grouped
+  // view (AC3) while these three keep printing exactly what they printed
+  // before this flow.
+  if (command === "--help" || command === "-h" || !command) {
     printHelp();
     return;
   }
@@ -166,13 +178,7 @@ export async function main(): Promise<void> {
       // dropped `flow owner`/`flow ac`/half of `flow`'s subcommands and every
       // `trigger` subcommand but `run` — this is the fix for that class of
       // drift, applied without touching the "ask, don't do" guard above.
-      const richHelp = RICH_GROUP_HELP.get(command);
-      if (richHelp) {
-        richHelp();
-        return;
-      }
-      const usage = groupUsage(command);
-      console.log(usage === undefined ? `keryx ${VERSION}\n\n${USAGE_BODY}` : `keryx ${command} — usage:\n\n${usage}\n`);
+      await printCommandHelp(command);
       return;
     }
     await route(args.slice(1));
@@ -191,6 +197,7 @@ export async function main(): Promise<void> {
  */
 export const USAGE_BODY = `Usage:
   keryx                                        Show CLI usage
+  keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
   keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
@@ -223,7 +230,15 @@ export const USAGE_BODY = `Usage:
   keryx sync [--apply]
   keryx sync install-hooks | uninstall-hooks
   keryx providers list [--json]
+  keryx providers status [--json] [--refresh]
   keryx providers cross-family [--opt-in] [--json]
+  keryx providers test <name> [--json]
+  keryx providers remove <name> [--yes] [--json]
+  keryx routing list [--json]
+  keryx routing set <category> <provider>/<model> [--user|--project]
+  keryx routing set <category> <provider> [--user|--project]
+  keryx routing unset <category> [--user|--project]
+  keryx routing trust
   keryx auth list [--json]
   keryx auth login <provider>
   keryx auth logout <provider>
@@ -323,6 +338,7 @@ export const USAGE_BODY = `Usage:
   keryx --version
 
 Commands:
+  help      Grouped command help by task: every verb, in nine onboarding-ordered groups
   shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions
@@ -341,6 +357,7 @@ Commands:
   rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
   sync      Reconcile graph/wiki/memory with the current code, and wire the git hooks
   providers Providers this operator has configured, and cross-family review eligibility
+  routing   Category -> model routing table: list, set, unset (per-user default; --project for the project layer)
   auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
   orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
   agents    Manage optional global agent bootstrap instructions
@@ -465,6 +482,37 @@ export function groupUsage(command: string, usage: string = USAGE_BODY): string 
     }
   }
   return out.length === 0 ? undefined : out.join("\n");
+}
+
+/**
+ * A verb's full usage: the richer text `keryx <command> --help` prints today,
+ * as a directly callable function — extracted from `main`'s own interception
+ * branch above (flow 303 AC4, "keryx help <command> prints that command's
+ * full usage (the existing rich group help where one exists)") rather than
+ * duplicated. The FOUR rich group helps (flow, trigger, serve-mcp,
+ * governance — AC5) win first; `agents`/`shell` (`DEEP_HELP_GROUPS`) answer
+ * their own `--help` safely (proven by `shell-cli-validation.test.ts` and
+ * `cli.test.ts`'s agents case — see the doc comment on `DEEP_HELP_GROUPS`),
+ * so their route is invoked directly with exactly the token that reaches it
+ * when an operator types `keryx <command> --help`; every other verb falls
+ * back to its `groupUsage` slice of `USAGE_BODY`, same as before this
+ * extraction.
+ */
+export async function printCommandHelp(command: string): Promise<void> {
+  const richHelp = RICH_GROUP_HELP.get(command);
+  if (richHelp) {
+    richHelp();
+    return;
+  }
+  if (DEEP_HELP_GROUPS.has(command)) {
+    const route = CLI_ROUTES[command];
+    if (route) {
+      await route(["--help"]);
+      return;
+    }
+  }
+  const usage = groupUsage(command);
+  console.log(usage === undefined ? `keryx ${VERSION}\n\n${USAGE_BODY}` : `keryx ${command} — usage:\n\n${usage}\n`);
 }
 
 /**

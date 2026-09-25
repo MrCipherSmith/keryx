@@ -285,6 +285,19 @@ Production region pinned: both real `buildInteractiveAgentTools({` call sites �
 
 ---
 
+## Added by flow 303 (keryx help)
+
+Added while flow 303's own PR review round was still open (HIGH 2 fix: wrap
+the AC14 startup-indicator region in try/finally). The two companion audits
+this same fix round added against `tui-shell.ts` (`busy-dispatch.test.ts`,
+`help-first-run.test.ts`) are recorded in
+[audits-tui-other.md](audits-tui-other.md) instead — this file covers only
+`src/commands/**` test files reading `commands/shell.ts`.
+
+| test (line) | technique | literal(s) / window | behaviour it actually protects | observable today? | proposed conversion | what cosmetic edit breaks it |
+|---|---|---|---|---|---|---|
+| `shell-starting-line.test.ts`: `"keryx: starting…"` is gated on `chooseShellSurface(…) !== "readline"`, not raw `isTty` (line ~30) | `indexOf` + a guard-line slice, plus two ordering `indexOf` comparisons against `refreshSavedGrants`/the official `const surface =` assignment | `process.stderr.write("keryx: starting…\n")`; the `if (` line immediately above it must contain `chooseShellSurface(` and `!== "readline"` | The pre-renderer status line must never print for a run that is going to the readline surface — `--print` (even on a real TTY), `--no-tui`, no TTY (CI). Printing there pollutes a scripted/piped `--print` capture with an extra line nothing downstream expects. | partial — `chooseShellSurface`'s OWN behaviour is exported and directly tested (two other tests in the same file); only the WIRING (that the print's guard actually calls it, in this exact spot, rather than duplicating the isTty check) is a source-text claim. | Extract the guard into a small named predicate (e.g. `shouldPrintStartupLine(flags, isTty)`) exported from `shell.ts`, so the wiring claim becomes "the print is behind this named call" instead of a substring match on the `if` line's text. | Reformatting the `if` across multiple lines with the call and the `!== "readline"` comparison on different lines; renaming `chooseShellSurface`. |
+
 ## Notes
 
 **Already effectively behavioural / low priority to convert:**

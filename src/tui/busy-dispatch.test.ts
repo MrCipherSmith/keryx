@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "bun:test";
 import { classifyBusyDispatch } from "./busy-dispatch";
 
@@ -20,6 +22,26 @@ test("classifyBusyDispatch: /help routes to help", () => {
   expect(
     classifyBusyDispatch({ line: "/help", commandName: "/help", ...base }),
   ).toBe("help");
+});
+
+// PR #669 review, LOW: `/help` classified to "help" (above) used to be
+// handled by a busy-notice message that never actually opened anything —
+// `chrome.isBusy()`'s branch is not reachable from a test without a real
+// renderer + a real in-progress turn, so this pins the SOURCE, the same
+// idiom `boot-animation.test.ts` uses for `tui-shell.ts` call sites it
+// cannot drive directly.
+test('tui-shell.ts\'s busy-dispatch "help" case opens the help modal, like session-info/flows/workspace/review do, not a busy notice', () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const caseIdx = source.indexOf('case "help": {');
+  const nextCaseIdx = source.indexOf('case "interrupt": {');
+  expect(caseIdx).toBeGreaterThan(-1);
+  expect(nextCaseIdx).toBeGreaterThan(caseIdx);
+  const body = source.slice(caseIdx, nextCaseIdx);
+  expect(body).toContain("openHelp();");
+  // The old busy-notice text — and its Cyrillic "и" typo — must be gone
+  // entirely, not just fixed in place.
+  expect(body).not.toContain("Main agent is busy. Type a normal question");
+  expect(source).not.toContain("/status и /flows");
 });
 
 test("classifyBusyDispatch: /interrupt routes to interrupt", () => {

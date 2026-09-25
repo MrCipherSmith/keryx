@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
 test("stepQueueNavIndex moves up/down and wraps at both ends", () => {
   expect(stepQueueNavIndex(1, 3, "up")).toBe(0);
@@ -26,4 +26,13 @@ test("stepQueueNavAction cycles force -> edit -> delete -> force and back", () =
   expect(stepQueueNavAction("delete", "right")).toBe("force"); // wraps
   expect(stepQueueNavAction("force", "left")).toBe("delete"); // wraps the other way
   expect(stepQueueNavAction("edit", "left")).toBe("force");
+});
+
+// flow 304 AC3: /connect's row-nav mode cycles Label -> Test -> Disconnect.
+test("stepConnectNavAction cycles label -> test -> disconnect -> label and back", () => {
+  expect(stepConnectNavAction("label", "right")).toBe("test");
+  expect(stepConnectNavAction("test", "right")).toBe("disconnect");
+  expect(stepConnectNavAction("disconnect", "right")).toBe("label"); // wraps
+  expect(stepConnectNavAction("label", "left")).toBe("disconnect"); // wraps the other way
+  expect(stepConnectNavAction("test", "left")).toBe("label");
 });

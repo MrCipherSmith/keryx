@@ -169,6 +169,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 305: the routing table (category -> model). TUI-only, same
+    // reasoning as /governance/ /triggers — the list+detail modal and its
+    // flat searchable model picker need the OpenTUI surface.
+    name: "/routing",
+    description: "Route task categories to models — a flat, searchable list across every connected provider",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 295 (AC6): create a scheduled background task. TUI-only: the
     // confirmation card and its yes/no dialog need the OpenTUI surface.
     name: "/schedule",
@@ -187,6 +195,21 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // project into an editor, the TUI half of `keryx integrate`.
     name: "/integrations",
     description: "Wire this project into an editor over MCP (keryx integrate)",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 306 (AC12): the list+detail modal over `keryx review ci-triage`'s
+    // advisory flaky/infra/real-regression pipeline. TUI-only, same reasoning
+    // as `/review`: it renders into the transcript of an OpenTUI session.
+    name: "/ci",
+    description: "Failed CI runs/jobs of the current branch's PR, each with an advisory triage",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 308 (AC12): reference-document conformance mode — pick a doc and a
+    // target, then walk its clauses. TUI-only, same reasoning as `/ci`.
+    name: "/conform",
+    description: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev",
     modes: AGENT_ONLY,
   },
   {

@@ -20,12 +20,29 @@ import {
   decideCrossFamilyReview,
   familyOf,
   loadCustomCompatProviders,
+  removeCustomCompatProvider,
 } from "../lib/provider-config";
 import { extraRequestHeaders } from "../lib/oauth/catalog";
-import { envWithOAuthAccess } from "../lib/oauth/grants";
+import { envWithOAuthAccess, oauthEnvKeyFor } from "../lib/oauth/grants";
+import { logoutProvider } from "../lib/oauth/login";
 import { resolveCallerSession } from "../lib/caller-session";
-import { type ShellConfig, envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import {
+  type ShellConfig,
+  envWithSavedApiKeys,
+  loadShellConfig,
+  removeApiKey,
+  removeProviderBaseUrl,
+  removeProviderModelParams,
+  savedCredentialEnvKeys,
+} from "../lib/shell-config";
 import { optionValue } from "../lib/args";
+import { confirm as ttyConfirm } from "../lib/prompt";
+import {
+  classifyModelsStatus,
+  formatCatalogAge,
+  updateProviderCatalogEntry,
+  type ProviderCatalogEntry,
+} from "../harness/provider-catalog-cache";
 
 /** A hosted OpenAI-compatible provider offered in the picker. */
 export interface OpenAiCompatProvider {
@@ -304,8 +321,15 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "OPENROUTER_API_KEY",
     models: ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001", "qwen/qwen-2.5-7b-instruct", "meta-llama/llama-3.1-8b-instruct"],
     note: "hosted · 400+ models",
-    // GET /api/v1/credits -> { credits: { total, used, remaining, total_usd, ... } }
-    balancePath: "/api/v1/credits",
+    // GET /v1/key -> { data: { limit, limit_remaining, usage, ... } } (limit is
+    // null when the key has no spending cap — see `fetchProviderBalance`'s
+    // fallback to /v1/credits -> { data: { total_credits, total_usage } }).
+    // Verified live against openrouter.ai (2026-09-25) — the PREVIOUS
+    // `/api/v1/credits` path here 404'd against this `baseUrl` (which already
+    // ends in `/api`, same as `DEFAULT_MODELS_PATH` above), and the previous
+    // parser read `body.credits.{total,used,remaining}`, a shape neither live
+    // endpoint returns (flow 309 review, finding 1).
+    balancePath: "/v1/key",
     balanceKind: "openrouter",
   },
   {
@@ -596,6 +620,75 @@ export async function fetchOpenAiCompatModels(
 }
 
 /**
+ * Largest a `/models` response body may be before it is refused rather than
+ * parsed (flow 309, AC1 — the live catalog reuses this exact fetch and needs
+ * a response-size cap on it). 4 MB is far above any real gateway's model list
+ * (OpenRouter's ~700 KB today, 400+ models) and far below what would matter
+ * for memory.
+ *
+ * Guarded so it only engages against a REAL streamable `Response` (one with
+ * `.headers`/`.body`) — an injected test fake shaped `{ ok, json() }` with
+ * neither falls straight through to the unbounded `res.json()` path exactly
+ * as before this constant existed, so no existing caller's fake needs to grow
+ * a `headers`/`body` it never had.
+ */
+export const MODELS_RESPONSE_BODY_LIMIT_BYTES = 4_000_000;
+
+/**
+ * Parse a `/models` response as JSON, refusing a body over `maxBytes`. Reads
+ * a declared `content-length` first; absent or lower than the truth (chunked
+ * transfer), the stream is read incrementally and abandoned once it crosses
+ * the bound — so an unbounded/compressed body cannot be read to completion
+ * regardless of what its header claimed.
+ */
+async function boundedJsonBody(res: Response, maxBytes: number): Promise<{ ok: true; value: unknown } | { ok: false }> {
+  const headers = (res as { headers?: { get?: (name: string) => string | null } }).headers;
+  const declared = typeof headers?.get === "function" ? headers.get("content-length") : null;
+  if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
+    const body = (res as { body?: ReadableStream<Uint8Array> | null }).body;
+    if (body != null && typeof body.cancel === "function") {
+      await body.cancel().catch(() => {});
+    }
+    return { ok: false };
+  }
+  const body = (res as { body?: ReadableStream<Uint8Array> | null }).body;
+  if (body == null || typeof body.getReader !== "function") {
+    // No streamable body on this Response (an injected fake, or a runtime
+    // without ReadableStream support) — the unbounded fallback every caller
+    // already used before this cap existed.
+    try {
+      return { ok: true, value: await res.json() };
+    } catch {
+      return { ok: false };
+    }
+  }
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return { ok: false };
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
  * Same as {@link fetchOpenAiCompatModels} but reports whether the list came from
  * the live endpoint or the curated fallback (for UI status lines / tests).
  */
@@ -630,7 +723,11 @@ export async function fetchOpenAiCompatModelsDetailed(
       const kind = res.status === 401 || res.status === 403 ? "rejected" : "http";
       return fallback({ kind, status: res.status, ...(detail === undefined ? {} : { detail }) });
     }
-    const body = (await res.json()) as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
+    const bounded = await boundedJsonBody(res, MODELS_RESPONSE_BODY_LIMIT_BYTES);
+    if (!bounded.ok) {
+      return fallback({ kind: "http", status: res.status, detail: "response too large or malformed" });
+    }
+    const body = bounded.value as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
     const ids = Array.isArray(body?.data)
       ? body.data
           .map((m) => {
@@ -736,34 +833,94 @@ function parseDeepSeekBalance(body: unknown): ProviderBalance | undefined {
   return undefined;
 }
 
-function parseOpenRouterBalance(body: unknown): ProviderBalance | undefined {
+/**
+ * Parse `GET /v1/key`'s response: the spending LIMIT configured on the key
+ * actually in use, and how much of it remains. `data.limit` is `null` when
+ * the key has no cap ("unlimited") — there is then no per-key budget to
+ * report, and `undefined` here tells {@link fetchProviderBalance} to fall
+ * back to {@link parseOpenRouterCreditsBalance}.
+ *
+ * Verified live against openrouter.ai (2026-09-25): `{ data: { limit,
+ * limit_remaining, usage, ... } }` — no `credits` wrapper, and no `currency`
+ * field (OpenRouter is always USD). The PREVIOUS parser read
+ * `body.credits.{total,used,remaining}`, which matches neither this nor the
+ * `/v1/credits` shape below — it silently returned `undefined` on every real
+ * response (flow 309 review, finding 1).
+ */
+function parseOpenRouterKeyBalance(body: unknown): ProviderBalance | undefined {
   if (typeof body !== "object" || body === null) {
     return undefined;
   }
-  const credits = (body as { credits?: unknown }).credits;
-  if (typeof credits !== "object" || credits === null) {
+  const data = (body as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) {
     return undefined;
   }
-  const total = Number((credits as { total?: unknown }).total);
-  const used = Number((credits as { used?: unknown }).used);
-  if (!Number.isFinite(total)) {
+  const limit = (data as { limit?: unknown }).limit;
+  if (typeof limit !== "number" || !Number.isFinite(limit)) {
+    // null (unlimited) or absent — no per-key budget to report.
     return undefined;
   }
-  const usedField = Number.isFinite(used) ? { used } : {};
-  const remaining = Number.isFinite(used) ? total - used : undefined;
+  const usage = Number((data as { usage?: unknown }).usage);
+  const limitRemaining = Number((data as { limit_remaining?: unknown }).limit_remaining);
   return {
-    currency: String((credits as { currency?: unknown }).currency ?? "USD"),
-    total,
-    ...usedField,
+    currency: "USD",
+    total: limit,
+    ...(Number.isFinite(usage) ? { used: usage } : {}),
+    ...(Number.isFinite(limitRemaining) ? { remaining: limitRemaining } : {}),
+    exact: true,
+  };
+}
+
+/**
+ * Parse `GET /v1/credits`'s response: the account's total purchased credits
+ * and lifetime usage. Verified live (2026-09-25): `{ data: { total_credits,
+ * total_usage } }`. Used as OpenRouter's balance ONLY when the key has no
+ * spending limit — with no cap, the account's remaining funds ARE what
+ * "balance" means, since the key can spend all of it.
+ */
+function parseOpenRouterCreditsBalance(body: unknown): ProviderBalance | undefined {
+  if (typeof body !== "object" || body === null) {
+    return undefined;
+  }
+  const data = (body as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+  const totalCredits = Number((data as { total_credits?: unknown }).total_credits);
+  if (!Number.isFinite(totalCredits)) {
+    return undefined;
+  }
+  const totalUsage = Number((data as { total_usage?: unknown }).total_usage);
+  const remaining = Number.isFinite(totalUsage) ? totalCredits - totalUsage : undefined;
+  return {
+    currency: "USD",
+    total: totalCredits,
+    ...(Number.isFinite(totalUsage) ? { used: totalUsage } : {}),
     ...(remaining !== undefined ? { remaining } : {}),
     exact: true,
   };
 }
 
 /**
+ * Largest a balance-endpoint response body may be before it is refused
+ * rather than parsed — the same defence {@link MODELS_RESPONSE_BODY_LIMIT_BYTES}
+ * gives `/models` (flow 309 review, finding 5). A real balance payload here
+ * is well under 2 KB (OpenRouter's `/v1/key`/`/v1/credits`, DeepSeek's
+ * `/user/balance`); 1 MB is far above that and far below what would matter
+ * for memory.
+ */
+export const BALANCE_RESPONSE_BODY_LIMIT_BYTES = 1_000_000;
+
+/**
  * Fetch the current balance for a provider that exposes a balance endpoint.
  * Returns `undefined` for providers without one, on network error, or on a
- * non-2xx / malformed response. Never throws.
+ * non-2xx / malformed / oversized response. Never throws.
+ *
+ * OpenRouter is a two-call case (flow 309 review, finding 1): `/v1/key` (the
+ * registry's `balancePath`) is tried first for the key's own spending limit;
+ * only when that key has NO limit (`data.limit: null`) does this fall back
+ * to `/v1/credits` for the account's total funds. Every other `balanceKind`
+ * makes exactly one request, as before.
  */
 export async function fetchProviderBalance(
   fetchFn: typeof fetch,
@@ -774,28 +931,43 @@ export async function fetchProviderBalance(
   if (provider.balancePath === undefined || provider.balanceKind === undefined) {
     return undefined;
   }
-  const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.balancePath}`;
   const timeoutMs = opts?.timeoutMs ?? BALANCE_FETCH_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const init: RequestInit = { signal: controller.signal };
-    if (apiKey !== undefined && apiKey.length > 0) {
-      init.headers = { authorization: `Bearer ${apiKey}` };
-    }
-    const res = await fetchFn(url, init);
-    if (!res.ok) {
+  const fetchBalanceBody = async (balancePath: string): Promise<unknown | undefined> => {
+    const url = `${provider.baseUrl.replace(/\/+$/, "")}${balancePath}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const init: RequestInit = { signal: controller.signal };
+      if (apiKey !== undefined && apiKey.length > 0) {
+        init.headers = { authorization: `Bearer ${apiKey}` };
+      }
+      const res = await fetchFn(url, init);
+      if (!res.ok) {
+        return undefined;
+      }
+      const bounded = await boundedJsonBody(res, BALANCE_RESPONSE_BODY_LIMIT_BYTES);
+      return bounded.ok ? bounded.value : undefined;
+    } catch {
       return undefined;
+    } finally {
+      clearTimeout(timer);
     }
-    const body = (await res.json()) as unknown;
-    return provider.balanceKind === "deepseek"
-      ? parseDeepSeekBalance(body)
-      : parseOpenRouterBalance(body);
-  } catch {
+  };
+
+  const body = await fetchBalanceBody(provider.balancePath);
+  if (body === undefined) {
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
+  if (provider.balanceKind === "deepseek") {
+    return parseDeepSeekBalance(body);
+  }
+  const keyBalance = parseOpenRouterKeyBalance(body);
+  if (keyBalance !== undefined) {
+    return keyBalance;
+  }
+  // The key has no spending limit — fall back to the account's total funds.
+  const creditsBody = await fetchBalanceBody("/v1/credits");
+  return creditsBody === undefined ? undefined : parseOpenRouterCreditsBalance(creditsBody);
 }
 
 /** Resolve the API key for a provider from an env-like record. */
@@ -809,6 +981,193 @@ export function providerApiKey(
   }
   const raw = env[envKey];
   return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Test connection / Disconnect (flow 304) — the `/connect` row buttons and
+// their CLI parity (`keryx providers test`/`keryx providers remove`).
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the provider's live model-list probe for a "Test connection" action —
+ * the exact probe `filterConnectedDetectedProviders` already runs to decide
+ * whether a provider belongs in `/connect`'s list in the first place. Resolves
+ * the key the same way that filter does: an env var when the registry names
+ * one, else the provider's own in-file `apiKey` (custom/local providers).
+ * Never throws.
+ */
+export async function testProviderConnection(
+  provider: OpenAiCompatProvider,
+  fetchFn: typeof fetch = globalThis.fetch,
+  env: Record<string, string | undefined> = process.env,
+): Promise<ModelsResolveResult> {
+  const apiKey = providerApiKey(provider, env) ?? provider.apiKey;
+  return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, { timeoutMs: MODELS_FETCH_TIMEOUT_MS });
+}
+
+/**
+ * Every OTHER provider (built-in or custom) whose OWN credential lives in the
+ * SAME env var as `envKey` — e.g. built-in `zai`/`zai-coding` both read
+ * `ZAI_API_KEY` (flow 304 review finding #2: disconnecting one silently
+ * disconnected the other, with no warning). Generic over whatever provider
+ * list is handed in — never special-cased by name — so it covers a custom
+ * provider that happens to share a built-in's env var the same way it covers
+ * two built-ins. Pure; `providers` is normally `allOpenAiCompatProviders(dir)`.
+ */
+export function providersSharingEnvKey(
+  envKey: string,
+  excludeName: string,
+  providers: readonly OpenAiCompatProvider[],
+): string[] {
+  return providers
+    .filter((p) => p.envKey === envKey && p.name !== excludeName)
+    .map((p) => p.name)
+    .sort();
+}
+
+/** The confirmation/result phrase naming `sharedWith`, or `undefined` when nothing is shared. */
+export function sharedCredentialWarning(sharedWith: readonly string[], envKey: string | undefined): string | undefined {
+  if (sharedWith.length === 0 || envKey === undefined) return undefined;
+  return `this also disconnects ${sharedWith.join(", ")} (same ${envKey})`;
+}
+
+/**
+ * Why a provider's credential cannot be resolved to a single owned artifact —
+ * or can, naming which one Disconnect must remove.
+ *
+ * - `custom`: an `llm-providers.json` entry (`removeCustomCompatProvider`),
+ *   together with any saved `baseUrls`/`modelParams` override for it.
+ * - `oauth-grant`: a device-code/PKCE grant in `auth.json` (`logoutProvider` —
+ *   LOCAL delete only; it does not call a vendor revoke endpoint, see
+ *   `logoutProvider`'s own doc and `docs/docs/cli-reference.md`). `envKey`
+ *   (when the grant maps onto one, via `oauthEnvKeyFor`) is the var
+ *   `envWithOAuthAccess` copied the access token onto (e.g. `grok` →
+ *   `XAI_API_KEY`) — flow 304 review finding #1: this used to go unnoticed by
+ *   `process.env`, so the NEXT `/connect` misclassified the just-disconnected
+ *   provider as `env-var-only` and told the operator to unset a variable
+ *   keryx itself had set.
+ * - `saved-api-key`: a key keryx itself saved under `apiKeys[envKey]` in
+ *   `auth.json` (`removeApiKey`).
+ * - `env-var-only`: the provider's env var IS set, but not by keryx (absent
+ *   from `savedCredentialEnvKeys()`/`apiKeys`) — the operator exported it in
+ *   their own shell. Not removable: unsetting a live process's env would
+ *   silently reappear on the next launch, which is worse than refusing.
+ * - `no-credential`: nothing keryx holds for this provider (a keyless local
+ *   provider, e.g. `rapid-mlx`, or a name with no saved credential at all).
+ */
+export type ProviderConnectionKind = "custom" | "oauth-grant" | "saved-api-key" | "env-var-only" | "no-credential";
+
+export interface ProviderConnectionClassification {
+  kind: ProviderConnectionKind;
+  /** Present for `saved-api-key`/`env-var-only`/`oauth-grant` (when mapped): the env var carrying the key. */
+  envKey?: string;
+  /** Every OTHER provider sharing that same env var (flow 304 review finding #2). Always present; empty when none. */
+  sharedWith: string[];
+}
+
+/**
+ * Classify how (if at all) `name`'s credential is held, in the SAME order
+ * Disconnect must check it: a custom provider's file entry outranks a
+ * same-named built-in (matches `allOpenAiCompatProviders`'s own precedence —
+ * a custom `name` colliding with a built-in is excluded from
+ * `customCompatProviders`, so this order never double-classifies one name).
+ * Pure; never throws.
+ */
+export function classifyProviderConnection(
+  name: string,
+  env: Record<string, string | undefined> = process.env,
+  dir?: string,
+): ProviderConnectionClassification {
+  if (customCompatProviders(dir).some((p) => p.name === name)) {
+    return { kind: "custom", sharedWith: [] };
+  }
+  if (loadShellConfig(dir).oauthGrants?.[name] !== undefined) {
+    const envKey = oauthEnvKeyFor(name);
+    const sharedWith = envKey === undefined ? [] : providersSharingEnvKey(envKey, name, allOpenAiCompatProviders(dir));
+    return { kind: "oauth-grant", ...(envKey !== undefined ? { envKey } : {}), sharedWith };
+  }
+  const registry = providerByName(name, dir);
+  const envKey = registry?.envKey;
+  if (envKey === undefined) {
+    return { kind: "no-credential", sharedWith: [] };
+  }
+  const sharedWith = providersSharingEnvKey(envKey, name, allOpenAiCompatProviders(dir));
+  if (loadShellConfig(dir).apiKeys?.[envKey] !== undefined) {
+    return { kind: "saved-api-key", envKey, sharedWith };
+  }
+  const raw = env[envKey];
+  if (typeof raw === "string" && raw.length > 0) {
+    return { kind: "env-var-only", envKey, sharedWith };
+  }
+  return { kind: "no-credential", sharedWith: [] };
+}
+
+export interface DisconnectProviderResult {
+  ok: boolean;
+  kind: ProviderConnectionKind;
+  /** Set on `ok: false` (env-var-only) and as an informational note on `no-credential`. */
+  reason?: string;
+  /** Every OTHER provider this disconnect ALSO affected, sharing the same env var. Always present. */
+  sharedWith: string[];
+}
+
+/**
+ * Disconnect one provider: remove exactly the credential
+ * {@link classifyProviderConnection} says it owns, and nothing belonging to a
+ * sibling provider'S OWN storage. Also clears `process.env[envKey]` for THIS
+ * process when (and only when) the removed key is one keryx itself loaded
+ * into it (`savedCredentialEnvKeys()`) — an operator-exported var is never
+ * touched, in `env-var-only` or any other branch. This covers BOTH a saved
+ * API key and an OAuth grant's mapped env var (flow 304 review finding #1).
+ * A shared env var (finding #2) is, by construction, actually removed for
+ * every provider in `sharedWith` too — one `apiKeys[envKey]`/env entry serves
+ * all of them — `sharedWith` is reported so a caller can say so BEFORE and
+ * AFTER acting, not because a second removal is needed. Best-effort; never
+ * throws.
+ */
+export function disconnectProvider(
+  name: string,
+  env: Record<string, string | undefined> = process.env,
+  dir?: string,
+): DisconnectProviderResult {
+  const classification = classifyProviderConnection(name, env, dir);
+  switch (classification.kind) {
+    case "custom":
+      removeCustomCompatProvider(name, dir);
+      removeProviderBaseUrl(name, dir);
+      removeProviderModelParams(name, dir);
+      return { ok: true, kind: "custom", sharedWith: classification.sharedWith };
+    case "oauth-grant": {
+      logoutProvider(name, dir);
+      const envKey = classification.envKey;
+      if (envKey !== undefined && savedCredentialEnvKeys().has(envKey)) {
+        delete process.env[envKey];
+      }
+      return { ok: true, kind: "oauth-grant", sharedWith: classification.sharedWith };
+    }
+    case "saved-api-key": {
+      const envKey = classification.envKey!;
+      removeApiKey(envKey, dir);
+      if (savedCredentialEnvKeys().has(envKey)) {
+        delete process.env[envKey];
+      }
+      return { ok: true, kind: "saved-api-key", sharedWith: classification.sharedWith };
+    }
+    case "env-var-only":
+      return {
+        ok: false,
+        kind: "env-var-only",
+        reason: `set via ${classification.envKey} in your environment — unset ${classification.envKey} in your shell to disconnect`,
+        sharedWith: classification.sharedWith,
+      };
+    case "no-credential":
+      return {
+        ok: true,
+        kind: "no-credential",
+        reason: "no saved credential for this provider — nothing to remove",
+        sharedWith: classification.sharedWith,
+      };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -845,15 +1204,26 @@ export function configuredProviders(
     .map((provider) => ({ name: provider.name, models: provider.models }));
 }
 
+/** Seams for `keryx providers test`/`keryx providers remove` tests: production passes none. */
+export interface ProvidersCommandDeps {
+  /** Injected fetch for `test` (never a real network call in a test). */
+  readonly fetch?: typeof fetch;
+  /** Injected env for `test`/`remove` key resolution. Default `process.env`. */
+  readonly env?: Record<string, string | undefined>;
+  /** Config dir `test`/`remove` read/write against. Default the real one. */
+  readonly dir?: string;
+  /** Confirmation prompt for `remove`. Default: a real TTY `y/N` prompt (`../lib/prompt`'s `confirm`). */
+  readonly confirm?: (question: string, defaultValue?: boolean) => Promise<boolean>;
+}
+
 /**
- * `keryx providers` — read-only reporting over the provider configuration.
- *
- * Read-only and network-free on purpose. `keryx review tier` already probes live
- * `/models` when it needs a capability ordering; this command answers a question
- * about CONFIGURATION, so it reads files and exits. That is also what lets it
- * carry a `read: true` command descriptor with no side effects.
+ * `keryx providers` — reporting over the provider configuration, plus the
+ * `test`/`remove` actions (flow 304) that give CLI parity with the `/connect`
+ * row buttons. `list`/`cross-family` stay read-only/network-free (AC8);
+ * `test` makes exactly one network call, and `remove` writes to disk only
+ * after confirmation.
  */
-export function providersCommand(args: string[]): void {
+export async function providersCommand(args: string[], deps: ProvidersCommandDeps = {}): Promise<void> {
   const command = args[0];
   if (!command || command === "--help" || command === "-h") {
     printProvidersHelp();
@@ -863,13 +1233,218 @@ export function providersCommand(args: string[]): void {
     runProvidersList(args.slice(1));
     return;
   }
+  if (command === "status") {
+    await runProvidersStatus(args.slice(1), deps);
+    return;
+  }
   if (command === "cross-family") {
     runCrossFamily(args.slice(1));
+    return;
+  }
+  if (command === "test") {
+    await runProvidersTest(args.slice(1), deps);
+    return;
+  }
+  if (command === "remove") {
+    await runProvidersRemove(args.slice(1), deps);
     return;
   }
   console.error(`Unknown providers command: ${command}`);
   printProvidersHelp();
   process.exitCode = 1;
+}
+
+/** `keryx providers test <name> [--json]` — the CLI form of the `[Test]` row button. */
+async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Promise<void> {
+  const name = args[0];
+  if (name === undefined || name === "--help" || name === "-h") {
+    console.error("Usage: keryx providers test <name> [--json]");
+    process.exitCode = 1;
+    return;
+  }
+  const dir = deps.dir;
+  const provider = providerByName(name, dir);
+  if (provider === undefined) {
+    console.error(`Unknown provider: ${name}`);
+    process.exitCode = 1;
+    return;
+  }
+  const env = deps.env ?? envWithOAuthAccess(envWithSavedApiKeys(process.env, dir));
+  const fetchFn = deps.fetch ?? globalThis.fetch;
+  const result = await testProviderConnection(provider, fetchFn, env);
+  const label = provider.label ?? provider.name;
+  // Flow 309 (AC3): `providers test`/the `[Test]` row button keep the SAME
+  // on-disk catalog cache `/routing`, `/connect` and `providers status` read
+  // current for THIS one provider, without a full re-refresh of every other
+  // connected provider. `updateProviderCatalogEntry` is itself best-effort
+  // (never throws) — awaited anyway so the write is deterministic rather
+  // than a fire-and-forget task that could outlive a caller's temp dir
+  // (tests) or the process (CLI).
+  const catalogStatus = classifyModelsStatus(result);
+  const apiKeyForBalance = providerApiKey(provider, env) ?? provider.apiKey;
+  const catalogBalance =
+    balanceCapableProvider(name) !== undefined
+      ? await fetchProviderBalance(fetchFn, provider, apiKeyForBalance, { timeoutMs: BALANCE_FETCH_TIMEOUT_MS }).catch(() => undefined)
+      : undefined;
+  const catalogEntry: ProviderCatalogEntry = {
+    name,
+    status: catalogStatus,
+    models: catalogStatus === "ok" ? result.models : [],
+    fallbackModels: [...provider.models],
+    fetchedAt: new Date().toISOString(),
+    ...(provider.label !== undefined ? { label: provider.label } : {}),
+    ...(catalogBalance !== undefined ? { balance: catalogBalance } : {}),
+  };
+  await updateProviderCatalogEntry(catalogEntry, dir);
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        { provider: name, ok: result.source === "live", models: result.models.length, failure: result.failure ?? null },
+        null,
+        2,
+      ),
+    );
+    if (result.source !== "live") process.exitCode = 1;
+    return;
+  }
+  if (result.source === "live") {
+    console.log(`${label}: ok — ${result.models.length} model(s)`);
+    return;
+  }
+  console.log(modelsFailureLine(label, result.failure ?? { kind: "empty" }));
+  process.exitCode = 1;
+}
+
+/** `keryx providers remove <name> [--yes] [--json]` — the CLI form of the `[Disconnect]` row button. */
+async function runProvidersRemove(args: string[], deps: ProvidersCommandDeps): Promise<void> {
+  const name = args[0];
+  if (name === undefined || name === "--help" || name === "-h") {
+    console.error("Usage: keryx providers remove <name> [--yes] [--json]");
+    process.exitCode = 1;
+    return;
+  }
+  const dir = deps.dir;
+  const env = deps.env ?? process.env;
+  const json = args.includes("--json");
+  // flow 304 review finding #3: an unknown name used to report success and
+  // exit 0. Validate the SAME way `test` does, before even asking to confirm.
+  if (providerByName(name, dir) === undefined) {
+    if (json) {
+      console.log(JSON.stringify({ provider: name, ok: false, reason: "unknown provider" }, null, 2));
+    } else {
+      console.error(`Unknown provider: ${name}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  // Classified BEFORE confirming (flow 304 review finding #2) so the
+  // confirmation prompt can name every provider this ALSO disconnects —
+  // `disconnectProvider` re-classifies internally too, which is fine: this
+  // read is pure and cheap, and the two must agree since nothing external
+  // can change the classification between this call and the actual removal
+  // (a CLI invocation is single-threaded, unlike the TUI's own arm/confirm
+  // gap, which re-classifies at confirm time for the same reason).
+  const classification = classifyProviderConnection(name, env, dir);
+  const warning = sharedCredentialWarning(classification.sharedWith, classification.envKey);
+  const yes = args.includes("--yes");
+  const confirmFn = deps.confirm ?? ttyConfirm;
+  const question =
+    warning === undefined
+      ? `Disconnect provider "${name}" and remove its saved credential?`
+      : `Disconnect provider "${name}" and remove its saved credential? Note: ${warning}.`;
+  const confirmed = yes || (await confirmFn(question, false));
+  if (!confirmed) {
+    if (json) {
+      console.log(JSON.stringify({ provider: name, ok: false, reason: "not confirmed", sharedWith: classification.sharedWith }, null, 2));
+    } else {
+      console.log("keryx providers remove: not confirmed — nothing was changed.");
+    }
+    if (!yes && !process.stdin.isTTY && deps.confirm === undefined) process.exitCode = 1;
+    return;
+  }
+  const result = disconnectProvider(name, env, dir);
+  if (json) {
+    console.log(
+      JSON.stringify(
+        { provider: name, ok: result.ok, kind: result.kind, sharedWith: result.sharedWith, reason: result.reason ?? null },
+        null,
+        2,
+      ),
+    );
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (!result.ok) {
+    console.log(`keryx providers remove: "${name}" not removed — ${result.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+  const sharedNote = sharedCredentialWarning(result.sharedWith, classification.envKey);
+  console.log(
+    `keryx providers remove: "${name}" disconnected (${result.kind}).${sharedNote !== undefined ? ` Note: ${sharedNote}.` : ""}${result.reason !== undefined ? ` ${result.reason}` : ""}`,
+  );
+}
+
+/**
+ * `keryx providers status [--json] [--refresh]` (flow 309, AC7): the live
+ * provider catalog — per connected provider, its status, model count and
+ * balance (when known), and the age of that reading. `--refresh` forces a
+ * fresh probe of every connected provider (bypasses the cache's TTL,
+ * mirroring `providers test`'s single-provider probe but for all of them);
+ * without it, a fresh cache answers immediately and only a stale/missing one
+ * triggers a probe (AC3).
+ */
+async function runProvidersStatus(args: string[], deps: ProvidersCommandDeps): Promise<void> {
+  const dir = deps.dir;
+  const env = deps.env ?? envWithOAuthAccess(envWithSavedApiKeys(process.env, dir));
+  const fetchFn = deps.fetch ?? globalThis.fetch;
+  // Dynamic import: `../harness/provider-catalog.ts` imports THIS module
+  // (`fetchOpenAiCompatModelsDetailed`/`fetchProviderBalance`/…) to do the
+  // actual probing — a static import here would be a real circular edge.
+  // `provider-catalog-cache.ts` (statically imported above) has no such
+  // cycle, which is why `classifyModelsStatus`/`updateProviderCatalogEntry`
+  // come from there instead.
+  const { loadOrRefreshProviderCatalog } = await import("../harness/provider-catalog");
+  const catalog = await loadOrRefreshProviderCatalog(
+    { fetch: fetchFn, env, ...(dir !== undefined ? { dir } : {}) },
+    { force: args.includes("--refresh") },
+  );
+  const rows = Object.values(catalog.providers).sort((a, b) => a.name.localeCompare(b.name));
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ fetchedAt: catalog.fetchedAt, providers: rows }, null, 2));
+    return;
+  }
+
+  console.log("# provider catalog");
+  console.log("");
+  if (rows.length === 0) {
+    console.log("none — no provider is connected. Run `keryx providers list` to see what a credential would unlock.");
+    return;
+  }
+  for (const row of rows) {
+    const label = row.label ?? row.name;
+    const modelsNote =
+      row.status === "ok"
+        ? `${row.models.length} model(s)`
+        : row.status === "auth-failed"
+          ? "no models (credential rejected)"
+          : row.fallbackModels.length > 0
+            ? `${row.fallbackModels.length} model(s) (offline list)`
+            : "no models";
+    const balanceNote =
+      row.balance !== undefined ? ` · balance ${formatCatalogBalance(row.balance)}` : "";
+    console.log(`- ${row.name} (${label}): ${row.status} — ${modelsNote}${balanceNote} · fetched ${formatCatalogAge(row.fetchedAt)}`);
+  }
+}
+
+/** `$6.19` / `€12.00` — mirrors `src/tui/balance-panel.ts`'s `formatBalance` for the CLI's own text output (kept separate: that module lives in the TUI's client zone and this is an adapter command). */
+function formatCatalogBalance(balance: ProviderCatalogEntry["balance"]): string {
+  if (balance === undefined) return "—";
+  const amount = balance.remaining ?? balance.total;
+  const symbol =
+    balance.currency === "USD" ? "$" : balance.currency === "EUR" ? "€" : balance.currency === "GBP" ? "£" : `${balance.currency} `;
+  return `${symbol}${amount.toFixed(2)}`;
 }
 
 function runProvidersList(args: string[]): void {
@@ -1010,17 +1585,46 @@ function printProvidersHelp(): void {
 
 Usage:
   keryx providers list [--json]
+  keryx providers status [--json] [--refresh]
   keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
+  keryx providers test <name> [--json]
+  keryx providers remove <name> [--yes] [--json]
 
 Commands:
   list          Providers this operator has configured, and the family of each
+  status        The live catalog: per connected provider, its status (ok /
+                auth failed / unreachable / timed out / no live listing),
+                model count, balance when known, and how old that reading is.
+                A fresh cache (keryx shell startup, /routing, or /connect
+                already refreshed it) is used immediately; --refresh forces a
+                fresh probe of every connected provider now
   cross-family  Whether review can run on a different model family than authored
                 the change, and the record the round should carry
+  test          Run this provider's live model-list probe and report ok/count
+                or the failure reason. Makes ONE network call — unlike list/
+                cross-family, not network-free. Also updates that provider's
+                entry the catalog "status" reads
+  remove        Disconnect a provider: remove its saved API key, OAuth grant,
+                or custom-provider entry. Errors on an unknown name (exit 1)
+                before asking anything. Asks for confirmation on a terminal;
+                refuses without one unless --yes. A provider whose only
+                credential is an environment variable you exported yourself
+                cannot be removed — the command names the variable to unset.
+                Some built-ins share one env var (e.g. zai/zai-coding both
+                read ZAI_API_KEY): removing either ALSO disconnects the
+                other, and both the confirmation prompt and the result name
+                every provider this affects — --json lists them under
+                sharedWith
 
 cross-family is OPT-IN: without --opt-in it reports what would happen and
 chooses single-family review. Dispatching to another provider spends tokens and
 sends the change to a second vendor, which is a decision rather than an
 optimisation. With no second family configured it reports single-family review
 with a stated reason and exits 0 — that is a normal configuration, not an error.
+
+Disconnecting a provider removes only keryx's LOCAL copy of its credential. It
+does not revoke anything at the vendor: an OAuth grant is deleted from
+auth.json only (no revoke call), and a saved API key simply stops being read —
+the key itself is still valid until you revoke it yourself with the vendor.
 `);
 }

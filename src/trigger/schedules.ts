@@ -90,6 +90,40 @@ export interface DraftContext {
   readonly resolveProgram?: (program: string) => string | undefined;
   /** The account a granted program acts as. Default: `gh api user --jq .login`, run from the project root. */
   readonly accountOf?: (program: string, bin: string) => Promise<string | undefined>;
+  /**
+   * Whether `provider` is known to report token usage on every response, and so can be
+   * priced (flow 302: the "Known" gap in 0.2.158's CHANGELOG — a drafted schedule could
+   * store and install a timer whose every fire refused with `dispatch-refused
+   * (provider-usage-unknown)`). Mirrors `providerReportsUsage`
+   * (`src/commands/trigger-dispatch.ts`), which the dispatcher itself checks at run
+   * time; every operator surface (`keryx schedule add`, `/schedule`, `schedule_create`)
+   * injects THAT function, so a draft's refusal agrees with what a real dispatch would
+   * do, including the OpenAI-compatible registry's `streamUsage` entries (grok,
+   * deepseek, …) this core zone cannot name on its own (RULE 1: a core owner never
+   * imports an adapter). Default: the three adapters this zone CAN name without
+   * importing anything — `anthropic`, `openai`, `gemini`.
+   */
+  readonly providerReportsUsage?: (provider: string) => boolean;
+  /**
+   * Resolve whether `provider`/`model` has a usable credential in this environment —
+   * the SAME resolution `defaultMakeProvider` performs at run time
+   * (`providerHasUsableCredential`, `src/commands/trigger-dispatch.ts`), injected for
+   * the same reason `providerReportsUsage` is: core may not import the client-zone
+   * provider construction that resolution needs. Every operator surface injects it, so
+   * a draft never stores an entry whose every fire will refuse at run time for want of
+   * a credential. Absent here, no credential check runs — a direct/library caller of
+   * `draftSchedule` is not one of those three confirmation-card-issuing surfaces.
+   */
+  readonly checkCredential?: (
+    provider: string,
+    model: string,
+  ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
+}
+
+/** `DraftContext.providerReportsUsage`'s default: the three native adapters this core zone can name without an adapter import. */
+const NATIVE_USAGE_PROVIDERS = new Set(["anthropic", "openai", "gemini"]);
+function defaultProviderReportsUsage(provider: string): boolean {
+  return NATIVE_USAGE_PROVIDERS.has(provider);
 }
 
 export interface ScheduleDraft {
@@ -151,6 +185,20 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   const bins: Record<string, string> = {};
   const binDigests: Record<string, BinaryPin> = {};
   const problems: string[] = [];
+  // Flow 302: refuse before anything else runs — a provider that cannot be priced, or
+  // that has no usable credential, must never reach a stored entry or an installed timer.
+  const reportsUsage = ctx.providerReportsUsage ?? defaultProviderReportsUsage;
+  if (!reportsUsage(request.provider)) {
+    problems.push(
+      `provider: "${request.provider}" is not known to report token usage on every response, so this schedule's cost ` +
+        "could not be counted against its ceiling — refusing to draft. Use anthropic, openai, gemini, or a registry " +
+        "provider whose entry sets streamUsage (for example grok, deepseek).",
+    );
+  }
+  if (ctx.checkCredential !== undefined) {
+    const credential = await ctx.checkCredential(request.provider, request.model);
+    if (!credential.ok) problems.push(`provider: ${credential.reason}`);
+  }
   const wrappers: Record<string, string> = {};
   for (const program of programs) {
     const bin = resolve(program);

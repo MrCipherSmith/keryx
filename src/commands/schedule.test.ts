@@ -71,6 +71,11 @@ function deps(extra: Partial<ScheduleCommandDeps> = {}): ScheduleCommandDeps {
     now: () => new Date(2026, 8, 23, 5, 7, 0),
     resolveProgram: (p) => fakeProgram(p),
     accountOf: async () => "MrCipherSmith",
+    // Flow 302: this suite drafts against the "fake" provider on purpose (no model is
+    // ever called), so the two new draft-time checks are stubbed to stay out of its way;
+    // they get their own dedicated tests.
+    providerReportsUsage: () => true,
+    checkCredential: async () => ({ ok: true }),
     ...extra,
   };
 }
@@ -148,6 +153,57 @@ describe("keryx schedule add", () => {
     await scheduleCommand(["add", "--name", "x"], deps());
     expect(process.exitCode).toBe(1);
     expect(out.join("\n")).toContain("missing --prompt, --provider, --model, --rates, --ceiling, --every (or --cron)");
+    expect(existsSync(scheduleStorePath(root))).toBe(false);
+  });
+
+  // --- flow 302: the "Known" gap in 0.2.158's CHANGELOG ----------------------------------
+  // Drafting used to accept any provider name, so a confirmed schedule could install a
+  // timer whose every fire refused at run time with `dispatch-refused
+  // (provider-usage-unknown)`, or with no usable credential. `keryx schedule add` calls the
+  // same `draftSchedule` the tool path (`schedule-tools.test.ts`) does; these are the
+  // CLI-path half of that pair.
+
+  test("flow 302: a provider not known to report token usage is refused, and nothing is written or installed", async () => {
+    await scheduleCommand(ADD, deps({ confirm: async () => true, providerReportsUsage: () => false }));
+    expect(process.exitCode).toBe(1);
+    expect(out.join("\n")).toContain("not known to report token usage");
+    expect(existsSync(scheduleStorePath(root))).toBe(false);
+    expect(await readdir(unitDir)).toEqual([]);
+  });
+
+  test("flow 302: a provider with no usable credential is refused, and nothing is written or installed", async () => {
+    await scheduleCommand(
+      ADD,
+      deps({
+        confirm: async () => true,
+        checkCredential: async () => ({ ok: false, reason: 'provider "fake" has no usable credential in this environment' }),
+      }),
+    );
+    expect(process.exitCode).toBe(1);
+    expect(out.join("\n")).toContain("no usable credential");
+    expect(existsSync(scheduleStorePath(root))).toBe(false);
+    expect(await readdir(unitDir)).toEqual([]);
+  });
+
+  test("flow 302: a priceable provider with a usable credential still drafts, stores and installs", async () => {
+    await scheduleCommand(ADD, deps({ confirm: async () => true }));
+    expect(existsSync(scheduleStorePath(root))).toBe(true);
+    expect((await readdir(unitDir)).length).toBe(2);
+  });
+
+  test("flow 302 (production wiring): a real provider with no usable credential in this environment is refused, and nothing is written or installed", async () => {
+    const savedKey = process.env["ANTHROPIC_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
+    try {
+      const args = ADD.map((a) => (a === "fake" ? "anthropic" : a));
+      // Neither check is stubbed here — this exercises the real `providerReportsUsage`/
+      // `providerHasUsableCredential` wiring from `./trigger-dispatch`, not a test double.
+      await scheduleCommand(args, deps({ confirm: async () => true, providerReportsUsage: undefined, checkCredential: undefined }));
+    } finally {
+      if (savedKey !== undefined) process.env["ANTHROPIC_API_KEY"] = savedKey;
+    }
+    expect(process.exitCode).toBe(1);
+    expect(out.join("\n")).toContain("no usable credential");
     expect(existsSync(scheduleStorePath(root))).toBe(false);
   });
 });

@@ -1,0 +1,215 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "blocker",
+    "problem": "A reference document's clause text could reach a Jev question or a log/journal line without passing through redactSensitiveText first.",
+    "impact": "Sensitive or private reference-document text could leave the machine unredacted, or be written unredacted into a local log.",
+    "suggested_fix": "Route every clause-text interpolation (the tag-choice question, the conform question, any printed/logged excerpt) through redactSensitiveText before it is used.",
+    "evidence": "src/review/conform-clauses.ts and src/review/conform-jev.ts: clause text was interpolated into model-bound strings without redaction.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/review/conform-clauses.ts",
+        "src/review/conform-jev.ts"
+      ],
+      "enumeration_method": "grep for redactSensitiveText and for clause.text interpolation across every file touching a reference-document clause"
+    },
+    "global_id": "308-r01#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711): src/review/conform-clauses.ts and src/review/conform-jev.ts route clause.text through redactSensitiveText before it is interpolated into any Jev question; the unredacted-clause-text defect no longer reproduces.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "blocker",
+    "problem": "The reference document's own filesystem path (not just its content) reached the --explain pass and its output, rather than only a redacted basename.",
+    "impact": "The path to a private reference document could leak into advisory output, a log, or an explanation prompt.",
+    "suggested_fix": "Pass only redactSensitiveText(path.basename(refPath)) into anything --explain touches; never the full path.",
+    "evidence": "src/commands/review.ts: the reference-document path was used directly instead of a redacted basename.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts"
+      ],
+      "enumeration_method": "grep for refPath usage in review.ts's conform/--explain code paths"
+    },
+    "global_id": "308-r01#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711): src/commands/review.ts:1893 uses redactSensitiveText(path.basename(refPath)); the full reference-document path no longer reaches --explain output.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "sonnet-reviewer",
+    "severity": "blocker",
+    "problem": "The clause-tag cache file (naming reference documents and their per-clause tags) was neither gitignored nor written with restrictive file permissions.",
+    "impact": "A cache file naming a private reference document and its tags could be committed by accident, or read by another local user.",
+    "suggested_fix": "Gitignore the cache directory and write the cache file with 0o600.",
+    "evidence": "src/review/conform-tag-cache.ts and .gitignore: the cache file had no mode restriction and no gitignore entry.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/review/conform-tag-cache.ts",
+        ".gitignore"
+      ],
+      "enumeration_method": "grep for the cache file's write call and for its directory in .gitignore"
+    },
+    "global_id": "308-r01#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711): src/review/conform-tag-cache.ts writes the cache file with mode 0o600, and .gitignore:104 ignores .metaproject/data/review-conform/; the unprotected-cache defect no longer reproduces.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "sonnet-reviewer",
+    "severity": "blocker",
+    "problem": "Flow journal entries recorded a live check's per-clause results using the reference document's own heading-derived clause ids, rather than anonymized labels.",
+    "impact": "A durable, committed-adjacent record (the flow journal) could carry wording derived from a private document's own headings.",
+    "suggested_fix": "Anonymize clause ids in any journal entry describing a live run against a private document: group by heading, then relabel with neutral, order-assigned labels, dropping any heading-derived wording.",
+    "evidence": "flow journal for this flow: the live-check entry now groups clause ids under neutral relabelled sections (e.g. sectionA-1) with a note stating no heading-derived wording is retained.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        ".metaproject/flows/308-2026-09-25-keryx-review-conform-check-a-pr-a-review/journal.md"
+      ],
+      "enumeration_method": "read every journal entry describing a live run against the private document; one entry does this (AC11 live check)"
+    },
+    "global_id": "308-r01#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711) and the flow journal on disk: the AC11 live-check entry groups clause ids under neutral relabelled sections (sectionA.. etc.) with an explicit note that no heading-derived wording is retained; the private-clause-id-in-journal defect no longer reproduces.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The /conform TUI inspector's abort of an in-flight run could still let that run's promise settle after a newer run had already written its own result, overwriting the newer result with stale data.",
+    "impact": "A user who re-runs conform quickly could see a stale verdict silently replace a fresh one.",
+    "suggested_fix": "Compare a run's identity/generation against the current one before writing its result, discarding a late-arriving stale settlement.",
+    "evidence": "src/tui/conform-inspector.ts: options.run's promise could settle after AbortController.abort() with no generation check before writing.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/tui/conform-inspector.ts"
+      ],
+      "enumeration_method": "grep for AbortController/abort in conform-inspector.ts; one run-dispatch site"
+    },
+    "global_id": "308-r01#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711): src/tui/conform-inspector.ts (lines ~205-211) compares the settling run's identity against the current one before writing a result, discarding a late-arriving stale settlement; the stale-run race no longer reproduces.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The PR-reading port (gh pr view / gh pr diff) had no timeout, so a hung gh process could block a conform run indefinitely.",
+    "impact": "A single stalled gh call hangs `review conform --pr` with no bound.",
+    "suggested_fix": "Add a spawn timeout and output cap to the port's gh calls, mirroring the CI-triage port's existing pattern.",
+    "evidence": "src/review/conform-pr-port.ts: defaultConformSpawn now carries CONFORM_SPAWN_TIMEOUT_MS and a byte output cap, killing a hung child rather than waiting forever.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/review/conform-pr-port.ts"
+      ],
+      "enumeration_method": "grep for Bun.spawn in conform-pr-port.ts; one spawn helper, shared by every gh call"
+    },
+    "global_id": "308-r01#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711): src/review/conform-pr-port.ts's defaultConformSpawn carries CONFORM_SPAWN_TIMEOUT_MS and a byte output cap, killing a hung gh child; the unbounded-hang defect no longer reproduces.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "problem": "The committed conform fixtures, though entirely invented, were structured and phrased closely enough to the operator's real private reference document that their shape and wording still read as correlated with it.",
+    "impact": "A committed fixture that mirrors a private document's structure and phrasing risks leaking information about that document's shape even without copying its text.",
+    "suggested_fix": "Rewrite the fixtures into an unrelated domain and structure, keeping only the mechanical shape a parser needs (numbered/bulleted items under headings) and none of the private document's own organization.",
+    "evidence": "src/review/fixtures/conform/invented-doctrine.md and src/commands/fixtures/conform/invented-ref.md: rewritten into a data-pipeline contribution policy (an unrelated domain), independently structured from the operator's example.",
+    "confidence": "high",
+    "class_scope": {
+      "sites": [
+        "src/review/fixtures/conform/invented-doctrine.md",
+        "src/commands/fixtures/conform/invented-ref.md"
+      ],
+      "enumeration_method": "read every committed conform fixture; both were rewritten in the same pass"
+    },
+    "global_id": "308-r01#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711): src/review/fixtures/conform/invented-doctrine.md and src/commands/fixtures/conform/invented-ref.md are a data-pipeline contribution policy, an unrelated domain and structure from the operator's example; the fixture-correlation gap no longer reproduces.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "sonnet-reviewer",
+    "severity": "minor",
+    "problem": "A finding field name and its AC criterion wording described report-kind facts in terms that, combined with the fixture-correlation gap above, leaned on vocabulary closer to the private document's own domain than necessary.",
+    "impact": "Committed wording (docs and the acceptance criterion text) carried a naming choice more specific than the neutral concept it describes.",
+    "suggested_fix": "Rename the field to a neutral term and reword the criterion to describe the general concept (which fields a finding records, such as a file anchor) rather than a domain-specific one.",
+    "evidence": "src/review/conform-state.ts / conform-state.test.ts: the finding-location field was renamed to an anchor-kind concept (classifyFindingAnchor), and this flow's AC4 was reworded to match (flow journal, ac-updated entry).",
+    "confidence": "medium",
+    "global_id": "308-r01#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "site-check against 8a8452b3954456506aa1e90af2b30837c782998e (merged PR #711): src/review/conform-state.ts's classifyFindingAnchor and this flow's AC4 wording (flow journal ac-updated entry, 2026-09-25T11:18:33.915Z) both use the neutral anchor-kind term; the domain-leaning wording no longer reproduces.",
+      "verifier": "operator-agent"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "8a8452b3954456506aa1e90af2b30837c782998e (PR #711)"
+    }
+  }
+]

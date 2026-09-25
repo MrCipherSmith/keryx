@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { appendFile, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -320,5 +320,68 @@ describe("L4: installer details", () => {
     expect(await detectBackend(host)).toBe("systemd");
     await planInstall(root, "x", "0 */4 * * *", host, { argv: [TRUE_BIN], env: {} });
     expect(probes).toBe(1);
+  });
+});
+
+// --- flow 302: draftSchedule's own (core-zone) provider/credential checks -----------------
+// The CLI path (`schedule.test.ts`) and the tool path (`schedule-tools.test.ts`) cover the
+// production wiring; these exercise `draftSchedule` itself — no adapter in between — so its
+// DEFAULT `providerReportsUsage` (the three native adapters this core zone can name without
+// an adapter import) and its opt-in `checkCredential` are pinned directly.
+
+describe("flow 302: draftSchedule's own provider/credential checks", () => {
+  // A fake, non-real scheduler backend: `planInstall` runs only once the two new checks
+  // have already passed, and `install.ts` refuses to touch the real systemctl/launchctl/
+  // crontab under `bun test` with no fake host injected (see `src/trigger/install.ts`).
+  const fakeHost: ScheduleHost = { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) };
+
+  test("with no ctx override, the default providerReportsUsage accepts only anthropic/openai/gemini", async () => {
+    for (const provider of ["anthropic", "openai", "gemini"]) {
+      const drafted = await draftSchedule({ ...request(), provider }, { projectRoot: root, host: fakeHost, resolveProgram: () => fakeGh(), accountOf: async () => "me" });
+      expect(drafted.ok).toBe(true);
+    }
+    const drafted = await draftSchedule(
+      { ...request(), provider: "grok" },
+      { projectRoot: root, host: fakeHost, resolveProgram: () => fakeGh(), accountOf: async () => "me" },
+    );
+    expect(drafted.ok).toBe(false);
+    if (!drafted.ok) expect(drafted.problems.join(" ")).toContain("not known to report token usage");
+  });
+
+  test("an injected providerReportsUsage can widen the default (e.g. a registry provider with streamUsage)", async () => {
+    const drafted = await draftSchedule(
+      { ...request(), provider: "grok" },
+      { projectRoot: root, host: fakeHost, resolveProgram: () => fakeGh(), accountOf: async () => "me", providerReportsUsage: (p) => p === "grok" },
+    );
+    expect(drafted.ok).toBe(true);
+  });
+
+  test("with no ctx.checkCredential injected, no credential check runs", async () => {
+    const drafted = await draftSchedule(request(), { projectRoot: root, host: fakeHost, resolveProgram: () => fakeGh(), accountOf: async () => "me" });
+    expect(drafted.ok).toBe(true);
+  });
+
+  test("an injected checkCredential refusal refuses the draft, and nothing is written or installed", async () => {
+    const drafted = await draftSchedule(request(), {
+      projectRoot: root,
+      host: fakeHost,
+      resolveProgram: () => fakeGh(),
+      accountOf: async () => "me",
+      checkCredential: async () => ({ ok: false, reason: 'provider "anthropic" has no usable credential in this environment' }),
+    });
+    expect(drafted.ok).toBe(false);
+    if (!drafted.ok) expect(drafted.problems.join(" ")).toContain("no usable credential");
+    expect(existsSync(scheduleStorePath(root))).toBe(false);
+  });
+
+  test("an injected checkCredential that resolves ok still drafts", async () => {
+    const drafted = await draftSchedule(request(), {
+      projectRoot: root,
+      host: fakeHost,
+      resolveProgram: () => fakeGh(),
+      accountOf: async () => "me",
+      checkCredential: async () => ({ ok: true }),
+    });
+    expect(drafted.ok).toBe(true);
   });
 });

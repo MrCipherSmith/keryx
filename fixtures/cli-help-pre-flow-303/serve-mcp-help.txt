@@ -1,0 +1,15 @@
+keryx serve-mcp — expose Metaproject services over the Model Context Protocol
+
+Usage
+  keryx serve-mcp [--cwd <project-root>]          # stdio JSON-RPC MCP server (default)
+  keryx serve-mcp --http [--cwd <project-root>]   # HTTP/SSE opt-in (requires capabilities.http.enabled)
+  keryx serve-mcp --read-only [--cwd <project-root>]  # expose only tools that change nothing
+
+Options
+  --http       Use the isolated HTTP/SSE transport (localhost only) instead of stdio.
+  --cwd        Project root whose .metaproject workspace should be exposed. Defaults to the process cwd.
+  --read-only  Hide every tool marked mutating. keryx uses this when it hands its own MCP server to a foreign ACP agent, whose MCP calls never pass keryx's permission bridge.
+
+Notes
+  Requires the optional @modelcontextprotocol/sdk. Disabled by default (modules.mcp.enabled=false); `keryx integrate <editor>` turns it on and wires a client.
+  `keryx mcp serve` is the retired spelling of this command. It still works and prints one deprecation line on stderr.

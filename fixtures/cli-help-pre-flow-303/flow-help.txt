@@ -1,0 +1,31 @@
+keryx flow — agent-first managed work (flows)
+
+Usage
+  keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--require-confirmation]
+  keryx flow list
+  keryx flow status <id>
+  keryx flow freeze <id>
+  keryx flow start <id>
+  keryx flow next <id> [--json]   (first task not done whose dependsOn are all done)
+  keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]
+  keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]
+  keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]
+  keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)
+  keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)
+  keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
+  keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)
+  keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)
+  keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)
+    every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone
+  keryx flow implemented <id> --pr <url>
+  keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]
+  keryx flow confirm <id> [--merged]   (mint a completion confirmation token; needs a terminal and a typed challenge)
+  keryx flow recover <id> --reason "<why>"   (move a flow left in `completing` back to `in-progress`)
+  keryx flow block <id> --reason "<why>"   /   flow unblock <id>
+  keryx flow check
+  keryx flow renumber <dir> --to <id> --reason "<why>"   (repair a duplicate id)
+  keryx flow repair-reviews   (re-point review records of flows renumbered before renumber rewrote them)
+  keryx flow plan <id> [--provider <p>] [--json]   (model-suggested task breakdown)
+  keryx flow schema [--out <path>]
+  `--signed-by` names the signer explicitly (stated). Falls back to KERYX_ACTOR (also stated), then to `git config user.email` in this checkout (derived — the person who RAN the command, not necessarily who signed), then to `unknown`. None of these is proof a human signed: a flag, an environment variable, and a local git identity can all be set by an agent. `--owner` is never inferred at all — see docs/decisions/keryx-harness/.
+  `flow confirm` mints a short-lived, single-use token only for a flow created with `--require-confirmation` (or `completion.require_confirmation: true`). The token proves an interactive confirmation step ran outside the agent's tool roster, within its TTL, for this criteria checksum — not that a human ran it, and not who. See docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md.

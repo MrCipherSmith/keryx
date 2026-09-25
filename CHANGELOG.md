@@ -3,6 +3,254 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.164] — 2026-09-25
+
+Two more pieces of the Jev plan, and a routing picker that lists the models
+your providers actually serve today.
+
+### Added
+- **`keryx review conform`: check a PR, a review or a diff against a
+  reference document.** `keryx review conform --ref <doc> (--pr <n> |
+  --report <dir> | --diff <ref>) [--explain] [--threshold] [--json]` splits a
+  rules file, skill or project skill into clauses without a model (heading +
+  item, stable ids), tags each as about the PR, a review report, code hunks,
+  or not checkable, and computes the checkable facts first: which PR-body
+  sections are present and filled, the hand-written line count, a report's
+  section order, which fields each finding records. Jev then scores each
+  clause (`satisfied` / `likely-violated`); `not-checkable` clauses are always
+  listed, never guessed. `--explain` asks the model routed to the `review`
+  category for a short advisory explanation of each violated clause and never
+  writes to GitHub. `/conform` in the shell picks a recent document and a
+  target and shows the clauses grouped by kind with their evidence.
+  - Opt-in per project (`review.jev.conform` in
+    `.metaproject/tasks.config.json`): the document's clauses, the PR text,
+    the report and the diff are sent to Jev after secret redaction; nothing
+    leaves the machine otherwise. Only the document's file name reaches the
+    `--explain` model. The clause-tag cache and the recent-documents list live
+    under `.metaproject/data/review-conform/`, which is gitignored, mode 0600.
+  - Measured live against a real process document: Jev answers cautiously
+    (none of 115 scores reached 0.8), so treat a `likely-violated` as a
+    prompt for a human look, not a verdict.
+- **`keryx providers status [--json] [--refresh]`** prints every connected
+  provider's catalog: status (ok, auth failed, unreachable, timeout, not
+  supported), model count, balance where the provider documents one, and when
+  it was fetched.
+
+### Changed
+- **CI triage v2.** `keryx review ci-triage` now computes deterministic
+  signals before asking Jev — whether a rerun of the job passed, whether the
+  same test failed on other branches and later passed there, whether the
+  failing test is near the diff, and log markers for a lost runner, network,
+  out-of-memory, timeout and a broken dependency install — and puts them
+  above the log. A rerun that passed, or the same job passing later on the
+  same commit, decides the verdict by itself (`DETERMINISTIC:`), with Jev's
+  probabilities still printed beside it; an ambiguous job name or a run that
+  falls outside the fetched history withholds that and shows an advisory line
+  instead. Every failed job is triaged (at most 10; `--job` narrows), and
+  `--json` prints `{results, notTriaged}`. `--eval <manifest> [--live]` runs a
+  committed set of 8 labelled real runs; measured live, top-1 accuracy was 4/8
+  before and after the signals — the docs say so. `/ci` shows the same
+  evidence.
+- **`/routing` lists the models your connected providers serve now.** The
+  picker read hardcoded model lists and offered providers you had not
+  connected. At shell startup keryx now fetches every connected provider's
+  model list in parallel ("checking providers…", 8 s per provider, never
+  blocking the prompt), which doubles as an availability check; the result is
+  cached for 5 minutes (mode 0600, no credentials) and `providers test`
+  refreshes it. A provider whose fetch failed shows its curated list marked
+  `(offline list)`; one whose key was rejected is left out. `/connect` rows
+  show status, balance and age, and a provider that fails at startup gets one
+  notice line.
+
+### Fixed
+- **The OpenRouter balance was never shown.** The request went to
+  `/api/api/v1/credits` and the parser expected a shape neither endpoint
+  returns. It now reads what is left of the key's limit from `/api/v1/key`, and
+  falls back to `/api/v1/credits` for a key without a limit.
+- **A rejected Jev key says where it came from.** A 401 names whether the
+  `OPENROUTER_API_KEY` environment variable or the saved key was used, and
+  flags a key that does not look like an OpenRouter key. Error bodies are
+  redacted.
+- **Jev `choice` questions** send their options as an object; the live
+  endpoint rejected an array.
+- `gh` and `git` calls made by CI triage and `review conform` have a timeout
+  and an output cap.
+
+## [0.2.163] — 2026-09-25
+
+### Added
+- **A prompting rule for Claude Opus 5.5, loaded only by Claude.** Opus 5.5
+  reasons before every reply, so an instruction telling it to think is spent
+  context that buys nothing and can over-constrain how it breaks the work up.
+  `rules/core/opus-5-5-prompting.mdc` says to delete those instructions and
+  state a completion criterion instead, to give a task its finish line rather
+  than hand-written steps, to name the patterns to avoid instead of directing
+  in the abstract, to keep stopping rules and destructive-command prompts in
+  the entrypoint, to keep long-run state in a file because the early context is
+  summarized away, to verify a subagent's evidence rather than its claim, to
+  read blockers before the summary, and to attach finished artifacts instead of
+  paraphrasing them.
+  - **The rule is Claude-scoped by construction.** It is cited from `CLAUDE.md`
+    only, in a section outside the managed `keryx:index` block, so
+    `keryx rules sync` carries it into `.metaproject/rules/claude-md.md` at
+    high priority and leaves `agents-md.md` untouched — an agent that reads
+    only `AGENTS.md` never loads it. `agent_requires: ["claude"]` records the
+    same restriction in frontmatter, alongside the existing `stack_requires`
+    convention. It is deliberately absent from `.metaproject/index.md`, which
+    every agent reads.
+  - Its Output Contract puts output-format instructions, safety and permission
+    rules, and anything written for non-Claude agents out of scope, so a
+    cleanup pass driven by the rule cannot strip them.
+
+## [0.2.162] — 2026-09-25
+
+The first two pieces of the Jev plan: keryx can send each kind of task to a
+model the operator chose, and it can tell a flaky CI failure from a real
+one. Both designs are in `docs/requirements/keryx-jev-router/` and
+`docs/requirements/keryx-jev-review/`.
+
+### Added
+- **A routing table: each kind of task goes to the model you chose.** The
+  categories are default, review, subagents, quick, coding, planning, docs
+  and unattended; each points at a specific model, a provider's default
+  model, or the session's model. `/routing` edits it from one searchable
+  list of every connected provider's models, with no provider step first,
+  and `keryx routing list|set|unset|trust` does the same from the CLI.
+  A project's `routing.config.json` overrides the user's table, and an
+  explicit choice overrides both. Review and subagents read it now; the
+  other categories can be set and are wired in later releases.
+  - **A project's table takes effect only once you approve it.** A
+    checked-in `routing.config.json` could otherwise decide which model
+    reviews that project's own changes. `keryx routing trust`, or `t` then
+    `y` in `/routing`, shows every entry before recording approval, and any
+    edit to the file voids it. An unapproved table is ignored with a notice,
+    even when part of it fails validation.
+  - **An entry naming a provider or model you have not connected falls
+    through** to the next layer and says so.
+  - A subagent's routed model still passes every existing allowlist, trust
+    and classification gate; a routed review model is labelled routed.
+- **CI failure triage: flaky, infrastructure, or a real regression.**
+  `keryx review ci-triage --run <id>` and `/ci` in the shell read a failed
+  job's log and ask Jev, TypeSafe's structured-decision model, for the
+  probability of each, through OpenRouter. It only advises - it cannot
+  rerun, cancel or write a status. It is off until a project enables
+  `review.jev.ci_triage`, because the log leaves the machine; the excerpt,
+  the test name and the job name are redacted first, a request ends after
+  30 seconds, and a malformed answer is an error rather than a silent zero.
+
+### Notes
+- Jev's accuracy figures are the vendor's own. Its answers to a multi-option
+  question carry no documented per-option probabilities, so triage asks one
+  yes/no question per outcome.
+
+## [0.2.161] — 2026-09-23
+
+A provider can be tested and disconnected from where it was connected.
+
+### Added
+- **`/connect` rows carry `[Test]` and `[Disconnect]` buttons**, built like
+  the queue's Force/Edit/Delete and reachable from the keyboard the same way
+  (up and down pick a row, left and right pick the action, Enter fires). Test
+  asks the provider for its model list and shows `ok - N models` or the
+  reason it failed on that row. Disconnect asks for confirmation, then removes
+  exactly what keryx saved: an API key, an OAuth grant, or a custom provider
+  with its base URL and model parameters. Selecting a provider works as
+  before; `/provider` is unchanged.
+- **`keryx providers test <name> [--json]` and `keryx providers remove <name>
+  [--yes]`** do the same from the CLI. `remove` asks on a terminal, refuses
+  without one unless `--yes`, and refuses a name it does not know.
+
+### Notes
+- **Disconnecting is local.** keryx deletes its own copy of the credential;
+  nothing is revoked at the vendor, OAuth grants included.
+- **A key the operator exported is left alone**, and Disconnect names the
+  variable to unset.
+- **Providers that share one key are named before they go.** The built-in
+  `zai` and `zai-coding` both read `ZAI_API_KEY`; disconnecting either says
+  that the other loses its credential too, before confirmation and after.
+- **Disconnecting the session's own provider switches nothing and interrupts
+  nothing**; the running session keeps the credential it loaded until
+  `/connect` or a restart.
+
+### Fixed
+- **`auth.json` and `llm-providers.json` are written atomically**, so a
+  crash mid-write can no longer leave either truncated.
+
+## [0.2.160] — 2026-09-23
+
+A patch to `keryx help`, found by the 0.2.159 smoke run.
+
+### Fixed
+- **`keryx help` in the terminal shows the shell's slash commands too.** It
+  listed only CLI verbs, so a group made of slash commands alone — Look and
+  feel, with `/theme` — never appeared, and `keryx help connect` left out
+  `/connect`. Each group now lists its CLI verbs, then its commands under
+  "in keryx shell:", and every group appears.
+- **`keryx help /<command>` stays within 80 columns**; its explanation
+  line ran to 94. A test holds every group and every command's help to 80.
+- **The `/help` modal's tabs read as words.** Nine full group names did not
+  fit the tab bar and were cut mid-phrase. The tabs now read Start, Connect,
+  Look, Shell, Knowledge, Work, Automate, Agents, Maintain, fall back to
+  short forms only when the modal is too narrow for them, and each tab
+  opens with its group's full name.
+
+## [0.2.159] — 2026-09-23
+
+A new user can now find their way in. `keryx help` and a tabbed `/help`
+group every command by the steps a user takes to start, the README and the
+onboarding page walk the first session in that order, and every page on the
+docs site was checked against the code. A schedule can no longer be created
+for a provider that cannot be priced.
+
+### Added
+- **`keryx help` — every command, grouped by the steps to get started.** One
+  table places each CLI verb and each shell slash command in one of nine
+  groups: start here, connect a model provider, look and feel, working in
+  keryx shell, project knowledge, managed work, automation, external agents
+  (ACP and MCP), and maintenance. `keryx help` prints them all within 80
+  columns, `keryx help <group>` prints one, `keryx help <command>` or
+  `keryx help /<slash>` prints that command's usage, and a typo gets the
+  closest matches. A test fails when a command is in no group or in two;
+  internal helpers and aliases are hidden with a reason. `keryx --help`,
+  `-h` and a bare `keryx` still print the flat usage block, now with one line
+  naming `keryx help`. (flow 303)
+- **`/help` in the shell opens a modal with a tab per group** and a detail
+  view per command; left and right switch tabs, up and down move, Enter shows
+  usage, Esc closes. It opens during a turn too. The readline shell and ACP
+  editors get the same grouping as text. The first shell run with no model
+  provider connected opens it on the provider tab, once; the check runs in
+  the background and never delays the composer. (flow 303)
+- **Commands by task** on the docs site is generated from the same table, so
+  it cannot drift from the code. (flow 303)
+- **The start screen names `/help`**, and the shell no longer goes dark
+  between the splash and a ready composer: a spinner names the startup step
+  until the composer paints. (flow 303)
+
+### Changed
+- **Documentation revision.** The README has one quick start, right after the
+  introduction — install, `keryx init`, connecting a provider, the first
+  session and where to go next — ahead of the deep dives, with a test pinning
+  that order. The onboarding page gains the first `keryx shell` session:
+  providers, theme, permission modes, slash-command basics and sessions. The
+  two long setup references state their audience and link to onboarding
+  instead of restating it. Checking every page against the code found
+  triggers, schedules and governance missing from the module maps in
+  `architecture.md` and `modules.md`, `SECURITY.md` naming 0.1.x as
+  supported, and `bun run check` described as typecheck plus tests; all are
+  fixed, and a test keeps the docs index and the site navigation in
+  agreement. (flow 302)
+
+### Fixed
+- **A schedule is refused at the card when its provider cannot be priced or
+  has no usable credential** — the "Known" gap in 0.2.158. `keryx schedule
+  add`, `/schedule` and the `schedule_create` tool now make the same two
+  checks the dispatcher makes at run time, before anything is written or a
+  timer installed, so a card can no longer leave a schedule whose every fire
+  refuses.
+- **A theme switch recolours a modal's body**, not only its frame, in every
+  modal the shell opens.
+- **`/help` during a turn** opens the help modal instead of a busy notice.
+
 ## [0.2.158] — 2026-09-23
 
 DeepSeek can be priced, so an unattended run may use it. The dispatcher accepts

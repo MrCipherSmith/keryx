@@ -95,6 +95,13 @@ keryx auth login <provider>  # subscription login (device code / OAuth) or API k
 Inside a running session, `/provider` reopens the same add/reconfigure wizard
 and `/connect` switches between providers you already configured.
 
+Once you have more than one provider connected, `keryx routing` (and, inside a
+session, `/routing`) maps a task category — `review`, `subagents`, and a
+catalogue of others — to a specific model, so reviews and subagent spawns can
+run on a different (cheaper, or stronger) model than your main session without
+switching `/model` before every turn. See [the CLI
+reference](docs/docs/cli-reference.md#routing).
+
 ### Your first session
 
 ```bash
@@ -116,8 +123,9 @@ first session:
 
 Full documentation site: **<https://mrciphersmith.github.io/keryx/>**, starting
 with [Onboarding](docs/docs/onboarding.md) for the complete first-run
-walkthrough. Run `keryx <command> --help` for the live flag surface of any
-command.
+walkthrough. `keryx help` groups every command by task; the same table is a
+generated reference page, [Commands by task](docs/docs/commands-by-task.md).
+Run `keryx <command> --help` for the live flag surface of any command.
 
 ## Why keryx
 
@@ -241,6 +249,31 @@ keryx shell --no-tui                          # classic readline shell
 keryx shell --chat                            # chat without tools
 keryx shell --provider ollama --model gemma4:e4b     # fully local
 ```
+
+### Finding a command
+
+`keryx help` prints every command grouped by task — Start here; Connect a
+model provider; Look and feel; Working in keryx shell; Project knowledge;
+Managed work; Automation; External agents, ACP and MCP; Maintenance and
+diagnostics — instead of one long alphabetical list. `keryx help <group>`
+narrows to one group, and `keryx help <command>` (a CLI verb or a `keryx
+shell` command like `/theme`) prints that command's own usage. `--help`,
+`-h` and bare `keryx` are unchanged: they still print the flat usage block.
+The same table is also a generated reference page: [Commands by
+task](docs/docs/commands-by-task.md).
+
+```bash
+keryx help                    # every group
+keryx help project-knowledge  # one group
+keryx help flow                # one command's full usage
+keryx help /theme               # one shell command's detail
+```
+
+Inside `keryx shell`'s TUI, `/help` opens the same grouping as a tabbed
+modal — arrow keys to move, Enter for a command's detail, Esc to close. On
+your very first `keryx shell` with no model provider configured yet, it
+opens once on its "Connect a model provider" tab. The readline shell,
+`--no-tui`, and the ACP host print the same grouping as text.
 
 ### Turn budgets
 

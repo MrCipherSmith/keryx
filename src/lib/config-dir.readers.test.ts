@@ -31,7 +31,7 @@
 //
 // The files are sparse (`ftruncate`), so the whole suite costs no real disk.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
   closeSync,
   ftruncateSync,
@@ -50,15 +50,7 @@ import { Glob } from "bun";
 import { loadsModule, parse } from "./config-dir.ast";
 import { sessionDir } from "../session/paths";
 import { MAX_CONFIG_FILE_BYTES, MAX_TRANSCRIPT_FILE_BYTES, readConfigFile, readTranscriptFile } from "./config-dir";
-import {
-  CONFIG_PATH_RESOLVERS,
-  code,
-  type Exemption,
-  type Offence,
-  scanFor,
-  sourceFiles as scanSourceFiles,
-  treeSources as scanTreeSources,
-} from "./config-dir.scan";
+import { CONFIG_PATH_RESOLVERS, code, type Exemption, type Offence, scanFor } from "./config-dir.scan";
 
 const SRC = path.join(import.meta.dir, "..");
 
@@ -580,13 +572,43 @@ function readOffenders(sources: ReadonlyMap<string, string>): Offence[] {
 }
 
 describe("every reader of the shared config directory goes through the bounded helpers", () => {
+  // Flow (flaky-tests, 2026-09): `scanTreeSources`/`sourceFiles`/
+  // `scannerImporters` each walk `src/` (~700+ files, `everything` below adds
+  // the `.test.` files back in) and read every file's content from disk; the
+  // two importer checks also run each file through a real TypeScript parse
+  // (`config-dir.ast.ts`'s `parse`/`loadsModule`, which is the expensive part
+  // — see that file's own COST comment). Five tests in this block used to call
+  // those functions independently, so the same ~700-file tree was read from
+  // disk up to four times and PARSED twice per run. On this repo's dev
+  // hardware that was cheap enough not to notice; on a CI runner it measured
+  // one of these tests at 5680ms, over bun's 5s per-test default. The tree is
+  // immutable for the duration of a run, so it is read and parsed once here,
+  // and every test below reuses the cached result instead of re-scanning.
+  let allSources: Map<string, string>;
+  let nonTestSources: Map<string, string>;
+  /** `scannerImporters` is a pure per-file predicate, so the importer set over
+   * the non-test subset is exactly the "everything" set filtered to non-test
+   * files — computing it once over `allSources` and filtering is equivalent
+   * to (and cheaper than) running the parse pass twice. */
+  let importersOfEverything: string[];
+
+  beforeAll(() => {
+    allSources = new Map(
+      [...new Glob("**/*.ts").scanSync(SRC)]
+        .map((relative) => relative.split(path.sep).join("/"))
+        .map((relative) => [relative, readFileSync(path.join(SRC, relative), "utf8")] as const),
+    );
+    nonTestSources = new Map([...allSources].filter(([file]) => !file.includes(".test.")));
+    importersOfEverything = scannerImporters(allSources).sort();
+  });
+
   test("no un-exempt file both resolves a config path and reads raw", () => {
-    expect(readOffenders(scanTreeSources(SRC))).toEqual([]);
+    expect(readOffenders(nonTestSources)).toEqual([]);
   });
 
   test("the scan actually reaches the source tree", () => {
     // Without this the assertion above passes vacuously if the glob root moves.
-    const files = scanSourceFiles(SRC);
+    const files = [...nonTestSources.keys()];
     expect(files.length).toBeGreaterThan(200);
     expect(files).toContain("lib/config-dir.ts");
     expect(files).toContain("session/store.ts");
@@ -594,15 +616,14 @@ describe("every reader of the shared config directory goes through the bounded h
 
   test("the scan finds files that genuinely resolve a config path", () => {
     // The complement being empty means nothing if the numerator is empty too.
-    const resolving = scanSourceFiles(SRC).filter((relative) => {
-      const source = code(readFileSync(path.join(SRC, relative), "utf8"));
-      return CONFIG_PATH_RESOLVERS.some((resolver) => source.includes(resolver));
-    });
+    const resolving = [...nonTestSources]
+      .filter(([, raw]) => CONFIG_PATH_RESOLVERS.some((resolver) => code(raw).includes(resolver)))
+      .map(([relative]) => relative);
     expect(resolving.length).toBeGreaterThanOrEqual(7);
   });
 
   test("every exemption names a file that exists and states a reason", () => {
-    const files = new Set(scanSourceFiles(SRC));
+    const files = new Set(nonTestSources.keys());
     for (const exemption of READ_EXEMPTIONS) {
       expect({ file: exemption.file, present: files.has(exemption.file) }).toEqual({
         file: exemption.file,
@@ -703,7 +724,24 @@ describe("every reader of the shared config directory goes through the bounded h
     // rather than matching them. That one is a closure. This one catches the
     // weaker case it cannot: an import that exists but is currently tree-shaken,
     // and would ship the moment something calls it.
+    //
+    // The `raw.includes` below is a PRE-FILTER, not a replacement for the AST
+    // check above it — the doc comment already states the invariant it relies
+    // on: "a module path cannot be spelled without the string". Whatever
+    // spelling `moduleSpecifiers` recognises (bare, `require`, dynamic
+    // `import`, with or without an extension), the specifier text it finds is
+    // "config-dir.scan" verbatim, so it necessarily appears as a literal
+    // substring of the file's raw source; a file that never spells the
+    // substring cannot make `loadsModule` return true, under any spelling this
+    // predicate currently detects or could detect without inventing a sixth
+    // one. Skipping the parse for files that fail this cheap check first is
+    // what took this scan from parsing every file in `src/` (~700+, full
+    // `ts.createSourceFile` + a tree walk each) to parsing only the handful
+    // that mention the module at all — the actual cost of the two importer
+    // tests below, one of which measured 5680ms on CI (over bun's 5s per-test
+    // default) before this filter existed.
     return [...sources]
+      .filter(([, raw]) => raw.includes("config-dir.scan"))
       .filter(([file, raw]) => loadsModule(parse(file, raw), "config-dir.scan"))
       .map(([file]) => file);
   }
@@ -756,20 +794,23 @@ describe("every reader of the shared config directory goes through the bounded h
     //
     // Its header says it must not be exempt from the rules it implements. This
     // is the rule it was one short of.
-    expect(scannerImporters(scanTreeSources(SRC))).toEqual([]);
+    //
+    // Equivalent to `scannerImporters(scanTreeSources(SRC))`, but derived from
+    // the cached `importersOfEverything` (see the `beforeAll` above) instead
+    // of re-reading and re-parsing the tree: the predicate is per-file, so
+    // filtering the "everything" importer set down to non-test files gives
+    // the exact same answer as computing it over the non-test subset directly.
+    expect(importersOfEverything.filter((file) => !file.includes(".test."))).toEqual([]);
   });
 
   test("the importer scan sees the test files that DO import it", () => {
     // The numerator. `treeSources` filters `.test.` files out, so the assertion
     // above is over production files only — and would pass just as well if the
     // predicate matched nothing at all. This drives the same predicate over the
-    // whole tree including tests, and names what it finds.
-    const everything = new Map(
-      [...new Glob("**/*.ts").scanSync(SRC)]
-        .map((relative) => relative.split(path.sep).join("/"))
-        .map((relative) => [relative, readFileSync(path.join(SRC, relative), "utf8")] as const),
-    );
-    const importers = scannerImporters(everything).sort();
+    // whole tree including tests, and names what it finds. (`allSources`/
+    // `importersOfEverything` are the cached full-tree read and importer scan
+    // from the `beforeAll` above.)
+    const importers = importersOfEverything;
 
     expect(importers).toEqual([
       "harness/policy/profiles.test.ts",
