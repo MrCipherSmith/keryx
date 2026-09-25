@@ -3,9 +3,12 @@ import type { FlowInspectorItem } from "./inspector-sources";
 import {
   clampScroll,
   findFlowItem,
+  formatAcCheckLines,
+  formatAcMarkersSummary,
   formatFlowDetailLines,
   formatFlowListLines,
   formatFlowListText,
+  isAcCommand,
   isFlowsCommand,
   presentFlows,
   windowLines,
@@ -75,9 +78,145 @@ test("presentFlows opens list+detail and Enter switches to Detail", () => {
     },
   );
   expect(calls[0]?.title).toBe("/flows");
-  expect(calls[0]?.tabs.map((tab) => tab.id)).toEqual(["list", "detail"]);
+  expect(calls[0]?.tabs.map((tab) => tab.id)).toEqual(["list", "detail", "ac"]);
   expect(active).toBe("detail");
   expect(formatFlowListText([ITEM])).toContain("154");
+});
+
+// Flow 328, AC7: per-criterion markers (met / not evident / not checkable /
+// not run), a key ("c") to run the check, and `/ac` as a direct entry point.
+test("isAcCommand accepts only /ac", () => {
+  expect(isAcCommand("/ac")).toBe(true);
+  expect(isAcCommand("  /ac 154")).toBe(true);
+  expect(isAcCommand("/a")).toBe(false);
+  expect(isAcCommand("/flows")).toBe(false);
+});
+
+test("formatAcMarkersSummary and formatAcCheckLines: not run vs. a cached result, English text", () => {
+  expect(formatAcMarkersSummary(ITEM)).toBe("AC: not run");
+  const notRunLines = formatAcCheckLines(ITEM).join("\n");
+  expect(notRunLines).toContain("No acceptance-criteria check has been run");
+  expect(notRunLines).toContain("c");
+
+  const checked: FlowInspectorItem = {
+    ...ITEM,
+    acMarkers: [
+      { id: "AC1", status: "likely-met", label: "likely met" },
+      { id: "AC2", status: "not-evident", label: "not evident" },
+      { id: "AC3", status: "not-checkable", label: "not checkable" },
+    ],
+    acCheckedAt: "2026-09-25T00:00:00.000Z",
+  };
+  expect(formatAcMarkersSummary(checked)).toBe("AC: 1 met, 1 not evident, 1 not checkable");
+  const lines = formatAcCheckLines(checked);
+  expect(lines.join("\n")).toContain("2026-09-25T00:00:00.000Z");
+  expect(lines).toContain("AC1  [met]");
+  expect(lines).toContain("AC2  [not evident]");
+  expect(lines).toContain("AC3  [not checkable]");
+
+  const stale: FlowInspectorItem = { ...checked, acCheckStale: true };
+  expect(formatAcMarkersSummary(stale)).toContain("stale");
+  expect(formatAcCheckLines(stale).join("\n")).toContain("STALE");
+});
+
+test("presentFlows: /ac requests the AC tab as initialTab, and `c` calls onRunCheck with the selected flow", async () => {
+  let active = "list";
+  let ran: FlowInspectorItem | undefined;
+  const calls: { initialTab?: string }[] = [];
+  presentFlows(
+    (_otui, _chrome, input) => {
+      calls.push(input);
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    {},
+    {},
+    {
+      items: [ITEM],
+      initialTab: "ac",
+      onRunCheck: async (item) => {
+        ran = item;
+        return undefined;
+      },
+      onKeypress: (handler) => {
+        handler({ name: "c", sequence: "c" });
+        return () => {};
+      },
+    },
+  );
+  expect(calls[0]?.initialTab).toBe("ac");
+  await Promise.resolve(); // let onRunCheck's own promise settle
+  expect(ran?.id).toBe("154");
+});
+
+// Item 4 review finding: an in-modal busy state for `c`, `c` ignored while a
+// check is in flight, and errors shown IN the modal rather than only on a
+// terminal line the operator may already have scrolled past.
+test("presentFlows: `c` shows 'Checking…', ignores a second `c` in flight, and shows the error in the AC tab on failure", async () => {
+  let active = "ac";
+  let acNode: { content: string } | undefined;
+  let runCount = 0;
+  let resolveCheck: ((outcome: { error?: string } | undefined) => void) | undefined;
+  const checked: FlowInspectorItem = {
+    ...ITEM,
+    acMarkers: [{ id: "AC1", status: "likely-met", label: "likely met" }],
+    acCheckedAt: "2026-09-25T00:00:00.000Z",
+  };
+
+  presentFlows(
+    (_otui, _chrome, input) => {
+      input.renderTab("ac", {
+        add: (child: { content?: string }) => {
+          acNode = child as { content: string };
+        },
+      });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    {
+      TextRenderable: class {
+        content: string;
+        constructor(_r: unknown, opts: { content: string }) {
+          this.content = opts.content;
+        }
+      },
+    },
+    {},
+    {
+      items: [checked],
+      initialTab: "ac",
+      onRunCheck: () => {
+        runCount += 1;
+        return new Promise((resolve) => {
+          resolveCheck = resolve;
+        });
+      },
+      onKeypress: (handler) => {
+        handler({ name: "c", sequence: "c" }); // starts the check
+        handler({ name: "c", sequence: "c" }); // ignored — one is already in flight
+        return () => {};
+      },
+    },
+  );
+
+  expect(runCount).toBe(1); // the second `c` never called onRunCheck again
+  expect(acNode?.content).toContain("Checking…");
+
+  resolveCheck?.({ error: "boom" });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  expect(acNode?.content).toContain("Error: boom");
 });
 
 test("windowLines and clampScroll keep a viewport over long bodies", () => {

@@ -195,11 +195,15 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
 
   // The ONLY lines later flows may add to a rich help. Flow 313 (W4, T8):
   // `serve-mcp --harness` binds the cross-harness memory identity at launch —
-  // one synopsis line and one flag line.
+  // one synopsis line and one flag line. Flow 328: `flow check-ac`, the
+  // advisory Jev-vs-frozen-criteria check — one USAGE line in `flow --help`.
   const RICH_NEW_LINES: Readonly<Record<string, readonly string[]>> = {
     "serve-mcp": [
       "  keryx serve-mcp --harness <id> [--cwd <project-root>]  # bind a cross-harness memory identity\n",
       "  --harness    Bind this server process's cross-harness memory identity once at launch (or set KERYX_HARNESS; --harness wins). Used by memory.search filtering, memory.handoff, and the Source-Harness stamped on memory.propose writes. Unknown id refuses to start.\n",
+    ],
+    flow: [
+      "  keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)\n",
     ],
   };
 

@@ -284,6 +284,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   { kind: "slash", name: "/flows", group: "Managed work", summary: "Browse project flows and inspect one." },
   {
     kind: "slash",
+    name: "/ac",
+    group: "Managed work",
+    summary: "Check the active flow's frozen acceptance criteria (advisory, cached) — same modal as /flows, AC tab.",
+  },
+  {
+    kind: "slash",
     name: "/review",
     group: "Managed work",
     summary: "Show project-wide items needing review (proposals, blocked sessions).",
