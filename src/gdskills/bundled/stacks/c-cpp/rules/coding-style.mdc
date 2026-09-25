@@ -1,0 +1,80 @@
+---
+extends: common
+paths: ["**/*.c", "**/*.h", "**/*.cpp", "**/*.cc", "**/*.cxx", "**/*.hpp", "**/*.hxx", "**/*.hh", "**/*.ipp", "**/*.inl", "**/*.tpp", "**/*.cppm", "**/*.ixx"]
+metadata:
+  origin: authored
+---
+
+# C / C++ coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern C++
+(17/20/23) and modern C idiom. Applies to both `.c`/`.h` and
+`.cpp`/`.cc`/`.cxx`/`.hpp`/`.hxx` files — everything not C/C++-specific
+still comes from the common rules this file `extends`.
+
+## Naming and structure
+
+- `snake_case` for functions, variables, and namespaces; `PascalCase` for
+  types (classes, structs, enums); `SCREAMING_SNAKE_CASE` for macros and
+  compile-time constants — match whichever convention the project already
+  uses over this default when one is established.
+- Keep a header self-contained: `#pragma once` (or a project-consistent
+  include guard) at the top, and every symbol the header uses actually
+  `#include`d in it — do not rely on an include some other header happens
+  to pull in transitively.
+- One translation unit's private helpers go in an anonymous namespace
+  (C++) or are declared `static` (C) — do not give internal linkage away
+  by leaving a file-local helper externally visible.
+- An identifier's name shrinks with its scope: a loop index is `i`, a
+  header-exposed public function gets a full descriptive name.
+
+## Modern C++ idiom (17/20/23)
+
+- Own a heap allocation with `std::unique_ptr` by default; reach for
+  `std::shared_ptr` only when the ownership is genuinely shared (more than
+  one owner can outlive any single other owner) — a `shared_ptr` used for
+  single ownership just adds atomic refcount overhead and obscures who
+  actually owns the object.
+- Prefer `std::make_unique`/`std::make_shared` over a bare `new` passed to
+  a smart pointer constructor — it avoids a leak on an exception thrown
+  between the `new` and the constructor call, and avoids a second
+  allocation for `shared_ptr`'s control block.
+- Use `std::span` (C++20) for a non-owning view over a contiguous range
+  instead of a raw `(pointer, length)` pair — it carries bounds
+  information the raw pair does not, without owning or copying the data.
+- Move, don't copy, when a value's ownership is transferring: accept
+  by-value and `std::move` into place, or take an rvalue-reference
+  overload, rather than accepting `const&` and copying when the caller's
+  object was about to be discarded anyway.
+- Prefer a range-`for` or a `<ranges>` (C++20) pipeline over a manual
+  index loop or raw iterator pair when the loop is a plain traversal —
+  keep the manual iterator form for cases that need the iterator itself
+  (insertion position, mutation while iterating with an explicit
+  erase-returns-next-iterator pattern).
+- `constexpr`/`consteval` any function or value that can be computed at
+  compile time; `const` (or nothing, per project convention) otherwise —
+  do not default to `#define` for a typed constant.
+
+## Modern C safety practices
+
+- Prefer a fixed-size or length-tracked buffer API (`snprintf`, not
+  `sprintf`; `strncpy`/explicit length checks, not `strcpy`/`strcat`;
+  `fgets`, never `gets`) — every string/buffer write states or checks its
+  destination's capacity.
+- Check every `malloc`/`calloc`/`realloc` return for `NULL` before
+  dereferencing it; on `realloc` failure, keep the original pointer (do
+  not overwrite it with the `NULL` return and leak the original block).
+- Prefer C99 designated initializers and stack-based fixed arrays with an
+  explicit, checked bound over a raw pointer with an implicit length
+  carried only in a comment.
+- Const-qualify a pointer parameter the function does not mutate through
+  (`const char *`, not `char *`) — it documents the contract and lets the
+  compiler catch an accidental write.
+
+## Formatting
+
+- Format with the project's configured `clang-format`/`.clang-format` if
+  present; do not hand-format around a formatter that is already
+  configured.
+- Braces and brace-placement follow the project's existing style over any
+  default preference in this file — match neighboring code.

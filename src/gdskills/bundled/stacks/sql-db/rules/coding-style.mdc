@@ -1,0 +1,69 @@
+---
+extends: common
+paths: ["**/*.sql"]
+metadata:
+  origin: authored
+---
+
+# SQL coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to raw `.sql` files
+(schema definitions, migrations, hand-written query files) across Postgres,
+MySQL, and generic SQL engines. Applies only to `*.sql` files — application
+code that embeds SQL as strings (a Python/Go/JS query builder call) is
+covered by that language's own stack pack, not this one.
+
+## Naming
+
+- Tables and columns are `snake_case`, plural for tables (`orders`,
+  `order_items`), singular for columns (`user_id`, not `user_ids` on a
+  scalar foreign key) — match whatever convention the project's existing
+  schema already uses instead of introducing a second one.
+- Name a foreign-key column `<singular_referenced_table>_id`
+  (`orders.user_id` referencing `users.id`), so its relationship is
+  readable without opening the schema.
+- Name an index `idx_<table>_<column(s)>` and a unique constraint
+  `uq_<table>_<column(s)>`; name a foreign key constraint
+  `fk_<table>_<referenced_table>` — explicit names are required so a
+  failing constraint's error message names something a reader recognizes,
+  instead of an engine-generated identifier like `orders_user_id_fkey1`.
+
+## Formatting
+
+- One clause per line for anything beyond a trivial single-table query —
+  `SELECT`, `FROM`, `WHERE`, `GROUP BY`, `ORDER BY` each start their own
+  line, with join conditions immediately under their `JOIN`. A query dense
+  enough to need review is dense enough to need this shape.
+- Keywords uppercase (`SELECT`, `FROM`, `WHERE`, `JOIN`), identifiers
+  lowercase — do not mix case within one file's own convention.
+- Explicit `JOIN ... ON` conditions, never an implicit comma join
+  (`FROM a, b WHERE a.id = b.a_id`) — the join type and its condition
+  belong together, not split across `FROM` and `WHERE`.
+- Every migration file's DDL statements are wrapped in the smallest
+  transaction the engine allows (Postgres: a single implicit transaction
+  per migration is usually safe except around `CREATE INDEX CONCURRENTLY`,
+  which cannot run inside a transaction block at all — split it into its
+  own migration step rather than wrapping it anyway).
+
+## Column and type choices
+
+- Pick the narrowest correct type: an `enum`/`CHECK`-constrained text
+  column over a free `VARCHAR` for a closed set of values, `TIMESTAMPTZ`
+  (Postgres) / a UTC-normalized `DATETIME` (MySQL) over a naive local-time
+  column, `NUMERIC`/`DECIMAL` for money — never `FLOAT`/`DOUBLE` for a
+  value that must round exactly.
+- A nullable column means "this can genuinely be absent," not "I didn't
+  decide yet" — a column with no legitimate absent case gets `NOT NULL`
+  from the migration that introduces it (with a default, or through the
+  safe multi-step pattern in `rules/patterns.mdc` when the table already
+  has rows).
+
+## Comments and documentation
+
+- A non-obvious index (a partial index's predicate, a composite index
+  whose column order looks surprising) gets a one-line comment stating
+  which query it serves — an index with no stated purpose is a maintenance
+  liability the next person can't safely drop or reorder.
+- A migration that is not naturally reversible (a data-destructive
+  backfill, a column drop) states its rollback plan or its "no rollback,
+  here is why" reasoning in a comment at the top of the file.

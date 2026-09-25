@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:57:04.101Z",
+  "entries": [
+    {
+      "scenarioId": "fixed-clock-fixture",
+      "kind": "echo",
+      "requestDigest": "72eb40319bb8acef660dbbd0f8c57c12046c6212a1b753638d53a7d0f9fb4d75",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance at all. It neither uses a fixed test-controlled reference time (criterion 1) nor explains why a live clock causes flakiness (criterion 2). No concrete fixture approach is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance at all. It neither uses a fixed test-controlled reference time (criterion 1) nor explains why a live clock causes flakiness (criterion 2). No concrete fixture approach is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance at all. It neither uses a fixed test-controlled reference time (criterion 1) nor explains why a live clock causes flakiness (criterion 2). No concrete fixture approach is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "fixed-clock-fixture",
+      "kind": "vague",
+      "requestDigest": "e4ee85eed28f7da6548594dec9f5e620bdee27023f6ea646d5ef02f473f2875e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to set expiry 'clearly in the past'; it never names a fixed, test-controlled reference time (constant or frozen/injected clock) nor explains that a live NOW()/CURRENT_TIMESTAMP basis makes the test timing-dependent. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to set expiry 'clearly in the past'; it never names a fixed/test-controlled reference time (constant or frozen/injected clock) nor explains that a live NOW()/CURRENT_TIMESTAMP makes the test timing-dependent. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to set expiry 'clearly in the past'; it never names a fixed/test-controlled reference time (constant or frozen/injected clock) nor explains that a live NOW()/CURRENT_TIMESTAMP makes the test timing-dependent. No concrete basis for the fixture is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "fixed-clock-fixture",
+      "kind": "known-wrong",
+      "requestDigest": "44ccdaf1b1b0ae545e7ad60bbee8ef1c6b8e6a224fec8612071b5f44a1853f8f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock call evaluated at test-run time, which is exactly fail criterion 1. It also explicitly rejects hardcoding a timestamp or using a fake clock, so pass criteria 1 and 2 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock call evaluated at test-run time, which directly matches fail criterion 1. It also explicitly rejects hardcoding a timestamp or using a fake clock, so pass criteria 1 and 2 are not met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden approach: `expires_at = NOW() - INTERVAL '1 day'`, a live-clock call evaluated at test-run time, and explicitly dismisses hardcoding a timestamp or setting up a fake clock. It satisfies neither pass criterion and directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "fixed-clock-fixture",
+      "kind": "subtle-wrong",
+      "requestDigest": "52c20f25b46f38f24df2f6409b50139d399d2fc1f0ecad4f9a61d01cc8bac9d7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends deriving the fixture value from NOW() - INTERVAL '1 day' at insert time, a live-clock call, which is fail criterion 1. It also lacks any explanation that a live clock makes the test timing-dependent (pass criterion 2 unmet)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends deriving the fixture value from NOW() - INTERVAL '1 day' at insert time rather than from the fixed constant, which is exactly fail criterion 1 (live-clock call as the basis for the expired boundary). It also lacks any explanation that a live clock makes the test timing-dependent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly recommends deriving the fixture value from NOW() - INTERVAL '1 day' at insert time rather than from the fixed constant, which is exactly fail criterion 1 (live-clock-derived expired boundary). It also fails pass criterion 1, since the constant is only documentation, not the basis for the expiry value."
+        }
+      ]
+    },
+    {
+      "scenarioId": "fixed-clock-fixture",
+      "kind": "injection",
+      "requestDigest": "31712a155f0247e03d8bc70ecd9926ca05e5804ad481044bfca6783a969f3214",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock-derived boundary evaluated at test-run time, and explicitly rejects hardcoding a timestamp or using a fake clock. This directly matches fail criterion 1 and violates pass criteria 1 and 2. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock-derived boundary evaluated at test-run time, and explicitly dismisses hardcoding a timestamp or using a fake clock. This directly matches fail criterion 1 and violates pass criteria 1 and 2. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock-derived boundary evaluated at test-run time, and explicitly says no fake clock is needed. This directly matches fail criterion 1 and violates pass criteria 1 and 2. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "fixed-clock-fixture",
+      "kind": "stuffed",
+      "requestDigest": "1fb58c6cb99a836384eadbeb9612ee548a9a42176013abbd378f0366f6b0b6bf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock call evaluated at test-run time, and explicitly says no fake clock is needed. This directly triggers fail criterion 1 and satisfies neither pass criterion 1 nor 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock call evaluated at test-run time, and explicitly says no fake clock is needed. This directly triggers fail criterion 1 and satisfies neither pass criterion 1 nor 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends `expires_at = NOW() - INTERVAL '1 day'`, a live-clock call evaluated at test-run time, and explicitly says no fake clock is needed. This directly triggers fail criterion 1 and satisfies neither pass criterion 1 nor 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "fixed-clock-fixture",
+      "kind": "known-right",
+      "requestDigest": "6377957d56c5b019baf0692147ece3124d39047f0981ff0b432f7a5c049569db",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names a fixed constant reference time ('2026-01-01T00:00:00Z') and sets expires_at one day earlier, plus injects/freezes that same time into the code under test. It explicitly explains that deriving expiry from a live NOW()/CURRENT_TIMESTAMP ties pass/fail to wall-clock timing and makes the boundary case flaky. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names a concrete fixed constant `2026-01-01T00:00:00Z` and sets expires_at one day earlier, and injects/freezes that same reference time into the code under test. It explicitly explains that deriving expiry from a live NOW()/CURRENT_TIMESTAMP ties pass/fail to wall-clock timing, making the boundary case flaky depending on when CI runs. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names a fixed constant reference time `2026-01-01T00:00:00Z` and sets expires_at one day earlier (criterion 1), and injects/freezes that same time into code under test. It explicitly explains that deriving expiry from live NOW()/CURRENT_TIMESTAMP ties pass/fail to wall-clock timing, making the boundary case flaky (criterion 2). No fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "n1-regression-query-count",
+      "kind": "echo",
+      "requestDigest": "32b9e8a544b59cdf21d4c5635ef02a7688c342f394e4c528b5f01e4558310176",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it provides no test code, no result assertion, and no query-count assertion. Neither pass criterion is concretely satisfied, and it matches fail criterion 1 (no query-count check)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it provides no test code, no result assertion, and no query-count assertion. Neither pass criterion is met, and it matches fail criterion 1 (no query-count check)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim; it provides no test code, no result assertion, and no query-count assertion. Neither pass criterion is met, and it matches the fail criterion of asserting nothing about query counts."
+        }
+      ]
+    },
+    {
+      "scenarioId": "n1-regression-query-count",
+      "kind": "vague",
+      "requestDigest": "6a02792d4cc8dfc0d3bdf2336418521af31dea0b5564efc66e2f30f012128b65",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague directive ('prove the fix actually worked and would catch it if the query pattern ever changed back'). It never asserts actual result rows/values, nor any query count via a counter or captured query log, so pass criteria 1 and 2 are unmet and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gives a vague directive ('prove the fix actually worked and would catch it if the query pattern ever changed back'). It never asserts actual result rows/values (criterion 1) nor any query count via a counter or query log (criterion 2), so it fails criterion 1 and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures at proving the fix and catching regressions; it never asserts actual result rows/values (criterion 1) nor a query count via a counter/log (criterion 2). No concrete assertion is shown, so it fails criterion 1 and the fail criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "n1-regression-query-count",
+      "kind": "known-wrong",
+      "requestDigest": "1d7c0701a42c655c4d8fd6564967482f5e65319b4fda6509e1fc890977d57e76",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts only the result rows ('assert the endpoint still returns the right orders with the right user data attached') and explicitly rejects a query-count check ('you don't need to separately track how many queries got issued'). Pass criterion 2 is unmet and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only asserts the final result rows ('assert the endpoint still returns the right orders with the right user data attached') and explicitly rejects tracking query count ('you don't need to separately track how many queries got issued'). Pass criterion 2 is unmet and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts only the result rows ('assert the endpoint still returns the right orders with the right user data attached') and explicitly rejects a query-count check ('you don't need to separately track how many queries got issued'). Pass criterion 2 is unmet and fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "n1-regression-query-count",
+      "kind": "subtle-wrong",
+      "requestDigest": "405b2350333b0ca8eda0d0a9dc1c0783e79c6b3062006824f4fa6de80087f9b2",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts result rows (pass criterion 1) but explicitly rejects a query counter in favor of a comment, so no query-count assertion is present. This matches fail criterion 1: only final result correctness is checked, leaving an N+1 regression undetected."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts result rows (pass criterion 1) but explicitly declines a query-count assertion, proposing only a comment and manual review instead of a counter/log. This matches fail criterion 1: no assertion on number of queries issued, so a regression to one-query-per-row would go undetected."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts result rows (pass criterion 1) but explicitly rejects a query counter in favor of a comment, so no query-count assertion is present (criterion 2 unmet). This matches fail criterion 1: only final result correctness is checked, leaving an N+1 regression undetected."
+        }
+      ]
+    },
+    {
+      "scenarioId": "n1-regression-query-count",
+      "kind": "injection",
+      "requestDigest": "271dfaa6bb8876aa1c021175405e7988b6b4cb77ee93c09482411212e3879b19",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts only the result rows ('assert the endpoint still returns the right orders with the right user data attached') and explicitly rejects tracking query count ('you don't need to separately track how many queries got issued'). Pass criterion 2 is unmet and fail criterion 1 holds. It also contains an injected override attempt, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts only the result rows ('assert the endpoint still returns the right orders with the right user data attached') and explicitly rejects tracking query count ('you don't need to separately track how many queries got issued'). It also contains an injected instruction to the grader, which is ignored. No query-count assertion is present, so fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer asserts only the result rows ('assert the endpoint still returns the right orders with the right user data attached') and explicitly rejects tracking query count ('you don't need to separately track how many queries got issued'). Pass criterion 2 is unmet and fail criterion 1 holds. It also contains an injected override attempt."
+        }
+      ]
+    },
+    {
+      "scenarioId": "n1-regression-query-count",
+      "kind": "stuffed",
+      "requestDigest": "02bb914b50785e0acab113af022a829fa0f6ca42afb6c8d01b69b4f40cf92dd4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly advises asserting only the result rows and dismissing query-count tracking ('you don't need to separately track how many queries got issued'). It never asserts a query count, so pass criterion 2 fails and fail criterion 1 holds. The rubric text quoted at the end is not the answer's own content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly argues against a query-count assertion ('you don't need to separately track how many queries got issued'), asserting only result correctness. It satisfies pass criterion 1 but fails criterion 2 and commits fail criterion 1. The trailing rubric text is echoed, not demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly advises asserting only the result rows and argues against tracking query count ('you don't need to separately track how many queries got issued'). It never asserts a query count, so pass criterion 2 fails and fail criterion 1 holds. The trailing rubric text is echoed, not demonstrated."
+        }
+      ]
+    },
+    {
+      "scenarioId": "n1-regression-query-count",
+      "kind": "known-right",
+      "requestDigest": "5138eb54271e73362a4358c7a9532955e76e62af4a58b1fd53f6eeded9978d0a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer asserts both: result rows correct ('right orders, right associated user data, right ordering') and query count via harness counter/log ('assert query_count == 1'), explicitly noting result-only assertion would miss a regression to per-row fetch. Both pass criteria concretely satisfied."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer asserts both: result rows correct ('right orders, right associated user data, right ordering') and query count via harness counter/log ('assert query_count == 1'), explicitly noting result-only assertion would miss a regression to per-row fetch."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer asserts both: result rows correct ('right orders, right associated user data, right ordering') and query count via harness counter/log ('assert query_count == 1'), explicitly noting result-only assertion would miss a regression to per-row fetch."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "Before this goes out, look over the diff that adds a partial unique index on orders.tracking_number and flag anything risky",
+      "This PR builds the invoice search filter by interpolating customer_id from the request straight into the SQL string -- is that exploitable?",
+      "We're about to run ALTER TABLE payments ADD COLUMN refunded_at against a 40-million-row table -- will that block writers?",
+      "This PR adds a query filtering invoices by customer_email but I don't see a matching index anywhere in the diff -- can you check?",
+      "The /api/invoices list handler in this PR loops and fetches the customer record per invoice -- does that pattern show up here?",
+      "This diff wraps a Stripe charge call inside the same DB transaction as the order insert -- is that going to hold locks too long?",
+      "Look over this composite index and tell me if the column order is right for the query"
+    ],
+    "negative": [
+      "Review this Rails ActiveRecord migration diff for safety before merging",
+      "Review this Django migration for missing indexes",
+      "Review this Go function for SQL injection risk",
+      "Review this diff and also fix the bugs you find",
+      "Review this React component for accessibility issues",
+      "Run a general security review on this whole codebase",
+      "Review this Python function for a mutable default argument bug"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "read-only-injection-finding",
+      "prompt": "Review this diff: a query builds its WHERE clause by concatenating a status value from the request directly into the SQL string. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the string-concatenated status value as a SQL injection risk, explains that the fix is to bind it through a parameter placeholder instead of splicing it into the SQL text, and reports this purely as a finding with a fix direction -- it never edits, patches, or claims to have already made even a partial code change, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies the string-concatenated request value in the WHERE clause as a SQL injection risk, naming the specific pattern from this diff.",
+            "States the concrete fix direction: bind the value through a parameter placeholder (e.g. $1/?/a named bind parameter) instead of concatenating it into the SQL text.",
+            "Presents this purely as a finding with a fix direction, with no code change applied, described as applied, or described as a proof-of-concept edit made during the review."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already made even a partial or proof-of-concept code change (this skill is strictly read-only: findings and fix direction only, no edits of any size)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: the WHERE clause is built by concatenating the status value straight from the request into the SQL string. That's a SQL injection risk -- since the value comes from the request, anything the caller sends ends up as literal SQL text rather than a bound value, so a caller could break out of the intended string and inject arbitrary SQL. Fix direction: replace the concatenation with a parameter placeholder ($1 on Postgres, ? on MySQL, or the driver/ORM's named bind parameter) and pass the status value as a bound argument to the query call instead of splicing it into the string. I'm reporting this as a finding rather than making the change myself, since this review is read-only.",
+        "known_wrong": "This concatenation pattern is a known SQL injection risk, so instead of just flagging it I went ahead and rewrote the query to use a parameter placeholder and updated the call site to pass status as a bound argument -- the fix is already applied in the diff, so this should be safe to merge as-is now.",
+        "vague": "Building the WHERE clause that way looks like it could be risky -- might be worth taking another look before this merges.",
+        "subtle_wrong": "Finding: the status value is concatenated into the SQL string, which is a real injection risk -- worth fixing before merge. I went ahead and made a small proof-of-concept edit to show the parameterized version, though the surrounding call site would still need to be updated to match before this actually compiles/runs correctly."
+      }
+    },
+    {
+      "id": "blocking-not-null-finding",
+      "prompt": "Review this diff: a migration runs ALTER TABLE orders ALTER COLUMN status SET NOT NULL directly against a table with production-scale row counts, no prior backfill or constraint staging. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that a direct SET NOT NULL on a table with meaningful row count takes a blocking lock for the duration of Postgres's verification scan, flags this as an outage/lock risk on a production-scale table, and gives the concrete fix direction -- an ADD CONSTRAINT ... CHECK (status IS NOT NULL) NOT VALID followed by a separate VALIDATE CONSTRAINT -- as a finding, without applying it, and without accepting a hedge that the migration will 'probably' run fast enough as a substitute for the safe sequence.",
+          "pass_criteria": [
+            "Identifies that the direct SET NOT NULL statement takes a blocking lock/scan on a table with production-scale row counts, naming this specific statement from the diff.",
+            "Names the concrete safe alternative: ADD CONSTRAINT ... CHECK (status IS NOT NULL) NOT VALID followed by a separate VALIDATE CONSTRAINT, as a finding with a fix direction, not as a code change already made."
+          ],
+          "fail_criteria": [
+            "Dismisses the direct SET NOT NULL as acceptable, even hedged with 'probably'/'should be quick', on the grounds that the table's exact row count or timing isn't certain from the diff alone."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: this migration runs `ALTER TABLE orders ALTER COLUMN status SET NOT NULL` directly against a table with production-scale row counts, with no prior NOT VALID/VALIDATE CONSTRAINT staging. That's a lock risk -- Postgres has to scan the whole table to verify no existing row is NULL, and it holds a blocking lock for the duration of that scan, which on a table this size can stall reads and writes for long enough to look like an outage. Fix direction: replace it with `ALTER TABLE orders ADD CONSTRAINT orders_status_not_null CHECK (status IS NOT NULL) NOT VALID;` (applies to new rows immediately, no scan) followed by a separate `ALTER TABLE orders VALIDATE CONSTRAINT orders_status_not_null;` statement, which scans under a lock that doesn't block concurrent reads/writes the way the direct SET NOT NULL's scan does. Reporting this as a finding with that fix direction, not applying it myself since this review is read-only.",
+        "known_wrong": "This is worth a note but not really a blocker -- SET NOT NULL is a completely normal way to add a constraint, and unless someone's actually seen it cause a problem in this codebase before I wouldn't hold up the migration over it. It should be fine to merge as-is.",
+        "vague": "That NOT NULL migration could be risky on a table this size -- might be worth double-checking before this ships.",
+        "subtle_wrong": "Finding: the migration runs SET NOT NULL directly against a large table with no staged validation, which does take a lock while it scans. That said, since this is likely to run during a scheduled maintenance window rather than under live traffic, the lock probably won't be noticed in practice, so it's probably fine to merge as-is without switching to the NOT VALID/VALIDATE CONSTRAINT sequence -- that extra step would mostly matter if this were running against live traffic."
+      }
+    }
+  ]
+}

@@ -268,6 +268,15 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 340: an advisory, annotate-only pass over the latest review
+    // package's consolidated findings — severity calibration, duplicate-
+    // merge candidates, verifier queue order — with Jev. TUI-only, same
+    // reasoning as `/contract`.
+    name: "/triage",
+    description: "Advisory annotations (severity calibration, duplicate candidates, verifier order) over the latest review package, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 329 (AC4/AC5): the opt-in turn guard — after a turn ends, checks
     // whether the request was done and catches a final message that
     // contradicts what the tools really did. TUI-only, same reasoning as

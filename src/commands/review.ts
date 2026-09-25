@@ -44,6 +44,10 @@ import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments
 // flow 335: one more ADDITIONAL, CLI-driven reviewer — see
 // `review-jev-contract.ts` for everything past registration.
 import { runJevContract } from "./review-jev-contract";
+// flow 340: an advisory, annotate-only triage pass over a review package's
+// CONSOLIDATED findings — see `review-jev-triage.ts` for everything past
+// registration.
+import { runJevTriage } from "./review-jev-triage";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -601,6 +605,12 @@ export async function reviewCommand(args: string[]): Promise<void> {
     // `src/commands/review-jev-contract.ts` for everything past registration.
     if (command === "jev-contract") {
       await runJevContract(args.slice(1));
+      return;
+    }
+    // flow 340: an advisory, annotate-only pass — see
+    // `src/commands/review-jev-triage.ts` for everything past registration.
+    if (command === "jev-triage") {
+      await runJevTriage(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -3707,6 +3717,16 @@ Usage:
                             asks one Jev noul per claim; also checks the linked flow's frozen
                             acceptance criteria when --flow is given. Opt-in via
                             review.jev.contract in .metaproject/tasks.config.json.
+  keryx review jev-triage --report <dir|findings.json>
+                          [--max-calls <n>] [--threshold <0..1>]
+                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+                          Advisory, annotate-only. Runs over a review package's
+                          CONSOLIDATED findings after the quality gate and before Wave C:
+                          severity calibration (trigger+outcome noul per blocker/major),
+                          duplicate-merge candidates (deterministic pairs, one noul each),
+                          and verifier queue order (one noul per finding, lowest
+                          plausibility first). Never drops or demotes a finding. Opt-in
+                          via review.jev.triage in .metaproject/tasks.config.json.
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]

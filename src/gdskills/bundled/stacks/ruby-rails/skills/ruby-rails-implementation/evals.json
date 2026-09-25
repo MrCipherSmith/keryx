@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a PlaceOrder service object that a controller action can call",
+      "Add strong parameters to this create action so mass assignment isn't possible",
+      "Wire up an ActiveJob that charges a customer and needs to be safe to retry",
+      "Add an eager-loaded association so this index view doesn't run a query per row",
+      "Extract this fat controller action's business logic into its own class",
+      "Add a case/in pattern match to parse this webhook payload's JSON shape"
+    ],
+    "negative": [
+      "Implement this feature in Django using its ORM",
+      "Add a POST endpoint in Express that validates the request body",
+      "Review this Rails diff for N+1 queries",
+      "Write RSpec tests for this Rails service object",
+      "Fix this failing bundle install error in the Rails app"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "strong-parameters",
+      "prompt": "I'm building a create action for orders that saves whatever comes in from the form. How should I handle the params?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer requires and permits an explicit list of attributes (params.expect or params.require+permit) before building/updating the model, rather than passing the raw params hash directly to the model or calling permit! to bypass the check.",
+          "pass_criteria": [
+            "Names params.expect(order: [...]) or params.require(:order).permit(...) explicitly as the mechanism, with a concrete attribute list shown.",
+            "States that building/updating the model directly from the raw params hash (e.g. Order.new(params[:order])) is unsafe because of mass assignment.",
+            "Does not recommend permit! as part of the fix."
+          ],
+          "fail_criteria": [
+            "Recommends permit! on user-controlled params, or building/updating the model from the raw params hash (or by merging in unpermitted keys from it) instead of listing permitted attributes explicitly. Mentioning permit! only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Require the params under :order and permit only the fields the form actually submits, e.g. `params.expect(order: [:item_id, :quantity, :shipping_address])` (or `params.require(:order).permit(:item_id, :quantity, :shipping_address)` on an older Rails). Then pass the permitted hash to `Order.new(order_params)`. Don't build the record straight from `params[:order]` -- that hands mass assignment to whatever keys are in the submitted form, including ones nobody meant to be settable from outside, like a `total_price` override or an `admin` flag if one is ever added to the model.",
+        "known_wrong": "Simplest is `Order.new(params[:order])` and let ActiveRecord sort out which attributes it has -- Rails handles that fine. If you're getting a ForbiddenAttributesError anywhere in the chain, just call `.permit!` on the params hash before you use it; that clears the block globally so you don't have to keep listing out fields by hand as the form grows.",
+        "vague": "Make sure you're only accepting the fields you actually mean to accept before saving the order -- don't just trust the raw form input.",
+        "subtle_wrong": "Use `params.require(:order).permit(:item_id, :quantity)` for the known fields, and then merge in `params[:order].except(:item_id, :quantity)` for anything else the form might send, so you don't have to keep updating the permit list every time a new field gets added to the form."
+      },
+      "anti_patterns": ["permit!"]
+    },
+    {
+      "id": "n-plus-one",
+      "prompt": "This index view loops over @orders and calls order.customer.name for each one. Anything to watch out for?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies this as an N+1 query -- one extra query per order to load its customer -- and fixes it by eager-loading the association (includes(:customer), or preload/eager_load) where @orders is built, rather than leaving the per-row queries or fixing it only inside the view.",
+          "pass_criteria": [
+            "Identifies the per-row `.customer` call as an N+1 query risk, naming the mechanism (one extra query per order).",
+            "Names the concrete fix: add `.includes(:customer)` (or preload/eager_load) to the @orders query, in the controller/query-building code, not in the view.",
+            "States that this reduces the query count from one-per-row (N+1) to a small constant number."
+          ],
+          "fail_criteria": [
+            "Dismisses the N+1 as acceptable because the table or collection is currently small, or proposes per-row caching of the association instead of eager-loading it at the point @orders is queried."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "That's an N+1: `order.customer.name` inside the loop runs one query per order to fetch its customer, on top of the query that loaded @orders in the first place -- so 50 orders means 51 queries. Fix it where @orders is built, in the controller: `@orders = Order.includes(:customer)` (composed with whatever the existing scope chain already is) rather than in the view -- Rails will pick preload or eager_load for you and pull all the customers in one or two queries total instead of one per row. The view code itself doesn't need to change.",
+        "known_wrong": "That's fine as long as the orders table stays small -- a handful of extra queries per page load isn't something to worry about unless you're seeing real performance problems in production. I'd leave the view as-is and only add includes if it actually shows up as slow in the logs.",
+        "vague": "That loop could be running more queries than it needs to -- might be worth eager loading the association at some point.",
+        "subtle_wrong": "Add `order.association(:customer).load_target` inside the loop instead of calling `.customer` directly -- that at least caches the association per order object so you're not re-triggering the query if the view happens to reference `.customer` more than once on the same row, without needing to touch how @orders is queried in the controller."
+      }
+    }
+  ]
+}

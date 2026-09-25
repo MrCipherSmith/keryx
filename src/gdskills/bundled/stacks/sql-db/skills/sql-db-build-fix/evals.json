@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "This migration keeps failing with a unique constraint violation, help me fix the root cause",
+      "A query that used to hit the index now runs a full table scan, what changed?",
+      "This migration is erroring that the index already exists on a re-run, fix it",
+      "We're seeing a deadlock during this migration's backfill, help me resolve it",
+      "This backfill is failing a NOT NULL check on some rows, figure out why",
+      "Our migration tool errors that 0047_add_orders_index has the same timestamp prefix as a teammate's 0047_add_wallet_column, and only one of them applies",
+      "The migration times out acquiring a lock in production, what's actually going on?"
+    ],
+    "negative": [
+      "npm install is failing with a peer dependency conflict",
+      "This Django migration conflicts with another migration, please merge them",
+      "cargo build is failing for this Rust crate",
+      "Fix this failing Go test that uses testify assertions",
+      "Write a new migration that adds a column to this table",
+      "Review this migration diff for injection risk before merging",
+      "Resolve this Terraform state lock error"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-constraint-drop-to-fix-violation",
+      "prompt": "A migration's backfill is failing with a NOT NULL constraint violation on some rows. How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer investigates which rows are failing the NOT NULL check and why the backfill's logic didn't cover them (a legacy data shape, a missed case in the derivation query), then fixes the backfill's condition or default-value logic so those rows get a real value -- rather than dropping or loosening the NOT NULL constraint to let the violating rows through unfixed.",
+          "pass_criteria": [
+            "States investigating which specific rows are failing and why the backfill's own logic didn't cover them (e.g. a different legacy value shape than the WHERE clause expected), not just that 'some rows fail'.",
+            "Fixes the backfill's own condition/derivation logic so the previously-missed rows get a correct value, rather than working around the constraint itself."
+          ],
+          "fail_criteria": [
+            "Recommends dropping, disabling, or loosening the NOT NULL constraint (or replacing it with a nullable column) so the violating rows stop being rejected, instead of fixing the backfill logic or the data."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "First find out which rows are actually failing and why -- query for rows matching the backfill's target condition that still don't get a value assigned, and look at what's different about them (a status stored as an empty string instead of NULL from an old import, a row created before a field existed at all, etc.). Once you know the real shape, fix the backfill's own WHERE/derivation logic to also cover that case -- for example, if the backfill only matched `WHERE status IS NULL` but some legacy rows have `status = ''`, widen the condition to `WHERE status IS NULL OR status = ''` so those rows get backfilled too. Re-run the backfill and confirm zero rows violate the constraint before moving on. Dropping or loosening the NOT NULL constraint isn't the fix here -- the constraint is correctly catching that some rows don't actually have a valid value yet; removing it would just let bad data through silently instead of fixing why it's missing.",
+        "known_wrong": "Easiest fix: just make the column nullable instead of NOT NULL, or drop the constraint entirely, then re-run the migration -- it'll go through without erroring on those rows. You can always add the constraint back later once someone gets around to figuring out why those particular rows don't have a value.",
+        "vague": "Look into why those rows don't have a value and get them fixed up before the constraint goes on.",
+        "subtle_wrong": "Add a fallback default so the backfill can't fail: change the UPDATE to `SET status = COALESCE(derive_status(...), 'unknown')` so every row gets some non-null value even when the normal derivation doesn't apply, then the NOT NULL check will always pass. That way you don't need to dig into which specific rows are failing or why -- the COALESCE guarantees a value either way, so the migration goes through clean."
+      }
+    },
+    {
+      "id": "planner-regression-not-a-hint",
+      "prompt": "A query that used to use an index now runs a sequential scan and got slow after the last deploy. How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer investigates the actual cause of the plan change first -- confirming with EXPLAIN ANALYZE whether the index still exists, whether table statistics are stale (running ANALYZE), or whether the query's shape changed to no longer match the index's column order -- and fixes that root cause, rather than reaching for a planner hint to force the old plan as the first response.",
+          "pass_criteria": [
+            "States checking with EXPLAIN/EXPLAIN ANALYZE whether the index still exists and whether statistics are stale (recommending an ANALYZE run) as an investigation step before proposing a fix.",
+            "Identifies at least one concrete root-cause candidate for the regression (stale statistics, an index that was dropped/changed, or a query shape no longer matching the index's column order) and fixes that cause."
+          ],
+          "fail_criteria": [
+            "Proposes forcing the old plan with a planner hint (or disabling the sequential-scan planner option) as the fix, without first investigating whether stale statistics or an index/query shape change caused the regression."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Start by confirming what actually changed: run EXPLAIN (ANALYZE, BUFFERS) on the query and compare the plan to what it used to be. Check whether the index the query used to hit still exists and still matches the query's filter columns -- did the last deploy change the WHERE clause's shape, or the index's own definition? If the index and query still line up, the next most likely cause is stale statistics: a large data change (a bulk load, a big delete) can shift the table's row/value distribution enough that the planner's cost estimates favor a sequential scan even with a usable index present -- run ANALYZE on the table (Postgres) or ANALYZE TABLE (MySQL) and re-check the plan. Fix whichever of those is the actual cause -- rebuild/adjust the index if its shape no longer matches the query, or refresh statistics if they were stale -- rather than reaching for a planner hint (e.g. forcing an index scan or disabling seqscan) as the first move; a hint papers over the real cause and can go stale itself the next time the data distribution shifts again.",
+        "known_wrong": "Fastest fix: just force the planner to use the index directly with a hint (or, on Postgres, temporarily set `enable_seqscan = off` for this query) so it stops picking the sequential scan. You don't really need to dig into why the planner changed its mind -- forcing the plan gets the query fast again immediately, and that's what actually matters for the regression.",
+        "vague": "Figure out why the query stopped using the index and get it back to using it properly.",
+        "subtle_wrong": "Run EXPLAIN ANALYZE, confirm the index still exists and the query still filters on the same columns -- so the index itself looks fine. Since digging into planner statistics would take longer to sort out, just add a query hint to force the index scan for now; that gets performance back immediately, and you can always look into the statistics later if it becomes a recurring issue."
+      }
+    }
+  ]
+}

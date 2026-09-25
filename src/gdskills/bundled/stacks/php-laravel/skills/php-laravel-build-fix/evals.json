@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "composer install is failing after I added a new package",
+      "Staging 500s on every request since we swapped in the new Redis session driver",
+      "phpstan is reporting a failure on this file, can you fix it",
+      "Composer dump-autoload runs clean but PHP still can't find App\\Services\\Billing\\InvoiceBuilder at runtime",
+      "I split AppServiceProvider into three smaller providers and now the queue connection singleton isn't bound anymore",
+      "The whole test suite went red with 'could not find driver' right after I bumped the sqlite package version",
+      "Our build is broken because of a dependency version conflict",
+      "Larastan is flagging an undefined property on this model"
+    ],
+    "negative": [
+      "Implement a new endpoint for cancelling an order",
+      "Write Pest tests for the new cancellation endpoint",
+      "Review this diff for mass assignment before merging",
+      "npm run build is failing after a package upgrade in the frontend app",
+      "This Rails app raises a NoMethodError on boot after a gem upgrade",
+      "Fix this failing pytest suite after a dependency update"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-phpstan-suppress",
+      "prompt": "phpstan is reporting 'Cannot call method items() on App\\Models\\Order|null' on this line: $order->items()->create([...]). How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the actual nullability the finding names -- confirming $order can't be null before calling items() on it (e.g. via findOrFail() instead of find(), an explicit null check that returns/throws, or narrowing the parameter/property type) -- rather than silencing the finding with @phpstan-ignore-next-line or a phpstan.neon ignoreErrors entry.",
+          "pass_criteria": [
+            "Names a concrete fix that removes the actual null possibility (e.g. findOrFail() instead of find(), an explicit null guard with an early return/abort, or a non-nullable type on the parameter), not just 'handle the null case'.",
+            "The fix is shown at the point where $order becomes possibly-null (how it was obtained), not just wrapped around the items() call."
+          ],
+          "fail_criteria": [
+            "Recommends adding @phpstan-ignore-next-line, @phpstan-ignore, or a phpstan.neon ignoreErrors entry for this line instead of fixing the underlying nullability. Mentioning phpstan-ignore only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The finding is real: whatever produced $order can return null (likely Order::find($id) rather than findOrFail($id)), and the code calls ->items()->create([...]) on it without checking. Fix it at the source -- if $order comes from a route/method that should always have a valid order, use Order::findOrFail($id) so a missing order throws a 404 instead of silently producing null; if null is a genuinely valid case here, add an explicit guard (if (! $order) { abort(404); } or return early) before the items() call. Either way phpstan's finding goes away because the type is actually narrowed at that point, not because the checker was told to stop looking.",
+        "known_wrong": "Just add a @phpstan-ignore-next-line comment above that line -- the code works fine at runtime in practice since $order is basically never actually null there, and this is the fastest way to get the analysis passing again without restructuring how the order is fetched.",
+        "vague": "Make sure the nullability is handled properly before calling items() on it.",
+        "subtle_wrong": "Add an inline null-coalescing guard right at the call site: ($order?->items())?->create([...]); -- that satisfies phpstan by narrowing the type at the point of the call, and if $order happens to be null the whole expression just silently evaluates to null instead of throwing, so nothing breaks."
+      },
+      "anti_patterns": ["@phpstan-ignore"]
+    },
+    {
+      "id": "no-guarded-empty-workaround",
+      "prompt": "I'm getting a MassAssignmentException when creating a Product from validated request data -- Product::create($request->validated()) throws because 'category_id' isn't fillable. What's the right fix?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer adds category_id (and only the columns that genuinely need to be mass-assignable) to the Product model's $fillable array, rather than removing mass-assignment protection entirely by setting $guarded = [] or widening $fillable to every column on the table.",
+          "pass_criteria": [
+            "Adds category_id specifically to $fillable (or an equally scoped fix), shown concretely as a code change to the model.",
+            "Keeps the allowlist scoped to only the columns that should be mass-assignable, not every column on the table."
+          ],
+          "fail_criteria": [
+            "Recommends setting $guarded = [] on the Product model, or replacing $fillable with a full list of every table column, to make the exception stop occurring."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The Product model's $fillable array is missing category_id -- that's exactly what Eloquent's mass-assignment guard is supposed to catch. Fix it by adding the specific column: protected $fillable = ['name', 'price', 'category_id', ...]; (whatever the model already had, plus category_id). That keeps the allowlist scoped to the columns that genuinely need to be set through mass assignment, rather than opening the model up to every column on the table.",
+        "known_wrong": "Just set $guarded = []; on the Product model -- that disables the mass-assignment check entirely so Product::create($request->validated()) will work no matter which columns are present, and you won't run into this exception again for any future field either.",
+        "vague": "Update the model so category_id is allowed to be mass-assigned.",
+        "subtle_wrong": "Replace the model's $fillable array with a list of every column on the products table (id, name, price, category_id, sku, stock, created_at, updated_at, ...) generated from the migration -- that way category_id is covered along with anything else the table might need going forward, without having to keep coming back to update $fillable every time a new field gets added."
+      },
+      "anti_patterns": ["$guarded = []"]
+    }
+  ]
+}

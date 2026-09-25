@@ -177,6 +177,24 @@ entry point; `decideDispatchModel` is what it calls.
 Nothing reads a recorded resolution back and checks it. These fields explain a
 finished run; they do not gate one.
 
+## A third place: compiling a Claude Code subagent file
+
+`keryx agents export --runtime claude` (`src/agents/compile.ts`'s
+`renderClaudeExport`) is neither of the two shapes above — it never asks
+`spawn_subagent` or `keryx review tier` anything, and it runs at EXPORT time,
+once, against a file written to disk, not at dispatch time. Claude Code's own
+subagent frontmatter has no tier concept and no candidate discovery at all; it
+accepts exactly four fixed, version-free words for `model` — `opus`, `sonnet`,
+`haiku`, `inherit` — and nothing else. The compiler maps a definition's
+declared `model_tier` onto that fixed vocabulary directly: `deep` to `opus`,
+`standard` to `sonnet`, `light` to `haiku` (an undeclared tier defaults to
+`standard`, so it lands on `sonnet`). This is not the discover/rank/fall-back
+resolution described above, and it is not a model id — it is a static lookup
+into the one enum a host's own docs define, so it can never go stale the way a
+literal id would. A project that wants the pre-existing behavior sets
+`.metaproject/tasks.config.json`'s `modelGuidance.claudeSubagentAliases:
+false`, which restores `model: inherit` for every tier.
+
 ## Choosing the tier
 
 The tier is **computed, not judged**. Run:

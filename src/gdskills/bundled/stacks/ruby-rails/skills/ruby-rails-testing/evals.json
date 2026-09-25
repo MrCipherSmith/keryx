@@ -1,0 +1,72 @@
+{
+  "triggers": {
+    "positive": [
+      "Write specs for this ActiveRecord model's validations",
+      "Write a test asserting that hitting PATCH /orders/:id without a signed-in user returns 401 instead of raising",
+      "Test that this job gets enqueued when the order is placed",
+      "Fix this failing spec that's flaking in CI",
+      "Our checkout spec is actually hitting Stripe's charges endpoint when it runs, how do I keep that out of the test",
+      "Write Minitest coverage for this model's scopes"
+    ],
+    "negative": [
+      "Write Jest tests for this React component",
+      "Write pytest tests for this Django view",
+      "Implement the feature this spec is supposed to cover",
+      "Review this Rails diff for missing test coverage",
+      "Fix this failing bundle install so the test suite can boot"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-sleep-for-jobs",
+      "prompt": "My test enqueues a job and I want to assert its effect ran. What's the right way to wait for it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer runs the job synchronously inside the test with perform_enqueued_jobs (ActiveJob::TestHelper) before asserting its effect, or asserts only that it was enqueued with have_enqueued_job when running it isn't the point -- never a sleep-based wait, whether alone or as extra insurance alongside the real mechanism.",
+          "pass_criteria": [
+            "Names perform_enqueued_jobs (or have_enqueued_job, if only the enqueue itself is being asserted) as the mechanism, shown concretely rather than described in the abstract.",
+            "Explains why this is deterministic compared to a fixed delay -- the job either has actually run or hasn't, rather than depending on timing.",
+            "Does not recommend sleep at any point in the wait step."
+          ],
+          "fail_criteria": [
+            "Recommends sleep -- as the sole wait mechanism or as extra 'insurance' alongside perform_enqueued_jobs/have_enqueued_job -- anywhere in the answer's wait step. Mentioning sleep only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Wrap the triggering code in `perform_enqueued_jobs { ... }` (from `ActiveJob::TestHelper`) so the job actually runs synchronously inside the test instead of just sitting in the queue -- then assert directly on its effect. If you only care that the job was scheduled, not that it ran, `expect { ... }.to have_enqueued_job(ChargeJob).with(order.id)` is enough and doesn't need `perform_enqueued_jobs` at all. Either way, don't reach for `sleep` -- there's nothing actually running in the background to wait for until you explicitly drain the queue.",
+        "known_wrong": "Just add `sleep(1)` right after you trigger the code that enqueues the job, then run your assertion against whatever the job was supposed to change -- that gives it enough time to run in the background before you check. If it's flaky in CI bump it up to 2 or 3 seconds.",
+        "vague": "Make sure the job actually finishes before you check the result instead of just assuming it ran.",
+        "subtle_wrong": "Use `perform_enqueued_jobs` to run the job, but add a short `sleep(0.5)` right before it just to be safe in case there's any async I/O the job itself kicks off that isn't captured by the synchronous run -- that extra buffer doesn't hurt and covers cases perform_enqueued_jobs might miss."
+      },
+      "anti_patterns": ["sleep"]
+    },
+    {
+      "id": "stub-external-boundary",
+      "prompt": "This feature calls a third-party shipping API to get a rate. How should I test it without hitting the real API?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer stubs the HTTP call at the boundary (WebMock stub_request or a VCR cassette, matching whichever the project already uses) rather than letting the test make a real network call to any environment of the third-party API, sandbox included.",
+          "pass_criteria": [
+            "Names a concrete boundary-stubbing mechanism -- a WebMock stub_request or a VCR cassette -- as the fix, not just 'mock it out'.",
+            "States plainly that the test must not make a real network call, sandbox environments included.",
+            "Says to match whichever stubbing tool the project already has configured rather than introducing a second one."
+          ],
+          "fail_criteria": [
+            "Recommends letting the test call a real environment of the third-party API (including a vendor sandbox) instead of stubbing the HTTP call, or recommends skipping/silently passing the assertion when that live call fails."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Stub the HTTP call at the boundary rather than hitting anything real -- if the project already uses WebMock, `stub_request(:get, \"https://api.shipper.example/rates\").to_return(status: 200, body: fixture_json)` covers it; if it's VCR, record a cassette once and replay it in CI. Match whichever the project already has configured rather than introducing the other one. That keeps the test fast, deterministic, and independent of the shipper's actual uptime or rate limits.",
+        "known_wrong": "Easiest is to just point the test at the shipper's sandbox/test environment and let it make a real call -- that way you're testing against their actual API contract instead of a fixture that could drift out of date. As long as it's their sandbox and not production, it's fine to leave the network call in the test.",
+        "vague": "Don't let the test hit the real API -- fake it somehow so it's not flaky.",
+        "subtle_wrong": "Wrap the API client call in a begin/rescue inside the test and, if the sandbox call fails or times out, just skip the assertion for that run -- that way the test still exercises the real integration when the sandbox is up, without failing the build when it's flaky."
+      }
+    }
+  ]
+}

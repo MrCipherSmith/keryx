@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "Write a test that confirms this migration's rollback leaves the schema the way it was before",
+      "Add a test fixture for a user whose invite token expired two days ago",
+      "How should I isolate these database tests from each other so one doesn't affect the next?",
+      "Write a regression test proving this order-listing query no longer issues one query per row",
+      "Write a test proving the batched backfill script for orders.legacy_status touches every row with no row skipped or double-updated",
+      "Add test cases for this query's empty-result and boundary conditions",
+      "Set up a test that seeds fifty thousand rows to check this migration at realistic scale"
+    ],
+    "negative": [
+      "Write pytest fixtures for this Django model's test suite",
+      "Add RSpec tests for this Rails ActiveRecord scope",
+      "Write Jest tests for this React component's rendering",
+      "Fix this failing Go test that uses testify assertions",
+      "Set up a mock server for this API integration test",
+      "Write end-to-end tests for this checkout flow using Playwright",
+      "Add unit tests for this Python function that formats currency"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "fixed-clock-fixture",
+      "prompt": "I'm writing a test fixture for a token that should already be expired. How should I set the expiry timestamp?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer builds the expiry timestamp relative to a fixed, injected reference time controlled by the test (a constant, a frozen/injected clock) rather than a live NOW()/CURRENT_TIMESTAMP evaluated at the moment the test runs, because a live-clock-derived boundary value makes the test's outcome depend on exact timing and can flake.",
+          "pass_criteria": [
+            "Uses a fixed, test-controlled reference time (a constant timestamp, or a frozen/injected clock value) as the basis for the expiry fixture, not a live NOW()/CURRENT_TIMESTAMP.",
+            "Explains that deriving the boundary value from a live clock makes the test's pass/fail depend on when it happens to run, which is why a fixed reference time is used instead."
+          ],
+          "fail_criteria": [
+            "Recommends setting the fixture's expiry using NOW()/CURRENT_TIMESTAMP (or an equivalent live-clock call) evaluated at test-run time as the basis for the expired boundary, whether directly or via a small offset from it."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Pick a fixed reference timestamp for the test -- a constant like `2026-01-01T00:00:00Z` -- and set the token's `expires_at` to something clearly before it, e.g. one day earlier. If the code under test reads the current time itself, inject or freeze that same fixed reference time into it too (a test clock, a frozen-time helper) so 'now' and the fixture's notion of 'already expired' agree deterministically. Don't derive the expiry from a live NOW()/CURRENT_TIMESTAMP call evaluated when the test actually runs -- that ties the test's pass/fail to real wall-clock timing, which is exactly the kind of thing that makes a boundary case (a token that 'just' expired) flaky depending on when CI happens to execute it.",
+        "known_wrong": "Just set it relative to right now: `expires_at = NOW() - INTERVAL '1 day'` (or your language's equivalent of 'now minus a day') -- that guarantees it's in the past relative to whenever the test happens to run, so you don't need to hardcode any timestamp or set up a fake clock for what's a pretty simple fixture.",
+        "vague": "Make sure the expiry is set to a time that's clearly in the past so the token reads as expired.",
+        "subtle_wrong": "Use a fixed reference constant for readability, something like `const REFERENCE = '2026-01-01T00:00:00Z'`, but derive the actual fixture value from `NOW() - INTERVAL '1 day'` at insert time rather than from the constant itself -- the constant documents the intent in the test file, and NOW() minus an offset gets you an expired timestamp either way without needing to wire a frozen clock into the code under test."
+      },
+      "anti_patterns": ["NOW()"]
+    },
+    {
+      "id": "n1-regression-query-count",
+      "prompt": "I fixed an N+1 query in the order-listing endpoint by switching to a single JOIN. How should I write the regression test so it doesn't silently regress back to N+1 later?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer asserts both the query's actual result (rows/values) and the number of queries issued (via the test harness's or ORM's query counter/log), so a later regression back to one query per row fails the test even if the final result set still happens to be correct -- asserting the result alone, without a query-count check, is not sufficient.",
+          "pass_criteria": [
+            "Asserts the query's actual result rows/values are correct.",
+            "Additionally asserts the number of queries issued (a query count via the test harness's/ORM's counter or captured query log), not just that the final result is correct."
+          ],
+          "fail_criteria": [
+            "Tests only the final result set's correctness with no assertion on the number of queries issued, leaving a regression back to one-query-per-row undetected as long as the final rows still happen to be right."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Assert two things, not one: the result rows come back correct (right orders, right associated user data, right ordering), and the number of queries the test harness observed is exactly what the single-JOIN version should issue -- most test setups expose a query counter or let you capture the executed query log around the call, so assert something like `assert query_count == 1` (or whatever the JOIN version's actual expected count is) alongside the row assertions. The result-only assertion would still pass if someone later reverted to a per-row fetch loop that happens to reconstruct the same final rows -- the query-count assertion is what actually proves the fix is still in effect, since it fails the moment the query pattern regresses back to one-per-row even though the output would still look identical.",
+        "known_wrong": "Just assert the endpoint still returns the right orders with the right user data attached -- that's the behavior that matters to callers. If the result rows are correct, the fix is working; you don't need to separately track how many queries got issued to get that, since a wrong query count with a correct final result isn't actually a bug anyone would notice.",
+        "vague": "Make sure the test proves the fix actually worked and would catch it if the query pattern ever changed back.",
+        "subtle_wrong": "Assert the result rows are correct, and add a comment above the test noting that this relies on the single-JOIN implementation so a reviewer should double check the query pattern by eye if this test is ever touched -- that's a lighter-weight way to flag the regression risk than wiring up a query counter, and it still documents the intent for whoever reads the test next."
+      }
+    }
+  ]
+}

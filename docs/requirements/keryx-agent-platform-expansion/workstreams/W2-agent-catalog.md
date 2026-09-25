@@ -620,6 +620,27 @@ keryx agents generate --stack <id> [--check] [--json]
   alter the documented behavior of, `keryx agents bootstrap|external|monitor`
   (regression test against the existing `agent-commands.test.ts` suite).
 
+## Implementation notes: Wave 4 batch 5 (flow 337)
+
+Four new W1 stack packs authored (`php-laravel`, `ruby-rails`, `c-cpp`,
+`sql-db` — see `W1-stack-catalog.md`, "Implementation notes: Wave 4 batch 5
+(flow 337)" and its Phase B follow-up), all `stability: "experimental"`.
+
+**Phase B outcome.** Calibration (`skills judge-check --record`) recorded
+clean for all 16 skills across the four packs. The honest 10-trial DeepSeek
+gate (`skills eval --runner deepseek:deepseek-chat --judge
+deepseek:deepseek-chat --strictness high --trials 10`) then ran for real and
+failed all 16 — every failure is trigger accuracy (behavior content passed
+at 0.8+ in every case but one, at 0.4). Per each pack's `agent-refs.json`,
+`"agents": []` with a note recording this actual outcome (not "gate not yet
+run" — the gate ran and the result is recorded). `keryx agents generate
+--stack <id>` refuses all four, confirmed directly, with
+`stack-pack-not-gate-cleared`. This matches batch 1's own first honest gate
+run (flow 314), which also failed all four of its packs before later fixes
+(flow 316, 317) cleared two of them — the same recovery path is available to
+this batch as a future flow, not attempted here per the standing rule
+against tuning content to a grader after seeing a result.
+
 ## Open questions
 
 - OQ-W2.1 — should `policy_profile` be a closed enum shared across all targets,

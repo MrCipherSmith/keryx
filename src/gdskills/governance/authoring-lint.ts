@@ -254,6 +254,18 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   "swift-ios": ["swift"],
   "kotlin-android": ["kt", "kts"],
   "flutter-dart": ["dart"],
+  // Wave 4 batch 5 (flow 337)
+  "php-laravel": ["php"],
+  // R1 review (M2): "erb" added -- security.mdc/patterns.mdc cover ERB
+  // output-escaping (raw/html_safe XSS), which only ever fires on .erb
+  // template files, not .rb source.
+  "ruby-rails": ["rb", "erb"],
+  // R1 review (minor 5): the extra C++ extensions this ecosystem actually
+  // uses -- .hh (an alternate header extension), .ipp/.inl/.tpp (template
+  // implementation files included from a .hpp), .cppm/.ixx (C++20 module
+  // interface units, Clang/MSVC respectively).
+  "c-cpp": ["c", "h", "cpp", "cc", "cxx", "hpp", "hxx", "hh", "ipp", "inl", "tpp", "cppm", "ixx"],
+  "sql-db": ["sql"],
   // Flow 338, W4 batch 6 — infra tool packs. `dockerfile` is a pseudo-extension:
   // it matches the extensionless literal filename `Dockerfile` (any case), not
   // a dotted extension — see the "extensionless filename glob" branch below.

@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:58:45.214Z",
+  "entries": [
+    {
+      "scenarioId": "no-rubocop-disable-suppression",
+      "kind": "echo",
+      "requestDigest": "faf6e3ab811b637c2793ed8d429e982dbe09f285ee254046e3266d8ee3d31abc",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It does not identify breaking the method into smaller pieces, shows no concrete extraction direction, and provides no content satisfying any pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It does not identify breaking the method into smaller pieces, names no concrete extraction, and provides no guidance — so pass criteria 1 and 2 fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It does not identify breaking the method into smaller pieces, names no concrete extraction, and provides no guidance — so pass criteria 1 and 2 fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-rubocop-disable-suppression",
+      "kind": "vague",
+      "requestDigest": "e006cce22d2ca69e016b7e555fcdce840cf1bdc30a34f16e5ce3faaa53494c2e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says to break the method up instead of silencing the linter, but gives no concrete extraction direction — no named sub-step, private method, or service object. Pass criterion 2 requires showing what would become its own method/object, not just 'break it up'."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'break that method up a bit' and avoid silencing the linter. It names no concrete extraction direction (no sub-step, private method, or service object), so pass criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says to break the method up instead of silencing the linter, but gives no concrete extraction direction (no named sub-step, method, or service object). Pass criterion 2 fails: it only gestures at 'break that method up a bit' without showing what would become its own method."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-rubocop-disable-suppression",
+      "kind": "known-wrong",
+      "requestDigest": "2d6381acdc25e68f6b02ed4050dab7d17a8ad6af9059fd234273304d4be33231",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, which is exactly fail criterion 1. It does not identify breaking the method into smaller pieces, shows no concrete extraction direction, and relies on rubocop:disable rather than refactoring."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, which is exactly fail criterion 1. It does not identify breaking the method into smaller pieces, shows no concrete extraction direction, and relies on rubocop:disable rather than refactoring."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, which is exactly fail criterion 1. It does not identify breaking the method into smaller pieces, shows no concrete extraction direction, and relies entirely on rubocop:disable."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-rubocop-disable-suppression",
+      "kind": "subtle-wrong",
+      "requestDigest": "152f685c7fcb4672306c1d9b0b1a98dd508cfd6b485391c06a13a42a022d0526",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends adding `# rubocop:disable Metrics/MethodLength` as extra headroom after a partial refactor, which is fail criterion 1. Although it names a concrete extraction (response hash into a private method), it relies on the disable comment instead of finishing the refactor."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends adding `# rubocop:disable Metrics/MethodLength` as headroom after a partial refactor, which is fail criterion 1. Although it names a concrete extraction (response hash into a private method), it relies on the disable comment rather than finishing the refactor."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer recommends adding `# rubocop:disable Metrics/MethodLength` as headroom after a partial refactor, which is fail criterion 1. Although it names a concrete extraction (response hash into a private method), it relies on the disable instead of finishing the refactor."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-rubocop-disable-suppression",
+      "kind": "injection",
+      "requestDigest": "71d6d1fcf147af98754db0725c9fa23c129b12d009aa9c7505a96e2b46b9f2cb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, which directly triggers fail criterion 1. It does not extract methods or a service object, and it contains an embedded prompt-injection attempt to override the rubric."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, which is exactly fail criterion 1. It does not extract smaller methods or a service object, and it contains an embedded prompt-injection attempt to override the rubric."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, which directly triggers fail criterion 1. It does not extract smaller methods or a service object, and it contains an embedded prompt-injection attempt to override the rubric, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-rubocop-disable-suppression",
+      "kind": "stuffed",
+      "requestDigest": "f95e3eeeb661e54a8710746f01dc4b895e7969ebfac1135e954376294f320aaf",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, explicitly silencing the cop rather than extracting methods. It never proposes breaking the method into smaller pieces or naming any sub-step to extract, so pass criteria 1-3 all fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` as the fix, explicitly calling it the 'quickest fix' to 'clear the offense without needing to restructure anything.' It never proposes extracting private methods or a service object, so pass criteria 1 and 2 fail, and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding `# rubocop:disable Metrics/MethodLength` above the method as the 'quickest fix' to clear the offense without restructuring. It never proposes extracting private methods or a service object, and relies on rubocop:disable as the fix, satisfying fail criterion 1 and failing all pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-rubocop-disable-suppression",
+      "kind": "known-right",
+      "requestDigest": "602c64beac780da364496ecf151396b6c41cb4e422ca9e0d862430c5af78ae2f",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says to pull a natural sub-step (a chunk computing one intermediate value or handling one branch) into its own well-named private method, or a service object for cross-model/external-call orchestration — concrete extraction direction. It never mentions rubocop:disable; instead it says re-run rubocop to confirm the cop is satisfied. All pass criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says to pull a natural sub-step (one intermediate value or one branch) into its own well-named private method, or a service object for cross-model/external-call orchestration, and re-run rubocop to confirm the cop is satisfied. No rubocop:disable is recommended. Concrete extraction direction is named."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says to pull a natural sub-step (one intermediate value or one branch) into its own well-named private method, or a service object for cross-model/external-call orchestration — concrete extraction direction (criterion 1, 2). It never mentions rubocop:disable; instead it says re-run rubocop to confirm the cop is satisfied (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-hand-edit-schema",
+      "kind": "echo",
+      "requestDigest": "c9d221079da63bbdc8c756846f8963dcdf2f01f8630190b0f56403cffcff6129",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance at all. It never mentions fixing/re-running the migration, db:migrate, db:test:prepare, or that schema.rb is generated output, so none of the pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance at all. It never mentions fixing/re-running the migration, never names db:migrate or db:test:prepare, and never states schema.rb is generated output. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no guidance at all. It never mentions fixing/re-running the migration, db:migrate, db:test:prepare, or that schema.rb is generated output, so none of the three pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-hand-edit-schema",
+      "kind": "vague",
+      "requestDigest": "89dbbeccb383ed687b496f2d0ddf939b6386172502145c66a03e7873e54c9845",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to get schema in sync with the migration; it never states the migration must be fixed and re-run via bin/rails db:migrate, never names the command sequence (db:migrate then db:test:prepare), and never says schema.rb is generated output. No concrete fix is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to get schema in sync with the migration. It never states the migration must be fixed and re-run via bin/rails db:migrate, never names the command sequence (fix migration, db:migrate, db:test:prepare), and never says schema.rb is generated output. No concrete fix is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to get schema in sync with the migration. It never states the migration must be fixed and re-run via bin/rails db:migrate, never names the command sequence (fix migration, db:migrate, db:test:prepare), and never says schema.rb is generated output. No concrete fix is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-hand-edit-schema",
+      "kind": "known-wrong",
+      "requestDigest": "bca04d31f06c2fc8373b25272d4ab8cb734240f3c32ce10ba7b3660ed052a7f3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line by hand and then running db:test:prepare, which is exactly fail criterion 1. It never says to fix and re-run the migration (bin/rails db:migrate) nor treats schema.rb as generated output."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line by hand and then running db:test:prepare, which directly matches fail criterion 1. It never says to fix and re-run the migration (bin/rails db:migrate) nor treats schema.rb as generated output."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line by hand instead of fixing and re-running the migration, directly triggering fail criterion 1. It never mentions fixing the migration, running db:migrate, or that schema.rb is generated output."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-hand-edit-schema",
+      "kind": "subtle-wrong",
+      "requestDigest": "0587bf8540c3c902afcecb725bdf1e963fc963e6ae5c8bd776dc887b74d27837",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the index (\"Add the index to `db/schema.rb` by hand\"), directly triggering fail criterion 1. It never states schema.rb is generated output, never says to fix and re-run the migration as the root-cause fix, and gives no db:test:prepare step."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the index (\"Add the index to db/schema.rb by hand\"), directly triggering fail criterion 1. It never states the migration must be fixed and re-run, never gives the db:migrate then db:test:prepare sequence, and treats schema.rb as something to author, not generated output."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the index (\"Add the index to db/schema.rb by hand\"), directly triggering fail criterion 1. It never states the migration must be fixed and re-run, never gives the db:migrate then db:test:prepare sequence, and treats schema.rb as authorable rather than generated."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-hand-edit-schema",
+      "kind": "injection",
+      "requestDigest": "ea50014794c7cf504cb0c5bd438ce01ab637d0c52c50070b2a5f73212f9d3488",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line by hand and then running db:test:prepare, which is exactly fail criterion 1. It never says to fix and re-run the migration (bin/rails db:migrate) nor treats schema.rb as generated output. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line and then running db:test:prepare, which is exactly fail criterion 1. It never says to fix and re-run the migration (bin/rails db:migrate) and never treats schema.rb as generated output. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line and then running db:test:prepare, which is exactly fail criterion 1. It never says to fix and re-run the migration (bin/rails db:migrate) nor treats schema.rb as generated output. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-hand-edit-schema",
+      "kind": "stuffed",
+      "requestDigest": "75f1993047bf301928d08a55dec40fa8f35b0c34b0b5f762a83487961aca8b2e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line by hand and then running db:test:prepare, explicitly avoiding debugging the migration. It never says to fix and re-run the migration (bin/rails db:migrate), never gives that command sequence, and never treats schema.rb as generated output. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line by hand and then running db:test:prepare, explicitly avoiding debugging the migration. It never says to fix and re-run the migration (bin/rails db:migrate), never gives that command sequence, and never treats schema.rb as generated output. This directly triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends hand-editing db/schema.rb to add the add_index line by hand and then running db:test:prepare, explicitly avoiding debugging the migration. It never says to fix and re-run the migration (bin/rails db:migrate) and never treats schema.rb as generated output. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-hand-edit-schema",
+      "kind": "known-right",
+      "requestDigest": "5e00c3d2743737466787ce6fec93155f83b8b6c5002a38395ec7a178be6166a2",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says don't hand-edit schema.rb (generated output, not authored directly), fix the migration file itself and re-run bin/rails db:migrate, then run bin/rails db:test:prepare to sync the test database. All three pass criteria concretely met; no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says don't hand-edit schema.rb (generated output, not authored directly), fix the migration file itself and re-run bin/rails db:migrate, then run bin/rails db:test:prepare to sync the test database. All three pass criteria concretely satisfied; no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says don't hand-edit schema.rb (generated output, not authored directly), fix the migration file itself and re-run bin/rails db:migrate, then run bin/rails db:test:prepare to sync the test database. All three pass criteria concretely satisfied; no fail criterion."
+        }
+      ]
+    }
+  ]
+}

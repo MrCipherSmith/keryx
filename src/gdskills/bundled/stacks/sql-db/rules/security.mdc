@@ -1,0 +1,74 @@
+---
+extends: common
+paths: ["**/*.sql"]
+metadata:
+  origin: authored
+---
+
+# SQL security
+
+Narrows `core-common-rules`' stack-agnostic security rules to injection
+safety and access control for `.sql` files across Postgres, MySQL, and
+generic SQL engines. Applies only to `*.sql` files — parameterized-query
+enforcement in application code (the driver/ORM call site) is covered by
+that language's own stack pack; this file covers the `.sql` side (stored
+procedures, functions, views) and the shared vocabulary both sides share.
+
+## Injection
+
+- Never build a query by concatenating or string-formatting a
+  user-influenced value into SQL text — this applies inside a stored
+  procedure or function body exactly as it does in application code: a
+  dynamic `EXECUTE`/`EXEC` built from concatenated input is injectable
+  even though the vulnerable code lives in the database, not the app.
+- Postgres `EXECUTE`/`format()` inside `PL/pgSQL`: use `format('...%I...',
+  identifier)` for identifiers (table/column names that must be dynamic)
+  and `format('...%L...', value)` or a parameterized `USING` clause for
+  values — `%I`/`%L` quote-escape correctly; plain string concatenation
+  of either does not.
+- MySQL stored procedures: build dynamic SQL with `PREPARE stmt FROM
+  @sql; EXECUTE stmt USING @param;` — bind user-influenced values through
+  `USING`, never interpolate them into `@sql` itself before `PREPARE`.
+- An ORM or query builder's raw-SQL escape hatch (a `.raw()`, `.exec()`,
+  or template-literal query method) carries the same rule as a
+  hand-written query: pass user-influenced values through its
+  placeholder/parameter API, never through string interpolation into the
+  raw SQL text, even when the surrounding call looks like it's "just
+  building a string for convenience."
+- A dynamic identifier (a table or column name chosen at runtime, common
+  in multi-tenant schema-per-tenant designs or admin tooling) cannot go
+  through a value placeholder at all — placeholders bind values, not
+  identifiers. Validate it against an allowlist of known-safe identifiers
+  before using it, never trust it as free text even when it "came from
+  our own config."
+
+## Access control
+
+- Grant the narrowest role/privilege a connection actually needs — an
+  application's runtime database user should not hold `DROP`/`CREATE`/
+  superuser privileges it never uses; a migration runner's credentials
+  (which do need DDL rights) should be separate from the application's
+  runtime connection.
+- Use row-level security (Postgres `CREATE POLICY` on a table with `ROW
+  LEVEL SECURITY` enabled) or an equivalent application-enforced tenant
+  filter consistently — do not rely on every query remembering to add
+  `WHERE tenant_id = ?` by convention alone when the engine can enforce it
+  structurally.
+- A view or stored procedure that runs with elevated privileges
+  (Postgres `SECURITY DEFINER`, a MySQL `DEFINER`-owned routine) is a
+  privilege-escalation surface if it accepts unvalidated input that
+  influences what it reads or writes — treat its parameters with the same
+  injection discipline as a top-level query, since callers with lower
+  privileges can reach the elevated code path through it.
+
+## Data exposure
+
+- Never `SELECT *` a table containing a sensitive column (password hash,
+  API token, PII) into a result set a caller with less trust than the
+  query's own privilege level will see — select named columns so adding a
+  sensitive column later can't leak silently into an existing query.
+- Encrypt or hash sensitive columns before they reach storage
+  (`pgcrypto`'s `crypt()`/`digest()` on Postgres, an application-layer
+  hash before insert) rather than relying on transport encryption alone —
+  a compromised backup or replica exposes plaintext columns even when
+  every connection to the primary was encrypted.

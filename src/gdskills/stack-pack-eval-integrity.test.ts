@@ -442,6 +442,11 @@ const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set([
   "swift-ios",
   "kotlin-android",
   "flutter-dart",
+  // Wave 4 batch 5 (flow 337) — authored against I11 from the start.
+  "php-laravel",
+  "ruby-rails",
+  "c-cpp",
+  "sql-db",
 ]);
 
 describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () => {

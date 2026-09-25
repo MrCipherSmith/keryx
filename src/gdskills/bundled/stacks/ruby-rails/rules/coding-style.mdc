@@ -1,0 +1,69 @@
+---
+extends: common
+paths: ["**/*.rb"]
+metadata:
+  origin: authored
+---
+
+# Ruby on Rails coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern Ruby
+(3.x) idiom and Rails conventions in one pack (this pack has no separate
+`lang:ruby` base to extend). Applies only to `*.rb` files.
+
+## Naming and structure
+
+- `snake_case` for methods, local variables, file names, and DB
+  columns/tables; `CamelCase` for classes and modules — never mix Ruby's
+  own convention with a borrowed one from another language.
+- A predicate method (returns true/false) ends in `?` (`published?`, not
+  `is_published`); a destructive/bang method that mutates in place or
+  raises instead of returning nil ends in `!` and normally has a
+  non-bang counterpart (`save!` alongside `save`).
+- Two-space indentation, no tabs; keep a method short enough to read on
+  one screen — a model method past ~10 lines is a signal to extract a
+  private method, a concern, or (per `rules/patterns.mdc`) a service
+  object, not to keep growing in place.
+- Follow the app's own file layout: `app/models`, `app/controllers`,
+  `app/jobs`, `app/services` (if the app already has one) — do not
+  invent a new top-level directory for one class.
+
+## Modern Ruby (3.x) idiom
+
+- Reach for `case/in` pattern matching when destructuring a
+  hash/array-shaped value (parsed JSON, a multi-branch conditional on a
+  value's shape) reads clearer than a chain of `if`/`elsif` or
+  `dig`/`fetch` calls; do not force pattern matching onto a simple
+  `if value.nil?` check where it adds no clarity.
+- An endless method (`def full_name = "#{first_name} #{last_name}"`) is
+  fine for a genuine one-expression method; do not squeeze a
+  multi-statement method onto one line just to use the syntax.
+- Keyword arguments (`def initialize(name:, email:)`) for a method with
+  more than one or two parameters, especially when some are optional —
+  clearer at the call site than positional args, and safer against
+  argument-order mistakes than a trailing options hash.
+- Prefer `Data.define`/a plain `Struct` for a small immutable value
+  object over a full `ActiveRecord`-backed model when nothing needs
+  persisting.
+- Safe navigation (`user&.profile&.bio`) only where `nil` is an expected,
+  legitimate state for the chain; do not use it to paper over a case
+  where a `nil` actually signals a bug that should raise or be handled
+  explicitly.
+
+## Frozen string literals and immutability
+
+- New Ruby files start with `# frozen_string_literal: true` (match the
+  project's own convention if it already has one) — string literals are
+  frozen by default, so any `String#<<`/`gsub!`/`concat` mutation must
+  target an explicit `.dup`/`String.new`, not a literal.
+- Prefer returning a new value over mutating an argument in place, except
+  for methods whose name signals mutation (`!`-suffixed, or a
+  conventionally mutating method like `each`'s block).
+
+## Formatting and linting
+
+- Match whatever the project's own `.rubocop.yml` enforces; do not
+  hand-format around a configured linter or introduce a style the
+  project's cops would flag.
+- Run `bundle exec rubocop` (scoped to changed files is fine during
+  iteration) before considering a change formatted correctly.

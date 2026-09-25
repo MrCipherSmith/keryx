@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "I refactored Buffer::resize to use raw pointers instead of std::vector -- can you look for memory bugs before I open the PR",
+      "This PR frees the connection object on the error path -- does anything later in the function still touch it",
+      "I'm returning a reference to a local Session inside this function -- could that reference outlive the object it points to",
+      "Review this change for unsynchronized access to the shared cache",
+      "Look over this diff for iterator invalidation risk",
+      "Check whether this new parser code has any bounds issues",
+      "Review this pull request for double-free risk"
+    ],
+    "negative": [
+      "Implement this feature in modern C++, don't just review it",
+      "Fix this ctest failure in the parser module",
+      "Review this Go diff for goroutine leaks and data races",
+      "Review this Rust diff for unsafe block soundness",
+      "Write GoogleTest cases for this class",
+      "Fix this CMake linker error"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "review-iterator-invalidation",
+      "prompt": "Please review this diff:\n\n```cpp\nvoid remove_expired(std::vector<Session>& sessions) {\n  for (auto it = sessions.begin(); it != sessions.end(); ++it) {\n    if (it->expired()) {\n      sessions.erase(it);\n    }\n  }\n}\n```",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review identifies that sessions.erase(it) invalidates `it` (and every iterator/pointer/reference from the erase point onward), so the loop's own `++it` afterward is undefined behavior, and gives a concrete fix direction -- assigning erase's return value back to `it` and skipping the increment on that branch, or using std::erase_if / the erase-remove idiom -- without applying the fix itself.",
+          "pass_criteria": [
+            "States that sessions.erase(it) invalidates the iterator `it`, and that continuing to use it (including the loop's `++it`) afterward is undefined behavior/a bug, not just a style concern.",
+            "Names a concrete fix direction: assign erase's return value back to `it` (and skip the redundant `++it` on that branch), or use std::erase_if / the erase-remove idiom.",
+            "Gives the finding with a specific location (the erase call / the loop) rather than a generic 'this loop looks risky' comment."
+          ],
+          "fail_criteria": [
+            "Says the loop is correct as written, or reviews only style/formatting without flagging the iterator invalidation."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "This has an iterator-invalidation bug: `sessions.erase(it)` invalidates `it` itself (std::vector::erase invalidates the erased element's iterator and everything after it), so the loop's own `++it` on the next iteration is undefined behavior -- it's advancing an iterator that's already been invalidated. The fix is to capture erase's return value, which is the iterator to the next valid element, and only increment in the branch that didn't erase: `if (it->expired()) { it = sessions.erase(it); } else { ++it; }`. Simpler still, since this is just filtering a vector, `std::erase_if(sessions, [](const Session& s) { return s.expired(); });` (C++20) replaces the whole loop and can't get the iterator handling wrong. Flag this as a diff-introduced correctness bug, not a style nit -- it's undefined behavior, not just inefficient.",
+        "known_wrong": "This looks fine -- the loop erases each expired session as it finds one and keeps going. std::vector::erase is a normal member function call, so once it returns the loop just continues from where `it` was pointing, same as with any other container operation in the middle of a loop.",
+        "vague": "The loop might have an issue with how it's iterating while also modifying the vector, worth taking another look at that.",
+        "subtle_wrong": "Good use of `expired()` to filter here. One nit: `sessions.erase(it)` is O(n) per call since it has to shift every following element down, so for a large sessions vector this loop is O(n^2) overall. Consider collecting the expired indices first and erasing them in a single pass afterward for better performance, but functionally the loop is correct since erase() returns a valid iterator afterward regardless of what the loop does with it."
+      }
+    },
+    {
+      "id": "review-unchecked-malloc-and-free",
+      "prompt": "Please review this diff:\n\n```c\nstruct Buffer *buffer_create(size_t size) {\n  struct Buffer *buf = malloc(sizeof(struct Buffer));\n  buf->data = malloc(size);\n  buf->size = size;\n  return buf;\n}\n```",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags that neither malloc call's return value is checked for NULL before being dereferenced or stored (buf->data is written on a possibly-NULL buf, and buf->data itself is never checked), and that a failure of the second malloc leaks the first allocation with no free -- and states a fix direction (check both returns, free buf on the second failure) without applying it.",
+          "pass_criteria": [
+            "Flags that `buf` (the first malloc's result) is dereferenced (buf->data, buf->size) with no NULL check first.",
+            "Flags that `buf->data` (the second malloc's result) is also never checked for NULL before being stored/returned.",
+            "States that if the second malloc fails, the first allocation (`buf`) is never freed before the function could reasonably be considered to have failed -- a leak on that error path -- and gives a concrete fix direction (check both allocations, free buf and return NULL/an error on the second one failing)."
+          ],
+          "fail_criteria": [
+            "Reviews the diff without flagging at least the missing NULL checks on both malloc results."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Two problems here. First, neither malloc result is checked for NULL: `buf` is dereferenced immediately (`buf->data = ...`, `buf->size = ...`) with no check that the first malloc actually succeeded, and `buf->data` itself is stored and returned without ever being checked either -- a caller has no way to tell a real allocation from a failed one. Second, if the second malloc (for `buf->data`) fails, `buf` itself is already allocated and is never freed on that path -- a leak. Fix direction: check `buf` for NULL and return NULL immediately if it is; check `buf->data` for NULL and, if it failed, `free(buf)` before returning NULL so the first allocation doesn't leak on the error path.",
+        "known_wrong": "This looks like a standard constructor-style function -- allocate the struct, allocate its buffer, fill in the fields, return the pointer. malloc failures are rare enough in practice that most codebases don't bother checking every single call, and the two-allocation pattern here is pretty typical for a struct that owns a separately-sized buffer.",
+        "vague": "Might want to double check the error handling around the allocations in this function before merging.",
+        "subtle_wrong": "One issue: if `malloc(size)` for `buf->data` fails, the function still returns `buf` with `buf->data` set to NULL and `buf->size` set to the requested size, which means a caller could later try to write into `buf->data` at up to `buf->size` bytes and crash on a NULL write. The fix is to have callers check `buf->data != NULL` themselves before using it, rather than checking anything inside buffer_create -- that way the allocation and the usage-time check stay in the caller's control, and buf itself never needs a NULL check since malloc(sizeof(struct Buffer)) essentially never fails for a small fixed-size struct like this."
+      }
+    }
+  ]
+}

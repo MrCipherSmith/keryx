@@ -344,6 +344,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/triage",
+    group: "Managed work",
+    summary: "Advisory annotations — severity calibration, duplicate-merge candidates, verifier queue order — over the latest review package, with Jev.",
+  },
+  {
+    kind: "slash",
     name: "/guard",
     group: "Managed work",
     summary: "Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on|off].",

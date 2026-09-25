@@ -157,9 +157,24 @@ this is visible before you rely on it.
 
 `model_tier` is one of `light`, `standard`, or `deep` — never a model name.
 Tier resolution is delegated entirely to the existing tier resolver; a
-definition cannot pin a specific model. Host exports that have no tier
-concept of their own (Claude Code, for instance) emit `model: inherit`
-instead of guessing a model alias.
+definition cannot pin a specific model.
+
+Most host exports have no tier concept of their own and emit `model: inherit`
+(or omit `model` entirely). Claude Code is the one exception: its subagent
+frontmatter accepts exactly four fixed, version-free words for `model` —
+`opus`, `sonnet`, `haiku`, `inherit` — so a `claude`-target export maps the
+definition's `model_tier` onto that vocabulary directly: `deep` → `opus`,
+`standard` → `sonnet`, `light` → `haiku` (an undeclared tier defaults to
+`standard`, landing on `sonnet`). This is a static lookup into a host-defined
+enum, never a guessed or versioned model id. Set
+`.metaproject/tasks.config.json`'s `modelGuidance.claudeSubagentAliases:
+false` to opt a project out and keep `model: inherit` for every tier.
+
+`keryx update` does not rewrite subagent files you already exported. The alias
+reaches an existing `.claude/agents/*.md` file on the next explicit
+`keryx agents export --runtime claude` or `keryx integrations` sync, which
+replaces an unedited exported file without a prompt. Set the opt-out before
+that run if you want those files to stay on `inherit`.
 
 ## The prompt-defense baseline
 

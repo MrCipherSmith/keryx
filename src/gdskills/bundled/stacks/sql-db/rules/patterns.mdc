@@ -1,0 +1,134 @@
+---
+extends: common
+paths: ["**/*.sql"]
+metadata:
+  origin: authored
+---
+
+# SQL patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to migration
+safety, query design, and indexing for `.sql` files across Postgres,
+MySQL, and generic SQL engines. Extends the general N+1/index/migration
+guidance in the core `database-patterns.mdc` rule with engine-specific
+mechanics for the zero-downtime cases that rule states only as a general
+three-step pattern. Applies only to `*.sql` files.
+
+## Zero-downtime schema changes
+
+- **Adding a nullable column** is always safe as a single migration on
+  both engines.
+- **Adding a `NOT NULL` column with a constant default** does not require
+  a full table rewrite on modern Postgres (11+) or MySQL (8.0+, via
+  `ALGORITHM=INSTANT` for an appended column) — prefer `ADD COLUMN ...
+  NOT NULL DEFAULT <constant>` directly over the older three-step
+  add-nullable/backfill/constrain dance when every existing and new row
+  can share the same default value.
+- **Adding `NOT NULL` to an existing column that needs a real backfill**
+  (not a constant default) still needs the multi-step sequence: add the
+  column nullable, deploy code that writes it on every insert/update,
+  backfill existing rows in batches (not one giant `UPDATE`, which holds
+  locks and generates a huge amount of WAL/binlog), then constrain.
+  - Postgres: prefer `ALTER TABLE t ADD CONSTRAINT t_col_not_null CHECK
+    (col IS NOT NULL) NOT VALID;` followed by a separate `ALTER TABLE t
+    VALIDATE CONSTRAINT t_col_not_null;` over a direct `ALTER TABLE t
+    ALTER COLUMN col SET NOT NULL` — `NOT VALID` skips the initial
+    table scan (applies only to new rows immediately), and
+    `VALIDATE CONSTRAINT` then scans under `SHARE UPDATE EXCLUSIVE`,
+    which does not block concurrent reads/writes the way the scan inside
+    a plain `SET NOT NULL` does.
+  - MySQL: `ALTER TABLE t MODIFY COLUMN col <type> NOT NULL` is an
+    in-place operation but still requires a full table scan/rebuild on
+    most storage engines — schedule it like any table-rewriting DDL
+    (off-peak, or through the project's online-migration tool such as
+    `gh-ost`/gantry-style tooling if one is already in use).
+- **Adding an index on an existing table**: Postgres —
+  `CREATE INDEX CONCURRENTLY` (cannot run inside a transaction block; put
+  it in its own migration step) to avoid the `ACCESS EXCLUSIVE`-adjacent
+  write lock a plain `CREATE INDEX` takes. MySQL — `CREATE INDEX` on
+  InnoDB uses `ALGORITHM=INPLACE` by default for most index additions,
+  which permits concurrent DML; verify with `ALGORITHM=INPLACE, LOCK=NONE`
+  explicitly if the table is under sustained write load.
+- **Renaming or changing a column's type**: no engine makes this safe as
+  one step under a rolling deploy — add the new column, dual-write from
+  application code, backfill, cut reads over, then drop the old column in
+  a later migration once nothing reads it.
+- **Dropping a column or table**: stop reading/writing it from application
+  code first (a full deploy cycle), then drop it in a subsequent
+  migration — dropping while old code still reads the column breaks that
+  code immediately on deploy overlap.
+
+## Indexing
+
+- Index every foreign key column and every column that appears in a
+  `WHERE`, `JOIN ON`, or `ORDER BY` clause on a table large enough that a
+  sequential/full-table scan would be noticeable — confirm with
+  `EXPLAIN ANALYZE` on production-representative data volume, not on an
+  empty dev table where every plan looks fast.
+- **Composite index column order**: put equality-filtered columns before
+  range-filtered ones, and put the columns a query's `WHERE` actually
+  restricts before columns only used for `ORDER BY`. An index on
+  `(status, created_at)` serves `WHERE status = 'open' ORDER BY
+  created_at` efficiently; the same index in the order `(created_at,
+  status)` cannot use the equality filter to narrow the scan first and
+  degrades toward a broader range scan.
+- **Covering indexes**: when a query only ever selects a handful of
+  columns already present in an index's key or `INCLUDE`/covered columns
+  (Postgres `INCLUDE`, or MySQL's implicit covering when all selected
+  columns are in the index), the engine can satisfy it as an index-only
+  scan without touching the table's heap/pages at all — worth adding
+  narrowly for a hot, narrow query, not as a default habit.
+- **An index has a write cost**: every index is maintained on every
+  insert/update/delete touching its columns. Do not add a composite index
+  for every column combination a report might someday filter by; add the
+  ones actual queries use, and periodically check for unused indexes
+  (`pg_stat_user_indexes.idx_scan = 0` on Postgres) before a schema
+  accumulates dead weight.
+- A partial index (`CREATE INDEX ... WHERE <predicate>`, Postgres) is
+  narrower and cheaper to maintain than a full index when a query always
+  filters on a fixed condition (`WHERE deleted_at IS NULL`,
+  `WHERE status = 'active'`) — prefer it over a full index whose non-
+  matching rows the query never touches.
+
+## Query design
+
+- A query issued inside an application-code loop, once per row of an
+  outer result set, is an N+1 — replace it with a single `JOIN`, an
+  `IN (...)` batch, or the ORM's eager-load option before merging. This
+  narrows the core `database-patterns.mdc` N+1 rule to the SQL shape
+  itself: the fix is a query that returns everything needed in one round
+  trip, not a cache layered on top of the repeated queries.
+- Select only the columns a caller actually needs — `SELECT *` in a
+  hand-written `.sql` file breaks silently when a column is added later
+  and can leak a sensitive column (a password hash, a token) into a
+  result set nothing downstream expected to see.
+- Wrap a multi-statement write (anything touching more than one table, or
+  more than one row-affecting statement against the same table) in an
+  explicit transaction — `BEGIN`/`COMMIT` or the driver's transaction
+  API — so a failure partway through rolls back cleanly instead of
+  leaving related tables inconsistent.
+- Keep a transaction's lifetime to the database work alone — commit
+  before making a slow external call (an HTTP request, a queue publish,
+  a `sleep`), or open a fresh transaction after it completes. A
+  transaction held open across an external call holds its locks for the
+  external call's entire duration, which can stall every other writer
+  touching the same rows.
+- Prefer `UPSERT` (Postgres `INSERT ... ON CONFLICT DO UPDATE`, MySQL
+  `INSERT ... ON DUPLICATE KEY UPDATE`) over a read-then-decide-insert-or-
+  update round trip when the goal is "write this row whether or not it
+  already exists" — the read-then-write version races under concurrent
+  writers even inside a transaction unless it also takes an explicit lock.
+
+## Migration hygiene
+
+- Every migration that mutates existing data (not just schema) states its
+  reverse operation, or explicitly states there isn't one and why (a
+  destructive backfill, a data transformation that can't be inverted).
+- Make DDL idempotent where the engine allows it (`IF NOT EXISTS` on
+  `CREATE TABLE`/`CREATE INDEX`, `IF EXISTS` on `DROP`) so a migration
+  runner that re-applies a partially-run migration after a crash does not
+  fail on an object that already exists.
+- Never combine a long-running backfill and a blocking schema change in
+  the same migration step — split them so the schema change (fast) and
+  the backfill (potentially slow, batched) can be reviewed and rolled
+  back independently.
