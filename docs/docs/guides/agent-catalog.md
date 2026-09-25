@@ -62,22 +62,21 @@ Per-stack generated pairs (a `<stack>-code-auditor` and a `<stack>-build-fixer`
 per stack pack) are not part of this hand-authored initial catalogue — each
 pair is generated only from a stack pack that has already cleared its own
 governance gates, via `keryx agents generate --stack <id> [--check] [--json]`.
-As of flow 316's fix-attempt-1 re-run of the honest gate under judge prompt
-v2 (DeepSeek `deepseek-chat` for both the runner and the judge,
-`--strictness high` / `--trials 5`), only `ts-js-node` clears it and ships a
-generated pair: `ts-js-node-code-auditor` / `ts-js-node-build-fixer`.
-`react` cleared an earlier, less strict run of the same gate, but the
-hardened judge (fixed for leniency on vague answers, see R1-4 in review round
-1 of PR #698) scored its `no-disable-hooks-lint` scenario 3/5 — below the
-pack floor — so `react` is back to `stability: experimental` and its
-generated pair was removed. `python` and `go` still fail the gate: `python`
-only on a trigger-selection gap (every one of its behavior scenarios now
-clears the floor), and `go` on a runner/skill interaction limitation plus one
-newly-observed scenario — reasons recorded as working hypotheses, not proven
-grader defects, until each is validated by its own honest re-run (see
+As of flow 317's honest gate run at trials=10 (DeepSeek `deepseek-chat` for
+both the runner and the judge, `--strictness high`, `PACK_MIN_TRIALS` raised
+5 -> 10), `python` and `go` clear it and each ships a generated pair:
+`python-code-auditor` / `python-build-fixer`, `go-code-auditor` /
+`go-build-fixer`. `ts-js-node` cleared the gate at trials=5 (marginally, at
+exactly the 0.8 floor) but DROPPED OUT at the higher trial count —
+`no-ts-ignore-suppression` fell to 6/10 (0.6), a genuine model-answer-quality
+gap checked against the recorded trials (not a rubric defect) — so it is
+back to `stability: experimental` and its generated pair was removed.
+`react` still fails: `no-disable-hooks-lint` scored 3/10 (0.3), confirming
+rather than reversing the earlier 3/5 finding. See
 `docs/requirements/keryx-agent-platform-expansion/workstreams/
-W1-stack-catalog.md`, "Implementation notes: fix attempt 1 (flow 316, review
-round 1)"). Neither `python` nor `go` has a generated pair.
+W1-stack-catalog.md`, "Implementation notes: flow 317 (grader follow-ups)"
+for the full per-scenario breakdown. Neither `react` nor `ts-js-node` has a
+generated pair today.
 
 A project can drop its own files under `.metaproject/agents/<name>.md`. A
 project definition with the same `name` as a bundled one **overrides** it;

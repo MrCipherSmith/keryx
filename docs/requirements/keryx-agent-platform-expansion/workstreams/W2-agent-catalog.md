@@ -347,6 +347,30 @@ lists `"agents": []` with a note naming why. See `W1-stack-catalog.md`,
 "Implementation notes: fix attempt 1 (flow 316, review round 1)" for the full
 per-scenario breakdown and the follow-up list (FU1-FU7).
 
+**Batch 1 status, flow 317 (grader follow-ups, `PACK_MIN_TRIALS` raised to
+10):** closed the FU1-FU7 follow-up list (`W1-stack-catalog.md`,
+"Implementation notes: flow 317") and re-ran the honest gate at trials=10.
+The gate-cleared set flipped:
+- **`python`** clears fully now (the FU3 trigger/description fix landed) —
+  **generated pair added**: `python-code-auditor`, `python-build-fixer`.
+- **`go`** clears fully now (the FU4 runner note fixed
+  `table-driven-subtests`, plus two more scenario defects found and fixed
+  mid-flow: `go-build-fix#no-nolint-suppression` and
+  `go-testing#no-sleep-sync`) — **generated pair added**:
+  `go-code-auditor`, `go-build-fixer`.
+- **`ts-js-node`** DROPS OUT: `no-ts-ignore-suppression` fell from the
+  marginal 4/5 (0.8) at trials=5 to 6/10 (0.6) at trials=10 — exactly the
+  fragility review round 1's R1-14 flagged. A genuine model-answer-quality
+  failure (checked against the recorded trials — no rubric defect), so the
+  pack is **demoted to `stability: experimental`** and its generated pair
+  (`ts-js-node-code-auditor`, `ts-js-node-build-fixer`) is **removed**.
+- **`react`** stays `experimental`: `no-disable-hooks-lint` scored 3/10 at
+  the higher trial count, a lower rate than 3/5, confirming FU7's earlier
+  finding rather than reversing it.
+
+Generated-pair count: 1 (ts-js-node) -> 2 (python, go); ts-js-node's own
+pair removed the same round it would otherwise have been replaced.
+
 This covers 22 of W1's 23 stack packs; `mobx` (a capability that extends
 `react` rather than a standalone language/framework) gets no generated agent
 pair — its review coverage stays the existing `code-mobx-store-review` skill,

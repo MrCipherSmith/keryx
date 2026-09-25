@@ -903,21 +903,78 @@ fresh honest re-run, never by tuning mid-flow:
   criterion) — **done in this flow**, as an eval correction (the regex was
   dropped; the criterion now accepts `Path.read_text()`).
 - **FU3** (python `python-implementation` trigger-positive-6 not selected) —
-  still open; trigger/description work is needed. This is what blocks
-  `python`'s gate today.
+  **done in flow 317**: `go/go-implementation`'s generic description text was
+  outscoring python-implementation's own on a prompt naming a Python service
+  that logs requests, because the skill's description never used the word
+  "service." Strengthened the description/triggers to match what the skill's
+  own workflow already covers (`logging.Logger`); never touched `evals.json`.
+  Verified no regression with a full bundled-catalog trigger-only pass
+  (110/110 positives, 108/108 negatives).
 - **FU4** (go `table-driven-subtests`, the model emits a tool/shell call
-  instead of an answer because the single-turn runner has no tools) — still
-  open; add a runner system note telling the model to answer in text, or give
-  the prompt the function's code.
+  instead of an answer because the single-turn runner has no tools) —
+  **done in flow 317**: `buildEvalRunner` now appends a uniform
+  `RUNNER_SYSTEM_NOTE` ("answer in plain text... no tools") after the
+  skill's own `SKILL.md` system prompt, applied to every skill/scenario
+  alike. Reports gain `runnerPromptVersion`, bound by the stable-pack gate
+  the same way `judgePromptVersion` already is.
 - **FU5** (judge temperature control) — **done in this flow**: the judge now
   calls with `temperature: 0`.
 - **FU6** (a live re-judge sampler, opt-in, re-running the judge against a
-  sample of recorded outputs when a credential is available) — not done in
-  this flow; see the threat-model note above for why this is the actual
-  provenance control the gate itself cannot provide.
-- **FU7** (react `no-disable-hooks-lint`, 3/5 under judge prompt v2) — new
-  this round; react is back to `stability: experimental` and its generated
-  pair is removed until this scenario is fixed and re-run honestly.
+  sample of recorded outputs when a credential is available) — **done in
+  flow 317**: `keryx skills eval --reverify <pack-dir> [--sample N] --judge
+  <provider>[:<model>]` (`reverifyPackSample`, `src/gdskills/governance/eval.ts`).
+  See the CLI reference's threat-model paragraph for `eval --reverify`.
+- **FU7** (react `no-disable-hooks-lint`, 3/5 under judge prompt v2) —
+  **checked in flow 317, not a defect**: at trials=10 the scenario scored
+  3/10 (0.3) — a LOWER rate than 3/5, confirming a genuine model weakness
+  rather than floor noise. `react` stays `stability: experimental`.
+
+## Implementation notes: flow 317 (grader follow-ups)
+
+Seven follow-ups from flow 316's own journal (FU1..FU7 above, plus two more
+found while executing this round) were closed in one flow, each backed by
+recorded evidence, never by tuning a grader to force a pass:
+
+- **`PACK_MIN_TRIALS` raised 5 -> 10.** Several scenarios sat exactly on the
+  0.8 floor with only 5 trials — one flipped trial away from failing either
+  direction. Doubling the trial count halves that single-flip swing. No
+  grandfathering: a report recorded at the old minimum fails the gate
+  (regression test in `eval.test.ts`).
+- **Two more scenario defects found while diagnosing the trials=10 run's own
+  failures**, both the SAME under-specified-prompt class flow 316 already
+  established for python's `mypy-error-no-blanket-suppress`: `go-build-fix`'s
+  `no-nolint-suppression` (prompt supplies no call site, yet `pass_criteria`
+  demanded showing "the actual flagged call site's fix") and `go-testing`'s
+  `no-sleep-sync` (the `fail_criteria` wording didn't distinguish a
+  `select`+`time.After` deadline GUARD, which the scenario's own
+  `known_right` calibration endorses, from a blocking `time.Sleep`). Both
+  fixed with the narrowest possible wording change, re-recorded, and re-run
+  clean.
+- **The getter-accessor calibration variant** review round 2 found
+  (`nodejs-build-fix#no-ts-ignore-suppression`, R2-1) is now documented in
+  `pass_criteria`/`known_right` — the calibration schema supports only one
+  `known_right` string, so this is a rubric note rather than a schema
+  change.
+- **The honest trials=10 gate run** (one CLI call per skill, HEAD unchanged
+  start to end, `governance/eval.json` rebuilt verbatim from raw outputs):
+  - **python — gate PASS**, every scenario 1.0/1.0, trigger 7/7. **Promoted
+    to `stability: stable`**; ships `python-code-auditor`/`python-build-fixer`.
+  - **go — gate PASS** after the two scenario-defect fixes above. **Promoted
+    to `stability: stable`**; ships `go-code-auditor`/`go-build-fixer`.
+  - **react — gate FAIL**, unchanged conclusion: `no-disable-hooks-lint`
+    3/10. Stays `experimental`, no generated pair.
+  - **ts-js-node — gate FAIL, DEMOTED from `stable`**: `no-ts-ignore-suppression`
+    fell from the marginal 4/5 (0.8) at trials=5 to 6/10 (0.6) — exactly the
+    fragility review round 1's R1-14 predicted ("one more judge flip... would
+    fail the pack"; here it was more trials revealing the true rate, not a
+    single flip). The 4 failing trials each name the right direction but
+    never show the corrected declaration/access code — a genuine
+    model-answer-quality failure, not a rubric defect (unlike the two go
+    scenarios above, this prompt IS concrete enough to answer, and the
+    calibration's own `known_right` does answer it). No grandfathering: the
+    generated pair is removed and `ts-js-node/agent-refs.json` records why.
+  - Net stack coverage: 1 (ts-js-node only) -> 2 (python, go) generated
+    pairs shipped; ts-js-node's pair removed the same round.
 
 ## Data contracts
 
