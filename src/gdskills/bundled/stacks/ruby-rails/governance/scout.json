@@ -1,0 +1,33 @@
+[
+  {
+    "query": "Use when implementing or extending a feature in a Ruby on Rails app -- MVC boundaries, strong parameters, ActiveRecord associations and scopes, service objects for fat controllers/models, ActiveJob, and modern Ruby 3.x idiom (pattern matching, endless methods, keyword args).",
+    "decision": "create",
+    "topMatch": "ruby-rails/ruby-rails-testing",
+    "recordedAt": "2026-09-25T15:28:04.114Z",
+    "skillName": "ruby-rails-implementation"
+  },
+  {
+    "query": "Use when a Rails app's test suite needs writing, extending, or fixing -- RSpec request/model/job specs (or Minitest equivalents), FactoryBot fixtures, stubbing external HTTP calls, asserting on enqueued ActiveJobs, and avoiding sleep-based waits.",
+    "decision": "fork",
+    "topMatch": "php-laravel/php-laravel-testing",
+    "recordedAt": "2026-09-25T15:28:28.999Z",
+    "skillName": "ruby-rails-testing",
+    "justification": "Nearest match php-laravel/php-laravel-testing (0.32) covers PHPUnit/Pest specs, Laravel factories, and PHP HTTP mocking -- not RSpec/Minitest syntax, FactoryBot, or ActiveJob's have_enqueued_job/perform_enqueued_jobs test helpers. react/react-testing (0.23) and python/python-testing (0.21) are further still, sharing only generic testing vocabulary. None share Rails-specific test vocabulary (RSpec, FactoryBot, ActiveJob, request specs) so this is a genuine fork, not a substitute."
+  },
+  {
+    "query": "Use when reviewing a Rails change for framework-specific risks -- mass assignment gaps, N+1 queries, raw SQL interpolation, raw/html_safe XSS, missing auth/authorization filters, fat controllers/models, and non-idempotent ActiveJobs. Read-only, no edits.",
+    "decision": "use",
+    "topMatch": "php-laravel/php-laravel-code-review",
+    "recordedAt": "2026-09-25T15:28:32.565Z",
+    "skillName": "ruby-rails-code-review",
+    "justification": "Top match php-laravel/php-laravel-code-review (0.56) shares review-vocabulary (mass assignment, N+1, XSS, read-only framing) because both are MVC framework review packs, but it checks Eloquent/Blade/Laravel-specific APIs (fillable/guarded, Blade's {{ }} auto-escaping, Laravel's auth middleware), not Rails' strong parameters, ActiveRecord includes/preload, ERB raw/html_safe, or before_action filters -- no shared code surface despite the conceptual overlap, so this stays a separate authored skill rather than a fork or reuse."
+  },
+  {
+    "query": "Use when bundle install/bundle exec fails, a Rails migration or db:test:prepare fails, rubocop reports offenses, or a Rails test suite fails to boot -- resolves Gemfile.lock mismatches, pending/failed migrations, autoload/zeitwerk errors, and rubocop findings with the smallest root-cause fix.",
+    "decision": "fork",
+    "topMatch": "php-laravel/php-laravel-build-fix",
+    "recordedAt": "2026-09-25T15:28:36.534Z",
+    "skillName": "ruby-rails-build-fix",
+    "justification": "Nearest matches: php-laravel/php-laravel-build-fix (0.44) fixes Composer/artisan migration and PHP linter failures, not Bundler/Gemfile.lock, ActiveRecord migrations, or Zeitwerk autoload errors. go/go-build-fix (0.26) and python/python-build-fix (0.24) fix their own compiler/module-toolchain surfaces, unrelated to rubocop or db/schema.rb regeneration. None share Ruby/Rails-specific vocabulary (Bundler, Zeitwerk, rubocop, db:test:prepare) so this is a genuine fork, not a substitute."
+  }
+]

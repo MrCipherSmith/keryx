@@ -1,0 +1,89 @@
+---
+extends: common
+paths: ["**/*.rb"]
+metadata:
+  origin: authored
+---
+
+# Ruby on Rails testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to Rails
+testing idiom. Covers RSpec (the more common choice in current Rails
+apps) and notes the Minitest equivalent where it differs meaningfully.
+Applies only to `*.rb` files.
+
+## Layout and framework choice
+
+- Match whichever framework the project already uses — `spec/` with
+  RSpec (`*_spec.rb`) or `test/` with Minitest (`*_test.rb`); do not
+  introduce the other framework into a project that has standardized on
+  one.
+- Mirror `app/`'s structure under `spec/`/`test/`: a model at
+  `app/models/order.rb` gets a spec at `spec/models/order_spec.rb`, a
+  job at `app/jobs/charge_job.rb` gets
+  `spec/jobs/charge_job_spec.rb`, and so on.
+
+## RSpec conventions
+
+- `describe`/`context`/`it` read as a sentence — `context` for a
+  precondition ("when the user is not signed in"), `it` for the
+  observable behavior ("redirects to the login page"); avoid vague
+  `it "works"` descriptions.
+- Use `let`/`let!` for lazily/eagerly built fixtures shared across
+  examples in a block instead of repeating setup in every `it`;
+  `before` blocks for side effects that must run before each example.
+- Request specs (`spec/requests`) exercise a controller action through
+  the full stack (routing, before_actions, rendering) and are generally
+  preferred over controller specs for new Rails apps; system specs
+  (`spec/system`, via Capybara) exercise a full browser flow — pick the
+  narrowest layer that actually covers what changed.
+- Use FactoryBot (`create`/`build`, `build_stubbed` when persistence
+  isn't needed) if the project already has it configured, matching its
+  existing factory definitions rather than hand-building fixtures a
+  different way.
+
+## Minitest conventions (when the project uses it instead)
+
+- `test "does something" do ... end` inside a `class XyzTest <
+  ActiveSupport::TestCase` (or `ActionDispatch::IntegrationTest` for
+  request tests); fixtures come from `test/fixtures/*.yml` or the
+  project's own factory setup.
+- Assertions read `assert_equal expected, actual` (expected first) and
+  `assert_predicate`/`assert_raises` over a bare `assert` on a boolean
+  expression, for a clearer failure message.
+
+## Database and external boundaries
+
+- Tests run inside a transaction per example (RSpec's
+  `use_transactional_fixtures`/Rails' default Minitest behavior) that
+  rolls back automatically — do not manually clean up records created
+  in a test unless the app has opted out of transactional tests for a
+  specific reason (e.g. system specs across threads), in which case
+  match whatever cleanup strategy (DatabaseCleaner, truncation) it
+  already uses.
+- Stub/mock an external HTTP call (a third-party API, a webhook) at the
+  boundary (WebMock, VCR cassettes, or the project's existing tooling)
+  — a test must not make a real network call.
+- Assert an `ActiveJob` was enqueued with `have_enqueued_job`
+  (RSpec) / `assert_enqueued_with` (Minitest) rather than asserting on
+  its side effects by actually running it, unless the test's purpose is
+  specifically to exercise the job's `perform` behavior — in which case
+  drain the queue explicitly (`perform_enqueued_jobs`) instead of
+  sleeping or polling for it to run.
+
+## Determinism
+
+- Never synchronize with `sleep` to wait for a background job, an
+  async callback, or an eventually-consistent read — use
+  `perform_enqueued_jobs`, a Capybara-provided wait matcher
+  (`have_content` retries automatically), or an explicit polling helper
+  with a timeout.
+- Freeze time (`travel_to`/`Timecop`, matching whatever the project
+  already uses) for any test asserting on a timestamp or a
+  time-dependent calculation, instead of asserting against
+  `Time.current` computed twice and racing a clock tick.
+
+## Regression discipline
+
+- A bug fix gets a regression test that fails before the fix and passes
+  after; new behavior gets new coverage in the same change.

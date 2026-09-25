@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "bundle install keeps failing with a version conflict",
+      "This migration is marked pending and I can't run the test suite",
+      "rubocop is flagging Metrics/MethodLength on this file, how do I fix it",
+      "Zeitwerk can't find the constant for this file, what's wrong",
+      "The test suite errors before any example runs",
+      "Gemfile.lock doesn't match Gemfile after I added a gem"
+    ],
+    "negative": [
+      "npm install is failing with a peer dependency conflict",
+      "cargo build is failing for this Rust crate",
+      "Implement the feature once the build is fixed",
+      "Review this Rails diff for security issues",
+      "Write a regression test for this migration bug"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-rubocop-disable-suppression",
+      "prompt": "rubocop is flagging Metrics/MethodLength on this method I just wrote. How should I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer fixes the actual complexity the cop flagged by breaking the method into smaller, well-named pieces (an extracted private method or, for cross-model/external-call orchestration, a service object), rather than silencing the finding with a rubocop:disable comment, whether as the sole fix or as extra headroom after a partial refactor.",
+          "pass_criteria": [
+            "Identifies the fix as breaking the method into smaller pieces (an extracted private method or a service object) to reduce its length/complexity, not merely suppressing the finding.",
+            "Shows a concrete extraction direction (names what sub-step would become its own method or object), not just 'refactor it'.",
+            "Does not rely on rubocop:disable as part of the fix for the flagged finding."
+          ],
+          "fail_criteria": [
+            "Recommends adding a rubocop:disable comment (e.g. `# rubocop:disable Metrics/MethodLength`) -- whether as the sole fix or as extra 'headroom' after a partial refactor -- instead of finishing the refactor so the method satisfies the cop on its own. Mentioning rubocop:disable only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "That cop is telling you the method has grown too long to read in one pass. Look for a natural sub-step -- a chunk of the method that computes one intermediate value or handles one branch -- and pull it into its own well-named private method (or, if it's coordinating several models/external calls, a service object per the project's own pattern). That shrinks the flagged method while keeping each piece testable on its own. Once you've split it up, re-run `bundle exec rubocop` to confirm the cop is actually satisfied, not just that the method looks shorter to you.",
+        "known_wrong": "Quickest fix is to add `# rubocop:disable Metrics/MethodLength` above the method (and `# rubocop:enable` after it, or just leave it disabled for the rest of the file) -- that clears the offense without needing to restructure anything. The method works fine as written; the cop's default threshold is often too strict for methods that just have a lot of straightforward steps in a row.",
+        "vague": "You should probably break that method up a bit instead of just silencing the linter.",
+        "subtle_wrong": "Extract the middle chunk of the method -- the part building the response hash -- into a private method so the main method reads shorter, which should bring the line count close to the limit. If it's still one or two lines over after that, just add `# rubocop:disable Metrics/MethodLength` above the method as a small bit of headroom rather than splitting it further -- you've already done the real work of shrinking it, so a narrow disable for the last couple of lines is a reasonable trade-off."
+      },
+      "anti_patterns": ["rubocop:disable"]
+    },
+    {
+      "id": "no-hand-edit-schema",
+      "prompt": "A migration to add an index failed halfway and now db:test:prepare is failing because the test schema doesn't have it. What should I do?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer treats db/schema.rb as generated output and fixes the root cause by repairing and re-running the migration (bin/rails db:migrate) rather than hand-editing schema.rb to add the missing index, then syncs the test database with db:test:prepare.",
+          "pass_criteria": [
+            "States that the migration itself needs to be fixed and re-run (bin/rails db:migrate) rather than hand-editing schema.rb.",
+            "Names the concrete command sequence: fix the migration, run db:migrate, then db:test:prepare to sync the test database.",
+            "States or implies that db/schema.rb is generated output, not something to author directly."
+          ],
+          "fail_criteria": [
+            "Recommends directly hand-editing schema.rb to add the missing index instead of fixing and re-running the migration. Mentioning that only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Don't hand-edit `db/schema.rb` -- it's generated output, not something you author directly, and editing it won't actually apply the index to your database, just to the file that's supposed to describe it. Figure out why the migration failed halfway (a lock timeout, a bad column reference, the index already existing under a different name) and fix that in the migration file itself, then re-run `bin/rails db:migrate`. Once that succeeds and `db:migrate:status` shows nothing pending, run `bin/rails db:test:prepare` to sync the test database's schema from the fixed migration.",
+        "known_wrong": "Simplest fix: since the migration already ran partway, just open `db/schema.rb` and add the `add_index` line by hand so it matches what the migration was trying to do, then run `db:test:prepare` -- that gets the test database back in sync without needing to debug why the migration itself failed.",
+        "vague": "You should get the schema back in sync with the migration before running the tests again.",
+        "subtle_wrong": "Add the index to `db/schema.rb` by hand to match what the migration intended, then also mark the migration as run in `schema_migrations` (or just re-run `db:migrate` after the manual schema edit) so Rails doesn't try to apply it again and conflict with your manual change."
+      },
+      "anti_patterns": ["schema.rb"]
+    }
+  ]
+}
