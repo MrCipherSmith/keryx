@@ -1,0 +1,79 @@
+---
+extends: common
+paths: ["**/*.php"]
+metadata:
+  origin: authored
+---
+
+# PHP / Laravel security
+
+Narrows `core-common-rules`' stack-agnostic security rules to PHP/Laravel-
+specific, OWASP-relevant risks and the framework API to use instead.
+Applies only to `*.php` files.
+
+## Mass assignment
+
+- Every Eloquent model that is ever constructed from request data
+  declares `$fillable` (an explicit allowlist) or `$guarded`; an empty
+  `$guarded = []` mass-assigns every column, attacker-controlled fields
+  (`is_admin`, `role`, `user_id` on someone else's record) included.
+- Build a create/update from `$request->validated()` (the Form Request's
+  validated subset), not raw `$request->all()`/`$request->input()` — even
+  with `$fillable` set, validating first catches type/shape problems
+  `$fillable` alone does not.
+
+## SQL and data access
+
+- Use Eloquent/the query builder's parameter binding
+  (`where('email', $email)`, `DB::select('... where id = ?', [$id])`) for
+  every value that varies with input; never interpolate a variable
+  directly into a raw SQL string (`DB::select("... where id = $id")`,
+  `DB::statement("... = '{$value}'")`) — that is SQL injection regardless
+  of how "internal" the input looks.
+- `DB::raw()`/`whereRaw()`/`selectRaw()` still take bindings as a second
+  argument for any variable part of the expression — pass the value
+  there, not by interpolating it into the raw string.
+
+## Output encoding (Blade/XSS)
+
+- Blade's `{{ $value }}` escapes through `htmlspecialchars` by default;
+  use it for anything that can contain user-influenced content.
+- `{!! $value !!}` performs no escaping — reserve it for content the
+  application itself fully controls and trusts (a sanitized rich-text
+  field explicitly passed through a purifier, not raw user input) and
+  say so at the point of use when it is used at all.
+
+## CSRF and state-changing requests
+
+- Every state-changing route (POST/PUT/PATCH/DELETE) reached from a
+  browser session relies on Laravel's `VerifyCsrfToken`/
+  `ValidateCsrfToken` middleware (the default for the `web` middleware
+  group) and includes `@csrf` in the form or the `X-CSRF-TOKEN`/
+  `X-XSRF-TOKEN` header for an AJAX call.
+- Adding a route to the CSRF-exempt list is a deliberate, narrow decision
+  for a genuinely stateless endpoint (a signed webhook, an API token
+  route already outside the `web` group) — never a workaround for a
+  request that is failing CSRF verification for an unrelated reason.
+
+## Secrets and configuration
+
+- Read secrets from `.env`/`config/*.php` via the `config()` helper; never
+  commit a real credential, API key, or signing secret into a versioned
+  file (`.env.example` gets placeholder values only).
+- Laravel's `APP_KEY` (used for encryption and signed URLs) is generated
+  per environment (`php artisan key:generate`) and never shared between
+  environments or committed to version control.
+
+## Queues and background work
+
+- A queue job handling anything security- or money-relevant is written
+  assuming at-least-once delivery: guard the side effect with
+  `ShouldBeUnique`, a `uniqueId()`, or an idempotency check recorded
+  before the effect runs, not an assumption that retries "shouldn't
+  normally happen."
+
+## Dependency hygiene
+
+- Run `composer audit` when introducing or updating dependencies, or when
+  asked to check for known vulnerabilities in the project's Composer
+  packages.

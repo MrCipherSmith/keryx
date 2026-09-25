@@ -1,0 +1,76 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Laravel diff for mass assignment issues",
+      "Check this Eloquent change for N+1 queries",
+      "Review this Laravel pull request for security issues before merge",
+      "Any raw SQL string building in this PHP change I should worry about?",
+      "Check this Blade template for unescaped output",
+      "Review this queue job for idempotency before we ship it",
+      "Take a look at this controller diff and flag anything risky",
+      "Does this migration and model change look safe to merge?"
+    ],
+    "negative": [
+      "Write Pest tests covering this controller's validation rules",
+      "Implement the missing eager loading in this order listing page",
+      "Fix the composer dependency conflict blocking this build",
+      "Review this Rails controller diff for mass assignment issues",
+      "Review this Express route for SQL injection in a raw query",
+      "Review this Django view for unescaped template output"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "review-flags-raw-sql-interpolation",
+      "prompt": "Review this diff:\n\n```php\npublic function search(Request $request)\n{\n    $term = $request->input('q');\n    $results = DB::select(\"select * from products where name like '%$term%'\");\n    return view('products.search', ['results' => $results]);\n}\n```",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags the interpolated $term inside the raw SQL string passed to DB::select() as a SQL injection risk, names the specific line/pattern, and gives the fix direction of using a parameter binding (e.g. DB::select('select * from products where name like ?', [\"%$term%\"])) or the query builder, without actually rewriting the code itself since this skill is read-only.",
+          "pass_criteria": [
+            "Names the DB::select(\"...$term...\") call as the specific finding, not a generic 'be careful with SQL' comment.",
+            "States the risk concretely as SQL injection (an attacker-controlled value reaching the query string unescaped).",
+            "Gives the fix direction of a parameter binding or the query builder (e.g. DB::select('...where name like ?', [...]) or Product::where('name', 'like', \"%$term%\")) without rewriting the file itself."
+          ],
+          "fail_criteria": [
+            "Says the interpolated $term is not a real risk here (e.g. because it only searches products, or because Eloquent/Laravel already escapes it automatically)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "products.search:3 -- DB::select(\"select * from products where name like '%$term%'\") interpolates $request->input('q') directly into the raw SQL string. Risk: SQL injection -- a crafted 'q' value (e.g. `%' OR '1'='1`) breaks out of the intended LIKE clause. Fix direction: use a binding instead of interpolation, e.g. DB::select('select * from products where name like ?', [\"%{$term}%\"]), or switch to the query builder: Product::where('name', 'like', \"%{$term}%\")->get(). This is a read-only review -- I'm not applying the fix myself.",
+        "known_wrong": "This looks fine -- it's just a product search endpoint, DB::select() runs against the products table and the term is only used for a LIKE match, so there's no real injection surface here worth flagging.",
+        "vague": "Might want to double check how user input is handled in that query before merging.",
+        "subtle_wrong": "The DB::select() call is interpolating user input, but since $term only ever gets wrapped in %...% for a LIKE search and the products table has no sensitive columns, this is low-risk enough to leave as a minor note rather than a blocking finding -- worth mentioning in passing but not worth flagging as an actual SQL injection risk."
+      },
+      "anti_patterns": ["DB::select"]
+    },
+    {
+      "id": "review-flags-unescaped-blade-output",
+      "prompt": "Review this diff:\n\n```blade\n<div class=\"comment-body\">\n    {!! $comment->body !!}\n</div>\n```\n\n$comment->body is user-submitted text stored as-is when a visitor posts a comment.",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct review flags {!! $comment->body !!} as rendering unescaped, user-submitted content -- an XSS risk -- and gives the fix direction of switching to {{ $comment->body }} (escaped output) or explicitly sanitizing the value through a purifier before it reaches unescaped output, without applying the fix itself.",
+          "pass_criteria": [
+            "Names {!! $comment->body !!} as the specific finding, not a generic 'watch your Blade output' comment.",
+            "States the risk concretely as XSS, tied to $comment->body being user-submitted and stored as-is.",
+            "Gives a fix direction: switch to {{ }} escaped output, or run the value through a sanitizer/purifier before rendering it unescaped."
+          ],
+          "fail_criteria": [
+            "Says {!! !!} is fine here because the value 'is just a comment' or because Blade/Laravel already sanitizes stored content by default."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "resources/views/comments/show.blade.php -- {!! $comment->body !!} renders $comment->body unescaped. Since the prompt states this is user-submitted text stored as-is, this is an XSS risk: a comment body containing a <script> tag or an event-handler attribute would execute in every other visitor's browser who views this comment. Fix direction: switch to {{ $comment->body }} so it goes through Blade's default htmlspecialchars escaping, or, if rich-text formatting genuinely needs to be preserved, run the value through an HTML purifier at write time (or render time) before it ever reaches {!! !!}. This is a read-only review -- I'm flagging it, not editing the template.",
+        "known_wrong": "{!! $comment->body !!} looks fine -- it's just displaying a comment's text content, and Blade templates handle escaping for you automatically regardless of which syntax you use, so there's nothing to flag here.",
+        "vague": "Might be worth double-checking how comment content gets rendered before this ships.",
+        "subtle_wrong": "This uses {!! !!} for user-submitted content, which is usually a concern, but since it's scoped to a 'comment-body' div with its own CSS class and comments already go through the standard profanity filter on submission, the practical XSS risk here is low enough that it doesn't need to block this diff -- worth a passing mention but not a real finding."
+      },
+      "anti_patterns": ["{!! "]
+    }
+  ]
+}

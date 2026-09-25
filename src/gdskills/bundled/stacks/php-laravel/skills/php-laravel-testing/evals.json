@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Write a Pest test for this controller's store endpoint",
+      "Add feature tests covering this API endpoint's happy path and errors",
+      "Fix this failing PHPUnit test after the model change",
+      "Add a factory and test coverage for this new model",
+      "Write tests that assert this job gets queued when an order ships",
+      "Test this form's validation errors for missing required fields",
+      "Add test coverage for the subscription renewal email job",
+      "Write a test that checks an unauthenticated user gets redirected from this route"
+    ],
+    "negative": [
+      "Implement the subscription renewal job itself, not its tests",
+      "Review this Laravel diff for missing eager loading and validation gaps",
+      "Fix this composer autoload error after adding a new namespace",
+      "Write Jest tests for this React checkout form",
+      "Write RSpec tests for this Rails model",
+      "Add pytest coverage for this Django view"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-sleep-queue-fake",
+      "prompt": "I want to test that shipping an order dispatches a SendShippingNotification job. How should I write that test?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer uses Queue::fake() before the action under test, performs the action, then asserts with Queue::assertPushed(SendShippingNotification::class, ...) -- checking the job's own arguments, not just that some job of that class was pushed -- rather than letting a real job run and waiting on it with sleep() or a polling delay.",
+          "pass_criteria": [
+            "Calls Queue::fake() before triggering the shipping action.",
+            "Asserts with Queue::assertPushed(SendShippingNotification::class, ...) after the action, shown concretely rather than described in the abstract.",
+            "Checks something about the pushed job's own state (e.g. the order it was built with), not merely that a job of that class was pushed at all."
+          ],
+          "fail_criteria": [
+            "Recommends letting the job actually run against a real queue connection and waiting for it with sleep() or a fixed delay before asserting its effect. Mentioning sleep() only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Call Queue::fake() at the top of the test, then perform the action that ships the order (e.g. hit the ship endpoint or call the service method), then assert with Queue::assertPushed(SendShippingNotification::class, function ($job) use ($order) { return $job->order->is($order); }); -- that checks not just that some SendShippingNotification was pushed, but that it was built for this specific order. Queue::fake() swaps the queue connection for an in-memory recorder, so nothing actually dispatches to a real worker and the assertion is instant and deterministic.",
+        "known_wrong": "Just let the job run for real against the queue connection configured for tests, then after triggering the shipping action add sleep(2) before checking that a notification record exists in the database -- that gives the queue worker enough time to pick up and process the job in the background, which is closer to how it behaves in production than faking it.",
+        "vague": "Make sure the job actually gets dispatched when the order ships and check that it happened.",
+        "subtle_wrong": "Call Queue::fake() before the action, run the shipping action, then assert Queue::assertPushed(SendShippingNotification::class) with no callback -- that confirms a job of the right class was queued. If the test is occasionally flaky in CI because the dispatch happens on a slightly different tick, add a short sleep(1) right after Queue::fake() before triggering the action, just to make sure the fake is fully wired up first."
+      },
+      "anti_patterns": ["sleep("]
+    },
+    {
+      "id": "feature-test-real-route",
+      "prompt": "I need to test that submitting this order form with a missing customer_id returns a validation error. What's the right way to write that test?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer drives the test through the actual HTTP route (e.g. $this->post('/orders', [...]) or postJson for an API test) with customer_id omitted, then asserts the validation failure with assertInvalid(['customer_id']) or an equivalent response-level assertion, rather than instantiating the controller class directly and calling its method in isolation, which bypasses routing, middleware, and the framework's own request validation pipeline.",
+          "pass_criteria": [
+            "Drives the test through the real route (e.g. $this->post(...)/$this->postJson(...) against the actual URI), not a directly instantiated controller.",
+            "Omits customer_id from the submitted payload and asserts the validation failure concretely (e.g. assertInvalid(['customer_id']) or assertSessionHasErrors(['customer_id'])), not just 'checks for an error'."
+          ],
+          "fail_criteria": [
+            "Instantiates the controller class directly (e.g. new OrderController()) and calls its method with a manually built request object instead of going through the actual route."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Use the HTTP testing helper to hit the real route with customer_id left out of the payload: $response = $this->post('/orders', ['total' => 100]); then assert $response->assertInvalid(['customer_id']); (or assertSessionHasErrors(['customer_id']) for a traditional web form). Going through $this->post(...) exercises the actual route, the web/api middleware group, and the Form Request's own validation -- the same path a real browser submission takes -- so the test proves the endpoint itself rejects the bad input, not just that some validation rule object would.",
+        "known_wrong": "Instantiate the controller directly and call its store method with a Request built by hand: $controller = new OrderController(); $request = Request::create('/orders', 'POST', ['total' => 100]); $controller->store($request); -- that's more direct than going through the HTTP kernel and avoids the overhead of dispatching a full request.",
+        "vague": "Submit the form without a customer_id and check that it comes back with a validation error.",
+        "subtle_wrong": "Skip the HTTP layer and test the Form Request's rules() directly: instantiate StoreOrderRequest, call its rules() method, and assert the returned array contains a 'required' rule for customer_id. That confirms the validation rule is defined correctly without the overhead of dispatching a full HTTP request through routing and middleware."
+      }
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "Add a checkout endpoint that saves the order straight from the request body",
+      "Build a new model for storing customer addresses with a migration",
+      "Set up validation for this contact form controller action",
+      "Add a job that emails users when their subscription renews",
+      "Wire up route model binding for the invoice show page",
+      "Add a relationship between Author and Book and expose it on the API",
+      "Implement a feature in our Laravel app that lets a user cancel their order",
+      "Add a new Eloquent model with a migration for storing support tickets"
+    ],
+    "negative": [
+      "Write Pest tests for this Eloquent model's validation rules",
+      "Review this Laravel controller diff for N+1 queries and mass assignment",
+      "Fix this failing composer install after a dependency version bump",
+      "Add this endpoint in a Django REST framework view with a serializer",
+      "Implement this feature in a Rails controller using ActiveRecord",
+      "Add a new Express route handler backed by a Sequelize model"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mass-assignment-validated-input",
+      "prompt": "I'm adding a controller method that creates an Order from the incoming request. How should I build it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer validates the incoming request through a Form Request (or $request->validate([...])) and builds the Eloquent create call from the validated array (e.g. Order::create($request->validated())), not from $request->all()/$request->input(), and states that the Order model itself declares $fillable or $guarded so mass assignment is bounded even if an unexpected field reaches the create call.",
+          "pass_criteria": [
+            "Shows the concrete create call built from the validated data (e.g. Order::create($request->validated())), not just says 'validate the input'.",
+            "States that the Order model declares $fillable or $guarded explicitly.",
+            "Uses a Form Request class or $request->validate([...]) to produce the validated array, named concretely rather than left implicit."
+          ],
+          "fail_criteria": [
+            "Recommends passing $request->all() or $request->input() (with no validated()/allowlist step) directly into Order::create() or a mass-update call. Mentioning $request->all() only to warn against using it this way is not a failure -- only recommending it as the actual approach is."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Create a StoreOrderRequest Form Request with the rules() the order needs (customer_id required/exists, line item shape, etc.), then in the controller call Order::create($request->validated()) -- never Order::create($request->all()). Validating first catches malformed input before it reaches the database, and passing only the validated() subset means an attacker can't smuggle an extra field into the payload that happens to match a column name. On top of that, make sure the Order model itself declares protected $fillable = ['customer_id', 'total', 'status', ...] (or $guarded, if that's the project's convention) so mass assignment stays bounded to those columns even if the validated array ever grows to include something it shouldn't.",
+        "known_wrong": "Keep it simple: in the controller, just do Order::create($request->all()) -- Eloquent's mass assignment protection via $fillable already guards which columns can be written, so there's no need for a separate Form Request or validated() step for something like this. If a required field is missing, the database's NOT NULL constraint will catch it and throw anyway.",
+        "vague": "Make sure you validate the incoming data properly before creating the order, and don't just trust whatever the client sends.",
+        "subtle_wrong": "Add inline validation with $request->validate(['customer_id' => 'required|exists:customers,id', 'total' => 'required|numeric']) at the top of the controller method so the required fields are confirmed present and well-typed, then create the order with Order::create($request->all()) since the validation call already confirmed the request looks right -- that way you get the safety of validation without needing to thread a separate validated() array through, and the model's $fillable list still bounds which columns can actually be written."
+      },
+      "anti_patterns": ["$request->all()"]
+    },
+    {
+      "id": "eager-load-relationship",
+      "prompt": "I'm adding a page that lists orders and shows each order's customer name. What should I watch out for when I write the loop?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer eager-loads the customer relationship (Order::with('customer')->get(), or ->load('customer') on an already-fetched collection) before the loop that reads $order->customer->name for each row, rather than letting each iteration lazily trigger its own query -- an N+1 query pattern that scales with the number of orders shown.",
+          "pass_criteria": [
+            "Shows the concrete eager-load call (with('customer') on the query, or ->load('customer') on the collection) before/around the loop, not just says 'watch out for N+1'.",
+            "Explains that accessing $order->customer inside the loop with no eager load issues one additional query per order."
+          ],
+          "fail_criteria": [
+            "States or implies that accessing $order->customer inside the loop with no eager load is fine because Eloquent's lazy loading 'only runs one query overall' or is otherwise not a real concern for this case."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Fetch the orders with the relationship eager-loaded up front: Order::with('customer')->get() (or, if you already have an $orders collection from elsewhere, $orders->load('customer') before the loop). Then the loop that does foreach ($orders as $order) { echo $order->customer->name; } only issues two queries total -- one for the orders, one batched query for all their customers -- instead of one query per order. Accessing $order->customer inside the loop with no eager load is the classic N+1: Eloquent lazily fires a fresh query the first time each order's customer is touched, so a 200-row order list turns into 201 queries.",
+        "known_wrong": "You can just loop over the orders and read $order->customer->name directly -- foreach ($orders as $order) { echo $order->customer->name; }. This won't cause any N+1 issue since each customer lookup is a fast, indexed primary-key query, and Eloquent only loads what's actually accessed, which keeps things efficient for a page that's not showing thousands of rows.",
+        "vague": "Be careful about how you access the relationship in the loop so it doesn't end up being slow.",
+        "subtle_wrong": "Fetch the orders with their line items eager-loaded, Order::with('items')->get(), since that's usually the more expensive relationship to compute per row, and then loop with foreach ($orders as $order) { echo $order->customer->name; }. Eager-loading items up front avoids the main N+1 risk on this page; the customer lookup per row is cheap enough on its own that it doesn't need the same treatment."
+      },
+      "anti_patterns": ["N+1"]
+    }
+  ]
+}
