@@ -25,11 +25,15 @@ files.
   library's current status in the Android docs before reaching for it in
   an existing codebase that already depends on it.
 - Never hard-code an API key, client secret, or signing credential as a
-  Kotlin string literal or a `BuildConfig` field populated from a
-  committed value — load it from a local, untracked properties file
-  injected at build time (`local.properties`, a CI secret), or fetch it
-  from a backend at runtime; a string baked into the APK is trivially
-  recoverable by decompiling it.
+  Kotlin string literal or a `BuildConfig` field, whether the value is
+  committed or injected at build time from a local, untracked properties
+  file (`local.properties`) or a CI secret — either way, a `BuildConfig`
+  field is compiled into the APK exactly like a string literal and is
+  just as recoverable by decompiling it. Keeping the value out of source
+  control (via `local.properties`/a CI secret) only stops it leaking
+  through the repository; it does not keep it off the device. For a
+  value that must actually stay off the device, fetch it from a backend
+  at runtime instead of baking it into the build at all.
 - Generate and store cryptographic keys through `AndroidKeyStore`
   (`KeyGenParameterSpec`) rather than deriving or hard-coding a key in
   application code — the Keystore keeps key material out of the app's

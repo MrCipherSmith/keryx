@@ -954,11 +954,11 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // improvement lowering the count further does not itself fail this test
   // — only a REGRESSION (more failures than this) does.
   // `checkSkillSelectedLeaveOneOut` rebuilds the full lexical index from
-  // scratch on every call (no cross-call caching), so scanning all 642
-  // triggers against the 110-skill catalog is O(triggers x catalog) —
-  // ~2.8-5s locally, and CI's runner (slower/cold-cache) exceeded bun's
-  // default 5000ms test timeout after the #719 merge grew the catalog.
-  // Explicit timeout, not a product change.
+  // scratch on every call (no cross-call caching), so scanning all 755
+  // triggers against the 130-skill catalog (flow 336; was 642/110 after
+  // #719) is O(triggers x catalog) — CI's runner (slower/cold-cache)
+  // exceeded bun's default 5000ms test timeout once the catalog grew past
+  // #719's size. Explicit timeout, not a product change.
   test(
     "ratchet: no more than 181 of the bundled triggers fail checkSkillSelectedLeaveOneOut",
     () => {
