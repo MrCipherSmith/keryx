@@ -119,3 +119,6 @@ NEITHER stable pack regresses on triggers. Nothing to report/fix for AC6.
 No `evals.json`, `SKILL.md` description, or trigger text was edited to
 produce or improve any of these numbers.
 - 2026-09-25T15:08:28.754Z - task-attempt: T8: started (attempt 1) — measuring before/after trigger accuracy across all 90 bundled skills
+- 2026-09-25T15:08:34.442Z - task-done: T8: Before/after trigger-accuracy measurement + stable pack gate re-check
+- 2026-09-25T15:08:46.963Z - task-done: T9: Docs: exclusion clauses are safe to write
+- 2026-09-25T15:09:00.669Z - task-attempt: T10: started (attempt 1) — opening PR, targeting main
