@@ -19,7 +19,17 @@
       ],
       "enumeration_method": "keryx ctx rg for buildShellHookRuntime / loadHookConfig call sites; PoC run through the real `keryx shell` on the branch and on main"
     },
-    "global_id": "2026-09-25-ingest-700#R700-01"
+    "global_id": "2026-09-25-ingest-700#R700-01",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 5b052d7d, 082b3d36, 18ab7fb2; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: review probe re-run: untrusted SessionStart hook did not run in dev and dist forms (manual step 12 at 83b8e1bd, also with a .env KERYX_HOME trick); src/commands/hook-trust.probe.test.ts red before, green after; adversarial rounds r1-r5 found no path that runs untrusted project hooks.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "5b052d7d, 082b3d36, 18ab7fb2; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-02",
@@ -42,7 +52,17 @@
       ],
       "enumeration_method": "BUILTIN_HOOK_REGISTRATIONS in src/harness/hooks/builtins.ts:268"
     },
-    "global_id": "2026-09-25-ingest-700#R700-02"
+    "global_id": "2026-09-25-ingest-700#R700-02",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 5b052d7d; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: project disable of keryx.security-check-output ignored (hooks list enabled=true, session-start warning) in manual probe; config.test.ts tighten-only tests; r1 attempted project-scope gate disables, none succeeded.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "5b052d7d; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-03",
@@ -62,7 +82,17 @@
       ],
       "enumeration_method": "grep for appendFile/mkdir in default-on hook handlers (builtins learning-observer, impact-evidence); PoC for observe.ts"
     },
-    "global_id": "2026-09-25-ingest-700#R700-03"
+    "global_id": "2026-09-25-ingest-700#R700-03",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 3a8cac4e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: symlinked .metaproject/data/learning/observations -> outside dir received 0 files after a shell session (manual probe); observe.test.ts / impact-evidence state.test.ts symlink tests.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "3a8cac4e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-04",
@@ -81,7 +111,17 @@
       ],
       "enumeration_method": "rg -l over a fixed list of the branch's new modules (keryx:raw), then compared by hand with COVERED_DIRS/COVERED_FILES"
     },
-    "global_id": "2026-09-25-ingest-700#R700-04"
+    "global_id": "2026-09-25-ingest-700#R700-04",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 3a8cac4e, fea70205, 082b3d36; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: src/lib/contained-write.ratchet.test.ts covers every listed writer; allowlist back to 8.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "3a8cac4e, fea70205, 082b3d36; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-05",
@@ -102,7 +142,17 @@
       ],
       "enumeration_method": "read of the command-registry descriptors next to the exclusion reasons in coverage.test.ts"
     },
-    "global_id": "2026-09-25-ingest-700#R700-05"
+    "global_id": "2026-09-25-ingest-700#R700-05",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 3956805e, 082b3d36; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: command-registry.coverage.test.ts excludes hooks disable; hooks.test.ts symlink-escape write refusal.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "3956805e, 082b3d36; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-06",
@@ -122,7 +172,17 @@
       ],
       "enumeration_method": "git status after init→update, run separately on main and on the branch (the main baseline lacks this file)"
     },
-    "global_id": "2026-09-25-ingest-700#R700-06"
+    "global_id": "2026-09-25-ingest-700#R700-06",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 045d298e, b9daac12; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: manual: init, commit, update x3 leaves git status clean; update.test.ts idempotence test.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "045d298e, b9daac12; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-07",
@@ -143,7 +203,17 @@
       ],
       "enumeration_method": "ran `<verb> --help` and `<verb>` for bundle, learn, agents, skills, integrations, security, memory, hooks and stack"
     },
-    "global_id": "2026-09-25-ingest-700#R700-07"
+    "global_id": "2026-09-25-ingest-700#R700-07",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 3956805e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: skills/memory/security --help list every subcommand (cli-reference-coverage.test.ts); manual: skills eval --help prints eval help.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "3956805e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-08",
@@ -166,7 +236,17 @@
       ],
       "enumeration_method": "compared --help against docs/docs/cli-reference.md for every new command"
     },
-    "global_id": "2026-09-25-ingest-700#R700-08"
+    "global_id": "2026-09-25-ingest-700#R700-08",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 3956805e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: usage lines carry --allow-hooks/--surface/--file/--force (cli.test.ts golden).",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "3956805e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-09",
@@ -188,7 +268,17 @@
       ],
       "enumeration_method": "read of `keryx help` output"
     },
-    "global_id": "2026-09-25-ingest-700#R700-09"
+    "global_id": "2026-09-25-ingest-700#R700-09",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 3956805e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: agents summary covers catalog; /integrations renamed /integrate (acp commands, busy-dispatch, mcp-help tests).",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "3956805e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-10",
@@ -208,7 +298,17 @@
       ],
       "enumeration_method": "diff of .gitignore and git diff of seeded files on the upgrade path"
     },
-    "global_id": "2026-09-25-ingest-700#R700-10"
+    "global_id": "2026-09-25-ingest-700#R700-10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 045d298e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: managed .gitignore block and seeded rules carry no internal labels; metaproject-gitignore.test.ts old-block replacement.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "045d298e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R700-11",
@@ -229,6 +329,16 @@
       ],
       "enumeration_method": "code read of the W3↔W4 handoff"
     },
-    "global_id": "2026-09-25-ingest-700#R700-11"
+    "global_id": "2026-09-25-ingest-700#R700-11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 045d298e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: bundle/plan.test.ts: import resets TTL, caps confidence at 0.3, records provenance.importedFrom.",
+      "verifier": "flow-319-verification (adversarial-opus-r1..r6 + manual plan)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "045d298e; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   }
 ]

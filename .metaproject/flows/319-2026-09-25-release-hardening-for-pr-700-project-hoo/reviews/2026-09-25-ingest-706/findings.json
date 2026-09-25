@@ -20,7 +20,17 @@
       ],
       "enumeration_method": "grep KERYX_HOME / resolveKeryxHomeDir / resolveHookHomeDir across src (non-test); all user-scope hook paths derive from a single env-driven home resolver; empirically confirmed Bun `.env` autoload populates process.env.KERYX_HOME under the prescribed `bun src/cli.ts` invocation, which is the same runtime the shipped `dist/cli.js` bin runs under."
     },
-    "global_id": "2026-09-25-ingest-706#R1-01"
+    "global_id": "2026-09-25-ingest-706#R1-01",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 18ab7fb2, 6f9f947f, 767d0b8f, 83b8e1bd; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: round-2..5 probes: .env KERYX_HOME has no effect in shipped form (safe shebang) and dev form (guard); KERYX_HOME inside project refused; safe-exec.hostile-cwd.e2e.test.ts.",
+      "verifier": "adversarial-opus-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "18ab7fb2, 6f9f947f, 767d0b8f, 83b8e1bd; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R1-02",
@@ -40,7 +50,17 @@
       ],
       "enumeration_method": "grep for describeProjectHookForApproval and renderListText and every site that joins/prints a project hook's argv/env/cwd to a terminal; the session-start notice path (harness/hooks/notices.ts) inspected and excluded (prints only constrained id + event)."
     },
-    "global_id": "2026-09-25-ingest-706#R1-02"
+    "global_id": "2026-09-25-ingest-706#R1-02",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 54367a26, 499285dd, 574eca59; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: reviewer CSI payload shown escaped in hooks trust/list/notices (terminal-safe tests; r2/r3 re-ran payload).",
+      "verifier": "adversarial-opus-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "54367a26, 499285dd, 574eca59; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R1-03",
@@ -59,7 +79,17 @@
       ],
       "enumeration_method": "n/a (minor)"
     },
-    "global_id": "2026-09-25-ingest-706#R1-03"
+    "global_id": "2026-09-25-ingest-706#R1-03",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 54367a26; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: trust display and hooks.md state trust covers argv, not script contents; NOTE line for repo-relative scripts (trust.test.ts).",
+      "verifier": "adversarial-opus-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "54367a26; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   },
   {
     "id": "R1-04",
@@ -78,6 +108,16 @@
       ],
       "enumeration_method": "n/a (minor)"
     },
-    "global_id": "2026-09-25-ingest-706#R1-04"
+    "global_id": "2026-09-25-ingest-706#R1-04",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Post-fix re-check: the finding no longer reproduces (this is the fixed reading, not a claim the finding was wrong). Fix commit(s) 54367a26; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green). Check: enabled unsandboxed user hooks listed at session start (notices tests).",
+      "verifier": "adversarial-opus-r2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "54367a26; squash-merged into feat/agent-platform-expansion as 197ce355fd256660dc644ea476dfb42e72f11154 (PR #706, head b62737927b240887d0047b55b865a317b43d0281, CI green)"
+    }
   }
 ]

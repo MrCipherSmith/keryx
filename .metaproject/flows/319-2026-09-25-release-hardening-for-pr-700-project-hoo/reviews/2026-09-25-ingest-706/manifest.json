@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-25-ingest-706",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "706",
-    "head": "41498706fe9066bfd3f2e652c437ff51ba64739c"
+    "head": "082b3d36"
   },
   "artifacts": {
     "scope": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo/reviews/2026-09-25-ingest-706/scope.md",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-25T08:17:49.535Z",
-  "updatedAt": "2026-09-25T08:17:49.535Z",
+  "createdAt": "2026-09-25T11:34:16.204Z",
+  "updatedAt": "2026-09-25T11:34:17.193Z",
   "flow": {
     "id": "319",
     "path": ".metaproject/flows/319-2026-09-25-release-hardening-for-pr-700-project-hoo"
