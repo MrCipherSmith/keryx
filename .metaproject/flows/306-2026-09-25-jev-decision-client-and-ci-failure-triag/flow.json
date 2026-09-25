@@ -1,0 +1,511 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "306",
+  "slug": "jev-decision-client-and-ci-failure-triag",
+  "title": "Jev decision client and CI failure triage: flaky, infra or real regression, advisory only",
+  "status": "done",
+  "createdAt": "2026-09-25T06:18:31.026Z",
+  "updatedAt": "2026-09-25T07:49:04.117Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T07:08:04.560Z",
+      "note": "src/harness/decision/jev-client.ts: callJevSystemOne(fetchFn=globalThis.fetch, {model,state,questions}) -> {answers,usage}; no vendor SDK, no ProviderPort import. jev-client.test.ts AC1/AC4 describe block (2 tests)."
+    },
+    "AC2": {
+      "at": "2026-09-25T07:08:04.674Z",
+      "note": "resolveJevApiKey() reuses envWithSavedApiKeys (src/lib/shell-config.ts); JevCredentialError thrown, 0 fetch calls, when absent. jev-client.test.ts AC2 describe block (2 tests)."
+    },
+    "AC3": {
+      "at": "2026-09-25T07:08:09.390Z",
+      "note": "preflightBudget() reuses estimateTokens (src/review/cost.ts); JevBudgetError names state|questions side, refused before any fetch call. jev-client.test.ts AC3 describe block (4 tests)."
+    },
+    "AC4": {
+      "at": "2026-09-25T07:08:09.510Z",
+      "note": "JEV_MODEL_1_13, JEV_MODEL_LATEST, DEFAULT_JEV_MODEL exported constants in jev-client.ts; every call site (review.ts, ci-triage-source.ts) references DEFAULT_JEV_MODEL, no duplicated literal."
+    },
+    "AC5": {
+      "at": "2026-09-25T07:08:14.176Z",
+      "note": "Injected fake fetch in every test; jev-client.test.ts AC5 describe block: success, malformed-JSON, non-200, missing-usage, missing-answers, each its own test (5 tests, no real socket)."
+    },
+    "AC6": {
+      "at": "2026-09-25T07:08:14.289Z",
+      "note": "src/review/ci-port.ts: createGhCiPort/createFixtureCiPort, 3 read methods only (runInfo, failedLog, recentRuns); job-name history approximated at workflow granularity (documented in file header, gh has no bulk per-job endpoint). ci-port.test.ts (9 tests)."
+    },
+    "AC7": {
+      "at": "2026-09-25T07:08:20.316Z",
+      "note": "FINDING: OpenRouter TypeSafe SDK guide documents no per-option-probability shape for a choice answer (only the chosen option); confirmed independently in docs/requirements/keryx-jev-router/PRD.md §13. Implemented as 3 noul questions (flaky/infra/real-regression) instead of 1 choice question, giving a true probability per option. src/review/ci-triage.ts buildCiTriageQuestions/computeCiTriageVerdict/renderCiTriageAdvisory; advisory text always labelled ADVISORY ONLY, never triggers rerun/merge/status-check. ci-triage.test.ts AC7 block (4 tests)."
+    },
+    "AC8": {
+      "at": "2026-09-25T07:08:26.261Z",
+      "note": "keryx review ci-triage --run <id> [--job][--test][--repo][--model][--fixtures][--json] wired in src/commands/review.ts (runCiTriage); no other reviewer/round required. review-ci-triage-cli.test.ts AC8 block (4 tests) driven through the real CLI with fixtures built from a real failed run on this repo (36095133327)."
+    },
+    "AC9": {
+      "at": "2026-09-25T07:08:26.377Z",
+      "note": "CiPort has exactly 3 read methods, no write method at all (structural proof). ci-port.test.ts AC9 tests assert the live adapter's argv never contains rerun/cancel/delete/POST-PUT-PATCH-DELETE and the fixture port's method set is exactly {runInfo,failedLog,recentRuns}. review-ci-triage-cli.test.ts and ci-triage-source.test.ts also assert no such call/argv appears."
+    },
+    "AC10": {
+      "at": "2026-09-25T07:08:32.880Z",
+      "note": "readCiTriageEnabled() reads review.jev.ci_triage from .metaproject/tasks.config.json, default false, mirrors readRequireConfirmationDefault's pattern exactly. CLI and TUI paths both check opt-in + credential BEFORE touching the CI port or Jev client. ci-triage.test.ts AC10 (5 tests), review-ci-triage-cli.test.ts AC10 (2 tests, proving a nonexistent --fixtures dir is never opened when refused), ci-triage-source.test.ts (2 equivalent tests for the TUI path)."
+    },
+    "AC11": {
+      "at": "2026-09-25T07:08:33.003Z",
+      "note": "buildCiTriageState() bounds the log to CI_TRIAGE_LOG_CHARS=6000 chars (tail-first, well inside the 64k budget) and runs redactSensitiveText BEFORE truncation. ci-triage.test.ts AC11 block (4 tests) including a planted-secret test; revert-checked by disabling redaction and confirming the test fails, then restoring (see conversation notes / PR description)."
+    },
+    "AC12": {
+      "at": "2026-09-25T07:08:40.645Z",
+      "note": "TUI /ci: src/tui/ci-triage-inspector.ts (list+detail modal, follows triggers-inspector.ts/governance-inspector.ts conventions: modal-host, keyboardOwnedElsewhere via inputBlocked, guardedThemeRepaint) + src/tui/ci-triage-source.ts (production gh+Jev loader/triager for the current branch's PR), wired into tui-shell.ts (/ci dispatch) and agent-commands.ts. Detail view uses renderCiTriageAdvisory, always labelled ADVISORY ONLY. ci-triage-inspector.test.ts (7 tests, real OpenTUI renderer, 0 skips) + ci-triage-source.test.ts (7 tests, injected gh spawn + fetch, no real network)."
+    },
+    "AC13": {
+      "at": "2026-09-25T07:08:40.873Z",
+      "note": "keryx review ci-triage: dispatch in review.ts, usage/detail text in printHelp(). HELP_GROUPS: /ci slash entry added (Managed work); review verb already covered (subcommand, matches budget/tier/comments precedent). CLI reference: docs/docs/cli-reference.md usage line + subcommand table row + new ### review ci-triage section stating limits (opt-in privacy decision, advisory-only by construction, vendor-reported-accuracy-only). All English. cli-reference-coverage.test.ts, help-groups.test.ts, commands-by-task.test.ts (regenerated) all pass."
+    },
+    "AC14": {
+      "at": "2026-09-25T07:48:28.142Z",
+      "note": "CI is green on the merge commit 45df98bdafd11b292990addf50e311d2072a048c (origin/main tip, PR #704 squash-merge): gh api repos/MrCipherSmith/keryx/commits/45df98bdafd11b292990addf50e311d2072a048c/check-runs shows 19/19 checks completed success (typecheck-and-tests confirmed completed success by polling; 18 others were already green). keryx health run, executed by me in a worktree checked out at 45df98bdafd11b292990addf50e311d2072a048c: Code Health PASS, project score 94, no gate conditions triggered."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/704"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read PRD.md/PLAN.md Phase 0-1, GitHubPort/pr-comments.ts pattern, shell-config.ts key resolution, cost.ts estimateTokens, redact.ts, help-groups.ts, modal-host.ts, triggers/governance-inspector.ts as templates; verified Jev shape via WebFetch against openrouter.ai docs."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented src/harness/decision/jev-client.ts, src/review/ci-port.ts, src/review/ci-triage.ts, wired keryx review ci-triage in src/commands/review.ts, TUI /ci (src/tui/ci-triage-inspector.ts + ci-triage-source.ts) wired into tui-shell.ts/agent-commands.ts/help-groups.ts, docs updated."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "59 new unit/CLI/TUI tests added across jev-client.test.ts, ci-port.test.ts, ci-triage.test.ts, review-ci-triage-cli.test.ts, ci-triage-inspector.test.ts, ci-triage-source.test.ts; all pass. Redact revert-check performed (test correctly failed with redaction disabled, then restored)."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review done: full diff reviewed, revert-check on redaction proved a real catch, typecheck/eslint/test:core/test:client:terminal/test:client:runtime/opentui-no-skips/check:doc-links/keryx health run all green. No commit/push/PR made per this task's explicit instruction not to commit or push; left for the operator to open the PR from this worktree's branch feat/jev-ci-triage."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T06:18:31.026Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T06:18:45.334Z",
+      "event": "frozen",
+      "detail": "14 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T06:18:45.443Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T07:07:45.977Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T07:07:46.094Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T07:07:50.620Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T07:07:59.095Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T07:08:04.560Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/decision/jev-client.ts: callJevSystemOne(fetchFn=globalThis.fetch, {model,state,questions}) -> {answers,usage}; no vendor SDK, no ProviderPort import. jev-client.test.ts AC1/AC4 describe block (2 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:04.674Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: resolveJevApiKey() reuses envWithSavedApiKeys (src/lib/shell-config.ts); JevCredentialError thrown, 0 fetch calls, when absent. jev-client.test.ts AC2 describe block (2 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:09.390Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: preflightBudget() reuses estimateTokens (src/review/cost.ts); JevBudgetError names state|questions side, refused before any fetch call. jev-client.test.ts AC3 describe block (4 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:09.510Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: JEV_MODEL_1_13, JEV_MODEL_LATEST, DEFAULT_JEV_MODEL exported constants in jev-client.ts; every call site (review.ts, ci-triage-source.ts) references DEFAULT_JEV_MODEL, no duplicated literal. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:14.176Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Injected fake fetch in every test; jev-client.test.ts AC5 describe block: success, malformed-JSON, non-200, missing-usage, missing-answers, each its own test (5 tests, no real socket). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:14.289Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/review/ci-port.ts: createGhCiPort/createFixtureCiPort, 3 read methods only (runInfo, failedLog, recentRuns); job-name history approximated at workflow granularity (documented in file header, gh has no bulk per-job endpoint). ci-port.test.ts (9 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:20.316Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: FINDING: OpenRouter TypeSafe SDK guide documents no per-option-probability shape for a choice answer (only the chosen option); confirmed independently in docs/requirements/keryx-jev-router/PRD.md §13. Implemented as 3 noul questions (flaky/infra/real-regression) instead of 1 choice question, giving a true probability per option. src/review/ci-triage.ts buildCiTriageQuestions/computeCiTriageVerdict/renderCiTriageAdvisory; advisory text always labelled ADVISORY ONLY, never triggers rerun/merge/status-check. ci-triage.test.ts AC7 block (4 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:26.261Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: keryx review ci-triage --run <id> [--job][--test][--repo][--model][--fixtures][--json] wired in src/commands/review.ts (runCiTriage); no other reviewer/round required. review-ci-triage-cli.test.ts AC8 block (4 tests) driven through the real CLI with fixtures built from a real failed run on this repo (36095133327). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:26.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: CiPort has exactly 3 read methods, no write method at all (structural proof). ci-port.test.ts AC9 tests assert the live adapter's argv never contains rerun/cancel/delete/POST-PUT-PATCH-DELETE and the fixture port's method set is exactly {runInfo,failedLog,recentRuns}. review-ci-triage-cli.test.ts and ci-triage-source.test.ts also assert no such call/argv appears. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:32.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: readCiTriageEnabled() reads review.jev.ci_triage from .metaproject/tasks.config.json, default false, mirrors readRequireConfirmationDefault's pattern exactly. CLI and TUI paths both check opt-in + credential BEFORE touching the CI port or Jev client. ci-triage.test.ts AC10 (5 tests), review-ci-triage-cli.test.ts AC10 (2 tests, proving a nonexistent --fixtures dir is never opened when refused), ci-triage-source.test.ts (2 equivalent tests for the TUI path). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:33.004Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: buildCiTriageState() bounds the log to CI_TRIAGE_LOG_CHARS=6000 chars (tail-first, well inside the 64k budget) and runs redactSensitiveText BEFORE truncation. ci-triage.test.ts AC11 block (4 tests) including a planted-secret test; revert-checked by disabling redaction and confirming the test fails, then restoring (see conversation notes / PR description). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:40.645Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: TUI /ci: src/tui/ci-triage-inspector.ts (list+detail modal, follows triggers-inspector.ts/governance-inspector.ts conventions: modal-host, keyboardOwnedElsewhere via inputBlocked, guardedThemeRepaint) + src/tui/ci-triage-source.ts (production gh+Jev loader/triager for the current branch's PR), wired into tui-shell.ts (/ci dispatch) and agent-commands.ts. Detail view uses renderCiTriageAdvisory, always labelled ADVISORY ONLY. ci-triage-inspector.test.ts (7 tests, real OpenTUI renderer, 0 skips) + ci-triage-source.test.ts (7 tests, injected gh spawn + fetch, no real network). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:08:40.873Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: keryx review ci-triage: dispatch in review.ts, usage/detail text in printHelp(). HELP_GROUPS: /ci slash entry added (Managed work); review verb already covered (subcommand, matches budget/tier/comments precedent). CLI reference: docs/docs/cli-reference.md usage line + subcommand table row + new ### review ci-triage section stating limits (opt-in privacy decision, advisory-only by construction, vendor-reported-accuracy-only). All English. cli-reference-coverage.test.ts, help-groups.test.ts, commands-by-task.test.ts (regenerated) all pass. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:48:13.886Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/704 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T07:48:22.544Z",
+      "event": "owner-set",
+      "detail": "not set -> altsay (Flow 306 opted into owner accountability at init; setting owner before flow complete per coordinator instruction.)"
+    },
+    {
+      "at": "2026-09-25T07:48:28.142Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: CI is green on the merge commit 45df98bdafd11b292990addf50e311d2072a048c (origin/main tip, PR #704 squash-merge): gh api repos/MrCipherSmith/keryx/commits/45df98bdafd11b292990addf50e311d2072a048c/check-runs shows 19/19 checks completed success (typecheck-and-tests confirmed completed success by polling; 18 others were already green). keryx health run, executed by me in a worktree checked out at 45df98bdafd11b292990addf50e311d2072a048c: Code Health PASS, project score 94, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T07:49:00.073Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T07:49:04.116Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-25T07:49:04.117Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T07:08:04.560Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:04.674Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:09.390Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:09.510Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:14.176Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:14.289Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:20.316Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:26.261Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:26.377Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:32.880Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:33.003Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:40.645Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:08:40.873Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:48:28.142Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    },
+    {
+      "at": "2026-09-25T07:49:04.117Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804",
+      "headCommit": "45df98bdafd11b292990addf50e311d2072a048c"
+    }
+  ],
+  "baseBranch": "main",
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T07:49:04.116Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "14 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "45df98bdafd11b292990addf50e311d2072a048c is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "45df98bdafd11b292990addf50e311d2072a048c is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:184f5c5b1f47b6671ccda229f0c57cbbc8aa683253eed81edc2bddabcba72804"
+    }
+  ],
+  "merged": {
+    "commit": "45df98bdafd11b292990addf50e311d2072a048c",
+    "ref": "origin/main",
+    "at": "2026-09-25T07:49:04.117Z"
+  }
+}

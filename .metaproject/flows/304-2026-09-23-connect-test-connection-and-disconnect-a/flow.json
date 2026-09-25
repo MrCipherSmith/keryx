@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "304",
+  "slug": "connect-test-connection-and-disconnect-a",
+  "title": "/connect: test connection and disconnect a provider, with buttons like the queue block",
+  "status": "done",
+  "createdAt": "2026-09-23T18:35:41.492Z",
+  "updatedAt": "2026-09-23T20:42:24.344Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-23T20:41:46.271Z",
+      "note": "src/tui/connect-provider-buttons.test.ts covers [Test]/[Disconnect] on every row, drawn via the queue-dock button pattern, colour from theme; Enter/click on the label still selects the provider. /provider wizard unchanged. 14 tests pass at head 5d203ec9925f83b60cb93441e09f0f01e871f882 (== merge e04715a2)."
+    },
+    "AC2": {
+      "at": "2026-09-23T20:41:46.515Z",
+      "note": "testProviderConnection wraps fetchOpenAiCompatModelsDetailed with the provider's resolved key (src/commands/providers.ts); tui-shell.ts renders 'ok — N models' or modelsFailureLine(label, failure) on the row without leaving /connect. connect-provider-buttons.test.ts covers success+failure via mouse."
+    },
+    "AC3": {
+      "at": "2026-09-23T20:41:46.767Z",
+      "note": "src/tui/queue-nav.ts adds ConnectNavAction + stepConnectNavAction (Label/Test/Disconnect) beside stepQueueNavIndex/clampQueueNavIndex reused verbatim; queue-nav.test.ts (5 pass) unit-tests the steppers; connect-provider-buttons.test.ts drives it with real keypresses (arrow/enter/esc)."
+    },
+    "AC4": {
+      "at": "2026-09-23T20:41:47.051Z",
+      "note": "connect-provider-buttons.test.ts: declining an armed Disconnect (2nd choice / Esc without confirming) asserts loadShellConfig(configDir) is byte-for-byte unchanged (e.g. apiKeys still {DEEPSEEK_API_KEY: 'sk-real'})."
+    },
+    "AC5": {
+      "at": "2026-09-23T20:41:56.777Z",
+      "note": "removeApiKey (shell-config.ts), logoutProvider (oauth/login.ts), removeCustomCompatProvider (provider-config.ts) each remove exactly the named provider's entry; provider-config.test.ts (24 pass) and shell-config.test.ts (18 pass) read files back and show siblings intact."
+    },
+    "AC6": {
+      "at": "2026-09-23T20:41:57.026Z",
+      "note": "classifyProviderConnection returns kind:'env-var-only' when the env var is set but not by keryx; CLI/TUI refuse to remove and name the exact variable to unset (src/commands/providers.ts:886-998); providers.disconnect.test.ts covers it with injected env + temp config dir."
+    },
+    "AC7": {
+      "at": "2026-09-23T20:41:57.302Z",
+      "note": "src/harness/provider/make-provider-disconnect.test.ts (dedicated behavioural test, 1 pass/6 expects) plus onDisconnected wiring in tui-shell.ts/shell.ts prove: no provider switch, no turn interruption, one line naming the provider, and the saved key removed from process.env for this process."
+    },
+    "AC8": {
+      "at": "2026-09-23T20:41:57.550Z",
+      "note": "keryx providers test <name> [--json] and keryx providers remove <name> [--yes] mirror the row buttons; remove refuses without confirmation on a terminal unless --yes; providers.disconnect.test.ts covers both CLI paths; providers list remains network-free (unchanged read path)."
+    },
+    "AC9": {
+      "at": "2026-09-23T20:42:07.164Z",
+      "note": "docs/docs/cli-reference.md 'remove' row and docs/docs/onboarding.md state plainly: disconnect removes only keryx's LOCAL credential copy; OAuth grant deleted from auth.json with no vendor revoke call; an API key stays valid at the vendor until revoked there. providers test/remove documented; onboarding + /help describe buttons and keys."
+    },
+    "AC10": {
+      "at": "2026-09-23T20:42:07.406Z",
+      "note": "connect-provider-buttons.test.ts describe('AC10 — button/row colours come from the active theme') exercises two themes; colours come from themeColorToHex/resolveTheme. All new UI/CLI text reviewed as English."
+    },
+    "AC11": {
+      "at": "2026-09-23T20:42:07.658Z",
+      "note": "src/standard/help-groups.ts HELP_GROUPS includes 'providers'; src/cli.ts USAGE_BODY lists providers test/remove; src/cli-reference-coverage.test.ts and src/standard/help-groups.test.ts pass (32 pass / 0 fail combined) confirming coverage."
+    },
+    "AC12": {
+      "at": "2026-09-23T20:42:07.884Z",
+      "note": "gh pr view 673: state MERGED, headRefOid 5d203ec9925f83b60cb93441e09f0f01e871f882, mergeCommit e04715a20941f6d527a315be7bcce215670b9648. gh pr checks 673: 18 passed / 0 failed. keryx health run (run by the completion verifier, this session): PASS, score 94."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/673"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review complete: 12/12 AC confirmed with evidence, review package 2026-09-23-verify-connect-disconnect closed (7/7 findings acted-on, verified against merge commit e04715a20941f6d527a315be7bcce215670b9648), keryx health run PASS (94), PR #673 merged with 18/18 CI green."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T18:35:41.492Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-23T18:40:42.505Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-23T18:40:42.618Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-23T19:38:25.551Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-23T19:38:25.678Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-23T19:38:25.807Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-23T20:41:22.313Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/673 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-23T20:41:31.892Z",
+      "event": "owner-set",
+      "detail": "not set -> altsay (closing flow 304 through its completion gates per task instruction)"
+    },
+    {
+      "at": "2026-09-23T20:41:46.271Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/tui/connect-provider-buttons.test.ts covers [Test]/[Disconnect] on every row, drawn via the queue-dock button pattern, colour from theme; Enter/click on the label still selects the provider. /provider wizard unchanged. 14 tests pass at head 5d203ec9925f83b60cb93441e09f0f01e871f882 (== merge e04715a2). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:41:46.516Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: testProviderConnection wraps fetchOpenAiCompatModelsDetailed with the provider's resolved key (src/commands/providers.ts); tui-shell.ts renders 'ok — N models' or modelsFailureLine(label, failure) on the row without leaving /connect. connect-provider-buttons.test.ts covers success+failure via mouse. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:41:46.767Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/tui/queue-nav.ts adds ConnectNavAction + stepConnectNavAction (Label/Test/Disconnect) beside stepQueueNavIndex/clampQueueNavIndex reused verbatim; queue-nav.test.ts (5 pass) unit-tests the steppers; connect-provider-buttons.test.ts drives it with real keypresses (arrow/enter/esc). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:41:47.052Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: connect-provider-buttons.test.ts: declining an armed Disconnect (2nd choice / Esc without confirming) asserts loadShellConfig(configDir) is byte-for-byte unchanged (e.g. apiKeys still {DEEPSEEK_API_KEY: 'sk-real'}). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:41:56.778Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: removeApiKey (shell-config.ts), logoutProvider (oauth/login.ts), removeCustomCompatProvider (provider-config.ts) each remove exactly the named provider's entry; provider-config.test.ts (24 pass) and shell-config.test.ts (18 pass) read files back and show siblings intact. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:41:57.026Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: classifyProviderConnection returns kind:'env-var-only' when the env var is set but not by keryx; CLI/TUI refuse to remove and name the exact variable to unset (src/commands/providers.ts:886-998); providers.disconnect.test.ts covers it with injected env + temp config dir. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:41:57.302Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/harness/provider/make-provider-disconnect.test.ts (dedicated behavioural test, 1 pass/6 expects) plus onDisconnected wiring in tui-shell.ts/shell.ts prove: no provider switch, no turn interruption, one line naming the provider, and the saved key removed from process.env for this process. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:41:57.551Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: keryx providers test <name> [--json] and keryx providers remove <name> [--yes] mirror the row buttons; remove refuses without confirmation on a terminal unless --yes; providers.disconnect.test.ts covers both CLI paths; providers list remains network-free (unchanged read path). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:42:07.164Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: docs/docs/cli-reference.md 'remove' row and docs/docs/onboarding.md state plainly: disconnect removes only keryx's LOCAL credential copy; OAuth grant deleted from auth.json with no vendor revoke call; an API key stays valid at the vendor until revoked there. providers test/remove documented; onboarding + /help describe buttons and keys. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:42:07.406Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: connect-provider-buttons.test.ts describe('AC10 — button/row colours come from the active theme') exercises two themes; colours come from themeColorToHex/resolveTheme. All new UI/CLI text reviewed as English. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:42:07.658Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: src/standard/help-groups.ts HELP_GROUPS includes 'providers'; src/cli.ts USAGE_BODY lists providers test/remove; src/cli-reference-coverage.test.ts and src/standard/help-groups.test.ts pass (32 pass / 0 fail combined) confirming coverage. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:42:07.885Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: gh pr view 673: state MERGED, headRefOid 5d203ec9925f83b60cb93441e09f0f01e871f882, mergeCommit e04715a20941f6d527a315be7bcce215670b9648. gh pr checks 673: 18 passed / 0 failed. keryx health run (run by the completion verifier, this session): PASS, score 94. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-23T20:42:12.620Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-23T20:42:20.193Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-23T20:42:24.343Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-23T20:42:24.344Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "baseBranch": "main",
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-09-23T20:41:46.271Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:41:46.515Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:41:46.767Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:41:47.051Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:41:56.777Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:41:57.026Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:41:57.302Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:41:57.550Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:42:07.164Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:42:07.406Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:42:07.658Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:42:07.884Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    },
+    {
+      "at": "2026-09-23T20:42:24.344Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03",
+      "headCommit": "e04715a20941f6d527a315be7bcce215670b9648"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-23T20:42:24.343Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "12 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e04715a20941f6d527a315be7bcce215670b9648 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "e04715a20941f6d527a315be7bcce215670b9648 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:e35e26c8f2eac3523682731ce95423710d62dcfe1e20a760171870e8fed79f03"
+    }
+  ],
+  "merged": {
+    "commit": "e04715a20941f6d527a315be7bcce215670b9648",
+    "ref": "origin/main",
+    "at": "2026-09-23T20:42:24.344Z"
+  }
+}
