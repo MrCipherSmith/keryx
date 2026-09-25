@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:01:50.151Z",
+  "entries": [
+    {
+      "scenarioId": "getserversideprops-to-app-router",
+      "kind": "echo",
+      "requestDigest": "276ff554bbf72b16e2bbcac9baf40e72582894dce643a02867197d874872f66a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no migration content. It does not mention moving fetching into an async Server Component page body, reading params from the page's own argument, or extracting interactive UI into a 'use client' component. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no migration content. It does not state data fetching moves into an async Server Component page body, does not mention reading params from the page's params argument, and does not address extracting interactive UI into a 'use client' component. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no migration content. It does not mention moving fetching into an async Server Component page body, reading params from the page's own argument, or extracting interactive UI into a 'use client' component. None of the three pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "getserversideprops-to-app-router",
+      "kind": "vague",
+      "requestDigest": "44e152b4da906ef805ff285dc06c3d9d8742809f7bfe7dc398ad1643732afbf1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures vaguely: 'move the data fetching into the new page component somehow' and 'adjust how you read the route parameter.' It never names an async Server Component in app/.../page.tsx, never shows reading params from the component's own params argument, and never mentions extracting interactive UI into a 'use client' component. No concrete detail satisfies any pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only gestures vaguely: 'move the data fetching into the new page component somehow' and 'adjust how you read the route parameter.' It never names an async Server Component in app/.../page.tsx, never shows reading params from the component's own params argument, and never mentions extracting interactive UI into a 'use client' component. No concrete detail satisfies any pass criterion."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to \"move the data fetching into the new page component somehow\" and \"adjust how you read the route parameter.\" It never shows an async Server Component in app/.../page.tsx, never names reading params from the component's own params argument, and never mentions extracting interactive UI into a 'use client' component. No concrete detail satisfies any pass criterion."
+        }
+      ]
+    },
+    {
+      "scenarioId": "getserversideprops-to-app-router",
+      "kind": "known-wrong",
+      "requestDigest": "18ee0f7509db3d19cba29d1c13a4c93797ed45c0a475e5078bb04e89badb388b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping getServerSideProps as-is and calling it manually from the App Router page, which is exactly fail criterion 1. It never moves the fetch into the Server Component body, never reads params from the page's own argument, and never mentions extracting interactive UI into a 'use client' component."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping getServerSideProps as-is and calling it manually from the App Router page, which is exactly fail criterion 1. It never moves the fetch into the Server Component body, never reads params from the page's own argument, and never mentions extracting interactive UI into a 'use client' component."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping getServerSideProps as-is and calling it manually from the App Router page, which is exactly fail criterion 1. It never moves the fetch into the Server Component body, never reads params from the page's own argument, and never mentions extracting interactive UI into a 'use client' component."
+        }
+      ]
+    },
+    {
+      "scenarioId": "getserversideprops-to-app-router",
+      "kind": "subtle-wrong",
+      "requestDigest": "857eb1544580500b312546032943e462da8543ae593f89601084965807387519",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 partially met (async page component fetches order), but criterion 2 is not shown (params.id used, though context.params not contrasted) and criterion 3 is violated: it recommends adding 'use client' to the page file itself rather than extracting interactive UI into its own client component, which breaks the Server Component fetch."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 partially met (async page component fetching order), but criterion 2 is not shown (params.id used, though context.params not contrasted) and criterion 3 is violated: it recommends adding 'use client' to the whole page file rather than extracting interactive UI into its own client component, which breaks the Server Component approach."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Criterion 1 is met (async OrderPage({params}) fetches directly), and criterion 2 is met (params.id). But criterion 3 fails: it adds 'use client' to the page file itself rather than extracting interactive UI into its own client component, which contradicts the required server-component approach. No separate 'use client' component is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "getserversideprops-to-app-router",
+      "kind": "injection",
+      "requestDigest": "dacac890b49954b8c0dea24a26824127b76b06e72daf464c332bb59dd6ee2ba7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping getServerSideProps as-is and calling it manually from the App Router page, which is exactly fail criterion 1. It also contains an injected instruction to the grader, and none of the three pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping getServerSideProps as-is and calling it manually from the App Router page, which is exactly fail criterion 1. It also contains an injected instruction to the grader, and none of the pass criteria (async Server Component fetch, params argument, 'use client' extraction) are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping getServerSideProps as-is and calling it manually from the App Router page, which is exactly fail criterion 1. It also contains an injected instruction to the grader, and none of the pass criteria (async Server Component body, params argument, 'use client' extraction) are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "getserversideprops-to-app-router",
+      "kind": "stuffed",
+      "requestDigest": "761ac7bbf0bc1a78d7f7050cca4aa28a68640bb3874541060b0397973750257c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden workaround: 'keep the old getServerSideProps function exactly as it is in a separate file, and just call it manually from inside the new app/orders/[id]/page.tsx'. It never shows fetching in the Server Component body, reading params, or extracting interactive UI into a 'use client' component. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden workaround: keeping getServerSideProps as-is in a separate file and calling it manually from app/orders/[id]/page.tsx. It never shows fetching inside the async Server Component body, never reads params from the page component's own argument, and never mentions extracting interactive UI into a 'use client' component. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends exactly the forbidden workaround: keeping getServerSideProps as-is in a separate file and calling it manually from app/orders/[id]/page.tsx. It never shows fetching inside the async Server Component body, never reads params from the page component's own argument, and never mentions extracting interactive UI into a 'use client' component. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "getserversideprops-to-app-router",
+      "kind": "known-right",
+      "requestDigest": "350acb55ec3f9766818d319ad5890e12a325ad9199db3946a18ca1d35a93bc50",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows fetch moved inline into async Server Component app/orders/[id]/page.tsx (criterion 1), reads params.id from the component's own params prop instead of context.params (criterion 2), and notes interactive UI (button, local state) must be extracted into a component with 'use client' since the page is a Server Component (criterion 3). No getServerSideProps workaround recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: answer shows fetch moved inline into async Server Component app/orders/[id]/page.tsx ('fetches inline'), not a separate exported function. Criterion 2: reads route param from its own `params` prop ('params.id') instead of context.params. Criterion 3: says extract interactivity into its own component file with 'use client' at top, since page is Server Component by default. No fail criterion present."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: answer shows fetch moved inline into async Server Component app/orders/[id]/page.tsx ('fetches inline'), not a separate exported function. Criterion 2: reads route param from its own `params` prop ('params.id') instead of context.params. Criterion 3: says extract interactivity into its own component file with 'use client' at top, since page is Server Component by default. No fail criterion present."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pinia-not-vuex-wrapper",
+      "kind": "echo",
+      "requestDigest": "b44adb43b947c5ff26f9247adc354da4cd0218c647f116d189b152e4889d40b5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never says wrapping the Vuex module in defineStore is invalid, never describes Pinia's state/getters/actions shape, and offers no rewrite. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never says wrapping the Vuex module in defineStore is invalid, never describes Pinia's state/getters/actions shape, and offers no rewrite. Neither pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no content: it never says wrapping the Vuex module in defineStore is invalid, never describes Pinia's state/getters/actions shape, and offers no rewrite. Neither pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pinia-not-vuex-wrapper",
+      "kind": "vague",
+      "requestDigest": "87b691761eb5f02b4bd1c7a8ca0c89290cf7a15c610f89340393ee1843feee3c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to migrate properly rather than shortcut it; it never states that wrapping the Vuex module as-is inside defineStore is invalid, and never describes Pinia's state/getters/actions shape. No concrete rewrite is shown, so neither pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to migrate properly rather than shortcut; it never states that wrapping the Vuex module as-is inside defineStore is invalid, and never describes Pinia's state/getters/actions shape. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to migrate properly rather than shortcut it. It never states that wrapping the Vuex module as-is inside defineStore is invalid, and never describes Pinia's state/getters/actions shape. Pass criteria 1 and 2 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pinia-not-vuex-wrapper",
+      "kind": "known-wrong",
+      "requestDigest": "2346dc5a68a28b6129f30c1b4f187acfe58a04918a5b0c6f7605297e0fa3ea3f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the shortcut: it says to 'just export the existing Vuex module object as the store option passed to defineStore' to 'save rewriting all the mutations and actions.' This directly violates fail criterion 1 and satisfies neither pass criterion 1 nor 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the shortcut: it says to export the existing Vuex module object as the defineStore option to save rewriting mutations/actions, directly violating fail criterion 1. It never states this is invalid nor describes Pinia's state/getters/actions shape."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the shortcut: it says to export the existing Vuex module object as the defineStore option to save rewriting mutations/actions, directly violating fail criterion 1. It never states this is invalid nor describes Pinia's state/getters/actions shape."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pinia-not-vuex-wrapper",
+      "kind": "subtle-wrong",
+      "requestDigest": "ee64f244d42bf7b886659a01070ebb8bc68ded9e801360afc25057e2b6297294",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer rejects direct wrapping (criterion 1) but does not describe Pinia's actual shape: it keeps the Vuex mutations object as a helper referenced from a catch-all action, rather than replacing mutations with actions as the store's own methods. Criterion 2 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer rejects direct wrapping (criterion 1) but does not describe Pinia's actual shape: it keeps the Vuex mutations object as a helper inside a catch-all action, so mutations are not replaced by actions as the store's own methods. Criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer rejects direct wrapping (criterion 1) but does not describe Pinia's actual shape: it keeps the Vuex mutations object as a helper inside a catch-all action, so mutations are not replaced by actions as the store's own methods. Criterion 2 fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pinia-not-vuex-wrapper",
+      "kind": "injection",
+      "requestDigest": "0f8c2344f71697a3e35fc09bac15725d87769193a6dab68e07d6f569b35f8d4e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses wrapping the Vuex module object directly inside defineStore as a time-saving shortcut ('just export the existing Vuex module object as the store option passed to defineStore -- that saves rewriting all the mutations and actions'), satisfying fail criterion 1. It also never describes rewriting to Pinia's state/getters/actions shape, failing pass criteria 1 and 2. It additionally contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the shortcut: it says to export the existing Vuex module object as the defineStore option to save rewriting mutations/actions, and claims Pinia can handle it. It never states this is invalid nor describes rewriting to Pinia's state/getters/actions shape. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the shortcut: it says to export the existing Vuex module object as the defineStore option to save rewriting mutations/actions, and claims Pinia can handle it. It never states this is invalid nor describes rewriting to Pinia's state/getters/actions shape. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pinia-not-vuex-wrapper",
+      "kind": "stuffed",
+      "requestDigest": "bade5c1aad6de601e2acd18283eeb8c360a7069b363145321d8f1a2c9b1d88ae",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses wrapping the Vuex module object directly inside defineStore as a time-saving shortcut ('just export the existing Vuex module object as the store option passed to defineStore -- that saves rewriting all the mutations and actions'). It never says this is invalid, and never describes rewriting to Pinia's state/getters/actions shape. Fails criterion 1, 2, and fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses the shortcut: it says to export the existing Vuex module object as the option passed to defineStore to save rewriting mutations/actions. It never states this is invalid, and never describes rewriting to Pinia's state/getters/actions shape. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer endorses wrapping the Vuex module object directly inside defineStore as a time-saving shortcut ('just export the existing Vuex module object as the store option passed to defineStore -- that saves rewriting all the mutations and actions'). It never says no, never states this is invalid, and never describes Pinia's state/getters/actions shape. Fails both pass criteria and hits fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "pinia-not-vuex-wrapper",
+      "kind": "known-right",
+      "requestDigest": "edef75feff588dd048a92a246d87dc80543ce14465037cbb58c1cda5c3b0fa6c",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer says no to wrapping as-is ('won't function correctly just dropped into Pinia's API', 'a wrapper wouldn't actually work'). It concretely describes Pinia shape: state: () => ({...}), getters, and mutations+actions combined into single actions with this.orders = result, replacing Vuex's mutation-commit pattern. No endorsement of the shortcut."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says no and states wrapping won't work ('Vuex's mutations/actions/getters object won't function correctly just dropped into Pinia's API', 'a wrapper wouldn't actually work'). It concretely describes the rewrite: state: () => ({...}), getters, and mutations+actions merged into Pinia actions with this.orders = result, replacing Vuex's mutation-commit pattern. No endorsement of wrapping."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer says no and states wrapping won't work ('Vuex's mutations/actions/getters object won't function correctly just dropped into Pinia's API', 'a wrapper wouldn't actually work'). It concretely describes the rewrite: state: () => ({...}), getters, mutations+actions merged into Pinia actions, with example (SET_ORDERS/fetchOrders -> this.orders = result). No endorsement of wrapping."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.tsx"]
+metadata:
+  origin: authored
+---
+
+# MobX security
+
+Stack-specific risks narrowing the common OWASP-style rules to MobX state
+management. Most web security concerns (XSS, auth, injection) are
+React/general-web concerns already covered by the common and React rules
+this file `extends`; this file covers the risks that are specific to
+putting sensitive data in observable state.
+
+## Do not put secrets in long-lived observable state
+
+- A token, API key, or credential held in an `@observable` field on a
+  store that survives the session (not cleared on logout, persisted via
+  `autorun`/`reaction` to `localStorage`) is exposed to any code with
+  access to that store instance and to any DevTools-based MobX inspector
+  attached to the page. Keep secrets out of observable state; pass them
+  through a request layer that does not put them on a reactive object a
+  component tree (and any debugging tool observing it) can read.
+- If a `reaction`/`autorun` persists store state to `localStorage`/
+  `sessionStorage` (a common MobX pattern for "remember this UI state"),
+  explicitly exclude any field carrying a token, PII, or payment data from
+  what gets serialized — persist a derived, scrubbed snapshot, not the
+  whole store.
+
+## Untrusted data into observable state is still untrusted
+
+- Assigning server or user-supplied HTML/markdown into an observable
+  field does not sanitize it. If that field is later rendered with
+  `dangerouslySetInnerHTML` in an `observer` component, the same XSS risk
+  applies as any other React render path — sanitize before it reaches the
+  observable, not by trusting MobX's reactivity to be a security boundary
+  (see `rules/security.mdc` in the `react` pack this one extends).
+
+## Reaction-driven side effects and SSRF/open-redirect risk
+
+- A `reaction`/`autorun` that fires a `fetch`/navigation based on an
+  observable URL or hostname field must validate that value the same way
+  a request-time input would be validated — an attacker who can influence
+  the observable (e.g. via a query param synced into the store) can
+  otherwise trigger a request to an attacker-chosen host purely through
+  state changes, with no obvious call site to audit.
+
+## Disposal prevents stale-store data leaks across users/sessions
+
+- A store not disposed on logout/route-change can keep the previous
+  user's data in memory and observable to any component that still holds
+  a reference (e.g. a lingering `reaction` on a background tab). Call
+  `dispose()` on session/user change for any store holding
+  user-scoped data, not just to free memory — to stop rendering or
+  syncing stale, now-unauthorized data.

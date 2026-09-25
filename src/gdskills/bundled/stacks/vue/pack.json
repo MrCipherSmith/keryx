@@ -1,0 +1,42 @@
+{
+  "id": "vue",
+  "family": "framework",
+  "extends": "ts-js-node",
+  "modules": ["vue-rules", "vue-skills"],
+  "detectionMarkers": ["vue"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 318, Wave 4 batch 2"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["vue-implementation"],
+    "test": ["vue-testing"],
+    "review": ["vue-code-review"],
+    "build-fix": ["vue-build-fix"],
+    "migrate": ["vue2-to-vue3-migration"]
+  },
+  "agentProfile": {
+    "displayName": "Vue",
+    "auditFocus": [
+      "reactivity lost by destructuring a reactive()/props object instead of using refs, toRefs, or (Vue 3.5+) defineProps destructuring",
+      "a watch/watchEffect with a missing or wrong dependency, or one left running past the component's lifecycle with no cleanup",
+      "props or emitted events with no type-based defineProps<T>()/defineEmits<T>() declaration, or a mutated prop instead of emitting a change",
+      "v-html rendering unsanitized or user-controlled content",
+      "a Pinia store action mutating another store's state directly instead of calling its own actions, or state read outside a component/setup reactivity scope",
+      "a v-for list with no stable :key, or :key bound to the array index where the list can reorder"
+    ],
+    "buildCommands": [
+      "the project's type-check script (vue-tsc --noEmit or its package.json equivalent)",
+      "the project's lint script (eslint with eslint-plugin-vue enabled)",
+      "the project's test script (Vitest run of Vue Test Utils suites)",
+      "the project's build (vite build, or the framework's own production build)"
+    ],
+    "fixGuardrails": [
+      "never disable or downgrade an eslint-plugin-vue rule to silence a warning",
+      "never cast a component's props, emits, or template expression to any to satisfy vue-tsc",
+      "never delete or loosen a failing assertion in a Vue Test Utils test to make it pass",
+      "never mutate a prop in place as a build-fix instead of emitting an update event"
+    ]
+  }
+}

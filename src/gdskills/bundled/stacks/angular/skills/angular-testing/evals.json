@@ -1,0 +1,71 @@
+{
+  "triggers": {
+    "positive": [
+      "This Angular component reads its data through a signal input — what's the right TestBed setup to cover it with tests?",
+      "This Angular service fires off a couple of HTTP requests — how do I mock them out with HttpTestingController for a proper spec?",
+      "I need a fakeAsync TestBed spec for this Angular component that proves its debounced search waits the full delay before calling the service — how do I structure the tick() calls?",
+      "Test this standalone Angular component's OnPush rendering when the input changes",
+      "In a TestBed spec for this component, what's the right way to swap out its injected OrdersService for a mock/fake?",
+      "What's the best way to unit test whether this route guard's CanActivate correctly blocks a logged-out user, in Angular?"
+    ],
+    "negative": [
+      "Write Vitest component tests for this Vue component using Vue Test Utils",
+      "Write React Testing Library tests for this component's rendered list",
+      "Implement a new standalone Angular component that shows order history",
+      "Fix this ng build AOT compile error about a missing provider",
+      "Write a Playwright e2e test for the login flow in our Angular app",
+      "Write unit tests for this Go struct's JSON marshaling using the standard testing package"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "setinput-not-direct-assignment",
+      "prompt": "I'm writing a TestBed spec for a standalone Angular component that has a signal input declared as `order = input.required<Order>();`. In the test, should I just set `component.order = someMockOrder` before calling detectChanges?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that a signal input must be set through fixture.componentRef.setInput('order', mockOrder), not by directly assigning the component instance's field, because direct assignment bypasses Angular's actual input-binding mechanism and would not reflect what a real caller's template binding does; it should also call fixture.detectChanges() afterward before asserting on the DOM.",
+          "pass_criteria": [
+            "States directly that assigning `component.order = mockOrder` does not go through Angular's real input-binding path and should not be used",
+            "Shows the correct call: `fixture.componentRef.setInput('order', mockOrder)` before `fixture.detectChanges()`"
+          ],
+          "fail_criteria": [
+            "Recommends direct field assignment (`component.order = mockOrder`) as a working way to set the input for the test"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- don't assign `component.order` directly. That field is a signal created by `input.required<Order>()`, and assigning over it doesn't go through Angular's input-binding machinery the way a real caller's template binding would; it also just overwrites the signal reference rather than setting its value through the framework. Use the fixture's binding API instead:\n\nfixture.componentRef.setInput('order', mockOrder);\nfixture.detectChanges();\n\nThat's the same mechanism a real parent template's `[order]=\"someOrder\"` binding goes through, so the test exercises the actual input path, and `detectChanges()` after it makes sure the template re-renders before you assert on the DOM.",
+        "known_wrong": "Sure, that's fine -- just do `component.order = someMockOrder;` then `fixture.detectChanges();`. It's the simplest way to get a value into the component for the test and detectChanges() will pick it up either way.",
+        "vague": "You shouldn't set inputs directly on the component instance in a test -- use the fixture's proper way of setting inputs instead so it behaves like a real binding.",
+        "subtle_wrong": "I'd avoid touching `component.order` directly, so instead I re-declared the field in the test by doing `(component as any).order = signal(mockOrder);`, replacing the whole input signal with a new one I control, then called `fixture.detectChanges()`. This keeps the test off the plain-assignment anti-pattern since it's still a signal, just one I constructed myself instead of going through Angular's binding."
+      },
+      "anti_patterns": ["component.order ="]
+    },
+    {
+      "id": "http-testing-controller-verify",
+      "prompt": "I'm testing an Angular service method that calls HttpClient.get() and returns the parsed response. I've set up HttpTestingController and flushed a mock response, and the assertion on the returned value passes. Is that test complete?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer says the test is not complete until httpTestingController.verify() is called (directly or in an afterEach), because expectOne/flush alone confirm the expected request happened but do not catch an unexpected additional HTTP request the code under test might also be making.",
+          "pass_criteria": [
+            "States that httpTestingController.verify() must be called (e.g. in afterEach or at the end of the test) to catch any unexpected outstanding/extra request",
+            "Explains that verify() checks for requests beyond the one already asserted with expectOne, not just re-checking the one that was flushed"
+          ],
+          "fail_criteria": [
+            "Says the test is already complete once the flushed response's assertion passes, with no mention of verify()"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Not quite -- asserting on the flushed response only proves the one request you called expectOne on returned what you expected. It doesn't catch a bug where the method under test also fires a second, unexpected HTTP call (a duplicated request, a stray retry). Add httpTestingController.verify() -- typically in an afterEach so every test in the file is covered -- which fails the test if there's any outstanding or unmatched request left over. That's the check that actually proves the method made exactly the request you expected and nothing else.",
+        "known_wrong": "Yes, that's complete -- you flushed the mock response and the assertion on the parsed value passed, so the HTTP call and the parsing logic are both verified. No need to add anything else.",
+        "vague": "Not fully -- there's usually one more step with HttpTestingController to make sure everything about the request is properly checked before calling it done.",
+        "subtle_wrong": "Close, but I'd also add a second `httpMock.expectOne(url)` call right after the first flush just to double-check the same request is still tracked correctly, then flush it again with the same mock response. That extra check makes sure the request handling is solid without needing a separate verify() step in afterEach."
+      }
+    }
+  ]
+}

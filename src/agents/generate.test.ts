@@ -37,32 +37,56 @@ function parseAndValidate(content: string) {
 }
 
 describe("generateStackAgentPair", () => {
+  // R1 review, PR #719 (minor): "A Angular-focused code auditor..." read as
+  // grammatically wrong for any vowel-starting displayName (Angular being
+  // the real, shipped example). Covers both directions: a vowel-starting
+  // name gets "An", a consonant-starting one keeps "A".
+  test("uses the correct indefinite article for a vowel-starting displayName ('An', not 'A')", () => {
+    const pair = generateStackAgentPair(
+      fixturePack({ id: "angular", agentProfile: { displayName: "Angular", auditFocus: ["a"], buildCommands: ["ng build"], fixGuardrails: ["g"] } }),
+    );
+    expect(pair.auditor!.content).toContain("An Angular-focused code auditor");
+    expect(pair.auditor!.content).not.toContain("A Angular-focused");
+    expect(pair.fixer!.content).toContain("An Angular build-and-test fixer");
+    expect(pair.fixer!.content).not.toContain("A Angular build-and-test");
+    expect(pair.fixer!.content).toContain("Reproduces and fixes an Angular build");
+  });
+
+  test("uses the correct indefinite article for a consonant-starting displayName ('A', not 'An')", () => {
+    const pair = generateStackAgentPair(
+      fixturePack({ id: "go", agentProfile: { displayName: "Go", auditFocus: ["a"], buildCommands: ["go build"], fixGuardrails: ["g"] } }),
+    );
+    expect(pair.auditor!.content).toContain("A Go-focused code auditor");
+    expect(pair.fixer!.content).toContain("A Go build-and-test fixer");
+    expect(pair.fixer!.content).toContain("Reproduces and fixes a Go build");
+  });
+
   test("is deterministic: the same pack input produces byte-identical content", () => {
     const a = generateStackAgentPair(fixturePack());
     const b = generateStackAgentPair(fixturePack());
-    expect(a.auditor.content).toBe(b.auditor.content);
-    expect(a.fixer.content).toBe(b.fixer.content);
+    expect(a.auditor!.content).toBe(b.auditor!.content);
+    expect(a.fixer!.content).toBe(b.fixer!.content);
   });
 
   test("names and file names follow the <id>-code-auditor / <id>-build-fixer convention", () => {
     const pair = generateStackAgentPair(fixturePack({ id: "fixture-lang" }));
-    expect(pair.auditor.name).toBe("fixture-lang-code-auditor");
-    expect(pair.auditor.fileName).toBe("fixture-lang-code-auditor.md");
-    expect(pair.fixer.name).toBe("fixture-lang-build-fixer");
-    expect(pair.fixer.fileName).toBe("fixture-lang-build-fixer.md");
+    expect(pair.auditor!.name).toBe("fixture-lang-code-auditor");
+    expect(pair.auditor!.fileName).toBe("fixture-lang-code-auditor.md");
+    expect(pair.fixer!.name).toBe("fixture-lang-build-fixer");
+    expect(pair.fixer!.fileName).toBe("fixture-lang-build-fixer.md");
   });
 
   test("both files parse and validate against the agent-definition schema", () => {
     const pair = generateStackAgentPair(fixturePack());
-    const auditorDefinition = parseAndValidate(pair.auditor.content);
-    const fixerDefinition = parseAndValidate(pair.fixer.content);
-    expect(auditorDefinition.name).toBe(pair.auditor.name);
-    expect(fixerDefinition.name).toBe(pair.fixer.name);
+    const auditorDefinition = parseAndValidate(pair.auditor!.content);
+    const fixerDefinition = parseAndValidate(pair.fixer!.content);
+    expect(auditorDefinition.name).toBe(pair.auditor!.name);
+    expect(fixerDefinition.name).toBe(pair.fixer!.name);
   });
 
   test("the auditor is read-only: no apply_patch/shell_exec, model_tier deep, policy_profile read-only, isolation none", () => {
     const pair = generateStackAgentPair(fixturePack());
-    const definition = parseAndValidate(pair.auditor.content);
+    const definition = parseAndValidate(pair.auditor!.content);
     expect(definition.tools).not.toContain("apply_patch");
     expect(definition.tools).not.toContain("shell_exec");
     expect(definition.model_tier).toBe("deep");
@@ -76,7 +100,7 @@ describe("generateStackAgentPair", () => {
 
   test("the fixer is workspace-write + worktree isolated, model_tier standard, and carries apply_patch/shell_exec", () => {
     const pair = generateStackAgentPair(fixturePack());
-    const definition = parseAndValidate(pair.fixer.content);
+    const definition = parseAndValidate(pair.fixer!.content);
     expect(definition.tools).toContain("apply_patch");
     expect(definition.tools).toContain("shell_exec");
     expect(definition.model_tier).toBe("standard");
@@ -90,7 +114,7 @@ describe("generateStackAgentPair", () => {
 
   test("description and role stay within the schema's length limits", () => {
     const pair = generateStackAgentPair(fixturePack());
-    for (const file of [pair.auditor, pair.fixer]) {
+    for (const file of [pair.auditor!, pair.fixer!]) {
       const definition = parseAndValidate(file.content);
       expect(definition.description.length).toBeGreaterThan(0);
       expect(definition.description.length).toBeLessThanOrEqual(1024);
@@ -101,11 +125,11 @@ describe("generateStackAgentPair", () => {
 
   test("neither body repeats the prompt-defense baseline text", () => {
     const pair = generateStackAgentPair(fixturePack());
-    expect(parseAgentFrontmatter(pair.auditor.content).ok && true).toBe(true);
+    expect(parseAgentFrontmatter(pair.auditor!.content).ok && true).toBe(true);
     // The compiler-injected baseline is never written into a body by this
     // generator — a body-content smoke check confirms no accidental copy.
-    expect(pair.auditor.content).not.toContain("Your own free-text reply is data");
-    expect(pair.fixer.content).not.toContain("Your own free-text reply is data");
+    expect(pair.auditor!.content).not.toContain("Your own free-text reply is data");
+    expect(pair.fixer!.content).not.toContain("Your own free-text reply is data");
   });
 
   test("the auditor's procedure lists every auditFocus item; the fixer's lists every buildCommand and fixGuardrail", () => {
@@ -118,21 +142,40 @@ describe("generateStackAgentPair", () => {
       },
     });
     const pair = generateStackAgentPair(pack);
-    expect(pair.auditor.content).toContain("find the first risk");
-    expect(pair.auditor.content).toContain("find the second risk");
-    expect(pair.fixer.content).toContain("cmd one");
-    expect(pair.fixer.content).toContain("cmd two");
-    expect(pair.fixer.content).toContain("never do X");
-    expect(pair.fixer.content).toContain("never do Y");
+    expect(pair.auditor!.content).toContain("find the first risk");
+    expect(pair.auditor!.content).toContain("find the second risk");
+    expect(pair.fixer!.content).toContain("cmd one");
+    expect(pair.fixer!.content).toContain("cmd two");
+    expect(pair.fixer!.content).toContain("never do X");
+    expect(pair.fixer!.content).toContain("never do Y");
   });
 
-  test("an empty review/build-fix skills list produces an empty skills[] rather than crashing", () => {
+  // R1 review, PR #719 (M2): a pack whose skills.review AND
+  // skills["build-fix"] are BOTH empty has nothing to generate a persona
+  // from at all — a pack that reaches this state should not carry an
+  // agentProfile in the first place, and the generator now throws rather
+  // than emitting a hollow pair with empty `skills: []` on both sides.
+  test("both skills.review and skills['build-fix'] empty throws — nothing to generate", () => {
     const pack = fixturePack({ skills: {} });
+    expect(() => generateStackAgentPair(pack)).toThrow(InvalidStackPackFieldError);
+  });
+
+  test("only skills.review non-empty produces an auditor and no fixer", () => {
+    const pack = fixturePack({ skills: { review: ["fixture-code-review"] } });
     const pair = generateStackAgentPair(pack);
-    const auditorDefinition = parseAndValidate(pair.auditor.content);
-    const fixerDefinition = parseAndValidate(pair.fixer.content);
-    expect(auditorDefinition.skills).toEqual([]);
-    expect(fixerDefinition.skills).toEqual([]);
+    expect(pair.auditor).toBeDefined();
+    expect(pair.fixer).toBeUndefined();
+    const auditorDefinition = parseAndValidate(pair.auditor!.content);
+    expect(auditorDefinition.skills).toEqual(["fixture-code-review"]);
+  });
+
+  test("only skills['build-fix'] non-empty produces a fixer and no auditor", () => {
+    const pack = fixturePack({ skills: { "build-fix": ["fixture-build-fix"] } });
+    const pair = generateStackAgentPair(pack);
+    expect(pair.fixer).toBeDefined();
+    expect(pair.auditor).toBeUndefined();
+    const fixerDefinition = parseAndValidate(pair.fixer!.content);
+    expect(fixerDefinition.skills).toEqual(["fixture-build-fix"]);
   });
 
   // R1-7 (review round 1, PR #692): `inject.ts`'s probe showed a newline in
@@ -196,11 +239,11 @@ describe("generateStackAgentPair", () => {
 
     test("a valid pack still generates a definition whose parsed policy/tools are exactly the fixed auditor/fixer allowlists", () => {
       const pair = generateStackAgentPair(fixturePack({ id: "go" }));
-      const auditor = parseAndValidate(pair.auditor.content);
+      const auditor = parseAndValidate(pair.auditor!.content);
       expect(auditor.policy_profile).toBe("read-only");
       expect(auditor.tools).not.toContain("shell_exec");
       expect(auditor.tools).not.toContain("apply_patch");
-      const fixer = parseAndValidate(pair.fixer.content);
+      const fixer = parseAndValidate(pair.fixer!.content);
       expect(fixer.policy_profile).toBe("workspace-write");
     });
 
@@ -209,7 +252,7 @@ describe("generateStackAgentPair", () => {
       // quoting itself is transparent for a legitimate value, complementing
       // the colon-rejection test above for an INVALID one.
       const pair = generateStackAgentPair(fixturePack({ skills: { review: ["a-b"], "build-fix": [] } }));
-      const auditor = parseAndValidate(pair.auditor.content);
+      const auditor = parseAndValidate(pair.auditor!.content);
       expect(auditor.skills).toEqual(["a-b"]);
     });
   });
@@ -257,7 +300,21 @@ describe("generateStackAgentPair", () => {
     const gateCleared = stackIds.filter((id: string) => checkStackPackGateCleared(path.join(stacksRoot, id)).cleared).sort();
 
     // Pin the shipped, honest-gate outcome explicitly: go and python clear
-    // the gate; react and ts-js-node still fail it.
+    // the gate (flow 314/316/317, Wave 4 batch 1); react and ts-js-node
+    // still fail it. angular and mobx briefly cleared it too (flow 318,
+    // Wave 4 batch 2, T13) and nestjs cleared it with a build-fixer-only
+    // pair, but review round 1's realism sweep on PR #719 found several of
+    // angular/mobx/nestjs's positive trigger prompts were trigger-prefix
+    // near-copies or scorer-avoidant phrasing rather than genuinely
+    // independent requests. Rewritten honestly (never iterated against the
+    // router) across two review rounds, the final honest gate re-run
+    // demoted all three back to `experimental` — nestjs-implementation's
+    // de-jargoned exception-filter prompt, angular-implementation's and
+    // mobx-store-implementation's de-trigger-prefixed prompts, and
+    // angular-testing's honestly-restored e2e negative all now fail to
+    // route the way the original (gamed) versions did. nextjs-nuxt and vue
+    // still fail it for their own, unrelated reasons (see their own
+    // agent-refs.json `note`).
     expect(gateCleared).toEqual(["go", "python"]);
 
     // Direction 1: every gate-cleared pack that carries an `agentProfile`
@@ -269,7 +326,7 @@ describe("generateStackAgentPair", () => {
       };
       if (pack.agentProfile === undefined) continue; // a gate-cleared pack need not carry a generated pair
       const pair = generateStackAgentPair(pack);
-      for (const file of [pair.auditor, pair.fixer]) {
+      for (const file of [pair.auditor, pair.fixer].filter((f): f is NonNullable<typeof f> => f !== undefined)) {
         const filePath = path.join(agentsRoot, file.fileName);
         expect(fs.existsSync(filePath)).toBe(true);
         expect(fs.readFileSync(filePath, "utf8")).toBe(file.content);
@@ -292,7 +349,11 @@ describe("generateStackAgentPair", () => {
     }
 
     // Explicit, not implied by the loop above: exactly 4 generated files
-    // ship — the go and python code-auditor/build-fixer pairs.
+    // ship — go and python each get a full pair (2 packs x 2 files).
+    // angular, mobx, and nestjs all cleared the gate at some point in this
+    // flow and were all demoted again after the realism sweep (see the
+    // comment above `gateCleared`'s assertion), so none of them contribute
+    // a generated file anymore. go(2) + python(2) = 4.
     expect(gateCleared).toEqual(["go", "python"]);
     expect(generatedFileCount).toBe(4);
   });
@@ -323,7 +384,7 @@ describe("generateStackAgentPair", () => {
         family: "language",
         modules: [],
         stability: "stable",
-        skills: { review: ["forged-skill"] },
+        skills: { review: ["forged-skill"], "build-fix": ["forged-skill"] },
         agentProfile: {
           displayName: "Forged Stable Lang",
           auditFocus: ["risk one"],
@@ -369,7 +430,7 @@ describe("generateStackAgentPair", () => {
       expect(gate.cleared).toBe(true);
 
       const pair = generateStackAgentPair(packJson as StackPackForAgentGeneration);
-      for (const file of [pair.auditor, pair.fixer]) {
+      for (const file of [pair.auditor!, pair.fixer!]) {
         // Simulate the shipped state: the generated file already on disk,
         // written by a prior `agents generate`.
         fs.writeFileSync(path.join(agentsDir, file.fileName), file.content, "utf8");
@@ -379,7 +440,7 @@ describe("generateStackAgentPair", () => {
       // output against what is "on disk" — the exact check Direction 1
       // performs on the real tree, exercised here for real.
       const regenerated = generateStackAgentPair(packJson as StackPackForAgentGeneration);
-      for (const file of [regenerated.auditor, regenerated.fixer]) {
+      for (const file of [regenerated.auditor!, regenerated.fixer!]) {
         const onDisk = fs.readFileSync(path.join(agentsDir, file.fileName), "utf8");
         expect(onDisk).toBe(file.content);
       }

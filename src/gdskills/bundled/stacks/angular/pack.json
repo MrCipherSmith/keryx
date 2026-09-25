@@ -1,0 +1,55 @@
+{
+  "id": "angular",
+  "family": "framework",
+  "extends": "ts-js-node",
+  "modules": [
+    "angular-rules",
+    "angular-skills"
+  ],
+  "detectionMarkers": [
+    "angular"
+  ],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 318, Wave 4 batch 2"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": [
+      "angular-implementation"
+    ],
+    "test": [
+      "angular-testing"
+    ],
+    "review": [
+      "angular-code-review"
+    ],
+    "build-fix": [
+      "angular-build-fix"
+    ],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Angular",
+    "auditFocus": [
+      "an RxJS subscription created in a component/directive with no takeUntilDestroyed, async pipe, or explicit ngOnDestroy teardown",
+      "a component still using ChangeDetectionStrategy.Default with heavy template bindings where OnPush plus signals would isolate re-renders",
+      "a service or dependency reached through constructor-parameter injection mixed inconsistently with inject() in the same file, or inject() called outside an injection context",
+      "a template still using *ngIf/*ngFor/*ngSwitch in a component whose codebase has otherwise migrated to @if/@for/@switch control flow",
+      "a NgModule-based component/directive/pipe added to a codebase where the rest of the app is standalone",
+      "state mutated directly on a class field instead of through a signal's set/update, or a computed signal with a side effect inside its computation"
+    ],
+    "buildCommands": [
+      "ng build (or the project's package.json build script wrapping the Angular CLI)",
+      "ng test (or the project's configured Karma/Jest runner) for unit tests",
+      "npx tsc --noEmit for standalone type-checking outside the Angular compiler",
+      "ng lint (or the project's configured eslint-angular script)"
+    ],
+    "fixGuardrails": [
+      "never add `standalone: false` or reintroduce an NgModule just to route around a compiler/DI error in an otherwise-standalone codebase",
+      "never disable Angular's strict template type checking (`strictTemplates`, `fullTemplateTypeCheck`) in tsconfig to silence a template type error",
+      "never swallow an RxJS subscription error with an empty `error: () => {}` handler to stop a console error from failing a build check",
+      "never delete or skip a failing TestBed spec to reach a green test run"
+    ]
+  }
+}

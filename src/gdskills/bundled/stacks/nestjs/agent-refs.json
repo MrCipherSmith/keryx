@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "Demoted from stable (R1 review, PR #719, final honest gate re-run after fixing review findings): nestjs-implementation's trigger-positive-5 (the exception-filter prompt) no longer routes correctly (TP 6/7) once its positive was reworded away from naming the internal APP_FILTER token to describe the goal/symptom only -- an honest, accepted regression per the review's own instruction not to re-stuff the prompt to force a pass. nestjs-testing and nestjs-build-fix both still pass cleanly; nestjs-implementation alone fails the pack. No generated agent pair; the earlier nestjs-build-fixer.md is removed."
+}

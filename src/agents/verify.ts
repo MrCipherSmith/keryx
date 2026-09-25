@@ -625,14 +625,16 @@ function verifyOne(
                 });
               }
               if (pair !== undefined) {
-                const expected = [pair.auditor, pair.fixer].find((file) => file.name === definition.name);
+                const generated = [pair.auditor, pair.fixer].filter((file): file is NonNullable<typeof file> => file !== undefined);
+                const expected = generated.find((file) => file.name === definition.name);
                 if (expected === undefined) {
+                  const names = generated.map((file) => file.name).join("\"/\"");
                   problems.push({
                     reason: "generated-source-mismatch",
                     detail:
-                      `bundled agent "${definition.name}" does not match either generated name ` +
-                      `("${pair.auditor.name}"/"${pair.fixer.name}") that "keryx agents generate --stack ${origin.sourceRef}" ` +
-                      `would produce from its current pack.json`,
+                      `bundled agent "${definition.name}" does not match any generated name ` +
+                      `(${names.length > 0 ? `"${names}"` : "none — its pack.json no longer generates anything"}) that ` +
+                      `"keryx agents generate --stack ${origin.sourceRef}" would produce from its current pack.json`,
                   });
                 } else if (expected.content !== loaded.raw) {
                   problems.push({

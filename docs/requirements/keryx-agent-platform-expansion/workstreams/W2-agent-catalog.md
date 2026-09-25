@@ -1,5 +1,57 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.8
+Version: 0.1.11
+
+**Changelog (0.1.11, flow 318, review round 2 on PR #719):** corrects the
+0.1.10 line below, which recorded review round 1's outcome — superseded by
+review round 2's own realism-sweep findings (N-M1). `angular` briefly
+cleared the gate with a full generated pair, but review round 2 found its
+positive trigger prompts (and mobx's) still had trigger-prefix/synonym-swap
+gaming the round 1 sweep missed. Rewritten honestly and not iterated
+against the router; the honest re-run demotes `angular` back to
+`stability: experimental` (its pair removed) alongside `mobx`, which was
+already pair-less by design (M1) but now also drops from `stable` on its
+own skills. Real, on-disk generated coverage as of this flow: `go`,
+`python` (2 packs, 4 files); `angular`, `mobx`, `nestjs`, `ts-js-node`,
+`react`, `nextjs-nuxt`, `vue` are all `experimental` with none.
+
+**Changelog (0.1.10, flow 318, review round 1 on PR #719 — superseded by
+0.1.11 above):** corrects the
+0.1.9 line below, which recorded flow 318's FIRST honest gate run (T13) —
+superseded by the review fix pass. `mobx` never ships a generated pair
+(the pack.json `agentProfile` review round 1 found was a silent reversal
+of the original design decision is removed; M1). `nestjs` cleared T13's
+gate and briefly shipped `nestjs-build-fixer` (a build-fixer-only pair
+after M2 stopped generating a dangling `nestjs-code-auditor`), but the
+review's I11 fix removed a trigger prompt's internal-token stuffing
+(`APP_FILTER`), and the honestly-reworded prompt no longer routes — the
+final honest gate re-run demotes `nestjs` back to `stability: experimental`
+with no pair at all. `angular` is unaffected and still clears cleanly.
+Real, on-disk generated coverage as of this flow: `go`, `python`, `angular`
+(3 packs, 6 files); `mobx` is `stable` with none by design; `ts-js-node`,
+`react`, `nestjs`, `nextjs-nuxt`, `vue` are all `experimental` with none.
+
+**Changelog (0.1.9, flow 318, Wave 4 batch 2, T13 — superseded by 0.1.10
+above):** two updates on top of the
+0.1.8 state below, which this document had not caught up to. First, a
+correction: flow 317 (`W1-stack-catalog.md`, "Implementation notes: flow 317
+(grader follow-ups)") re-ran the honest gate at `PACK_MIN_TRIALS=10` and
+changed batch 1's outcome again — `python` and `go` now clear the gate and
+ship generated pairs; `ts-js-node` was DEMOTED back to `stability:
+experimental` (its pair removed) after `no-ts-ignore-suppression` fell to
+6/10 at the higher trial count; `react` stayed `experimental`, unchanged.
+This document's 0.1.8 changelog line still describes the pre-317 state and
+was never updated — noted here rather than silently rewritten, since the
+actual on-disk state (verifiable via `keryx agents verify` /
+`src/agents/verify.test.ts`) is the source of truth either way. Second, this
+flow's own batch: `nestjs`, `angular`, and `mobx` (Wave 4 batch 2's honest
+DeepSeek `deepseek-chat` runner+judge gate, `--strictness high --trials 10
+--scope bundled`) each clear `checkStablePackGate` on every skill and now
+ship generated `<stack>-code-auditor`/`<stack>-build-fixer` pairs;
+`nextjs-nuxt` and `vue` fail it (see `W1-stack-catalog.md`, "Implementation
+notes: Wave 4 batch 2 (flow 318)" for the per-skill breakdown) and stay
+`stability: experimental` with no generated pair. Real, on-disk generated
+coverage as of this flow: `go`, `python`, `nestjs`, `angular`, `mobx` (5
+packs, 10 files); `ts-js-node`, `react`, `nextjs-nuxt`, `vue` have none.
 
 **Changelog (0.1.8, flow 316 fix attempt 1 / T25):** review round 1 (R1-4)
 found the live judge lenient on vague one-line answers; fix 1 hardened the

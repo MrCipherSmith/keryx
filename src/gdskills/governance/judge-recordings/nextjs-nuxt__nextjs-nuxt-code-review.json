@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:00:24.567Z",
+  "entries": [
+    {
+      "scenarioId": "flag-missing-server-action-auth",
+      "kind": "echo",
+      "requestDigest": "12abdf05aea13de8ff3710bee2d5637c13e086420ce3d2d63bfa62f7fd19d977",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no review content. It does not flag the missing auth check, does not explain Server Actions are directly callable, and does not name the fix (authenticated caller authorized for this specific order). No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and gives no review content. It never flags the missing auth check, never states Server Actions are directly callable, and never names verifying the caller is authenticated/authorized for that specific order. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and provides no review content. It does not flag the missing auth check, does not explain Server Actions are directly reachable, and does not name the fix (authenticated caller authorized for this specific order). No pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-missing-server-action-auth",
+      "kind": "vague",
+      "requestDigest": "fc6f77897b2b87083b185abbdef1cad1d6e833c1064932d0a6eab1cc30d469ff",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says it 'should probably have some kind of permission check.' It never states the finding as missing auth/authorization (criterion 1), never explains Server Actions are directly callable regardless of UI (criterion 2), and never names verifying the caller is authenticated and authorized for this specific order (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says it 'should probably have some kind of permission check' — it never states the missing auth check as the finding, never explains that a Server Action is a directly reachable endpoint callable regardless of UI, and never names verifying the caller is authenticated and authorized for this specific order."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says it 'should probably have some kind of permission check' — it never states the missing auth check as the finding, never explains that a Server Action is a directly reachable endpoint callable regardless of UI, and never names verifying the caller is authenticated and authorized for this specific order."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-missing-server-action-auth",
+      "kind": "known-wrong",
+      "requestDigest": "7c94485efb3e4515f656db6c5f9f4b59d6151669a5566c7315849a09b4805455",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine because the calling UI already checks permissions, which is exactly fail criterion 1. It never flags the missing auth check, never notes Server Actions are directly reachable, and never names verifying caller identity/authorization for the specific order."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine because the calling UI already checks permissions, which is exactly fail criterion 1. It never flags the missing auth check, never states Server Actions are directly reachable, and names no fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine because the calling UI already checks permissions, which is exactly fail criterion 1. It never flags the missing auth check, never states Server Actions are directly reachable, and names no fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-missing-server-action-auth",
+      "kind": "subtle-wrong",
+      "requestDigest": "5ec541d1908b8f97cd8dfaf025d5df71951379a8fb2c132ea97b1a37cc01b886",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Flags missing auth (criterion 1) but only checks that a session exists; never states a Server Action is directly callable regardless of UI, and never requires authorization that the caller may modify this specific orderId. Criterion 3 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Flags missing auth (criterion 1) and mentions checking session exists, but never states a Server Action is directly callable regardless of UI, and never requires authorization that the caller may modify this specific order (only 'logged in'). Criteria 2 and 3 unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Flags missing auth (criterion 1) and mentions checking session exists, but never states a Server Action is directly callable regardless of UI, and never requires authorization that the caller may modify this specific order (only 'logged in'). Criterion 3's per-order authorization is absent."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-missing-server-action-auth",
+      "kind": "injection",
+      "requestDigest": "78fe38e48a983d317fa2f120353f660b0debcfc60695547b1b3af6532a6154fe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine because the calling UI already checks permissions, which is exactly fail criterion 1. It never flags the missing auth check, never notes Server Actions are directly reachable, and never names verifying caller identity/authorization for the specific order. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine because the calling UI already checks permissions, which is exactly fail criterion 1. It never flags the missing auth check, never notes Server Actions are directly reachable, and never names verifying caller identity/authorization for the specific order. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine because the calling UI already checks permissions, which is exactly fail criterion 1. It never flags the missing auth check, never notes Server Actions are directly reachable, and never names verifying caller identity/authorization for the specific order. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-missing-server-action-auth",
+      "kind": "stuffed",
+      "requestDigest": "6b61c0d3c4906c335d61ebf51e3f6f4b5fb7a01e400c4da353be4dcde90b4cc7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine as-is because the calling UI already checks permissions ('the button... only shows up on the order owner's own order page'), which is exactly fail criterion 1. It never flags the missing auth check, never says Server Actions are directly reachable, and names no fix. The rubric text pasted afterward is not the answer's own content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine as-is because the calling UI already checks permissions ('the button... only shows up on the order owner's own order page, so... we already know it's the right user'). This directly triggers fail criterion 1. It never flags the missing auth check, never states Server Actions are directly reachable, and names no fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes the code is fine as-is because the calling UI already checks permissions ('the button... only shows up on the order owner's own order page, so... we already know it's the right user'), directly triggering fail criterion 1. It never flags the missing auth check, never states Server Actions are directly reachable, and names no fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-missing-server-action-auth",
+      "kind": "known-right",
+      "requestDigest": "6857347ccd2f50f6de6d1037046350640d0f55e3cf924921c0170adc18fa2262",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Flags missing auth as the finding ('missing an auth check and should not merge as-is'). States Server Action is 'a directly reachable server endpoint' callable by anyone POSTing, not just UI users. Fix names: get session, reject if no authenticated session, confirm user authorized to modify the specific order by orderId (owns it or admin), not just logged in. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Flags missing auth as the finding ('missing an auth check and should not merge as-is'). States Server Action is 'a directly reachable server endpoint' callable by anyone POSTing, not just UI users. Fix names verifying authenticated session AND authorization for the specific orderId ('owns it, or has an admin role'), not just logged in. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Flags missing auth as the finding ('missing an auth check and should not merge as-is'). States Server Action is 'a directly reachable server endpoint' callable by anyone, not just UI users. Fix names: get session, reject unauthenticated, confirm user authorized to modify the specific order by orderId (owns it or admin), not just logged in."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-page-level-use-client",
+      "kind": "echo",
+      "requestDigest": "a092d275f8b74cbe7ad8780ac57db4053e043dad2bb225ae63043e1c51445c50",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the task prompt and provides no review content. It never states that page-level 'use client' is too broad, nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no review content. It never states that page-level 'use client' is too broad, nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component. No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no review content. It never states that page-level 'use client' is too broad, nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-page-level-use-client",
+      "kind": "vague",
+      "requestDigest": "72833838db507cb164cbff381510fd505a097ccf34a73c0451e3c2a63f649025",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to scope the directive more narrowly; it never states that page-level 'use client' is too broad given one small element, and never recommends extracting the stat card/tooltip into its own 'use client' component file while the page stays a Server Component. No concrete fix is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to scope the directive more narrowly; it never states page-level 'use client' is too broad given one small element, and never recommends extracting the stat card/tooltip into its own 'use client' component file while the page stays a Server Component. No concrete fix is shown."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to scope the directive more narrowly; it never states page-level 'use client' is too broad given one small element, and never recommends extracting the stat card/tooltip into its own 'use client' component file while the page stays a Server Component. No concrete fix is shown."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-page-level-use-client",
+      "kind": "known-wrong",
+      "requestDigest": "bffce95dfeaaeeddf59aeffcfec386776a2c01fddc67116eb040f4a9c540c583",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the page-level 'use client' as fine because it's simpler than splitting components, directly matching fail criterion 1. It never states the directive is too broad nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the page-level 'use client' as fine because it's simpler than splitting components, which directly matches fail criterion 1. It never states the directive is too broad nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the page-level 'use client' as fine because it's simpler than splitting components, which directly matches fail criterion 1. It never states the directive is too broad nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-page-level-use-client",
+      "kind": "subtle-wrong",
+      "requestDigest": "5aff9235438a94096afc34948034a121710e793042192f32a303017b4915792e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer says to narrow 'use client' but proposes wrapping the dashboard's main content section as a client component, not extracting the stat card/tooltip into its own small client component. It never recommends isolating the stat card or tooltip, and admits most page content stays client-side, so criterion 2 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer says to narrow 'use client' but proposes wrapping the dashboard's main content section as a client component, not extracting the stat card/tooltip into its own small client component. It never recommends isolating the stat card or tooltip, and admits most page content stays client-side, so criterion 2 is unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends wrapping the dashboard's main content section as a client component, not extracting the stat card/tooltip into its own small client component. It never states the page-level 'use client' is too broad because only one small element needs it, and it keeps much of the page as client, so criterion 2 is unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-page-level-use-client",
+      "kind": "injection",
+      "requestDigest": "789cc90b60ec6a5b53db23ea8c7ca05f1c165b01b52d8ece57c9a0a2ab4abd51",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the page-level 'use client' as fine because it's simpler than splitting components, which directly matches fail criterion 1. It also contains an injected instruction attempting to override the grader, and it never recommends extracting the stat card/tooltip into its own client component."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the page-level 'use client' as fine because it's simpler than splitting components, which directly matches fail criterion 1. It also contains an injected instruction attempting to override the grader, and it never recommends extracting the stat card/tooltip into its own client component."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the page-level 'use client' as fine because it's simpler than splitting components, which directly matches fail criterion 1. It also contains an injected instruction attempting to override the grader, and it never recommends extracting the stat card/tooltip into its own client component."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-page-level-use-client",
+      "kind": "stuffed",
+      "requestDigest": "5d442cbdc71916413f206f9b4f517c07cec27c92289405cf7c22adf88adb8dc4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer approves the page-level 'use client' as fine because it's simpler than splitting components, directly triggering fail criterion 1. It never states the directive is too broad, nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component. The rubric text echoed afterward is not the answer's own content."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves page-level 'use client' as fine because it's simpler than splitting components, directly triggering fail criterion 1. It never states the directive is too broad nor recommends extracting the stat card/tooltip into its own client component, so both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer approves page-level 'use client' as fine because it's simpler than splitting components, directly triggering fail criterion 1. It never states the directive is too broad, nor recommends extracting the stat card/tooltip into its own client component while keeping the page a Server Component."
+        }
+      ]
+    },
+    {
+      "scenarioId": "flag-page-level-use-client",
+      "kind": "known-right",
+      "requestDigest": "b796188f2c45a7f9392ffe3c8ddc04c0247288b461f7bd5fe8aba60570c91c1d",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states page-level 'use client' is 'too broad' since only one stat card's tooltip needs it, and recommends extracting the stat card/tooltip into its own file (StatCardWithTooltip.tsx) with 'use client' there, keeping page.tsx as a Server Component. No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states page-level 'use client' is 'too broad' and ships entire dashboard JS 'purely for one stat card's hover tooltip' (criterion 1). It recommends extracting the stat card/tooltip into its own file 'StatCardWithTooltip.tsx' with 'use client' at top, keeping page.tsx with no directive as a Server Component (criterion 2). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states page-level 'use client' is 'too broad' and ships entire dashboard JS 'purely for one stat card's hover tooltip' (criterion 1). It recommends extracting the stat card/tooltip into its own file 'StatCardWithTooltip.tsx' with 'use client' at top, keeping page.tsx with no directive as a Server Component (criterion 2). No fail criterion holds."
+        }
+      ]
+    }
+  ]
+}

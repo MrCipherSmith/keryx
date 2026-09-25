@@ -1,0 +1,88 @@
+---
+extends: common
+paths: ["**/*.tsx", "**/*.jsx", "**/*.vue"]
+metadata:
+  origin: authored
+---
+
+# Next.js / Nuxt patterns
+
+Idiomatic meta-framework design for Next.js's App Router and Nuxt 3+ —
+routing conventions, rendering-mode choice, and data fetching, covering
+both where their concerns diverge and where they converge. Narrows
+`core-common-rules`; framework-agnostic design patterns still come from
+there.
+
+## Server/client boundary (Next.js) and setup context (Nuxt)
+
+- Fetch data in Server Components (no `'use client'`) by default; push
+  `'use client'` only to the interactive leaf (a button, a form, a chart
+  that needs a browser API) so the rest of the tree stays server-rendered
+  and out of the client bundle.
+- Pass data down from a Server Component to a Client Component as plain
+  serializable props — a Client Component cannot `await` a server-only
+  data call itself; if it needs fresh data after mount, call a Route
+  Handler (`app/api/.../route.ts`) or a Server Action, not a re-implemented
+  server-only fetch client-side.
+- A Server Action is declared with `'use server'` (file-level or inline in
+  an async function) and can be called directly from a form's `action`
+  prop or a Client Component's event handler; mutate, then call
+  `revalidatePath()`/`revalidateTag()` so the affected route re-renders
+  with fresh data in the same round trip — don't hand-roll a client-side
+  refetch-after-mutation when a Server Action + revalidate already covers
+  it.
+- Nuxt composables (`useX`) must be called synchronously during a
+  component's `setup()` (top level of `<script setup>`), a plugin, or
+  middleware — never inside an `async` callback, a `setTimeout`, or after
+  an `await` inside setup, because Nuxt resolves a composable's injection
+  context (route, app, Pinia store) synchronously at call time.
+
+## Rendering modes
+
+- Next.js: a route is static by default (build-time render, cached);
+  reading `cookies()`/`headers()`/a `searchParams` prop, or an uncached
+  `fetch`, opts it into dynamic per-request rendering. Use
+  `export const revalidate = <seconds>` for ISR when the data is allowed
+  to go stale for a bounded window rather than forcing full dynamic
+  rendering.
+- Nuxt: `ssr: true` (default) renders on each request; `routeRules` in
+  `nuxt.config.ts` set per-route rendering (`{ '/blog/**': { isr: 3600 } }`
+  for ISR-like caching, `{ '/app/**': { ssr: false } }` for an SPA-only
+  section, `{ '/': { prerender: true } }` for static). Choose the rule per
+  route instead of setting `ssr: false` globally when only part of the app
+  needs it.
+- Both frameworks: a component that needs data on first paint should fetch
+  it where the framework already renders (Server Component / `useFetch`),
+  not fetch client-side after an empty shell — that trade-off (an extra
+  client round trip, a loading flash) should be a deliberate choice, not
+  the default from not knowing the server-fetch path exists.
+
+## Data fetching
+
+- Next.js: `fetch()` inside a Server Component is deduplicated and cached
+  by the framework across a single render pass — prefer it over a
+  third-party data-fetching library for simple server-side reads unless
+  the project already standardizes on one (e.g. a query library for
+  client-side cache/mutation needs).
+- Nuxt: use `useFetch`/`useAsyncData` for data a page needs during SSR
+  (they dedupe across server and client and hydrate without a second
+  request); a plain `$fetch` call inside `onMounted` only re-fetches
+  client-side and loses SSR — use it for a genuinely client-only,
+  post-interaction call (e.g. in response to a click), not initial page
+  data.
+- Both: key async data explicitly (`useAsyncData('orders', ...)` in Nuxt;
+  a stable cache key in whatever client-side query library Next.js code
+  uses) — an unkeyed or auto-keyed-by-reference call can silently refetch
+  or fail to dedupe across re-renders/navigations.
+
+## Anti-patterns
+
+- Marking an entire page or layout `'use client'` to fix one interactive
+  child, instead of isolating the directive to that child.
+- Reaching for `ssr: false` on a whole Nuxt page to work around a
+  hydration mismatch instead of finding the actual nondeterministic
+  render source.
+- Storing derived/computed state in a `ref`/`useState` and syncing it with
+  an effect/`watch`, instead of computing it inline with `computed()` or
+  during render — both frameworks' reactivity systems already handle
+  derivation without an effect.

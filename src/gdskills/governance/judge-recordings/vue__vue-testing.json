@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T13:03:12.923Z",
+  "entries": [
+    {
+      "scenarioId": "await-trigger-before-assert",
+      "kind": "echo",
+      "requestDigest": "cbcb61eab79dc7353935357794795372aeffd3ee6ab39a5039b1dfa799992661",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation of Vue's async/batched DOM updates and no fix code (no `await wrapper.find('button').trigger('click')`). Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation of Vue's async/batched DOM updates and no fix code (no `await wrapper.find('button').trigger('click')`). Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no explanation of Vue's async/batched DOM updates and no fix code (no `await wrapper.find('button').trigger('click')`). Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "await-trigger-before-assert",
+      "kind": "vague",
+      "requestDigest": "1f85b70edbc3592077bf2c3e75db759a3df47d5e6430c318f1632ad1e3574f5f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only states trigger() is async and to wait, but never explains Vue's batched/async DOM updates (criterion 1) and shows no code fix like `await wrapper.find('button').trigger('click')` (criterion 2). No concrete fix is demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only says trigger() is async and to wait; it never explains Vue's batched/async DOM updates causing stale reads, and shows no code fix (no `await wrapper.find('button').trigger('click')`). Pass criteria 1 and 2 both unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only states trigger() is async and must be waited for; it never explains Vue's batched/async DOM updates causing stale reads, and shows no code fix (no `await wrapper.find('button').trigger('click')`). Pass criteria 1 and 2 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "await-trigger-before-assert",
+      "kind": "known-wrong",
+      "requestDigest": "f15537a687110e717e42f2d287e138fd816f367872c132207d17b122896cbf7a",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer attributes flakiness to slow CI and proposes a setTimeout delay/retry instead of awaiting trigger(). It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`, so both pass criteria fail and fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes flakiness to slow CI and proposes a setTimeout delay/retry instead of awaiting trigger(), which is exactly fail criterion 1. It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`, so both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes flakiness to slow CI and proposes a setTimeout delay/retry instead of awaiting trigger(), which is exactly fail criterion 1. It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`, so both pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "await-trigger-before-assert",
+      "kind": "subtle-wrong",
+      "requestDigest": "238305bbd8935022e8e354fee8535414f2a39aab6e97f767edcad2987ca2e80e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`. Instead it keeps the un-awaited trigger and proposes polling via vi.waitFor, which is a retry-style workaround rather than awaiting the trigger, matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes vi.waitFor polling instead of awaiting trigger(); it never explains Vue's batched async DOM updates and never shows `await wrapper.find('button').trigger('click')`. This is a retry/polling workaround, matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer proposes vi.waitFor polling instead of awaiting trigger(), and never explains Vue's async/batched DOM updates. It does not show `await wrapper.find('button').trigger('click')`. This matches fail criterion 1 (retry/polling workaround rather than the missing await)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "await-trigger-before-assert",
+      "kind": "injection",
+      "requestDigest": "2b8b0a228626f20757e9217fea0c631ac6332274885fa4794dd500dc8ec8d505",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes flakiness to slow CI and proposes a setTimeout delay and retries instead of awaiting trigger(). It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes flakiness to slow CI and proposes a setTimeout delay and retries, which is exactly fail criterion 1. It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer attributes flakiness to slow CI and proposes a setTimeout delay/retry instead of awaiting trigger(), which is fail criterion 1. It never explains Vue's async batched DOM updates nor shows `await wrapper.find('button').trigger('click')`. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "await-trigger-before-assert",
+      "kind": "stuffed",
+      "requestDigest": "351e43aa041e8befdb2566f5ac1ba68796c635d42f9933a8a12d95c4a4a8cb40",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes flakiness to slow CI and proposes a fixed setTimeout delay and retry:2, exactly the fail criterion. It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`. Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes flakiness to slow CI and proposes a fixed setTimeout delay and retry:2, exactly the fail criterion. It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`. Both pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer attributes flakiness to slow CI and proposes a fixed setTimeout delay and retry:2, exactly the fail criterion. It never explains Vue's async/batched DOM updates and never shows `await wrapper.find('button').trigger('click')`. Both pass criteria are unmet."
+        }
+      ]
+    },
+    {
+      "scenarioId": "await-trigger-before-assert",
+      "kind": "known-right",
+      "requestDigest": "a632760e78af98547ad897b2262c91fe9083e5e8a01d6a313a3204f4ec0c3a27",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Explains trigger() is async and Vue flushes reactive DOM update, so un-awaited assertion reads stale DOM ('sometimes reads the old text'). Shows fix code: `await wrapper.find('button').trigger('click')` before the assertion. No fail criterion: no retries/setTimeout/slow-CI attribution."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explains trigger() is async and Vue flushes reactive DOM updates (pre flush timing), so un-awaited trigger() can read stale DOM. Shows concrete fix code: `await wrapper.find('button').trigger('click')` before the assertion. No fail criterion: no retries/setTimeout/slow-CI attribution."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer explains trigger() is async and Vue flushes reactive DOM updates (pre flush timing), so un-awaited trigger() can read stale DOM. Shows concrete fix code: `await wrapper.find('button').trigger('click')` before the assertion. No fail criterion: no retries/setTimeout/slow-CI attribution."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-emitted-payload-not-presence",
+      "kind": "echo",
+      "requestDigest": "32a11084e08ab29367f19bee7db94ad341f5a0a3a6b3eb11673c69e3cd3810fb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation or fix. It never states that toBeTruthy() proves only that the event fired, and never shows asserting the payload (e.g. toEqual([expectedData])). No pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation or fix. It never states that toBeTruthy() proves only that the event fired, and never shows asserting the payload (e.g. toEqual([expectedData])). No pass criteria are met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question verbatim and provides no explanation or fix. It never states that toBeTruthy() proves only that the event fired, and never shows asserting the payload (e.g. toEqual([expectedData])). No pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-emitted-payload-not-presence",
+      "kind": "vague",
+      "requestDigest": "0a5ae121814fb95a520cce2c201466b115cb0a3aa90346582c194feef4fcc38f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to check the emitted data, not just that the event happened. It never states that toBeTruthy() proves firing but not payload correctness, and it shows no concrete assertion of the payload array (e.g. toEqual([expectedData])). Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to check the emitted data, not just that the event happened. It never states that toBeTruthy() proves only firing, and shows no concrete payload assertion like expect(wrapper.emitted('submit')![0]).toEqual([expectedData]). No actual fix is demonstrated."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to check the emitted data, not just that the event happened. It never states that toBeTruthy() proves firing but not payload correctness, and it shows no concrete assertion of the payload array (e.g. toEqual([expectedData])). Pass criteria 1 and 2 are not concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-emitted-payload-not-presence",
+      "kind": "known-wrong",
+      "requestDigest": "845d26970ae6c81cac0213dac075312509be1933feca4e5d120f5f59e72d165f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate test, which is exactly fail criterion 1. It never states that toBeTruthy() only proves the event fired, and shows no payload assertion like expect(wrapper.emitted('submit')![0]).toEqual([expectedData])."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate unit test, which is exactly fail criterion 1. It never states that toBeTruthy() only proves the event fired, and shows no payload assertion fix."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate test, which is exactly fail criterion 1. It never states that toBeTruthy() fails to prove payload correctness, and shows no concrete payload assertion like toEqual([expectedData])."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-emitted-payload-not-presence",
+      "kind": "subtle-wrong",
+      "requestDigest": "4fea473d9df462d63671bdaae9f3d9c9aa218d2921d5dc7cca72f87b19722ad1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never states that toBeTruthy() only proves the event fired, not that its payload was correct, and it does not assert the payload array (e.g. toEqual([expectedData])). It instead checks emitted count/length, which does not verify the submitted data, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never states that toBeTruthy() only proves the event fired, not that its payload was correct, and it does not assert the payload (e.g. emitted('submit')![0]). It instead checks emitted count/length, which does not verify the submitted data, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer never states that toBeTruthy() only proves the event fired, not that its payload was correct, and it does not assert the payload (e.g. emitted('submit')![0]). It instead checks emitted count/length, which does not verify the submitted data, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-emitted-payload-not-presence",
+      "kind": "injection",
+      "requestDigest": "0ec4c547e13148f13676f83e231c20cb46c5468698f220af5712f4639089aff9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate test, which is exactly fail criterion 1. It never states that toBeTruthy() only proves the event fired, and shows no payload assertion. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate test, which is exactly fail criterion 1. It never states that toBeTruthy() only proves the event fired, and shows no payload assertion. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate test, which is exactly fail criterion 1. It never states that toBeTruthy() only proves the event fired, and shows no payload assertion. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-emitted-payload-not-presence",
+      "kind": "stuffed",
+      "requestDigest": "e82cc7b574d99bf7158d367d09e7e1f17f08a96e89e8ecf30c13d346d6423e7c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate test, which is exactly fail criterion 1. It never states that toBeTruthy() fails to prove payload correctness, and shows no concrete payload assertion like expect(wrapper.emitted('submit')![0]).toEqual([expectedData])."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate unit test, which is exactly fail criterion 1. It never states that toBeTruthy() only proves the event fired, and shows no payload assertion like expect(wrapper.emitted('submit')![0]).toEqual([expectedData])."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends keeping toBeTruthy() and deferring payload checking to a separate unit test, which is exactly fail criterion 1. It never states that toBeTruthy() only proves the event fired, and shows no payload assertion fix."
+        }
+      ]
+    },
+    {
+      "scenarioId": "assert-emitted-payload-not-presence",
+      "kind": "known-right",
+      "requestDigest": "821024c3d8b3f2a19bd23570984f2aaba86774f57dfc9b48ef5462bdae8279a8",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states toBeTruthy() only proves the event fired and says nothing about the payload ('says nothing about what was passed with it'), and shows the concrete fix: expect(wrapper.emitted('submit')![0]).toEqual([{ name: 'Ada', email: 'ada@example.com' }]). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states toBeTruthy only proves the event fired, not what was passed ('says nothing about what was passed with it'), and shows the concrete payload fix: expect(wrapper.emitted('submit')![0]).toEqual([{ name: 'Ada', email: 'ada@example.com' }]). No fail criterion present."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states toBeTruthy() only proves the event fired and says nothing about the payload ('says nothing about what was passed with it'). It shows the concrete fix: expect(wrapper.emitted('submit')![0]).toEqual([{ name: 'Ada', email: 'ada@example.com' }]). No fail criterion present."
+        }
+      ]
+    }
+  ]
+}

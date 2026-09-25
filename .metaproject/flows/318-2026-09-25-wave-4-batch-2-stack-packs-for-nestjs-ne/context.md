@@ -55,4 +55,45 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+- Precedent: flows 314 (batch 1 authoring), 316 (judge grading + gate
+  hardening), 317 (PACK_MIN_TRIALS 5→10, follow-up fixes). Current stable
+  packs: `python`, `go`. `ts-js-node` demoted (nodejs-build-fix
+  no-ts-ignore-suppression, 6/10 at trials=10). `react` stays experimental
+  (react-build-fix no-disable-hooks-lint, 3/10 at trials=10).
+- Judge-based eval format confirmed live in
+  `src/gdskills/bundled/stacks/ts-js-node/skills/nodejs-build-fix/evals.json`:
+  `expected_behavior[].grader: "judge"` with `rubric`/`pass_criteria`/
+  `fail_criteria`, plus a sibling `calibration` object
+  (`known_right`/`known_wrong`/`vague`/`subtle_wrong`) and optional
+  `anti_patterns`. Deterministic `contains`/`regex` may accompany a judge
+  expectation for one unambiguous fact only; `not-contains` is banned on a
+  judge scenario (I8).
+- Integrity rules I1-I10 + AG live in
+  `src/gdskills/stack-pack-eval-integrity.test.ts`; full guide at
+  `docs/docs/guides/write-a-rubric-scenario.md`.
+- `src/stack/detect.ts`'s `STACK_DETECT_TAGS` already has `nestjs`, `react`,
+  `vue`, `angular`, `nextjs`, `nuxt`, `mobx` — no detection code changes
+  needed for this flow.
+- `STACK_EXTENSIONS` (`src/gdskills/governance/authoring-lint.ts`) extended
+  by this flow's first commit: `nestjs: ["ts"]`, `vue: ["vue"]`,
+  `angular: ["ts", "html"]`, `"nextjs-nuxt": ["tsx", "jsx", "vue"]`,
+  `mobx: ["ts", "tsx"]`.
+- `install-manifest.json` already has a `nestjs` profile and a pre-existing
+  `framework:nestjs` component (`nestjs-review-skill` = `review-backend`,
+  `nestjs-dto-rule` = `nestjs-dto.mdc`) and a pre-existing `capability:mobx`
+  component (`mobx-review-skill` = `code-mobx-store-review`,
+  `mobx-store-template-rule` = `mobx-store-template.mdc`) from before this
+  wave. This flow ADDS new `<id>-rules`/`<id>-skills` modules for the new
+  stack-pack content and extends those two components' module lists rather
+  than creating parallel components — avoids duplicate review-skill coverage
+  the W1 spec explicitly warns against ("cross-reference, don't duplicate").
+  New standalone components needed: `framework:vue`, `framework:angular`,
+  `framework:nextjs-nuxt`.
+- `gate-policy.ts` pins `STACK_PACK_GATE_POLICY` to DeepSeek `deepseek-chat`
+  for both runner and judge roles — required by the runner brief's fixed
+  parameters.
+- The pack-worker-brief from flow 314
+  (`/private/tmp/claude-502/-Users-Goodea-goodea-keryx/e4ee6e6a-388e-4015-b287-e00b261e73d6/scratchpad/f314/pack-worker-brief.md`)
+  is reused as a skeleton for this flow's own worker brief, updated for the
+  judge eval format per the guide above (its own §evals.json section is
+  pre-judge-migration and superseded).

@@ -1,0 +1,91 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.tsx"]
+metadata:
+  origin: authored
+---
+
+# MobX coding style
+
+Narrows the React/TypeScript common rules to MobX's own idiom for stores,
+observables, and observer components. Everything not MobX-specific still
+comes from the common and React rules this file `extends`.
+
+## Store class shape
+
+- Call `makeObservable(this)` (with an explicit annotations map, or
+  `makeAutoObservable(this)` for a store with no inheritance and no need to
+  keep some fields non-observable) once, in the constructor, before any
+  other constructor logic reads `this`.
+- Prefer explicit `@observable`/`@computed`/`@action`/`@action.bound`
+  decorators with `makeObservable` over `makeAutoObservable` for any store
+  a component subclasses, that mixes injected dependencies with state, or
+  that needs a field to stay non-observable — `makeAutoObservable` makes
+  every own enumerable property observable and every method an action,
+  which is the wrong default once the store has structure to protect.
+- Name store classes `XyzStore` and files `xyz.store.ts`/`XyzStore.ts` to
+  match the project's existing convention; keep one store per file.
+
+## Actions
+
+- Every method that mutates observable state must be an `action`
+  (`@action` or `@action.bound`). A public method invoked from a component
+  event handler must be `@action.bound` so it can be passed as a callback
+  reference without losing `this`.
+- After an `await` inside an async action, re-enter MobX with
+  `runInAction(() => { ... })` before mutating state — the code after the
+  `await` runs outside the original action's transaction.
+- Do not call a store method that mutates state directly from a component
+  render body; only from an event handler, effect, or another action.
+
+## Computed values
+
+- Any value derived purely from other observables belongs in a
+  `@computed get` accessor, not in a component-side calculation repeated
+  on every render or a store method that recomputes and returns a fresh
+  value each call. A `@computed` is cached and only re-evaluates when one
+  of its own observable dependencies changes.
+- Keep a `@computed` getter free of side effects; it must be safe to
+  evaluate speculatively (MobX may read a computed's value to decide
+  whether it changed).
+
+## Observable collections and value types
+
+- Use `@observable.ref` for a value the store treats as an opaque
+  reference (a large externally-owned object, a DOM/editor instance) it
+  does not want deeply proxied, `@observable.shallow` for a container
+  whose items should stay plain, and `@observable.struct` when a reaction
+  should only fire on a structural (deep-equal) change, not fine-grained.
+  Reserve the default deep `@observable` for state the store actually
+  wants MobX to track recursively.
+- When you need MobX's own collection API (`.replace()`, `.remove()`,
+  `.merge()`, `.has()`) on an array or map field, construct it with
+  `observable([...])` / `observable(new Map())` and type it as
+  `IObservableArray<T>` / `ObservableMap<K, V>`; a plain array/object
+  literal assigned to `@observable` is still deeply observed but does not
+  expose those methods.
+
+## Components
+
+- Wrap any function component that reads observable state in `observer`
+  from `mobx-react-lite`. A component that reads a store field but is not
+  wrapped in `observer` will render once and silently never update again
+  when that field changes.
+- Read store instances through a typed React context + hook pair
+  (`useXyzStore()`), not through a module-level singleton import, so
+  components stay testable and providers can swap the instance.
+- Do not destructure observable fields off a store at the top of a
+  component body if that breaks fine-grained tracking for a nested
+  `<Observer>` boundary further down — read the field where it is
+  actually rendered instead.
+
+## Errors and imports
+
+- Import MobX identifiers (`observable`, `action`, `computed`, `reaction`,
+  `runInAction`, `makeObservable`) from `"mobx"`, and `observer`,
+  `useLocalObservable` from `"mobx-react-lite"` — do not import from the
+  deprecated combined `mobx-react` package in new code unless the project
+  has not migrated off it yet.
+- Catch and store errors from an async action's `try/catch` as
+  `err: unknown`, narrowing before assigning to an observable `error`
+  field (see `rules/patterns.mdc` for the full async-action shape).

@@ -64,7 +64,9 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { normalizeRouteText, routeTokens } from "../lib/route-tokens";
 import { gradeExpectations, type EvalScenarioSpec, type ExpectedBehavior } from "./governance/eval";
+import { parseSkillFrontmatter } from "./skill-frontmatter";
 import {
   antiGamingAnswers,
   gradeScenarioAnswer,
@@ -143,6 +145,45 @@ function sharedSixGram(prompt: string, skillMdBody: string): string | undefined 
     if (bodyGrams.has(gram)) return gram;
   }
   return undefined;
+}
+
+/** I11 (R1 review, PR #719, M3) threshold: a positive trigger prompt at or above this Jaccard similarity against one of its own skill's frontmatter `triggers:` phrases is a near-copy, not an independent realistic phrasing. */
+const TRIGGER_OVERLAP_THRESHOLD = 0.5;
+
+/**
+ * I11: the worst (highest) Jaccard token similarity — `|intersection| /
+ * |union|` — a `positive` trigger prompt has against ANY of its own skill's
+ * frontmatter `triggers:` phrases. Uses the SAME tokenizer
+ * (`normalizeRouteText`/`routeTokens`) the real skill router scores with, so
+ * "near-copy" here means the same thing it means to routing, not a second,
+ * independently-invented notion of similarity. Jaccard (not one-sided
+ * containment) is deliberate: a short trigger phrase fully embedded in a
+ * much longer, genuinely-elaborated prompt should NOT count as a near-copy
+ * on its own — the union in the denominator is what tells "the prompt
+ * restates the trigger" apart from "the prompt happens to use a few of the
+ * same words while saying something substantially longer and different".
+ * Returns `{ ratio: 0, trigger: undefined }` when the skill has no triggers
+ * or none share any token with the prompt.
+ */
+function positiveTriggerOverlap(prompt: string, triggers: readonly string[]): { ratio: number; trigger: string | undefined } {
+  const promptTokens = routeTokens(normalizeRouteText(prompt));
+  let worstRatio = 0;
+  let worstTrigger: string | undefined;
+  for (const trigger of triggers) {
+    const triggerTokens = routeTokens(normalizeRouteText(trigger));
+    if (triggerTokens.size === 0) continue;
+    let shared = 0;
+    for (const token of triggerTokens) {
+      if (promptTokens.has(token)) shared += 1;
+    }
+    const union = new Set([...promptTokens, ...triggerTokens]).size;
+    const ratio = union === 0 ? 0 : shared / union;
+    if (ratio > worstRatio) {
+      worstRatio = ratio;
+      worstTrigger = trigger;
+    }
+  }
+  return { ratio: worstRatio, trigger: worstTrigger };
 }
 
 /** I5: answer-key phrasing that tells the model how to word its answer so a specific grader trips. */
@@ -337,6 +378,8 @@ interface PackSkillFixture {
   readonly skill: string;
   readonly skillMdBody: string;
   readonly scenarios: readonly EvalScenarioSpec[];
+  readonly triggers: readonly string[];
+  readonly positives: readonly string[];
 }
 
 function collectRealPackSkills(): PackSkillFixture[] {
@@ -351,17 +394,41 @@ function collectRealPackSkills(): PackSkillFixture[] {
       const evalsPath = path.join(skillDir, "evals.json");
       if (!existsSync(skillMdPath) || !existsSync(evalsPath)) continue;
       const skillMdBody = readFileSync(skillMdPath, "utf8");
-      let parsed: { readonly scenarios?: readonly EvalScenarioSpec[] };
+      let parsed: { readonly scenarios?: readonly EvalScenarioSpec[]; readonly triggers?: { readonly positive?: readonly string[] } };
       try {
-        parsed = JSON.parse(readFileSync(evalsPath, "utf8")) as { scenarios?: readonly EvalScenarioSpec[] };
+        parsed = JSON.parse(readFileSync(evalsPath, "utf8")) as {
+          scenarios?: readonly EvalScenarioSpec[];
+          triggers?: { readonly positive?: readonly string[] };
+        };
       } catch {
         parsed = {};
       }
-      out.push({ pack, skill, skillMdBody, scenarios: parsed.scenarios ?? [] });
+      const frontmatter = parseSkillFrontmatter(skillMdBody);
+      out.push({
+        pack,
+        skill,
+        skillMdBody,
+        scenarios: parsed.scenarios ?? [],
+        triggers: frontmatter.triggers ?? [],
+        positives: parsed.triggers?.positive ?? [],
+      });
     }
   }
   return out;
 }
+
+/**
+ * I11 (R1 review, PR #719, M3) is enforced hard only on the five batch-2
+ * packs (flow 318) — the ones actually authored/fixed against it. Batch-1
+ * (`ts-js-node`, `react`, `python`, `go`) was authored before this rule
+ * existed and, measured the same way, comes back 99/110 positives at or
+ * above the 0.5 Jaccard threshold — rewriting that much authored content
+ * unreviewed, mid-fix, is out of this flow's scope (its own positives were
+ * never flagged as scorer-tuned the way this batch's were). Deferred
+ * explicitly rather than silently: tracked as follow-up work for a future
+ * flow, not exempted forever.
+ */
+const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set(["nestjs", "nextjs-nuxt", "vue", "angular", "mobx"]);
 
 describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () => {
   const packSkills = collectRealPackSkills();
@@ -372,7 +439,7 @@ describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () 
     });
   }
 
-  for (const { pack, skill, skillMdBody, scenarios } of packSkills) {
+  for (const { pack, skill, skillMdBody, scenarios, triggers, positives } of packSkills) {
     for (const scenario of scenarios) {
       const label = `${pack}/${skill}#${scenario.id}`;
       const hasJudge = isJudgeScenario(scenario);
@@ -487,6 +554,17 @@ describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () 
     test(`I5 ${pack}/${skill}: SKILL.md contains no answer-key phrasing`, () => {
       expect(hasAnswerKeyPhrasing(skillMdBody)).toBe(false);
     });
+
+    if (I11_ENFORCED_PACKS.has(pack)) {
+      for (const positive of positives) {
+        test(`I11 ${pack}/${skill} [${JSON.stringify(positive)}]: no ${TRIGGER_OVERLAP_THRESHOLD}+ Jaccard overlap with a frontmatter trigger`, () => {
+          const { ratio, trigger } = positiveTriggerOverlap(positive, triggers);
+          expect(ratio, trigger === undefined ? "" : `near-copy of trigger "${trigger}" (Jaccard ${ratio.toFixed(2)})`).toBeLessThan(
+            TRIGGER_OVERLAP_THRESHOLD,
+          );
+        });
+      }
+    }
   }
 });
 
@@ -522,6 +600,22 @@ function makeJudgeScenario(overrides: Partial<EvalScenarioSpec> = {}): EvalScena
 }
 
 describe("I1-I9: negative fixtures prove each rule actually fires", () => {
+  test("I11 fires: a positive trigger prompt that closely restates its own skill's frontmatter trigger", () => {
+    const { ratio, trigger } = positiveTriggerOverlap("fix this NestJS UnknownDependenciesException", [
+      "fix this NestJS UnknownDependenciesException",
+    ]);
+    expect(ratio).toBeGreaterThanOrEqual(TRIGGER_OVERLAP_THRESHOLD);
+    expect(trigger).toBe("fix this NestJS UnknownDependenciesException");
+  });
+
+  test("I11 does not fire: a realistic, substantially different prompt sharing only a couple of words with a trigger", () => {
+    const { ratio } = positiveTriggerOverlap(
+      "The team migrated this service to standalone providers last sprint, and now the DI container throws on startup with no explanation. Where do I even start looking?",
+      ["fix this NestJS UnknownDependenciesException"],
+    );
+    expect(ratio).toBeLessThan(TRIGGER_OVERLAP_THRESHOLD);
+  });
+
   test("I1 fires: a not-contains-only scenario passes the empty answer today — this is exactly the hole the rule catches", () => {
     const scenario: EvalScenarioSpec = {
       id: "weak-not-contains-only",
