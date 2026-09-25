@@ -567,15 +567,22 @@ keryx agents generate --stack <id> [--check] [--json]
 
 Four new W1 stack packs authored (`php-laravel`, `ruby-rails`, `c-cpp`,
 `sql-db` — see `W1-stack-catalog.md`, "Implementation notes: Wave 4 batch 5
-(flow 337)"), all `stability: "experimental"`. Per each pack's
-`agent-refs.json`, `"agents": []` with a note that the honest gate has not
-run for this batch — no generated `<stack>-code-auditor`/`<stack>-build-fixer`
-pair ships for any of the four yet. `keryx agents generate --stack <id>`
-would refuse all four today (`stack-pack-not-gate-cleared`), which is
-correct: gate-clearing (Phase B — calibration, the honest 10-trial DeepSeek
-gate, `checkStablePackGate`) is explicitly out of scope for this flow's
-authoring phase and is picked up once PR #719 and flow 334 land on main and
-this branch rebases.
+(flow 337)" and its Phase B follow-up), all `stability: "experimental"`.
+
+**Phase B outcome.** Calibration (`skills judge-check --record`) recorded
+clean for all 16 skills across the four packs. The honest 10-trial DeepSeek
+gate (`skills eval --runner deepseek:deepseek-chat --judge
+deepseek:deepseek-chat --strictness high --trials 10`) then ran for real and
+failed all 16 — every failure is trigger accuracy (behavior content passed
+at 0.8+ in every case but one, at 0.4). Per each pack's `agent-refs.json`,
+`"agents": []` with a note recording this actual outcome (not "gate not yet
+run" — the gate ran and the result is recorded). `keryx agents generate
+--stack <id>` refuses all four, confirmed directly, with
+`stack-pack-not-gate-cleared`. This matches batch 1's own first honest gate
+run (flow 314), which also failed all four of its packs before later fixes
+(flow 316, 317) cleared two of them — the same recovery path is available to
+this batch as a future flow, not attempted here per the standing rule
+against tuning content to a grader after seeing a result.
 
 ## Open questions
 
