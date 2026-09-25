@@ -42,3 +42,20 @@
   Extra probes: a project disable of keryx.security-check-output is ignored (list shows enabled=true, session start warns) PASS, though the warning prints twice at session start (nit); a symlinked data/learning/observations -> outside dir gets 0 files. PASS. Nit: 'hooks list' header reads 'not trusted and do not run (not trusted)'.
 - 2026-09-25 - R700-06 remainder committed as b9daac12. update no longer restamps metaproject.json updatedAt when nothing else changed. The second and third updates leave tracked files unchanged. The dashboard changes only on the first update after init. The post-commit hook leaves .metaproject/data/gdgraph/ and data/wiki/ untracked in a fresh repo; main does the same (checked side by side), so it is not a regression. That is a follow-up: add them to the managed gitignore block, or make the hook write inside ignored paths. It is out of this flow's scope. Manual step 2: PASS.
 - 2026-09-25T08:02:47.435Z - task-done: T5: Lane A: project hook trust gate and tighten-only built-ins (R700-01/02, hooks.ts writes)
+- 2026-09-25T08:04:03.753Z - task-attempt: T10: started (attempt 1) — review round 1: opus adversarial on PR #706 head 41498706
+- 2026-09-25T08:17:42.798Z - task-attempt: T10: failed (attempt 2) — round 1: 1 blocker (R1-01 dotenv KERYX_HOME), 1 major (R1-02 control chars), 2 minor
+- 2026-09-25 - Review round 1 (adversarial opus) ingested (reviews/2026-09-25-ingest-706): R1-01 blocker, R1-02 major, R1-03 and R1-04 minor. Fix attempt 1 of 3.
+  - R1-01 root cause and scope: Bun auto-loads the cwd .env, .env.local and .env.<NODE_ENV>, and also the cwd bunfig.toml, whose preload runs arbitrary code before keryx starts. This applies to any `#!/usr/bin/env bun` script. Verified empirically on Bun 1.4.2: only `--no-env-file --config=/dev/null` stops both; `-c=/dev/null` does not stop the preload. Main is affected by the dotenv/bunfig class too (provider base URLs and keys, and preload execution). The KERYX_HOME to user-scope-hooks escalation is new on this branch; main reads KERYX_HOME only in a test.
+  - Fix: a safe shebang for src/cli.ts and dist, compile flags for binaries, safe flags on self-spawns, a runtime re-exec guard for shebang-less invocations, and a refusal of any KERYX_HOME that resolves inside the project.
+  - R1-02/03/04: control characters are escaped in the trust, list and notice output; the trust scope (argv, not script contents) is stated; unsandboxed user hooks are announced.
+  - The three manual-run nits were committed as 87c9bd09.
+- 2026-09-25 - CI on #706 (head 082b3d36): typecheck-and-tests and client matrix (runtime) failed on one test: agent-hooks.test.ts 'wires a real keryx.impact-evidence provider by default'. It disables gates from the project file (now ignored), so with no keryx on PATH security-check-output fail-closes. It passes locally because keryx is on PATH. Fix assigned to the R1-01 worker: move the disables to an acknowledged user file in a separate tmp home. All other checks passed.
+- 2026-09-25 - Round 1 fixes landed and were pushed: 54367a26 (R1-02/03/04) and 18ab7fb2 (R1-01). What 18ab7fb2 does:
+  - The CLI and dist shebang is now 'bun --no-env-file --config=/dev/null'.
+  - Release compiled binaries are built with --no-compile-autoload-dotenv and --no-compile-autoload-bunfig.
+  - Six child spawn sites get the safe flags.
+  - The runtime re-exec guard in src/lib/safe-exec.ts strips only values that came from dotenv.
+  - loadHookConfig refuses a user home that resolves inside the project.
+  - The docs and the CHANGELOG are updated.
+  - The CI-failing agent-hooks tests now use an acknowledged user file in a separate home.
+  Known platform gaps: BusyBox env has no -S, and Windows npm shims bypass the shebang. On both, the runtime guard is what protects the CLI. Targeted tests are 418/0, typecheck is clean, and build is checked.
