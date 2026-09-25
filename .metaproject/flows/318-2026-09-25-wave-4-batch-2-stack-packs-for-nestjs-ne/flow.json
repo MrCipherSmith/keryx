@@ -8,9 +8,9 @@
   "id": "318",
   "slug": "wave-4-batch-2-stack-packs-for-nestjs-ne",
   "title": "Wave 4 batch 2: stack packs for nestjs, nextjs-nuxt, vue, angular, mobx",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-25T06:09:18.148Z",
-  "updatedAt": "2026-09-25T16:33:34.725Z",
+  "updatedAt": "2026-09-25T16:56:55.717Z",
   "source": {
     "type": "description",
     "ref": null
@@ -607,6 +607,30 @@
       "at": "2026-09-25T16:33:34.725Z",
       "event": "completion-failed",
       "detail": "base-branch: violated: this flow recorded base feat/agent-platform-expansion, but the pull request now targets main. It was retargeted after the base was recorded. | review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/318-2026-09-25-wave-4-batch-2-stack-packs-for-nestjs-ne/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-25T16:52:32.563Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/719 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T16:52:32.863Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T16:52:40.598Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-09-25T16:52:40.599Z",
+      "event": "completion-failed",
+      "detail": "base-branch: violated: this flow recorded base feat/agent-platform-expansion, but the pull request now targets main. It was retargeted after the base was recorded. | review: 1 of 5 conditions failed — terminal-dispositions (violated): 24 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-719-r02#R1-B1 (blocker, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M1 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M2 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M3 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M4 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M5 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M6 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN1 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN2 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN3 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN4 (minor, round 2026-09-25-ingest-719-r03): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN5 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN6 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN7 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN8 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN9 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719#N-B1 (blocker, round 2026-09-25-ingest-719-r03): no disposition recorded | 2026-09-25-ingest-719#N-M1 (major, round 2026-09-25-ingest-719-r03): no disposition recorded | 2026-09-25-ingest-719#N-MIN3 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN4 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN5 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN6 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN7 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN8 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-25T16:56:55.717Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/719 (warning: PR is not a draft)"
     }
   ],
   "signatures": [
@@ -784,6 +808,58 @@
           "name": "review",
           "status": "fail",
           "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/318-2026-09-25-wave-4-batch-2-stack-packs-for-nestjs-ne/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:324fc1760f6bf5de0a52270a5c6533406e5d9675ed347eda8c24257cd43fc81e"
+    },
+    {
+      "at": "2026-09-25T16:52:40.598Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "fail",
+          "detail": "violated: this flow recorded base feat/agent-platform-expansion, but the pull request now targets main. It was retargeted after the base was recorded."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "16 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 24 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-719-r02#R1-B1 (blocker, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M1 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M2 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M3 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M4 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M5 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-M6 (major, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN1 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN2 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN3 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN4 (minor, round 2026-09-25-ingest-719-r03): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN5 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN6 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN7 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN8 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719-r02#R1-MIN9 (minor, round 2026-09-25-ingest-719): no disposition recorded | 2026-09-25-ingest-719#N-B1 (blocker, round 2026-09-25-ingest-719-r03): no disposition recorded | 2026-09-25-ingest-719#N-M1 (major, round 2026-09-25-ingest-719-r03): no disposition recorded | 2026-09-25-ingest-719#N-MIN3 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN4 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN5 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN6 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN7 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-25-ingest-719#N-MIN8 (minor, round 2026-09-25-ingest-719): marked fixed (`acted-on`) but its evidence names no commit SHA The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
         },
         {
           "name": "health",
