@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,14 +8,14 @@
   "id": "338",
   "slug": "wave-4-batch-6-stack-packs-for-docker-k8",
   "title": "Wave 4 batch 6: stack packs for docker-k8s-terraform, ci-github-gitlab",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-25T15:14:53.313Z",
-  "updatedAt": "2026-09-25T15:14:53.313Z",
+  "updatedAt": "2026-09-25T16:20:50.078Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:4d8ead77fffb86ed2273e4f3a2408e9d26665e4e7b5f94453f755b19938ef8da",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -32,34 +32,327 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T11, this flow's context was gathered inline by the runner"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T6/T7/T8 (pack authoring split per-pack)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T10 (offline checks); model gate is Phase B, gated on orchestrator go-ahead"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T11 (push + READY_FOR_GATE) and Phase B's opus review"
+    },
+    {
+      "id": "T5",
+      "title": "Extend authoring-lint.ts for extensionless filename globs + STACK_EXTENSIONS entries",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:19:15.004Z",
+            "outcome": "started",
+            "detail": "runner: extending authoring-lint.ts extension matcher"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Author docker-k8s-terraform pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:20:46.648Z",
+            "outcome": "started",
+            "detail": "dispatching sonnet worker for docker-k8s-terraform pack"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Author ci-github-gitlab pack",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:20:46.911Z",
+            "outcome": "started",
+            "detail": "dispatching sonnet worker for ci-github-gitlab pack"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Wire both packs into install-manifest.json",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Update W1/W2 docs with batch 6 implementation notes",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T16:20:08.198Z",
+            "outcome": "started",
+            "detail": "runner: W1/W2 docs + journal notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Offline integrity/lint checks + commit per pack",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T16:20:20.779Z",
+            "outcome": "started",
+            "detail": "runner: final targeted offline check sweep"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Push branch, report READY_FOR_GATE, wait for go-ahead",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-25T15:14:53.313Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-25T15:18:43.235Z",
+      "event": "task-added",
+      "detail": "T5: Extend authoring-lint.ts for extensionless filename globs + STACK_EXTENSIONS entries"
+    },
+    {
+      "at": "2026-09-25T15:18:43.539Z",
+      "event": "task-added",
+      "detail": "T6: Author docker-k8s-terraform pack"
+    },
+    {
+      "at": "2026-09-25T15:18:43.829Z",
+      "event": "task-added",
+      "detail": "T7: Author ci-github-gitlab pack"
+    },
+    {
+      "at": "2026-09-25T15:18:44.114Z",
+      "event": "task-added",
+      "detail": "T8: Wire both packs into install-manifest.json"
+    },
+    {
+      "at": "2026-09-25T15:18:44.392Z",
+      "event": "task-added",
+      "detail": "T9: Update W1/W2 docs with batch 6 implementation notes"
+    },
+    {
+      "at": "2026-09-25T15:18:44.651Z",
+      "event": "task-added",
+      "detail": "T10: Offline integrity/lint checks + commit per pack"
+    },
+    {
+      "at": "2026-09-25T15:18:44.904Z",
+      "event": "task-added",
+      "detail": "T11: Push branch, report READY_FOR_GATE, wait for go-ahead"
+    },
+    {
+      "at": "2026-09-25T15:18:52.391Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T15:18:52.650Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T15:18:52.903Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T15:18:53.169Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T15:19:09.634Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T15:19:09.910Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T15:19:15.004Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — runner: extending authoring-lint.ts extension matcher"
+    },
+    {
+      "at": "2026-09-25T15:20:32.849Z",
+      "event": "task-done",
+      "detail": "T5: Extend authoring-lint.ts for extensionless filename globs + STACK_EXTENSIONS entries"
+    },
+    {
+      "at": "2026-09-25T15:20:46.648Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — dispatching sonnet worker for docker-k8s-terraform pack"
+    },
+    {
+      "at": "2026-09-25T15:20:46.911Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — dispatching sonnet worker for ci-github-gitlab pack"
+    },
+    {
+      "at": "2026-09-25T16:17:58.751Z",
+      "event": "task-done",
+      "detail": "T6: Author docker-k8s-terraform pack"
+    },
+    {
+      "at": "2026-09-25T16:18:11.445Z",
+      "event": "task-done",
+      "detail": "T7: Author ci-github-gitlab pack"
+    },
+    {
+      "at": "2026-09-25T16:18:29.092Z",
+      "event": "task-done",
+      "detail": "T8: Wire both packs into install-manifest.json"
+    },
+    {
+      "at": "2026-09-25T16:20:08.198Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — runner: W1/W2 docs + journal notes"
+    },
+    {
+      "at": "2026-09-25T16:20:14.521Z",
+      "event": "task-done",
+      "detail": "T9: Update W1/W2 docs with batch 6 implementation notes"
+    },
+    {
+      "at": "2026-09-25T16:20:20.779Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — runner: final targeted offline check sweep"
+    },
+    {
+      "at": "2026-09-25T16:20:50.078Z",
+      "event": "task-done",
+      "detail": "T10: Offline integrity/lint checks + commit per pack"
     }
   ]
 }

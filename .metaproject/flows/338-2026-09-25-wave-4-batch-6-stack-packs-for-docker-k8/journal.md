@@ -67,3 +67,6 @@
   output in Phase B. `governance/scout.json` (deterministic scout, not the
   model gate) kept as authored.
 - 2026-09-25T16:20:08.198Z - task-attempt: T9: started (attempt 1) — runner: W1/W2 docs + journal notes
+- 2026-09-25T16:20:14.521Z - task-done: T9: Update W1/W2 docs with batch 6 implementation notes
+- 2026-09-25T16:20:20.779Z - task-attempt: T10: started (attempt 1) — runner: final targeted offline check sweep
+- 2026-09-25T16:20:50.078Z - task-done: T10: Offline integrity/lint checks + commit per pack
