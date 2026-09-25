@@ -54,4 +54,27 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+- Source of scope: flow 316 journal T13 + scratchpad/f316/review-r1.md,
+  review-r2.md, review-r3.md (not in this worktree; read from the runner's own
+  scratchpad dir per the dispatch).
+- Key modules: `src/gdskills/governance/eval.ts` (evalSkill, PACK_MIN_TRIALS=5,
+  checkStablePackGate/checkSkillReportForPackGate, regradeRecordedReport),
+  `src/commands/skills-governance.ts` (CLI: eval, judge-check),
+  `src/commands/model-eval-runner.ts` (buildEvalRunner: system=skill.body, no
+  tools — this is where a runner-prompt system note is added),
+  `src/gdskills/governance/judge.ts` (Judge, gradeScenarioAnswer,
+  JUDGE_PROMPT_VERSION="2026-09-25.1", antiGamingAnswers, ScenarioCalibration),
+  `src/gdskills/governance/judge-recordings.ts` (recordedJudge, judge-check
+  --record).
+- Bundled stack packs: `src/gdskills/bundled/stacks/{python,go,react,ts-js-node}`.
+  Skills of interest: python/python-implementation (trigger-positive-6),
+  go/go-testing#table-driven-subtests, react's no-disable-hooks-lint,
+  ts-js-node/nodejs-build-fix#no-ts-ignore-suppression.
+- Gate: DeepSeek deepseek:deepseek-chat, runner+judge, strictness high, scope
+  bundled, floor 0.8 (PACK_BEHAVIOR_PASS_FLOOR). Key at
+  ~/.local/share/keryx/auth.json — never printed.
+- `keryx agents generate --stack <id>` regenerates agent pairs from stability.
+- Routing: ctx_used yes throughout. graph_used not-relevant (file set already
+  known from flow 316's own journal/review). wiki_used not-relevant.
+  raw_rg_used only for trivial pwd/branch checks and reads of the runner's own
+  scratchpad dir outside the repo tree (each marked `# keryx:raw`).

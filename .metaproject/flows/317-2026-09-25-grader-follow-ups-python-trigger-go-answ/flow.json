@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,17 +8,54 @@
   "id": "317",
   "slug": "grader-follow-ups-python-trigger-go-answ",
   "title": "Grader follow-ups: python trigger, go answer-in-text runner note, live re-judge sampler, 10-trial promotion, honest re-run",
-  "status": "initializing",
+  "status": "done",
   "createdAt": "2026-09-25T04:36:22.847Z",
-  "updatedAt": "2026-09-25T04:36:22.847Z",
+  "updatedAt": "2026-09-25T06:01:36.531Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T06:01:24.005Z",
+      "note": "python-implementation SKILL.md description/triggers fixed after offline trigger-only diagnosis (keryx skills scout); full bundled-catalog trigger regression 110/110 pos, 108/108 neg. Commit 6b878fe1."
+    },
+    "AC2": {
+      "at": "2026-09-25T06:01:24.105Z",
+      "note": "RUNNER_SYSTEM_NOTE + RUNNER_PROMPT_VERSION added, bound by pack gate; no-sleep-sync fail_criteria reviewed and fixed against recorded evidence (select+time.After deadline guard vs fixed delay). Commits 412b2dc2, 454175e7."
+    },
+    "AC3": {
+      "at": "2026-09-25T06:01:24.205Z",
+      "note": "keryx skills eval --reverify implemented (reverifyPackSample), unit-tested with stub judge, documented in CLI reference threat-model section. Commit 5cadbf3e."
+    },
+    "AC4": {
+      "at": "2026-09-25T06:01:24.305Z",
+      "note": "PACK_MIN_TRIALS 5->10 with documented reasoning; regression test proves an old 5-trial report still fails. Commit 46fe5a49."
+    },
+    "AC5": {
+      "at": "2026-09-25T06:01:24.408Z",
+      "note": "no-disable-hooks-lint reviewed against recorded evidence (2 genuine failures); no defect found; confirmed at trials=10 (3/10, lower rate, not floor noise). Commits eb77e377, df55b49a."
+    },
+    "AC6": {
+      "at": "2026-09-25T06:01:24.509Z",
+      "note": "getter-accessor known-right variant documented in pass_criteria/known_right (schema supports only one known_right string, so a rubric note not a schema change). Commit b39e81f6."
+    },
+    "AC7": {
+      "at": "2026-09-25T06:01:24.611Z",
+      "note": "Calibration re-recorded (judge-check --record) for every touched scenario, all green; honest gate run at trials=10 over all 18 skills; governance/eval.json rebuilt from raw outputs; pack.json/install-manifest stability updated (python/go stable, ts-js-node experimental); agent pairs regenerated; W1/W2 docs, CLI reference, guide updated. Commit df55b49a, 9013e29e, 6c31e5fb."
+    },
+    "AC8": {
+      "at": "2026-09-25T06:01:24.712Z",
+      "note": "No SKILL.md or grader edited to force a pass; every rubric/calibration change justified in journal.md with recorded evidence (no-sleep-sync, no-nolint-suppression, getter-accessor)."
+    },
+    "AC9": {
+      "at": "2026-09-25T06:01:24.812Z",
+      "note": "PR #702 merged into feat/agent-platform-expansion as 009c13ba. Review round 1: 0 blocker/major/minor/info. Round 2 (narrow, CI-driven fix): 0 new findings. CI green on all checks."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/702"
   },
   "baseBranch": "feat/agent-platform-expansion",
   "owner": {
@@ -32,34 +69,585 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by FU-specific tasks T1..T7 below"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by FU-specific tasks T1..T7 below"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by FU-specific tasks T1..T7 below"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by FU-specific tasks T1..T7 below"
+    },
+    {
+      "id": "T5",
+      "title": "FU1: diagnose+fix python-implementation trigger-positive-6",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T04:41:01.251Z",
+            "outcome": "started",
+            "detail": "diagnosing python-implementation trigger-positive-6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "FU2: runner answer-in-text system note + no-sleep-sync check",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T04:43:41.046Z",
+            "outcome": "started",
+            "detail": "runner answer-in-text system note"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "FU3: live re-judge sampler (skills eval --reverify)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T04:48:45.703Z",
+            "outcome": "started",
+            "detail": "live re-judge sampler: skills eval --reverify"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "FU4: PACK_MIN_TRIALS 5->10 + regression test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T04:56:46.214Z",
+            "outcome": "started",
+            "detail": "PACK_MIN_TRIALS 5->10"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "FU5: react no-disable-hooks-lint defect check",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T05:00:21.987Z",
+            "outcome": "started",
+            "detail": "react no-disable-hooks-lint defect check"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "FU6: getter-accessor calibration variant",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T05:01:21.537Z",
+            "outcome": "started",
+            "detail": "getter-accessor calibration variant"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "FU7: re-record calibration + honest gate run at trials=10 + docs/agents",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T05:03:12.360Z",
+            "outcome": "started",
+            "detail": "re-record calibration + honest gate run at trials=10"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-25T04:36:22.847Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-25T04:40:43.196Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T04:40:43.287Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T04:40:43.384Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T04:40:43.482Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T04:40:50.601Z",
+      "event": "task-added",
+      "detail": "T5: FU1: diagnose+fix python-implementation trigger-positive-6"
+    },
+    {
+      "at": "2026-09-25T04:40:50.697Z",
+      "event": "task-added",
+      "detail": "T6: FU2: runner answer-in-text system note + no-sleep-sync check"
+    },
+    {
+      "at": "2026-09-25T04:40:50.790Z",
+      "event": "task-added",
+      "detail": "T7: FU3: live re-judge sampler (skills eval --reverify)"
+    },
+    {
+      "at": "2026-09-25T04:40:50.881Z",
+      "event": "task-added",
+      "detail": "T8: FU4: PACK_MIN_TRIALS 5->10 + regression test"
+    },
+    {
+      "at": "2026-09-25T04:40:50.973Z",
+      "event": "task-added",
+      "detail": "T9: FU5: react no-disable-hooks-lint defect check"
+    },
+    {
+      "at": "2026-09-25T04:40:51.063Z",
+      "event": "task-added",
+      "detail": "T10: FU6: getter-accessor calibration variant"
+    },
+    {
+      "at": "2026-09-25T04:40:51.157Z",
+      "event": "task-added",
+      "detail": "T11: FU7: re-record calibration + honest gate run at trials=10 + docs/agents"
+    },
+    {
+      "at": "2026-09-25T04:40:55.242Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T04:40:55.339Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T04:41:01.251Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — diagnosing python-implementation trigger-positive-6"
+    },
+    {
+      "at": "2026-09-25T04:43:35.832Z",
+      "event": "task-done",
+      "detail": "T5: FU1: diagnose+fix python-implementation trigger-positive-6"
+    },
+    {
+      "at": "2026-09-25T04:43:41.046Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — runner answer-in-text system note"
+    },
+    {
+      "at": "2026-09-25T04:48:41.955Z",
+      "event": "task-done",
+      "detail": "T6: FU2: runner answer-in-text system note + no-sleep-sync check"
+    },
+    {
+      "at": "2026-09-25T04:48:45.703Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — live re-judge sampler: skills eval --reverify"
+    },
+    {
+      "at": "2026-09-25T04:56:40.822Z",
+      "event": "task-done",
+      "detail": "T7: FU3: live re-judge sampler (skills eval --reverify)"
+    },
+    {
+      "at": "2026-09-25T04:56:46.214Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — PACK_MIN_TRIALS 5->10"
+    },
+    {
+      "at": "2026-09-25T05:00:15.506Z",
+      "event": "task-done",
+      "detail": "T8: FU4: PACK_MIN_TRIALS 5->10 + regression test"
+    },
+    {
+      "at": "2026-09-25T05:00:21.987Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — react no-disable-hooks-lint defect check"
+    },
+    {
+      "at": "2026-09-25T05:01:17.424Z",
+      "event": "task-done",
+      "detail": "T9: FU5: react no-disable-hooks-lint defect check"
+    },
+    {
+      "at": "2026-09-25T05:01:21.538Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — getter-accessor calibration variant"
+    },
+    {
+      "at": "2026-09-25T05:02:56.484Z",
+      "event": "task-done",
+      "detail": "T10: FU6: getter-accessor calibration variant"
+    },
+    {
+      "at": "2026-09-25T05:03:12.360Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — re-record calibration + honest gate run at trials=10"
+    },
+    {
+      "at": "2026-09-25T05:45:42.872Z",
+      "event": "task-done",
+      "detail": "T11: FU7: re-record calibration + honest gate run at trials=10 + docs/agents"
+    },
+    {
+      "at": "2026-09-25T06:01:10.882Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/702 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T06:01:24.005Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: python-implementation SKILL.md description/triggers fixed after offline trigger-only diagnosis (keryx skills scout); full bundled-catalog trigger regression 110/110 pos, 108/108 neg. Commit 6b878fe1. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.105Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: RUNNER_SYSTEM_NOTE + RUNNER_PROMPT_VERSION added, bound by pack gate; no-sleep-sync fail_criteria reviewed and fixed against recorded evidence (select+time.After deadline guard vs fixed delay). Commits 412b2dc2, 454175e7. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.205Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: keryx skills eval --reverify implemented (reverifyPackSample), unit-tested with stub judge, documented in CLI reference threat-model section. Commit 5cadbf3e. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.305Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: PACK_MIN_TRIALS 5->10 with documented reasoning; regression test proves an old 5-trial report still fails. Commit 46fe5a49. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.408Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: no-disable-hooks-lint reviewed against recorded evidence (2 genuine failures); no defect found; confirmed at trials=10 (3/10, lower rate, not floor noise). Commits eb77e377, df55b49a. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.509Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: getter-accessor known-right variant documented in pass_criteria/known_right (schema supports only one known_right string, so a rubric note not a schema change). Commit b39e81f6. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.611Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Calibration re-recorded (judge-check --record) for every touched scenario, all green; honest gate run at trials=10 over all 18 skills; governance/eval.json rebuilt from raw outputs; pack.json/install-manifest stability updated (python/go stable, ts-js-node experimental); agent pairs regenerated; W1/W2 docs, CLI reference, guide updated. Commit df55b49a, 9013e29e, 6c31e5fb. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.712Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: No SKILL.md or grader edited to force a pass; every rubric/calibration change justified in journal.md with recorded evidence (no-sleep-sync, no-nolint-suppression, getter-accessor). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:24.812Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: PR #702 merged into feat/agent-platform-expansion as 009c13ba. Review round 1: 0 blocker/major/minor/info. Round 2 (narrow, CI-driven fix): 0 new findings. CI green on all checks. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T06:01:28.551Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T06:01:36.530Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-25T06:01:36.531Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T06:01:24.005Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.105Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.205Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.305Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.408Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.509Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.611Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.712Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:24.812Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
+    },
+    {
+      "at": "2026-09-25T06:01:36.531Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24",
+      "headCommit": "2a83439e33688337eaf8a73a00221e6575b038c8"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T06:01:36.530Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets feat/agent-platform-expansion, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "11 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:fa2e917f2748e5327a274596de047cf52f773058612f893fc76c834c0ee83b24"
     }
   ]
 }
