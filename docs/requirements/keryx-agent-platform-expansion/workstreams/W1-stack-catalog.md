@@ -1383,6 +1383,74 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   foreseeable — the D-7 catalog-scale-governance risk already on record in
   this document's Risks section, observed in practice for the first time.
 
+## Implementation notes: Wave 4 batch 6, Phase B honest gate (flow 338)
+
+- **Rebased onto `main` (#719 + #725/flow 334's negation-aware scorer).**
+  Catalog grew 110/642 -> 119/684 skills/triggers; `scout.test.ts`'s
+  catalog-wide ratchet re-measured (157, then 159 after this flow's own
+  description edits below) and `checkStablePackGate` re-confirmed passing
+  for `go`/`python` at every stage — no collision from these two packs.
+- **Two `subtle_wrong` calibrations flagged in Phase A were resolved before
+  calibrating**, not deferred: verified against current Docker docs via
+  ctx7. Neither "mitigating" argument (internal-only image, nightly
+  rebuild cadence) is a real exception in Docker's own guidance, so both
+  are confirmed genuinely wrong; `fail_criteria` on both scenarios
+  extended with an explicit rebuttal clause.
+- **Honest gate, first run (all 5 skills, `deepseek:deepseek-chat`,
+  `--strictness high --trials 10 --scope bundled`): verdict `fail` on
+  every skill**, all on deterministic trigger-rank routing (13 scenarios
+  across 5 skills — real scope gaps, not model variance; trigger scoring
+  runs once regardless of `--trials`). All 4 judge-graded behavior
+  scenarios passed cleanly on this run. Raw output archived under this
+  flow's `gate-evidence/run1/`.
+- **Fix pass**: edited only `SKILL.md` `description:`/`triggers:`
+  frontmatter on all 5 skills to state real scope boundaries (explicit
+  "not for X, use Y" clauses; literal vocabulary/error text a user would
+  type, e.g. GitHub's own "Resource not accessible by integration"). No
+  `evals.json` scenario, calibration, or judge-check recording was
+  touched.
+- **Honest gate, second (official) run:**
+  - `ci-pipeline-implementation`: **PASS** — every trigger and behavior
+    scenario clears.
+  - `ci-pipeline-code-review`: **PASS** — every trigger and behavior
+    scenario clears.
+  - `docker-k8s-terraform-review`: **FAIL** — 2 trigger-negatives still
+    misroute (`"Deploy this Dockerfile image to production"`, `"Fix the
+    failing terraform plan for me"`), both action requests this read-only
+    skill should not claim. Behavior scenarios clear.
+  - `docker-k8s-terraform-build-fix`: **FAIL** — `"Fix the failing Go
+    build"` still misroutes. Direct `scoutSkill` measurement: every
+    `*-build-fix` skill in the catalog (`angular`, `ci-github-gitlab`,
+    `docker-k8s-terraform`, `go`) ties at `overlapScore: 1` on this exact
+    query, sharing only generic "build"/"fail"/"fix" tokens — "go" is
+    never a shared term in any match, so it was never the deciding token
+    and disclaiming it (done after run 1) had no measurable effect. Honest
+    ambiguity against the whole `*-build-fix` family, accepted per the
+    standing rule against iterating against the router rather than chased
+    further. Behavior scenarios clear.
+  - `ci-pipeline-build-fix`: **FAIL** — 3 trigger-negatives misroute (a
+    TypeScript compile error; a Dockerfile apt-package build failure,
+    where direct measurement shows this skill still outscores
+    `docker-k8s-terraform-build-fix` 0.48 vs 0.385 on shared generic
+    "because"/"build"/"fail"/"missing" tokens despite the Dockerfile
+    disclaimer already stripping "dockerfile" from its own indexed text;
+    and a "write a new workflow" authoring ask, close against
+    `ci-pipeline-implementation` at 0.352 vs 0.305). Behavior scenarios
+    0.9/1.0, both above the 0.8 floor.
+  - **Pack-level outcome**: a pack needs every listed skill to clear.
+    `docker-k8s-terraform` (0/2) and `ci-github-gitlab` (2/3) both stay
+    `stability: experimental`; neither ships a generated
+    `<id>-code-auditor`/`<id>-build-fixer` pair — same rule flow 316
+    applied to `react` (no pair while any one skill fails, even with
+    others passing).
+  - `governance/eval.json` for both packs rebuilt verbatim from this
+    second run's raw `skills eval --json` output, HEAD unchanged start to
+    end for that run.
+  - Stack coverage unchanged by this batch: still 2 generated-pair packs
+    (`go`, `python`) catalog-wide; `docker-k8s-terraform` and
+    `ci-github-gitlab` join `ts-js-node`/`react`/`nestjs`/`angular`/`mobx`/
+    `nextjs-nuxt`/`vue` as authored-but-experimental.
+
 ## Data contracts
 
 - `schemas/install-manifest.schema.json` (this workstream) — profiles,

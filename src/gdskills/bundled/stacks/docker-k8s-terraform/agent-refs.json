@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "no pair until the docker-k8s-terraform pack clears the eval gate (flow 338, Wave 4 batch 6 authored the pack but did not run `keryx skills eval`/`keryx skills judge-check` -- that is a later, separately-gated phase)"
+  "note": "no pair: the honest gate ran (flow 338 Phase B, deepseek:deepseek-chat, --strictness high --trials 10 --scope bundled) and FAILED for both skills on trigger accuracy -- docker-k8s-terraform-review misroutes on 'Deploy this Dockerfile image to production' and 'Fix the failing terraform plan for me' (action requests this read-only skill should not claim); docker-k8s-terraform-build-fix misroutes on 'Fix the failing Go build' (ties at overlapScore 1.0 with every other *-build-fix skill on generic build/fail/fix vocabulary alone -- an honest ambiguity, not a description defect). Both behavior scenarios passed cleanly on both skills. Stays stability: experimental; see governance/eval.json for the full recorded report and W1-stack-catalog.md's batch 6 implementation notes for the accounting."
 }

@@ -172,3 +172,68 @@
 - **The second run (after `b2ea46de`) is the official gate result** for
   stability/agent-generation purposes. Its per-skill outcome is recorded in
   a separate journal entry below once it completes.
+
+## Honest gate: official (second-run) result
+
+- **`ci-pipeline-implementation`: PASS.** Every trigger and both behavior
+  scenarios pass cleanly.
+- **`ci-pipeline-code-review`: PASS.** Every trigger and both behavior
+  scenarios pass cleanly.
+- **`docker-k8s-terraform-review`: FAIL.** `trigger-negative-3` ("Deploy
+  this Dockerfile image to production") and `trigger-negative-5` ("Fix the
+  failing terraform plan for me") still misroute — both are action
+  requests (deploy/fix) this read-only review skill should not claim, and
+  the "never builds, deploys, or runs" disclaimer added after run 1 didn't
+  cover "fix." Both behavior scenarios pass cleanly.
+- **`docker-k8s-terraform-build-fix`: FAIL.** `trigger-negative-4` ("Fix
+  the failing Go build") still misroutes. Direct measurement
+  (`scoutSkill`, see below) shows why: every `*-build-fix` skill in the
+  catalog (angular, ci-github-gitlab, docker-k8s-terraform, go) ties at
+  `overlapScore: 1` on this exact query, sharing only the generic tokens
+  "build"/"fail"/"fix" — "go" itself never appears as a shared term in ANY
+  match, meaning the scorer's tokenizer does not treat "go" as a
+  distinguishing signal here at all (too short/common). This is a genuine
+  ambiguity in the query against the whole *-build-fix family, not a
+  description defect specific to this pack — disclaiming "Go" explicitly
+  (already done after run 1) had no measurable effect because "go" was
+  never the deciding token. Per the standing rule against iterating
+  against the router, this is accepted as an honest miss rather than
+  chased with further wording changes. Both behavior scenarios pass
+  cleanly.
+- **`ci-pipeline-build-fix`: FAIL.** `trigger-negative-2` ("Our TypeScript
+  compile step is failing...", newly failing — was passing on run 1, a
+  corpus-redistribution side effect of this flow's own description edits,
+  not a new defect introduced by us alone), `trigger-negative-4` ("This
+  Dockerfile fails to build because of a missing apt package" — direct
+  measurement shows `ci-pipeline-build-fix` outscores
+  `docker-k8s-terraform-build-fix` 0.48 vs 0.385 on shared generic terms
+  "because"/"build"/"fail"/"missing", despite the disclaimer already
+  naming Dockerfile explicitly and stripping it from this skill's own
+  token set — an IDF-weighting effect between two sibling packs' generic
+  vocabulary, not a missing disclaimer), `trigger-negative-5` ("Write a new
+  workflow that lints our code on every push" — ties closely with
+  `ci-pipeline-implementation`, 0.352 vs 0.305, close but this skill still
+  clears the selection threshold). `permission-scope-fix` behavior scenario
+  0.9, `protected-variable-fix` 1.0 (both well above the 0.8 floor).
+- **Pack-level outcome.** A pack needs every skill it lists to clear the
+  gate. `docker-k8s-terraform` (2/2 skills fail) and `ci-github-gitlab`
+  (2/3 pass, 1/3 fails) both stay `stability: experimental` with
+  `agent-refs.json: {"agents": []}` — no generated
+  `<id>-code-auditor`/`<id>-build-fixer` pair for either, same rule flow
+  316 applied to `react` (no pair while any one skill fails, even with
+  others passing).
+- **Direct scorer measurement** (not a test run, a one-off diagnostic via
+  `scoutSkill`) confirms the above reasoning rather than asserting it
+  blind — reproducible with `scoutSkill(<query>, catalog)` from
+  `src/gdskills/governance/scout.ts` against the four still-failing
+  queries.
+- **`governance/eval.json` rebuilt verbatim** from the second (official)
+  run's raw `skills eval --json` output for both packs — no hand-editing
+  of report content. Raw first-run outputs archived under
+  `gate-evidence/run1/`; the second run's raw outputs are the
+  `governance/eval.json` files themselves (byte-identical to what
+  `keryx skills eval` produced, just assembled into the pack-level
+  `{schemaVersion, reports: [...]}` shape).
+- **`checkStablePackGate("stacks/go"/"stacks/python", "stable")` re-checked
+  a final time against the fully-updated catalog: both still
+  `{"status":"pass"}`.**

@@ -1,0 +1,430 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "docker-k8s-terraform/docker-k8s-terraform-review",
+  "strictness": "high",
+  "trials": 10,
+  "triggerAccuracy": {
+    "truePositive": 6,
+    "falsePositive": 2,
+    "positives": 6,
+    "negatives": 6
+  },
+  "evidence": "authored",
+  "scenarios": [
+    {
+      "id": "trigger-positive-1",
+      "kind": "trigger-positive",
+      "prompt": "Review this Dockerfile for security issues before we merge",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-2",
+      "kind": "trigger-positive",
+      "prompt": "Check this Kubernetes deployment manifest for a missing securityContext",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-3",
+      "kind": "trigger-positive",
+      "prompt": "Review this Terraform change for hardcoded secrets",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-4",
+      "kind": "trigger-positive",
+      "prompt": "Does this Dockerfile end up running the container as root",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-5",
+      "kind": "trigger-positive",
+      "prompt": "Review this Helm chart's NetworkPolicy template",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-positive-6",
+      "kind": "trigger-positive",
+      "prompt": "Check this docker-compose file for a credential in plaintext",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-1",
+      "kind": "trigger-negative",
+      "prompt": "Review this Go diff for goroutine leaks",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-2",
+      "kind": "trigger-negative",
+      "prompt": "Run a full dependency vulnerability scan on this repo",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-3",
+      "kind": "trigger-negative",
+      "prompt": "Deploy this Dockerfile image to production",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-4",
+      "kind": "trigger-negative",
+      "prompt": "Review this GitHub Actions workflow YAML for caching issues",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-5",
+      "kind": "trigger-negative",
+      "prompt": "Fix the failing terraform plan for me",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 0,
+      "passRate": 0,
+      "passAtK": 0,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "trigger-negative-6",
+      "kind": "trigger-negative",
+      "prompt": "Review this Python code for SQL injection",
+      "strictness": "high",
+      "trials": 1,
+      "passes": 1,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "trigger-rank-fork-family",
+      "status": "ran",
+      "deterministic": true
+    },
+    {
+      "id": "dockerfile-root-user",
+      "kind": "behavior",
+      "prompt": "Review this Dockerfile diff: an existing image previously ran as a non-root user, but the change adds `USER root` right before the final CMD instruction. What's wrong here?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "This diff regresses the image from running as a non-root user back to running as root, right at the point where it matters most — the final process.\n\nThe problem: the `USER root` added immediately before `CMD` means the container's main process (whatever `CMD` launches) now runs as root, undoing whatever non-root `USER` the image previously set earlier in the build. This is not a harmless build-time convenience — it's the runtime identity of the primary process.\n\nWhy it matters, concretely:\n\n- **Privilege scope on compromise.** If the process launched by `CMD` is compromised (e.g. a remote-code-execution bug in the app or one of its dependencies), the attacker is now root *inside the container* instead of a scoped user. That widens what they can touch: files owned by root, mounted volumes (including host paths mounted in), and any container-runtime escape surface that requires root inside the namespace.\n- **It's a regression, not a pre-existing condition.** If the file previously set a non-root `USER` and this diff adds `USER root` back, the diff *introduces* the root-container risk. That distinction matters for review — this isn't legacy debt, it's a new slice of exposure being added to a shared branch.\n- **Blast radius in orchestration.** Root-in-container is exactly the condition Kubernetes `securityContext` (`runAsNonRoot: true`) is designed to reject. If a manifest elsewhere in the same change enforces `runAsNonRoot: true`, this Dockerfile will now fail admission on deploy; if it doesn't, the two together silently ship a root workload.\n\nSketch of the finding:\n\n```\nDockerfile:<line of USER root> -- USER root added back immediately before\n  CMD, reverting the image to run its main process as root. Risk: any\n  compromise of the CMD process now executes with root privileges inside\n  the container instead of a scoped user. Fix direction: remove this\n  USER root; keep the previously non-root USER in effect at CMD time.\n  If the build genuinely needs root earlier (e.g. apt install), scope it\n  to that RUN layer and switch back with USER <nonroot> before CMD --\n  don't leave root as the final identity.\n```\n\nTwo things worth confirming before closing this out:\n\n- **Does the `USER root` actually get undone later?** Read the lines between it and `CMD` — if there's a subsequent `USER <nonroot>` I haven't seen, the finding evaporates. From the description, it's placed *right before* the final `CMD`, so it almost certainly is the effective identity, but confirm against the actual file.\n- **Was there an earlier non-root `USER`, and who created that user?** If the base image or an earlier `RUN useradd` established the non-root user, the fix is simply deleting this line. If the non-root `USER` was the only thing relying on a user that the rest of the diff also removes, the fix is to re-establish both.\n\nI'm not able to edit the file here — this is a read-only review, so the output is the finding and fix direction above, not a patched Dockerfile.",
+          "outputSha256": "f4303a16e461cd1733cec00fbe3673f418a9aa6c887a542cd36c2088de4d347d",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Names the diff's `USER root` before CMD as the problem (\"regresses... back to running as root\"), states the consequence (compromise of CMD process \"now root inside the container instead of a scoped user\"), and gives fix direction (\"remove this USER root; keep the previously non-root USER\"). Explicitly read-only: \"not able to edit the file here.\" No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "The `USER root` line is a security regression: it reverts the image from running as a non-root user back to running as root, which is exactly the non-root-by-default violation this review checks for.\n\n**What's wrong**\n\n- **Root container restored.** The base image (or an earlier stage) had already dropped privileges to a non-root user, presumably deliberately. Adding `USER root` immediately before the final `CMD` means the container's main process — and therefore everything the application spawns or that an attacker achieves through a process compromise inside the container — executes with UID 0 instead of the scoped user. Any code-execution or dependency-compromise inside the container is now running as root, which materially widens the blast radius (writable system paths, ability to change file ownership, easier privilege escalation, and in the pod context a much stronger starting position for container escapes).\n- **The placement makes it maximally effective.** `USER` is sticky and applies to every subsequent `RUN`, `CMD`, and `ENTRYPOINT`. Putting it *last*, right before `CMD`, means the runtime entrypoint is the thing that ends up as root. This is precisely the pattern that looks like an innocuous one-liner in a diff but changes the runtime identity of the shipped image.\n- **Loss of a deliberate control.** If the image previously ran non-root, that was a configured safeguard, not an accident. This diff removes it. Whatever motivated it — a base image that set `USER` itself, or an explicit earlier `USER app` with a `RUN useradd` — the change discards that protection rather than working within it.\n\n**A common rationalization, and why it fails:** \"I only need root to install/chown something.\" If a build step genuinely needs root, the fix is to switch back to a non-root user *after* that step (`USER root` → do the work → `USER app`), not to leave the final `CMD` running as root. A trailing `USER root` with no return to non-root has no legitimate build justification — it only affects the runtime process.\n\n**Finding, in the review format (report only, no edit):**\n\n```\nDockerfile:<line> -- USER root added immediately before the final CMD,\n  reverting the image from a non-root runtime to root. Risk: the container's\n  main process now runs as UID 0, so any process compromise or dependency\n  exploit inside the container gains root privileges instead of the scoped\n  user's. Fix direction: remove the trailing `USER root`; if a preceding build\n  step required root, restore the original switch back (e.g. `USER app`) after\n  that step, before CMD/ENTRYPOINT.\n```\n\n**Scope note:** if this file is the only Dockerfile change in the diff, that is the single finding. Confirm the line number from the diff, and if the earlier non-root step lived in a multi-stage build, verify the final stage is the one gaining `USER root` — a `USER root` in an intermediate stage that is discarded is a different (and usually benign) matter than one in the stage that produces the runtime image. No files were modified by this review.",
+          "outputSha256": "fafce1e8577d9745964017cfcab59017b0c6f169e9c5c63f0b90ff2f010655ff",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff's `USER root` before final CMD as the problem (\"security regression... reverts the image from running as a non-root user back to running as root\"). States consequence: main process runs UID 0, so process compromise/dependency exploit gains root instead of scoped user. Fix direction given as finding: remove trailing `USER root`, restore `USER app`; explicitly \"report only, no edit\" and \"No files were modified.\" No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "This is a regression that reverts the image to running as root, and it should be flagged as a finding, not fixed in place (this skill is read-only).\n\n**Finding**\n\n```\nDockerfile -- USER root added back immediately before CMD.\nRisk category: root container (rules/security.mdc, non-root-by-default).\n```\n\n**Why it matters**\n\nThe image was deliberately built to run as a non-root user — that's the state the diff is undoing. Adding `USER root` right before `CMD` means the container's main process now starts as UID 0. The concrete exposure:\n\n- Any compromise of the application process (a dependency RCE, a shell injection, a malicious request exploiting the app) executes with root privileges inside the container instead of a scoped, unprivileged user.\n- Root in the container is the worst possible starting point if the container is ever run without a restrictive `securityContext`, with `--privileged`, or with a host path mount — the blast radius of a container escape or a misconfigured volume is far larger from UID 0.\n- It silently undoes whatever hardening the original `USER <app>` line provided, so anyone reviewing the change sees a green build but a materially weaker runtime posture. This is exactly the \"regression introduced by the diff\" class the review is supposed to catch, distinct from any pre-existing issue elsewhere in the file.\n\n**What the reviewer should report (not apply)**\n\n- File:line of the added `USER root`, flagged as a root-container regression introduced by this diff.\n- Fix direction: delete the `USER root` line and restore the previous non-root `USER <name>` (the one already in place before CMD/ENTRYPOINT), ensuring the user is created earlier in the Dockerfile with something like `RUN useradd` and that any files the process needs to write are chowned to it. If the change was added to work around a permission error, the fix is to correct ownership of the specific path, not to run the whole image as root.\n\n**What not to do here**\n\n- Do not edit the Dockerfile to remove `USER root` yourself — report the finding and its fix direction only.\n- Do not wave it through as \"just for local dev.\" A Dockerfile on a shared branch is reviewed as shipping config; if the root user is genuinely needed for a local-only workflow, that should be an explicit override (e.g. `docker run --user root`) or a separate dev-only target, not a change to the image's default runtime user.\n- Confirm the surrounding context (what user the original `USER` line named, and whether any earlier stage already dropped privileges) so the finding distinguishes this diff-introduced regression from any pre-existing weakness in the same file.",
+          "outputSha256": "50ea589236224365778c0365a57a3c69806101ef81e3c05f8cdb05de08306e72",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff adding `USER root` before CMD as the problem (Finding block), states the consequence that a process compromise runs with root privileges instead of a scoped unprivileged user, and gives fix direction: delete `USER root` and restore the previous non-root `USER <name>`, presented as a read-only finding with no edit applied."
+          },
+          "passed": true
+        },
+        {
+          "output": "This diff reintroduces a root container regression on top of an image that was previously running as non-root — a clear violation of the non-root-by-default rule in `rules/security.mdc`.\n\n**What's wrong:**\n\n- `USER root` placed just before the final `CMD` reverts the runtime user for everything the container does from that point on. The image's default user for the container's actual process is now root.\n- The container was previously scoped to a non-root user. This change means any process compromise — a remote code execution in the app, a malicious dependency, a shell escaping into the container — now runs with root privileges inside the container instead of a limited user, substantially widening the impact of a compromise.\n- Because it is the last instruction before `CMD`, it is not a build-time-only `USER` (e.g., temporarily switching to install packages and switching back). It directly changes the identity of the final workload, which is exactly the pattern this skill flags.\n\n**Finding (read-only — not applied):**\n\n```\nDockerfile:<line of USER root> -- USER root added back before the final\n  CMD, reverting the image to run as root at runtime, and undoing the\n  non-root user the image previously ran as. Risk: any process compromise\n  inside the container now executes with root privileges instead of a\n  scoped user. Fix direction: remove the added USER root (or restore the\n  prior non-root instruction, e.g. USER app, if a build step needed a\n  temporary privilege escalation earlier in the file, scope that USER\n  change to just that RUN step and switch back afterward).\n```\n\n**Caveats worth confirming:**\n\n- If the added `USER root` was introduced specifically to make some command in `CMD`/`ENTRYPOINT` work (writing to a root-owned path, binding a privileged port, etc.), that is a symptom to solve with the proper fix — chown the needed path, grant the capability, or set the port — not by running the whole container as root.\n- If there is any doubt that this is a diff-introduced change versus a pre-existing one in a file the diff merely touches, check the diff base: the description here says it is newly added, so treat it as introduced by this change.\n- I have not modified the file — this is a report with fix direction only.",
+          "outputSha256": "27ce68464a07e537c257b232d64265fad2d40f0454e5e78977b98f507fe63d6e",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff adding `USER root` before final CMD as the problem (criterion 1), states the consequence that any process compromise now runs with root privileges instead of a scoped user (criterion 2), and gives fix direction to remove USER root / restore prior non-root instruction, explicitly read-only and not applied (criterion 3). No fail criteria: it does not excuse root as dev-only or claim an edit."
+          },
+          "passed": true
+        },
+        {
+          "output": "This diff moves the image backward on its most important hardening property: it reverts a container that was already non-root back to running as root for every process after that instruction.\n\n**What's wrong**\n\n- **Privilege regression, not a fresh start.** The prior state was correct (non-root `USER` in place). The change doesn't merely fail to add hardening — it strips hardening that already existed. That is a worse case than a Dockerfile that never set `USER` at all, and it deserves to be called out as a regression, not a gap.\n- **Everything after `USER root` runs as root.** Because the instruction sits immediately before the final `CMD`, the container's entrypoint process — and any child process it forks, including a compromised request handler, a shell spawned by an exploit, or a dependency's post-install script — runs with UID 0 inside the container. The non-root `USER` earlier in the file is now dead weight; the last one wins.\n- **Blast radius.** With root inside the container, a process compromise gains ownership of every file the image carries, the ability to bind privileged ports, to install packages, and to write anywhere the container's writable layer allows. If the container also has a mounted service-account token, host path, or Docker socket, root-in-container turns a contained bug into a path toward the node. Combined with a missing `runAsNonRoot`/`allowPrivilegeEscalation: false` in the Pod spec, there is no second line of defense at the orchestrator either.\n- **Why it's usually added.** This instruction is nearly always a shortcut for \"a permission error appears at runtime\" — a `RUN` step couldn't write to a directory, a volume mount is owned by root, or a port below 1024 is being bound. The correct fix is almost never \"become root\"; it's to `chown` the relevant path to the non-root user during build, use a high port, or set `fsGroup`/`runAsUser` in the Pod security context.\n\n**Fix direction (do not apply — report it)**\n\n- Restore a non-root `USER` as the final user-affecting instruction, after the `useradd`/`chown` steps earlier in the file, so it is the one that takes effect at `CMD`.\n- If files needed by the runtime were the reason root was introduced, `chown` them to that user at build time (`RUN chown -R app:app /app`) instead of widening privileges.\n- If a privileged port (<1024) was the reason, move the container to a high port (e.g. 8080) and let the Service map 80 → 8080.\n- Pair the restored `USER` with a Pod `securityContext` carrying `runAsNonRoot: true` and `allowPrivilegeEscalation: false`, so a future accidental `USER root` in the Dockerfile is caught by the admission layer rather than shipping silently.\n\n**One caveat before asserting completeness:** verify from the diff whether this `USER root` was added for a build-time `RUN` step only (in which case an even later `USER app` may still follow outside the shown hunk) or is genuinely the last user-affecting instruction before `CMD`. The finding above holds only for the latter; if the hunk was truncated, confirm the final `USER` value with the full file before reporting.",
+          "outputSha256": "16b33a9ad9ab779e1e2bb0ee1f706937b281f700811e90ef3dd2052932492a7b",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff's `USER root` as a privilege regression (\"reverts a container that was already non-root back to running as root\"), states the consequence (\"entrypoint process... runs with UID 0\", compromise gains root), and gives fix direction (\"Restore a non-root USER as the final user-affecting instruction\") explicitly as a finding (\"do not apply — report it\"). No edit claimed; no dev/internal-only excuse."
+          },
+          "passed": true
+        },
+        {
+          "output": "The change is a regression: it reverts the image from running as a scoped non-root user back to running as root.\n\n**What's wrong**\n\n`USER root` placed immediately before the final `CMD` is the instruction that actually takes effect for the running container — it overrides whatever non-root `USER` the image previously set earlier in the build. So this diff doesn't just \"do something early and get fixed later\"; it is the last word on the container's identity, and it undoes the prior non-root posture.\n\n**Why it matters (concrete exposure)**\n\n- Any process compromise inside the container (an RCE in the app, a dependency, an entrypoint script) now executes with UID 0 instead of a scoped user.\n- Root inside the container interacts badly with the host and cluster: if the container is ever run without a restrictive runtime policy, root in the container can map more directly to privilege on the node, and it defeats Kubernetes `securityContext` controls like `runAsNonRoot: true` (which will now cause the pod to fail admission, or be silently overridden where not enforced).\n- It weakens every downstream boundary at once — filesystem writes, capability inheritance, and any host mount the container can reach.\n\n**Fix direction (not applied — this review is read-only)**\n\nRestore a non-root `USER` as the last user-setting instruction before `CMD`/`ENTRYPOINT`, e.g. a user created earlier in the build:\n\n```\nRUN useradd --create-home --uid 10001 app\n...\nUSER app\nCMD [...]\n```\n\nIf root is genuinely needed for a privileged startup step (binding a low port, chowning a mounted volume), the correct pattern is to drop privileges inside the entrypoint after that step, not to leave the container running as root — and the corresponding Kubernetes `securityContext` should set `runAsNonRoot: true`, `allowPrivilegeEscalation: false`, and `capabilities.drop: [\"ALL\"]`.\n\n**One thing to confirm before closing this out**\n\nCheck whether the added `USER root` is paired with a compensating control elsewhere in the same change — e.g. a Kubernetes manifest that now enforces `runAsNonRoot: true` (which would make this Dockerfile fail at admission rather than actually run as root), or a stricter runtime security policy. If no such control exists, this is a live regression, not a contained one. The fix direction above stands either way; the confirmation only determines severity.\n\nFinding: `Dockerfile` — `USER root` added before final `CMD`, reverting the image to run as root. Risk: process compromise inside the container now runs with root privileges instead of a scoped user. Fix direction: restore a non-root `USER` before `CMD`/`ENTRYPOINT`.",
+          "outputSha256": "3a1b66179e35f910f371edfab6525ba2fc7c09f6d925375e67aceefd76c903e5",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff's `USER root` before final CMD as the problem (\"it overrides whatever non-root USER the image previously set\"), states the consequence (\"Any process compromise inside the container ... now executes with UID 0 instead of a scoped user\"), and gives a fix direction (\"Restore a non-root USER as the last user-setting instruction before CMD/ENTRYPOINT\", with `USER app` example) explicitly marked \"not applied — this review is read-only\". No fail criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding — `Dockerfile` (final stage, immediately before `CMD`): `USER root` added back onto a previously non-root image.**\n\n**What's wrong:**\n\nThe image had been hardened to run as a non-root user (an earlier `USER <user>` instruction, presumably paired with a `useradd`/`adduser` earlier in the build). This diff re-adds `USER root` right before the final `CMD`, which reverts that hardening: the container now starts — and runs its entrypoint process — as UID 0.\n\n**Why it matters:**\n\n- Any process or dependency compromise inside the container runs with root privileges instead of a scoped user. That removes the main barrier between an application-level exploit and root-level actions inside the container, and it widens the blast radius if the container is later combined with a misconfigured mount, an added capability, or a permissive `securityContext` (e.g. `runAsNonRoot` absent, `allowPrivilegeEscalation` left true).\n- It is a regression, not a new file's first draft: an existing guarantee is being removed by this diff, so it should be called out as diff-introduced, not pre-existing.\n- Because the change sits immediately before `CMD`, it is the last `USER` instruction in the final stage and therefore the one that takes effect — the earlier non-root `USER` is silently overridden.\n\n**Fix direction (not applied — this review is read-only):**\n\nRestore the non-root user as the effective final `USER`. The user must exist in the final stage (created there, or its UID/GID copied over with `COPY --from=... --chown=`); use a numeric UID (e.g. `USER 10001:10001`) so it works even when no matching `/etc/passwd` entry is present in the final image. Place `USER <non-root>` after any root-requiring `RUN` steps and before `CMD`/`ENTRYPOINT`. If root is genuinely needed only for a startup step, use an entrypoint that drops privileges (e.g. `gosu`/`su-exec`) rather than leaving the process running as root.\n\n**Confirm before concluding:** the finding above assumes the earlier non-root `USER` is still present earlier in the final stage and is being overridden by this new one. Check the final stage end-to-end: if the earlier `USER` line was *also* removed in this diff, the finding is the same but stronger (no non-root user is established at all). If no earlier `USER` exists in the final stage, reclassify the finding as \"never non-root\" rather than \"regression.\"",
+          "outputSha256": "971b38416f18b04f9192b34e697d3b6d3ba2836c89d70817138124f8a8fe3811",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff adding `USER root` before CMD as the problem (criterion 1), states the consequence that a process/dependency compromise runs with root privileges instead of a scoped user (criterion 2), and gives a fix direction — restore a non-root USER (e.g. `USER 10001:10001`) — explicitly marked 'not applied — this review is read-only' (criterion 3). No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "This diff reintroduces root execution into an image that was previously running as a non-root user, which is a direct regression of the non-root-by-default rule in `rules/security.mdc`.\n\nWhat's wrong:\n\n- **The image now runs as root at runtime.** Adding `USER root` immediately before the final `CMD`/`ENTRYPOINT` means the container's main process launches as UID 0. This is the last instruction to set the user, so it wins — the earlier non-root `USER` is overridden.\n- **Loss of the previous security posture.** The image *already* ran non-root, so this change is strictly a downgrade, not a new file being written to standard. The blast radius of any process compromise inside the container widens from a scoped user to full root within the container (and, depending on runtime/namespace settings and mounted resources, potentially the host).\n- **It defeats the other hardening around it.** Non-root is a precondition for `runAsNonRoot: true` enforcement and for `allowPrivilegeEscalation: false`/capability drops to be meaningful as a boundary; a root process starts already past that line.\n- **The \"it's just for local dev\" defense doesn't hold.** A Dockerfile reviewed in a diff bound for a shared branch is reviewed as shipping config. If root is genuinely needed for a build or debug step, that belongs in a scoped intermediate stage or a build-time flag, not as a blanket `USER root` ahead of `CMD` that ships to everyone.\n\nFix direction (report only, do not apply): restore a non-root `USER` (e.g. `USER app`, where the user was created earlier with `RUN useradd`/`adduser`) as the instruction before `CMD`/`ENTRYPOINT`. If a privileged step is required, confine it to an earlier build stage or an explicit, documented opt-in rather than the final runtime user.\n\nFinding form:\n\n```\nDockerfile:<line> -- USER root added immediately before the final CMD,\n  overriding the previously non-root user. Risk: the container's main\n  process now runs as root, so any in-container compromise gets root\n  privileges instead of a scoped user, and it invalidates surrounding\n  non-root hardening (runAsNonRoot, capability drops). Fix direction:\n  restore a non-root USER (created earlier via useradd/adduser) before\n  CMD/ENTRYPOINT; move any genuinely privileged step into a separate\n  build stage or an explicit opt-in.\n```\n\nConfirm one thing while reviewing: whether the earlier non-root `USER` line was also removed in the same diff (a full revert) or only the second `USER root` was added (a shadowing override). Either way it's a finding, but note which, and flag it as diff-introduced rather than pre-existing.",
+          "outputSha256": "d5066af786b2c8acbee244e586b1ab7533b80a04e9ad2d3692bbc0a9f0b8f8df",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff adding `USER root` before final CMD as the problem (\"Adding `USER root` immediately before the final `CMD`... the earlier non-root `USER` is overridden\"). States consequence: main process runs as UID 0, compromise gets root instead of scoped user. Fix direction given as report-only: \"restore a non-root `USER` (e.g. `USER app`...)\", explicitly \"report only, do not apply\". No fail criteria met."
+          },
+          "passed": true
+        },
+        {
+          "output": "This diff is a privilege regression, and it's the highest-severity class of finding for a Dockerfile review:\n\n**What changed:** The image previously ended as a non-root user. The diff inserts `USER root` immediately before the final `CMD`, so the container's runtime process — whatever `CMD`/`ENTRYPOINT` starts — now executes as UID 0 inside the container.\n\n**Why it matters:**\n- The entire point of the previous non-root `USER` was to constrain the blast radius of a compromise. Adding `USER root` back undoes that: any remote-code-execution, dependency compromise, or dropped-in shell now runs with root privileges inside the container instead of a scoped user.\n- Because the instruction sits right before `CMD`, it's easy to misread as a trivial late tweak, but it applies to the process that actually serves traffic for the container's whole lifetime — this isn't a build-time-only change.\n- If the container also lacks a restrictive `securityContext` (`runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [\"ALL\"]`), root inside the container is newly meaningful rather than blocked at the orchestrator layer. Worth confirming what the accompanying Kubernetes manifest (if any) sets.\n\n**Fix direction (do not apply — this review is read-only):** Restore a non-root `USER` before `CMD`/`ENTRYPOINT` — e.g. a user created earlier in the Dockerfile via `RUN useradd -r -u <uid> app` (or the base image's existing non-root user), then `USER app`. If the change was motivated by a permission problem at runtime, fix the underlying ownership/permission issue (files copied with correct ownership via `COPY --chown=app:app`, writable paths owned by that user) rather than reverting to root.\n\n**Two things to verify before finalizing the report:**\n1. Whether this is genuinely introduced by this diff or was already present in the parent revision — if the file already ended as root and the diff merely touched an unrelated line, classify it as pre-existing, not diff-introduced.\n2. Whether an unchanged `USER` earlier in the file is being overridden by this new one, or whether this is the only `USER` instruction — the finding's wording should match which.\n\nReport format:\n\n```\nDockerfile:<line> -- USER root added back immediately before CMD, reverting\n  the image to run as root. Risk: any process compromise inside the container\n  now runs as root instead of a scoped user, for the container's entire\n  runtime. Fix direction: restore a non-root USER (e.g. USER app, created\n  earlier with RUN useradd) before CMD/ENTRYPOINT; address the underlying\n  permission need via --chown rather than reverting to root.\n```",
+          "outputSha256": "49206e3e3b80c861ee8c15ec0c2bb91fc971e1453dcc6b2fc17dc25979af2707",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the diff inserting `USER root` before CMD as the problem (\"privilege regression\"), states the consequence (\"any remote-code-execution, dependency compromise, or dropped-in shell now runs with root privileges inside the container instead of a scoped user\"), and gives a concrete fix direction (\"Restore a non-root USER before CMD/ENTRYPOINT — e.g. ... RUN useradd -r -u <uid> app ... then USER app\"), explicitly framed as read-only (\"do not apply — this review is read-only\"). No fail criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "This diff reintroduces a root container, which is exactly the failure mode the review is supposed to catch first.\n\n**Finding**\n\n```\nDockerfile:<line of the added USER root> -- `USER root` added immediately before the\n  final CMD, reverting a previously non-root image back to running as root.\n  Risk: every process spawned by that CMD now runs with root privileges inside the\n  container. Any application compromise, RCE, or dependency-level code execution\n  that would otherwise be confined to a scoped, unprivileged user now lands with\n  full root authority inside the container -- and paired with a weak runtime\n  (shared namespaces, no user-namespace remapping, a mounted socket, hostPath\n  mounts) that is the difference between \"a process died\" and \"the host is\n  reachable.\" It also silently breaks any downstream guarantee that assumed the\n  image's UID, including file-permission expectations and admission policies\n  enforcing `runAsNonRoot: true`, which will now fail to start the workload\n  (or worse, be the only thing standing between this image and production).\n  Fix direction: remove the `USER root` line and restore the non-root `USER`\n  instruction that preceded this change, after whatever build steps genuinely\n  needed root (those belong in earlier `RUN` stages, not after finalization).\n  If a build step in this diff actually requires root, scope it to that step\n  (`RUN` as root, then drop back with `USER <appuser>` before `CMD`), and confirm\n  the user was created earlier with `useradd`/`adduser` -- a `USER` naming a\n  user that does not exist fails at runtime, which is a separate finding.\n```\n\n**Why this is not a \"just for local dev\" exception**\n\nEven if the commit message or PR description frames this as a debugging convenience, a Dockerfile in the diff is shipping configuration, not a private local override. The review flags it on the config's own terms and lets the team confirm an exception explicitly, rather than assuming one. If a temporary root step is truly needed, it should be reverted before the branch merges, or gated behind a clearly separate, non-default build target -- not left sitting on the path every build takes.\n\n**What to confirm before closing the finding**\n\n- `git blame` / diff the surrounding lines to confirm the previous `USER` was in fact a non-root user and not already root (a downgrade-to-root claim needs the \"downgrade from\" to be true).\n- Check whether the base image or an earlier stage now depends on root for a `RUN` that this line was added to satisfy -- that changes the fix from \"delete the line\" to \"reorder the stage.\"\n- Check whether any deployment manifest for this image sets `securityContext.runAsNonRoot: true`; if it does, note that this image will now be rejected or crash-loop at admission, which is a behavioral regression the diff introduces even setting the privilege issue aside.\n\n**Not in scope here:** whether the base image is pinned by digest, whether build secrets leak into a layer, and whether the deployment has a `NetworkPolicy` -- those are separate checks in the same review and should be reported independently, each with its own file:line. No file was modified by this review; the fix direction above is a report, not an edit.",
+          "outputSha256": "90840467dd46e1999cd284908e5c8ae9768c6392e26d8d5669f37fc48db78f6b",
+          "promptSha256": "43ae935fd01b90abd161afaf54611c1f621e3e389aa1ae077ecd795ef73d118f",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer names the added `USER root` before final CMD as the problem (Finding block), states the consequence that processes run with root privileges so any compromise/RCE lands with full root authority instead of a scoped unprivileged user, and gives a fix direction: remove `USER root` and restore the prior non-root USER instruction. It explicitly states no file was modified, presenting it as a report, not an edit."
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "base-image-digest-pin",
+      "kind": "behavior",
+      "prompt": "Review this Dockerfile diff: the base image line changes from `FROM node:20-slim@sha256:9f2c8b1e...` to `FROM node:latest`. What do you find?",
+      "strictness": "high",
+      "trials": 10,
+      "passes": 10,
+      "passRate": 1,
+      "passAtK": 1,
+      "grader": "judge",
+      "status": "ran",
+      "trialRecords": [
+        {
+          "output": "Finding:\n\n```\nDockerfile:<FROM line> -- base image pin downgraded from a digest-pinned\n  node:20-slim@sha256:9f2c8b1e... to a mutable tag node:latest. Risk: the\n  digest pin is what made the build reproducible; `node:latest` resolves\n  to whatever image the registry points at on the day of each build. This\n  is two distinct regressions rolled into one line:\n\n  1. Loss of reproducibility -- the same Dockerfile can build against a\n     different base image tomorrow than it did today, with no change to\n     the file itself. A build that passed CI last week is not guaranteed\n     to build the same artifact this week.\n\n  2. Major-version drift -- `latest` tracks the newest major, not the 20.x\n     line the pin was on. That silently moves the runtime from Node 20 to\n     Node 22+ (or whatever `latest` currently is) without anyone declaring\n     it: new/changed built-in APIs, a different default OpenSSL/libc, a\n     different image base (slim vs. not). Any `node:20`-specific behavior\n     the app relies on is now unguarded.\n```\n\nFix direction: restore the digest-pinned `node:20-slim@sha256:<digest>`, or if an upgrade is genuinely intended, move to an explicit new version tag *and* pin that tag by digest in the same change — e.g. `FROM node:22-slim@sha256:<digest>` — so the major version is a declared choice and the build stays reproducible.\n\nOne thing worth confirming rather than asserting: this file is reviewed as shipping config, since the diff is changing what a shared branch builds against. If this line only ever feeds a throwaway local override that never reaches a shared branch or a tag-triggered build, say so explicitly — but treat that as something to confirm, not to assume from the diff alone.\n\nScope note, per the review's rule on this: I'm flagging the pin downgrade and the version drift it carries. I'm not flagging the rest of the Dockerfile (USER, secrets-in-layers, etc.) because the diff as described only touches the `FROM` line — if the full diff changes more than that line, the other hunks need the same pass against the Step 2 focus list. And nothing was edited here; the fix direction above is a report, not an applied change.",
+          "outputSha256": "408a8ec95f760c4f5076470337bdd5d71f708fc07a980737b8ccf375eee22064",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies the pin downgrade from node:20-slim@sha256:9f2c8b1e... to mutable node:latest (criterion 1), states reproducibility loss: 'same Dockerfile can build against a different base image tomorrow than it did today' (criterion 2), and gives fix direction 'restore the digest-pinned node:20-slim@sha256:<digest>' or pin new tag by digest, explicitly 'nothing was edited here; the fix direction above is a report, not an applied change' (criterion 3). No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "Dockerfile `FROM` line — base image pin downgraded\n\nFinding: The diff changes a digest-pinned base image\n\n```\nFROM node:20-slim@sha256:9f2c8b1e...\n```\n\nto a mutable-tag reference:\n\n```\nFROM node:latest\n```\n\nThis is the \"unpinned base image\" pattern from the Step 2 Dockerfile checklist, and the diff does not merely leave a pin absent — it actively removes one that was present. That makes it a diff-introduced finding, not a pre-existing one in a touched file.\n\nWhy it matters: a digest pin is the only thing that guarantees the image you build against today is byte-for-byte the same image that gets built tomorrow. That pin was doing two jobs the new line no longer does:\n\n1. Reproducibility — `latest` (and any mutable tag, including `20-slim` untagged) can point at a different image layer stack at any future build with no change to this Dockerfile. Two builds of the same commit can produce different results.\n2. Integrity — a digest pin also pins the exact content that was resolved and vetted. Dropping it means the build now trusts whatever the registry serves under `latest` at build time; a retag upstream silently changes what ships, with no diff to review.\n\nThe `20-slim` → `latest` move compounds this: it also drops the major-version bound, so a Node major-version bump (e.g. 21, 22) can land as the base runtime without any signal in this repo. That is a runtime-behavior change disguised as a one-line base-image edit.\n\nFix direction: restore a digest pin, and keep the explicit version/variant tag alongside it for readability — e.g.\n\n```\nFROM node:20-slim@sha256:<resolved-digest>\n```\n\nRe-resolve the digest if the intent was genuinely to move off `20-slim`; do not resolve it by falling back to `latest`.\n\nConfirm before merging: check whether anything else in the build (a `.dockerignore`, a cache layer, or a CI base-image mirror) was relying on the pinned digest, and confirm the intended Node major version so the restored pin matches intent rather than just restoring the old line blindly.\n\nNo file was modified by this review. No shell or tool was used; this is a read-only finding against the diff as described. If you want the rest of the diff checked for the other categories (root `USER`, secrets in layers, Compose/K8s/Terraform handling), share those changed files and I will review them the same way.",
+          "outputSha256": "ebc11bf89bbbeae3af6ac35a4bc01acc3aa4770e9d538ddc205b7ed8dc326272",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Criterion 1: answer quotes the change from `FROM node:20-slim@sha256:9f2c8b1e...` to `FROM node:latest`, calling it a mutable-tag reference that removes an existing pin. Criterion 2: states `latest` can point at a different image layer stack at any future build, so two builds of the same commit can differ. Criterion 3: fix direction is `FROM node:20-slim@sha256:<resolved-digest>`, and it explicitly says no file was modified — a read-only finding. No fail criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "Dockerfile (base image line) — the `FROM` line is changed from `node:20-slim@sha256:9f2c8b1e...` to `node:latest`.\n\nFinding: the diff drops an existing digest pin and replaces it with a mutable tag.\n\n- **File:line**: the `FROM` line (first instruction) of the changed Dockerfile.\n- **Pattern**: an existing digest-pinned base image (`node:20-slim@sha256:9f2c8b1e...`) is replaced by `node:latest` — a mutable tag with no digest.\n- **Why it matters**: two regressions at once.\n  1. **Version drift / major-version jump.** `20-slim` pins a specific Node major and the slim variant. `latest` tracks whatever the publisher currently points `latest` at — today's `latest` may be a newer Node major, and tomorrow's may be different again. Any package, ABI, or libc assumption in the rest of the Dockerfile (or the app) can silently break, and the exact same Dockerfile will produce a different image over time.\n  2. **Loss of reproducibility and supply-chain pinning.** The digest pin guaranteed that every build pulled byte-for-byte the same base layers, and that a tag re-point (whether by the publisher or a compromised registry credential) could not change what you build. `node:latest` re-opens that: the tag can point at a different image tomorrow than it builds against today, and there is no record of what the image actually was.\n- **Pre-existing vs. diff-introduced**: this is **diff-introduced** — the previous line had a digest, and this change removes it. It is not a pre-existing gap in an otherwise untouched file.\n- **Fix direction**: restore a base image pinned by digest. If the intent was to move off the old `20-slim` digest, pick the intended Node version (e.g. `node:20-slim` or whatever major is now targeted) and pin that tag to a specific digest (`FROM node:20-slim@sha256:<digest>`). If the intent really was to move to a newer major, do that deliberately by choosing and digest-pinning that new version, not by falling back to the floating `latest` tag.\n\nNote: this review is read-only — the fix direction above is reported, not applied. Also, no `USER`/`securityContext`/secret findings are claimed here because the diff shown only concerns the `FROM` line; the rest of the Dockerfile would need to be read to check those separately.",
+          "outputSha256": "2774bbee8eb999555735d6332e45018123a89edf1cdf62c7eee1995375b59e77",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies the change drops the digest pin for mutable `node:latest` (Pattern bullet), states the reproducibility consequence ('the tag can point at a different image tomorrow than it builds against today'), and gives the fix direction 'restore a base image pinned by digest' with `FROM node:20-slim@sha256:<digest>`, explicitly noting the review is read-only and not applied. No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "Dockerfile (base image line) — `FROM node:20-slim@sha256:9f2c8b1e...` changed to `FROM node:latest`. Risk: loss of reproducibility — the digest pin is dropped and replaced with a mutable tag, so the same Dockerfile can build against a different underlying image tomorrow than it does today, with no diff in the repo to show for it. The specific regression here is the removal of an existing digest pin, not merely an unpinned `FROM` that was always unversioned. `node:latest` also tracks the newest major release rather than the 20.x line the previous pin was on, so a rebuild can pull in a Node major-version change and whatever base-OS/Glibc changes ride along with it — that is a much larger blast radius than a patch bump and is not something the Dockerfile itself signals. Fix direction: restore a pinned reference — `FROM node:20-slim@sha256:<digest>` (preferably re-resolved to the current 20-slim digest if an update is actually wanted) — and if a version bump is intentional, make it an explicit `node:22-slim@sha256:<digest>` change so the multi-major jump shows up in review rather than happening silently at build time.\n\nTwo caveats on this finding:\n\n- This assumes the diff only touched the `FROM` line. If the same diff also changed the `USER` line, added a secret via `ARG`/`ENV`/`COPY`, or dropped `--mount=type=secret`, those are separate findings at their own lines — I only reviewed the base-image change you quoted, not the whole file.\n- I read this as a diff-introduced regression (a pin was present and is now gone), not a pre-existing unpinned `FROM`. If `node:20-slim@sha256:9f2c8b1e...` was itself unreleased and this repo never built against a pinned tag, that framing changes — confirm from the actual diff base, not from this summary.\n\nNo file was modified; this is findings and fix direction only. Pin verification against a real digest should be confirmed with the registry (`docker buildx imagetools inspect node:20-slim`) since I cannot resolve the digest here.",
+          "outputSha256": "810e639340d3b5c7a8d04429daa24e2c4e41d97df75b7c5ae909609bc3d02e1e",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states the FROM line changed from `node:20-slim@sha256:9f2c8b1e...` to `FROM node:latest`, a mutable tag (criterion 1). It gives the concrete consequence: 'the same Dockerfile can build against a different underlying image tomorrow than it does today' (criterion 2). Fix direction: 'restore a pinned reference — `FROM node:20-slim@sha256:<digest>`', and explicitly 'No file was modified; this is findings and fix direction only' (criterion 3). No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding — `Dockerfile`, the `FROM` line (the changed line itself).**\n\nCategory: unpinned/downgraded base image (reproducibility regression introduced by this diff).\n\nThe diff drops a digest pin (`node:20-slim@sha256:9f2c8b1e...`) and replaces it with the mutable tag `node:latest`. This is a double regression:\n\n1. **Pin removed.** The digest resolved to one exact, immutable image. `latest` is a mutable tag — it points at whatever the publisher currently tags as latest, so the same Dockerfile can build against a different base image tomorrow than it did today. Every production-bound Dockerfile should pin its base image by digest so the build is reproducible.\n2. **`slim` → `latest` is a base-image widening.** `20-slim` (a trimmed Debian-based Node 20 image) and `latest` (the full, ever-moving current Node image) are not the same lineage. This is not a cosmetic tag edit — it changes the OS package surface, the bundled tooling, and the likely Node major version. It typically *increases* the attack surface (more packages present) and can silently shift the Node runtime underneath the app.\n\nRisk: the build becomes non-reproducible and drifts without any code change; the widened `latest` surface also enlarges the set of OS-level packages available to an attacker who gets code execution in the container.\n\nFix direction: restore a digest-pinned base and keep the explicit variant — e.g. pin back to a known-good digest for the intended line, such as `FROM node:20-slim@sha256:<digest>` (re-pin deliberately to a newly reviewed digest if a base upgrade is actually wanted, rather than floating on `latest`).\n\nNotes on scope:\n- This is **introduced by the diff**, not pre-existing — the file previously had the digest pin.\n- This is a Dockerfile runtime/reproducibility finding, distinct from a CVE scan of the built image (which belongs to a security-audit pass, not this review). I'm reporting the *authoring* defect (unpinned, widened base), which stands on its own regardless of what a later scan of that image would find.\n- Read-only review: no file was modified; the fix direction above is not applied.",
+          "outputSha256": "df0b9c9b3fc8ab1cb5b0b998a22687c4011ab33789fad67b2811f4c2fec8a991",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies the diff drops the digest pin for mutable `node:latest` (\"drops a digest pin... replaces it with the mutable tag `node:latest`\"), states non-reproducibility (\"same Dockerfile can build against a different base image tomorrow\"), and gives fix direction pinning back to a digest (`FROM node:20-slim@sha256:<digest>`), explicitly read-only (\"no file was modified\"). No fail criteria hold."
+          },
+          "passed": true
+        },
+        {
+          "output": "Finding — Dockerfile, `FROM` line (the changed line): the diff replaces a digest-pinned base image with a mutable tag.\n\n```\nDockerfile:<line of FROM> -- changes `FROM node:20-slim@sha256:9f2c8b1e...` to\n  `FROM node:latest`. Risk: two things, both introduced by this diff.\n  (1) Loss of reproducibility: `latest` is a mutable tag -- the image it\n  resolves to today is not guaranteed to be the image it resolves to on the\n  next build, so builds are no longer deterministic and a rebuild can silently\n  pick up a different Node version or a different base OS layer set.\n  (2) Both the major version pin (`20`) and the variant pin (`slim`) are\n  dropped: `latest` can move a major Node version forward and can drop the\n  slim variant, changing the runtime and the packages present in the image\n  without any Dockerfile-level signal that this happened.\n  Fix direction: restore a digest-pinned base, e.g.\n  `FROM node:20-slim@sha256:<digest>`. If a version bump is actually intended,\n  make it an explicit, reviewable change to a new pinned tag+digest (e.g.\n  `node:22-slim@sha256:<digest>`) rather than an implicit one via `latest`.\n```\n\nCategory: unpinned base image (Step 2, Dockerfile). Diff-introduced, not pre-existing — the previous state was pinned, so this is a regression the diff creates.\n\nTwo things I am deliberately not asserting:\n- I only see the `FROM` line change in the diff you described. I have not read the rest of the file, so I cannot say whether this Dockerfile also has a missing `USER`, a secret in an `ARG`/`ENV`, or other Step 2 findings — those would need the full file. If you paste the rest, I will check them separately.\n- Whether the mutable tag ever actually drifts for this project is not knowable from the file alone; the finding stands regardless, because the pin is what guarantees it cannot.\n\nNo file was modified; this is findings and fix direction only. Next concrete step: pull the current digest for the intended Node version and pin the `FROM` line to it, then re-run the review against that value.",
+          "outputSha256": "904b0d0c6178e1388d7227fb68a3223c8f3a116c5c6986ed92a727515999db75",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies the change drops the digest pin for mutable `FROM node:latest` (\"replaces a digest-pinned base image with a mutable tag\"). States consequence: \"latest is a mutable tag -- the image it resolves to today is not guaranteed to be the image it resolves to on the next build, so builds are no longer deterministic.\" Fix direction: \"restore a digest-pinned base, e.g. FROM node:20-slim@sha256:<digest>\", and \"No file was modified; this is findings and fix direction only.\" No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding — Dockerfile (base image line): digest pin dropped, replaced with a mutable tag**\n\n- **Pattern:** `FROM node:20-slim@sha256:9f2c8b1e...` → `FROM node:latest`. The diff removes an existing digest pin and substitutes the `latest` tag.\n- **Risk category:** unpinned base image (Step 2, Dockerfile/Compose). This is a diff-introduced regression, not pre-existing — the prior line *was* pinned.\n- **Why it matters:** Two failures compound here.\n  1. `latest` is a mutable tag. The image that gets built tomorrow is not guaranteed to be the image that builds today; the same Dockerfile can silently pull a different kernel/platform/Node minor, so builds stop being reproducible and a supply-chain change upstream lands in your image with no diff in your repo to show it.\n  2. Moving from `20-slim` to `latest` is not just a pin loss, it is a **base-image change in kind**: `latest` currently tracks the newest Node release (not 20), and the full `node` image, not the `-slim` variant. That changes both the major version and the surface area (the non-slim image ships a larger package set, more tooling, more potential CVE exposure). Any behavior the build relied on from Node 20 / slim now rides on whatever `latest` resolves to.\n- **Fix direction:** restore a base image pinned by digest, and decide the tag explicitly rather than by accident — e.g. `FROM node:20-slim@sha256:<digest>` to keep the previous intent, or, if the move to a newer line is intended, `FROM node:22-slim@sha256:<digest>` with the digest resolved at change time. Immutable references do not carry over through a retag; the digest must be re-resolved.\n\n**Design rule this maps to:** production-bound Dockerfiles should pin base images by digest so the built artifact is a function of the file, not of what a registry tag happens to point at on build day.\n\n**Two things to confirm before this is fully closed:**\n\n1. Was the tag change *intentional* (a deliberate Node upgrade) or incidental? If intentional, the fix direction above still applies — intent changes *which* pinned tag, not *whether* to pin.\n2. If any other instruction in this file depends on the previous base (a `RUN apt-get install` against `-slim`'s package set, a `USER node` that existed in the slim image, an expected Node version in a `RUN node --version` gate), those lines should be re-checked against the new base — the digest loss is certain, but the downstream breakage depends on what the rest of the file assumes.\n\nI have not edited the file; this is the finding and fix direction only. Per the skill's scope, this covers the config-authoring risk in the diff — it is not a CVE scan of either base image (that is `security-audit`'s job), and I have not built or run anything.",
+          "outputSha256": "3e3d3c64f284fcb9cd3891c5073b718034a6e984cd3bdda74e1b0733dada6582",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies the digest pin dropped for `FROM node:latest` (mutable tag), states builds stop being reproducible ('same Dockerfile can silently pull a different... image tomorrow'), and gives fix direction `FROM node:20-slim@sha256:<digest>` as a finding, explicitly 'I have not edited the file'. No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding — `Dockerfile` (the `FROM` line): base image pin downgraded from a digest to a mutable tag.**\n\nWhat changed: `FROM node:20-slim@sha256:9f2c8b1e...` → `FROM node:latest`.\n\nWhy it matters:\n- **Loss of reproducibility.** The digest pin guaranteed that every build, on every machine, resolved to the exact same image content that was reviewed and tested. `node:latest` resolves to whatever the tag points at *at build time* — the image you build tomorrow is not the image you built today, even with no change to this Dockerfile.\n- **Loss of the Node version guarantee.** `node:20-slim` pinned both the major version *and* the `slim` variant. `node:latest` drops the major-version constraint entirely, so a future Node major release silently rolls into this build — a language-runtime version change nobody reviewed or approved. This is a supply-chain and build-stability risk, not a cosmetic one.\n- **`latest` is the highest-risk mutable tag.** It is the tag most likely to move, and it is not even a deliberate \"track the current stable\" choice — it can shift under you without any signal in the diff.\n- **Trust is not pinning.** The base image being an official/trusted publisher (Docker official Node image) does not mitigate this: trusting the *publisher* is not the same as pinning *what actually gets built*. The digest is what makes \"the trusted publisher\" mean a fixed artifact rather than \"whatever they published most recently.\"\n\nFix direction (do not apply — this review is read-only):\n- Restore a digest pin, e.g. `FROM node:20-slim@sha256:<digest>`.\n- If the intent of this diff was genuinely to move off Node 20, that is a separate, explicit change: pick the new major version *and* a digest for it (`FROM node:22-slim@sha256:<digest>`), so the version bump is visible and reviewable on its own rather than smuggled in via `latest`.\n- If the team wants a managed way to refresh pinned digests over time, that belongs in an automated dependency-update path (e.g. a Renovate/Dependabot rule that proposes a new digest as its own reviewable PR), not in a hand-edited `latest`.\n\nTwo notes on scope:\n- **Diff-introduced:** this finding is introduced by the diff — the digest pin existed before and the diff removes it. It is not a pre-existing issue in a merely-touched file.\n- **Not covered here:** this says nothing about whether the resulting image has known CVEs in its packages. That is a scanned-image concern (`security-audit`'s job), not a config-authoring one — the problem here is *reproducibility and version control*, independent of what the image happens to contain.\n\nI did not open or edit anything, and `security-audit`/`deploy` were not invoked — this is purely a read of the diff you supplied.",
+          "outputSha256": "d6a1d410e6981c0f80b8189196455f12607de8ee4e9d8329d7527d72e413174a",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies the change as dropping the digest pin for mutable `FROM node:latest` (\"base image pin downgraded from a digest to a mutable tag\"). States concrete consequence: \"the image you build tomorrow is not the image you built today, even with no change to this Dockerfile.\" Fix direction given as read-only finding: \"Restore a digest pin, e.g. `FROM node:20-slim@sha256:<digest>`\" and \"do not apply — this review is read-only.\" No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "Dockerfile (base image line) -- `FROM node:20-slim@sha256:9f2c8b1e...` changed to `FROM node:latest`. Risk category: unpinned/downgraded base image (loss of reproducibility). This diff drops a digest pin and replaces it with a mutable tag, which is exactly the pinned-to-mutable-tag regression called out in the focus list.\n\nWhy it matters: the digest pin identified one immutable image; `node:latest` is a moving tag that can resolve to a different image tomorrow than it does today, with a different base OS, different patch level, and different contents -- the build is no longer reproducible, and neither is a CVE scan or any downstream attestation tied to that build. It also silently widens the version range from a single Node 20 line to whatever `latest` currently points at, which may not even be Node 20. The move from `-slim` to the default tag additionally pulls in a larger base image and a different package set than the one being replaced.\n\nFix direction: keep the digest pin. Set the intended tag and its digest explicitly, e.g. `FROM node:20-slim@sha256:<digest>` (re-resolve the digest if the intended tag genuinely needs to move), rather than reverting to `node:latest`. Pin every production-bound `FROM` line by digest, per the pack's reproducibility rule.\n\nTwo things worth flagging alongside the finding itself:\n\n- Reverting to `latest` is also a supply-chain-surface change, not just a reproducibility one. A mutable tag can be repointed at a compromised or simply newer image without any visible change in this file, so the diff removes the reviewer's ability to tell from the Dockerfile alone what actually gets built. If the intent was \"get off the frozen digest for a security patch,\" the correct move is to update the digest deliberately, in a commit that says so -- not to drop the pin.\n- This is a diff-introduced issue, clearly new in this change (the `@sha256:` digest was present on the `FROM` line before and is gone after), so it belongs in the diff-introduced bucket, not the pre-existing one.\n\nI did not modify the file; this is a report only. If you want, the same pass should check the rest of the diff for the other Dockerfile focus items -- a `USER` reachable by the build that ends up root, any secret entering via `ARG`/`ENV`/`COPY` rather than a build-time secret mount, and whether adding the default `node:latest` base also came with a `USER root` or equivalent privilege change. Confirm none of those are present before considering the Dockerfile portion clean. And since the base image is no longer pinned, I cannot say from reading alone whether `latest` currently resolves to something with a known CVE -- that's a scan against a built image, which is `security-audit`'s job, not this review's; flag it as \"re-pin, then scan\" rather than asserting a CVE is or isn't present.",
+          "outputSha256": "2a59db7dd9e9516a0f1a8e7e2f9b699fca48c104e4edcf6361d5d0e516466c66",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer states the diff 'drops a digest pin and replaces it with a mutable tag' (FROM node:latest), explains 'node:latest is a moving tag that can resolve to a different image tomorrow than it does today... the build is no longer reproducible,' and gives fix direction 'keep the digest pin... FROM node:20-slim@sha256:<digest>'. It explicitly says 'I did not modify the file; this is a report only.' No fail criteria triggered."
+          },
+          "passed": true
+        },
+        {
+          "output": "**Finding — Dockerfile base image line: digest pin dropped, replaced with a mutable tag**\n\n- **File:line**: the `FROM` line (exact line number depends on the file; it's the line changed by this diff).\n- **Pattern**: `FROM node:20-slim@sha256:9f2c8b1e...` → `FROM node:latest`. This removes the digest pin *and* moves off both the pinned version stream (`20`) and the `-slim` variant, in one change.\n- **Why it matters**:\n  - `latest` is a mutable tag. The image built tomorrow is not guaranteed to be the same bytes as the image built today, so builds stop being reproducible and a rebuild can silently pull in a different (or compromised) upstream image without any diff to review.\n  - Dropping the digest specifically defeats the one mechanism that pins *exactly* which image gets built against — a tag, even a version tag like `20-slim`, can be re-pushed to point at different content; a digest cannot.\n  - Dropping `-slim` also changes the base variant, which means a materially larger image and a different (larger) installed package surface — a second, easy-to-miss change smuggled into what looks like a one-token edit.\n- **Fix direction**: restore a digest-pinned, non-`latest` reference, e.g. `FROM node:20-slim@sha256:<digest>` (re-pin to the current digest if an upgrade is actually intended, rather than loosening to `latest`).\n\n**Note on severity / scope**: this is a diff-introduced regression, not a pre-existing issue in a touched file — the previous line was correctly pinned and this change removes that. It is the highest-confidence category of finding in this pack, since the before/after is directly visible in the diff and needs no surrounding context to confirm.\n\n**Not asserted**: I can't tell from the diff alone whether the `USER` instruction, secret handling, or anything else in the file changed — this review is scoped to the base-image line as given. If the rest of the file is also in the diff, each of those needs the same pass (non-root `USER` present, no secrets in `ARG`/`ENV`/`COPY`, etc.).",
+          "outputSha256": "1672e6e87667f10b292cd95827b12bcdfcd07ea54f5f7c8a2ee11a3bd4d494eb",
+          "promptSha256": "c88ec14ff6577533658fdafccb9cc7f94953f860bdb6bbdaa27adca90291a1ea",
+          "deterministic": [],
+          "judge": {
+            "verdict": "pass",
+            "reason": "Answer identifies the change as dropping the digest pin for mutable `FROM node:latest` (Pattern section), states builds stop being reproducible since tomorrow's image isn't the same bytes (Why it matters), and gives fix direction `FROM node:20-slim@sha256:<digest>` as a finding, not an applied edit. No fail criteria triggered."
+          },
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "verdict": "fail",
+  "scope": "bundled",
+  "skillDigest": "da69316c60d9773d42807da29bd68436389c01a91dbfdf3a1c94cd189f007127",
+  "catalogDigest": "0cdcf6c10ab68b2f0f133eadcae9b3830e7a303cbee5b88bcdf9ca11646f38ee",
+  "judgePromptVersion": "2026-09-25.1",
+  "runner": "deepseek",
+  "model": "deepseek-chat",
+  "runnerPromptVersion": "2026-09-25.1",
+  "recordedAt": "2026-09-25T18:05:25.676Z",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat"
+}
