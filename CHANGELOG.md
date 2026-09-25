@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Fixed
+- **A single transient Jev/OpenRouter blip no longer kills a whole review run.**
+  Every Jev caller (`review jev-rules`, `jev-risk`, `jev-scenarios`, `jev-docs`,
+  `jev-comments`, `jev-contract`, `conform`, CI triage, the routing classifier)
+  now retries a `429`/`500`/`502`/`503`/`504` response, or a network error like
+  a refused connection, up to twice with a short pause before giving up — a
+  `HTTP 503` that used to fail the run outright now recovers on its own if the
+  vendor was only down for a moment.
+
 ## [0.3.5] — 2026-09-25
 
 Fixes from a live review of a real PR with every Jev reviewer. (0.3.4 was

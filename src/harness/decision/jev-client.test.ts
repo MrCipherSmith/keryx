@@ -11,13 +11,16 @@ import {
   DEFAULT_JEV_MODEL,
   DEFAULT_JEV_TIMEOUT_MS,
   JEV_ENDPOINT,
+  JEV_MAX_ATTEMPTS,
   JEV_MODEL_1_13,
   JEV_MODEL_LATEST,
+  JEV_RETRY_AFTER_CAP_MS,
   JEV_TOKEN_BUDGET,
   JevAnswerValidationError,
   JevAuthRejectedError,
   JevBudgetError,
   JevCredentialError,
+  JevNetworkError,
   JevRequestError,
   JevResponseParseError,
   JevResponseShapeError,
@@ -420,5 +423,161 @@ describe("answer validation (flow 306 review item 4)", () => {
     });
     const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY });
     expect(Object.keys(result.answers)).toEqual(["warranted"]);
+  });
+});
+
+/**
+ * A `fetch` stand-in that plays back one step per call — a status/body pair,
+ * or a thrown error (a real `fetch` rejecting: connection refused, reset,
+ * DNS) — so a test can script exactly "fails transiently, then succeeds" or
+ * "fails every attempt" without a real socket. Never checks `init.signal`:
+ * none of the retry tests below exercise the timeout/abort path, which the
+ * "timeout / abort" describe block above already covers on its own.
+ */
+function queuedFetch(
+  steps: ReadonlyArray<{ readonly status: number; readonly body: unknown; readonly headers?: Record<string, string> } | { readonly throwError: unknown }>,
+): typeof fetch & { calls: { url: string; init?: RequestInit }[] } {
+  let i = 0;
+  const fn = (async (url: string, init?: RequestInit): Promise<Response> => {
+    (fn as unknown as { calls: unknown[] }).calls.push({ url, init });
+    const step = steps[i];
+    i += 1;
+    if (step === undefined) {
+      throw new Error(`queuedFetch: no step queued for call #${i}`);
+    }
+    if ("throwError" in step) {
+      throw step.throwError;
+    }
+    return new Response(typeof step.body === "string" ? step.body : JSON.stringify(step.body), {
+      status: step.status,
+      headers: { "content-type": "application/json", ...(step.headers ?? {}) },
+    });
+  }) as unknown as typeof fetch & { calls: { url: string; init?: RequestInit }[] };
+  (fn as unknown as { calls: unknown[] }).calls = [];
+  return fn;
+}
+
+/** Records every requested backoff instead of actually waiting it out. */
+function recordingSleep(): { sleepFn: (ms: number) => Promise<void>; delays: number[] } {
+  const delays: number[] = [];
+  const sleepFn = async (ms: number): Promise<void> => {
+    delays.push(ms);
+  };
+  return { sleepFn, delays };
+}
+
+describe("bounded retry for transient failures (the live keryx review jev-rules 503)", () => {
+  test("MAX_ATTEMPTS is 3 (one try plus up to two retries)", () => {
+    expect(JEV_MAX_ATTEMPTS).toBe(3);
+  });
+
+  test("503 then success: one result, exactly the successful attempt's usage, one backoff wait", async () => {
+    const fetchFn = queuedFetch([
+      { status: 503, body: { error: "upstream connect error or disconnect/reset before headers. reset reason: connection failure" } },
+      { status: 200, body: { answers: { warranted: { type: "noul", noul: 0.72 } }, usage: { input_tokens: 50, cost: 0.00001 } } },
+    ]);
+    const { sleepFn, delays } = recordingSleep();
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, sleepFn });
+    expect(result.answers.warranted).toEqual({ type: "noul", noul: 0.72 });
+    // Only the successful call's usage — never a merge of a failed attempt's (absent) usage.
+    expect(result.usage).toEqual({ input_tokens: 50, cost: 0.00001 });
+    expect(fetchFn.calls).toHaveLength(2);
+    expect(delays).toEqual([500]);
+  });
+
+  test("503 three times in a row: gives up, names the endpoint, and says how many attempts were made", async () => {
+    const body503 = { error: "upstream connect error or disconnect/reset before headers. reset reason: connection failure" };
+    const fetchFn = queuedFetch([
+      { status: 503, body: body503 },
+      { status: 503, body: body503 },
+      { status: 503, body: body503 },
+    ]);
+    const { sleepFn, delays } = recordingSleep();
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, sleepFn });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevRequestError);
+    const err = caught as JevRequestError;
+    expect(err.status).toBe(503);
+    expect(err.attempts).toBe(3);
+    expect(err.message).toContain(JEV_ENDPOINT);
+    expect(err.message).toContain("HTTP 503");
+    expect(err.message).toContain("3 attempts");
+    expect(fetchFn.calls).toHaveLength(3);
+    expect(delays).toEqual([500, 1500]);
+  });
+
+  test("400 is never retried — one call, the same JevRequestError shape as before this feature", async () => {
+    const fetchFn = queuedFetch([{ status: 400, body: { error: "max_tokens_exceeded" } }]);
+    const { sleepFn, delays } = recordingSleep();
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, sleepFn });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevRequestError);
+    const err = caught as JevRequestError;
+    expect(err.status).toBe(400);
+    expect(err.attempts).toBe(1);
+    expect(err.message).not.toContain("attempts");
+    expect(fetchFn.calls).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
+  test("a network error (connection refused) then success: one result, one call retried", async () => {
+    const fetchFn = queuedFetch([
+      { throwError: new TypeError("fetch failed: connect ECONNREFUSED 127.0.0.1:443") },
+      { status: 200, body: { answers: { warranted: { type: "noul", noul: 0.3 } }, usage: { input_tokens: 5 } } },
+    ]);
+    const { sleepFn, delays } = recordingSleep();
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, sleepFn });
+    expect(result.answers.warranted).toEqual({ type: "noul", noul: 0.3 });
+    expect(fetchFn.calls).toHaveLength(2);
+    expect(delays).toEqual([500]);
+  });
+
+  test("a network error on every attempt gives up as JevNetworkError naming the attempt count", async () => {
+    const cause = new TypeError("fetch failed: connect ECONNREFUSED 127.0.0.1:443");
+    const fetchFn = queuedFetch([{ throwError: cause }, { throwError: cause }, { throwError: cause }]);
+    const { sleepFn } = recordingSleep();
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, sleepFn });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JevNetworkError);
+    const err = caught as JevNetworkError;
+    expect(err.attempts).toBe(3);
+    expect(err.message).toContain("3 attempt(s)");
+    expect(err.message).toContain("ECONNREFUSED");
+    expect(fetchFn.calls).toHaveLength(3);
+  });
+
+  test("429 with Retry-After is honoured but capped, not trusted verbatim", async () => {
+    const fetchFn = queuedFetch([
+      { status: 429, body: { error: "rate limited" }, headers: { "retry-after": "30" } },
+      { status: 200, body: { answers: { warranted: { type: "noul", noul: 0.6 } }, usage: {} } },
+    ]);
+    const { sleepFn, delays } = recordingSleep();
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, sleepFn });
+    expect(result.answers.warranted).toEqual({ type: "noul", noul: 0.6 });
+    // The vendor asked for 30s; the client waits at most JEV_RETRY_AFTER_CAP_MS.
+    expect(delays).toEqual([JEV_RETRY_AFTER_CAP_MS]);
+    expect(JEV_RETRY_AFTER_CAP_MS).toBeLessThan(30_000);
+  });
+
+  test("a 401 is never retried, even though it is a non-2xx status", async () => {
+    const fetchFn = queuedFetch([{ status: 401, body: { error: "invalid credentials" } }]);
+    const { sleepFn, delays } = recordingSleep();
+    await expect(
+      callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, sleepFn }),
+    ).rejects.toBeInstanceOf(JevAuthRejectedError);
+    expect(fetchFn.calls).toHaveLength(1);
+    expect(delays).toEqual([]);
   });
 });

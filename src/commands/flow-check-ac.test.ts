@@ -259,7 +259,13 @@ describe("runCheckAc", () => {
       const fetchFn = (async () => {
         fetchCalls += 1;
         if (fetchCalls === 1) {
-          return new Response("boom", { status: 500 });
+          // 400, not a transient 5xx: this batch's own call must fail on its
+          // FIRST attempt, not get retried by the Jev client's bounded
+          // retry — otherwise this counter-based fixture (one response per
+          // call, not per batch) would hand batch 1's retry the batch-2-
+          // shaped success response below and this test would no longer be
+          // exercising "one failed batch, one untouched batch" at all.
+          return new Response("boom", { status: 400 });
         }
         return new Response(
           JSON.stringify({ answers: { AC7: { type: "noul", noul: 0.9 } }, usage: { input_tokens: 1, output_tokens: 1, cost: 0.0001 } }),
