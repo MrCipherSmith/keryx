@@ -24,7 +24,28 @@ interface CacheFile {
   };
 }
 
-export { hashOriginContent as hashConformDocContent };
+// Clause-tag schema version (precision fix, flow 337): bumped whenever
+// TAGGING BEHAVIOUR changes enough that an old cached tag can no longer be
+// trusted — here, the deterministic process pre-classifier
+// (`./conform-clauses.ts`'s `preClassifyProcessClause`) and the rewritten
+// `choice` question wording both change what a clause's tag OUGHT to be,
+// even though the document's own bytes are unchanged. Folded into the hash
+// fed to `cachedTagsFor`/`writeClauseTagCache` (not into `docPath` or the
+// cache file's shape) so a v1 entry simply misses under v2 — the SAME
+// "wrong hash reads as nothing cached" fail-closed behaviour a genuine
+// content edit already gets, no separate migration path needed.
+const CLAUSE_TAG_SCHEMA_VERSION = 2;
+
+/**
+ * The hash `readClauseTagCache`/`writeClauseTagCache`/`cachedTagsFor` key a
+ * clause-tag cache entry by — `hashOriginContent` (the same convention
+ * `src/gdskills/project-skills.ts` uses for origin drift) over the doc's own
+ * content, PREFIXED with {@link CLAUSE_TAG_SCHEMA_VERSION} so a schema bump
+ * changes every hash even when the document itself did not.
+ */
+export function hashConformDocContent(content: string): string {
+  return hashOriginContent(`clause-tag-schema:v${CLAUSE_TAG_SCHEMA_VERSION}\n${content}`);
+}
 
 function cacheFilePath(cwd: string, cacheRelPath: string): string {
   return path.join(cwd, cacheRelPath);

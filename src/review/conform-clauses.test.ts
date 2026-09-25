@@ -10,6 +10,8 @@ import {
   buildClauseTagQuestions,
   clauseTagFromChoice,
   extractReferenceClauses,
+  isWorkflowListStep,
+  preClassifyProcessClause,
 } from "./conform-clauses";
 
 const FIXTURE = path.join(import.meta.dir, "fixtures", "conform", "invented-doctrine.md");
@@ -126,5 +128,94 @@ describe("AC2: tagging — explicit markers win outright, Jev choice is the fall
     expect(instructions).not.toContain(secret);
     expect(instructions).toContain("[REDACTED:");
     expect(instructions).toContain("Rotate AWS_ACCESS_KEY_ID");
+  });
+
+  test("the choice question distinguishes a code-hunk property from a human action", () => {
+    const raw = extractReferenceClauses("# H\n\n- Every widget needs a docstring.");
+    const questions = buildClauseTagQuestions(raw);
+    const instructions = questions["h-1"]!.instructions;
+    expect(instructions).toContain("a property you can see in a code hunk");
+    expect(instructions).toContain("an action someone performs");
+  });
+});
+
+describe("Precision fix (flow 337): deterministic process/not-checkable pre-classifier", () => {
+  const codeContext = { ordered: false, fenced: false, headingPath: [] as string[] };
+
+  test("PR #712's own false positive — 'Review the contract for breaking changes' — is pre-classified process, no Jev question built", () => {
+    const doc = [
+      "# API Contracts",
+      "",
+      "## Core Principle: Contract Before Code",
+      "",
+      "```",
+      "1. Design the endpoint in OpenAPI/schema first",
+      "2. Review the contract for breaking changes",
+      "3. Generate or update types/validators from the spec",
+      "4. Implement the handler",
+      "5. Write contract tests that validate the spec is honoured",
+      "```",
+    ].join("\n");
+    const clauses = extractReferenceClauses(doc);
+    const reviewClause = clauses.find((c) => c.text === "Review the contract for breaking changes");
+    expect(reviewClause?.explicit).toMatchObject({ not_checkable_reason: expect.stringContaining("Pre-classified process") });
+
+    const questions = buildClauseTagQuestions(clauses);
+    expect(Object.keys(questions)).toEqual([]); // every step of this fenced numbered workflow is pre-classified — no Jev call at all
+
+    const tagged = applyClauseTags(clauses, new Map());
+    const tag = tagged.find((c) => c.text === "Review the contract for breaking changes");
+    expect(tag).toMatchObject({ checkable: false, tag_source: "explicit" });
+  });
+
+  test.each([
+    ["review the contract for breaking changes", "review"],
+    ["Discuss the migration plan with the team before merging", "discuss"],
+    ["Ask the platform team before adding a new dependency", "ask"],
+    ["Document the rationale for this exception in the PR description", "document"],
+    ["Communicate the deprecation to downstream consumers", "communicate"],
+    ["Get approval from a domain owner before changing this schema", "get approval"],
+    ["Plan the rollout across at least two release trains", "plan"],
+    ["Decide whether this warrants a major version bump", "decide"],
+    ["Design the endpoint in OpenAPI/schema first", "design"],
+  ] as const)("process verb lead: %s -> pre-classified (verb: %s)", (text) => {
+    expect(preClassifyProcessClause(text, codeContext)).toBeDefined();
+  });
+
+  test.each([
+    ["Every exported function must document its return type.", "must + function, verb not at clause start"],
+    ["A handler must never swallow an exception without logging it.", "must never + handler"],
+    ["An import must always resolve through the package's own public entrypoint.", "must always + import"],
+    ["Every new class must implement the base validate() method.", "must + class"],
+    ["A query must never concatenate raw user input into SQL.", "must never + query"],
+    ["Every exported type must be documented with a JSDoc comment.", "must + type, and the word 'documented' mid-sentence"],
+  ] as const)("code-property clause stays a Jev candidate: %s (%s)", (text) => {
+    expect(preClassifyProcessClause(text, codeContext)).toBeUndefined();
+  });
+
+  test("a numbered step inside a fenced block is a workflow step regardless of heading wording", () => {
+    expect(isWorkflowListStep({ ordered: true, fenced: true, headingPath: ["Core Principle: Contract Before Code"] })).toBe(true);
+  });
+
+  test("an ordered list under a heading literally naming 'workflow' is a workflow step even unfenced", () => {
+    expect(isWorkflowListStep({ ordered: true, fenced: false, headingPath: ["Release Workflow"] })).toBe(true);
+  });
+
+  test("a bulleted (non-ordered) list item is never a workflow step, fenced or not", () => {
+    expect(isWorkflowListStep({ ordered: false, fenced: true, headingPath: [] })).toBe(false);
+  });
+
+  test("an ordered, unfenced list under an unrelated heading is not a workflow step", () => {
+    expect(isWorkflowListStep({ ordered: true, fenced: false, headingPath: ["Rules"] })).toBe(false);
+  });
+
+  test("a code-property clause wins over the pre-classifier even inside a fenced numbered workflow list", () => {
+    const reason = preClassifyProcessClause("Every handler must never block the event loop.", { ordered: true, fenced: true, headingPath: [] });
+    expect(reason).toBeUndefined();
+  });
+
+  test("a document-authored explicit marker still wins outright over the pre-classifier", () => {
+    const clauses = extractReferenceClauses("# H\n\n- Review the contract for breaking changes. [state:hunk]");
+    expect(clauses[0]?.explicit).toEqual({ state_kind: "hunk" });
   });
 });
