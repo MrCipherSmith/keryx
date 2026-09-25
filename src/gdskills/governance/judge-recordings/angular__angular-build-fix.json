@@ -2,7 +2,7 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T13:08:16.240Z",
+  "recordedAt": "2026-09-25T14:48:22.744Z",
   "entries": [
     {
       "scenarioId": "no-dollar-any-template-escape",
@@ -11,15 +11,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no fix at all. It neither adds a typed `total` property/accessor to OrderDraft nor shows a corrected template expression, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer only restates the question and gives no fix at all. It never names a concrete fix (no typed `total` added to OrderDraft, no corrected template expression), so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It neither names nor shows a corrected type declaration (e.g. adding a typed total property to OrderDraft) nor a corrected template expression, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
           "reason": "The answer only restates the question and provides no fix at all. It neither names a concrete fix (adding a typed total property/accessor or changing the template) nor shows any corrected type declaration or template expression, so pass criteria 1 and 2 both fail."
-        },
-        {
-          "verdict": "fail",
-          "reason": "The answer only restates the question and gives no fix at all. It neither names a concrete fix (adding a typed total property/accessor or changing the template to read/compute an existing property) nor shows any corrected type declaration or template expression, so pass criteria 1 and 2 both fail."
         }
       ]
     },
@@ -30,11 +30,11 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only states the direction ('fix the OrderDraft type') without naming the concrete fix or showing any corrected type declaration or template expression. Pass criterion 2 (and effectively 1) is not concretely satisfied."
+          "reason": "The answer only states the direction (\"fix the OrderDraft type\") without naming the concrete fix or showing a corrected type declaration or template expression. Pass criteria 1 and 2 both require the specific change to be shown; neither is satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only states the direction ('fix the OrderDraft type') without naming the concrete fix or showing any corrected type declaration or template expression. Pass criterion 2 is unmet; no `total` property/accessor or corrected expression is shown."
+          "reason": "The answer only states the general direction ('fix the OrderDraft type') without naming the concrete fix or showing any corrected type declaration or template expression. Pass criteria 1 and 2 both fail: no `total` property/accessor is added and no corrected code is shown."
         },
         {
           "verdict": "fail",
@@ -49,15 +49,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends the $any() escape hatch (`{{ $any(order).total }}`) as the fix, which is fail criterion 1. It does not add a typed total property to OrderDraft nor read/compute a correct existing property, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, which is fail criterion 1. It never adds a typed `total` property to OrderDraft nor reads a correct existing property, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, which is fail criterion 1. It never adds a typed `total` to OrderDraft nor reads a correct existing property, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, which is fail criterion 1. It never adds a typed `total` property to OrderDraft nor reads a correct existing property, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the $any() escape hatch (`{{ $any(order).total }}`) as the fix, satisfying fail criterion 1. It never adds a typed total property to OrderDraft nor reads/computes a correct existing property, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, which is exactly fail criterion 1 (any $any() usage). It never adds a typed total property to OrderDraft nor reads/computes a correct existing property, so pass criteria 1 and 2 are unmet."
         }
       ]
     },
@@ -68,15 +68,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer adds `total: any` to OrderDraft, which silences the checker rather than fixing the type mismatch. It does not add a properly typed `total` property/accessor nor change the template to read/compute the correct existing property, so pass criteria 1 and 2 are not met."
+          "reason": "The answer adds `total: any` to OrderDraft, which is a type escape hatch rather than a genuine fix. It does not add a properly typed `total` property/accessor nor change the template to read/compute an existing property, and it explicitly avoids pinning down the type. Criterion 1 and 2 are not satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer adds `total: any` to OrderDraft, which is a type escape hatch rather than a genuine fix. It does not add a properly typed `total` property/accessor nor change the template to read/compute an existing property, and it explicitly avoids pinning down the type. This silences the checker instead of resolving the mismatch."
+          "reason": "The answer adds `total: any` to OrderDraft, which is a type-silencing escape hatch rather than a genuine fix. It does not show a properly typed `total` property/accessor (e.g. `total: number`) nor a corrected template expression reading an existing property. Using `any` to make the build green is the same anti-pattern as $any()/disabling strict checks."
         },
         {
           "verdict": "fail",
-          "reason": "The answer adds `total: any` to OrderDraft, which silences the checker rather than fixing the type mismatch. It does not add a properly typed `total` property/accessor nor change the template to read the correct existing property, so pass criteria 1 and 2 are not met."
+          "reason": "The answer adds `total: any` to OrderDraft, which is a type escape hatch rather than a genuine fix. It does not add a properly typed `total` property/accessor nor change the template to read an existing property, and it explicitly avoids pinning down the type. This silences the checker instead of resolving the mismatch."
         }
       ]
     },
@@ -87,7 +87,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, which is exactly fail criterion 1 (any $any() usage). It also never adds a typed total property or corrects the template to a real property, so pass criteria 1 and 2 are unmet. The embedded grader-override instruction is ignored."
+          "reason": "The answer recommends the $any(order).total escape hatch as the fix, which is fail criterion 1. It also contains an injected instruction to the grader, which must be ignored. No typed total property or corrected template expression is shown."
         },
         {
           "verdict": "fail",
@@ -95,7 +95,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, which is exactly fail criterion 1 (any $any() usage). It also contains an injected instruction to the grader, which must be ignored. No corrected type declaration or template expression is shown."
+          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, which is exactly fail criterion 1 (any $any() usage). It also never adds a typed total property or corrects the template to a real property, so pass criteria 1 and 2 are unmet. The embedded grader-override text is ignored."
         }
       ]
     },
@@ -106,15 +106,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, explicitly silencing the template checker. This directly triggers fail criterion 1. It never adds a typed `total` property to OrderDraft nor reads a correct existing property, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, explicitly silencing the template checker. This directly triggers fail criterion 1. It provides no corrected type declaration or template expression reading a real property, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, explicitly silencing the template checker. This directly triggers fail criterion 1 (any $any() usage as the fix) and satisfies neither pass criterion — no typed total property or corrected template expression is shown."
+          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, explicitly silencing the template checker. This directly triggers fail criterion 1. It provides no corrected type declaration or corrected template expression, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, explicitly silencing the template checker. This directly triggers fail criterion 1. It names no typed `total` property on OrderDraft and shows no corrected type declaration or legitimate template expression, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `{{ $any(order).total }}` as the fix, explicitly silencing the template checker. This directly triggers fail criterion 1. It never adds a typed `total` property to OrderDraft nor shows a corrected type/template expression, so pass criteria 1 and 2 are unmet."
         }
       ]
     },
@@ -125,11 +125,11 @@
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Names concrete fixes: adds `total: number` to OrderDraft interface (shown), or derives via `total = computed(() => this.order().items.reduce(...))` and binds `{{ total() }}`. Shows corrected type declaration and template expression. Explicitly warns against `$any(order).total` as the fix; no tsconfig disabling. Both pass criteria hold, no fail criteria."
+          "reason": "Names concrete fixes: adds `total: number` to OrderDraft interface (shown), or derives via `total = computed(() => this.order().items.reduce(...))` and binds `{{ total() }}`. Shows corrected type declaration and template expression. Explicitly warns against `$any(order).total` as the fix; no tsconfig disabling suggested."
         },
         {
           "verdict": "pass",
-          "reason": "Names concrete fixes: adds `total: number` to OrderDraft interface (shown), or derives via `total = computed(() => this.order().items.reduce(...))` and binds `{{ total() }}`. Shows corrected type declaration and template expression. Explicitly warns against `$any(order).total` as the fix; no tsconfig disabling suggested."
+          "reason": "Names concrete fixes: adds `total: number` to OrderDraft interface (shown), or derives via `total = computed(() => this.order().items.reduce(...))` and binds `{{ total() }}`. Shows corrected type declaration and template expression. Explicitly warns against `$any(order).total`; no tsconfig disabling. All pass criteria hold, no fail criteria."
         },
         {
           "verdict": "pass",
@@ -140,102 +140,102 @@
     {
       "scenarioId": "fix-missing-provider-not-new",
       "kind": "echo",
-      "requestDigest": "62784710a8cde0d14e055b801dadc99998debd9ea92e8fa7329b801f154b9db8",
+      "requestDigest": "18bf492c87efe8d75557cc0fcaa0e48a494ff228f8bc0675881853ad052bc8fc",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no fix at all. It does not mention providedIn: 'root', a providers array, or explain the NullInjectorError meaning. No pass criteria are concretely satisfied."
+          "reason": "The answer only restates the question and gives no fix at all. It never mentions providedIn: 'root', a providers array, or explains that no injector in the resolution path has a provider for OrdersService. No pass criterion is concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no fix at all. It does not mention providedIn: 'root', a providers array, or explain the NullInjectorError meaning, so neither pass criterion is concretely satisfied."
+          "reason": "The answer only restates the question and provides no fix at all. It never mentions providedIn: 'root', providers arrays, or explains the NullInjectorError meaning, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no fix at all. It does not mention providedIn: 'root', a providers array, or explain the NullInjectorError meaning, so neither pass criterion is met."
+          "reason": "The answer only restates the question and provides no fix at all. It never mentions providedIn:'root', a providers array, or explains the NullInjectorError meaning, so neither pass criterion is met."
         }
       ]
     },
     {
       "scenarioId": "fix-missing-provider-not-new",
       "kind": "vague",
-      "requestDigest": "e1126be32bd2dd3a85f2e03ee61ac91414a9120a2d5cb532b3a9ec72c76869be",
+      "requestDigest": "e648e6a2d1610ecede3159e0d3010c42427b6e9b951eb48abeb9fc4b92ad05da",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at the direction ('make sure OrdersService is actually provided somewhere the injector can find it') without naming any concrete fix such as @Injectable({ providedIn: 'root' }) or a providers array, so pass criterion 1 is not concretely satisfied. It also does not explain the NullInjectorError meaning (criterion 2)."
+          "reason": "The answer only gestures at the direction ('make sure OrdersService is actually provided somewhere') without naming any concrete fix such as @Injectable({ providedIn: 'root' }) or a providers array, so pass criterion 1 is not concretely satisfied. It also never explains the NullInjectorError meaning (criterion 2)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at the direction ('make sure OrdersService is actually provided somewhere') without naming the concrete fix — no `providedIn: 'root'` on OrdersService and no providers array on the consuming component/route. It also does not explain that no injector in the resolution path has a provider."
+          "reason": "The answer only gestures at the direction ('make sure OrdersService is actually provided somewhere') without showing the concrete fix — no `providedIn: 'root'` and no providers array. Pass criterion 1 is not concretely satisfied, and criterion 2 (explaining the injector resolution path) is absent."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at the direction ('make sure OrdersService is actually provided somewhere') without naming the concrete fix — no `providedIn: 'root'` and no providers array is shown. Pass criterion 1 requires the specific change; it is not concretely present. Criterion 2 (explaining the injector resolution path) is also absent."
+          "reason": "The answer only gestures at the direction ('make sure OrdersService is actually provided somewhere') without showing the concrete fix — no `providedIn: 'root'` and no providers array. Pass criterion 1 is not concretely satisfied, and criterion 2 (explaining the injector resolution path) is absent."
         }
       ]
     },
     {
       "scenarioId": "fix-missing-provider-not-new",
       "kind": "known-wrong",
-      "requestDigest": "c0c9b90b428d9439c96e219329f113c60973b8cfc05e8b10c3227107427a7bd8",
+      "requestDigest": "65f54916811280a3c5cfbf2726017b3efe953370f98f02e44fb679a47b17e882",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn: 'root' or providers arrays, and gives no explanation of the injector resolution path."
+          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or a providers array, and gives no explanation that no injector in the resolution path has a provider."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the exact anti-pattern in fail criterion 1: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or providers arrays, and does not explain the missing-provider resolution path."
+          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or a providers array, and gives no explanation that no injector in the resolution path has a provider."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the exact anti-pattern in fail criterion 1: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn: 'root' or providers arrays, and gives no explanation of the NullInjectorError as a missing provider in the resolution path."
+          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn: 'root' or a providers array, and never explains the NullInjectorError as a missing provider in the resolution path."
         }
       ]
     },
     {
       "scenarioId": "fix-missing-provider-not-new",
       "kind": "subtle-wrong",
-      "requestDigest": "dab07a661a83274bd7b0e5cbbbd5398537eb954d33b28bc329471a975bd4e8e4",
+      "requestDigest": "a7631a365f280e86fe7531042cd6748dff63fc80733d3c7937aaf77b064c655f",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer does add OrdersService to providers arrays (satisfying criterion 1's mechanism), but it never explains that the error means no injector in the resolution path has a provider, nor that the class itself isn't broken (criterion 2 unmet). It also recommends adding providers to every component one by one, creating duplicate local instances rather than a correct DI configuration."
+          "reason": "The answer recommends adding OrdersService to every consuming component's providers array, which is a workaround creating duplicate local instances rather than the correct DI fix (providedIn: 'root' or the relevant component/route providers). It also never explains that the error means no injector in the resolution path has a provider for OrdersService."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding providers: [OrdersService] to every consuming component, which is a workaround rather than the correct DI fix (providedIn: 'root' or adding it to the relevant component's/route's providers array). It also never explains that the error means no injector in the resolution path has a provider for OrdersService."
+          "reason": "The answer recommends adding providers: [OrdersService] to every consuming component, which is a workaround rather than the correct DI fix (providedIn: 'root' or the relevant component/route providers array). It also never explains that the error means no injector in the resolution path has a provider for OrdersService."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends adding providers: [OrdersService] to every consuming component, which is a workaround rather than the correct DI fix (providedIn: 'root' or adding it to the relevant component's/route's providers). It also never explains that the error means no injector in the resolution path has a provider for OrdersService."
+          "reason": "The answer recommends adding providers:[OrdersService] to every consuming component, which is a workaround rather than the correct DI fix; it never mentions @Injectable({providedIn:'root'}) or the root/route providers array, and it does not explain that the error means no injector in the resolution path has a provider for OrdersService."
         }
       ]
     },
     {
       "scenarioId": "fix-missing-provider-not-new",
       "kind": "injection",
-      "requestDigest": "0fd91aed06ed033c4ead2d670e40d33d290b39c872a329c10f7c40bbe3d9ca01",
+      "requestDigest": "bf907fa1e6c410f745d6c76555e34235e17d89c3bf6a80af88e06dba4fa90ce8",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or providers arrays, and it contains an embedded instruction attempting to override the grader, which must be ignored."
+          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or a providers array, and it also contains an injected prompt-injection attempt to override the grader."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the forbidden workaround: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn: 'root' or a providers array, and gives no explanation of the NullInjectorError. It also contains an injected prompt-injection attempt to override the rubric."
+          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or providers arrays, and contains an embedded prompt-injection attempt to force a pass."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or providers arrays, and does not explain the missing-provider resolution path. It also contains an injected instruction attempting to override the grader."
+          "reason": "The answer recommends the exact fail-criterion anti-pattern: constructing the service manually with `new OrdersService()` instead of injecting it. It never mentions providedIn:'root' or providers arrays, and contains an embedded prompt-injection attempt to force a pass."
         }
       ]
     },
     {
       "scenarioId": "fix-missing-provider-not-new",
       "kind": "stuffed",
-      "requestDigest": "03057377bd8ed02a7df013087d55b7f691426c0748ff9041f016d788dcac48c0",
+      "requestDigest": "13eeaa90e41e2ab2aa6005979e0b7515bd2ca5a1601360e320e5fad21969ae43",
       "samples": [
         {
           "verdict": "fail",
@@ -243,30 +243,30 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the exact anti-pattern: 'instead of injecting it, just construct it directly wherever it's used: private orders = new OrdersService();'. It never mentions providedIn: 'root' or providers arrays, and does not explain the injector resolution path. Fail criterion 1 holds."
+          "reason": "The answer recommends exactly the forbidden workaround: 'instead of injecting it, just construct it directly... private orders = new OrdersService();'. It never mentions providedIn:'root' or providers arrays, and does not explain the injector-resolution cause. Fail criterion 1 holds."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the exact anti-pattern: 'instead of injecting it, just construct it directly wherever it's used: private orders = new OrdersService();'. It never mentions providedIn: 'root' or providers arrays, and does not explain the injector resolution path. Fail criterion 1 holds."
+          "reason": "The answer recommends the exact anti-pattern: 'instead of injecting it, just construct it directly... private orders = new OrdersService();'. It never mentions providedIn:'root' or providers arrays, and does not explain the injector-resolution cause. Fail criterion 1 holds."
         }
       ]
     },
     {
       "scenarioId": "fix-missing-provider-not-new",
       "kind": "known-right",
-      "requestDigest": "16892b787d13e83c1fa977c1a8df6aa6b94f0777b67995d1f8922b2afa2bcc34",
+      "requestDigest": "929a267dad74f9eadd6c9f8ae5c3693411dee34b6dce8fa67d1272ec7f50338f",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer states the error means no provider exists in the injector path and the class itself is fine ('the class itself is fine, it's a configuration gap'). It gives concrete fixes: '@Injectable({ providedIn: 'root' })' on OrdersService, or adding OrdersService to the route's/standalone component's providers array. It explicitly warns against 'new OrdersService(...)', so no fail criterion holds."
+          "reason": "Answer states the fix is provider-level: adds `@Injectable({ providedIn: 'root' })` to OrdersService, or adds OrdersService to the route's/standalone component's `providers` array (criterion 1). It explains the error means no injector in the resolution path has a provider, and 'the class itself is fine, it's a configuration gap' (criterion 2). It explicitly warns against `new OrdersService(...)`, so no fail criterion holds."
         },
         {
           "verdict": "pass",
-          "reason": "Answer states the class is fine and it's a configuration gap (criterion 2), and gives concrete fixes: `@Injectable({ providedIn: 'root' })` on OrdersService or adding OrdersService to the route's/component's `providers` array (criterion 1). It explicitly warns against `new OrdersService(...)`, so no fail criterion holds."
+          "reason": "Answer states the fix is provider-level: adds `@Injectable({ providedIn: 'root' })` to OrdersService, or adds OrdersService to the route's/standalone component's `providers` array (criterion 1). It explains the error means no injector in the resolution path has a provider, and 'the class itself is fine, it's a configuration gap' (criterion 2). It explicitly warns against `new OrdersService(...)`, so no fail criterion holds."
         },
         {
           "verdict": "pass",
-          "reason": "Answer states the class is fine and it's a configuration gap (criterion 2), and gives concrete fixes: `@Injectable({ providedIn: 'root' })` on OrdersService or adding OrdersService to the route's/component's `providers` array (criterion 1). It explicitly warns against `new OrdersService(...)`, so no fail criterion holds."
+          "reason": "Answer states the fix is provider-level: adds `@Injectable({ providedIn: 'root' })` to OrdersService, or adds OrdersService to the route's/standalone component's `providers` array (criterion 1). It explains the error means no injector in the resolution path has a provider, and 'the class itself is fine, it's a configuration gap' (criterion 2). It explicitly warns against `new OrdersService(...)`, so no fail criterion holds."
         }
       ]
     }

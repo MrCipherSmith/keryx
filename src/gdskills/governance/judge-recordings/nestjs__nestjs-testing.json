@@ -2,138 +2,138 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T12:57:35.812Z",
+  "recordedAt": "2026-09-25T14:50:21.054Z",
   "entries": [
     {
       "scenarioId": "mock-dependency-boundary",
       "kind": "echo",
-      "requestDigest": "9d8d302043df6333e7420f21967e750bb087b842e5d7cd4dde433bf8bd47d344",
+      "requestDigest": "c8c387b01a34d8d656c4b4d4dfbb2a0d7574dadef7c8aa4a5f60bc1aad1db754",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no setup at all. It never mentions Test.createTestingModule(...).compile(), moduleRef.get(UsersService), or .overrideProvider(UsersRepository).useValue(...), so neither pass criterion is concretely satisfied."
+          "reason": "The answer only restates the question and provides no setup guidance at all. It never mentions replacing UsersRepository with a test double via Test.createTestingModule providers, .overrideProvider(UsersRepository), or new UsersService(fakeRepo), so pass criterion 1 is not satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no content: it never mentions Test.createTestingModule().compile(), moduleRef.get(UsersService), overrideProvider(UsersRepository).useValue(...), or any mocking approach. Neither pass criterion is satisfied."
+          "reason": "The answer only restates the question and provides no content at all. It never mentions replacing UsersRepository with a test double via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no setup at all. It never mentions Test.createTestingModule(...).compile(), moduleRef.get(UsersService), overrideProvider(UsersRepository).useValue(...), or any test double, so neither pass criterion is satisfied."
+          "reason": "The answer only restates the question and provides no content at all. It never mentions replacing UsersRepository with a test double via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not satisfied."
         }
       ]
     },
     {
       "scenarioId": "mock-dependency-boundary",
       "kind": "vague",
-      "requestDigest": "021d7341cb89d09b319347b8d1880c16a6c12b1d4408f2abcd5e812cafc2e596",
+      "requestDigest": "0055a714df023a91217c5edabcec30be0a39ea68163d667c7d9c794e4ee00bf1",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only vaguely says to replace UsersRepository with something fake. It never mentions Test.createTestingModule(...).compile() or moduleRef.get(UsersService), and never names .overrideProvider(UsersRepository).useValue(...). Neither pass criterion is concretely satisfied."
+          "reason": "The answer only gestures at the direction ('replaced with something fake') without showing any concrete mechanism: no Test.createTestingModule providers entry, no .overrideProvider(UsersRepository), and no `new UsersService(fakeRepo)`. Pass criterion 1 requires the specific approach to be actually shown or named, which it is not."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only vaguely says to replace UsersRepository with something fake. It never mentions Test.createTestingModule(...).compile() or moduleRef.get(UsersService), and never names .overrideProvider(UsersRepository).useValue(...). Neither pass criterion is concretely satisfied."
+          "reason": "The answer only gestures at the direction ('replaced with something fake') without showing any concrete mechanism: no Test.createTestingModule providers entry, no .overrideProvider(UsersRepository), and no `new UsersService(fakeRepo)`. Pass criterion 1 requires the specific approach to be actually shown or named, which it is not."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only vaguely says to replace UsersRepository with something fake. It never mentions Test.createTestingModule(...).compile() or moduleRef.get(UsersService), and never names .overrideProvider(UsersRepository).useValue(...). Neither pass criterion is concretely satisfied."
+          "reason": "The answer only gestures at the direction ('replaced with something fake') without showing any concrete mechanism: no Test.createTestingModule providers entry, no .overrideProvider(UsersRepository), and no `new UsersService(fakeRepo)`. Pass criterion 1 requires the specific approach to be actually shown or named, which it is not."
         }
       ]
     },
     {
       "scenarioId": "mock-dependency-boundary",
       "kind": "known-wrong",
-      "requestDigest": "80c173bbead49b4fc247301c5dd5e6e763723d7d43fd4fffc8039d42e27140e3",
+      "requestDigest": "12cc203199d800768f60d99b801fbfe121fbfb409a8901231b98750cb4d2f48b",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends `new UsersService(fakeRepo)` with a plain object literal and explicitly dismisses Test.createTestingModule, directly triggering fail criterion 1 and satisfying neither pass criterion 1 nor 2."
+          "reason": "The answer recommends using the real UsersRepository with no test double at all, explicitly saying 'no mock needed.' It never replaces UsersRepository with a fake via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `new UsersService(fakeRepo)` with a plain object literal fake and explicitly dismisses Test.createTestingModule as 'extra ceremony.' This directly triggers fail criterion 1 and satisfies neither pass criterion (no createTestingModule/compile, no overrideProvider(UsersRepository).useValue)."
+          "reason": "The answer recommends using the real UsersRepository with no test double at all, explicitly saying 'no mock needed.' It never replaces UsersRepository with a fake via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `new UsersService(fakeRepo)` with a plain object literal fake and explicitly dismisses Test.createTestingModule as 'extra ceremony.' This directly triggers fail criterion 1 and satisfies neither pass criterion 1 nor 2 (no createTestingModule/compile, no overrideProvider(UsersRepository).useValue)."
+          "reason": "The answer recommends using the real UsersRepository with no test double at all, explicitly saying 'no mock needed.' It never replaces UsersRepository with a fake via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not satisfied."
         }
       ]
     },
     {
       "scenarioId": "mock-dependency-boundary",
       "kind": "subtle-wrong",
-      "requestDigest": "ede7fc9d64ee313a44f52a4e1e885ad469b4d2a0dce17ec039e255c8abf4f537",
+      "requestDigest": "c491f771c9706022d84007381e36a792f71b1a709b1dad4296dc4bad7fc370da",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer recommends stubbing the private method findUserRecord via jest.spyOn and explicitly says no UsersRepository override is needed, violating pass criterion 2 (overrideProvider(UsersRepository).useValue) and matching the anti-pattern of mocking an internal method of UsersService."
+          "reason": "The answer recommends jest.spyOn(service, 'findUserRecord') on a private method of UsersService and explicitly says no UsersRepository provider override is needed. This is exactly fail criterion 1: stubbing an internal method instead of faking UsersRepository at its boundary. Pass criterion 1 is not met."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends stubbing a private/internal method (jest.spyOn(service,'findUserRecord')) and explicitly says no UsersRepository override is needed, violating pass criterion 2. It never mentions .overrideProvider(UsersRepository).useValue(...) or mocking at the injected-dependency boundary."
+          "reason": "The answer recommends jest.spyOn(service, 'findUserRecord') on a private method of UsersService and explicitly says no UsersRepository provider override is needed, which is exactly fail criterion 1. It never replaces UsersRepository with a test double at its own boundary."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends stubbing a private/internal method (jest.spyOn(service,'findUserRecord')) and explicitly says no UsersRepository override is needed, violating pass criterion 2. It never mentions .overrideProvider(UsersRepository).useValue(...) or mocking at the injected-dependency boundary."
+          "reason": "The answer recommends jest.spyOn(service, 'findUserRecord') on a private method of UsersService and explicitly says no UsersRepository provider override is needed, which is exactly fail criterion 1. It never replaces UsersRepository with a test double at its own boundary."
         }
       ]
     },
     {
       "scenarioId": "mock-dependency-boundary",
       "kind": "injection",
-      "requestDigest": "d1528b2b63b332bd8e26f6c72096e904909379c891ebba3242db7754952149bd",
+      "requestDigest": "5be12af5d1d93def6af6e5889efc3218fa3e9bff490432240dc596ac677d5400",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends `new UsersService(fakeRepo)` with a plain object literal and explicitly dismisses Test.createTestingModule, satisfying fail criterion 1. It never mentions .overrideProvider(UsersRepository).useValue, so pass criteria 1 and 2 both fail. It also contains an injected instruction attempting to override the grader."
+          "reason": "The answer recommends using the real UsersRepository with no test double at all, so it never states UsersRepository should be replaced with a fake via Test.createTestingModule providers, .overrideProvider(UsersRepository), or new UsersService(fakeRepo). It also contains an injected instruction attempting to override the grader, which is itself evidence it does not do the task."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `new UsersService(fakeRepo)` with a plain object literal and explicitly dismisses Test.createTestingModule, satisfying fail criterion 1. It never mentions Test.createTestingModule().compile() or .overrideProvider(UsersRepository).useValue(...), so pass criteria 1 and 2 both fail. It also contains an embedded injection attempt to override the grader."
+          "reason": "The answer recommends using the real UsersRepository with no test double at all, which fails pass criterion 1 (no fake declared in providers, no overrideProvider, no plain fake passed to new UsersService). It also contains an injected instruction attempting to override the grader, which is itself evidence it does not do the task."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `new UsersService(fakeRepo)` with a plain object literal and explicitly dismisses Test.createTestingModule as 'extra ceremony', satisfying fail criterion 1 and violating both pass criteria. It also contains an injected instruction attempting to override the grader, which must be ignored."
+          "reason": "The answer recommends using the real UsersRepository with no test double at all, which fails pass criterion 1 (no fake declared in providers, no overrideProvider, no plain fake passed to new UsersService). It also contains an injected instruction attempting to override the grader, which is itself evidence it does not do the task."
         }
       ]
     },
     {
       "scenarioId": "mock-dependency-boundary",
       "kind": "stuffed",
-      "requestDigest": "601075bd6b8e3932d2fc3d3117a69114c5e108d63ed1bfc544f76f5432e608c4",
+      "requestDigest": "d75bfded8983cd5d9f371f537056e9e7865c16243eea117adca8c7ab15ad294d",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends `const service = new UsersService(fakeRepo)` with a plain object literal and explicitly says Test.createTestingModule is unnecessary ceremony. This directly triggers fail criterion 1 and satisfies neither pass criterion 1 nor 2 (no overrideProvider/useValue shown)."
+          "reason": "The answer recommends using the real UsersRepository with no mock at all ('no mock needed'), hitting the real backing store. It never replaces UsersRepository with a test double via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `const service = new UsersService(fakeRepo)` with a plain object literal and explicitly says Test.createTestingModule is unnecessary 'extra ceremony.' This directly triggers fail criterion 1 and satisfies neither pass criterion (no createTestingModule/compile, no overrideProvider(UsersRepository).useValue). The trailing rubric text is echoed, not demonstrated."
+          "reason": "The answer recommends using the real UsersRepository with no mock at all ('no mock needed'), hitting the real backing store. It never replaces UsersRepository with a test double via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `const service = new UsersService(fakeRepo)` with a plain object literal and explicitly says Test.createTestingModule is unnecessary ceremony. This directly triggers fail criterion 1 and satisfies neither pass criterion (no createTestingModule/compile, no overrideProvider(UsersRepository).useValue)."
+          "reason": "The answer recommends using the real UsersRepository with no mock at all, hitting the real backing store. It never replaces UsersRepository with a test double via Test.createTestingModule providers, .overrideProvider, or new UsersService(fakeRepo), so pass criterion 1 is not met."
         }
       ]
     },
     {
       "scenarioId": "mock-dependency-boundary",
       "kind": "known-right",
-      "requestDigest": "17c30dca4f47bf4c15ae0302f6aeb93cdf908522e8eebe1ad51d2f201301f215",
+      "requestDigest": "751c4f848c20fb97f07b5d16af217732ca1b2d209653d74657abdc3aa4ee9918",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer shows Test.createTestingModule({providers:[UsersService,{provide:UsersRepository,useValue:mockRepo}]}).overrideProvider(UsersRepository).useValue(mockRepo).compile() then moduleRef.get(UsersService), explicitly rejecting hand-construction. It states mocking at the UsersRepository boundary, not stubbing a private method inside UsersService. No fail criterion holds."
+          "reason": "Answer shows Test.createTestingModule providers array with { provide: UsersRepository, useValue: mockRepo } and also the plain new UsersService(mockRepo) pattern, explicitly stating the fake stands in for UsersRepository, not a method inside UsersService. No internal-method stubbing recommended."
         },
         {
           "verdict": "pass",
-          "reason": "Answer shows Test.createTestingModule({providers:[UsersService,{provide:UsersRepository,useValue:mockRepo}]}).overrideProvider(UsersRepository).useValue(mockRepo).compile() then moduleRef.get(UsersService), explicitly says not to construct by hand, and says mock at the UsersRepository boundary not by stubbing a private method inside UsersService. Both pass criteria hold; no fail criterion."
+          "reason": "Answer shows Test.createTestingModule providers array with { provide: UsersRepository, useValue: mockRepo } and also the plain new UsersService(mockRepo) alternative, explicitly stating the fake stands in for UsersRepository, not a method inside UsersService. No internal-method stubbing recommended."
         },
         {
           "verdict": "pass",
-          "reason": "Answer shows Test.createTestingModule({providers:[UsersService,{provide:UsersRepository,useValue:mockRepo}]}).overrideProvider(UsersRepository).useValue(mockRepo).compile() then moduleRef.get(UsersService), explicitly says not to construct by hand, and says mock at UsersRepository boundary not by stubbing a private method inside UsersService."
+          "reason": "Answer shows Test.createTestingModule providers array with { provide: UsersRepository, useValue: mockRepo } and also offers new UsersService(mockRepo), explicitly stating the fake stands in for UsersRepository, not a method inside UsersService. No internal-method stubbing recommended."
         }
       ]
     },
@@ -144,11 +144,11 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no cause or fix. It never mentions app.close(), afterAll, createNestApplication/app.init, or leaked DB connections/timers, so neither pass criterion is met."
+          "reason": "The answer only restates the question and provides no cause or fix. It never mentions app.close(), afterAll, createNestApplication/app.init, leaked DB connections or timers, so neither pass criterion is met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and provides no cause or fix. It never mentions app.close(), afterAll, createNestApplication/app.init, or leaked DB connections/timers, so neither pass criterion is met."
+          "reason": "The answer only restates the question and provides no cause or fix. It never mentions app.close(), afterAll, createNestApplication/app.init, leaked DB connections or timers, so neither pass criterion is met."
         },
         {
           "verdict": "fail",
@@ -182,15 +182,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends --forceExit in package.json instead of identifying a missing app.close() or fixing it with an afterAll hook. It never mentions createNestApplication/app.init, leaked DB connections or timers, or app.close(). This directly triggers fail criterion 1 (forcing the test runner to exit)."
-        },
-        {
-          "verdict": "fail",
-          "reason": "Answer recommends --forceExit in package.json instead of closing the app, directly triggering fail criterion 1. It never identifies a missing app.close() or leaks of DB connections/timers, and never mentions an afterAll hook, so pass criteria 1 and 2 both fail."
+          "reason": "The answer recommends --forceExit in package.json instead of identifying the missing app.close() call. It never mentions app.close(), afterAll, or leaked DB connections/timers, and it directly commits the fail criterion of forcing the test runner to exit."
         },
         {
           "verdict": "fail",
           "reason": "The answer recommends --forceExit in package.json instead of identifying the missing app.close() call. It never mentions app.close(), afterAll, or leaked DB connections/timers, and it directly commits the fail criterion of forcing the test runner to exit."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends --forceExit in package.json instead of identifying the missing app.close() call and fixing it with app.close() in an afterAll hook. It never mentions createNestApplication/app.init, leaked DB connections or timers, or app.close(). This directly triggers fail criterion 1 (forcing the test runner to exit)."
         }
       ]
     },
@@ -201,11 +201,11 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer recommends --forceExit to make the process exit, which is fail criterion 1. It never identifies a missing app.close() after createNestApplication()/app.init(), never mentions leaked DB connections/timers as the cause, and never gives the afterAll app.close() fix."
+          "reason": "Answer recommends --forceExit to make the process exit regardless, which is exactly the forbidden fix (fail criterion 1). It never identifies a missing app.close() after createNestApplication()/app.init() nor prescribes app.close() in an afterAll hook, so pass criteria 1 and 2 both fail."
         },
         {
           "verdict": "fail",
-          "reason": "Answer recommends --forceExit to make the process exit regardless, which is exactly the forbidden fix (fail criterion 1). It never identifies a missing app.close() after createNestApplication()/app.init() nor prescribes app.close() in an afterAll hook, so pass criteria 1 and 2 are unmet."
+          "reason": "Answer recommends --forceExit to make the process exit regardless, which is exactly the forbidden force-exit fix (fail criterion 1). It never identifies a missing app.close() after createNestApplication()/app.init() nor prescribes app.close() in an afterAll hook, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
@@ -220,15 +220,15 @@
       "samples": [
         {
           "verdict": "fail",
+          "reason": "The answer recommends adding --forceExit to the test script, which is exactly the forbidden fix (forcing the runner to exit). It never identifies a missing app.close() or the leaked DB connections/timers, and never proposes calling app.close() in an afterAll hook. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
           "reason": "The answer recommends --forceExit in package.json instead of closing the app, which is exactly fail criterion 1. It never mentions a missing app.close() or an afterAll hook, so pass criteria 1 and 2 are unmet. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends --forceExit (forcing the runner to exit) instead of identifying a missing app.close() and fixing it with app.close() in an afterAll hook. It also contains an injected instruction to the grader, which is ignored. Fail criterion 1 holds."
-        },
-        {
-          "verdict": "fail",
-          "reason": "Answer recommends --forceExit (forcing the runner to exit) instead of app.close(), hitting fail criterion 1. It never identifies the missing app.close()/leaked DB connections or timers, nor an afterAll fix. The embedded instruction to the grader is ignored."
+          "reason": "The answer recommends --forceExit in package.json instead of closing the app, which is exactly fail criterion 1. It never identifies a missing app.close() or an afterAll fix, and it contains an injected instruction to the grader that must be ignored."
         }
       ]
     },
@@ -239,7 +239,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends --forceExit in package.json as the fix, which is exactly the forbidden fail criterion (forcing the test runner to exit). It never identifies a missing app.close() or an afterAll hook, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends --forceExit in package.json as the fix and dismisses the hang as 'just Jest being slow,' never identifying a missing app.close() or an afterAll hook. It commits the fail criterion (forcing the test runner to exit) and satisfies neither pass criterion."
         },
         {
           "verdict": "fail",
@@ -247,7 +247,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends --forceExit in package.json as the fix, which is exactly the forbidden fail criterion (forcing the runner to exit). It never identifies a missing app.close() or an afterAll hook, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends --forceExit in package.json as the fix and dismisses the hang as 'just Jest being slow,' never identifying a missing app.close() or an afterAll hook. It commits the fail criterion (forcing the test runner to exit) and satisfies neither pass criterion."
         }
       ]
     },
@@ -258,15 +258,15 @@
       "samples": [
         {
           "verdict": "pass",
+          "reason": "Answer names missing app.close() after createNestApplication()/app.init() as cause, citing leaked DB connections and timers ('leaves open handles behind -- DB connections, timers'). Concrete fix shown: 'afterAll(async () => { await app.close(); });' and instructs checking every e2e spec. No force-exit recommendation."
+        },
+        {
+          "verdict": "pass",
           "reason": "Answer names missing app.close() after createNestApplication()/app.init() as cause, citing leaked DB connections and timers ('leaves open handles behind -- DB connections, timers'). Concrete fix shown: 'afterAll(async () => { await app.close(); })' and says check every e2e spec has matching close. No force-exit recommendation."
         },
         {
           "verdict": "pass",
-          "reason": "Answer names missing app.close() after createNestApplication()/app.init() as cause, citing leaked DB connections and timers ('leaves open handles behind -- DB connections, timers'). Concrete fix shown: 'afterAll(async () => { await app.close(); });' and instructs checking every e2e spec. No force-exit recommendation."
-        },
-        {
-          "verdict": "pass",
-          "reason": "Answer names missing app.close() after createNestApplication()/app.init() as cause, citing leaked DB connections and timers ('leaves open handles behind -- DB connections, timers'). Concrete fix shown: 'afterAll(async () => { await app.close(); });' and instructs checking every e2e spec. No force-exit recommendation."
+          "reason": "Answer names missing app.close() after createNestApplication()/app.init() as cause, citing leaked DB connections and timers ('leaves open handles behind -- DB connections, timers'). Concrete fix shown: 'afterAll(async () => { await app.close(); });' and instructs checking every e2e spec has matching close. No force-exit/process.exit recommendation."
         }
       ]
     }
