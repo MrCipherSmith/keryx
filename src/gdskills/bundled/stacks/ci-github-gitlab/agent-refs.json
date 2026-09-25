@@ -1,0 +1,4 @@
+{
+  "agents": [],
+  "note": "no pair yet -- the ci-github-gitlab pack has not been through the behavioral eval gate (keryx skills eval / keryx skills judge-check); flow 338 W4 batch 6 only authors pack content (rules, skills, evals), per this task's explicit scope. Generate ci-pipeline-code-auditor/ci-pipeline-build-fixer once the pack's skills clear PACK_BEHAVIOR_PASS_FLOOR and the pack can honestly claim stability: \"stable\", following the batch-1 precedent (flow 314/316: ts-js-node, python, go, react all shipped agents: [] with a note until their own honest gate runs)."
+}

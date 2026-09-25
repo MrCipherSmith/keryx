@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "This workflow won't even parse -- GitHub says there's a YAML syntax error",
+      "Our deploy job can't read the API_KEY variable even though it's set in GitLab",
+      "The bot says Resource not accessible by integration when posting a PR comment",
+      "GitLab keeps saying this job's rules never match so it just gets skipped",
+      "actions/checkout is erroring out with an unrecognized input on this job",
+      "This job references another job in needs: that GitHub says doesn't exist"
+    ],
+    "negative": [
+      "The build fails because a Python import is missing, fix the code",
+      "Our TypeScript compile step is failing with a type error, fix it",
+      "The Go binary fails go vet, please fix the source",
+      "This Dockerfile fails to build because of a missing apt package",
+      "Write a new workflow that lints our code on every push",
+      "Review this workflow for security issues before we merge it"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "permission-scope-fix",
+      "prompt": "This job fails with 'Resource not accessible by integration' when it tries to comment on the pull request. The workflow currently has no permissions: block. How do I fix it?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies the missing pull-requests: write scope as the root cause of the 'Resource not accessible by integration' failure, fixes it by adding that specific scope at the job level, and confirms the fix does not widen access beyond what the failing comment step needs (no workflow-level write-all).",
+          "pass_criteria": [
+            "Identifies the missing permissions: pull-requests: write scope as the root cause of the 'Resource not accessible by integration' failure.",
+            "Adds the permissions grant at the job level rather than the workflow level.",
+            "States or confirms that the fix does not widen scope beyond what the failing comment step specifically needs."
+          ],
+          "fail_criteria": [
+            "Recommends permissions: write-all (or another broad, unscoped workflow-level grant) as the fix instead of the specific pull-requests: write scope at the job level. Mentioning write-all only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "The root cause is that the workflow has no permissions: block at all, so the default GITHUB_TOKEN scope doesn't include write access to pull requests, and the comment step fails with 'Resource not accessible by integration'. Fix: add `permissions: { pull-requests: write }` directly on this job (not at the workflow level, so the rest of the file stays at its current, narrower scope). That grants exactly the access the comment step needs and nothing more. Re-run the job after adding it to confirm the comment now posts successfully.",
+        "known_wrong": "Simplest fix here is to add `permissions: write-all` at the top of the workflow -- that guarantees this job (and anything else added later) has whatever access it needs without having to track down the exact scope each time.",
+        "vague": "You'll need to add the right permissions so the comment step can post.",
+        "subtle_wrong": "Add `permissions: { contents: write, pull-requests: write, issues: write }` at the workflow level -- that covers this comment step and leaves room for other jobs that might need similar write access later without having to keep revisiting the permissions block."
+      },
+      "anti_patterns": ["write-all"]
+    },
+    {
+      "id": "protected-variable-fix",
+      "prompt": "The deploy job can't see DEPLOY_TOKEN even though it's defined in GitLab CI/CD variables. The pipeline runs on a feature branch. How do I fix this?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that DEPLOY_TOKEN being unavailable is because it is marked Protected and the pipeline is running on an unprotected feature branch, and fixes it by restricting the deploy job's rules: to the protected branch/tag (or by introducing a separate non-protected variable for the feature-branch case) rather than by unprotecting DEPLOY_TOKEN.",
+          "pass_criteria": [
+            "Identifies that DEPLOY_TOKEN is unavailable because it is a Protected variable and the pipeline is running on an unprotected feature branch, not because the variable is misconfigured or missing.",
+            "Recommends restricting the deploy job (via rules:) to run only on the protected branch/tag DEPLOY_TOKEN is exposed to, or introducing a separate non-protected variable for the feature-branch case.",
+            "Does not recommend removing Protected status from DEPLOY_TOKEN as part of the fix."
+          ],
+          "fail_criteria": [
+            "Recommends unprotecting or removing Protected status from DEPLOY_TOKEN so it becomes available on the feature branch. Mentioning that this is what not to do is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "DEPLOY_TOKEN is marked Protected in GitLab, which means it's only exposed to pipelines running on a protected branch or tag -- a feature branch pipeline simply never receives it, which is why it reads as empty/missing rather than erroring loudly. Fix: restrict this deploy job's rules: so it only runs on the protected branch (or tag) that DEPLOY_TOKEN is actually scoped to, rather than on every feature branch. If the deploy job genuinely needs to run from feature branches too (e.g. for a staging deploy), use a separate, non-protected variable for that case instead of exposing the production DEPLOY_TOKEN there.",
+        "known_wrong": "Easiest fix is to open the variable settings in GitLab and uncheck 'Protected' on DEPLOY_TOKEN -- then it'll be available to every branch's pipeline, including this feature branch, with no other changes needed.",
+        "vague": "You probably just need to adjust the variable settings so the deploy job can see it.",
+        "subtle_wrong": "Since the feature branch needs the token right now for testing, go ahead and unprotect DEPLOY_TOKEN temporarily -- you can always re-protect it later once the feature branch work is done and merged."
+      }
+    }
+  ]
+}
