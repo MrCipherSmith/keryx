@@ -5446,6 +5446,15 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(`${text}\n`);
       }
     };
+    // R700-01: untrusted/changed project hooks, a hook-config load failure,
+    // or a tighten-only gate warning/banner — announced on EVERY interactive
+    // session start, every time (never behind a debug flag, never
+    // suppressed after the first session). One `announceStartupNotice` call
+    // per line rather than one call with embedded newlines, because
+    // `addStatusIfShown`'s splash status area is proven to render one line
+    // reliably; a multi-line block risks being clipped or shown as one
+    // truncated line there.
+    for (const line of liveDeps?.hooks?.notices ?? []) announceStartupNotice(line);
     if (viewedReadOnly) {
       // The wordmark would sit under the read-only view it just rendered.
       splash.removeIfShown();

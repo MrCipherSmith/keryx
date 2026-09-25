@@ -200,6 +200,200 @@ test("buildShellHookRuntime wires a real keryx.impact-evidence provider by defau
   }
 });
 
+// --- R700-01: project-hook trust wiring (flow 319, lane A) -----------------
+
+async function makeTrustProject(): Promise<{ dir: string; homeDir: string; configDir: string }> {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-trust-"));
+  const homeDir = dir;
+  const configDir = path.join(dir, "config");
+  await mkdir(path.join(dir, ".metaproject"), { recursive: true });
+  await writeFile(
+    path.join(dir, ".metaproject", "hooks.json"),
+    JSON.stringify({
+      schemaVersion: "1.0.0",
+      hooks: { SessionStart: [{ id: "marker-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }] },
+    }),
+    "utf8",
+  );
+  return { dir, homeDir, configDir };
+}
+
+test("R700-01: a trusted project SessionStart hook runs (present in registrations)", async () => {
+  const { dir, homeDir, configDir } = await makeTrustProject();
+  try {
+    const { recordProjectHooksTrust, projectHooksDigestOfDoc } = await import("../harness/hooks");
+    const raw = JSON.parse(await import("node:fs/promises").then((m) => m.readFile(path.join(dir, ".metaproject", "hooks.json"), "utf8")));
+    const digest = projectHooksDigestOfDoc(raw);
+    if (digest === undefined) throw new Error("expected a digest");
+    recordProjectHooksTrust({ trustRoot: dir, digest, hookIds: ["marker-hook"], configDir });
+
+    const result = buildShellHookRuntime({
+      projectRoot: dir,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir,
+      configDir,
+      env: { KERYX_HOOKS: "on" },
+    });
+    expect(result?.runtime.registrations().some((r) => r.id === "marker-hook")).toBe(true);
+    expect(result?.notices).toEqual([]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("R700-01: untrusted project hooks produce a start-of-session notice naming them", async () => {
+  const { dir, homeDir, configDir } = await makeTrustProject();
+  try {
+    const result = buildShellHookRuntime({
+      projectRoot: dir,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir,
+      configDir,
+      env: { KERYX_HOOKS: "on" },
+    });
+    expect(result?.runtime.registrations().some((r) => r.id === "marker-hook")).toBe(false);
+    expect(result?.notices?.some((n) => n.includes("marker-hook") && n.includes("not trusted"))).toBe(true);
+    expect(result?.notices?.some((n) => n.includes("keryx hooks trust"))).toBe(true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("R700-01: the notice is produced on EVERY build of the runtime, not suppressed after the first", async () => {
+  const { dir, homeDir, configDir } = await makeTrustProject();
+  try {
+    const opts = {
+      projectRoot: dir,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local" as const,
+      homeDir,
+      configDir,
+      env: { KERYX_HOOKS: "on" },
+    };
+    const first = buildShellHookRuntime(opts);
+    const second = buildShellHookRuntime(opts);
+    expect(first?.notices?.length).toBeGreaterThan(0);
+    expect(second?.notices ?? []).toEqual(first?.notices ?? []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("R700-01: a user-disabled gate produces the OFF banner", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-gate-off-"));
+  try {
+    await mkdir(path.join(dir, ".keryx"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".keryx", "hooks.json"),
+      JSON.stringify({
+        schemaVersion: "1.0.0",
+        hooks: { PreToolUse: [{ id: "keryx.ctx-guard", enabled: false, acknowledge: "disable-builtin-gate" }] },
+      }),
+      "utf8",
+    );
+    const result = buildShellHookRuntime({
+      projectRoot: dir,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir: dir,
+      env: { KERYX_HOOKS: "on" },
+    });
+    expect(result?.notices?.some((n) => n.includes("keryx.ctx-guard") && n.includes("OFF"))).toBe(true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("R700-01: forChild/inheritedHookIds never include an untrusted project hook", async () => {
+  const { dir, homeDir, configDir } = await makeTrustProject();
+  try {
+    const result = buildShellHookRuntime({
+      projectRoot: dir,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir,
+      configDir,
+      env: { KERYX_HOOKS: "on" },
+    });
+    if (result === undefined) throw new Error("expected a runtime");
+    const child = result.runtime.forChild({ sessionId: "child-s", runId: "child-r" });
+    expect(child.registrations().some((r) => r.id === "marker-hook")).toBe(false);
+    expect(child.inheritedHookIds()).not.toContain("marker-hook");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("R700-01/D9: trust recorded for the main root applies to a worktree copy with identical hooks.json, not to a changed one", async () => {
+  const { recordProjectHooksTrust, projectHooksDigestOfDoc } = await import("../harness/hooks");
+  const mainRoot = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-main-"));
+  const worktree = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-worktree-"));
+  const configDir = path.join(mainRoot, "config");
+  const homeDir = mainRoot;
+  try {
+    const doc = {
+      schemaVersion: "1.0.0",
+      hooks: { SessionStart: [{ id: "marker-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }] },
+    };
+    await mkdir(path.join(mainRoot, ".metaproject"), { recursive: true });
+    await mkdir(path.join(worktree, ".metaproject"), { recursive: true });
+    await writeFile(path.join(mainRoot, ".metaproject", "hooks.json"), JSON.stringify(doc), "utf8");
+    await writeFile(path.join(worktree, ".metaproject", "hooks.json"), JSON.stringify(doc), "utf8"); // identical
+
+    const digest = projectHooksDigestOfDoc(doc);
+    if (digest === undefined) throw new Error("expected a digest");
+    recordProjectHooksTrust({ trustRoot: mainRoot, digest, hookIds: ["marker-hook"], configDir });
+
+    const identical = buildShellHookRuntime({
+      projectRoot: worktree,
+      trustRoot: mainRoot,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir,
+      configDir,
+      env: { KERYX_HOOKS: "on" },
+    });
+    expect(identical?.runtime.registrations().some((r) => r.id === "marker-hook")).toBe(true);
+
+    // Now the worktree's hooks.json diverges from what was trusted.
+    const changedDoc = {
+      schemaVersion: "1.0.0",
+      hooks: { SessionStart: [{ id: "marker-hook", matcher: "*", class: "observe", command: { argv: ["false"] } }] },
+    };
+    await writeFile(path.join(worktree, ".metaproject", "hooks.json"), JSON.stringify(changedDoc), "utf8");
+    const changed = buildShellHookRuntime({
+      projectRoot: worktree,
+      trustRoot: mainRoot,
+      sessionId: "s",
+      runId: "r",
+      interactive: true,
+      profileId: "monitored-trusted-local",
+      homeDir,
+      configDir,
+      env: { KERYX_HOOKS: "on" },
+    });
+    expect(changed?.runtime.registrations().some((r) => r.id === "marker-hook")).toBe(false);
+    expect(changed?.notices?.some((n) => n.includes("changed since you trusted it"))).toBe(true);
+  } finally {
+    await rm(mainRoot, { recursive: true, force: true });
+    await rm(worktree, { recursive: true, force: true });
+  }
+});
+
 test("resolveHooksHomeDir: an explicit homeDir wins, then KERYX_HOME, then the real homedir", () => {
   expect(resolveHooksHomeDir({}, "/explicit")).toBe("/explicit");
   expect(resolveHooksHomeDir({ KERYX_HOME: "/from-env" })).toBe("/from-env");

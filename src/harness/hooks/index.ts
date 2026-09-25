@@ -12,3 +12,5 @@ export * from "./semantics";
 export * from "./compose";
 export * from "./runner";
 export * from "./runtime";
+export * from "./trust";
+export * from "./notices";

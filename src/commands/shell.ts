@@ -3490,6 +3490,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           runId: randomUUID(),
           interactive: true,
           profileId: "monitored-trusted-local",
+          ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
         });
       }
       return shellHooks;
@@ -4070,7 +4071,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         runId: randomUUID(),
         interactive: true,
         profileId: "monitored-trusted-local",
+        ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
       });
+      // R700-01: the readline path fires SessionStart before the TUI ever
+      // paints, so the notice goes to stderr right here — the one place this
+      // branch can still say it before the hooks that would have run are
+      // silently skipped.
+      for (const line of shellHooks?.notices ?? []) console.error(line);
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
       // CURRENT session dir at tool-invoke time, not whatever was true when

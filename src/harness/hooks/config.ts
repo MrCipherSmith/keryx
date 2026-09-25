@@ -18,8 +18,16 @@ import { resolveKeryxHomeDir } from "../../lib/keryx-home";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import { BUILTIN_HOOK_REGISTRATIONS } from "./builtins";
 import HOOK_CONFIG_SCHEMA from "./hook-config.schema.json";
+import {
+  digestProjectHooks,
+  loadHooksTrustStore,
+  PROJECT_HOOKS_REL,
+  projectHooksTrustKey,
+  projectHooksTrustState,
+} from "./trust";
+import type { HooksTrustStore, ProjectHooksTrustState } from "./trust";
 import { HOOK_EVENT_NAMES } from "./types";
-import type { HookEventName, HookRegistration, HookScope } from "./types";
+import type { HookClass, HookEventName, HookRegistration, HookScope } from "./types";
 import type { PolicyProfileId } from "../policy/types";
 
 export type HookConfigDiagnosticCode =
@@ -27,7 +35,9 @@ export type HookConfigDiagnosticCode =
   | "schema-invalid"
   | "unknown-schema-version"
   | "hook-id-collides-with-builtin"
-  | "hook-id-duplicate";
+  | "hook-id-duplicate"
+  | "project-gate-disable-ignored"
+  | "gate-disable-unacknowledged";
 
 export interface HookConfigDiagnostic {
   code: HookConfigDiagnosticCode;
@@ -36,8 +46,44 @@ export interface HookConfigDiagnostic {
   path?: string;
 }
 
+/**
+ * R700-02 (D10/D11): the value a USER-scope disable override of a protected
+ * built-in gate must carry for the override to take effect. Without it the
+ * override is ignored (with a warning) — a project file can NEVER disable a
+ * built-in gate, acknowledged or not (D12).
+ */
+export const GATE_DISABLE_ACKNOWLEDGEMENT = "disable-builtin-gate";
+
+/** `class`es with decision power — protected by the tighten-only rule (D10). `observe`/`context` may be disabled from either scope. */
+export function isProtectedBuiltinClass(cls: HookClass): boolean {
+  return cls === "gate" || cls === "gate-advisory";
+}
+
+/** One built-in gate a USER scope file has turned off, for notices/`disabledBuiltinGates`. */
+export interface DisabledBuiltinGate {
+  id: string;
+  file: string;
+}
+
+/** R700-01 (D4): the project file's trust state, plus every project full registration (trusted or not) for `list`/`trust`/notices. */
+export interface ProjectHooksReport {
+  state: ProjectHooksTrustState;
+  filePath: string;
+  trustKey: string;
+  /** Absent only when `state === "none"`. */
+  digest?: string;
+  hooks: HookRegistration[];
+}
+
 export type LoadHookConfigResult =
-  | { ok: true; registrations: HookRegistration[]; diagnostics: HookConfigDiagnostic[] }
+  | {
+      ok: true;
+      registrations: HookRegistration[];
+      diagnostics: HookConfigDiagnostic[];
+      warnings: HookConfigDiagnostic[];
+      projectHooks: ProjectHooksReport;
+      disabledBuiltinGates: DisabledBuiltinGate[];
+    }
   | { ok: false; diagnostics: HookConfigDiagnostic[] };
 
 export interface LoadHookConfigInput {
@@ -45,6 +91,16 @@ export interface LoadHookConfigInput {
   homeDir: string;
   /** Injectable file reader: returns file contents, or `undefined` when absent. Real errors (e.g. EACCES) throw. */
   readFile?: (filePath: string) => string | undefined;
+  /**
+   * R700-01: where project-hook trust is looked up. Omitted `trustRoot`
+   * defaults to `projectRoot` — the one case that differs is trigger-dispatch,
+   * which reads hooks from a worktree (`projectRoot`) but must look trust up
+   * under the MAIN project root, because that is what the operator actually
+   * approved (D9). Omitted `store` reads it fresh via `loadHooksTrustStore`;
+   * a caller that already has one loaded (e.g. `keryx hooks list` rendering
+   * several sections) can pass it to avoid re-reading the file.
+   */
+  projectTrust?: { configDir?: string; trustRoot?: string; store?: HooksTrustStore };
 }
 
 /**
@@ -84,18 +140,22 @@ interface ParsedHookDoc {
   hooks: Record<string, unknown[]>;
 }
 
-/** Whether `raw` is the disable-only override shape: exactly `{id, enabled: false}`. */
-function isDisableOverride(raw: unknown): raw is { id: string; enabled: false } {
+/**
+ * Whether `raw` is the disable-only override shape: `{id, enabled: false}`,
+ * optionally with `acknowledge` (R700-02, D11) — never any other key.
+ */
+export function isDisableOverride(raw: unknown): raw is { id: string; enabled: false; acknowledge?: string } {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return false;
   const record = raw as Record<string, unknown>;
-  const keys = Object.keys(record).sort();
-  return (
-    keys.length === 2 &&
-    keys[0] === "enabled" &&
-    keys[1] === "id" &&
-    record.enabled === false &&
-    typeof record.id === "string"
-  );
+  const keys = new Set(Object.keys(record));
+  if (!keys.has("id") || !keys.has("enabled")) return false;
+  keys.delete("id");
+  keys.delete("enabled");
+  keys.delete("acknowledge");
+  if (keys.size !== 0) return false;
+  if (record.enabled !== false || typeof record.id !== "string") return false;
+  if ("acknowledge" in record && typeof record.acknowledge !== "string") return false;
+  return true;
 }
 
 /** Scan a (possibly schema-invalid) parsed doc for full registrations whose id collides with a built-in namespace. */
@@ -212,22 +272,58 @@ function normalizeFullRegistration(
   };
 }
 
+/**
+ * Every project full registration (never a disable override), normalised,
+ * in file order per event, in `HOOK_EVENT_NAMES` order — exactly the array
+ * {@link digestProjectHooks} (D1) and `ProjectHooksReport.hooks` need.
+ */
+export function extractProjectRegistrations(hooks: Record<string, unknown[]>): HookRegistration[] {
+  const regs: HookRegistration[] = [];
+  let order = 0;
+  for (const event of HOOK_EVENT_NAMES) {
+    const rawList = hooks[event];
+    if (!Array.isArray(rawList)) continue;
+    for (const raw of rawList) {
+      if (isDisableOverride(raw)) continue;
+      regs.push(normalizeFullRegistration(raw as Record<string, unknown>, event, "project", order++));
+    }
+  }
+  return regs;
+}
+
 export interface ResolveHookRegistrationsInput {
   builtins: readonly HookRegistration[];
   user?: ParsedHookDoc;
   project?: ParsedHookDoc;
+  userFile?: string;
+  projectFile?: string;
 }
 
 /**
  * Merge already-validated (or absent) docs over the built-ins. Pure: no fs,
  * no clock. Applies disable-only overrides by id and rejects duplicate
  * full-registration ids within one event.
+ *
+ * R700-02 (D10/D11): an override that targets a PROTECTED built-in (`gate`/
+ * `gate-advisory`) is handled specially instead of being applied like any
+ * other disable — see the per-branch comments below. `observe`/`context`
+ * built-ins (only `keryx.learning-observer` today) are unaffected: either
+ * scope may disable them, exactly as before this flow.
  */
 export function resolveHookRegistrations(
   input: ResolveHookRegistrationsInput,
-): { registrations: HookRegistration[]; diagnostics: HookConfigDiagnostic[] } {
+): {
+  registrations: HookRegistration[];
+  diagnostics: HookConfigDiagnostic[];
+  warnings: HookConfigDiagnostic[];
+  disabledBuiltinGates: DisabledBuiltinGate[];
+} {
   const registrations: HookRegistration[] = [];
   const diagnostics: HookConfigDiagnostic[] = [];
+  const warnings: HookConfigDiagnostic[] = [];
+  const disabledBuiltinGates: DisabledBuiltinGate[] = [];
+  const warnedGateIds = new Set<string>();
+  const disabledGateIds = new Set<string>();
   let order = 0;
 
   for (const event of HOOK_EVENT_NAMES) {
@@ -240,20 +336,61 @@ export function resolveHookRegistrations(
       byId.set(resolved.id, resolved);
     }
 
-    const layers: Array<{ scope: HookScope; doc: ParsedHookDoc | undefined }> = [
-      { scope: "user", doc: input.user },
-      { scope: "project", doc: input.project },
+    const layers: Array<{ scope: HookScope; doc: ParsedHookDoc | undefined; file: string | undefined }> = [
+      { scope: "user", doc: input.user, file: input.userFile },
+      { scope: "project", doc: input.project, file: input.projectFile },
     ];
 
-    for (const { scope, doc } of layers) {
+    for (const { scope, doc, file } of layers) {
       const rawList = doc?.hooks[event];
       if (!Array.isArray(rawList)) continue;
       for (const raw of rawList) {
         if (isDisableOverride(raw)) {
           const target = byId.get(raw.id);
-          if (target !== undefined) {
+          if (target === undefined) continue;
+          if (target.scope === "builtin" && isProtectedBuiltinClass(target.class)) {
+            if (scope === "project") {
+              if (!warnedGateIds.has(`project:${target.id}`)) {
+                warnedGateIds.add(`project:${target.id}`);
+                warnings.push({
+                  code: "project-gate-disable-ignored",
+                  scope,
+                  path: target.id,
+                  message: `keryx hooks: ignored the disable of built-in gate ${target.id} in ${
+                    file ?? PROJECT_HOOKS_REL
+                  }: a project file cannot turn off a built-in gate. The gate stays on.`,
+                });
+              }
+              continue;
+            }
+            // scope === "user"
+            if (raw.acknowledge !== GATE_DISABLE_ACKNOWLEDGEMENT) {
+              if (!warnedGateIds.has(`user:${target.id}`)) {
+                warnedGateIds.add(`user:${target.id}`);
+                warnings.push({
+                  code: "gate-disable-unacknowledged",
+                  scope,
+                  path: target.id,
+                  message: `keryx hooks: ignored the disable of built-in gate ${target.id} in ${
+                    file ?? "~/.keryx/hooks.json"
+                  }: it needs "acknowledge": "disable-builtin-gate". The gate stays on. To turn it off for yourself, run: keryx hooks disable ${
+                    target.id
+                  } --user --acknowledge-gate-risk`,
+                });
+              }
+              continue;
+            }
             target.enabled = false;
+            if (!disabledGateIds.has(target.id)) {
+              disabledGateIds.add(target.id);
+              disabledBuiltinGates.push({ id: target.id, file: file ?? "~/.keryx/hooks.json" });
+            }
+            continue;
           }
+          // Not a protected built-in (observe/context built-in, or a
+          // project/user full registration already merged): disable applies
+          // as before this flow.
+          target.enabled = false;
           continue;
         }
         const record = raw as Record<string, unknown>;
@@ -275,14 +412,32 @@ export function resolveHookRegistrations(
     }
   }
 
-  return { registrations, diagnostics };
+  return { registrations, diagnostics, warnings, disabledBuiltinGates };
+}
+
+/**
+ * Validate + extract + digest a raw project hooks.json document in one call
+ * — `undefined` when the document is invalid, or has no full registrations
+ * (nothing to digest/trust). Used by `keryx hooks` for enable/disable
+ * carry-over (D13): comparing the digest before and after a CLI-driven
+ * rewrite, without duplicating the validate/extract/digest sequence.
+ */
+export function projectHooksDigestOfDoc(doc: unknown): string | undefined {
+  const validated = validateHookConfigDocument(doc, "project");
+  if (!validated.valid) return undefined;
+  const regs = extractProjectRegistrations(validated.hooks);
+  if (regs.length === 0) return undefined;
+  return digestProjectHooks(regs);
 }
 
 /**
  * Read, validate, and merge both config files over the built-in registrations.
  * Fail-closed: any diagnostic is an error here (there is no "warning that
  * still loads" case in v1) — a caller must treat `ok: false` as "hooks did
- * not load", never silently proceed with a partial set.
+ * not load", never silently proceed with a partial set. Validation/merge run
+ * over the FULL project file regardless of trust (D5) — trust only gates
+ * whether the resulting project registrations are allowed into the
+ * `registrations` a runtime executes.
  */
 export function loadHookConfig(input: LoadHookConfigInput): LoadHookConfigResult {
   const readFile = input.readFile ?? defaultReadFile;
@@ -330,9 +485,53 @@ export function loadHookConfig(input: LoadHookConfigInput): LoadHookConfigResult
     builtins: BUILTIN_HOOK_REGISTRATIONS,
     ...(user !== undefined ? { user } : {}),
     ...(project !== undefined ? { project } : {}),
+    userFile: userPath,
+    projectFile: projectPath,
   });
   if (merged.diagnostics.length > 0) {
     return { ok: false, diagnostics: merged.diagnostics };
   }
-  return { ok: true, registrations: merged.registrations, diagnostics: [] };
+
+  // R700-01: project-hook trust (D2/D9). The digest comes from the SAME
+  // parsed `project` doc `resolveHookRegistrations` just merged — never a
+  // second read — so there is no TOCTOU between what was validated/shown and
+  // what is checked for trust. `projectTrust.trustRoot` lets a caller (only
+  // trigger-dispatch today) look trust up under the MAIN project root while
+  // still digesting the WORKTREE's hooks.json — the file actually loaded
+  // above via `input.projectRoot` (D9): trust is recorded against the main
+  // root's key, but the digest inside that record is always of the exact
+  // document that will execute, wherever it was read from. A worktree with
+  // an identical hooks.json therefore matches; one with a different
+  // hooks.json digests differently and reports `changed`, never silently
+  // running content the operator never saw.
+  const trustRoot = input.projectTrust?.trustRoot ?? input.projectRoot;
+  const trustStore = input.projectTrust?.store ?? loadHooksTrustStore(input.projectTrust?.configDir);
+  const trustKey = projectHooksTrustKey(trustRoot);
+  const projectRegs = extractProjectRegistrations(project?.hooks ?? {});
+  const digest = projectRegs.length > 0 ? digestProjectHooks(projectRegs) : undefined;
+  const state = projectHooksTrustState(trustKey, digest, trustStore);
+
+  let registrations = merged.registrations;
+  if (state === "untrusted" || state === "changed") {
+    // D5: removed from `registrations`, not merely disabled — so no code
+    // path that ignores `enabled` (e.g. a future `hooks test` bypass) can
+    // run them, and a child agent cannot inherit them (`forChild` only ever
+    // sees `registrations`).
+    registrations = registrations.filter((r) => r.scope !== "project");
+  }
+
+  return {
+    ok: true,
+    registrations,
+    diagnostics: [],
+    warnings: merged.warnings,
+    projectHooks: {
+      state,
+      filePath: projectPath,
+      trustKey,
+      ...(digest !== undefined ? { digest } : {}),
+      hooks: projectRegs,
+    },
+    disabledBuiltinGates: merged.disabledBuiltinGates,
+  };
 }

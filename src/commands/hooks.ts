@@ -12,10 +12,13 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { confirm as realConfirm } from "../lib/prompt";
 import { resolveHooksHomeDir, resolveHooksProjectRoot } from "./agent-hooks";
+import { bothStreamsAreATerminal } from "./mcp-servers";
 import {
   BUILTIN_HOOK_IDS,
   BUILTIN_HOOK_REGISTRATIONS,
+  GATE_DISABLE_ACKNOWLEDGEMENT,
   HOOK_EVENT_NAMES,
   LEARNING_OBSERVER_EVENT_KIND,
   NOOP_IMPACT_EVIDENCE_PROVIDER,
@@ -23,13 +26,22 @@ import {
   buildHookEnv,
   buildHookStdin,
   createRealHookRunner,
+  describeProjectHookForApproval,
   extractFilePathsFromToolInput,
   failureEffect,
+  isDisableOverride,
   isIsolationRequired,
+  isProtectedBuiltinClass,
   loadHookConfig,
+  loadHooksTrustStore,
   parseHookResult,
+  projectHooksDigestOfDoc,
+  projectHooksTrustKey,
+  projectHooksTrustState,
+  recordProjectHooksTrust,
   resolveBuiltinCommandRunsIn,
   resolveKeryxArgv,
+  revokeProjectHooksTrust,
   validateHookConfigDocument,
 } from "../harness/hooks";
 import type {
@@ -42,6 +54,7 @@ import type {
   HookScope,
   ImpactEvidenceProvider,
   LearningObservationSink,
+  ProjectHooksTrustState,
 } from "../harness/hooks";
 import type { PolicyOutcome, PolicyProfileId } from "../harness/policy/types";
 import packageJson from "../../package.json" with { type: "json" };
@@ -59,6 +72,12 @@ export interface HooksCommandDeps {
   runner?: HookProcessRunner;
   learningSink?: LearningObservationSink;
   impactEvidence?: ImpactEvidenceProvider;
+  /** R700-01: where the trust store lives. Omitted reads/writes the real per-user config dir (hermetic under `bun test` — see `test-preload.ts`). */
+  configDir?: string;
+  /** R700-01: whether `hooks trust` may prompt. Defaults to `bothStreamsAreATerminal(process.stdin, process.stdout)`. */
+  isInteractive?: boolean;
+  /** R700-01: the yes/no prompt `hooks trust` asks in a TTY. Defaults to `lib/prompt.ts`'s `confirm`. */
+  confirm?: (question: string) => Promise<boolean>;
 }
 
 // Review finding 11: shared with `buildShellHookRuntime` (`./agent-hooks.ts`)
@@ -75,6 +94,11 @@ function resolveHomeDir(deps: HooksCommandDeps): string {
 // would — this used to use the raw `cwd` directly.
 function resolveCwdProjectRoot(deps: HooksCommandDeps): string {
   return resolveHooksProjectRoot(deps.cwd ?? process.cwd());
+}
+
+/** `exactOptionalPropertyTypes`-safe spread: omits the key entirely when `deps.configDir` is undefined, rather than passing `configDir: undefined`. */
+function optConfigDir(deps: HooksCommandDeps): { configDir?: string } {
+  return deps.configDir !== undefined ? { configDir: deps.configDir } : {};
 }
 
 function userHooksPath(homeDir: string): string {
@@ -140,6 +164,8 @@ export interface HooksListRow {
   /** `{kind:"command", argv}` for a spawned hook, `{kind:"builtin", name}` for the two in-process built-ins. */
   handler: { kind: "command"; argv: string[] } | { kind: "builtin"; name: string };
   description?: string;
+  /** R700-01: present only for a project-scope row. */
+  trust?: "trusted" | "untrusted" | "changed";
 }
 
 function groupById(registrations: readonly HookRegistration[], profileId: PolicyProfileId): HooksListRow[] {
@@ -174,9 +200,14 @@ function groupById(registrations: readonly HookRegistration[], profileId: Policy
 function renderListText(rows: readonly HooksListRow[], profileId: PolicyProfileId): string {
   const lines = rows.map((row) => {
     const command = row.handler.kind === "command" ? row.handler.argv.join(" ") : `builtin:${row.handler.name}`;
+    const trustLine =
+      row.scope === "project"
+        ? [`  scope=project trust=${row.trust === "changed" ? "changed since trusted" : (row.trust ?? "untrusted")} class=${row.class}`]
+        : [];
     return [
       `${row.id}`,
       `  scope=${row.scope} class=${row.class} enabled=${String(row.enabled)} appliesToChildAgents=${String(row.appliesToChildAgents)}`,
+      ...trustLine,
       `  events=${row.events.join(",")} matcher=${row.matcher} timeoutMs=${row.timeoutMs}`,
       `  runsIn=${row.runsIn}${row.refused ? " REFUSED (profile requires fail-closed isolation)" : ""} (effective under profile "${profileId}"; command hooks only)`,
       `  command: ${command}`,
@@ -195,7 +226,7 @@ async function runList(args: readonly string[], deps: HooksCommandDeps): Promise
     fail(`Unknown --profile "${String(profileArg)}". Valid: ${VALID_PROFILES.join(", ")}.`);
   }
 
-  const loaded = loadHookConfig({ projectRoot: cwd, homeDir });
+  const loaded = loadHookConfig({ projectRoot: cwd, homeDir, projectTrust: { ...optConfigDir(deps) } });
   if (!loaded.ok) {
     printDiagnostics(loaded.diagnostics, asJson);
     process.exitCode = 1;
@@ -203,10 +234,50 @@ async function runList(args: readonly string[], deps: HooksCommandDeps): Promise
   }
 
   const rows = groupById(loaded.registrations, profileId).sort((a, b) => a.id.localeCompare(b.id));
+  // R700-01: an untrusted/changed project hook is absent from `registrations`
+  // (and so from `rows`) — `list` still shows it, marked, so the operator
+  // can see it exists and decide whether to trust it, rather than it simply
+  // vanishing from the output with no trace.
+  const untrustedRows =
+    loaded.projectHooks.state === "untrusted" || loaded.projectHooks.state === "changed"
+      ? groupById(loaded.projectHooks.hooks, profileId).map((row) => ({
+          ...row,
+          trust: loaded.projectHooks.state === "changed" ? ("changed" as const) : ("untrusted" as const),
+        }))
+      : [];
+  const trustedRows = rows.map((row) => (row.scope === "project" ? { ...row, trust: "trusted" as const } : row));
+  const allRows = [...trustedRows, ...untrustedRows].sort((a, b) => a.id.localeCompare(b.id));
+
   if (asJson) {
-    console.log(JSON.stringify({ profileId, hooks: rows }, null, 2));
-  } else {
-    console.log(renderListText(rows, profileId));
+    console.log(
+      JSON.stringify(
+        {
+          profileId,
+          hooks: allRows,
+          projectTrust: {
+            state: loaded.projectHooks.state,
+            file: loaded.projectHooks.filePath,
+            ...(loaded.projectHooks.digest !== undefined ? { digest: loaded.projectHooks.digest } : {}),
+          },
+          warnings: loaded.warnings.map((w) => w.message),
+          disabledBuiltinGates: loaded.disabledBuiltinGates,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  if (loaded.projectHooks.state === "untrusted" || loaded.projectHooks.state === "changed") {
+    const reason = loaded.projectHooks.state === "changed" ? "changed since trusted" : "not trusted";
+    console.error(
+      `Project hooks in ${loaded.projectHooks.filePath} are not trusted and do not run (${reason}). Review and trust them with: keryx hooks trust`,
+    );
+  }
+  console.log(renderListText(allRows, profileId));
+  for (const w of loaded.warnings) console.error(w.message);
+  for (const g of loaded.disabledBuiltinGates) {
+    console.error(`keryx hooks: built-in gate ${g.id} is OFF (disabled in ${g.file}). Turn it back on with: keryx hooks enable ${g.id} --user`);
   }
 }
 
@@ -271,7 +342,7 @@ async function runValidate(args: readonly string[], deps: HooksCommandDeps): Pro
   const asJson = args.includes("--json");
   args.includes("--ci"); // accepted, documented above; no behavioral effect beyond what --json already gives.
 
-  const loaded = loadHookConfig({ projectRoot: cwd, homeDir });
+  const loaded = loadHookConfig({ projectRoot: cwd, homeDir, projectTrust: { ...optConfigDir(deps) } });
   if (!loaded.ok) {
     printDiagnostics(loaded.diagnostics, asJson);
     process.exitCode = 1;
@@ -286,6 +357,8 @@ async function runValidate(args: readonly string[], deps: HooksCommandDeps): Pro
           ok: true,
           hookCount: loaded.registrations.length,
           argvWarnings,
+          projectTrust: { state: loaded.projectHooks.state, file: loaded.projectHooks.filePath, digest: loaded.projectHooks.digest },
+          warnings: loaded.warnings.map((w) => w.message),
         },
         null,
         2,
@@ -294,9 +367,11 @@ async function runValidate(args: readonly string[], deps: HooksCommandDeps): Pro
     return;
   }
   console.log(`OK: ${loaded.registrations.length} hook registration(s) across both files loaded and validated.`);
+  console.log(`Project hooks: ${loaded.projectHooks.state}`);
   for (const warning of argvWarnings) {
     console.log(`WARNING: ${warning.hookId}: argv[0] "${warning.argv0}" did not resolve (absolute path or PATH lookup).`);
   }
+  for (const w of loaded.warnings) console.log(`WARNING: ${w.message}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -570,7 +645,7 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
     fail(`Unknown --event "${eventArg}". Valid: ${HOOK_EVENT_NAMES.join(", ")}.`);
   }
 
-  const loaded = loadHookConfig({ projectRoot: cwd, homeDir });
+  const loaded = loadHookConfig({ projectRoot: cwd, homeDir, projectTrust: { ...optConfigDir(deps) } });
   if (!loaded.ok) {
     printDiagnostics(loaded.diagnostics, asJson);
     process.exitCode = 1;
@@ -579,6 +654,17 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
 
   const matches = loaded.registrations.filter((r) => r.id === id);
   if (matches.length === 0) {
+    // D8: an untrusted/changed project hook is agent-reachable and spawns a
+    // real command — running it on "operator request" through `hooks test`
+    // would be exactly the bypass D5/D6 exist to close. It is absent from
+    // `registrations` (why `matches` is empty above); check `projectHooks`
+    // to give a precise refusal instead of the generic "unknown id".
+    const untrustedMatch = loaded.projectHooks.hooks.find((r) => r.id === id);
+    if (untrustedMatch !== undefined) {
+      fail(
+        `Hook "${String(id)}" comes from ${loaded.projectHooks.filePath}, which is not trusted, so it does not run. Review and trust the file with: keryx hooks trust`,
+      );
+    }
     fail(`Unknown hook id "${String(id)}". Run \`keryx hooks list\` to see registered ids.`);
   }
 
@@ -651,6 +737,95 @@ async function runTest(args: readonly string[], deps: HooksCommandDeps): Promise
 }
 
 // ---------------------------------------------------------------------------
+// trust / untrust
+// ---------------------------------------------------------------------------
+
+function pluralHook(n: number): string {
+  return n === 1 ? "hook" : "hooks";
+}
+
+async function runTrust(args: readonly string[], deps: HooksCommandDeps): Promise<void> {
+  const cwd = resolveCwdProjectRoot(deps);
+  const homeDir = resolveHomeDir(deps);
+  const filePath = projectHooksPath(cwd);
+  const yes = args.includes("--yes");
+
+  const loaded = loadHookConfig({ projectRoot: cwd, homeDir, projectTrust: { ...optConfigDir(deps) } });
+  if (!loaded.ok) {
+    printDiagnostics(loaded.diagnostics, false);
+    fail(`Nothing was trusted: fix ${filePath} first (keryx hooks validate).`);
+  }
+
+  const { projectHooks } = loaded;
+  if (projectHooks.digest === undefined) {
+    console.log(`No command hooks in ${filePath}; nothing to trust.`);
+    return;
+  }
+  if (projectHooks.state === "trusted") {
+    console.log(`${filePath} is already trusted.`);
+    return;
+  }
+
+  const enabledCount = projectHooks.hooks.filter((h) => h.enabled).length;
+  const unsandboxed = projectHooks.hooks.filter((h) => h.enabled && h.runsIn === "unsandboxed");
+  const lines: string[] = [
+    `${filePath} in ${cwd} asks to run ${enabledCount} command ${pluralHook(enabledCount)} in every keryx session opened here:`,
+    "",
+  ];
+  for (const reg of projectHooks.hooks) {
+    lines.push(...describeProjectHookForApproval(reg), "");
+  }
+  if (unsandboxed.length > 0) {
+    lines.push(`WARNING: ${unsandboxed.length} hook(s) run UNSANDBOXED, with your full user permissions: ${unsandboxed.map((h) => h.id).join(", ")}.`);
+  }
+  if (projectHooks.state === "changed") {
+    lines.push("This file changed since you last trusted it.");
+  }
+  console.log(lines.join("\n").trimEnd());
+
+  const isInteractive = deps.isInteractive ?? bothStreamsAreATerminal(process.stdin, process.stdout);
+  let accepted: boolean;
+  if (yes) {
+    accepted = true;
+  } else if (!isInteractive) {
+    fail("Not trusted: there is no terminal to confirm in. Re-run with --yes to trust exactly the version shown above.");
+  } else {
+    const ask = deps.confirm ?? realConfirm;
+    accepted = await ask(`Trust exactly this version of ${filePath}?`);
+  }
+
+  if (!accepted) {
+    fail("Nothing was trusted.");
+  }
+
+  const result = recordProjectHooksTrust({
+    trustRoot: cwd,
+    digest: projectHooks.digest,
+    hookIds: projectHooks.hooks.map((h) => h.id),
+    ...optConfigDir(deps),
+    ...(deps.now !== undefined ? { now: deps.now } : {}),
+  });
+  if (!result.ok) {
+    fail(result.error);
+  }
+  console.log(`Trusted ${filePath} (${projectHooks.digest.replace("sha256:", "").slice(0, 12)}). Any change to its hooks needs a new \`keryx hooks trust\`.`);
+}
+
+async function runUntrust(_args: readonly string[], deps: HooksCommandDeps): Promise<void> {
+  const cwd = resolveCwdProjectRoot(deps);
+  const filePath = projectHooksPath(cwd);
+  const result = revokeProjectHooksTrust({ trustRoot: cwd, ...optConfigDir(deps) });
+  if (!result.ok) {
+    fail(result.error);
+  }
+  if (result.removed) {
+    console.log(`Removed trust for ${filePath}. Its command hooks will not run until you trust it again.`);
+  } else {
+    console.log(`${filePath} was not trusted; nothing to remove.`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // enable / disable
 // ---------------------------------------------------------------------------
 
@@ -707,13 +882,6 @@ function writeDocAtomic(filePath: string, doc: HooksDoc): void {
   renameSync(temp, filePath);
 }
 
-function isDisableOverride(raw: unknown): raw is { id: string; enabled: false } {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return false;
-  const record = raw as Record<string, unknown>;
-  const keys = Object.keys(record).sort();
-  return keys.length === 2 && keys[0] === "enabled" && keys[1] === "id" && record.enabled === false && typeof record.id === "string";
-}
-
 function addManagedId(doc: HooksDoc, id: string): void {
   const existing = doc._keryxManaged?.managedHookIds ?? [];
   const managedHookIds = existing.includes(id) ? existing : [...existing, id];
@@ -743,17 +911,51 @@ function validateBeforeWrite(doc: HooksDoc, scope: HookScope, label: string): vo
   }
 }
 
-function disableBuiltin(doc: HooksDoc, id: string, filePath: string, scope: HookScope): void {
+function builtinClassFor(id: string): HookClass | undefined {
+  return BUILTIN_HOOK_REGISTRATIONS.find((reg) => reg.id === id)?.class;
+}
+
+function disableBuiltin(
+  doc: HooksDoc,
+  id: string,
+  filePath: string,
+  scope: HookScope,
+  acknowledgeGateRisk: boolean,
+  userFilePath: string,
+): void {
+  // D12: a project file can never disable a built-in GATE, and a user file
+  // needs the explicit `--acknowledge-gate-risk` flag — mirrors the runtime's
+  // own tighten-only rule (`resolveHookRegistrations`) so the CLI refuses the
+  // exact same thing the runtime would silently ignore with a warning.
+  const cls = builtinClassFor(id);
+  if (cls !== undefined && isProtectedBuiltinClass(cls)) {
+    if (scope === "project") {
+      fail(
+        `Refusing to disable built-in gate "${id}" in ${filePath}: a project file cannot turn off a built-in gate. To turn it off for yourself only, run: keryx hooks disable ${id} --user --acknowledge-gate-risk`,
+      );
+    }
+    if (!acknowledgeGateRisk) {
+      fail(
+        `Refusing to disable built-in gate "${id}" without --acknowledge-gate-risk: it stops this check in every project you open. Re-run with --user --acknowledge-gate-risk if you mean it.`,
+      );
+    }
+  }
+  const override: Record<string, unknown> =
+    cls !== undefined && isProtectedBuiltinClass(cls) ? { id, enabled: false, acknowledge: GATE_DISABLE_ACKNOWLEDGEMENT } : { id, enabled: false };
   const events = builtinEventsFor(id);
   for (const event of events) {
     const list = doc.hooks[event] ?? [];
     const alreadyOverridden = list.some((raw) => isDisableOverride(raw) && (raw as { id: string }).id === id);
-    doc.hooks[event] = alreadyOverridden ? list : [...list, { id, enabled: false }];
+    doc.hooks[event] = alreadyOverridden ? list : [...list, override];
   }
   addManagedId(doc, id);
   validateBeforeWrite(doc, scope, filePath);
   writeDocAtomic(filePath, doc);
-  console.log(`Disabled built-in hook "${id}" in ${filePath}.`);
+  if (cls !== undefined && isProtectedBuiltinClass(cls)) {
+    console.log(`Disabled built-in gate "${id}" for every project you open (in ${userFilePath}). keryx shell says so at the start of each session. Turn it back on with: keryx hooks enable ${id} --user`);
+  } else {
+    console.log(`Disabled built-in hook "${id}" in ${filePath}.`);
+  }
 }
 
 function enableBuiltin(doc: HooksDoc, id: string, filePath: string, scope: HookScope): void {
@@ -818,11 +1020,20 @@ function setProjectOrUserHookEnabled(
   enabled: boolean,
   filePath: string,
   scope: HookScope,
+  cwd: string,
+  deps: HooksCommandDeps,
 ): void {
   const found = findFullRegistrations(doc, id);
   if (found.length === 0) {
     fail(`Unknown hook id "${id}": not a built-in and not defined in ${filePath}.`);
   }
+
+  // D13: was the file trusted (under its digest BEFORE this edit) right
+  // before this write? Only meaningful for the project scope — trust is
+  // never tracked for the user file.
+  const wasTrustedBefore =
+    scope === "project" ? projectHooksDigestOfDoc(doc) !== undefined && projectFileTrustState(doc, cwd, deps) === "trusted" : false;
+
   for (const { event, index, entry } of found) {
     const list = doc.hooks[event] as unknown[];
     list[index] = { ...entry, enabled };
@@ -833,6 +1044,39 @@ function setProjectOrUserHookEnabled(
   console.log(
     `${enabled ? "Enabled" : "Disabled"} hook "${id}" in ${filePath} (${found.length} event${found.length === 1 ? "" : "s"}).`,
   );
+
+  if (scope !== "project") return;
+  const newDigest = projectHooksDigestOfDoc(doc);
+  if (wasTrustedBefore && newDigest !== undefined) {
+    const hookIds = projectFullRegistrationIds(doc);
+    const result = recordProjectHooksTrust({ trustRoot: cwd, digest: newDigest, hookIds, ...optConfigDir(deps) });
+    if (result.ok) {
+      console.log(`Trust for ${filePath} carried over to the new version because it was trusted before this change.`);
+    }
+  } else {
+    console.log(`Note: the command hooks in ${filePath} are not trusted and do not run. Review and trust them with: keryx hooks trust`);
+  }
+}
+
+/** The current trust state of the PROJECT file, given its in-memory doc (before or after an edit). */
+function projectFileTrustState(doc: HooksDoc, cwd: string, deps: HooksCommandDeps): ProjectHooksTrustState {
+  const digest = projectHooksDigestOfDoc(doc);
+  if (digest === undefined) return "none";
+  const store = loadHooksTrustStore(deps.configDir);
+  return projectHooksTrustState(projectHooksTrustKey(cwd), digest, store);
+}
+
+function projectFullRegistrationIds(doc: HooksDoc): string[] {
+  const ids: string[] = [];
+  for (const list of Object.values(doc.hooks)) {
+    for (const raw of list) {
+      if (isDisableOverride(raw)) continue;
+      if (typeof raw === "object" && raw !== null && typeof (raw as Record<string, unknown>).id === "string") {
+        ids.push((raw as Record<string, unknown>).id as string);
+      }
+    }
+  }
+  return ids;
 }
 
 async function runEnableDisable(action: "enable" | "disable", args: readonly string[], deps: HooksCommandDeps): Promise<void> {
@@ -841,7 +1085,7 @@ async function runEnableDisable(action: "enable" | "disable", args: readonly str
   const useUser = args.includes("--user");
   const id = args.find((a) => !a.startsWith("--"));
   if (id === undefined) {
-    fail(`Usage: keryx hooks ${action} <id> [--user]`);
+    fail(`Usage: keryx hooks ${action} <id> [--user] [--acknowledge-gate-risk]`);
   }
   const scope: HookScope = useUser ? "user" : "project";
   const filePath = useUser ? userHooksPath(homeDir) : projectHooksPath(cwd);
@@ -851,11 +1095,14 @@ async function runEnableDisable(action: "enable" | "disable", args: readonly str
 
   const isBuiltin = BUILTIN_HOOK_IDS.includes(id);
   if (isBuiltin) {
-    if (action === "disable") disableBuiltin(doc, id, filePath, scope);
-    else enableBuiltin(doc, id, filePath, scope);
+    if (action === "disable") {
+      disableBuiltin(doc, id, filePath, scope, args.includes("--acknowledge-gate-risk"), userHooksPath(homeDir));
+    } else {
+      enableBuiltin(doc, id, filePath, scope);
+    }
     return;
   }
-  setProjectOrUserHookEnabled(doc, id, action === "enable", filePath, scope);
+  setProjectOrUserHookEnabled(doc, id, action === "enable", filePath, scope, cwd, deps);
 }
 
 // ---------------------------------------------------------------------------
@@ -890,6 +1137,14 @@ export async function hooksCommand(args: string[] = [], deps: HooksCommandDeps =
       await runEnableDisable("disable", rest, deps);
       return;
     }
+    if (command === "trust") {
+      await runTrust(rest, deps);
+      return;
+    }
+    if (command === "untrust") {
+      await runUntrust(rest, deps);
+      return;
+    }
     console.error(`Unknown hooks subcommand: ${command}`);
     printHooksHelp();
     process.exitCode = 1;
@@ -897,14 +1152,16 @@ export async function hooksCommand(args: string[] = [], deps: HooksCommandDeps =
 }
 
 export function printHooksHelp(): void {
-  console.log(`keryx hooks — the \`keryx shell\` lifecycle hook runtime: list, validate, test, enable, disable
+  console.log(`keryx hooks — the \`keryx shell\` lifecycle hook runtime: list, validate, test, trust, enable, disable
 
 Usage:
   keryx hooks list [--json]
   keryx hooks validate [--json] [--ci]
   keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
+  keryx hooks trust [--yes]                     Show every command in .metaproject/hooks.json and trust exactly that version
+  keryx hooks untrust                           Withdraw trust; project command hooks stop running
   keryx hooks enable <id> [--user]
-  keryx hooks disable <id> [--user]
+  keryx hooks disable <id> [--user] [--acknowledge-gate-risk]
 
 Config files (project overrides user overrides built-in):
   .metaproject/hooks.json   project scope, version-controlled
@@ -920,5 +1177,12 @@ against a synthetic or --payload-file payload and reports its decision, exit
 code, stdout/stderr, duration and failure class. \`enable\`/\`disable\` flip a
 registration's enabled state in the target file, tracked in that file's
 _keryxManaged.managedHookIds so a hand-authored entry is never touched.
+
+Project command hooks in .metaproject/hooks.json run only after \`keryx hooks
+trust\`; any change to the file revokes trust and it must be trusted again. A
+project file can never disable a built-in gate (keryx.ctx-guard,
+keryx.security-check-input, keryx.security-check-output, keryx.impact-evidence);
+only \`keryx hooks disable <id> --user --acknowledge-gate-risk\` can, for
+yourself, in every project you open.
 `);
 }

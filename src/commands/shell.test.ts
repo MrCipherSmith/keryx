@@ -1324,7 +1324,10 @@ describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wir
   // past that field, well short of the next declaration.
   // Widened to 6800 for the metaproject-incomplete operator notice (K-009
   // follow-up), inserted between agentCwd and this same agentDepsBase object.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 6800);
+  // Widened to 7200 for R700-01's `configDir` wiring + startup-notice print
+  // loop, inserted just after `buildShellHookRuntime({...})` in this same
+  // branch, ahead of `sweepBackgroundJobs`.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 7200);
 
   test("imports createJobRegistry from the background-job-registry module", () => {
     expect(shellSourceAc7).toContain(

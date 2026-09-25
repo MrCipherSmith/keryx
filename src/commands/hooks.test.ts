@@ -187,24 +187,54 @@ describe("keryx hooks validate", () => {
 
 describe("keryx hooks enable/disable", () => {
   test("AC12: disable/enable round-trip for a built-in maintains _keryxManaged.managedHookIds", async () => {
-    await hooksCommand(["disable", "keryx.ctx-guard"], { cwd: project, homeDir: home });
+    // R700-02: keryx.ctx-guard is a protected built-in GATE — a project-scope
+    // disable of it is now refused outright (D12), so this round-trip test
+    // uses keryx.learning-observer (class observe, unaffected by the
+    // tighten-only rule) instead.
+    await hooksCommand(["disable", "keryx.learning-observer"], { cwd: project, homeDir: home });
     expect(process.exitCode).toBe(0);
 
     const afterDisable = JSON.parse(await readFile(projectHooksPath(), "utf8"));
-    expect(afterDisable.hooks.PreToolUse).toContainEqual({ id: "keryx.ctx-guard", enabled: false });
-    expect(afterDisable._keryxManaged.managedHookIds).toContain("keryx.ctx-guard");
+    expect(afterDisable.hooks.SessionStart).toContainEqual({ id: "keryx.learning-observer", enabled: false });
+    expect(afterDisable._keryxManaged.managedHookIds).toContain("keryx.learning-observer");
 
     logs = [];
     await hooksCommand(["list", "--json"], { cwd: project, homeDir: home });
     const listed = jsonOutput() as { hooks: Array<{ id: string; enabled: boolean }> };
-    const row = listed.hooks.find((h) => h.id === "keryx.ctx-guard");
+    const row = listed.hooks.find((h) => h.id === "keryx.learning-observer");
     expect(row?.enabled).toBe(false);
 
-    await hooksCommand(["enable", "keryx.ctx-guard"], { cwd: project, homeDir: home });
+    await hooksCommand(["enable", "keryx.learning-observer"], { cwd: project, homeDir: home });
     expect(process.exitCode).toBe(0);
     const afterEnable = JSON.parse(await readFile(projectHooksPath(), "utf8"));
-    expect(afterEnable.hooks.PreToolUse ?? []).not.toContainEqual({ id: "keryx.ctx-guard", enabled: false });
-    expect(afterEnable._keryxManaged.managedHookIds).not.toContain("keryx.ctx-guard");
+    expect(afterEnable.hooks.SessionStart ?? []).not.toContainEqual({ id: "keryx.learning-observer", enabled: false });
+    expect(afterEnable._keryxManaged.managedHookIds).not.toContain("keryx.learning-observer");
+  });
+
+  test("R700-02: disable of a gate at project scope refuses and writes nothing", async () => {
+    await hooksCommand(["disable", "keryx.ctx-guard"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    expect(existsSync(projectHooksPath())).toBe(false);
+  });
+
+  test("R700-02: disable of a gate --user without --acknowledge-gate-risk refuses", async () => {
+    await hooksCommand(["disable", "keryx.ctx-guard", "--user"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    expect(existsSync(userHooksPath())).toBe(false);
+  });
+
+  test("R700-02: disable --user --acknowledge-gate-risk writes the acknowledged override and enable --user removes it", async () => {
+    await hooksCommand(["disable", "keryx.ctx-guard", "--user", "--acknowledge-gate-risk"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const userDoc = JSON.parse(await readFile(userHooksPath(), "utf8"));
+    expect(userDoc.hooks.PreToolUse).toContainEqual({ id: "keryx.ctx-guard", enabled: false, acknowledge: "disable-builtin-gate" });
+
+    await hooksCommand(["enable", "keryx.ctx-guard", "--user"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    const afterEnable = JSON.parse(await readFile(userHooksPath(), "utf8"));
+    expect(afterEnable.hooks.PreToolUse ?? []).not.toContainEqual(
+      expect.objectContaining({ id: "keryx.ctx-guard", enabled: false }),
+    );
   });
 
   test("AC12: refuses to enable a hand-authored (not Keryx-managed) disable override, and writes nothing", async () => {
@@ -296,12 +326,12 @@ describe("keryx hooks enable/disable", () => {
   });
 
   test("--user targets ~/.keryx/hooks.json instead of the project file", async () => {
-    await hooksCommand(["disable", "keryx.ctx-guard", "--user"], { cwd: project, homeDir: home });
+    await hooksCommand(["disable", "keryx.ctx-guard", "--user", "--acknowledge-gate-risk"], { cwd: project, homeDir: home });
     expect(process.exitCode).toBe(0);
     expect(existsSync(userHooksPath())).toBe(true);
     expect(existsSync(projectHooksPath())).toBe(false);
     const userDoc = JSON.parse(await readFile(userHooksPath(), "utf8"));
-    expect(userDoc.hooks.PreToolUse).toContainEqual({ id: "keryx.ctx-guard", enabled: false });
+    expect(userDoc.hooks.PreToolUse).toContainEqual({ id: "keryx.ctx-guard", enabled: false, acknowledge: "disable-builtin-gate" });
   });
 
   test("unknown id is refused, non-zero exit", async () => {
@@ -354,6 +384,10 @@ describe("keryx hooks test", () => {
       },
     });
 
+    // R700-01: a project full registration only loads (and so is runnable by
+    // `hooks test`, D8) once trusted.
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    logs = [];
     await hooksCommand(["test", "fixture-deny-hook", "--json"], { cwd: project, homeDir: home });
     expect(process.exitCode).toBe(0); // the hook ran; "test" itself never fails for a hook's own deny.
     const report = jsonOutput() as { decision?: string; exitCode?: number; stderr?: string };
@@ -365,6 +399,16 @@ describe("keryx hooks test", () => {
   test("unknown id is refused, non-zero exit", async () => {
     await hooksCommand(["test", "nonexistent-hook-id"], { cwd: project, homeDir: home });
     expect(process.exitCode).toBe(1);
+  });
+
+  test("R700-01: test refuses an untrusted project hook", async () => {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: { PreToolUse: [{ id: "untrusted-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }] },
+    });
+    await hooksCommand(["test", "untrusted-hook"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+    expect(errors.some((e) => e.includes("not trusted") && e.includes("keryx hooks trust"))).toBe(true);
   });
 
   test("a builtin in-process hook (keryx.learning-observer) reports its port's result", async () => {
@@ -490,6 +534,8 @@ describe("keryx hooks test", () => {
       },
     });
 
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    logs = [];
     await hooksCommand(["test", "unsandboxed-project-hook", "--profile", "unattended-untrusted", "--json"], {
       cwd: project,
       homeDir: home,
@@ -520,6 +566,8 @@ describe("keryx hooks test", () => {
       },
     });
 
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    logs = [];
     await hooksCommand(["test", "unsandboxed-project-hook", "--profile", "monitored-trusted-local", "--json"], {
       cwd: project,
       homeDir: home,
@@ -528,5 +576,149 @@ describe("keryx hooks test", () => {
     const report = jsonOutput() as { failure?: string; exitCode?: number };
     expect(report.failure).toBeUndefined();
     expect(report.exitCode).toBe(0);
+  });
+});
+
+describe("keryx hooks trust / untrust", () => {
+  async function writeOneGateHook(id = "my-gate"): Promise<void> {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: { PreToolUse: [{ id, matcher: "Bash", class: "gate", command: { argv: ["echo", "hi"] }, runsIn: "unsandboxed" }] },
+    });
+  }
+
+  test("list shows trust=untrusted and the trust header", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["list"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    expect(errors.some((e) => e.includes("not trusted") && e.includes("keryx hooks trust"))).toBe(true);
+    expect(logs.join("\n")).toContain("trust=untrusted");
+  });
+
+  test("list --json carries projectTrust and per-row trust", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["list", "--json"], { cwd: project, homeDir: home });
+    const result = jsonOutput() as { projectTrust: { state: string }; hooks: Array<{ id: string; trust?: string }> };
+    expect(result.projectTrust.state).toBe("untrusted");
+    expect(result.hooks.find((h) => h.id === "my-gate")?.trust).toBe("untrusted");
+  });
+
+  test("trust --yes records trust and list then shows trusted", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Trusted");
+
+    logs = [];
+    await hooksCommand(["list", "--json"], { cwd: project, homeDir: home });
+    const result = jsonOutput() as { hooks: Array<{ id: string; trust?: string; scope: string }> };
+    const row = result.hooks.find((h) => h.id === "my-gate");
+    expect(row?.trust).toBe("trusted");
+    expect(row?.scope).toBe("project");
+  });
+
+  test("trust without --yes and without a TTY refuses and writes nothing", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["trust"], { cwd: project, homeDir: home, isInteractive: false });
+    expect(process.exitCode).toBe(1);
+    expect(existsSync(path.join(home, "..", "does-not-matter"))).toBe(false);
+    expect(errors.some((e) => e.includes("Re-run with --yes"))).toBe(true);
+  });
+
+  test('trust in a TTY asks; "no" writes nothing', async () => {
+    await writeOneGateHook();
+    let asked = "";
+    await hooksCommand(["trust"], {
+      cwd: project,
+      homeDir: home,
+      isInteractive: true,
+      confirm: async (q) => {
+        asked = q;
+        return false;
+      },
+    });
+    expect(process.exitCode).toBe(1);
+    expect(asked).toContain("Trust exactly this version");
+    expect(errors.some((e) => e.includes("Nothing was trusted"))).toBe(true);
+  });
+
+  test("trust prints every command and a WARNING for unsandboxed hooks", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    const text = logs.join("\n");
+    expect(text).toContain("my-gate");
+    expect(text).toContain("UNSANDBOXED");
+    expect(text).toContain("WARNING");
+  });
+
+  test("trust refuses an invalid file", async () => {
+    await writeProjectHooks({ schemaVersion: "1.0.0", hooks: { PreToolUse: [{ id: "x" }] } });
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("untrust removes trust", async () => {
+    await writeOneGateHook();
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    logs = [];
+    await hooksCommand(["untrust"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Removed trust");
+
+    logs = [];
+    await hooksCommand(["list", "--json"], { cwd: project, homeDir: home });
+    const result = jsonOutput() as { projectTrust: { state: string } };
+    expect(result.projectTrust.state).toBe("untrusted");
+  });
+
+  test("disable/enable of a project hook carries trust over when the file was trusted", async () => {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: { Stop: [{ id: "my-observe-hook", matcher: "*", class: "observe", command: { argv: ["true"] } }] },
+    });
+    await hooksCommand(["trust", "--yes"], { cwd: project, homeDir: home });
+    logs = [];
+    await hooksCommand(["disable", "my-observe-hook"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("carried over");
+
+    logs = [];
+    await hooksCommand(["list", "--json"], { cwd: project, homeDir: home });
+    const result = jsonOutput() as { hooks: Array<{ id: string; trust?: string; enabled: boolean }> };
+    const row = result.hooks.find((h) => h.id === "my-observe-hook");
+    expect(row?.trust).toBe("trusted");
+    expect(row?.enabled).toBe(false);
+  });
+
+  test("enable of a project hook in an untrusted file leaves it untrusted", async () => {
+    await writeProjectHooks({
+      schemaVersion: "1.0.0",
+      hooks: { Stop: [{ id: "my-observe-hook", matcher: "*", class: "observe", command: { argv: ["true"] }, enabled: false }] },
+    });
+    // Never trusted this file.
+    await hooksCommand(["enable", "my-observe-hook"], { cwd: project, homeDir: home });
+    expect(process.exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("not trusted");
+
+    logs = [];
+    await hooksCommand(["list", "--json"], { cwd: project, homeDir: home });
+    const result = jsonOutput() as { projectTrust: { state: string } };
+    expect(result.projectTrust.state).toBe("untrusted");
+  });
+
+  test("disable refuses to write through a .metaproject/hooks.json symlink that escapes the project", async () => {
+    // R700-04 is a different owner's contained-write fix; this test only
+    // asserts THIS worker's surface (disable) does not crash and reports
+    // some failure when the target is unwritable-as-expected. If R700-04's
+    // contained-write wiring lands in `hooks.ts` later, this test still
+    // holds: a refusal is a refusal either way.
+    const { symlinkSync, mkdirSync: mkdirSyncNode } = await import("node:fs");
+    const outside = path.join(path.dirname(project), `keryx-hooks-outside-${Date.now()}`);
+    mkdirSyncNode(outside, { recursive: true });
+    mkdirSyncNode(path.join(project, ".metaproject"), { recursive: true });
+    symlinkSync(path.join(outside, "hooks.json"), projectHooksPath());
+    await hooksCommand(["disable", "keryx.learning-observer"], { cwd: project, homeDir: home });
+    // Whatever happened, it must not have silently succeeded writing outside `project`.
+    expect(existsSync(path.join(outside, "hooks.json"))).toBe(false);
   });
 });
