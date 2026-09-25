@@ -258,3 +258,31 @@
     cleared it. AC6 evidence: every pack's `governance/eval.json` and `pack.json` `stability` field
     (and, for `angular`/`mobx`/`nestjs`, `agent-refs.json`'s own `note`) agree with this outcome as
     of this commit.
+- review-r3: narrow Opus verification of PR #719's review-r2 fixes (fix attempt 3 of 3, the
+  runner brief's budget) found **0 blockers, 0 majors, 4 minors, 3 info**. N-B1 (TS18048
+  typecheck break) and N-M1 (angular/mobx honest realism demotion) both confirmed genuinely
+  fixed and internally consistent: `pack.json` stability, `install-manifest.json` module
+  stability, `agent-refs.json` notes, and `governance/eval.json` all agree that only go and
+  python remain stable with generated agent pairs; angular's generated pair files are gone.
+  Per the owner's standing rule (0 blocker + 0 major on a narrow verification round = merge),
+  the 4 minors are deferred rather than fixed, each recorded here for a follow-up flow's scope
+  (decided-by: MrCipherSmith, owner, in chat, standing rule):
+  1. Two of mobx-store-implementation's positive trigger prompts (#4 and #8) are still
+     near-copies of their own SKILL.md frontmatter triggers — in scope for the same
+     containment-based I11 follow-up already deferred above (threshold 0.75, batch-1 rewrite).
+  2. The nestjs-build-fix trigger reworded in review-r2 ("these two NestJS modules have a
+     circular dependency on each other") now pulls an unrelated Go prompt ("Fix a circular
+     dependency between two Go packages") to nestjs at a 0.642 scout score, above the 0.55
+     "use" threshold — a fresh instance of the recurring go-collision class, logged for the
+     negation-aware-scorer follow-up and for re-check once flow 334 (the negation-aware scorer
+     work referenced in this session's other background tasks) lands.
+  3. The inject-inside-injection-context-only scenario's `fail_criteria` wording (not
+     `pass_criteria`, already widened in review-r2) still reads awkwardly per the reviewer;
+     left as prose polish for a follow-up pass, not a behavioral bug.
+  4. Several W1 bullets describing earlier provisional stack-coverage counts (5→3→2
+     generated-pair packs) don't explicitly say they're superseded by the final
+     "Implementation notes: fix attempt 2" section: a follow-up doc pass should add explicit
+     "(superseded, see below)" markers rather than relying on section order.
+  The 3 info items were left unchanged per the same standing-rule logic (no blocker/major
+  attached to them); no doc slip was urgent enough to justify touching content mid-merge.
+  Proceeding to CI-green check and the merge per the standing rule.
