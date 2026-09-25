@@ -1,5 +1,6 @@
 import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,18 @@ import { renderGdgraphPostCommitHook } from "../lib/templates";
 import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
 import { containFromMetaprojectPath, updateCommand } from "./update";
+import { initCommand } from "./init";
+
+// R700-06: throwaway fixture repo helper — mirrors the convention in
+// gdgraph-freshness.test.ts. GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM are both
+// disabled so a machine-local global git template (e.g. an identity-guard
+// pre-commit hook) can never affect this fixture's commits.
+function gitForUpdateIdempotency(cwd: string, args: string[]): string {
+  return execFileSync("git", args, {
+    cwd,
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" },
+  }).toString("utf8");
+}
 
 // R700-14: `containFromMetaprojectPath`'s own comment says it bounds
 // containment at the LAST `.metaproject` path segment, but it used
@@ -719,3 +732,116 @@ async function expectDashboardLinksToExist(projectRoot: string, dashboard: strin
   }
   expect(missing).toEqual([]);
 }
+
+// R700-06: `keryx update --yes` on a committed, unchanged repo used to leave
+// ` M .metaproject/metaproject.json` on every run — `applyStandardManifestFields`
+// stamped a fresh `updatedAt` unconditionally, and `updateManifestAgentEntrypoints`
+// wrote the file even when that timestamp was the only difference. The fix
+// skips the write entirely when the rebuilt manifest is equal to what's on
+// disk in every field except `updatedAt`. This test proves it end to end: a
+// real git fixture, two updates after the manifest is already settled and
+// committed, and `git status --porcelain` reports nothing (untracked
+// directories a post-commit hook may create, e.g. data/gdgraph or data/wiki,
+// are a separate, pre-existing matter and are excluded here with
+// `--untracked-files=no`).
+test("keryx update: a second update on a committed, unchanged repo makes no tracked-file changes", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-idempotent-"));
+  try {
+    gitForUpdateIdempotency(root, ["init", "-q"]);
+    gitForUpdateIdempotency(root, ["config", "user.email", "test@test.com"]);
+    gitForUpdateIdempotency(root, ["config", "user.name", "test"]);
+
+    // A real `keryx init` (not a hand-rolled minimal manifest): it already
+    // syncs AGENTS.md's routing block into place, so the very first `update`
+    // afterward reaches steady state in one pass — a minimal manifest lacking
+    // that sync takes an extra update round to converge (the dashboard's
+    // embedded docs catch up to the AGENTS.md content a round late), which
+    // would make this test assert idempotency a round too early.
+    await withCwd(root, async () => {
+      await initCommand(["--yes"]);
+    });
+    gitForUpdateIdempotency(root, ["add", "-A"]);
+    gitForUpdateIdempotency(root, ["commit", "-q", "-m", "init"]);
+
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime"]);
+    });
+    gitForUpdateIdempotency(root, ["add", "-A"]);
+    gitForUpdateIdempotency(root, ["commit", "-q", "-m", "update1"]);
+
+    const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+    const manifestBeforeSecondUpdate = await readFile(manifestPath, "utf8");
+
+    // Second update: nothing changed since the commit above, so this must be
+    // a no-op on every tracked file, metaproject.json included.
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime"]);
+    });
+
+    const status = gitForUpdateIdempotency(root, ["status", "--porcelain", "--untracked-files=no"]);
+    expect(status.trim()).toBe("");
+
+    const manifestAfterSecondUpdate = await readFile(manifestPath, "utf8");
+    expect(manifestAfterSecondUpdate).toBe(manifestBeforeSecondUpdate);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// Companion to the idempotency test above: a real module-flag change must
+// still bump `updatedAt` (and get written), proving the fix only SKIPS the
+// write when nothing but the timestamp would differ — it does not disable
+// updates altogether.
+test("keryx update: an actual module-flag change still bumps metaproject.json's updatedAt", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-flag-change-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: { gdskills: { enabled: true } },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+
+    // Settle the manifest to the full standard shape first.
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime", "--no-tasks"]);
+    });
+    const settled = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      updatedAt: string;
+      profiles: unknown;
+      modules: { gdskills: { enabled: boolean } };
+    };
+
+    // Confirm the fix's no-op path on an unchanged manifest first.
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime", "--no-tasks"]);
+    });
+    const unchanged = JSON.parse(await readFile(manifestPath, "utf8")) as { updatedAt: string };
+    expect(unchanged.updatedAt).toBe(settled.updatedAt);
+
+    // Now flip a real module flag directly in the manifest — the next update
+    // reads modules.gdskills from disk, so this is a genuine config change,
+    // not something the update run itself would produce.
+    const flipped = { ...settled, modules: { ...settled.modules, gdskills: { enabled: false } } };
+    await writeFile(manifestPath, JSON.stringify(flipped, null, 2), "utf8");
+
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime", "--no-tasks"]);
+    });
+    const afterFlagChange = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      updatedAt: string;
+      profiles: unknown;
+    };
+
+    expect(afterFlagChange.updatedAt).not.toBe(settled.updatedAt);
+    expect(afterFlagChange.profiles).not.toEqual(settled.profiles);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
