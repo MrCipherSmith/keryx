@@ -1267,6 +1267,15 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     sideEffects: ["removes the chosen category's assignment from the selected layer's routing config"],
   },
+  {
+    module: "routing",
+    command: "routing trust",
+    summary:
+      "Print routing.config.json's entries and approve its current content — required before the project layer applies (AC11).",
+    intent: ["одобрить routing.config.json", "approve project routing", "trust routing config", "keryx routing trust"],
+    args: [],
+    sideEffects: ["records the project's routing.config.json content fingerprint as approved, in the operator's own config dir"],
+  },
   // ---- retention ----------------------------------------------------------
   {
     module: "retention",

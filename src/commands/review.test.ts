@@ -15,6 +15,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "./review";
 import type { StructuredReviewFinding } from "../review/types";
+import { loadRoutingConfigRaw } from "../harness/routing/config";
+import { approveProjectRouting } from "../harness/routing/trust";
 
 const ORIGINAL_CWD = process.cwd();
 let ROOT = "";
@@ -812,6 +814,13 @@ async function persistShellSelection(provider: string, model: string): Promise<v
   await writeFile(path.join(dir, "auth.json"), JSON.stringify({ provider, model }), "utf8");
 }
 
+/** Flow 305 AC11 — a project `routing.config.json` applies only once approved. Test helper that reads what was just written and approves exactly that content, mirroring `keryx routing trust`. */
+async function approveProjectRoutingFile(): Promise<void> {
+  const raw = await loadRoutingConfigRaw("project", { cwd: ROOT });
+  const result = await approveProjectRouting(ROOT, raw.table);
+  if (!result.ok) throw new Error(result.error);
+}
+
 test("`review tier` does not pin the model `keryx shell` last persisted — that is not the caller's session", async () => {
   // Observed: an orchestrator in Claude Code got `provider: deepseek`,
   // `model: deepseek-flash` because auth.json still held a `keryx shell` choice.
@@ -906,11 +915,17 @@ test("flow 305 AC5: with an EMPTY routing table, `review tier` output is byte-id
 });
 
 test("flow 305 AC5: an explicit per-project `review` routing entry REPLACES the tier-ranked provider/model", async () => {
+  // "demo"/"demo-large" — a CONNECTED provider/model (AC10: it is in the
+  // `--catalog` fixture `tier()` always passes), distinct from what tier
+  // ranking alone would pick for these signals ("demo-mini", per the
+  // pre-existing `review tier --json` test above) — so the assertion below
+  // still proves the OVERRIDE took effect, not an accidental agreement.
   await writeFile(
     path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-routed" } } }),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
     "utf8",
   );
+  await approveProjectRoutingFile(); // AC11: a project layer only applies once approved
   await tier("--findings", "2", "--diff-lines", "20", "--json");
 
   expect(process.exitCode).toBe(0);
@@ -918,8 +933,9 @@ test("flow 305 AC5: an explicit per-project `review` routing entry REPLACES the 
   // The tier itself is unaffected — routing decides WHICH model, not the tier
   // arithmetic (PRD §Non-goals: this design sits one level above `assignTier`).
   expect(model.tier).toBe("light");
-  expect(model.provider).toBe("anthropic");
-  expect(model.model).toBe("claude-routed");
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-large");
+  expect(model.routed).toBe(true);
 });
 
 test("flow 305 AC5: a per-user `review` routing entry also wins over the tier-ranked model (the same layer `keryx routing set` writes to by default)", async () => {
@@ -929,14 +945,14 @@ test("flow 305 AC5: a per-user `review` routing entry also wins over the tier-ra
   // for `provider`/`model` in this file's own auth.json.
   await writeFile(
     path.join(dir, "auth.json"),
-    JSON.stringify({ routing: { review: { kind: "model", providerId: "deepseek", modelId: "deepseek-routed" } } }),
+    JSON.stringify({ routing: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
     "utf8",
   );
   await tier("--findings", "2", "--diff-lines", "20", "--json");
 
   const model = modelBlock();
-  expect(model.provider).toBe("deepseek");
-  expect(model.model).toBe("deepseek-routed");
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-large");
 });
 
 test("flow 305 AC5: a per-project entry wins over a per-user entry for the same category (PRD §5 precedence)", async () => {
@@ -944,19 +960,20 @@ test("flow 305 AC5: a per-project entry wins over a per-user entry for the same 
   await mkdir(dir, { recursive: true });
   await writeFile(
     path.join(dir, "auth.json"),
-    JSON.stringify({ routing: { review: { kind: "model", providerId: "deepseek", modelId: "deepseek-routed" } } }),
+    JSON.stringify({ routing: { review: { kind: "model", providerId: "demo", modelId: "demo-medium" } } }),
     "utf8",
   );
   await writeFile(
     path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-routed" } } }),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
     "utf8",
   );
+  await approveProjectRoutingFile();
   await tier("--findings", "2", "--diff-lines", "20", "--json");
 
   const model = modelBlock();
-  expect(model.provider).toBe("anthropic");
-  expect(model.model).toBe("claude-routed");
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-large");
 });
 
 test("flow 305 AC5: routing an UNRELATED category (not `review`) never changes review tier's own model", async () => {
@@ -965,11 +982,195 @@ test("flow 305 AC5: routing an UNRELATED category (not `review`) never changes r
     JSON.stringify({ categories: { quick: { kind: "model", providerId: "anthropic", modelId: "claude-routed" } } }),
     "utf8",
   );
+  await approveProjectRoutingFile();
   await tier("--findings", "2", "--diff-lines", "20", "--json");
 
   const model = modelBlock();
   expect(model.provider).toBe("demo");
   expect(model.model).toBe("demo-mini");
+});
+
+// ---------------------------------------------------------------------------
+// Flow 305 review findings — AC10 (connected fallback), AC11 (project
+// trust), item 3 (malformed config surfaced), item 4 (provider-default parity).
+// ---------------------------------------------------------------------------
+
+test("flow 305 AC10: a `review` routing entry naming a provider the catalog never reported falls through to the session model, with a notice", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    // "anthropic" is NOT in `tier()`'s `--catalog` fixture (only "demo" is).
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } } }),
+    "utf8",
+  );
+  await approveProjectRoutingFile();
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  expect(model.routed).toBeUndefined();
+  // Falls through to the ORDINARY tier-discovered answer (unaffected by the
+  // rejected routing entry) — not "inherit": these signals already rank
+  // "demo-mini" from the connected catalog on their own, same as the
+  // pre-existing `review tier --json` test with no routing configured at all.
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-mini");
+  const notices = (JSON.parse(logs.join("\n")) as { notices?: string[] }).notices ?? [];
+  expect(notices.some((n) => n.includes("anthropic/claude-x") && n.includes("not connected"))).toBe(true);
+});
+
+test("flow 305 AC10: a `review` routing entry naming a MODEL the connected provider does not list falls through too", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    // "demo" is connected, but "demo-huge" is not one of its reported models.
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-huge" } } }),
+    "utf8",
+  );
+  await approveProjectRoutingFile();
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  expect(model.routed).toBeUndefined();
+  const notices = (JSON.parse(logs.join("\n")) as { notices?: string[] }).notices ?? [];
+  expect(notices.some((n) => n.includes("demo/demo-huge") && n.includes("not connected"))).toBe(true);
+});
+
+test("flow 305 item 3: a malformed routing.config.json is surfaced as a notice, non-fatal — `review tier` still runs", async () => {
+  await writeFile(path.join(ROOT, "routing.config.json"), "not json at all", "utf8");
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  expect(process.exitCode).toBe(0); // non-fatal
+  const parsed = JSON.parse(logs.join("\n")) as { notices?: string[] };
+  expect(parsed.notices?.some((n) => n.includes("routing.config.json"))).toBe(true);
+});
+
+test("flow 305 item 4: a `provider-default` `review` assignment resolves via resolveProviderDefaultModelId, same as subagents", async () => {
+  // "ollama"'s documented default is `llama3.1:latest`
+  // (`provider-default.ts`'s `OLLAMA_DEFAULT_MODEL_ID`). Its own catalog
+  // fixture here (not `tier()`'s "demo" one) is what makes it "connected"
+  // for AC10's provider-only check on a `provider-default` assignment.
+  await writeFile(path.join(ROOT, "catalog.json"), JSON.stringify([{ name: "ollama", models: ["llama3.1:latest"] }]), "utf8");
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "provider-default", providerId: "ollama" } } }),
+    "utf8",
+  );
+  await approveProjectRoutingFile();
+  await reviewCommand([
+    "tier",
+    "--session-provider",
+    "demo",
+    "--session-model",
+    "demo-medium",
+    "--catalog",
+    "catalog.json",
+    "--findings",
+    "2",
+    "--diff-lines",
+    "20",
+    "--json",
+  ]);
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  expect(model.provider).toBe("ollama");
+  expect(model.model).toBe("llama3.1:latest");
+  expect(model.routed).toBe(true);
+});
+
+test("flow 305 item 4: an UNRESOLVABLE `provider-default` (not a real registered provider) is inert, same as a `session-default`", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "provider-default", providerId: "demo" } } }),
+    "utf8",
+  );
+  await approveProjectRoutingFile();
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  // "demo" is connected (AC10 passes) but is not a real registered provider,
+  // so `resolveProviderDefaultModelId` returns `undefined` and the
+  // assignment is inert.
+  expect(model.routed).toBeUndefined();
+});
+
+// ---------------------------------------------------------------------------
+// Flow 305 AC11 — project routing.config.json trust: unapproved -> ignored,
+// approve -> applies, edit-after-approval -> voids approval.
+// ---------------------------------------------------------------------------
+
+test("flow 305 AC11: an UNAPPROVED routing.config.json is ignored, with a visible notice, in `review tier` output", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
+    "utf8",
+  );
+  // No approveProjectRoutingFile() call — the file is written but never trusted.
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  expect(model.routed).toBeUndefined();
+  expect(model.model).toBe("demo-mini"); // the ordinary tier-ranked answer, unaffected
+  const parsed = JSON.parse(logs.join("\n")) as { notices?: string[] };
+  expect(parsed.notices?.some((n) => n.includes("unapproved") && n.includes("keryx routing trust"))).toBe(true);
+});
+
+test("flow 305 AC11: approving the file applies it", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
+    "utf8",
+  );
+  await approveProjectRoutingFile();
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  expect(model.routed).toBe(true);
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-large");
+});
+
+test("flow 305 AC11: editing the file after approval VOIDS the approval — the edited entries are ignored until re-approved", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
+    "utf8",
+  );
+  await approveProjectRoutingFile();
+  // Now change what the file actually says.
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-medium" } } }),
+    "utf8",
+  );
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  expect(model.routed).toBeUndefined();
+  expect(model.model).toBe("demo-mini"); // fell back — the edited content is unapproved
+  const parsed = JSON.parse(logs.join("\n")) as { notices?: string[] };
+  expect(parsed.notices?.some((n) => n.includes("unapproved"))).toBe(true);
+});
+
+test("flow 305 AC11: a pure reformat (whitespace, key order) after approval does NOT void it", async () => {
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
+    "utf8",
+  );
+  await approveProjectRoutingFile();
+  // Same content, reformatted: different key order, extra whitespace.
+  await writeFile(
+    path.join(ROOT, "routing.config.json"),
+    `{\n  "categories": {\n    "review": { "modelId": "demo-large", "kind": "model", "providerId": "demo" }\n  }\n}\n`,
+    "utf8",
+  );
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  const model = modelBlock();
+  expect(model.routed).toBe(true);
+  expect(model.provider).toBe("demo");
+  expect(model.model).toBe("demo-large");
 });
 
 test("`review tier` refuses an unrecognised --verifier rather than silently defaulting", async () => {

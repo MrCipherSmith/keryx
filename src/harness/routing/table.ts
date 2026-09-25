@@ -71,6 +71,34 @@ export type RoutingSource = "override" | "project" | "user" | "default";
 export interface ResolvedCategory {
   readonly assignment: CategoryAssignment;
   readonly source: RoutingSource;
+  /**
+   * AC10 — the FIRST layer's assignment that was skipped because it named an
+   * unconnected provider/model, when one was. `undefined` on the ordinary
+   * path (nothing was rejected). Carried through so a caller can show
+   * `"<provider>/<model> - not connected, falling back to <resolved>"`
+   * without re-deriving which layer that was.
+   */
+  readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource };
+}
+
+/**
+ * Whether `providerId` (and, when given, `modelId`) is one the operator has
+ * actually connected — AC10's "same notion of connected as `/connect`".
+ * Pure and synchronous by construction: a caller builds this from whatever
+ * provider list it already has on hand (`configuredProviders()`,
+ * `detectProviders()`, an injected `getDetectedProviders()`), never a NEW
+ * live probe triggered by resolution itself. See `connectedPredicateFrom`
+ * (below) for the standard way to build one.
+ */
+export type ConnectedPredicate = (providerId: string, modelId?: string) => boolean;
+
+/** The permissive default: everything is "connected" — existing callers that pass no predicate see no behavior change (AC1 unchanged). */
+const ALWAYS_CONNECTED: ConnectedPredicate = () => true;
+
+function isAssignmentConnected(assignment: CategoryAssignment, connected: ConnectedPredicate): boolean {
+  if (assignment.kind === "session-default") return true;
+  if (assignment.kind === "model") return connected(assignment.providerId, assignment.modelId);
+  return connected(assignment.providerId);
 }
 
 /**
@@ -78,32 +106,68 @@ export interface ResolvedCategory {
  * the operator fixed (PRD §5): explicit override > per-project > per-user >
  * `default` (the session's own model, unconditionally available). Reports
  * WHICH layer answered, for display (`keryx routing list`, `/routing`).
+ *
+ * AC10: `connected` (default: everything is connected, i.e. unchanged
+ * behavior) is checked against EVERY candidate layer in precedence order; an
+ * assignment naming an unconnected provider/model is treated as though that
+ * layer had nothing configured for the category and resolution moves to the
+ * next layer, all the way down to `default` if every configured layer names
+ * something unconnected.
  */
 export function resolveCategoryDetailed(
-  _category: RoutingCategory,
+  category: RoutingCategory,
   layers: RoutingLayers,
+  connected: ConnectedPredicate = ALWAYS_CONNECTED,
 ): ResolvedCategory {
-  if (layers.override !== undefined) {
-    return { assignment: layers.override, source: "override" };
+  const candidates: ReadonlyArray<{ assignment: CategoryAssignment; source: RoutingSource }> = [
+    ...(layers.override !== undefined ? [{ assignment: layers.override, source: "override" as const }] : []),
+    ...(layers.project?.[category] !== undefined ? [{ assignment: layers.project[category]!, source: "project" as const }] : []),
+    ...(layers.user?.[category] !== undefined ? [{ assignment: layers.user[category]!, source: "user" as const }] : []),
+  ];
+
+  let rejected: { assignment: CategoryAssignment; source: RoutingSource } | undefined;
+  for (const candidate of candidates) {
+    if (isAssignmentConnected(candidate.assignment, connected)) {
+      return { ...candidate, ...(rejected !== undefined ? { rejected } : {}) };
+    }
+    rejected ??= candidate;
   }
-  const project = layers.project?.[_category];
-  if (project !== undefined) {
-    return { assignment: project, source: "project" };
-  }
-  const user = layers.user?.[_category];
-  if (user !== undefined) {
-    return { assignment: user, source: "user" };
-  }
-  return { assignment: SESSION_DEFAULT_ASSIGNMENT, source: "default" };
+  return { assignment: SESSION_DEFAULT_ASSIGNMENT, source: "default", ...(rejected !== undefined ? { rejected } : {}) };
 }
 
 /**
  * `resolveCategory(category, layers): CategoryAssignment` (AC1's exact
  * signature) — the assignment alone, for a caller that does not need to know
- * which layer answered.
+ * which layer answered. `connected` is optional and additive (AC10); omitted,
+ * behavior is byte-identical to before AC10.
  */
-export function resolveCategory(category: RoutingCategory, layers: RoutingLayers): CategoryAssignment {
-  return resolveCategoryDetailed(category, layers).assignment;
+export function resolveCategory(
+  category: RoutingCategory,
+  layers: RoutingLayers,
+  connected: ConnectedPredicate = ALWAYS_CONNECTED,
+): CategoryAssignment {
+  return resolveCategoryDetailed(category, layers, connected).assignment;
+}
+
+/** Build a `ConnectedPredicate` from a plain provider list (`configuredProviders()`, `detectProviders()`, or an injected `getDetectedProviders()`) — the shared, non-network-probing shape every call site uses. */
+export function connectedPredicateFrom(providers: readonly FlatPickerProvider[]): ConnectedPredicate {
+  const byName = new Map(providers.map((p) => [p.name, p] as const));
+  return (providerId, modelId) => {
+    const provider = byName.get(providerId);
+    if (provider === undefined) return false;
+    if (modelId === undefined) return true;
+    const models = provider.models;
+    // No reported model list at all -> cannot refute a specific model id;
+    // treat the PROVIDER's connectedness as the whole answer rather than
+    // falsely rejecting a model this list simply never enumerated.
+    if (models === undefined || models.length === 0) return true;
+    return models.includes(modelId);
+  };
+}
+
+/** AC10's exact notice text: `"<provider>/<model> - not connected, falling back to <resolved>"`. */
+export function describeFallbackNotice(rejected: CategoryAssignment, resolved: CategoryAssignment): string {
+  return `${describeAssignment(rejected)} - not connected, falling back to ${describeAssignment(resolved)}`;
 }
 
 /** Human-readable form of an assignment, shared by the CLI and the TUI. */

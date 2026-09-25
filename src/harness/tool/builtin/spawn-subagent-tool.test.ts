@@ -9,6 +9,8 @@ import {
 } from "./spawn-subagent-tool";
 import { DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
+import { loadRoutingConfigRaw } from "../../routing/config";
+import { approveProjectRouting } from "../../routing/trust";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -581,10 +583,19 @@ afterEach(async () => {
   for (const root of routingRoots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
+/**
+ * Writes `routing.config.json` AND approves it (AC11: an unapproved project
+ * layer is ignored outright — see the dedicated AC11 tests further down for
+ * that gate itself; these AC6/AC7/AC10 tests are about resolution, so they
+ * start from an already-trusted project file).
+ */
 async function projectWithSubagentsRouting(assignment: unknown): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-"));
   routingRoots.push(root);
   await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ categories: { subagents: assignment } }), "utf8");
+  const raw = await loadRoutingConfigRaw("project", { cwd: root });
+  const approved = await approveProjectRouting(root, raw.table);
+  if (!approved.ok) throw new Error(approved.error);
   return root;
 }
 
@@ -613,14 +624,52 @@ test("flow 305 AC6: the `subagents` category resolves to an ALLOWED provider/mod
   expect(result.output).toContain("via ollama/routed-model");
 });
 
-test("flow 305 AC7: a `subagents` category resolving to a provider OUTSIDE the allowlist is denied with the SAME reason text an explicit out-of-allowlist request produces today", async () => {
+test("flow 305 AC10: a `subagents` category resolving to a provider the parent never detected falls through — the child inherits the parent instead of being denied", async () => {
   const cwd = await projectWithSubagentsRouting({ kind: "model", providerId: "openai", modelId: "gpt-4o" });
+  let usedProviderModel: { providerId: string; modelId: string } | undefined;
+  const tool = createSpawnSubagentTool({
+    cwd,
+    getParentModel: () => ({ providerId: "ollama", modelId: "parent-model" }),
+    makeProvider: (providerId, modelId) => {
+      usedProviderModel = { providerId, modelId };
+      return stubProvider("inherited child ran");
+    },
+    // "openai" was never detected — only "ollama" was. AC10: the routing
+    // entry naming it is treated as unresolved at its layer, so `subagents`
+    // falls all the way through to `default` (inherit the parent), the same
+    // as if nothing had been configured — never denied for a config-file
+    // entry the operator's own connected-provider list never offered.
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+
+  const result = await tool.invoke({ task: "investigate", mode: "read_only" });
+
+  expect(result.isError).toBe(false);
+  expect(usedProviderModel).toEqual({ providerId: "ollama", modelId: "parent-model" });
+  expect(result.output).toContain("via ollama/parent-model");
+});
+
+test("flow 305 AC7: resolveChildModel's gates still apply UNMODIFIED to a category-resolved request that DOES pass AC10 — a detected-but-unclassifiable provider is denied with the SAME reason text an explicit unclassifiable request produces today", async () => {
+  // AC10 filters by DETECTION alone (the parent's own connected-provider
+  // list), same as G1's allowlist — the two are the SAME set at this call
+  // site, so a provider AC10 rejects never reaches resolveChildModel at all.
+  // G3 (classifiable) is the gate genuinely independent of detection: it
+  // reads the STATIC provider registry, not whatever a fixture's
+  // `getDetectedProviders()` reports, so a fixture can report a provider as
+  // "detected" (AC10 passes, and it lands in the G1 allowlist too) while it
+  // is still not a REAL registered provider (G3 denies it) — proving the
+  // gates run, unmodified, on a request AC10 let through.
+  const cwd = await projectWithSubagentsRouting({ kind: "model", providerId: "not-a-real-provider", modelId: "x" });
   const tool = createSpawnSubagentTool({
     cwd,
     getParentModel: () => ({ providerId: "ollama", modelId: "parent-model" }),
     makeProvider: () => stubProvider("should never run"),
-    // "openai" is NOT in the allowlist — only "ollama" was detected.
-    getDetectedProviders: () => [{ name: "ollama" }],
+    getDetectedProviders: () => [{ name: "not-a-real-provider" }],
     idSeq: (() => {
       let n = 0;
       return () => `id-${n++}`;
@@ -632,9 +681,9 @@ test("flow 305 AC7: a `subagents` category resolving to a provider OUTSIDE the a
 
   expect(result.status).toBe("Denied");
   expect(result.isError).toBe(true);
-  // Same denial vocabulary `model.test.ts` pins for an explicit out-of-allowlist
-  // request (`resolveChildModel`'s G1 gate, untouched by this flow — AC7).
-  expect(result.output).toContain('provider "openai" is not in the parent allowlist');
+  // Same denial vocabulary `model.test.ts` pins for an explicit unclassifiable
+  // request (`resolveChildModel`'s G3 gate, untouched by this flow — AC7).
+  expect(result.output).toContain('provider "not-a-real-provider" is not classifiable');
 });
 
 test("flow 305 AC7: a dispatcher-supplied `model_tier` overrides the category entirely — an out-of-allowlist `subagents` routing entry never denies an explicit-tier dispatch", async () => {
@@ -660,4 +709,63 @@ test("flow 305 AC7: a dispatcher-supplied `model_tier` overrides the category en
   expect(result.status).not.toBe("Denied");
   expect(result.isError).toBe(false);
   expect(result.output).not.toContain("openai");
+});
+
+test("flow 305 AC11: an UNAPPROVED project routing.config.json's `subagents` entry is ignored — the child inherits the parent, exactly as if nothing were configured", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-"));
+  routingRoots.push(root);
+  // Written but never approved (no `approveProjectRouting` call) — unlike
+  // `projectWithSubagentsRouting`, which approves as part of its setup.
+  await writeFile(
+    path.join(root, "routing.config.json"),
+    JSON.stringify({ categories: { subagents: { kind: "model", providerId: "ollama", modelId: "unapproved-model" } } }),
+    "utf8",
+  );
+  let usedProviderModel: { providerId: string; modelId: string } | undefined;
+  const tool = createSpawnSubagentTool({
+    cwd: root,
+    getParentModel: () => ({ providerId: "ollama", modelId: "parent-model" }),
+    makeProvider: (providerId, modelId) => {
+      usedProviderModel = { providerId, modelId };
+      return stubProvider("inherited child ran");
+    },
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+
+  const result = await tool.invoke({ task: "investigate", mode: "read_only" });
+
+  expect(result.isError).toBe(false);
+  expect(usedProviderModel).toEqual({ providerId: "ollama", modelId: "parent-model" });
+});
+
+test("flow 305 item 3: a malformed routing.config.json is surfaced as a non-fatal system-log diagnostic, and the spawn still runs (falls back to inherit)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-"));
+  routingRoots.push(root);
+  await writeFile(path.join(root, "routing.config.json"), "not json at all", "utf8");
+  const events: SpawnSubagentFleetEvent[] = [];
+  const tool = createSpawnSubagentTool({
+    cwd: root,
+    getParentModel: () => ({ providerId: "ollama", modelId: "parent-model" }),
+    makeProvider: () => stubProvider("inherited child ran"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    onFleetEvent: (event) => events.push(event),
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+
+  const result = await tool.invoke({ task: "investigate", mode: "read_only" });
+
+  expect(result.isError).toBe(false); // never fatal
+  const diagnostics = events.filter(
+    (event) => event.kind === "log" && event.entry.kind === "system" && event.entry.text.startsWith("routing:"),
+  );
+  expect(diagnostics.length).toBeGreaterThan(0);
 });

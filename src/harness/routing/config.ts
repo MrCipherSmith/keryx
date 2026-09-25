@@ -13,6 +13,7 @@ import { pathExists, writeFileAtomic } from "../../lib/fs";
 import { readJsonObjectFile } from "../../lib/json";
 import { loadShellConfig, saveShellConfig } from "../../lib/shell-config";
 import { isRoutingCategory, ROUTING_CATEGORIES, type CategoryAssignment, type RoutingCategory, type RoutingTable } from "./table";
+import { isProjectRoutingApproved, ROUTING_TRUST_NOTICE } from "./trust";
 
 /** The two layers a config file/entry can be read from or written to. */
 export type RoutingConfigLayer = "project" | "user";
@@ -42,14 +43,28 @@ export interface RoutingConfigLocation {
 export interface RoutingConfigResult {
   readonly table: RoutingTable;
   /**
-   * Set when the file/entry EXISTS but could not be read as a routing table —
-   * invalid JSON, a non-object payload, or a category entry that fails
-   * validation. `table` is still the best-effort partial parse (valid
-   * categories kept, invalid ones dropped) so one bad entry never blanks the
-   * whole layer, but `error` must be surfaced by every caller rather than
-   * treated as "nothing configured".
+   * A human-readable reason to surface, set when either:
+   *  - the file/entry EXISTS but could not be read as a routing table —
+   *    invalid JSON, a non-object payload, or a category entry that fails
+   *    validation. `table` is still the best-effort partial parse (valid
+   *    categories kept, invalid ones dropped) so one bad entry never blanks
+   *    the whole layer.
+   *  - (project layer only, AC11) the file is well-formed but UNAPPROVED —
+   *    same text as `untrusted`, below, which a caller can also check
+   *    directly when it needs to distinguish the two cases.
+   * Either way, `error` must be surfaced by every caller rather than treated
+   * as "nothing configured".
    */
   readonly error?: string;
+  /**
+   * AC11 — set (project layer only) when the file parses and validates fine
+   * but its CURRENT content has not been approved via `keryx routing trust`
+   * (or was approved for a since-changed content). `table` is EMPTY in this
+   * state — the entries are ignored, not merely flagged — so every existing
+   * caller that reads `.table` without checking this flag already gets the
+   * safe behavior; callers that want to show the notice check this flag.
+   */
+  readonly untrusted?: boolean;
 }
 
 /** `routing.config.json` at the project root (sibling to the project's `.metaproject/`, per AC2). */
@@ -118,11 +133,18 @@ export function renderRoutingConfig(table: RoutingTable): { categories: RoutingT
 }
 
 /**
- * Read one layer's routing table. Never throws. An absent project file or an
- * absent/empty user entry is `{table: {}}` — the ordinary "never configured"
- * case — not an error.
+ * Read one layer's routing table AS WRITTEN — no AC11 trust gate applied.
+ * Never throws. An absent project file or an absent/empty user entry is
+ * `{table: {}}` — the ordinary "never configured" case — not an error.
+ *
+ * This is the merge base `setRoutingCategory`/`unsetRoutingCategory` read
+ * before writing: a project file the operator has not yet approved still
+ * physically holds whatever OTHER categories were already set in it, and a
+ * `keryx routing set <cat> ... --project` on top of it must not silently
+ * discard them just because AC11 hides them from ordinary reads. Approval
+ * status is a DISPLAY/RESOLUTION concern, not a data-loss switch.
  */
-export async function loadRoutingConfig(layer: RoutingConfigLayer, location: RoutingConfigLocation): Promise<RoutingConfigResult> {
+export async function loadRoutingConfigRaw(layer: RoutingConfigLayer, location: RoutingConfigLocation): Promise<RoutingConfigResult> {
   if (layer === "user") {
     const raw = loadShellConfig(location.userConfigDir).routing;
     if (raw === undefined) return { table: {} };
@@ -147,6 +169,27 @@ export async function loadRoutingConfig(layer: RoutingConfigLayer, location: Rou
 }
 
 /**
+ * Read one layer's routing table for RESOLUTION/DISPLAY (AC1-AC9's original
+ * contract, plus AC11's trust gate on the project layer): a well-formed
+ * project table takes effect only once the operator has approved its CURRENT
+ * content (`keryx routing trust`). Unapproved (or approved-then-edited) ->
+ * the entries are ignored outright, exactly as if the project layer had
+ * nothing configured, with `untrusted: true` and a notice in `error` for
+ * callers that want to show it. The user layer has no trust gate (it is the
+ * operator's own global config, not a file a repository can commit).
+ */
+export async function loadRoutingConfig(layer: RoutingConfigLayer, location: RoutingConfigLocation): Promise<RoutingConfigResult> {
+  const raw = await loadRoutingConfigRaw(layer, location);
+  if (layer === "user" || raw.error !== undefined || Object.keys(raw.table).length === 0) {
+    return raw;
+  }
+  if (!isProjectRoutingApproved(location.cwd, raw.table, location.userConfigDir)) {
+    return { table: {}, untrusted: true, error: ROUTING_TRUST_NOTICE };
+  }
+  return raw;
+}
+
+/**
  * Write one layer's routing table. The user layer merges into the existing
  * shell config (like every other `saveShellConfig` caller); the project layer
  * overwrites `routing.config.json` atomically (mirrors
@@ -162,20 +205,25 @@ export async function saveRoutingConfig(layer: RoutingConfigLayer, location: Rou
   await writeFileAtomic(file, body);
 }
 
-/** Set one category's assignment in a layer, preserving every other category already set there. */
+/**
+ * Set one category's assignment in a layer, preserving every other category
+ * already set there. Merges against `loadRoutingConfigRaw` (AC11 note on that
+ * function): an unapproved project file's OTHER entries must survive a write
+ * that only meant to add or change one category.
+ */
 export async function setRoutingCategory(
   layer: RoutingConfigLayer,
   location: RoutingConfigLocation,
   category: RoutingCategory,
   assignment: CategoryAssignment,
 ): Promise<void> {
-  const current = await loadRoutingConfig(layer, location);
+  const current = await loadRoutingConfigRaw(layer, location);
   await saveRoutingConfig(layer, location, { ...current.table, [category]: assignment });
 }
 
-/** Clear one category back to unset (`session-default` falls through to it) in a layer. */
+/** Clear one category back to unset (`session-default` falls through to it) in a layer. Same raw-merge-base note as `setRoutingCategory`. */
 export async function unsetRoutingCategory(layer: RoutingConfigLayer, location: RoutingConfigLocation, category: RoutingCategory): Promise<void> {
-  const current = await loadRoutingConfig(layer, location);
+  const current = await loadRoutingConfigRaw(layer, location);
   const { [category]: _removed, ...rest } = current.table;
   await saveRoutingConfig(layer, location, rest);
 }

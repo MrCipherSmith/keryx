@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "305",
+  "slug": "task-routing-table-categories-to-models-",
+  "title": "Task routing table: categories to models, /routing modal with one searchable model list, keryx routing CLI; review and subagents read it",
+  "status": "in-progress",
+  "createdAt": "2026-09-25T06:18:30.539Z",
+  "updatedAt": "2026-09-25T07:19:57.559Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:989421d4ceb62723aedf6000eadd8107ac56aac8405ba4eefce6a13566472d2b",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read PRD/PLAN §4-§7/§9, .metaproject/index.md, and all touched source files (routing table precedence, shell-config, providers registry, resolveChildModel gates, review tier, modal-host/mountFilterList, help-groups/cli.ts help pins, import-policy ratchet)."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented table.ts/config.ts/provider-default.ts/child-model-request.ts, keryx routing CLI, /routing TUI modal (filter-list.ts extraction + routing-inspector.ts), review tier and spawn_subagent routing integration, CLI/HELP_GROUPS/command-registry/docs wiring."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added table/config/provider-default/child-model-request unit tests, routing CLI tests, routing-inspector modal test, additive review.test.ts (AC5) and spawn-subagent-tool.test.ts (AC6/AC7) tests, command-registry routing-categories sync test; fixed agent-commands.test.ts pinned order and command-registry.coverage.test.ts for the new verb; typecheck/eslint clean; opentui-tests-no-skips, test:client:terminal, test:client:runtime, test:core (2 pre-existing unrelated sandbox flakes only), skills verify --bundled, check:doc-links, flow check, keryx health run all green."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T06:18:30.539Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T06:18:45.113Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T06:18:45.223Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T07:10:02.544Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T07:10:06.742Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T07:10:12.195Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T07:19:57.448Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"(new)\" -> \"An assignment at any layer that names a provider the operator has not connected (or a model that provider does not offer) is treated as unresolved at that layer and falls through to the next one, at every call site - `review tier`, `spawn_subagent`, `keryx routing list` and `/routing` - and the CLI and the modal show \"<provider>/<model> - not connected, falling back to <resolved>\"; tests cover each call site.\" (review of PR #705 (finding 1): the operator's fallback requirement from PRD section 5 was documented but not implemented and had not been carried into an AC)"
+    },
+    {
+      "at": "2026-09-25T07:19:57.559Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(new)\" -> \"A project `routing.config.json` takes effect only after the operator approves its current content once (a content hash recorded per user, like other project trust in keryx); until then, and whenever the file changes, its entries are ignored with a visible notice in `keryx routing list`, `/routing` and the review tier output, and `keryx routing trust` (or a confirmation in `/routing`) approves it; a routed review model is labelled as routed, never as discovered.\" (review of PR #705 (finding 2): a checked-in routing file could silently redirect the model that reviews the same diff)"
+    }
+  ]
+}

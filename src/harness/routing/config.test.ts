@@ -10,12 +10,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   loadRoutingConfig,
+  loadRoutingConfigRaw,
   projectRoutingConfigPath,
   saveRoutingConfig,
   setRoutingCategory,
   unsetRoutingCategory,
   validateRoutingConfig,
 } from "./config";
+import { approveProjectRouting } from "./trust";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -77,12 +79,15 @@ test("loadRoutingConfig (user): an absent entry is an empty table, never an erro
   expect(result).toEqual({ table: {} });
 });
 
-test("saveRoutingConfig/loadRoutingConfig round-trip through BOTH layers independently", async () => {
+test("saveRoutingConfig/loadRoutingConfigRaw round-trip through BOTH layers independently", async () => {
+  // `loadRoutingConfigRaw`, not `loadRoutingConfig`: this is a write/read
+  // round-trip check, independent of AC11's project-trust gate (its own
+  // dedicated tests are further down) — the user layer has no such gate.
   const loc = await location();
   await saveRoutingConfig("project", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
   await saveRoutingConfig("user", loc, { quick: { kind: "provider-default", providerId: "deepseek" } });
 
-  const project = await loadRoutingConfig("project", loc);
+  const project = await loadRoutingConfigRaw("project", loc);
   const user = await loadRoutingConfig("user", loc);
   expect(project.table).toEqual({ review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
   expect(user.table).toEqual({ quick: { kind: "provider-default", providerId: "deepseek" } });
@@ -128,7 +133,9 @@ test("unsetRoutingCategory clears exactly one category, leaving the rest untouch
   await setRoutingCategory("project", loc, "review", { kind: "model", providerId: "anthropic", modelId: "claude-x" });
   await setRoutingCategory("project", loc, "quick", { kind: "provider-default", providerId: "deepseek" });
   await unsetRoutingCategory("project", loc, "review");
-  const result = await loadRoutingConfig("project", loc);
+  // `loadRoutingConfigRaw`, not `loadRoutingConfig`: a write/merge check,
+  // independent of AC11's project-trust gate.
+  const result = await loadRoutingConfigRaw("project", loc);
   expect(result.table).toEqual({ quick: { kind: "provider-default", providerId: "deepseek" } });
 });
 
@@ -143,4 +150,89 @@ test("the user layer and the project layer for DIFFERENT projects at the same cw
     kind: "provider-default",
     providerId: "deepseek",
   });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 305 AC11 — the project layer is trust-gated; the user layer is not.
+// ---------------------------------------------------------------------------
+
+test("loadRoutingConfig (project): an unapproved non-empty table is ignored — empty table, `untrusted: true`, and a notice", async () => {
+  const loc = await location();
+  await saveRoutingConfig("project", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  const result = await loadRoutingConfig("project", loc);
+  expect(result.table).toEqual({});
+  expect(result.untrusted).toBe(true);
+  expect(result.error).toBeDefined();
+});
+
+test("loadRoutingConfig (project): approving applies it", async () => {
+  const loc = await location();
+  await saveRoutingConfig("project", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  const raw = await loadRoutingConfigRaw("project", loc);
+  await approveProjectRouting(loc.cwd, raw.table, loc.userConfigDir);
+  const result = await loadRoutingConfig("project", loc);
+  expect(result.table).toEqual({ review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  expect(result.untrusted).toBeUndefined();
+});
+
+test("loadRoutingConfig (project): editing after approval voids it again", async () => {
+  const loc = await location();
+  await saveRoutingConfig("project", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  const raw = await loadRoutingConfigRaw("project", loc);
+  await approveProjectRouting(loc.cwd, raw.table, loc.userConfigDir);
+  await saveRoutingConfig("project", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-y" } });
+  const result = await loadRoutingConfig("project", loc);
+  expect(result.table).toEqual({});
+  expect(result.untrusted).toBe(true);
+});
+
+test("loadRoutingConfig (project): an EMPTY table needs no approval", async () => {
+  const loc = await location();
+  await saveRoutingConfig("project", loc, {});
+  const result = await loadRoutingConfig("project", loc);
+  expect(result.table).toEqual({});
+  expect(result.untrusted).toBeUndefined();
+  expect(result.error).toBeUndefined();
+});
+
+test("loadRoutingConfig (user): the user layer has no trust gate — a write is visible immediately, no approval needed", async () => {
+  const loc = await location();
+  await saveRoutingConfig("user", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  const result = await loadRoutingConfig("user", loc);
+  expect(result.table).toEqual({ review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  expect(result.untrusted).toBeUndefined();
+});
+
+test("loadRoutingConfigRaw (project): bypasses the trust gate entirely — sees the file's real content regardless of approval", async () => {
+  const loc = await location();
+  await saveRoutingConfig("project", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  const raw = await loadRoutingConfigRaw("project", loc);
+  expect(raw.table).toEqual({ review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+});
+
+test("setRoutingCategory on an UNAPPROVED project layer preserves its other (still unapproved) categories rather than discarding them", async () => {
+  const loc = await location();
+  await saveRoutingConfig("project", loc, {
+    review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
+    quick: { kind: "provider-default", providerId: "deepseek" },
+  });
+  // Unapproved — `loadRoutingConfig` would see an empty table here.
+  await setRoutingCategory("project", loc, "coding", { kind: "session-default" });
+  const raw = await loadRoutingConfigRaw("project", loc);
+  expect(raw.table).toEqual({
+    review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
+    quick: { kind: "provider-default", providerId: "deepseek" },
+    coding: { kind: "session-default" },
+  });
+});
+
+test("unsetRoutingCategory on an UNAPPROVED project layer preserves the rest, removing only the named category", async () => {
+  const loc = await location();
+  await saveRoutingConfig("project", loc, {
+    review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
+    quick: { kind: "provider-default", providerId: "deepseek" },
+  });
+  await unsetRoutingCategory("project", loc, "review");
+  const raw = await loadRoutingConfigRaw("project", loc);
+  expect(raw.table).toEqual({ quick: { kind: "provider-default", providerId: "deepseek" } });
 });

@@ -44,7 +44,8 @@ import {
 } from "../review/scope";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import { loadRoutingConfig } from "../harness/routing/config";
-import { resolveCategory } from "../harness/routing/table";
+import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
+import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
@@ -778,25 +779,62 @@ async function runBudget(args: string[]): Promise<void> {
  * object identity is not required, but every field is byte-identical, which
  * is what the regression test pins (AC5's "byte-identical to pre-Flow-A").
  *
- * Reuses `tier_resolution: "discovered"` for the override rather than adding a
- * new `TierResolutionSource` member: both mean the same thing to a reader of
- * the printed block — "a specific model, not the adaptive tier" — and adding a
- * fourth enum value would touch `model-tier.ts`'s public contract for a
- * cosmetic distinction the dispatch schema does not need.
+ * `routed: true` marks a routing-table override on the RESULT rather than
+ * forcing `tier_resolution: "discovered"` (review finding, AC11d): the two
+ * questions are independent — `tier_resolution` says how `assignTier`
+ * resolved a MODEL FOR THE TIER, `routed` says whether the routing table then
+ * REPLACED that model outright. Conflating them mislabels a routed pick as
+ * "discovered" (tier-ranked), which is exactly the confusion AC11(d) flags —
+ * and would have required a fourth `TierResolutionSource` member to fix
+ * honestly, touching `model-tier.ts`'s public contract for a distinction the
+ * dispatch schema does not otherwise need.
+ *
+ * Flow 305 review findings, additive to AC5:
+ *  - AC10: the resolved assignment is checked against `catalog` (the same
+ *    provider/model list already fetched for tier ranking — no NEW network
+ *    call). An assignment naming an unconnected provider/model falls through
+ *    exactly as `resolveCategoryDetailed` documents; `notices` carries the
+ *    fallback line for the caller to print.
+ *  - AC11(b): a malformed or unapproved project `routing.config.json` is
+ *    surfaced in `notices` (never silently swallowed) rather than only
+ *    logged nowhere the operator can see it.
+ *  - item 4: a `provider-default` assignment is resolved the same way
+ *    `subagents` already does (`resolveProviderDefaultModelId`), not ignored.
  */
-async function applyReviewRoutingCategory(decision: DispatchModelDecision, cwd: string): Promise<DispatchModelDecision> {
+interface ReviewRoutingResult {
+  readonly decision: DispatchModelDecision;
+  readonly routed: boolean;
+  /** Human-readable lines to surface alongside the tier output — never silent. */
+  readonly notices: readonly string[];
+}
+
+async function applyReviewRoutingCategory(
+  decision: DispatchModelDecision,
+  cwd: string,
+  catalog: readonly DiscoveredProvider[],
+): Promise<ReviewRoutingResult> {
   const location = { cwd };
   const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
-  const assignment = resolveCategory("review", { project: project.table, user: user.table });
-  if (assignment.kind !== "model") {
-    return decision;
+  const notices: string[] = [];
+  for (const layer of [project, user]) {
+    if (layer.error !== undefined) notices.push(layer.error);
   }
-  return {
-    ...decision,
-    provider: assignment.providerId,
-    model: assignment.modelId,
-    tier_resolution: "discovered",
-  };
+  const connected = connectedPredicateFrom(catalog);
+  const resolved = resolveCategoryDetailed("review", { project: project.table, user: user.table }, connected);
+  if (resolved.rejected !== undefined) {
+    notices.push(describeFallbackNotice(resolved.rejected.assignment, resolved.assignment));
+  }
+  const { assignment } = resolved;
+  if (assignment.kind === "model") {
+    return { decision: { ...decision, provider: assignment.providerId, model: assignment.modelId }, routed: true, notices };
+  }
+  if (assignment.kind === "provider-default") {
+    const modelId = resolveProviderDefaultModelId(assignment.providerId);
+    if (modelId !== undefined) {
+      return { decision: { ...decision, provider: assignment.providerId, model: modelId }, routed: true, notices };
+    }
+  }
+  return { decision, routed: false, notices };
 }
 
 async function runTier(args: string[]): Promise<void> {
@@ -804,12 +842,26 @@ async function runTier(args: string[]): Promise<void> {
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
-  const decision = await applyReviewRoutingCategory(decideDispatchModel(session, signals, catalog), process.cwd());
-  const block = dispatchModelBlock(decision);
+  const { decision, routed, notices } = await applyReviewRoutingCategory(
+    decideDispatchModel(session, signals, catalog),
+    process.cwd(),
+    catalog,
+  );
+  // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s
+  // `pinsModel`-gated provider/model — that path exists for the TIER's own
+  // "discovered" resolution. `routed: true` is an ADDITIVE field on top of
+  // the same block shape, not a replacement for `tier_resolution`.
+  const block = routed
+    ? { ...dispatchModelBlockRouted(decision), routed: true }
+    : dispatchModelBlock(decision);
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ model: block }, null, 2));
+    console.log(JSON.stringify({ model: block, ...(notices.length > 0 ? { notices } : {}) }, null, 2));
     return;
+  }
+
+  for (const notice of notices) {
+    console.error(`routing: ${notice}`);
   }
 
   const discovery = decision.model_discovery;
@@ -821,7 +873,11 @@ async function runTier(args: string[]): Promise<void> {
   // Printed rather than assumed: `inherit` is an answer, and saying "not
   // resolved" would read as a failure — the next thing a reader does with a
   // failure is pick a model by hand.
-  if (pinsModel(decision)) {
+  if (routed) {
+    console.log(`provider: ${decision.provider}`);
+    console.log(`model: ${decision.model}`);
+    console.log(`routed: true (from the routing table's "review" category — not tier-discovered)`);
+  } else if (pinsModel(decision)) {
     console.log(`provider: ${decision.provider}`);
     console.log(`model: ${decision.model}`);
   } else {
@@ -840,6 +896,18 @@ async function runTier(args: string[]): Promise<void> {
   console.log("```json");
   console.log(JSON.stringify({ model: block }, null, 2));
   console.log("```");
+}
+
+/** `dispatchModelBlock`'s shape, but unconditionally naming `provider`/`model` — used only when `routed` (AC11d), where `pinsModel`'s own tier-based gate does not apply. */
+function dispatchModelBlockRouted(decision: DispatchModelDecision): Record<string, unknown> {
+  return {
+    tier: decision.tier,
+    tier_reasons: decision.tier_reasons,
+    provider: decision.provider,
+    model: decision.model,
+    tier_resolution: decision.tier_resolution,
+    model_discovery: decision.model_discovery,
+  };
 }
 
 /** The §4.4 signals, read from flags an orchestrator already has the answers to. */

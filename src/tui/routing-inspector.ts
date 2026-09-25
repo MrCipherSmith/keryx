@@ -9,22 +9,40 @@
 // provider-then-model flow (PRD §7, §Non-goals). A confirmed pick writes
 // immediately to the per-user layer (AC3's default write layer), not on
 // modal close.
+//
+// Flow 305 review findings, additive to AC4:
+//  - AC10: the SAME connected-provider list already fetched once for the
+//    flat picker (`reload()`, below — not a second live probe) also gates
+//    category RESOLUTION; a rejected layer's entry is shown with the
+//    "not connected, falling back to …" notice.
+//  - AC11: an unapproved/changed project `routing.config.json` is ignored
+//    (surfaced by `loadRoutingConfig` itself, `config.ts`) with a visible
+//    notice; `t` on the list tab arms an approve action that shows the
+//    file's entries BEFORE recording anything (`y` confirms, any other key
+//    cancels) — the same discipline `keryx routing trust` uses on the CLI.
 import {
   loadRoutingConfig,
+  loadRoutingConfigRaw,
   saveRoutingConfig,
   type RoutingConfigLocation,
   type RoutingConfigResult,
 } from "../harness/routing/config";
 import {
+  connectedPredicateFrom,
   describeAssignment,
+  describeFallbackNotice,
   flatModelOptions,
+  resolveCategoryDetailed,
   ROUTING_CATEGORIES,
   type CategoryAssignment,
+  type ConnectedPredicate,
   type FlatModelOption,
   type FlatPickerProvider,
   type RoutingCategory,
+  type RoutingSource,
   type RoutingTable,
 } from "../harness/routing/table";
+import { approveProjectRouting, describeTableForApproval, type RoutingTrustResult } from "../harness/routing/trust";
 import { mountFilterList, type KeypressEvent } from "./filter-list";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -38,35 +56,36 @@ export const ROUTING_COMMAND = "/routing";
 export const ROUTING_FOOTER = [
   { key: "↑/↓", label: "move" },
   { key: "enter", label: "pick model" },
+  { key: "t", label: "trust project file" },
   { key: "esc", label: "close" },
 ] as const;
 
 export interface RoutingCategoryRow {
   readonly category: RoutingCategory;
   readonly assignment: CategoryAssignment;
-  readonly source: "project" | "user" | "default";
+  readonly source: RoutingSource;
+  /** AC10 — the layer's own entry, when one was rejected as unconnected before landing here. */
+  readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource };
 }
 
-/** The list tab's rows, derived from both layers (AC3's precedence: project > user > default). */
-export function routingCategoryRows(project: RoutingConfigResult, user: RoutingConfigResult): RoutingCategoryRow[] {
-  return ROUTING_CATEGORIES.map((category) => {
-    const projectAssignment = project.table[category];
-    const userAssignment = user.table[category];
-    if (projectAssignment !== undefined) {
-      return { category, assignment: projectAssignment, source: "project" as const };
-    }
-    if (userAssignment !== undefined) {
-      return { category, assignment: userAssignment, source: "user" as const };
-    }
-    return { category, assignment: { kind: "session-default" as const }, source: "default" as const };
-  });
+/** The list tab's rows, derived from both layers (AC3's precedence, AC10's connected fallback). */
+export function routingCategoryRows(
+  project: RoutingConfigResult,
+  user: RoutingConfigResult,
+  connected: ConnectedPredicate = () => true,
+): RoutingCategoryRow[] {
+  return ROUTING_CATEGORIES.map((category) => ({
+    category,
+    ...resolveCategoryDetailed(category, { project: project.table, user: user.table }, connected),
+  }));
 }
 
 /** The list tab's rendered lines. Exported so a test can hold it against the CLI's own `list` output shape. */
 export function formatRoutingListLines(rows: readonly RoutingCategoryRow[], selected: number): string[] {
   return rows.map((row, index) => {
     const mark = index === selected ? ">" : " ";
-    return `${mark} ${row.category.padEnd(12)} ${describeAssignment(row.assignment)}  [${row.source}]`;
+    const suffix = row.rejected !== undefined ? `  (${describeFallbackNotice(row.rejected.assignment, row.assignment)})` : "";
+    return `${mark} ${row.category.padEnd(12)} ${describeAssignment(row.assignment)}  [${row.source}]${suffix}`;
   });
 }
 
@@ -76,10 +95,12 @@ export interface RoutingModalOptions {
   /** Per-user config dir override (test seam only) — the "user" layer. Default: the real global config dir. */
   userConfigDir?: string;
   onKeypress: (handler: (key: KeypressEvent) => void) => () => void;
-  /** Connected providers for the flat picker. Defaults to a live `detectProviders()` call. */
+  /** Connected providers for the flat picker AND AC10's resolution check. Defaults to a live `detectProviders()` call, fetched ONCE per `reload()` — never a second probe for resolution alone. */
   providers?: () => Promise<readonly FlatPickerProvider[]>;
   load?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
+  loadRaw?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
   save?: (layer: "project" | "user", location: RoutingConfigLocation, table: RoutingTable) => Promise<void>;
+  approve?: (cwd: string, table: RoutingTable, userConfigDir: string | undefined) => Promise<RoutingTrustResult>;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   /** True while a composer choice or permission prompt owns the keyboard (review pattern, flow 300). */
@@ -94,13 +115,19 @@ export interface RoutingModalHandle extends ModalHandle {
   selectedCategory(): RoutingCategory | undefined;
   /** The flat picker's current options (populated once the "picker" tab has loaded providers). Tests only. */
   pickerOptions(): readonly FlatModelOption[];
+  /** AC11 — whether the project layer is currently unapproved/changed. Tests only. */
+  projectUntrusted(): boolean;
+  /** Settles once the in-flight write/arm/approve/reload (if any) has finished. Tests only. */
+  settled(): Promise<void>;
 }
 
 export function openRouting(otui: unknown, chrome: unknown, options: RoutingModalOptions): RoutingModalHandle | undefined {
   const core = otui as OpenTui;
   const r = (chrome as { renderer?: unknown } | undefined)?.renderer;
   const load = options.load ?? loadRoutingConfig;
+  const loadRaw = options.loadRaw ?? loadRoutingConfigRaw;
   const save = options.save ?? saveRoutingConfig;
+  const approve = options.approve ?? ((cwd, table, userConfigDir) => approveProjectRouting(cwd, table, userConfigDir));
   const location: RoutingConfigLocation = {
     cwd: options.cwd,
     ...(options.userConfigDir !== undefined ? { userConfigDir: options.userConfigDir } : {}),
@@ -115,10 +142,16 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
 
   let rows: RoutingCategoryRow[] = [];
   let flatOptions: FlatModelOption[] = [];
+  let providers: readonly FlatPickerProvider[] = [];
+  let projectIsUntrusted = false;
   let selected = 0;
   let statusText = "enter to pick a model for the selected category";
   let closed = false;
   let currentTab: string = "list";
+  /** AC11 — armed by `t`, confirmed by `y`, cancelled by any other key. */
+  let armedApproval: RoutingTable | undefined;
+  /** Every async action (write/arm/approve/reload) assigns here — `settled()` (tests) awaits exactly the work a keypress actually started, instead of a fixed number of ticks. */
+  let inFlight: Promise<void> = Promise.resolve();
   let statusNode: { content: unknown } | undefined;
   let bodyNode: { content: unknown } | undefined;
   const host: { handle?: ModalHandle } = {};
@@ -139,10 +172,13 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     // branch never reassigns them (it uses its own status node). `reload()`
     // (called from `writePick`, which can run while "picker" is still
     // active, right before it switches back to "list") must not paint into
-    // an already-destroyed TextRenderable.
+    // an already-destroyed TextRenderable. A THEME CHANGE while "picker" is
+    // active hits this exact guard too (`onThemeChange` below calls
+    // `paintList` through `guardedThemeRepaint`) — regression-pinned by
+    // `routing-inspector.test.ts`.
     if (closed || currentTab !== "list") return;
     if (statusNode !== undefined) {
-      statusNode.content = core.t`${roleChunk(core, "muted", statusText)}`;
+      statusNode.content = core.t`${roleChunk(core, armedApproval !== undefined ? "attention" : "muted", statusText)}`;
     }
     if (bodyNode !== undefined) {
       bodyNode.content = core.t`${dimChunk(core, listLines().join("\n"))}`;
@@ -150,11 +186,14 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   };
 
   const reload = async (): Promise<void> => {
-    const [project, user] = await Promise.all([load("project", location), load("user", location)]);
+    const [project, user, fetchedProviders] = await Promise.all([load("project", location), load("user", location), loadProviders()]);
+    providers = fetchedProviders;
+    projectIsUntrusted = project.untrusted === true;
     for (const error of [project.error, user.error]) {
       if (error !== undefined) statusText = `routing: ${error}`;
     }
-    rows = routingCategoryRows(project, user);
+    const connected = connectedPredicateFrom(providers);
+    rows = routingCategoryRows(project, user, connected);
     selected = Math.min(selected, Math.max(0, rows.length - 1));
     paintList();
   };
@@ -165,6 +204,34 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     statusText = `${category} -> ${describeAssignment(assignment)}  [user]`;
     await reload();
     host.handle?.setTab("list");
+  };
+
+  /** AC11 — `t`: show the project file's raw entries and arm the approval. */
+  const armApproval = async (): Promise<void> => {
+    const raw = await loadRaw("project", location);
+    if (raw.error !== undefined && raw.untrusted !== true) {
+      statusText = `routing: ${raw.error}`;
+      paintList();
+      return;
+    }
+    if (Object.keys(raw.table).length === 0) {
+      statusText = "routing.config.json declares no categories — nothing to approve.";
+      paintList();
+      return;
+    }
+    armedApproval = raw.table;
+    const lines = describeTableForApproval(raw.table);
+    statusText = `Approve routing.config.json?\n  ${lines.join("\n  ")}\ny confirms · any other key cancels`;
+    paintList();
+  };
+
+  const confirmApproval = async (): Promise<void> => {
+    const table = armedApproval;
+    armedApproval = undefined;
+    if (table === undefined) return;
+    const result = await approve(location.cwd, table, location.userConfigDir);
+    statusText = result.ok ? `Approved (${result.file}).` : `routing: ${result.error}`;
+    await reload();
   };
 
   let unsubscribeTheme: () => void = () => {};
@@ -187,6 +254,16 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
         return options.onKeypress((key) => {
           if (closed || options.inputBlocked?.() === true) return;
           const token = key.name || key.sequence;
+          if (armedApproval !== undefined) {
+            if (token === "y") {
+              inFlight = confirmApproval();
+            } else {
+              armedApproval = undefined;
+              statusText = "approval cancelled";
+              paintList();
+            }
+            return;
+          }
           if (token === "up" || token === "k") {
             selected = Math.max(0, selected - 1);
             paintList();
@@ -195,44 +272,41 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
             paintList();
           } else if (token === "return" || token === "enter") {
             if (selectedRow() !== undefined) host.handle?.setTab("picker");
+          } else if (token === "t") {
+            inFlight = armApproval();
           }
         });
       }
-      // "picker" tab — the flat model list (AC4).
+      // "picker" tab — the flat model list (AC4), built from the SAME
+      // provider list `reload()` already fetched (no extra live probe).
       const row = selectedRow();
       statusNode = new core.TextRenderable(r as never, {
         id: "rt-picker-status",
         content: core.t`${roleChunk(core, "muted", row === undefined ? "no category selected" : `picking a model for ${row.category}`)}`,
       }) as never;
       parent.add(statusNode as never);
-      let unsub = (): void => {};
-      void (async () => {
-        const providers = await loadProviders();
-        flatOptions = flatModelOptions(providers);
-        if (closed || host.handle?.activeTab() !== "picker") return;
-        const list = mountFilterList(core, r as never, parent as never, {
-          idPrefix: "rt",
-          items: flatOptions,
-          toOption: (opt) => ({ name: opt.label, description: "" }),
-          matches: (opt, q) => opt.search.includes(q),
-          emptyLabel: "(no connected providers)",
-          idleHint: "type to filter · ↑/↓ Enter to pick · Esc back",
-          filterHint: (filter, shown, total) => `filter: ${filter}  (${shown}/${total})`,
-          showDescription: false,
-          width: "100%",
-          height: Math.max(1, bodyRows - 1),
-          onPick: (opt) => {
-            const currentRow = selectedRow();
-            if (opt === undefined || currentRow === undefined) return;
-            void writePick(currentRow.category, opt.assignment);
-          },
-        });
-        unsub = options.onKeypress((key) => {
-          if (closed || options.inputBlocked?.() === true) return;
-          list.onKey(key);
-        });
-      })();
-      return () => unsub();
+      flatOptions = flatModelOptions(providers);
+      const list = mountFilterList(core, r as never, parent as never, {
+        idPrefix: "rt",
+        items: flatOptions,
+        toOption: (opt) => ({ name: opt.label, description: "" }),
+        matches: (opt, q) => opt.search.includes(q),
+        emptyLabel: "(no connected providers)",
+        idleHint: "type to filter · ↑/↓ Enter to pick · Esc back",
+        filterHint: (filter, shown, total) => `filter: ${filter}  (${shown}/${total})`,
+        showDescription: false,
+        width: "100%",
+        height: Math.max(1, bodyRows - 1),
+        onPick: (opt) => {
+          const currentRow = selectedRow();
+          if (opt === undefined || currentRow === undefined) return;
+          inFlight = writePick(currentRow.category, opt.assignment);
+        },
+      });
+      return options.onKeypress((key) => {
+        if (closed || options.inputBlocked?.() === true) return;
+        list.onKey(key);
+      });
     },
     onClose: () => {
       closed = true;
@@ -255,6 +329,8 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     visibleLines: () => windowLines(listLines(), bodyRows),
     selectedCategory: () => selectedRow()?.category,
     pickerOptions: () => flatOptions,
+    projectUntrusted: () => projectIsUntrusted,
+    settled: () => inFlight,
   };
 }
 

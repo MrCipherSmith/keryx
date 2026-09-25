@@ -43,7 +43,7 @@ import {
 import type { ChildModelRequest } from "../../child/model";
 import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
 import { loadRoutingConfig } from "../../routing/config";
-import { resolveCategory } from "../../routing/table";
+import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../../routing/table";
 
 export type SubagentMode = "read_only" | "general";
 
@@ -531,14 +531,40 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // the project root; the user layer ignores `cwd` entirely and reads the
         // operator's real global config (no `userConfigDir` override here, same
         // as every other production call site — see `RoutingConfigLocation`'s
-        // doc in `routing/config.ts`).
+        // doc in `routing/config.ts`). AC11's project-trust gate applies
+        // automatically here too — `loadRoutingConfig("project", …)` already
+        // returns an EMPTY table for an unapproved/changed
+        // `routing.config.json`, so an untrusted project entry never reaches
+        // this branch at all; no additional gate is needed for AC11(e).
         const routingLocation = { cwd: deps.cwd };
         const [projectRouting, userRouting] = await Promise.all([
           loadRoutingConfig("project", routingLocation),
           loadRoutingConfig("user", routingLocation),
         ]);
-        const assignment = resolveCategory("subagents", { project: projectRouting.table, user: userRouting.table });
-        categoryModelRequest = categoryAssignmentToChildModelRequest(assignment);
+        // Flow 305 review finding 3 — a malformed routing.config.json (or
+        // per-user entry) used to be silently swallowed here: the category
+        // just fell back to `default` with no trace. Surfaced as a
+        // non-fatal system-log diagnostic (never blocks the spawn) rather
+        // than an error.
+        for (const layer of [projectRouting, userRouting]) {
+          if (layer.error !== undefined) {
+            emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "system", text: `routing: ${layer.error}` } });
+          }
+        }
+        // AC10 — an assignment naming a provider/model the parent has not
+        // actually detected is unresolved at that layer; `catalog` (above) is
+        // the SAME detection result already computed for tier resolution, so
+        // this adds no new network call.
+        const connected = connectedPredicateFrom(catalog);
+        const resolved = resolveCategoryDetailed("subagents", { project: projectRouting.table, user: userRouting.table }, connected);
+        if (resolved.rejected !== undefined) {
+          emitFleetEvent({
+            kind: "log",
+            id: workerId,
+            entry: { kind: "system", text: `routing: ${describeFallbackNotice(resolved.rejected.assignment, resolved.assignment)}` },
+          });
+        }
+        categoryModelRequest = categoryAssignmentToChildModelRequest(resolved.assignment);
       }
       const dispatchModelRequest: ChildModelRequest | undefined =
         requestedTier !== undefined ? { kind: "tier", tier: requestedTier } : categoryModelRequest;

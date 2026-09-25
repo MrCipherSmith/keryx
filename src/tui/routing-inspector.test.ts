@@ -2,7 +2,7 @@
 // fixture multi-provider catalogue (never a live network probe).
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -11,8 +11,10 @@ import {
   routingCategoryRows,
 } from "./routing-inspector";
 import { loadOpenTui, mountChrome, keypressSource, settle } from "./ops-sidebar.test-helpers";
+import { applyThemeId, getThemeId } from "./theme";
 import type { KeypressEvent } from "./filter-list";
-import { loadRoutingConfig, saveRoutingConfig } from "../harness/routing/config";
+import { loadRoutingConfig, loadRoutingConfigRaw, saveRoutingConfig } from "../harness/routing/config";
+import { connectedPredicateFrom } from "../harness/routing/table";
 import type { FlatPickerProvider } from "../harness/routing/table";
 
 const OTUI = await loadOpenTui();
@@ -76,6 +78,30 @@ test("routingCategoryRows: project wins over user, which wins over default (AC3'
   expect(quick.assignment).toEqual({ kind: "provider-default", providerId: "deepseek" });
 });
 
+test("flow 305 AC10: routingCategoryRows falls through an unconnected assignment and reports it as `rejected`", () => {
+  const connected = connectedPredicateFrom([{ name: "deepseek", models: ["deepseek-chat"] }]);
+  const rows = routingCategoryRows(
+    { table: { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } } },
+    { table: {} },
+    connected,
+  );
+  const review = rows.find((r) => r.category === "review")!;
+  expect(review.source).toBe("default");
+  expect(review.assignment).toEqual({ kind: "session-default" });
+  expect(review.rejected).toEqual({
+    assignment: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
+    source: "project",
+  });
+});
+
+test("flow 305 AC10: formatRoutingListLines shows the exact fallback notice text", () => {
+  const connected = connectedPredicateFrom([]);
+  const rows = routingCategoryRows({ table: { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } } }, { table: {} }, connected);
+  const lines = formatRoutingListLines(rows, 0);
+  const reviewLine = lines.find((l) => l.includes("review"))!;
+  expect(reviewLine).toContain("anthropic/claude-x - not connected, falling back to session default");
+});
+
 test("formatRoutingListLines marks the selected row", () => {
   const rows = routingCategoryRows({ table: {} }, { table: {} });
   const lines = formatRoutingListLines(rows, 1);
@@ -134,6 +160,7 @@ otuiTest(
       await chrome.mockInput.pressKeys([..."claude-x"]);
       await settle(chrome);
       chrome.mockInput.pressEnter();
+      await handle!.settled();
       await settle(chrome);
 
       expect(handle!.activeTab()).toBe("list");
@@ -156,4 +183,204 @@ test("AC2/AC3 cross-check: a write through the shared loader is visible to a sub
   );
   const read = await loadRoutingConfig("user", { cwd, userConfigDir });
   expect(read.table.review).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-x" });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 305 AC11 — an unapproved project routing.config.json is ignored with
+// a notice; `t` then `y` in the modal approves it (showing entries first);
+// editing after approval voids it.
+// ---------------------------------------------------------------------------
+
+otuiTest("flow 305 AC11: an unapproved project file is ignored, with a visible notice; `t` shows its entries, `y` approves, and it then applies", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui);
+  const cwd = await tempDir("keryx-routing-trust-modal-");
+  const userConfigDir = await tempDir("keryx-routing-trust-user-");
+  await writeFile(
+    path.join(cwd, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } } }),
+    "utf8",
+  );
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => FIXTURE_PROVIDERS,
+    });
+    await handle!.ready;
+    await settle(chrome);
+
+    expect(handle!.projectUntrusted()).toBe(true);
+    const listLines = handle!.visibleLines();
+    expect(listLines.some((l) => l.includes("review") && l.includes("session default"))).toBe(true);
+
+    // Arm the approval — shows the file's entries BEFORE recording anything.
+    chrome.mockInput.pressKey("t");
+    await handle!.settled();
+    await settle(chrome);
+    expect(handle!.status()).toContain("anthropic/claude-x");
+    expect(handle!.status()).toContain("y confirms");
+
+    // Any other key cancels.
+    chrome.mockInput.pressKey("q");
+    await settle(chrome);
+    expect(handle!.status()).toContain("cancelled");
+    expect(handle!.projectUntrusted()).toBe(true);
+
+    // Arm again, this time confirm.
+    chrome.mockInput.pressKey("t");
+    await handle!.settled();
+    await settle(chrome);
+    chrome.mockInput.pressKey("y");
+    await handle!.settled();
+    await settle(chrome);
+
+    expect(handle!.projectUntrusted()).toBe(false);
+    const appliedLines = handle!.visibleLines();
+    expect(appliedLines.some((l) => l.includes("review") && l.includes("anthropic/claude-x") && l.includes("[project]"))).toBe(true);
+
+    const raw = await loadRoutingConfigRaw("project", { cwd, userConfigDir });
+    expect(raw.table.review).toEqual({ kind: "model", providerId: "anthropic", modelId: "claude-x" });
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("flow 305 AC11: editing the project file after approval voids it — the modal shows it unapproved again on reload", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui);
+  const cwd = await tempDir("keryx-routing-trust-modal-");
+  const userConfigDir = await tempDir("keryx-routing-trust-user-");
+  await writeFile(
+    path.join(cwd, "routing.config.json"),
+    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } } }),
+    "utf8",
+  );
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => FIXTURE_PROVIDERS,
+    });
+    await handle!.ready;
+    await settle(chrome);
+    chrome.mockInput.pressKey("t");
+    await handle!.settled();
+    await settle(chrome);
+    chrome.mockInput.pressKey("y");
+    await handle!.settled();
+    await settle(chrome);
+    expect(handle!.projectUntrusted()).toBe(false);
+
+    await writeFile(
+      path.join(cwd, "routing.config.json"),
+      JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-y" } } }),
+      "utf8",
+    );
+    await handle!.reload();
+    await settle(chrome);
+
+    expect(handle!.projectUntrusted()).toBe(true);
+    const listLines = handle!.visibleLines();
+    expect(listLines.some((l) => l.includes("review") && l.includes("session default"))).toBe(true);
+  } finally {
+    chrome.destroy();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Flow 305 item 6 — the picker's destroyed-renderable fix, regression-pinned;
+// and a scale check over ~300 models.
+// ---------------------------------------------------------------------------
+
+otuiTest("flow 305 item 6: a theme change while the PICKER tab is active does not crash, and the list tab repaints correctly afterwards", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui);
+  const cwd = await tempDir("keryx-routing-theme-");
+  const userConfigDir = await tempDir("keryx-routing-theme-user-");
+  const before = getThemeId();
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => FIXTURE_PROVIDERS,
+    });
+    await handle!.ready;
+    await settle(chrome);
+    chrome.mockInput.pressEnter(); // "default" category -> picker tab
+    await settle(chrome);
+    expect(handle!.activeTab()).toBe("picker");
+
+    // This is exactly the sequence that used to throw "TextBuffer is
+    // destroyed": `onThemeChange` fires `paintList`, which — before the
+    // `currentTab` guard — wrote into the LIST tab's `bodyNode`, already
+    // torn down by modal-host's `unmountActiveTab` when the picker tab
+    // mounted.
+    expect(() => applyThemeId(before === "groknight" ? "grokday" : "groknight")).not.toThrow();
+    await settle(chrome);
+
+    // The modal is still fully functional afterwards: back to the list tab
+    // (Esc CLOSES this modal outright — `left` is modal-host's own
+    // previous-tab key), it repaints with real content, not a stale/blank body.
+    chrome.mockInput.pressArrow("left");
+    await settle(chrome);
+    expect(handle!.activeTab()).toBe("list");
+    const lines = handle!.visibleLines();
+    expect(lines.some((l) => l.includes("review"))).toBe(true);
+  } finally {
+    applyThemeId(before);
+    chrome.destroy();
+  }
+});
+
+otuiTest("flow 305 item 6: the flat picker over ~300 models filters correctly and stays fast (no obviously quadratic blow-up)", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui);
+  const cwd = await tempDir("keryx-routing-scale-");
+  const userConfigDir = await tempDir("keryx-routing-scale-user-");
+  const BIG: readonly FlatPickerProvider[] = Array.from({ length: 10 }, (_, p) => ({
+    name: `provider-${p}`,
+    models: Array.from({ length: 30 }, (_, m) => `model-${p}-${m}`),
+  })); // 10 * 30 = 300 models, plus 10 provider-default rows and 1 session-default row.
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => BIG,
+    });
+    await handle!.ready;
+    await settle(chrome);
+    chrome.mockInput.pressEnter();
+    await settle(chrome);
+    expect(handle!.activeTab()).toBe("picker");
+    expect(handle!.pickerOptions().length).toBe(1 + 10 + 300);
+
+    const start = performance.now();
+    // A filter that narrows to exactly the models of one provider (30 rows).
+    await chrome.mockInput.pressKeys([..."provider-7/model-7-2"]);
+    await settle(chrome);
+    const elapsedMs = performance.now() - start;
+
+    // Not a tight perf assertion (headless test timing varies) — a generous
+    // ceiling that a linear `.filter()` over 300 plain-string comparisons
+    // clears trivially, and a quadratic-per-keystroke re-render would not.
+    expect(elapsedMs).toBeLessThan(2000);
+
+    chrome.mockInput.pressEnter();
+    await handle!.settled();
+    await settle(chrome);
+    expect(handle!.activeTab()).toBe("list");
+    const written = await loadRoutingConfig("user", { cwd, userConfigDir });
+    expect(written.table.default).toEqual({ kind: "model", providerId: "provider-7", modelId: "model-7-2" });
+  } finally {
+    chrome.destroy();
+  }
 });

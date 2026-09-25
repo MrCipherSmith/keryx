@@ -237,6 +237,7 @@ export const USAGE_BODY = `Usage:
   keryx routing set <category> <provider>/<model> [--user|--project]
   keryx routing set <category> <provider> [--user|--project]
   keryx routing unset <category> [--user|--project]
+  keryx routing trust
   keryx auth list [--json]
   keryx auth login <provider>
   keryx auth logout <provider>
