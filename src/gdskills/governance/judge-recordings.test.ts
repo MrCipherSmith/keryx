@@ -3,9 +3,10 @@
 // committed one) so nothing here writes to the repo tree.
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ContainedWriteError } from "../../lib/contained-write";
 import type { JudgeableScenario, JudgeRequest } from "./judge";
 import { gradeScenarioAnswer, judgeRequestDigest } from "./judge";
 import {
@@ -121,7 +122,7 @@ describe("readJudgeRecording", () => {
 });
 
 describe("writeJudgeRecording / readJudgeRecording round-trip", () => {
-  test("writes stable, indented, newline-terminated JSON that reads back identically", () => {
+  test("writes stable, indented, newline-terminated JSON that reads back identically", async () => {
     const dir = tempDir();
     try {
       const file: JudgeRecordingFile = {
@@ -147,7 +148,7 @@ describe("writeJudgeRecording / readJudgeRecording round-trip", () => {
           },
         ],
       };
-      writeJudgeRecording("go/go-build-fix", file, dir);
+      await writeJudgeRecording("go/go-build-fix", file, dir);
 
       const filePath = judgeRecordingPath("go/go-build-fix", dir);
       const raw = readFileSync(filePath, "utf8");
@@ -161,10 +162,10 @@ describe("writeJudgeRecording / readJudgeRecording round-trip", () => {
     }
   });
 
-  test("creates the recordings directory if it does not exist yet", () => {
+  test("creates the recordings directory if it does not exist yet", async () => {
     const dir = path.join(tempDir(), "nested", "deeper");
     try {
-      writeJudgeRecording("go/go-build-fix", {
+      await writeJudgeRecording("go/go-build-fix", {
         judgePromptVersion: "v1",
         judge: "deepseek",
         judgeModel: "deepseek-chat",
@@ -174,6 +175,36 @@ describe("writeJudgeRecording / readJudgeRecording round-trip", () => {
       expect(readJudgeRecording("go/go-build-fix", dir)).not.toBeUndefined();
     } finally {
       rmSync(path.dirname(dir), { recursive: true, force: true });
+    }
+  });
+});
+
+describe("writeJudgeRecording refuses a symlinked recordings directory (flow 319 follow-up to R700-04)", () => {
+  test("a recordingsDir that is itself a symlink pointing outside its parent is refused, and nothing is written outside", async () => {
+    const parent = tempDir();
+    const outside = tempDir();
+    try {
+      const recordingsDir = path.join(parent, "judge-recordings");
+      symlinkSync(outside, recordingsDir);
+
+      await expect(
+        writeJudgeRecording(
+          "go/go-build-fix",
+          {
+            judgePromptVersion: "v1",
+            judge: "deepseek",
+            judgeModel: "deepseek-chat",
+            recordedAt: "2026-09-24T00:00:00.000Z",
+            entries: [],
+          },
+          recordingsDir,
+        ),
+      ).rejects.toThrow(ContainedWriteError);
+
+      expect(existsSync(path.join(outside, "go__go-build-fix.json"))).toBe(false);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
     }
   });
 });

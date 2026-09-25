@@ -342,7 +342,7 @@ async function scoutCommand(args: readonly string[]): Promise<void> {
 
   if (record !== undefined) {
     const packDir = path.resolve(root, record);
-    recordScout(packDir, {
+    await recordScout(packDir, {
       query,
       decision: result.decision,
       topMatch: result.matches[0]?.skillId ?? null,
@@ -910,7 +910,7 @@ async function judgeCheckCommand(args: readonly string[], deps: SkillsGovernance
   }
 
   if (record) {
-    writeJudgeRecording(skillId, {
+    await writeJudgeRecording(skillId, {
       judgePromptVersion: JUDGE_PROMPT_VERSION,
       judge: provider,
       judgeModel,
@@ -967,7 +967,7 @@ async function stocktakeCommand(args: readonly string[]): Promise<void> {
   const json = args.includes("--json");
   const root = process.cwd();
 
-  const report = runStocktake(root, { scope, quick });
+  const report = await runStocktake(root, { scope, quick });
 
   if (json) {
     console.log(JSON.stringify(report, null, 2));

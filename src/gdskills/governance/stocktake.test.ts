@@ -1,24 +1,25 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ContainedWriteError } from "../../lib/contained-write";
 import { assertReasonsSpecific, runStocktake, stripSkillIdentity, type StocktakeReport } from "./stocktake";
 
 const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
 
-function withTempRoot<T>(fn: (root: string) => T): T {
+async function withTempRoot<T>(fn: (root: string) => Promise<T> | T): Promise<T> {
   const root = mkdtempSync(path.join(tmpdir(), "stocktake-"));
   try {
-    return fn(root);
+    return await fn(root);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
 
 describe("runStocktake", () => {
-  test("every entry carries a non-empty, skill-specific reason (never reused verbatim)", () => {
-    withTempRoot((root) => {
-      const report = runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
+  test("every entry carries a non-empty, skill-specific reason (never reused verbatim)", async () => {
+    await withTempRoot(async (root) => {
+      const report = await runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
       expect(report.entries.length).toBeGreaterThan(50);
       for (const entry of report.entries) {
         expect(entry.reason.length).toBeGreaterThan(0);
@@ -27,9 +28,9 @@ describe("runStocktake", () => {
     });
   }, 20_000);
 
-  test("writes the dated report and the cache under .metaproject/data/skills/stocktake", () => {
-    withTempRoot((root) => {
-      const report = runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-03-15T12:00:00.000Z") });
+  test("writes the dated report and the cache under .metaproject/data/skills/stocktake", async () => {
+    await withTempRoot(async (root) => {
+      const report = await runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-03-15T12:00:00.000Z") });
       const reportPath = path.join(root, ".metaproject", "data", "skills", "stocktake", "2026-03-15.json");
       const cachePath = path.join(root, ".metaproject", "data", "skills", "stocktake", "cache.json");
       const onDisk = JSON.parse(readFileSync(reportPath, "utf8")) as StocktakeReport;
@@ -38,10 +39,10 @@ describe("runStocktake", () => {
     });
   }, 20_000);
 
-  test("a second run reuses the cache (hits > 0, misses 0)", () => {
-    withTempRoot((root) => {
-      runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
-      const second = runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-02T00:00:00.000Z") });
+  test("a second run reuses the cache (hits > 0, misses 0)", async () => {
+    await withTempRoot(async (root) => {
+      await runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
+      const second = await runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-02T00:00:00.000Z") });
       expect(second.cache.hits).toBeGreaterThan(0);
       expect(second.cache.misses).toBe(0);
     });
@@ -53,9 +54,9 @@ describe("runStocktake", () => {
   // (the merge/overlap check scores against the whole catalog) or a
   // verification report (the `update` verdict). Both must invalidate the
   // cache even though the skill's own SKILL.md content never moved.
-  test("adding a new catalog entry invalidates every other entry's cache row (neighbour-dependent verdicts)", () => {
-    withTempRoot((root) => {
-      const first = runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
+  test("adding a new catalog entry invalidates every other entry's cache row (neighbour-dependent verdicts)", async () => {
+    await withTempRoot(async (root) => {
+      const first = await runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
       expect(first.cache.misses).toBeGreaterThan(0);
 
       const newSkillDir = path.join(root, ".metaproject", "project-skills", "project", "brand-new-project-skill");
@@ -66,7 +67,7 @@ describe("runStocktake", () => {
         "utf8",
       );
 
-      const second = runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-02T00:00:00.000Z") });
+      const second = await runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-02T00:00:00.000Z") });
       // Every previously-cached row's catalogFingerprint changed (a new
       // entry now exists in the corpus every scout/overlap check scores
       // against), so none of them can be served from the stale cache.
@@ -74,9 +75,9 @@ describe("runStocktake", () => {
     });
   }, 30_000);
 
-  test("a new/changed verification report invalidates that skill's cache row even though its SKILL.md is unchanged", () => {
-    withTempRoot((root) => {
-      const first = runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
+  test("a new/changed verification report invalidates that skill's cache row even though its SKILL.md is unchanged", async () => {
+    await withTempRoot(async (root) => {
+      const first = await runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
       const target = first.entries[0];
       if (target === undefined) throw new Error("expected at least one bundled skill");
       const [category, name] = target.skillId.split("/");
@@ -85,11 +86,36 @@ describe("runStocktake", () => {
       mkdirSync(reportsDir, { recursive: true });
       writeFileSync(path.join(reportsDir, `${category}-${name}-verification.json`), JSON.stringify({ status: "stale" }), "utf8");
 
-      const second = runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-02T00:00:00.000Z") });
+      const second = await runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-02T00:00:00.000Z") });
       const updated = second.entries.find((entry) => entry.skillId === target.skillId);
       // Without the cache-key fix this would still report the run-1 verdict
       // forever (same SKILL.md sha256), never picking up the new report.
       expect(updated?.verdict).toBe("update");
+    });
+  }, 20_000);
+
+  // Flow 319 follow-up to R700-04: runStocktake's cache/report writes now go
+  // through writeContained (root/rel split against the project `root`
+  // passed in), so a `.metaproject/data/skills/stocktake` leaf directory
+  // swapped for a symlink pointing outside the project is refused, exactly
+  // like any other contained-write call site — never silently written
+  // through to wherever the symlink points.
+  test("refuses to write when .metaproject/data/skills/stocktake is a symlink pointing outside the project, and writes nothing outside", async () => {
+    await withTempRoot(async (root) => {
+      const outside = mkdtempSync(path.join(tmpdir(), "stocktake-outside-"));
+      try {
+        mkdirSync(path.join(root, ".metaproject", "data", "skills"), { recursive: true });
+        symlinkSync(outside, path.join(root, ".metaproject", "data", "skills", "stocktake"));
+
+        await expect(
+          runStocktake(root, { scope: "bundled", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") }),
+        ).rejects.toThrow(ContainedWriteError);
+
+        expect(existsSync(path.join(outside, "cache.json"))).toBe(false);
+        expect(existsSync(path.join(outside, "2026-01-01.json"))).toBe(false);
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
     });
   }, 20_000);
 });
@@ -183,8 +209,8 @@ describe("assertReasonsSpecific", () => {
 });
 
 describe("R2-3 (flow 309 review round 2): runtime duplicate reasons are tagged, never thrown", () => {
-  test("three near-duplicate project skills do not crash runStocktake — they are tagged, and the run completes (exit-equivalent: no throw)", () => {
-    withTempRoot((root) => {
+  test("three near-duplicate project skills do not crash runStocktake — they are tagged, and the run completes (exit-equivalent: no throw)", async () => {
+    await withTempRoot(async (root) => {
       const base = "Use when you need to review code style. Trigger words: code, review, style, when, you, need.";
       for (const name of ["alpha", "beta", "gamma"]) {
         const skillDir = path.join(root, ".metaproject", "project-skills", "project", name);
@@ -193,9 +219,13 @@ describe("R2-3 (flow 309 review round 2): runtime duplicate reasons are tagged, 
       }
 
       let report: StocktakeReport | undefined;
-      expect(() => {
-        report = runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
-      }).not.toThrow();
+      let thrown: unknown;
+      try {
+        report = await runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeUndefined();
       expect(report).toBeDefined();
       if (report === undefined) return;
 
@@ -219,8 +249,8 @@ describe("R2-3 (flow 309 review round 2): runtime duplicate reasons are tagged, 
   // even the other 71+ perfectly readable ones. It must instead be
   // recorded in a top-level `unreadable` list and the run must still
   // complete.
-  test.skipIf(isRoot)("--scope all: an unreadable project SKILL.md (EACCES) is recorded in `unreadable`, not thrown (R3-4)", () => {
-    withTempRoot((root) => {
+  test.skipIf(isRoot)("--scope all: an unreadable project SKILL.md (EACCES) is recorded in `unreadable`, not thrown (R3-4)", async () => {
+    await withTempRoot(async (root) => {
       const okDir = path.join(root, ".metaproject", "project-skills", "ok-skill");
       mkdirSync(okDir, { recursive: true });
       writeFileSync(path.join(okDir, "SKILL.md"), `---\nname: ok-skill\ndescription: Use when things are fine.\n---\n\nBody.\n`, "utf8");
@@ -233,9 +263,13 @@ describe("R2-3 (flow 309 review round 2): runtime duplicate reasons are tagged, 
 
       try {
         let report: StocktakeReport | undefined;
-        expect(() => {
-          report = runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
-        }).not.toThrow();
+        let thrown: unknown;
+        try {
+          report = await runStocktake(root, { scope: "all", quick: true, now: () => new Date("2026-01-01T00:00:00.000Z") });
+        } catch (error) {
+          thrown = error;
+        }
+        expect(thrown).toBeUndefined();
         expect(report).toBeDefined();
         if (report === undefined) return;
         expect(report.unreadable.some((u) => u.path === badSkillMd)).toBe(true);

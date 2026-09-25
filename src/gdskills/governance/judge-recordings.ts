@@ -8,8 +8,9 @@
 // `judgeRequestDigest` so a stale recording (an edited rubric, a bumped
 // `JUDGE_PROMPT_VERSION`) is detectably wrong rather than silently reused.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { writeContained } from "../../lib/contained-write";
 import { judgeRequestDigest, type AntiGamingKind, type Judge, type JudgeRequest, type JudgeVerdict } from "./judge";
 
 /**
@@ -164,10 +165,27 @@ export function readJudgeRecording(skillId: string, recordingsDir: string = defa
  * trailing newline — a diff-friendly, deterministic byte-for-byte output for
  * a value built from the same input, and the same shape a hand read of the
  * committed file expects.
+ *
+ * R700-04 follow-up (flow 319): routed through `writeContained` instead of a
+ * raw `mkdirSync`/`writeFileSync` pair. `recordingsDir` is treated as the
+ * potentially-swappable final path segment: the containment boundary
+ * (`root`) is its PARENT directory, and `rel` is `<basename(recordingsDir)>/
+ * <pack>__<skill>.json` — so a symlink placed at `recordingsDir` itself
+ * (pointing outside its parent) is caught the same way an escaping symlink
+ * anywhere else on a contained write's path is, rather than being trusted as
+ * an opaque boundary. For the real, default `JUDGE_RECORDINGS_DIR`, `root`
+ * resolves to `import.meta.dir` (this module's own directory, always inside
+ * the project tree); a test's `KERYX_JUDGE_RECORDINGS_DIR` override gets the
+ * same treatment relative to ITS own parent.
  */
-export function writeJudgeRecording(skillId: string, file: JudgeRecordingFile, recordingsDir: string = defaultRecordingsDir()): void {
+export async function writeJudgeRecording(
+  skillId: string,
+  file: JudgeRecordingFile,
+  recordingsDir: string = defaultRecordingsDir(),
+): Promise<void> {
   const filePath = judgeRecordingPath(skillId, recordingsDir);
-  mkdirSync(path.dirname(filePath), { recursive: true });
+  const root = path.dirname(recordingsDir);
+  const rel = path.relative(root, filePath);
   const stable: JudgeRecordingFile = {
     judgePromptVersion: file.judgePromptVersion,
     judge: file.judge,
@@ -184,7 +202,7 @@ export function writeJudgeRecording(skillId: string, file: JudgeRecordingFile, r
       })),
     })),
   };
-  writeFileSync(filePath, `${JSON.stringify(stable, null, 2)}\n`, "utf8");
+  await writeContained(root, rel, `${JSON.stringify(stable, null, 2)}\n`);
 }
 
 /**

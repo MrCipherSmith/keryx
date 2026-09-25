@@ -131,21 +131,6 @@ const ALLOWLIST: ReadonlyArray<{ readonly file: string; readonly reason: string 
     reason: "R2-F3 fix: the raw `unlink` (removeStaleRuntimeBuilds, removeUnmodifiedRetiredRules) and raw `cp` (copyDirectoryContained) install.ts's whole-file entry used to cover for ANY raw write in that file now live in this small, dedicated module ALONE — install.ts itself carries no allowlist entry and is fully ratcheted, matching the R1-F3 fix already applied to init.ts/update.ts. Every export here keeps its own, more discriminating containment right next to the raw call: unlink only ever fires after an `lstat`+`realpath` walk that refuses a symlinked skills root, category, or skill directory (see removeStaleRuntimeBuilds's doc comment) or an `lstat`-confirmed-regular-file retired rule; copyDirectoryContained's callers `mkdirContained` (R1-F1 fix) the target immediately before calling it, confirming it resolves inside metaprojectRoot with no escaping symlink on the way (flow 315 T16 allowlist).",
   },
   {
-    file: "src/gdskills/governance/judge-recordings.ts",
-    reason:
-      "R700-04 allowlist: writes a recording keyed by a schema-validated `pack/skill` id under this module's OWN packaged `judge-recordings/` directory (or a test-only KERYX_JUDGE_RECORDINGS_DIR override), never into a user project tree, through a synchronous `writeJudgeRecording` whose only non-test caller (src/commands/skills-governance.ts, a different lane's file) calls it synchronously — converting to the async containment primitive would require changing that caller too.",
-  },
-  {
-    file: "src/gdskills/governance/scout.ts",
-    reason:
-      "R700-04 allowlist: recordScout is a synchronous append into a stack pack's own governance/scout.json, called synchronously from src/commands/skills-governance.ts (a different lane's file) — same sync-API constraint as judge-recordings.ts, so converting to the async containment primitive would require changing that unowned caller too.",
-  },
-  {
-    file: "src/gdskills/governance/stocktake.ts",
-    reason:
-      "R700-04 allowlist: runStocktake's cache/report writes are synchronous and its only non-test caller (src/commands/skills-governance.ts, a different lane's file, which the orchestrator asked this lane not to touch the output paths/gitignore of) reads its return value synchronously — converting to the async containment primitive would require changing that unowned caller too.",
-  },
-  {
     file: "src/lib/managed-git-hook.ts",
     reason: "installManagedHook/removeManagedHook write into .git/hooks by design (a managed git hook) — contained-write.ts categorically refuses any .git path segment, so this module keeps raw mkdir/writeFile/chmod. R1-F3/R1-F6 fix: this is now the ONE shared copy (deduplicated out of init.ts and update.ts, which no longer contain raw hook writes and carry no allowlist entry of their own), and unlike the old per-command comment this module actually verifies containment itself before writing — it lstat/realpath-checks that both the hooks directory and the target hook file resolve inside the git common dir resolveGitHooksRoot derived from, refusing (not silently writing through) a hooks dir or hook file symlinked elsewhere (flow 315 T12 allowlist).",
   },
@@ -325,10 +310,13 @@ describe("contained-write ratchet", () => {
     for (const entry of ALLOWLIST) {
       expect(entry.reason.length).toBeGreaterThan(10);
     }
-    // R700-04: raised from 8 to 11 for three sync-API exemptions
-    // (judge-recordings.ts, scout.ts, stocktake.ts) — each justified above,
-    // never bumped just to make a violation go away.
-    expect(ALLOWLIST.length).toBeLessThanOrEqual(11);
+    // Flow 319 follow-up to R700-04: judge-recordings.ts, scout.ts and
+    // stocktake.ts were converted to the async containment primitive
+    // (writeJudgeRecording/recordScout/runStocktake are now async, and their
+    // one caller, src/commands/skills-governance.ts, awaits them) rather
+    // than staying on the allowlist — the cap is back to its pre-R700-04
+    // value of 8.
+    expect(ALLOWLIST.length).toBeLessThanOrEqual(8);
   });
 });
 
@@ -401,21 +389,15 @@ describe("contained-write ratchet: R2-F3 (install.ts is no longer whole-file all
     expect(isAllowed("src/gdskills/install.ts")).toBe(false);
   });
 
-  test("src/gdskills allowlist entries are exactly guarded-fs-ops.ts plus the R700-04 sync-API exemptions", () => {
+  test("src/gdskills allowlist entries are exactly guarded-fs-ops.ts (flow 319 follow-up to R700-04)", () => {
     // R700-04 widened `src/gdskills/manifest` and `src/gdskills/governance`
-    // into COVERED_DIRS — every file in those subtrees is now scanned, and
-    // judge-recordings.ts/scout.ts/stocktake.ts are exempted (sync API, an
-    // unowned caller) rather than converted. Anything else under
-    // `src/gdskills/` reintroducing a raw write is still caught.
+    // into COVERED_DIRS — every file in those subtrees is scanned. Flow 319
+    // converted judge-recordings.ts/scout.ts/stocktake.ts to the async
+    // containment primitive instead of exempting them, so only
+    // guarded-fs-ops.ts remains here. Anything else under `src/gdskills/`
+    // reintroducing a raw write is still caught.
     const gdskillsEntries = ALLOWLIST.filter((entry) => entry.file.startsWith("src/gdskills/"));
-    expect(gdskillsEntries.map((entry) => entry.file).sort()).toEqual(
-      [
-        "src/gdskills/guarded-fs-ops.ts",
-        "src/gdskills/governance/judge-recordings.ts",
-        "src/gdskills/governance/scout.ts",
-        "src/gdskills/governance/stocktake.ts",
-      ].sort(),
-    );
+    expect(gdskillsEntries.map((entry) => entry.file).sort()).toEqual(["src/gdskills/guarded-fs-ops.ts"].sort());
   });
 
   test("a raw writeFile reintroduced into install.ts's text would be caught", () => {

@@ -48,10 +48,11 @@
 // calibrated against a [0, 1] coverage-shaped score and the failure was in
 // how the score was COMPUTED, not where the bar was set.
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { lstat, mkdtemp, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { removeContained, writeContained } from "../../lib/contained-write";
 import { normalizeRouteText, routeTokens } from "../../lib/route-tokens";
 import type { CatalogEntry } from "./catalog-index";
 
@@ -458,14 +459,18 @@ export function readScoutRecord(packDir: string): ScoutRecordEntry[] {
   return Array.isArray(parsed) ? parsed : [];
 }
 
-/** Append one scout run to `<packDir>/governance/scout.json`, sorted for a stable diff. */
-export function recordScout(packDir: string, entry: ScoutRecordEntry): void {
-  const file = scoutLogPath(packDir);
-  mkdirSync(path.dirname(file), { recursive: true });
+/**
+ * Append one scout run to `<packDir>/governance/scout.json`, sorted for a
+ * stable diff. R700-04 follow-up (flow 319): routed through `writeContained`
+ * — `packDir` is the containment boundary (`root`), `"governance/scout.json"`
+ * the relative path within it, so a `governance` directory swapped for a
+ * symlink pointing outside `packDir` is refused rather than written through.
+ */
+export async function recordScout(packDir: string, entry: ScoutRecordEntry): Promise<void> {
   const next = [...readScoutRecord(packDir), entry].sort(
     (a, b) => a.recordedAt.localeCompare(b.recordedAt) || a.query.localeCompare(b.query) || a.skillName.localeCompare(b.skillName),
   );
-  writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeContained(packDir, path.join("governance", "scout.json"), `${JSON.stringify(next, null, 2)}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -806,9 +811,13 @@ export async function auditSkillSnapshot(files: ReadonlyMap<string, Buffer>): Pr
     stagingRoot = await mkdtemp(path.join(tmpdir(), "keryx-skill-vet-"));
     const entries: { path: string; kind: "skill" }[] = [];
     for (const [rel, bytes] of files) {
-      const abs = path.join(stagingRoot, rel);
-      await mkdir(path.dirname(abs), { recursive: true });
-      await writeFile(abs, bytes);
+      // R700-04 follow-up (flow 319): routed through `writeContained` — the
+      // freshly mkdtemp'd `stagingRoot` is `root`, `rel` (as
+      // `collectSkillDirectorySnapshot` produced it) is the relative path
+      // within it; `writeContained` creates parent directories itself, so
+      // the old separate `mkdir(dirname(abs), { recursive: true })` call is
+      // no longer needed.
+      await writeContained(stagingRoot, rel, bytes);
       entries.push({ path: rel, kind: "skill" });
     }
 
@@ -837,7 +846,11 @@ export async function auditSkillSnapshot(files: ReadonlyMap<string, Buffer>): Pr
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   } finally {
     if (stagingRoot !== undefined) {
-      await rm(stagingRoot, { recursive: true, force: true });
+      // R700-04 follow-up (flow 319): `removeContained` in place of a raw
+      // `rm` — `stagingRoot`'s own parent (the OS temp directory) is `root`,
+      // `stagingRoot`'s basename is `rel`, so the same containment check
+      // applies to the cleanup as to the writes above.
+      await removeContained(path.dirname(stagingRoot), path.basename(stagingRoot));
     }
   }
 }
