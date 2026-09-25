@@ -213,7 +213,9 @@ describe("systemd --user", () => {
 
   const analyze = Bun.which("systemd-analyze");
   test.skipIf(!analyze)("the installed units pass systemd-analyze verify, with a project path containing a space", async () => {
-    const host = fakeHost("systemd");
+    // systemd-analyze checks that ExecStart's binary exists, so this test uses
+    // the real Bun running it (a Bun interpreter, so the safe flags are present).
+    const host = { ...fakeHost("systemd"), invocation: { execPath: process.execPath, scriptPath: "/bin/true" } };
     expect(root).toContain(" ");
     await mkdir(path.join(root, ".metaproject", "data", "trigger"), { recursive: true });
     await installSchedule(root, "check-github", CRON, host);
