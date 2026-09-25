@@ -1,0 +1,6 @@
+{
+  "number": 999,
+  "title": "Invented fixture PR title",
+  "body": "## Summary\nDoes an invented thing.\n\n## Testing\nAdded a unit test.\n",
+  "diff": "diff --git a/src/invented/example.ts b/src/invented/example.ts\nindex 1111111..2222222 100644\n--- a/src/invented/example.ts\n+++ b/src/invented/example.ts\n@@ -1,2 +1,3 @@\n context line\n+an invented, genuinely hand-written line\n context line\n"
+}

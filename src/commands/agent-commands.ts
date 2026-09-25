@@ -206,6 +206,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 308 (AC12): reference-document conformance mode — pick a doc and a
+    // target, then walk its clauses. TUI-only, same reasoning as `/ci`.
+    name: "/conform",
+    description: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
     // P2 flipped this, as the entry it replaces said it would: `/mcp` was
     // "Deprecated alias of /integrations", kept pointing at the installer
     // only because the consumer view did not exist and a slash command

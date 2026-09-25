@@ -67,8 +67,17 @@ export type JevQuestionType = "noul" | "choice";
 export interface JevQuestion {
   readonly type: JevQuestionType;
   readonly instructions: string;
-  /** Only meaningful for a `choice` question. */
-  readonly criteria?: readonly string[];
+  /**
+   * Only meaningful for a `choice` question. An OBJECT (option id -> label),
+   * not an array — flow 308's live check against the real
+   * `POST /api/v1/systemone` endpoint got back `HTTP 400 "expected: record,
+   * received: array"` for a `criteria` array, confirming what this module's
+   * own header already quoted from the vendor's SDK guide (`criteria: {...}`)
+   * and had not yet been made to match: no caller had sent a real `choice`
+   * question until flow 308's clause-tagging pass did. Minimal, additive fix
+   * — flow 306's own `noul`-only CI triage never sets this field.
+   */
+  readonly criteria?: Readonly<Record<string, string>>;
 }
 
 export type JevQuestions = Readonly<Record<string, JevQuestion>>;
@@ -199,7 +208,12 @@ export function resolveJevApiKey(
 /** A stable, order-independent text of `questions`, for the token estimate only. */
 function questionsEstimateText(questions: JevQuestions): string {
   return Object.entries(questions)
-    .map(([key, q]) => `${key}:${q.type}:${q.instructions}:${(q.criteria ?? []).join(",")}`)
+    .map(
+      ([key, q]) =>
+        `${key}:${q.type}:${q.instructions}:${Object.entries(q.criteria ?? {})
+          .map(([k, v]) => `${k}=${v}`)
+          .join(",")}`,
+    )
     .join("\n");
 }
 

@@ -3178,6 +3178,9 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
 keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                     [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                     [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
@@ -3222,6 +3225,7 @@ left off and the gate reports it as unobserved.
 | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
+| `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
 | `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
@@ -3739,6 +3743,57 @@ keryx review ci-triage --run 36095133327 --job typecheck-and-tests --json
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
 | `--fixtures <dir>` | Answers BOTH the CI read and the Jev call from files on disk (`ci-run-info.json`, `ci-failed-log.txt`, optional `ci-history.json`, `jev-response.json`) — no real `gh` call, no real network call. |
 | `--json` | Prints `{runId, job, testName, verdict, usage}` instead of the human-readable advisory text. |
+
+### `review conform`
+
+Reference-document conformance mode (flow 308): a rules file, a skill, or a
+project skill is split deterministically into clauses (no model call), each
+tagged `state_kind: pr|report|hunk` and `checkable`. Every checkable clause is
+scored by Jev against DETERMINISTIC FACTS keryx computes first — PR body
+sections present/non-empty and hand-written size (via `src/review/scope.ts`)
+for `pr`; a report's section order and whether every finding carries a
+severity/evidence/location class for `report`; the hunk itself for `hunk` —
+placed above the redacted state. A `not-checkable` clause (a live/manual step,
+or a reviewer-process obligation no artefact records) is always listed, never
+sent to Jev.
+
+```bash
+keryx review conform --ref docs/review-doctrine.md --pr 999 --json
+```
+
+| Flag | Description |
+|---|---|
+| `--ref <doc>` | Required. Path to the reference document (a rules file, a skill, or a project skill). |
+| `--pr <n>` | Score `pr`-kind clauses against that pull request's title/body, and `hunk`-kind clauses against its diff. Exactly one of `--pr`/`--report`/`--diff` is required. |
+| `--report <dir>` | Score `report`-kind clauses against an existing review package's own `report.md`/`findings.json` — no new artifact format. |
+| `--diff <ref>` | Score `hunk`-kind clauses against `git diff <ref>`. |
+| `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`; omitted, `gh` resolves the repository from the current checkout. |
+| `--explain` | Sends every clause scored below `--threshold` to the model the routing table assigns the `review` category (the session model when unset), citing the clause id and the evidence. Labelled ADVISORY; never written to the PR or to `findings.json`. |
+| `--threshold <0..1>` | Below this Jev probability a clause is `likely-violated` (and, with `--explain`, explained). Default `0.5`. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), every Jev call (`jev-response.json`), and (with `--explain`) the explanation pass (`explain-response.json`) — no real `gh` call, no real network. |
+| `--json` | Prints `{ref, target, threshold, clauses, usage}` instead of the human-readable report. |
+
+**Opt-in, and named as a privacy decision.** Disabled by default. A project
+enables it with `review.jev.conform: true` in
+`.metaproject/tasks.config.json` — PR text, report content and code hunks
+leave the machine to OpenRouter/TypeSafe. With the setting off, or with no
+OpenRouter credential, the command refuses before any read and makes no
+network call; every redacted state passes through `redactSensitiveText`
+first.
+
+**A checkable clause whose kind has no target this run is `not evaluated`**,
+never silently dropped — the same discipline `not-checkable` clauses get.
+
+**Honest limits.** This mode is the least mechanical use of Jev in this
+repository: deciding whether a PR body names an out-of-scope list is closer
+to judgement than a styling checklist bullet. Measured against real pull
+requests and a real review package: Jev's `noul` scores hedge low rather than
+confidently discriminating (no score reached 0.8+ probability across a
+115-question live check, and only a handful crossed the 0.5 default
+threshold on ordinary small maintenance PRs) — read `likely-violated` as
+"worth a human glance," not a confirmed finding. See flow 308's own journal
+(`.metaproject/flows/308-*/journal.md`) for the full measurement.
 
 **Opt-in, and named as a privacy decision.** Disabled by default. A project
 enables it with `review.jev.ci_triage: true` in

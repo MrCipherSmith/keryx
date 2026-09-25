@@ -1,0 +1,9 @@
+{
+  "answers": {
+    "scope-1": { "type": "noul", "noul": 0.91 },
+    "scope-2": { "type": "noul", "noul": 0.22 },
+    "hunks-1": { "type": "noul", "noul": 0.68 },
+    "reports-1": { "type": "noul", "noul": 0.4 }
+  },
+  "usage": { "input_tokens": 512, "output_tokens": 12, "cost": 0.00002 }
+}

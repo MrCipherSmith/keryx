@@ -292,7 +292,7 @@ describe("answer validation (flow 306 review item 4)", () => {
   });
 
   test("a choice answer with an empty/non-string choice is rejected", async () => {
-    const choiceQuestion: JevQuestions = { pick: { type: "choice", instructions: "pick one", criteria: ["a", "b"] } };
+    const choiceQuestion: JevQuestions = { pick: { type: "choice", instructions: "pick one", criteria: { a: "a", b: "b" } } };
     const empty = fakeFetch({ answers: { pick: { type: "choice", choice: "" } }, usage: {} });
     await expect(callJevSystemOne(empty, { state: "s", questions: choiceQuestion }, { env: ENV_WITH_KEY })).rejects.toBeInstanceOf(
       JevAnswerValidationError,
@@ -300,7 +300,7 @@ describe("answer validation (flow 306 review item 4)", () => {
   });
 
   test("a well-formed choice answer is accepted", async () => {
-    const choiceQuestion: JevQuestions = { pick: { type: "choice", instructions: "pick one", criteria: ["a", "b"] } };
+    const choiceQuestion: JevQuestions = { pick: { type: "choice", instructions: "pick one", criteria: { a: "a", b: "b" } } };
     const fetchFn = fakeFetch({ answers: { pick: { type: "choice", choice: "a" } }, usage: {} });
     const result = await callJevSystemOne(fetchFn, { state: "s", questions: choiceQuestion }, { env: ENV_WITH_KEY });
     expect(result.answers.pick).toEqual({ type: "choice", choice: "a" });
