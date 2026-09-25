@@ -1,0 +1,498 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "307",
+  "slug": "ci-triage-v2-history-and-diff-signals-be",
+  "title": "CI triage v2: history and diff signals beside the log, every failed job, a clear key error, measured on labelled runs",
+  "status": "done",
+  "createdAt": "2026-09-25T08:57:06.898Z",
+  "updatedAt": "2026-09-25T11:37:00.401Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T11:29:05.930Z",
+      "note": "src/review/ci-triage.ts: every signal computed through the read-only CiPort (src/review/ci-port.ts, three-then-six read-only methods, no write) and git show; comment at ci-triage.ts:309 ties this to AC1/AC2"
+    },
+    "AC2": {
+      "at": "2026-09-25T11:29:06.055Z",
+      "note": "src/review/ci-triage.ts:88 buildCiTriageState places the labelled signals block above the redacted log excerpt within the 64k budget; questions rewritten at ci-triage.ts:93,97 to point at it; docs/docs/cli-reference.md:3807-3810 describes the placement"
+    },
+    "AC3": {
+      "at": "2026-09-25T11:29:06.176Z",
+      "note": "src/commands/review.ts:1436 MAX_JOBS_TRIAGED=10; :1461-1470 triages every failedJobs entry by default (jobArg undefined -> filter conclusion==failure), --job narrows to one, notTriaged lists the rest; docs/docs/cli-reference.md:3739,3748-3758"
+    },
+    "AC4": {
+      "at": "2026-09-25T11:29:06.296Z",
+      "note": "src/tui/ci-triage-inspector.ts:50-58 signalLines carries the same deterministic-signal evidence lines the CLI prints into the /ci detail view; verdict stays ADVISORY ONLY (docs/docs/cli-reference.md:3773-3774)"
+    },
+    "AC5": {
+      "at": "2026-09-25T11:29:06.608Z",
+      "note": "src/commands/fixtures/ci-triage-eval/{manifest.json,cases/} holds the labelled redacted fixture set (8 cases, 2026-09-25); --eval implemented at src/commands/review.ts:1441-1444 (runCiTriageEval) and documented docs/docs/cli-reference.md:3745,3859"
+    },
+    "AC6": {
+      "at": "2026-09-25T11:29:06.727Z",
+      "note": "Live --eval run recorded in .metaproject/flows/307-*/journal.md:28-46 (before 4/8=50% $0.000771, after 4/8=50% $0.000829) and honestly stated in docs/docs/cli-reference.md:3835-3857 (Measured accuracy section, same numbers, per-case gaps explained)"
+    },
+    "AC7": {
+      "at": "2026-09-25T11:29:06.846Z",
+      "note": "src/harness/decision/jev-client.ts:176-193 JevAuthRejectedError; :410 throw new JevAuthRejectedError(keyResolution.source, status, text, looksLikeOpenRouterKey(apiKey)) names env var vs saved key and the sk-or- prefix check without printing the key; covered by src/harness/decision/jev-client.test.ts:153-169 for both sources"
+    },
+    "AC8": {
+      "at": "2026-09-25T11:29:06.969Z",
+      "note": "src/review/ci-triage.ts:610-687 job-level deterministic override (matches by jobName, not run level); ambiguity guard :628-654 (sameHeadJobNameAmbiguous when matchingJobs.length>1, no override) and pagination guard :636-645,669-673 (sameHeadCurrentRunMissing when the triaged run's own entry is absent from the paginated runsForHeadSha page) added in PR #713 followups; Jev probabilities still shown beside DETERMINISTIC verdict per docs/docs/cli-reference.md:3812-3816"
+    },
+    "AC9": {
+      "at": "2026-09-25T11:29:07.284Z",
+      "note": "docs/docs/cli-reference.md:3723-3858 review ci-triage section (signals, MAX_JOBS_TRIAGED=10 cap, opt-in gate, deterministic override, known gaps, measured accuracy), all in English; docs/docs/cli-reference.md:3224 ci-triage row in the subcommand table"
+    },
+    "AC10": {
+      "at": "2026-09-25T11:29:07.401Z",
+      "note": "gh pr view 710/713 --repo MrCipherSmith/keryx: both state=MERGED, statusCheckRollup conclusions {SUCCESS,SKIPPED} only (no failures); keryx health run: PASS, project score 94, no gate conditions triggered"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/710"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "folded into T4"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #710 (squash f56f99d3e464a8b9d787b797a884f55b6d3ab353) and follow-up PR #713 (squash 2aaf8372d51e418005f866f630e2943cb307f09c) merged to main"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T08:57:06.898Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T08:57:20.168Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T08:57:20.277Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T11:27:12.822Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T11:27:12.947Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T11:27:13.060Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T11:27:17.323Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T11:29:05.930Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/review/ci-triage.ts: every signal computed through the read-only CiPort (src/review/ci-port.ts, three-then-six read-only methods, no write) and git show; comment at ci-triage.ts:309 ties this to AC1/AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:06.055Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/review/ci-triage.ts:88 buildCiTriageState places the labelled signals block above the redacted log excerpt within the 64k budget; questions rewritten at ci-triage.ts:93,97 to point at it; docs/docs/cli-reference.md:3807-3810 describes the placement (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:06.176Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/commands/review.ts:1436 MAX_JOBS_TRIAGED=10; :1461-1470 triages every failedJobs entry by default (jobArg undefined -> filter conclusion==failure), --job narrows to one, notTriaged lists the rest; docs/docs/cli-reference.md:3739,3748-3758 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:06.296Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/tui/ci-triage-inspector.ts:50-58 signalLines carries the same deterministic-signal evidence lines the CLI prints into the /ci detail view; verdict stays ADVISORY ONLY (docs/docs/cli-reference.md:3773-3774) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:06.608Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/commands/fixtures/ci-triage-eval/{manifest.json,cases/} holds the labelled redacted fixture set (8 cases, 2026-09-25); --eval implemented at src/commands/review.ts:1441-1444 (runCiTriageEval) and documented docs/docs/cli-reference.md:3745,3859 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:06.727Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Live --eval run recorded in .metaproject/flows/307-*/journal.md:28-46 (before 4/8=50% $0.000771, after 4/8=50% $0.000829) and honestly stated in docs/docs/cli-reference.md:3835-3857 (Measured accuracy section, same numbers, per-case gaps explained) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:06.846Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/harness/decision/jev-client.ts:176-193 JevAuthRejectedError; :410 throw new JevAuthRejectedError(keyResolution.source, status, text, looksLikeOpenRouterKey(apiKey)) names env var vs saved key and the sk-or- prefix check without printing the key; covered by src/harness/decision/jev-client.test.ts:153-169 for both sources (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:06.969Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/review/ci-triage.ts:610-687 job-level deterministic override (matches by jobName, not run level); ambiguity guard :628-654 (sameHeadJobNameAmbiguous when matchingJobs.length>1, no override) and pagination guard :636-645,669-673 (sameHeadCurrentRunMissing when the triaged run's own entry is absent from the paginated runsForHeadSha page) added in PR #713 followups; Jev probabilities still shown beside DETERMINISTIC verdict per docs/docs/cli-reference.md:3812-3816 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:07.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: docs/docs/cli-reference.md:3723-3858 review ci-triage section (signals, MAX_JOBS_TRIAGED=10 cap, opt-in gate, deterministic override, known gaps, measured accuracy), all in English; docs/docs/cli-reference.md:3224 ci-triage row in the subcommand table (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:07.402Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: gh pr view 710/713 --repo MrCipherSmith/keryx: both state=MERGED, statusCheckRollup conclusions {SUCCESS,SKIPPED} only (no failures); keryx health run: PASS, project score 94, no gate conditions triggered (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:29:12.884Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/710 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T11:34:31.388Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T11:34:35.428Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T11:34:35.428Z",
+      "event": "completion-failed",
+      "detail": "owner: no owner set; run `keryx flow owner set <id> --owner \"<name>\" --reason \"<why>\"` | review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 2aaf8372d51e418005f866f630e2943cb307f09c, but the PR head is ca98eadf419ebc00edebbb8c5a39581aa2c67d91. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+    },
+    {
+      "at": "2026-09-25T11:35:49.296Z",
+      "event": "owner-set",
+      "detail": "not set -> altsay (human accountable for closing flow 307 (matches the owner convention used across this project's other flows))"
+    },
+    {
+      "at": "2026-09-25T11:36:56.562Z",
+      "event": "completing",
+      "detail": "merged commit: 2aaf8372d51e418005f866f630e2943cb307f09c"
+    },
+    {
+      "at": "2026-09-25T11:37:00.400Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-25T11:37:00.401Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T11:29:05.930Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:06.055Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:06.176Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:06.296Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:06.608Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:06.727Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:06.846Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:06.969Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:07.284Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:29:07.401Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:37:00.401Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134",
+      "headCommit": "2aaf8372d51e418005f866f630e2943cb307f09c"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T11:34:35.428Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "2aaf8372d51e418005f866f630e2943cb307f09c is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "2aaf8372d51e418005f866f630e2943cb307f09c is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "fail",
+          "detail": "no owner set; run `keryx flow owner set <id> --owner \"<name>\" --reason \"<why>\"`"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against 2aaf8372d51e418005f866f630e2943cb307f09c, but the PR head is ca98eadf419ebc00edebbb8c5a39581aa2c67d91. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    },
+    {
+      "at": "2026-09-25T11:37:00.400Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "2aaf8372d51e418005f866f630e2943cb307f09c is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "2aaf8372d51e418005f866f630e2943cb307f09c is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:8a927eb9ef5540b584f8f7c46d77c6a539489f3fc48db33aac338a368349b134"
+    }
+  ],
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "merged": {
+    "commit": "2aaf8372d51e418005f866f630e2943cb307f09c",
+    "ref": "origin/main",
+    "at": "2026-09-25T11:37:00.401Z"
+  }
+}

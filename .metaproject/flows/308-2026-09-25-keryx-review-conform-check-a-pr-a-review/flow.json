@@ -1,0 +1,668 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "308",
+  "slug": "keryx-review-conform-check-a-pr-a-review",
+  "title": "keryx review conform: check a PR, a review report or code against a reference document, clause by clause, with Jev",
+  "status": "done",
+  "createdAt": "2026-09-25T09:03:06.541Z",
+  "updatedAt": "2026-09-25T11:41:31.302Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a",
+  "acConfirmed": {
+    "AC4": {
+      "at": "2026-09-25T11:24:03.092Z",
+      "note": "conform-state.ts computeReportConformFacts: report sections and order, severity/evidence counts, anchorCounts via classifyFindingAnchor; conform-state.test.ts; hunk state via buildReviewScope"
+    },
+    "AC1": {
+      "at": "2026-09-25T11:38:35.960Z",
+      "note": "src/review/conform-clauses.ts: extractReferenceClauses(docText) — pure/sync, no model call; clause_id = <nearest-heading-slug>-<index>. Pinned for an invented fixture (src/review/fixtures/conform/invented-doctrine.md) in conform-clauses.test.ts (12 tests)."
+    },
+    "AC2": {
+      "at": "2026-09-25T11:38:36.213Z",
+      "note": "conform-clauses.ts: explicit [state:pr|report|hunk]/[not-checkable: reason] markers parsed with no model call; buildClauseTagQuestions/applyClauseTags/clauseTagFromChoice for the Jev-choice fallback; conform-tag-cache.ts caches by hashConformDocContent (sha256), keyed per doc path, merges on write. conform-clauses.test.ts + conform-tag-cache.test.ts (16 tests)."
+    },
+    "AC3": {
+      "at": "2026-09-25T11:38:36.442Z",
+      "note": "conform-state.ts: parsePrBodySections/computePrConformFacts/prClauseFacts use buildReviewScope(diff) for hand-written line counts (mechanical bulk excluded via scope.ts drop reasons) and section presence/emptiness; conform-pr-port.ts (createGhConformPrPort/createFixtureConformPrPort, gh pr view+diff, live/fixture split). conform-state.test.ts + conform-pr-port.test.ts (16 tests); live-verified against real PRs #709/#708/#689 (journal)."
+    },
+    "AC5": {
+      "at": "2026-09-25T11:38:37.186Z",
+      "note": "conform-jev.ts: batchConformItems groups same-kind clauses sharing state under CONFORM_TOKEN_BUDGET=64k (estimateTokens), never truncating; conform-state.ts's *ClauseFacts functions place deterministic facts above the redacted state text; a decisive fact (e.g. a stated size budget) is reported alongside Jev's own answer, never in place of it. conform-jev.test.ts (7 tests, incl. a 10-clause oversized batch that splits)."
+    },
+    "AC6": {
+      "at": "2026-09-25T11:38:37.491Z",
+      "note": "keryx review conform wired in src/commands/review.ts (runConform); renderConformMarkdown/conformResultToJson in conform-report.ts print id/kind/checkable-or-not(+reason)/deterministic evidence/probability per clause; not-checkable always listed; a checkable clause whose kind has no target this run reads not-evaluated (tracked per-clause via a Set, not per-kind). review-conform-cli.test.ts AC6 blocks (--pr and --report, 7 tests) + conform-report.test.ts (11 tests)."
+    },
+    "AC7": {
+      "at": "2026-09-25T11:38:37.760Z",
+      "note": "explainConformVerdicts (review.ts) sends every clause scored below --threshold (default 0.5, configurable, validated 0..1) to resolveConformExplainModel's resolution of the review routing category (session model when unset, via resolveCategoryDetailed); output labelled ADVISORY, nothing written to findings.json or a PR (no write path exists). review-conform-cli.test.ts (--explain, --threshold tests); live-verified: session-default failed closed silently on rate-limit, and an explicit trusted routing produced 3 real advisory explanations (journal)."
+    },
+    "AC8": {
+      "at": "2026-09-25T11:38:38.430Z",
+      "note": "src/tui/conform-inspector.ts (new file, not editing ci-triage-*): setup tab lists recent docs (recents remembered via conform-report.ts's withRecentDoc, persisted at .metaproject/data/review-conform/recent-docs.json) then the three targets (PR/report/diff); clauses tab groups by kind with status; detail tab shows evidence+explanation. src/tui/conform-source.ts (production loader/runner, mirrors ci-triage-source.ts). Wired into tui-shell.ts (/conform) and agent-commands.ts. conform-inspector.test.ts: 10 tests, real OpenTUI renderer, 0 skips."
+    },
+    "AC9": {
+      "at": "2026-09-25T11:38:38.706Z",
+      "note": "readConformEnabled (conform-report.ts) reads review.jev.conform from .metaproject/tasks.config.json, default false, mirrors readCiTriageEnabled's pattern exactly; runConform checks opt-in then OPENROUTER_API_KEY credential BEFORE reading the reference doc or the target, refuses with no network call; every state text passes through redactSensitiveText. review-conform-cli.test.ts AC9 block (2 tests proving the ref path is never even opened when refused) + conform-report.test.ts opt-in gate tests (4 tests)."
+    },
+    "AC10": {
+      "at": "2026-09-25T11:39:30.083Z",
+      "note": "src/review/fixtures/conform/invented-doctrine.md and src/commands/fixtures/conform/invented-ref.md (+ report-package fixtures) are entirely invented for this repository, in a different domain and structure from the operator's example (a data-pipeline contribution policy: numbered rules mixed across workflow-stage headings covering opening a change, a change-size limit, a per-pass review record, code/test hunks, and a sign-off condition); no wording copied. Every conform-*.test.ts file and review-conform-cli.test.ts uses only invented text."
+    },
+    "AC11": {
+      "at": "2026-09-25T11:39:30.199Z",
+      "note": "Live check run against the operator's real private reference document and real merged PRs/review package of MrCipherSmith/keryx from a scratch project dir (review.jev.conform enabled only there); env -u OPENROUTER_API_KEY so the saved openrouterKey resolved. Full per-clause-id verdicts, cost and an honest usefulness assessment recorded in the flow journal (entry 2026-09-25T10:03:47.000Z) — no document text, no clause text, no file path. Found and fixed a real vendor API mismatch (choice-question criteria: array vs record) live."
+    },
+    "AC12": {
+      "at": "2026-09-25T11:39:30.312Z",
+      "note": "keryx review conform in dispatch (review.ts command switch), HELP_GROUPS (/conform slash entry, Managed work group), AGENT_SLASH_COMMANDS (agent-commands.ts), and the CLI reference (docs/docs/cli-reference.md: usage line, subcommand table row, review conform section) all in English; cli-reference-coverage.test.ts, help-groups.test.ts, commands-by-task.test.ts, agent-commands.test.ts all pass. gh pr view 711: state=MERGED, statusCheckRollup {SUCCESS,SKIPPED} only; keryx health run: PASS, project score 94, no gate conditions triggered."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/711"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read PRD Requirements 24-29, PLAN.md Phase 2 draft ACs, flow 308's frozen AC1-12, existing jev-client.ts (flow 306), ci-triage.ts/ci-port.ts precedent, scope.ts, types.ts, routing/table.ts, single-turn.ts, pr-comments.ts GitHubPort, and the TUI modal-host/ci-triage-inspector.ts precedent."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented src/review/conform-{clauses,tag-cache,state,jev,pr-port,report}.ts (core), runConform in src/commands/review.ts (adapter, calls callJevSystemOne and runModelTurn), src/tui/conform-{inspector,source}.ts (client), /conform wired into tui-shell.ts/agent-commands.ts/help-groups.ts, CLI/docs reference updated. Minimal additive fix to jev-client.ts's JevQuestion.criteria (array->record) after a live-verified vendor API mismatch."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "9 new test files (conform-clauses/state/jev/tag-cache/pr-port/report .test.ts, review-conform-cli.test.ts, conform-inspector.test.ts) all passing; typecheck, eslint, opentui-no-skips, test:core, test:client:runtime, test:client:terminal, check:doc-links, flow check, keryx health run all green."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-reviewed the diff, ran the full quality-gate list, and ran the AC11 live check against a real private reference document and real PRs/review package of this repository; findings recorded in this journal. Draft PR not yet opened by this session."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-25T09:03:06.541Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-25T09:03:25.195Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-25T09:03:25.316Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-25T10:05:49.305Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-25T10:05:57.809Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T10:05:57.949Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T10:05:58.078Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T10:06:03.234Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/review/conform-clauses.ts: extractReferenceClauses(docText) — pure/sync, no model call; clause_id = <nearest-heading-slug>-<index>. Pinned for an invented fixture (src/review/fixtures/conform/invented-doctrine.md) in conform-clauses.test.ts (12 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:12.093Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: conform-clauses.ts: explicit [state:pr|report|hunk]/[not-checkable: reason] markers parsed with no model call; buildClauseTagQuestions/applyClauseTags/clauseTagFromChoice for the Jev-choice fallback; conform-tag-cache.ts caches by hashConformDocContent (sha256), keyed per doc path, merges on write. conform-clauses.test.ts + conform-tag-cache.test.ts (16 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:12.223Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: conform-state.ts: parsePrBodySections/computePrConformFacts/prClauseFacts use buildReviewScope(diff) for hand-written line counts (mechanical bulk excluded via scope.ts drop reasons) and section presence/emptiness; conform-pr-port.ts (createGhConformPrPort/createFixtureConformPrPort, gh pr view+diff, live/fixture split). conform-state.test.ts + conform-pr-port.test.ts (16 tests); live-verified against real PRs #709/#708/#689 (journal). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:12.359Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: conform-state.ts: parseReportSections/classifyFindingLocation/computeReportConformFacts/reportClauseFacts read report.md/findings.json directly, no new artifact format; deterministic facts = section order, per-finding severity/evidence/location-class presence. conform-state.test.ts; live-verified against this repo's own .metaproject/flows/299-.../reviews/2026-09-23-review-299-r02 (journal). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:22.772Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: conform-jev.ts: batchConformItems groups same-kind clauses sharing state under CONFORM_TOKEN_BUDGET=64k (estimateTokens), never truncating; conform-state.ts's *ClauseFacts functions place deterministic facts above the redacted state text; a decisive fact (e.g. a stated size budget) is reported alongside Jev's own answer, never in place of it. conform-jev.test.ts (7 tests, incl. a 10-clause oversized batch that splits). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:22.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: keryx review conform wired in src/commands/review.ts (runConform); renderConformMarkdown/conformResultToJson in conform-report.ts print id/kind/checkable-or-not(+reason)/deterministic evidence/probability per clause; not-checkable always listed; a checkable clause whose kind has no target this run reads not-evaluated (tracked per-clause via a  Set, not per-kind, so a zero-region diff/report never silently drops a clause). review-conform-cli.test.ts AC6 blocks (--pr and --report, 7 tests) + conform-report.test.ts (11 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:23.035Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: explainConformVerdicts (review.ts) sends every clause scored below --threshold (default 0.5, configurable, validated 0..1) to resolveConformExplainModel's resolution of the review routing category (session model when unset, via resolveCategoryDetailed); output labelled ADVISORY, nothing written to findings.json or a PR (no write path exists). review-conform-cli.test.ts (--explain, --threshold tests); live-verified: session-default (github-copilot, rate-limited, failed closed silently) and an explicit routing.config.json (openrouter/openai/gpt-4o-mini, trusted) which produced 3 real advisory explanations (journal). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:37.676Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/tui/conform-inspector.ts (new file, not editing ci-triage-*): setup tab lists recent docs (recents remembered via conform-report.ts's withRecentDoc, persisted at .metaproject/data/review-conform/recent-docs.json) then the three targets (PR/report/diff); clauses tab groups by kind with status; detail tab shows evidence+explanation. src/tui/conform-source.ts (production loader/runner, mirrors ci-triage-source.ts). Wired into tui-shell.ts (/conform) and agent-commands.ts. conform-inspector.test.ts: 10 tests, real OpenTUI renderer, 0 skips (bun scripts/opentui-tests-no-skips.ts). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:44.847Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: readConformEnabled (conform-report.ts) reads review.jev.conform from .metaproject/tasks.config.json, default false, mirrors readCiTriageEnabled's pattern exactly; runConform checks opt-in then OPENROUTER_API_KEY credential BEFORE reading the reference doc or the target, refuses with no network call; every state text passes through redactSensitiveText. review-conform-cli.test.ts AC9 block (2 tests proving the ref path is never even opened when refused) + conform-report.test.ts opt-in gate tests (4 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:44.981Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: src/review/fixtures/conform/invented-doctrine.md and src/commands/fixtures/conform/invented-ref.md (+ report-package fixtures) are entirely invented for this repository, similar in SHAPE only to the operator's example (structure withheld); no wording copied. Every conform-*.test.ts file and review-conform-cli.test.ts uses only invented text. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:06:50.347Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Live check run against the operator's real private reference document and real merged PRs/review package of MrCipherSmith/keryx from a scratch project dir (review.jev.conform enabled only there); env -u OPENROUTER_API_KEY so the saved openrouterKey resolved. Full per-clause-id verdicts, cost and an honest usefulness assessment recorded in this journal entry above (timestamp 2026-09-25T10:03:47Z) — no document text, no clause text, no file path. Found and fixed a real vendor API mismatch (choice-question criteria: array vs record) live. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T10:17:45.576Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: keryx review conform in dispatch (review.ts command switch), HELP_GROUPS (/conform slash entry, Managed work group), AGENT_SLASH_COMMANDS (agent-commands.ts), and the CLI reference (docs/docs/cli-reference.md: usage line, subcommand table row, review conform section) all in English; cli-reference-coverage.test.ts, help-groups.test.ts, commands-by-task.test.ts (regenerated), agent-commands.test.ts all pass. Local gates all green: typecheck, eslint, test:core (8002 pass, 2 pre-existing unrelated schedule-security.test.ts sandbox failures that pass in isolation), opentui-tests-no-skips (1218 pass 0 skip), test:client:runtime, test:client:terminal, check:doc-links, flow check, keryx health run (PASS, score 94). No PR opened this session (no push/commit per instructions), so CI-on-PR is pending the operator opening one. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:18:33.915Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"`report`-kind state is an existing review package's `report.md` and `findings.json`, and deterministic facts are computed first (which fields each finding records; the report's sections and their order); `hunk`-kind state reuses `buildReviewScope`'s blocks.\" -> \"`report`-kind state is an existing review package's `report.md` and `findings.json`, and deterministic facts are computed first (which fields each finding records, such as severity, evidence and a file anchor; the report's sections and their order); `hunk`-kind state reuses `buildReviewScope`'s blocks.\" (neutral wording; the finding field was renamed to anchor kind)"
+    },
+    {
+      "at": "2026-09-25T11:24:03.092Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: conform-state.ts computeReportConformFacts: report sections and order, severity/evidence counts, anchorCounts via classifyFindingAnchor; conform-state.test.ts; hunk state via buildReviewScope (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:35.960Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/review/conform-clauses.ts: extractReferenceClauses(docText) — pure/sync, no model call; clause_id = <nearest-heading-slug>-<index>. Pinned for an invented fixture (src/review/fixtures/conform/invented-doctrine.md) in conform-clauses.test.ts (12 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:36.213Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: conform-clauses.ts: explicit [state:pr|report|hunk]/[not-checkable: reason] markers parsed with no model call; buildClauseTagQuestions/applyClauseTags/clauseTagFromChoice for the Jev-choice fallback; conform-tag-cache.ts caches by hashConformDocContent (sha256), keyed per doc path, merges on write. conform-clauses.test.ts + conform-tag-cache.test.ts (16 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:36.443Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: conform-state.ts: parsePrBodySections/computePrConformFacts/prClauseFacts use buildReviewScope(diff) for hand-written line counts (mechanical bulk excluded via scope.ts drop reasons) and section presence/emptiness; conform-pr-port.ts (createGhConformPrPort/createFixtureConformPrPort, gh pr view+diff, live/fixture split). conform-state.test.ts + conform-pr-port.test.ts (16 tests); live-verified against real PRs #709/#708/#689 (journal). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:37.187Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: conform-jev.ts: batchConformItems groups same-kind clauses sharing state under CONFORM_TOKEN_BUDGET=64k (estimateTokens), never truncating; conform-state.ts's *ClauseFacts functions place deterministic facts above the redacted state text; a decisive fact (e.g. a stated size budget) is reported alongside Jev's own answer, never in place of it. conform-jev.test.ts (7 tests, incl. a 10-clause oversized batch that splits). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:37.491Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: keryx review conform wired in src/commands/review.ts (runConform); renderConformMarkdown/conformResultToJson in conform-report.ts print id/kind/checkable-or-not(+reason)/deterministic evidence/probability per clause; not-checkable always listed; a checkable clause whose kind has no target this run reads not-evaluated (tracked per-clause via a Set, not per-kind). review-conform-cli.test.ts AC6 blocks (--pr and --report, 7 tests) + conform-report.test.ts (11 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:37.760Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: explainConformVerdicts (review.ts) sends every clause scored below --threshold (default 0.5, configurable, validated 0..1) to resolveConformExplainModel's resolution of the review routing category (session model when unset, via resolveCategoryDetailed); output labelled ADVISORY, nothing written to findings.json or a PR (no write path exists). review-conform-cli.test.ts (--explain, --threshold tests); live-verified: session-default failed closed silently on rate-limit, and an explicit trusted routing produced 3 real advisory explanations (journal). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:38.430Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/tui/conform-inspector.ts (new file, not editing ci-triage-*): setup tab lists recent docs (recents remembered via conform-report.ts's withRecentDoc, persisted at .metaproject/data/review-conform/recent-docs.json) then the three targets (PR/report/diff); clauses tab groups by kind with status; detail tab shows evidence+explanation. src/tui/conform-source.ts (production loader/runner, mirrors ci-triage-source.ts). Wired into tui-shell.ts (/conform) and agent-commands.ts. conform-inspector.test.ts: 10 tests, real OpenTUI renderer, 0 skips. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:38:38.706Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: readConformEnabled (conform-report.ts) reads review.jev.conform from .metaproject/tasks.config.json, default false, mirrors readCiTriageEnabled's pattern exactly; runConform checks opt-in then OPENROUTER_API_KEY credential BEFORE reading the reference doc or the target, refuses with no network call; every state text passes through redactSensitiveText. review-conform-cli.test.ts AC9 block (2 tests proving the ref path is never even opened when refused) + conform-report.test.ts opt-in gate tests (4 tests). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:39:30.084Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: src/review/fixtures/conform/invented-doctrine.md and src/commands/fixtures/conform/invented-ref.md (+ report-package fixtures) are entirely invented for this repository, in a different domain and structure from the operator's example (a data-pipeline contribution policy: numbered rules mixed across workflow-stage headings covering opening a change, a change-size limit, a per-pass review record, code/test hunks, and a sign-off condition); no wording copied. Every conform-*.test.ts file and review-conform-cli.test.ts uses only invented text. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:39:30.199Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Live check run against the operator's real private reference document and real merged PRs/review package of MrCipherSmith/keryx from a scratch project dir (review.jev.conform enabled only there); env -u OPENROUTER_API_KEY so the saved openrouterKey resolved. Full per-clause-id verdicts, cost and an honest usefulness assessment recorded in the flow journal (entry 2026-09-25T10:03:47.000Z) — no document text, no clause text, no file path. Found and fixed a real vendor API mismatch (choice-question criteria: array vs record) live. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:39:30.313Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: keryx review conform in dispatch (review.ts command switch), HELP_GROUPS (/conform slash entry, Managed work group), AGENT_SLASH_COMMANDS (agent-commands.ts), and the CLI reference (docs/docs/cli-reference.md: usage line, subcommand table row, review conform section) all in English; cli-reference-coverage.test.ts, help-groups.test.ts, commands-by-task.test.ts, agent-commands.test.ts all pass. gh pr view 711: state=MERGED, statusCheckRollup {SUCCESS,SKIPPED} only; keryx health run: PASS, project score 94, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-25T11:39:34.286Z",
+      "event": "owner-set",
+      "detail": "not set -> altsay (human accountable for closing flow 308 (matches the owner convention used across this project's other flows))"
+    },
+    {
+      "at": "2026-09-25T11:39:36.344Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/711 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-25T11:41:27.525Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T11:41:31.301Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-25T11:41:31.302Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T10:06:03.234Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:12.093Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:12.223Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:12.359Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:22.772Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:22.904Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:23.035Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:37.676Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:44.847Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:44.981Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:06:50.347Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T10:17:45.575Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:e531cfe9ec4ec49d3b6e9359e7aa6f9a89f1a3766843f1bd1cb69cf176e008af"
+    },
+    {
+      "at": "2026-09-25T11:24:03.092Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:35.960Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:36.213Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:36.442Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:37.186Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:37.491Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:37.760Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:38.430Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:38:38.706Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:39:30.083Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:39:30.199Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:39:30.312Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    },
+    {
+      "at": "2026-09-25T11:41:31.302Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a",
+      "headCommit": "8a8452b3954456506aa1e90af2b30837c782998e"
+    }
+  ],
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T11:41:31.301Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "12 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "8a8452b3954456506aa1e90af2b30837c782998e is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "8a8452b3954456506aa1e90af2b30837c782998e is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:57d07969b36fa3307c76014c1f3cfb2f0e222aa20961c1dc8743c431cb35aa0a"
+    }
+  ],
+  "merged": {
+    "commit": "8a8452b3954456506aa1e90af2b30837c782998e",
+    "ref": "origin/main",
+    "at": "2026-09-25T11:41:31.301Z"
+  }
+}
