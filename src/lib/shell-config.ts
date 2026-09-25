@@ -114,6 +114,16 @@ export interface ShellConfig {
    */
   routing?: Record<string, unknown>;
   /**
+   * Flow 327 — the operator's PER-USER model-profile catalogue (strength
+   * tier, price, context length, priority, per-field provenance;
+   * `src/harness/routing/model-profile.ts`'s `ModelProfile`), keyed by
+   * `<providerId>/<modelId>`. Not validated at this layer (a raw
+   * best-effort reader/writer, like every other structured field above);
+   * `loadModelProfiles`/`loadStoredModelProfiles` do the validation. Read/
+   * written only through `model-profile.ts`, never raw here.
+   */
+  modelProfiles?: Record<string, unknown>;
+  /**
    * Flow 329 — the turn guard's per-user, opt-in setting: `enabled: true`
    * turns it on for every future `keryx shell` session until turned off
    * again, persisted by the `/guard on|off` command. Default off (absent or
@@ -170,7 +180,21 @@ export function loadShellConfig(dir?: string): ShellConfig {
   }
 }
 
-/** Merge `patch` into the persisted config (0600). Best-effort; never throws. */
+/**
+ * Merge `patch` into the persisted config (0600). Best-effort; never throws.
+ *
+ * Round 2 item 2 briefly put this read-modify-write under a shared sync lock
+ * with `model-profile.ts`'s one-time `modelProfiles` migration strip
+ * (`withAuthFileLockSync`); round 3 removed it (review of PR #718: that lock
+ * — `Atomics.wait`-based, up to a 2s timeout on contention — sat around
+ * EVERY call here, including hot TUI paths like `/reasoning`/`/think`, to
+ * guard a race only the migration strip actually needs to avoid. This
+ * function is back to its original, unconditional read-merge-write; the
+ * migration strip now protects itself instead
+ * (`stripModelProfilesFromAuthJsonUnlocked`, `../harness/routing/
+ * model-profile.ts` — see that function's own doc for the window and its
+ * residual risk).
+ */
 export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void {
   try {
     // `ensureKeryxConfigDir`, not `mkdirSync`: this is usually the first writer

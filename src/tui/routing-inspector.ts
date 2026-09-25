@@ -30,10 +30,12 @@ import {
 import {
   connectedPredicateFrom,
   describeAssignment,
-  describeFallbackNotice,
+  describeCategoryResolution,
+  describeRejectionNotice,
   flatModelOptions,
   resolveCategoryDetailed,
   ROUTING_CATEGORIES,
+  type AvailablePredicate,
   type CategoryAssignment,
   type ConnectedPredicate,
   type FlatModelOption,
@@ -43,6 +45,15 @@ import {
   type RoutingTable,
 } from "../harness/routing/table";
 import { approveProjectRouting, describeTableForApproval, type RoutingTrustResult } from "../harness/routing/trust";
+import { deriveDefaultTable } from "../harness/routing/derive-default-table";
+import {
+  availablePredicateFromProfiles,
+  formatNumericField,
+  isModelDerivable,
+  loadModelProfiles,
+  profileKey,
+  type ModelProfile,
+} from "../harness/routing/model-profile";
 import { mountFilterList, type KeypressEvent } from "./filter-list";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -64,28 +75,41 @@ export interface RoutingCategoryRow {
   readonly category: RoutingCategory;
   readonly assignment: CategoryAssignment;
   readonly source: RoutingSource;
-  /** AC10 — the layer's own entry, when one was rejected as unconnected before landing here. */
-  readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource };
+  /** AC10 — the layer's own entry, when one was rejected (not connected, or — flow 327 — unavailable) before landing here. */
+  readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource; readonly reason?: "unavailable" };
 }
 
-/** The list tab's rows, derived from both layers (AC3's precedence, AC10's connected fallback). */
+/**
+ * The list tab's rows, derived from both layers (AC3's precedence, AC10's
+ * connected fallback). `derived`/`available` (flow 327) are optional and
+ * additive — omitted, behavior is byte-identical to before either existed
+ * (AC14).
+ */
 export function routingCategoryRows(
   project: RoutingConfigResult,
   user: RoutingConfigResult,
   connected: ConnectedPredicate = () => true,
+  derived: RoutingTable = {},
+  available: AvailablePredicate = () => true,
 ): RoutingCategoryRow[] {
   return ROUTING_CATEGORIES.map((category) => ({
     category,
-    ...resolveCategoryDetailed(category, { project: project.table, user: user.table }, connected),
+    ...resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connected, available),
   }));
 }
 
-/** The list tab's rendered lines. Exported so a test can hold it against the CLI's own `list` output shape. */
-export function formatRoutingListLines(rows: readonly RoutingCategoryRow[], selected: number): string[] {
+/**
+ * The list tab's rendered lines. Exported so a test can hold it against the
+ * CLI's own `list` output shape. `sessionProviderId` (flow 327) is optional —
+ * omitted, a `"derived"` row (which cannot occur without a `derived` layer
+ * anyway) would fall back to a bare `describeAssignment`, but no existing
+ * test constructs that state, so this stays behavior-identical for AC14.
+ */
+export function formatRoutingListLines(rows: readonly RoutingCategoryRow[], selected: number, sessionProviderId?: string): string[] {
   return rows.map((row, index) => {
     const mark = index === selected ? ">" : " ";
-    const suffix = row.rejected !== undefined ? `  (${describeFallbackNotice(row.rejected.assignment, row.assignment)})` : "";
-    return `${mark} ${row.category.padEnd(12)} ${describeAssignment(row.assignment)}  [${row.source}]${suffix}`;
+    const suffix = row.rejected !== undefined ? `  (${describeRejectionNotice(row.rejected, row.assignment)})` : "";
+    return `${mark} ${row.category.padEnd(12)} ${describeCategoryResolution(row, sessionProviderId)}  [${row.source}]${suffix}`;
   });
 }
 
@@ -97,6 +121,17 @@ export interface RoutingModalOptions {
   onKeypress: (handler: (key: KeypressEvent) => void) => () => void;
   /** Connected providers for the flat picker AND AC10's resolution check. Defaults to the live provider catalog (flow 309, `../harness/provider-catalog.ts`), read ONCE per `reload()` — never a second probe for resolution alone. */
   providers?: () => Promise<readonly FlatPickerProvider[]>;
+  /**
+   * Flow 327 (AC12) — the session's own current provider/model, for the
+   * `derived` layer (PRD §6.3 — v1 derives from the session's own provider
+   * only). `undefined` (no live selection, e.g. a test that doesn't care
+   * about derivation) means the modal shows no `derived` rows — every
+   * category simply resolves through `user`/`project`/`default` as before
+   * this flow (AC14: unaffected when omitted).
+   */
+  session?: { providerId: string; modelId: string };
+  /** Model-profile catalogue loader (flow 327) — defaults to the real per-user store (`../harness/routing/model-profile.ts`). Test seam. */
+  loadProfiles?: (userConfigDir: string | undefined) => Record<string, ModelProfile>;
   load?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
   loadRaw?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
   save?: (layer: "project" | "user", location: RoutingConfigLocation, table: RoutingTable) => Promise<void>;
@@ -133,6 +168,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     ...(options.userConfigDir !== undefined ? { userConfigDir: options.userConfigDir } : {}),
   };
   const loadProviders = options.providers ?? defaultProviders;
+  const loadProfiles = options.loadProfiles ?? ((dir) => loadModelProfiles(dir));
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const panelRows =
     typeof rendererHint?.width === "number" && typeof rendererHint.height === "number"
@@ -143,6 +179,8 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   let rows: RoutingCategoryRow[] = [];
   let flatOptions: FlatModelOption[] = [];
   let providers: readonly FlatPickerProvider[] = [];
+  /** Flow 327 (AC12) — the operator's model-profile catalogue, reloaded alongside the routing tables. */
+  let profiles: Record<string, ModelProfile> = {};
   let projectIsUntrusted = false;
   let selected = 0;
   let statusText = "enter to pick a model for the selected category";
@@ -159,7 +197,8 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
 
   const selectedRow = (): RoutingCategoryRow | undefined => rows[selected];
 
-  const listLines = (): string[] => (rows.length === 0 ? ["Reading routing table…"] : formatRoutingListLines(rows, selected));
+  const listLines = (): string[] =>
+    rows.length === 0 ? ["Reading routing table…"] : formatRoutingListLines(rows, selected, options.session?.providerId);
 
   const paintList = (): void => {
     // Guarded on `currentTab`, not `host.handle?.activeTab()` (which is
@@ -188,12 +227,23 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   const reload = async (): Promise<void> => {
     const [project, user, fetchedProviders] = await Promise.all([load("project", location), load("user", location), loadProviders()]);
     providers = fetchedProviders;
+    profiles = loadProfiles(location.userConfigDir);
     projectIsUntrusted = project.untrusted === true;
     for (const error of [project.error, user.error]) {
       if (error !== undefined) statusText = `routing: ${error}`;
     }
     const connected = connectedPredicateFrom(providers);
-    rows = routingCategoryRows(project, user, connected);
+    const available = availablePredicateFromProfiles(profiles);
+    // Flow 327 (AC10/AC12) — the `derived` layer, built from the SAME
+    // provider list just fetched for the picker/connected-check (no extra
+    // probe), against the session's own provider only (PRD §6.3).
+    let derived: RoutingTable = {};
+    if (options.session !== undefined) {
+      const sessionProvider = providers.find((p) => p.name === options.session!.providerId);
+      const models = sessionProvider?.models ?? [options.session.modelId];
+      derived = deriveDefaultTable(options.session.providerId, models, profiles, options.session.modelId);
+    }
+    rows = routingCategoryRows(project, user, connected, derived, available);
     selected = Math.min(selected, Math.max(0, rows.length - 1));
     paintList();
   };
@@ -289,12 +339,18 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
       const list = mountFilterList(core, r as never, parent as never, {
         idPrefix: "rt",
         items: flatOptions,
-        toOption: (opt) => ({ name: opt.label, description: "" }),
+        // Flow 327 (AC12) — each "model" row also shows its profile (tier,
+        // price, context, priority, sources, availability), read from the
+        // SAME `profiles` catalogue `reload()` already loaded — no extra
+        // lookup. Non-model rows ("session default", "<provider> (provider
+        // default)") carry no profile and show an empty description, exactly
+        // as before this flow.
+        toOption: (opt) => ({ name: opt.label, description: describePickerRowProfile(opt, profiles) }),
         matches: (opt, q) => opt.search.includes(q),
         emptyLabel: "(no connected providers)",
         idleHint: "type to filter · ↑/↓ Enter to pick · Esc back",
         filterHint: (filter, shown, total) => `filter: ${filter}  (${shown}/${total})`,
-        showDescription: false,
+        showDescription: true,
         width: "100%",
         height: Math.max(1, bodyRows - 1),
         onPick: (opt) => {
@@ -336,6 +392,29 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
 
 function windowLines(lines: readonly string[], rows: number): readonly string[] {
   return lines.slice(0, Math.max(1, rows));
+}
+
+/**
+ * Flow 327 (AC12) — the flat picker row's description: its model profile
+ * (tier, price, context, priority, each field's source) and, when
+ * `available: false`, an explicit "unavailable" marker (still selectable —
+ * PRD §6.4). Empty for a non-"model" row (session default / provider
+ * default), which carries no profile.
+ */
+export function describePickerRowProfile(opt: FlatModelOption, profiles: Readonly<Record<string, ModelProfile>>): string {
+  if (opt.assignment.kind !== "model") return "";
+  const profile = profiles[profileKey(opt.assignment.providerId, opt.assignment.modelId)];
+  if (profile === undefined) return "";
+  const parts = [
+    `${profile.strengthTier.value} (${profile.strengthTier.source})`,
+    `in ${formatNumericField(profile.priceInputPerMillion, "/M")}`,
+    `out ${formatNumericField(profile.priceOutputPerMillion, "/M")}`,
+    `ctx ${profile.contextLength.value === "unknown" ? "unknown" : `${profile.contextLength.value} (${profile.contextLength.source})`}`,
+    `priority ${profile.priority.value}`,
+  ];
+  if (!profile.available) parts.push("UNAVAILABLE");
+  if (!isModelDerivable(profile)) parts.push("non-chat/free — never auto-derived");
+  return parts.join("  ·  ");
 }
 
 /**

@@ -99,7 +99,10 @@ Once you have more than one provider connected, `keryx routing` (and, inside a
 session, `/routing`) maps a task category — `review`, `subagents`, and a
 catalogue of others — to a specific model, so reviews and subagent spawns can
 run on a different (cheaper, or stronger) model than your main session without
-switching `/model` before every turn. See [the CLI
+switching `/model` before every turn. Leave a category unset and a sensible
+default is built automatically from your connected provider's own models and
+their recorded price/strength profiles (`keryx routing profile list`) — cheap
+models for high-volume work, strong ones for planning/review. See [the CLI
 reference](docs/docs/cli-reference.md#routing).
 
 ### Your first session
