@@ -1,0 +1,227 @@
+[
+  {
+    "id": "M1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "the journal and W1 doc claimed the ten post-gate \"Not for X\" description clauses \"measurably worked\" against specific trigger-accuracy misses, citing a ruby-rails-implementation \"Django ORM flip\" that does not exist in the raw gate data",
+    "impact": "a false claim of measured improvement stood in the flow's own record, contradicting its own raw (truePositive, falsePositive) numbers a few lines above it",
+    "suggested_fix": "rewrite to state the real mechanism (stripExclusionClauses zeroes an exclusion clause's own coverage contribution before either gate run) and reclassify the ten clauses as a routing-weakness acceptance, not a verified fix",
+    "evidence": "direct diff of the two raw governance/eval.json gate runs showed all 16 skills identical on (truePositive, falsePositive); src/gdskills/governance/scout.ts stripExclusionClauses",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md",
+    "class_scope": {
+      "sites": [
+        "docs/requirements/keryx-agent-platform-expansion/workstreams/W1-stack-catalog.md",
+        ".metaproject/flows/337-2026-09-25-wave-4-batch-5-stack-packs-for-php-larav/journal.md"
+      ],
+      "enumeration_method": "both records repeated the same erroneous \"measurably worked\" claim; grep for that phrase across the flow's own journal and requirements doc found exactly these two sites"
+    },
+    "global_id": "2026-09-25-ingest-735#M1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit cde4a57c4fcfac4fe8583b90ad4b5a0d96ed2c4f rewrote W1-stack-catalog.md's Phase B section to state the real stripExclusionClauses mechanism and reclassify the ten clauses as a routing-weakness acceptance; the flow journal carries the matching CORRECTION entry",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit cde4a57c4fcfac4fe8583b90ad4b5a0d96ed2c4f"
+    }
+  },
+  {
+    "id": "M2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "ruby-rails's raw/html_safe XSS guidance in security.mdc/patterns.mdc only ever fires on .erb templates, but neither rule's paths: frontmatter included **/*.erb and STACK_EXTENSIONS[\"ruby-rails\"] did not include erb",
+    "impact": "the pack's XSS guidance was dead code for every .erb file in a Rails project",
+    "suggested_fix": "add **/*.erb to both rules' paths: and erb to STACK_EXTENSIONS[\"ruby-rails\"], with a regression test",
+    "evidence": "read of ruby-rails/rules/security.mdc and patterns.mdc frontmatter against STACK_EXTENSIONS in src/gdskills/governance/authoring-lint.ts",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/ruby-rails/rules/security.mdc",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/stacks/ruby-rails/rules/security.mdc",
+        "src/gdskills/bundled/stacks/ruby-rails/rules/patterns.mdc",
+        "src/gdskills/governance/authoring-lint.ts"
+      ],
+      "enumeration_method": "grep for raw/html_safe XSS guidance across ruby-rails rules and cross-checked each rule's paths: glob and STACK_EXTENSIONS for .erb coverage"
+    },
+    "global_id": "2026-09-25-ingest-735#M2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "commit c63a3dd2a94dfba74a610708dd0db207b0a1fd33 added **/*.erb to ruby-rails security.mdc/patterns.mdc paths: and erb to STACK_EXTENSIONS, with a targeted authoring-lint.test.ts case; bun test src/gdskills/governance/authoring-lint.test.ts passes",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit c63a3dd2a94dfba74a610708dd0db207b0a1fd33"
+    }
+  },
+  {
+    "id": "minor-1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "the \"Not for a Django/Python view/template\" scope clauses in ruby-rails-code-review and php-laravel-code-review named the specific stack that happened to be the failing eval prompt's subject",
+    "impact": "reads as tuned to the specific failing prompt rather than a freestanding scope statement",
+    "suggested_fix": "reword to a general statement of the real boundary (\"Not for a change in another web framework's own MVC/view layer\")",
+    "evidence": "ruby-rails-code-review and php-laravel-code-review SKILL.md description text",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/stacks/ruby-rails/skills/ruby-rails-code-review/SKILL.md",
+    "global_id": "2026-09-25-ingest-735#minor-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 5cbd6f90fdcc7830082142c640828a14f32ffe6f reworded ruby-rails-code-review's and php-laravel-code-review's clauses to \"Not for a change in another web framework's own MVC/view layer\"",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit 5cbd6f90fdcc7830082142c640828a14f32ffe6f"
+    }
+  },
+  {
+    "id": "minor-2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "the \"Not for X\" edits also swapped description wording to `raw` (e.g. \"a migration fails to apply\" -> \"a raw SQL migration fails to apply\") alongside the disclosed exclusion-clause additions, without being called out as a separate change",
+    "impact": "an undisclosed second change alongside a disclosed one leaves the round's own account of what changed incomplete",
+    "suggested_fix": "disclose the change explicitly and confirm it restates the same real scope boundary (this pack covers only raw .sql artifacts, never an ORM's own schema/migration file)",
+    "evidence": "diff of commit 419a8a79",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/sql-db/skills/sql-db-build-fix/SKILL.md",
+    "global_id": "2026-09-25-ingest-735#minor-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 48c7d1c828e58652eaeee4973c963813b2c84f49 records the disclosure in the flow journal, confirming the raw-wording change is the same disclosed scope boundary and not a separate undisclosed change",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit 48c7d1c828e58652eaeee4973c963813b2c84f49"
+    }
+  },
+  {
+    "id": "minor-3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "agent-refs.json's ruby-rails note and the journal cited only one below-1.0 behavior scenario when the official gate run had three (no-rubocop-disable-suppression 0.4, no-sleep-for-jobs 0.8, stub-external-boundary 0.9)",
+    "impact": "understates the pack's real behavior-scenario weakness",
+    "suggested_fix": "name all three scenarios in agent-refs.json, the journal, and W1's doc",
+    "evidence": "the official governance/eval.json gate run's raw per-scenario scores",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/ruby-rails/agent-refs.json",
+    "global_id": "2026-09-25-ingest-735#minor-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commit 5cbd6f90fdcc7830082142c640828a14f32ffe6f updated ruby-rails/agent-refs.json to name all three below-1.0 scenarios (no-rubocop-disable-suppression 0.4, no-sleep-for-jobs 0.8, stub-external-boundary 0.9)",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit 5cbd6f90fdcc7830082142c640828a14f32ffe6f"
+    }
+  },
+  {
+    "id": "minor-4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "safe-not-null-backfill's pass/fail criteria only accepted the nullable-then-backfill-then-NOT VALID/VALIDATE sequence, contradicting patterns.mdc's own documentation that Postgres 11+/MySQL 8.0+ apply a constant-default ADD COLUMN NOT NULL as metadata-only",
+    "impact": "the eval scenario would mark a genuinely correct, metadata-only answer as wrong",
+    "suggested_fix": "accept either safe path; recalibrate known_wrong to a case that genuinely doesn't get the fast path",
+    "evidence": "src/gdskills/bundled/stacks/sql-db/rules/patterns.mdc lines 21-26 vs the scenario's own rubric",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/stacks/sql-db/skills/sql-db-implementation/evals.json",
+    "global_id": "2026-09-25-ingest-735#minor-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "commit 35c87adb49e5250d1df1274e66e8213c1fa70464 rewrote safe-not-null-backfill's rubric/pass-criteria/known_wrong to accept either safe path and re-recorded judge-check (3/3 samples clean); further tightened by round-2 residual commit 270f779bbfe5f2fffef5c1be44815b39256d7443 (VOLATILE vs STABLE default distinction)",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit 35c87adb49e5250d1df1274e66e8213c1fa70464 and commit 270f779bbfe5f2fffef5c1be44815b39256d7443"
+    }
+  },
+  {
+    "id": "minor-5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "STACK_EXTENSIONS[\"c-cpp\"] was missing hh, ipp, inl, tpp, cppm, ixx -- real alternate C++ header/module extensions this ecosystem uses",
+    "impact": "files using these extensions would not get the c-cpp rules applied",
+    "suggested_fix": "add them to STACK_EXTENSIONS[\"c-cpp\"]",
+    "evidence": "general C/C++ ecosystem knowledge of alternate header and C++20 module-interface extensions",
+    "confidence": "medium",
+    "file": "src/gdskills/governance/authoring-lint.ts",
+    "global_id": "2026-09-25-ingest-735#minor-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "commit c63a3dd2a94dfba74a610708dd0db207b0a1fd33 added hh/ipp/inl/tpp/cppm/ixx to STACK_EXTENSIONS[\"c-cpp\"]; commit 270f779bbfe5f2fffef5c1be44815b39256d7443 also added the same six extensions to all four c-cpp rules' own paths: frontmatter so the rules actually load for those file types; bun test stack-packs.test.ts authoring-lint.test.ts pass",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit c63a3dd2a94dfba74a610708dd0db207b0a1fd33 and commit 270f779bbfe5f2fffef5c1be44815b39256d7443"
+    }
+  },
+  {
+    "id": "minor-6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "php-laravel and ruby-rails SKILL.md bodies, rules/patterns.mdc, rules/security.mdc, and pack.json auditFocus claimed queue delivery is at-least-once \"by design\"/\"guarantee\", which depends on the configured queue backend (Laravel's sync driver, Rails inline/test adapters have none), not the framework itself",
+    "impact": "guidance overstates a delivery guarantee that depends on configuration the reader may not have",
+    "suggested_fix": "soften to \"most production queue connections/adapters are at-least-once\" / \"depends on the configured connection\"",
+    "evidence": "Laravel/Rails queue-adapter documentation (general knowledge); the packs' own already-correct framing elsewhere",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/stacks/php-laravel/rules/patterns.mdc",
+    "global_id": "2026-09-25-ingest-735#minor-6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "commits 5cbd6f90fdcc7830082142c640828a14f32ffe6f (php-laravel pack.json/SKILL.md, ruby-rails SKILL.md/agent-refs.json/scout.json) and d5279e4863b7ce7c56174b01cbf79b8a124d6596 (php-laravel rules/patterns.mdc and rules/security.mdc) softened every at-least-once claim to name the configured connection, not the framework",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit 5cbd6f90fdcc7830082142c640828a14f32ffe6f and commit d5279e4863b7ce7c56174b01cbf79b8a124d6596"
+    }
+  },
+  {
+    "id": "minor-7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "after minor-1's reword, ruby-rails-code-review's new, more general scope clause had not been re-scored against php-laravel-code-review for overlap",
+    "impact": "an un-rescored clause leaves the scout use/fork decision stale for the new wording",
+    "suggested_fix": "re-run keryx skills scout for the new description and record the decision",
+    "evidence": "keryx skills scout overlap scoring methodology",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/stacks/ruby-rails/governance/scout.json",
+    "global_id": "2026-09-25-ingest-735#minor-7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "commit 5cbd6f90fdcc7830082142c640828a14f32ffe6f re-ran keryx skills scout for ruby-rails-code-review's reworded description: 0.38 overlap against php-laravel-code-review (down from 0.56), decision \"fork\", recorded in governance/scout.json",
+      "verifier": "flow-337-runner"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by commit 5cbd6f90fdcc7830082142c640828a14f32ffe6f"
+    }
+  },
+  {
+    "id": "info-1",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "ownership-unique-vs-shared scenario accepted only std::unique_ptr; a plain by-value std::ofstream member (already move-only RAII) is an equally correct answer for a single owner",
+    "impact": "a genuinely correct alternative answer would be marked wrong",
+    "suggested_fix": "accept either answer in the rubric/pass-criteria/known_right",
+    "evidence": "general C++ RAII/move-semantics knowledge",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/stacks/c-cpp/skills/c-cpp-implementation/evals.json",
+    "global_id": "2026-09-25-ingest-735#info-1"
+  }
+]
