@@ -1,0 +1,15 @@
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	##[group]src/commands/trigger-dispatch.test.ts:
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	766 |     expect(providerReportsUsage("deepseek")).toBe(false);
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	error: expect(received).toBe(expected)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	Expected: false
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	Received: true
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	      at <anonymous> (/home/runner/work/keryx/keryx/src/commands/trigger-dispatch.test.ts:766:46)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	(fail) AC14: spend is reserved before the first model call and never fails open > only providers known to report usage are accepted [85.95ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	1 tests failed:
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	(fail) AC14: spend is reserved before the first model call and never fails open > only providers known to report usage are accepted [85.95ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 7768 pass
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 12 skip
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 1 fail
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	Ran 7781 tests across 591 files.
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	error: script "test:core" exited with code 1
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	##[error]Process completed with exit code 1.

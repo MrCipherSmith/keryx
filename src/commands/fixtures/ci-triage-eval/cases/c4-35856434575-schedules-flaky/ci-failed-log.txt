@@ -1,0 +1,7 @@
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	##[group]src/tui/schedules-sidebar.test.ts:
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	      at <anonymous> (/home/runner/work/keryx/keryx/src/tui/schedules-sidebar.test.ts:396:11)
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	1 tests failed:
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	(fail) AC11: p pauses in one step (the CLI's service); r and d arm and need y — any other key cancels; confirmed run-now is `trigger run --schedule`; d deletes [429.94ms]
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	 1117 pass
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	 1 fail
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	##[error]Process completed with exit code 1.

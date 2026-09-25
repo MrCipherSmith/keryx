@@ -170,7 +170,23 @@ describe("runCiTriageForItem", () => {
         if (argv.includes("--log-failed")) {
           return { stdout: "typecheck-and-tests\tstep\tat (src/x.test.ts:9:1)\n", stderr: "", exitCode: 0 };
         }
-        throw new Error(`unexpected argv: ${argv.join(" ")}`);
+        if (argv.includes("--json") && argv.includes("jobs,workflowName,headBranch,headSha,conclusion")) {
+          return {
+            stdout: JSON.stringify({
+              jobs: [{ name: "typecheck-and-tests", conclusion: "failure" }],
+              workflowName: "CI",
+              headBranch: "feat/x",
+              headSha: "deadbeef",
+              conclusion: "failure",
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        // Flow 307 signals: every other read (prior attempts, changed files,
+        // same-head history) answers empty/non-zero — best-effort, so the
+        // triage still completes with every signal reading "not checked".
+        return { stdout: "", stderr: "not found", exitCode: 1 };
       });
       let fetchCalls = 0;
       const fetchFn = (async () => {
@@ -202,7 +218,20 @@ describe("runCiTriageForItem", () => {
     try {
       const { spawn } = recordingSpawn((argv) => {
         if (argv.includes("--log-failed")) return { stdout: "typecheck-and-tests\tstep\tboom\n", stderr: "", exitCode: 0 };
-        throw new Error(`unexpected argv: ${argv.join(" ")}`);
+        if (argv.includes("--json") && argv.includes("jobs,workflowName,headBranch,headSha,conclusion")) {
+          return {
+            stdout: JSON.stringify({
+              jobs: [{ name: "typecheck-and-tests", conclusion: "failure" }],
+              workflowName: "CI",
+              headBranch: "feat/x",
+              headSha: "deadbeef",
+              conclusion: "failure",
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: "", stderr: "not found", exitCode: 1 };
       });
       // A real `fetch` given an already-aborted signal rejects immediately —
       // this fake matches that, which is the case that actually matters here:
@@ -237,7 +266,20 @@ describe("runCiTriageForItem", () => {
     try {
       const { spawn } = recordingSpawn((argv) => {
         if (argv.includes("--log-failed")) return { stdout: "typecheck-and-tests\tstep\tboom\n", stderr: "", exitCode: 0 };
-        throw new Error(`unexpected argv: ${argv.join(" ")}`);
+        if (argv.includes("--json") && argv.includes("jobs,workflowName,headBranch,headSha,conclusion")) {
+          return {
+            stdout: JSON.stringify({
+              jobs: [{ name: "typecheck-and-tests", conclusion: "failure" }],
+              workflowName: "CI",
+              headBranch: "feat/x",
+              headSha: "deadbeef",
+              conclusion: "failure",
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: "", stderr: "not found", exitCode: 1 };
       });
       const fetchFn = (async () => new Response("{not json", { status: 200 })) as unknown as typeof fetch;
       const result = await runCiTriageForItem(dir, item, spawn, fetchFn);
