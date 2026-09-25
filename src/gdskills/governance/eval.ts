@@ -109,6 +109,31 @@ export interface EvalSpecFile {
 
 export type RunnerOutput = { readonly output: string };
 
+/**
+ * Flow 317 (FU2): every `--runner` call appends this note to the skill's own
+ * `SKILL.md` system prompt, uniformly across every skill/scenario. The
+ * single-turn runner (`buildEvalRunner`, `src/commands/model-eval-runner.ts`)
+ * has no tools wired in at all — `go/go-testing#table-driven-subtests`
+ * (flow 316 journal T13) was failing 3/5 trials not because the answer was
+ * wrong, but because the model emitted a tool/shell call ("let me inspect
+ * the function first") that the judge then graded as non-text output. This
+ * is a runner/skill interaction limitation, not a rubric defect, so the fix
+ * is a runner-level instruction, applied to every skill alike, never a
+ * per-scenario prompt or rubric change.
+ */
+export const RUNNER_SYSTEM_NOTE =
+  "Answer in plain text only. You have no tools, shell, or file access in this exercise -- do not attempt a tool call, function call, or shell command; reply with your complete answer directly, inline, as your entire response.";
+
+/**
+ * Bumped whenever `RUNNER_SYSTEM_NOTE` (or how it is appended to the skill's
+ * system prompt) changes — mirrors `JUDGE_PROMPT_VERSION`'s contract. A
+ * recorded report's `runnerPromptVersion` is only trustworthy against the
+ * exact note text that produced its trials; the stable-pack gate requires
+ * it to equal the CURRENT version for every report carrying a `--runner`
+ * generated behavior scenario (`checkSkillReportForPackGate`).
+ */
+export const RUNNER_PROMPT_VERSION = "2026-09-25.1";
+
 /** Runs one behavior scenario prompt against the skill under test; injectable so a CLI/W3 runner can be wired in without changing this module. */
 export type Runner = (prompt: string, skill: CatalogEntry) => Promise<RunnerOutput>;
 
@@ -220,6 +245,8 @@ export interface EvalReport {
   readonly runner?: string;
   /** R1-15: the model id (e.g. `"llama3.1:latest"`) — stamped by the CLI alongside `runner`. */
   readonly model?: string;
+  /** Flow 317 (FU2): `RUNNER_PROMPT_VERSION` at the time this report's `--runner` behavior scenarios actually ran — stamped by the CLI (`skills-governance.ts`'s `evalCommand`) alongside `runner`/`model`, mirroring how `evalSkill` itself stamps `judgePromptVersion`. Absent for a report with no runner. */
+  readonly runnerPromptVersion?: string;
   /** R1-15: ISO timestamp of when the CLI recorded this report. */
   readonly recordedAt?: string;
   /** Flow 316: the judge provider this report's judge-graded behavior scenarios actually ran against (e.g. `"deepseek"`) — stamped by the CLI alongside `judgeModel`, mirroring `runner`/`model`. Absent when no scenario carried a judge expectation. */
@@ -1343,6 +1370,17 @@ function checkSkillReportForPackGate(
   );
   if (ranBehaviorScenarios.length === 0) {
     return `skill "${skillId}": eval report has zero ran behavior scenarios`;
+  }
+
+  // Flow 317 (FU2): every RAN behavior scenario came from a `--runner`
+  // completion (there is no other way for a behavior scenario to reach
+  // `status: "ran"`), so the report must also have run under the CURRENT
+  // runner system note — an old recording from before the "answer in text,
+  // no tools" note was added proves nothing about whether today's runner
+  // note actually stops a tool/shell-call answer. Mirrors the
+  // `judgePromptVersion` check below for judge scenarios.
+  if (report.runnerPromptVersion !== RUNNER_PROMPT_VERSION) {
+    return `skill "${skillId}": eval report runnerPromptVersion "${report.runnerPromptVersion}" is not the current runner prompt version "${RUNNER_PROMPT_VERSION}"`;
   }
   // R1-1 (flow 316 fix1): the pack minimum applies to every RAN behavior
   // scenario individually, not just the report's own top-level `trials`

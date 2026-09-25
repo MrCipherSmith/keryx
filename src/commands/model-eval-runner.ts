@@ -29,7 +29,7 @@
 // said nothing" (a plausible read for a `not-contains` grader).
 
 import type { CatalogEntry } from "../gdskills/governance/catalog-index";
-import type { Runner, RunnerOutput } from "../gdskills/governance/eval";
+import { RUNNER_SYSTEM_NOTE, type Runner, type RunnerOutput } from "../gdskills/governance/eval";
 import { defaultModelFor, hasCredential, runModelTurn, type ProviderFactory } from "../harness/provider/single-turn";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { providerByName } from "./providers";
@@ -117,7 +117,14 @@ export function buildEvalRunner(runnerSpec: string, options: BuildEvalRunnerOpti
     const result = await runModelTurn({
       provider,
       model: resolvedModel,
-      system: skill.body,
+      // Flow 317 (FU2): the skill's own SKILL.md system prompt, plus a
+      // uniform runner-level note — applied to every skill/scenario alike,
+      // never per-scenario — telling the model this single-turn call has no
+      // tools and must answer in text. See `RUNNER_SYSTEM_NOTE`'s doc
+      // comment in `eval.ts` for why (a real single-turn runner has no tool
+      // wiring at all; a model that tries one anyway produces a non-answer
+      // no rubric should have to special-case).
+      system: `${skill.body}\n\n${RUNNER_SYSTEM_NOTE}`,
       user: prompt,
       env,
       ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),

@@ -1870,6 +1870,33 @@ describe("flow 316: the judge grader", () => {
       }
     });
 
+    test("a stale runnerPromptVersion fails (flow 317 FU2 — every ran behavior scenario is runner-produced)", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(DETERMINISTIC_SPEC);
+      try {
+        const report = { ...buildGateReadyReport({ packId: "gate-pack", skillName: "gate-skill", skillDir, evalSpec: DETERMINISTIC_SPEC }), runnerPromptVersion: "0.0.0-stale" };
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [report] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("runnerPromptVersion");
+      } finally {
+        cleanup();
+      }
+    });
+
+    test("a missing runnerPromptVersion fails the same way (an old report recorded before FU2's runner note existed)", () => {
+      const { packDir, skillDir, cleanup } = writeGateFixture(DETERMINISTIC_SPEC);
+      try {
+        const base = buildGateReadyReport({ packId: "gate-pack", skillName: "gate-skill", skillDir, evalSpec: DETERMINISTIC_SPEC });
+        const { runnerPromptVersion: _drop, ...report } = base;
+        writeFileSync(path.join(packDir, "governance", "eval.json"), JSON.stringify({ schemaVersion: "1.0.0", reports: [report] }), "utf8");
+        const result = checkStablePackGate(packDir, "stable");
+        expect(result.status).toBe("fail");
+        expect(result.reason).toContain("runnerPromptVersion");
+      } finally {
+        cleanup();
+      }
+    });
+
     test("missing trialRecords on the recorded report fails", () => {
       const { packDir, skillDir, cleanup } = writeGateFixture(DETERMINISTIC_SPEC);
       try {

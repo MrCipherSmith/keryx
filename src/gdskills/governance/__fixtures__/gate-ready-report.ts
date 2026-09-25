@@ -26,6 +26,7 @@ import {
   currentSkillCatalogEntry,
   gradeDeterministic,
   PACK_MIN_TRIALS,
+  RUNNER_PROMPT_VERSION,
   scoreTriggerScenarios,
   type EvalReport,
   type EvalScenarioResult,
@@ -154,6 +155,7 @@ export function buildGateReadyReport(options: GateReadyReportOptions): EvalRepor
     catalogDigest,
     runner: GATE_ALLOWLISTED_PROVIDER,
     model: GATE_ALLOWLISTED_MODEL,
+    runnerPromptVersion: RUNNER_PROMPT_VERSION,
     ...(hasAnyJudgeScenario
       ? { judge: GATE_ALLOWLISTED_PROVIDER, judgeModel: GATE_ALLOWLISTED_MODEL, judgePromptVersion: JUDGE_PROMPT_VERSION }
       : {}),

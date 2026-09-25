@@ -11,7 +11,7 @@
 
 import path from "node:path";
 import { loadSkillCatalog, loadSkillCatalogWithDiagnostics, type CatalogScope } from "../gdskills/governance/catalog-index";
-import { evalSkill, readSkillEvalSpec, type EvalSpecFile } from "../gdskills/governance/eval";
+import { evalSkill, readSkillEvalSpec, RUNNER_PROMPT_VERSION, type EvalSpecFile } from "../gdskills/governance/eval";
 import {
   antiGamingAnswers,
   gradeScenarioAnswer,
@@ -505,7 +505,13 @@ async function evalCommand(args: readonly string[], deps: SkillsGovernanceDeps =
     let report = rawReport;
     if (runnerName !== undefined) {
       const { provider, model } = splitRunnerSpec(runnerName);
-      report = { ...report, runner: provider, model: model ?? defaultModelFor(provider), recordedAt: new Date().toISOString() };
+      report = {
+        ...report,
+        runner: provider,
+        model: model ?? defaultModelFor(provider),
+        runnerPromptVersion: RUNNER_PROMPT_VERSION,
+        recordedAt: new Date().toISOString(),
+      };
     }
     if (judgeName !== undefined) {
       const { provider, model } = splitRunnerSpec(judgeName);

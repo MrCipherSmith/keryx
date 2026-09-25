@@ -41,3 +41,43 @@ authored) shows 110/110 positives selected and 108/108 negatives correctly
 rejected — no other skill's trigger accuracy moved.
 
 `bun test src/gdskills/stack-packs.test.ts src/gdskills/stack-pack-eval-integrity.test.ts src/gdskills/governance`: 1483 pass, 0 fail.
+- 2026-09-25T04:43:35.832Z - task-done: T5: FU1: diagnose+fix python-implementation trigger-positive-6
+- 2026-09-25T04:43:41.046Z - task-attempt: T6: started (attempt 1) — runner answer-in-text system note
+
+## FU2 (T6): runner answer-in-text system note + no-sleep-sync check
+
+`go-testing#table-driven-subtests` (flow 316 journal T13) failed 3/5 because
+`buildEvalRunner` gives the model no tools at all, and the model tried one
+anyway instead of answering in text. Added a uniform runner-level system
+note, `RUNNER_SYSTEM_NOTE` (`eval.ts`), appended after `skill.body` in
+`buildEvalRunner` (`model-eval-runner.ts`) for EVERY skill/scenario alike —
+never a per-scenario prompt change. Added `RUNNER_PROMPT_VERSION` mirroring
+`JUDGE_PROMPT_VERSION`'s contract; the CLI (`evalCommand`) stamps
+`runnerPromptVersion` on the report alongside `runner`/`model` whenever
+`--runner` was used; `checkSkillReportForPackGate` now requires it to equal
+the current version for every report carrying a ran behavior scenario (every
+ran behavior scenario came from a `--runner` call, so this is unconditional,
+mirroring the judge check). `__fixtures__/gate-ready-report.ts` updated to
+stamp it too, and two new gate tests added (`eval.test.ts`: stale and
+missing `runnerPromptVersion` both fail the gate, naming the field).
+
+`no-sleep-sync` rubric review (owner ask: "review timeouts vs sleeps, fix
+only if defective"): read `go/go-testing/evals.json`'s rubric/pass_criteria/
+fail_criteria/calibration for `no-sleep-sync`. It already correctly
+distinguishes a fixed `time.Sleep` delay (fail, "whether as the sole
+mechanism or as extra 'insurance' alongside a real join") from an actual
+synchronization primitive (WaitGroup/channel), and `known_right` explicitly
+allows a `select` against a deadline as a legitimate additional safety net
+without being scored as a sleep — the `subtle_wrong` calibration answer
+(WaitGroup + an extra `time.Sleep` "insurance" line) exercises exactly the
+gap a weaker rubric would miss. No defect found; left unchanged. This is the
+honest result, not a silent skip: T13's own failure list never named
+`no-sleep-sync` as failing (only `table-driven-subtests` did) — it was
+already passing under the old grader and remains correctly specified now.
+
+`bun test src/gdskills/governance src/commands/model-eval-runner.test.ts
+src/commands/skills-governance.test.ts`: 289 pass, 0 fail; `bun run
+typecheck`: exit 0. Five REAL bundled-tree tests (ts-js-node's committed
+`governance/eval.json` predates `runnerPromptVersion`) now correctly fail
+the gate as stale evidence — expected, and resolved by FU7's honest re-run,
+not worked around here.
