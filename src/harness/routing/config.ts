@@ -73,9 +73,23 @@ export function projectRoutingConfigPath(cwd: string): string {
 }
 
 /** One `CategoryAssignment`'s validation error, or `undefined` when it is well-shaped. */
+const ASSIGNMENT_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "session-default": ["kind"],
+  model: ["kind", "providerId", "modelId"],
+  "provider-default": ["kind", "providerId"],
+};
+
 function validateAssignment(value: unknown): string | undefined {
-  if (typeof value !== "object" || value === null) return "must be an object";
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return "must be an object";
   const kind = (value as { kind?: unknown }).kind;
+  // An assignment carries only the fields its kind defines: an extra key (a
+  // stray baseUrl, say) is refused rather than carried along unvalidated for
+  // some later reader to trust.
+  const allowed = typeof kind === "string" ? ASSIGNMENT_KEYS[kind] : undefined;
+  if (allowed !== undefined) {
+    const extra = Object.keys(value).filter((key) => !allowed.includes(key));
+    if (extra.length > 0) return `unexpected field${extra.length > 1 ? "s" : ""} ${extra.map((key) => JSON.stringify(key)).join(", ")} for kind ${JSON.stringify(kind)}`;
+  }
   if (kind === "session-default") return undefined;
   if (kind === "model") {
     const providerId = (value as { providerId?: unknown }).providerId;
@@ -180,11 +194,15 @@ export async function loadRoutingConfigRaw(layer: RoutingConfigLayer, location: 
  */
 export async function loadRoutingConfig(layer: RoutingConfigLayer, location: RoutingConfigLocation): Promise<RoutingConfigResult> {
   const raw = await loadRoutingConfigRaw(layer, location);
-  if (layer === "user" || raw.error !== undefined || Object.keys(raw.table).length === 0) {
+  if (layer === "user" || Object.keys(raw.table).length === 0) {
     return raw;
   }
+  // The trust check runs on whatever survived validation, even when some other
+  // entry in the same file was malformed: a partial parse still carries live
+  // entries, and a stray invalid line must never switch the approval gate off.
   if (!isProjectRoutingApproved(location.cwd, raw.table, location.userConfigDir)) {
-    return { table: {}, untrusted: true, error: ROUTING_TRUST_NOTICE };
+    const notice = raw.error !== undefined ? `${raw.error}; ${ROUTING_TRUST_NOTICE}` : ROUTING_TRUST_NOTICE;
+    return { table: {}, untrusted: true, error: notice };
   }
   return raw;
 }

@@ -165,6 +165,55 @@ test("loadRoutingConfig (project): an unapproved non-empty table is ignored — 
   expect(result.error).toBeDefined();
 });
 
+test("loadRoutingConfig (project): an unapproved file with one malformed entry still hides its valid ones — a stray bad line never switches the gate off", async () => {
+  const loc = await location();
+  await writeFile(
+    projectRoutingConfigPath(loc.cwd),
+    JSON.stringify({
+      categories: {
+        review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
+        "zzz-typo-category": { kind: "nonsense" },
+      },
+    }),
+  );
+  const result = await loadRoutingConfig("project", loc);
+  expect(result.table).toEqual({});
+  expect(result.untrusted).toBe(true);
+  expect(result.error).toContain("zzz-typo-category");
+});
+
+test("loadRoutingConfig (project): an approved file with one malformed entry applies its valid ones and still reports the bad one", async () => {
+  const loc = await location();
+  await writeFile(
+    projectRoutingConfigPath(loc.cwd),
+    JSON.stringify({
+      categories: {
+        review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
+        "zzz-typo-category": { kind: "nonsense" },
+      },
+    }),
+  );
+  const raw = await loadRoutingConfigRaw("project", loc);
+  await approveProjectRouting(loc.cwd, raw.table, loc.userConfigDir);
+  const result = await loadRoutingConfig("project", loc);
+  expect(result.table).toEqual({ review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
+  expect(result.untrusted).toBeUndefined();
+  expect(result.error).toContain("zzz-typo-category");
+});
+
+test("validateRoutingConfig: an assignment with a field its kind does not define is refused, not carried along", () => {
+  const { table, errors } = validateRoutingConfig({
+    categories: {
+      review: { kind: "model", providerId: "anthropic", modelId: "claude-x", baseUrl: "https://attacker.example" },
+      subagents: { kind: "session-default", note: "x" },
+      docs: { kind: "provider-default", providerId: "deepseek" },
+    },
+  });
+  expect(table).toEqual({ docs: { kind: "provider-default", providerId: "deepseek" } });
+  expect(errors.join("\n")).toContain('"baseUrl"');
+  expect(errors.join("\n")).toContain('"note"');
+});
+
 test("loadRoutingConfig (project): approving applies it", async () => {
   const loc = await location();
   await saveRoutingConfig("project", loc, { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
