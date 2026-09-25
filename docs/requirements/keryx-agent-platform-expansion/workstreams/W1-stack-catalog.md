@@ -1295,6 +1295,91 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   keeping it. `ts-js-node`/`react`/`nextjs-nuxt`/`vue` remain
   `experimental` for their own, unrelated reasons.
 
+## Implementation notes: Wave 4 batch 4 (flow 336)
+
+Four new packs authored against the batch-4 list: `csharp-dotnet` (language,
+standalone full pack), `swift-ios`, `kotlin-android`, and `flutter-dart`
+(framework family per the target-stack table, but authored **standalone** —
+see below). Each pack carries `pack.json`, 4 `rules/*.mdc` files scoped to
+its own file extensions (`.cs`; `.swift`; `.kt`/`.kts`; `.dart`), 4 skills
+(`implement`/`test`/`review`/`build-fix`; none of the four needed a distinct
+`migrate` skill), judge-format `evals.json` per skill, and a pack-level
+`governance/eval.json`. Version-specific claims (current .NET LTS/nullable
+reference types default, Swift 6 concurrency/`@Observable`/Swift Testing,
+Jetpack Compose recomposition guidance, Dart 3 mandatory sound null safety
+and `context.mounted`) were verified via ctx7 before being written, not
+recalled from training data.
+
+- **"Extends" is standalone for all three framework packs, despite the
+  table.** The target-stack table calls `swift-ios`/`kotlin-android`/
+  `flutter-dart` "full pack; extends `lang:swift`"/"`lang:kotlin`"/
+  "`lang:dart`" — but none of those three base components exist anywhere in
+  the catalog or `install-manifest.json` (unlike `react`/`angular`, which
+  genuinely extend the already-authored `ts-js-node`). Since the same table
+  entry calls each one a "full pack" (ships every rule/skill itself), this
+  flow treats all four batch-4 packs as standalone: no `extends` key in
+  `pack.json`, no `dependencies` in their install-manifest modules onto a
+  component that doesn't exist. Recorded as a runner decision, not silently
+  assumed; a future flow authoring `lang:swift`/`lang:kotlin`/`lang:dart` as
+  their own components could retrofit a real `extends` relationship then.
+- **I11 enforced from the start**, like batch 2 and unlike batch 1's deferred
+  exemption — these four packs were authored after I11 existed.
+  `csharp-dotnet`/`flutter-dart` needed 11 trigger-positive prompts reworded
+  (restated their own skill's frontmatter triggers too closely); `swift-ios`/
+  `kotlin-android` needed none.
+- **Stable-pack protection.** `checkStablePackGate(packDir, "stable")` run
+  directly against `go` and `python` after adding all four batch-4 packs to
+  the bundled catalog: both still `{"status":"pass"}` — no collision from the
+  larger catalog, no fix needed, `go`/`python` evals untouched.
+- **Calibration clean on the first attempt.** `skills judge-check <pack>/
+  <skill> --judge deepseek:deepseek-chat --samples 3 --record` for all 16
+  skills — every one of the 8 canned answers (empty, echo, vague,
+  known-wrong, subtle-wrong, injection, stuffed, known-right) graded to its
+  expected verdict on the first live-judge run for every skill.
+- **The honest trials=10 gate run** (one CLI call per skill, HEAD unchanged
+  start to end, `governance/eval.json` built verbatim from raw outputs):
+  every behavior scenario across all 16 skills clears
+  `PACK_BEHAVIOR_PASS_FLOOR` (0.8), mostly 1.0/1.0. Every one of the 16
+  skills still fails the gate, on trigger accuracy alone:
+  - `csharp-dotnet`: dotnet-implementation TP2/7 FP1/8; dotnet-testing TP4/7
+    FP0/8; dotnet-code-review TP3/7 FP0/8; dotnet-build-fix TP1/7 FP0/8
+    (worst of the 16 — even genuinely .NET-specific vocabulary the
+    description already lists, "NuGet", "StyleCop", "CS####" compiler error
+    codes, still didn't route).
+  - `swift-ios`: swiftui-implementation TP1/7 FP0/7; swift-testing TP3/7
+    FP0/7; swift-code-review TP2/6 FP2/7 (one false positive was a prompt
+    asking to *implement* a fix, wrongly routed to the read-only review
+    skill despite its own "Read-only, no edits" description clause);
+    swift-build-fix TP1/6 FP0/7.
+  - `kotlin-android`: compose-implementation TP3/7 FP0/7;
+    kotlin-android-testing TP3/7 FP0/7; kotlin-android-code-review TP4/7
+    FP0/7; kotlin-android-build-fix TP4/7 FP0/7 — the pack's best trigger
+    recall of the four and zero false positives on any of its 4 skills,
+    still short of the pass bar.
+  - `flutter-dart`: flutter-implementation TP6/7 FP2/7; flutter-testing TP3/7
+    FP2/7; flutter-code-review TP6/7 FP4/7 (worst false-positive rate of any
+    batch-4 skill — a prompt explicitly asking to "also fix the bugs you
+    find" still routed to the read-only review skill); flutter-build-fix
+    TP3/7 FP2/7 — the strongest positive recall of the four packs, paired
+    with the weakest negative discipline.
+- **No SKILL.md/evals.json edits followed the gate, for any of the 16
+  skills.** Every pack's own scope-boundary language ("Read-only, no edits",
+  the DI/EF Core/async vocabulary, etc.) was already present before the gate
+  ran; the router still missed. No candidate description edit could be
+  constructed that both (a) states a real, general scope boundary rather
+  than restating a failing eval prompt's wording (forbidden per this flow's
+  standing rule, tightened after a batch-6 lesson: a description that
+  merely repeats vocabulary from a failing prompt is not an honest fix), and
+  (b) would plausibly move any of these numbers. Concluded this is genuine,
+  catalog-scale routing weakness — 12+ stacks now share near-identical
+  implement/test/review/build-fix category framing — not an authoring
+  defect specific to these four packs.
+- **Stack coverage: unchanged at 2 (`go`, `python`).** All four batch-4
+  packs stay `stability: "experimental"`; no generated
+  `<id>-code-auditor`/`<id>-build-fixer` pair ships for any of them. Each
+  pack's `agent-refs.json` records the real per-skill numbers and the
+  reasoning above.
+
 ## Data contracts
 
 - `schemas/install-manifest.schema.json` (this workstream) — profiles,

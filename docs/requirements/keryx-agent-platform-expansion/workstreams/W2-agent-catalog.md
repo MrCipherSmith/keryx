@@ -1,5 +1,24 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.11
+Version: 0.1.12
+
+**Changelog (0.1.12, flow 336, Wave 4 batch 4):** `csharp-dotnet`,
+`swift-ios`, `kotlin-android`, `flutter-dart` (4 new packs, 16 skills) each
+ran the honest DeepSeek `deepseek-chat` runner+judge gate
+(`--strictness high --trials 10 --scope bundled`), once per skill, after
+calibration (`judge-check --record`) cleared cleanly on the first attempt for
+all 16. Every behavior scenario across all 16 skills clears
+`PACK_BEHAVIOR_PASS_FLOOR`; every skill still fails the gate on trigger
+accuracy alone — see `W1-stack-catalog.md`, "Implementation notes: Wave 4
+batch 4 (flow 336)" for the full per-skill breakdown. No SKILL.md/evals.json
+content changed after seeing these numbers (the standing rule this flow
+recorded: a post-gate edit may only state a skill's real, general scope
+boundary, never restate a failing eval prompt's wording — no edit satisfying
+that constraint was found for any of the 16 misses). All four packs stay
+`stability: experimental`; none ships a generated pair. Real, on-disk
+generated coverage as of this flow: unchanged at `go`, `python` (2 packs, 4
+files); `angular`, `mobx`, `nestjs`, `ts-js-node`, `react`, `nextjs-nuxt`,
+`vue`, `csharp-dotnet`, `swift-ios`, `kotlin-android`, `flutter-dart` are all
+`experimental` with none.
 
 **Changelog (0.1.11, flow 318, review round 2 on PR #719):** corrects the
 0.1.10 line below, which recorded review round 1's outcome — superseded by
