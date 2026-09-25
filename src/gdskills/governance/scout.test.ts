@@ -60,7 +60,13 @@ describe("scoutSkill", () => {
   });
 
   test("a fully unrelated technical query still returns create", () => {
-    const result = scoutSkill("kubernetes helm chart linting", catalog);
+    // Flow 338, W4 batch 6: "kubernetes helm chart linting" was the original
+    // fixture here, chosen because nothing in the catalog covered Kubernetes
+    // at the time. That's no longer true -- docker-k8s-terraform-review now
+    // genuinely covers Kubernetes/Helm manifest review, so the query
+    // legitimately scores "use" today. Swapped to a query with no plausible
+    // overlap with anything in this catalog, present or foreseeable.
+    const result = scoutSkill("transpose this Baroque lute tablature into modern staff notation", catalog);
     expect(result.decision).toBe("create");
   });
 
@@ -305,9 +311,18 @@ describe("scoutImports", () => {
       const { vetExternalCatalog, applyExternalImports } = await import("../../bundle/external");
       const skillDir = path.join(catalogRoot, "acme-widget");
       mkdirSync(skillDir, { recursive: true });
+      // Flow 338, W4 batch 6: the original description here ("Build and
+      // validate acme widgets end to end") started scoring as a near-dupe
+      // once the catalog gained more build-fix-named skills (docker-k8s-
+      // terraform-build-fix, ci-pipeline-build-fix) sharing generic
+      // "build"/"validate" vocabulary -- a real effect of catalog growth,
+      // not a defect in those skills' descriptions. Swapped to a
+      // description with no plausible lexical overlap with any catalog
+      // skill, so this test keeps checking the "still verifies clean, no
+      // false dedupe" arm rather than an incidental collision.
       writeFileSync(
         path.join(skillDir, "SKILL.md"),
-        "---\nname: acme-widget\ndescription: Build and validate acme widgets end to end\n---\nBody text.\n",
+        "---\nname: acme-widget\ndescription: Compose a birthday playlist from a guest's favorite decades of music\n---\nBody text.\n",
         "utf8",
       );
       const vetted = await vetExternalCatalog({ catalogPath: catalogRoot, projectRoot, homeDir: home });
