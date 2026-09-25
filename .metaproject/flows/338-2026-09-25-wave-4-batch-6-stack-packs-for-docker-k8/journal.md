@@ -106,3 +106,16 @@
   unrelated flaky test in `src/gdskills/install.test.ts` (legacy install
   path, read-only-directory chmod test — not stack-pack or manifest
   content, not touched by this flow).
+- **Resolved the two flagged `subtle_wrong` calibrations** (per-flow-338
+  Phase A note above) before calibrating: verified both against current
+  Docker docs via ctx7 (`/websites/docker_reference`). Neither "mitigating"
+  argument is a real exception in Docker's own guidance — non-root
+  guidance has no documented internal-only/no-customer-traffic carve-out,
+  and digest pinning's purpose ("an immutable identifier... prevents
+  automatic updates") is unrelated to local rebuild cadence, which a
+  nightly rebuild from a mutable tag does not restore. Both subtle_wrong
+  answers are confirmed genuinely wrong, not merely defensible-but-
+  incomplete — kept as-is, and `fail_criteria` on both scenarios extended
+  with an explicit rebuttal clause so the judge cannot be talked into
+  accepting either rationalization. No trigger/positive-prompt wording
+  touched.
