@@ -1,0 +1,70 @@
+---
+extends: common
+paths: ["**/*.ts"]
+metadata:
+  origin: authored
+---
+
+# NestJS coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules, and `ts-js-node`'s
+own TypeScript conventions, to NestJS's own idiom: decorator-driven modules,
+providers, and dependency injection. Applies only to `*.ts` files in a
+NestJS project.
+
+## Naming and file layout
+
+- One artifact per file, named after its role: `<name>.controller.ts`,
+  `<name>.service.ts`, `<name>.module.ts`, `<name>.dto.ts`,
+  `<name>.guard.ts`, `<name>.interceptor.ts`, `<name>.filter.ts`,
+  `<name>.pipe.ts` — the Nest CLI's own generator convention. Do not fold a
+  guard or interceptor into a controller file "since it's only used there".
+- Class names end in the same suffix as the file role
+  (`UsersController`, `UsersService`, `UsersModule`), `PascalCase`.
+- Injection tokens for non-class providers (`useValue`/`useFactory`) are
+  `UPPER_SNAKE_CASE` string constants or `Symbol()`s exported from a single
+  `tokens.ts`/`constants.ts`, never an inline string literal repeated at
+  every injection site.
+
+## Decorators and typing
+
+- Every constructor-injected dependency is typed explicitly
+  (`constructor(private readonly usersService: UsersService) {}`); do not
+  widen an injected dependency to `any` to sidestep a circular-import type
+  error — fix the import cycle instead (see `rules/patterns.mdc`).
+- Every controller method's return type is explicit or trivially inferred
+  from a typed service call — never `Promise<any>`.
+- DTOs are typed classes with `class-validator`/`class-transformer`
+  decorators, never plain `interface`s for request bodies — interfaces are
+  erased at runtime and `ValidationPipe` has nothing to validate against
+  (see `rules/security.mdc` and the repo's own `nestjs-dto.mdc` rule, which
+  owns the full DTO decorator checklist).
+- Use `@Injectable()` on every class that is registered as a provider, even
+  a class with no constructor dependencies — omitting it is a common cause
+  of a confusing DI resolution failure covered in
+  `skills/nestjs-build-fix/SKILL.md`.
+
+## Imports and module boundaries
+
+- Import providers only from the module that exports them; do not reach
+  into another feature module's `src/<feature>/*.service.ts` file directly
+  — import the feature module and let Nest's DI resolve it, or add the
+  provider to that module's `exports` array if it is meant to be shared.
+- Keep a module's `providers`, `controllers`, `imports`, and `exports`
+  arrays sorted by the order they were added or grouped logically; do not
+  let an `@Module()` decorator grow past what fits on one screen without
+  splitting the feature into sub-modules.
+- Barrel files (`index.ts` re-exporting a feature's public surface) export
+  only what other modules are meant to import — not internal providers,
+  guards, or DTOs used solely inside the module.
+
+## Errors
+
+- Throw a specific built-in NestJS exception (`NotFoundException`,
+  `BadRequestException`, `ConflictException`, etc.) or a project-defined
+  subclass of `HttpException`, never a bare `throw new Error(...)` from a
+  controller or service that is expected to produce an HTTP response — a
+  plain `Error` becomes an opaque `500` with no semantic status code.
+- Do not catch an exception in a service only to log it and rethrow the
+  same thing unchanged; catch only where you add context (wrap with a
+  domain-specific exception) or where you genuinely handle it.

@@ -1,0 +1,34 @@
+[
+  {
+    "query": "Use when building or extending a NestJS module, controller, guard, interceptor, pipe, or exception filter -- choosing provider scope and registering a cross-cutting concern globally via APP_GUARD/APP_INTERCEPTOR/APP_PIPE/APP_FILTER, and keeping controllers thin with business rules delegated downstream. Scoped to authoring new behavior in an app that already boots; excludes selecting field-level checks on a request body, a finished-diff review pass, and diagnosing why an already-written module stops the app from starting.",
+    "decision": "fork",
+    "topMatch": "nestjs/nestjs-testing",
+    "recordedAt": "2026-09-25T06:29:56.288Z",
+    "skillName": "nestjs-implementation",
+    "justification": "Top overlap is review-backend (NestJS DI/guard/controller structure review, not authoring) and mobx-store-review-style patterns are unrelated; closest same-domain skill is review-backend which reviews finished diffs, not implementation, so fork is correct."
+  },
+  {
+    "query": "Use when writing or debugging a NestJS test built through @nestjs/testing: a unit test that compiles a provider via Test.createTestingModule and overrides its collaborators with overrideProvider/overrideGuard/overrideInterceptor, or an e2e test that boots a real Nest application and drives it with supertest through the actual guard/pipe/filter pipeline. Scoped to a test compiled through Nest's own testing module builder; excludes picking field-level checks for a request body, authoring the feature itself, and a plain unit test with no Nest module wiring involved.",
+    "decision": "fork",
+    "topMatch": "nestjs/nestjs-implementation",
+    "recordedAt": "2026-09-25T06:30:10.502Z",
+    "skillName": "nestjs-testing",
+    "justification": "Top overlap is nestjs-implementation (same pack, different category, not a substitute) and review-backend/review-testing-practices review finished diffs rather than authoring @nestjs/testing specs, so fork is correct."
+  },
+  {
+    "query": "Use when a NestJS app itself won't boot because of its own dependency graph: `Nest can't resolve dependencies` / UnknownDependenciesException, a circular-dependency warning between modules or providers, a missing @Injectable() decorator, or a provider that isn't exported from the module owning it. Applies the smallest root-cause fix to the module/provider graph and never widens scope or adds a module import blindly to silence the startup failure. Excludes a TypeScript compiler mismatch or module-loader failure with no Nest dependency-injection angle at all (use the ts-js-node build-fix skill), and excludes authoring behavior in a module that already boots cleanly (use nestjs-implementation).",
+    "decision": "fork",
+    "topMatch": "angular/angular-build-fix",
+    "recordedAt": "2026-09-25T06:30:16.866Z",
+    "skillName": "nestjs-build-fix",
+    "justification": "Top overlap is nodejs-build-fix (ts-js-node pack, generic tsc/module-resolution errors, not Nest's own DI graph) and nestjs-implementation (same pack, authoring not fixing); neither substitutes for diagnosing UnknownDependenciesException/circular-module errors, so fork is correct."
+  },
+  {
+    "query": "Use when writing or debugging a NestJS test built through Nest's own testing-module builder: a unit test that swaps a provider's real dependency (a repository, an HTTP client) for a fake or mock double so the unit under test runs in isolation, or an e2e test that boots a real Nest application and drives it with supertest through the actual guard/pipe/filter pipeline. Scoped to a test compiled through Nest's own testing module; excludes picking field-level checks for a request body, authoring the feature itself, and a framework-agnostic unit test that never touches Nest's module system.",
+    "decision": "create",
+    "topMatch": "nestjs/nestjs-implementation",
+    "recordedAt": "2026-09-25T06:33:27.947Z",
+    "skillName": "nestjs-testing",
+    "justification": "Top overlap remains nestjs-implementation (same pack, different category, authoring not testing) and review-backend/review-testing-practices review finished diffs rather than authoring @nestjs/testing specs, so fork is correct."
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "id": "nestjs",
+  "family": "framework",
+  "extends": "ts-js-node",
+  "modules": ["nestjs-rules", "nestjs-skills"],
+  "detectionMarkers": ["nestjs"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 318, Wave 4 batch 2"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["nestjs-implementation"],
+    "test": ["nestjs-testing"],
+    "review": [],
+    "build-fix": ["nestjs-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "NestJS",
+    "auditFocus": [
+      "a REQUEST-scoped or TRANSIENT provider injected into a Singleton provider, sharing one request's state across others",
+      "a guard, interceptor, or pipe re-implemented per-controller instead of reused via APP_GUARD/APP_INTERCEPTOR/APP_PIPE or a shared decorator",
+      "business logic or direct ORM/repository calls inside a controller method instead of delegated to a service",
+      "a circular dependency between two modules or providers with no forwardRef(), or a provider resolved by string token with no matching provide entry",
+      "an exception filter or async controller method that lets an unhandled rejection or a raw internal error reach the HTTP response",
+      "a custom decorator or Reflector-based metadata read with no default when the metadata key is absent"
+    ],
+    "buildCommands": [
+      "nest build (or the project's package.json build script wrapping it)",
+      "tsc --noEmit",
+      "the project's lint script (eslint . or npm run lint)",
+      "the project's test script (nest test / jest, including e2e: npm run test:e2e)"
+    ],
+    "fixGuardrails": [
+      "Never widen a provider's scope to Default/Singleton just to make a DI resolution error disappear without checking whether the provider genuinely needs request-scoped state.",
+      "Never add a module to `imports` purely to silence an UnknownDependenciesException without confirming that module actually exports the provider being injected.",
+      "Never catch and swallow an exception in a controller or service just to stop a NestJS unhandled-rejection warning; use a proper exception filter or rethrow a typed HttpException.",
+      "Never delete or skip a failing @nestjs/testing spec to reach a green build."
+    ]
+  }
+}

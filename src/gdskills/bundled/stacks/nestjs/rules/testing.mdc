@@ -1,0 +1,69 @@
+---
+extends: common
+paths: ["**/*.ts"]
+metadata:
+  origin: authored
+---
+
+# NestJS testing
+
+Test layout and conventions specific to `@nestjs/testing`, narrowing
+`ts-js-node`'s general test-runner guidance to Nest's module-compiled test
+style. Applies only to `*.ts` files in a NestJS project.
+
+## Layout and runner
+
+- Unit tests for a provider live beside it as `<name>.service.spec.ts` /
+  `<name>.controller.spec.ts`; end-to-end tests live under `test/` as
+  `<feature>.e2e-spec.ts`, matching the Nest CLI's own generated layout and
+  its default `test/jest-e2e.json` config.
+- Run the project's own `package.json` test scripts (typically `test` for
+  unit specs and `test:e2e` for the `test/` suite) rather than invoking
+  `jest`/`vitest` directly with ad hoc flags — they carry the project's own
+  module resolution and coverage config.
+
+## Building the test module
+
+- Build the unit under test through `Test.createTestingModule({...}).compile()`
+  from `@nestjs/testing`, not by `new`-ing the class directly with hand-built
+  fake dependencies — a hand-built instance skips Nest's own DI wiring and
+  can pass while the real module graph would fail to compile.
+- Replace a real dependency with a test double via `.overrideProvider(Token)
+  .useValue(...)` (or `.useFactory(...)`/`.useClass(...)`) on the
+  `TestingModule` builder, not by monkey-patching the class prototype or
+  mutating an already-compiled module's internals.
+- For a guard/interceptor/pipe/filter under test in isolation, override it
+  the same way (`overrideGuard`/`overrideInterceptor`/`overridePipe`/
+  `overrideFilter`) rather than constructing it manually when it depends on
+  injected providers (e.g. `Reflector`).
+- For an e2e spec, call `moduleRef.createNestApplication()` then
+  `app.init()` before issuing requests, and `app.close()` in `afterAll` —
+  a suite that never calls `app.close()` leaks open handles (DB
+  connections, timers) across spec files and can make later suites hang or
+  flake.
+
+## Mocking and fixtures
+
+- Mock at the provider boundary (repository/HTTP-client provider), not by
+  stubbing a private method on the real service under test — the point of
+  `overrideProvider` is to replace what the unit depends on, not to reach
+  inside it.
+- Build a request-scoped dependency's test double as a plain object/mock
+  matching its public shape (`{ findAll: jest.fn() }`), not the real
+  provider with `Scope.REQUEST` instantiated per test — request scope only
+  matters at the framework's request-handling boundary, which a unit test
+  bypasses entirely.
+- Use `supertest` against `app.getHttpServer()` for e2e assertions on
+  status code and response shape; do not assert against the service's
+  return value directly in an e2e spec — that turns the e2e test back into
+  a unit test and loses the point of exercising the real HTTP pipeline
+  (guards, pipes, filters included).
+
+## Determinism
+
+- Reset or recreate mocked providers between tests (`jest.clearAllMocks()`
+  in `afterEach`, or a fresh `TestingModule` per test) so one spec's mock
+  call count or return value cannot leak into the next.
+- Do not depend on Nest's module compile order across a test file; each
+  `describe` block that needs a `TestingModule` builds and compiles its
+  own rather than sharing one built in an outer, unrelated `describe`.

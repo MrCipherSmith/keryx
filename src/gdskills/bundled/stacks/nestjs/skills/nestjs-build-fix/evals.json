@@ -1,0 +1,70 @@
+{
+  "triggers": {
+    "positive": [
+      "Nest can't resolve dependencies of OrdersService, help me fix this",
+      "Fix this NestJS UnknownDependenciesException on startup",
+      "There's a circular dependency warning between UsersModule and AuthModule",
+      "My NestJS app won't bootstrap, it's throwing a dependency injection error",
+      "This provider isn't found at constructor index [2], NestJS DI error",
+      "Fix this NestJS build error that's blocking npm run start:dev"
+    ],
+    "negative": [
+      "Write unit tests for UsersService using @nestjs/testing with a mocked repository",
+      "Add a new NestJS module for the invoices feature with a controller and service",
+      "Fix this plain tsc error: Type 'string' is not assignable to type 'number' in a Node script",
+      "Review this NestJS PR for missing DTO validation and N+1 queries",
+      "go vet ./... is failing on this package, help resolve the compile error",
+      "Fix this Angular AOT compile error about an unresolved template reference"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "missing-export-not-import-alone",
+      "prompt": "OrdersService injects PricingService and I'm getting 'Nest can't resolve dependencies of OrdersService'. I already added PricingModule to OrdersModule's imports array, but it's still failing. What am I missing?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that adding PricingModule to OrdersModule's imports is not enough by itself: PricingModule must also list PricingService in its own exports array, since only exported providers are visible to importing modules. The fix is adding PricingService to PricingModule's exports array, not re-declaring PricingService inside OrdersModule's own providers.",
+          "pass_criteria": [
+            "States that importing PricingModule only makes it visible to OrdersModule if PricingModule actually exports PricingService -- an import with no matching export entry does not resolve the dependency",
+            "Names the concrete fix: add PricingService to PricingModule's exports array"
+          ],
+          "fail_criteria": [
+            "Recommends re-declaring PricingService directly inside OrdersModule's own providers array as the fix, instead of adding it to PricingModule's exports -- that creates a second, separate instance of the provider rather than sharing the one PricingModule owns"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Importing PricingModule only gets you access to what it actually exports -- if PricingService is declared in PricingModule's providers but not listed in its exports array, OrdersModule still can't see it even though the module itself is imported. Check PricingModule's @Module() decorator:\n\n@Module({\n  providers: [PricingService],\n  exports: [PricingService], // <- this is almost certainly missing\n})\nexport class PricingModule {}\n\nAdd PricingService to that exports array. That's the fix -- OrdersModule's imports entry was already correct, the gap was on PricingModule's side.",
+        "known_wrong": "If the import isn't picking it up, just add PricingService directly to OrdersModule's own providers array too, alongside OrdersService. That guarantees it's available in OrdersModule's DI container regardless of what PricingModule does or doesn't export.",
+        "vague": "Double check that PricingModule is actually sharing PricingService properly with other modules that need it.",
+        "subtle_wrong": "Add PricingService to PricingModule's exports, and also add it to OrdersModule's own providers array just to be safe in case the export doesn't propagate correctly -- that way OrdersService can resolve it either way."
+      }
+    },
+    {
+      "id": "circular-dependency-both-sides",
+      "prompt": "OrdersModule and PricingModule genuinely need providers from each other. I added forwardRef() to OrdersModule's imports array, but PricingModule still throws a circular dependency error at bootstrap. What's wrong?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that resolving a genuine circular dependency with forwardRef() requires it on both sides of the reference, not just one -- OrdersModule's forwardRef() alone still leaves PricingModule trying to resolve OrdersModule the normal way, which fails the same way. The fix is adding forwardRef(() => OrdersModule) to PricingModule's imports as well (and the matching @Inject(forwardRef(...)) on constructor parameters if the cycle is between providers, not just modules).",
+          "pass_criteria": [
+            "States that forwardRef() must be applied on both sides of a genuine circular reference, and that having it only in OrdersModule's imports is why PricingModule still fails",
+            "Names the concrete fix: add forwardRef(() => OrdersModule) to PricingModule's own imports array (and @Inject(forwardRef(() => OtherService)) on the relevant constructor parameter if the providers themselves reference each other)"
+          ],
+          "fail_criteria": [
+            "Recommends removing forwardRef() and instead reordering the modules' imports, or merging the two modules, as the fix -- rather than applying forwardRef() symmetrically on both sides of the genuine cycle"
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "forwardRef() has to be on both sides of a genuine cycle -- putting it only in OrdersModule's imports fixes how OrdersModule resolves PricingModule, but PricingModule is still trying to resolve OrdersModule the normal, eager way, which fails for the same reason. Add it symmetrically:\n\n// pricing.module.ts\n@Module({\n  imports: [forwardRef(() => OrdersModule)],\n})\nexport class PricingModule {}\n\nIf the cycle is actually between the two services rather than just the modules (PricingService injects OrdersService or vice versa), the constructor also needs @Inject(forwardRef(() => OrdersService)) on that parameter, since module-level forwardRef() alone doesn't cover a provider-level cycle. Once both sides use forwardRef(), the app should bootstrap.",
+        "known_wrong": "Circular deps between modules are usually a sign forwardRef() is the wrong tool -- just remove it from OrdersModule's imports and instead reorder which module gets imported first in AppModule, since import order sometimes resolves it without needing forwardRef at all.",
+        "vague": "Circular dependencies in NestJS usually need forwardRef on both modules that reference each other, so make sure it's applied consistently.",
+        "subtle_wrong": "Add forwardRef(() => OrdersModule) to PricingModule's imports too, but skip the @Inject(forwardRef(...)) on the constructor parameter -- the module-level forwardRef should be enough to cover the provider injection as well, so there's no need to duplicate it at the constructor level."
+      }
+    }
+  ]
+}
