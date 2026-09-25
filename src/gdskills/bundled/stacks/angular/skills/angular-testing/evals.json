@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Write TestBed tests for this Angular component that reads a signal input",
-      "Add a spec for this Angular service's HTTP calls using HttpTestingController",
-      "Write a fakeAsync test for this Angular component's debounced search",
+      "This Angular component reads its data through a signal input — what's the right TestBed setup to cover it with tests?",
+      "This Angular service fires off a couple of HTTP requests — how do I mock them out with HttpTestingController for a proper spec?",
+      "I need a fakeAsync TestBed spec for this Angular component that proves its debounced search waits the full delay before calling the service — how do I structure the tick() calls?",
       "Test this standalone Angular component's OnPush rendering when the input changes",
-      "Mock this Angular component's injected OrdersService in a TestBed spec",
-      "Add a unit test for this Angular route guard's CanActivate logic"
+      "In a TestBed spec for this component, what's the right way to swap out its injected OrdersService for a mock/fake?",
+      "What's the best way to unit test whether this route guard's CanActivate correctly blocks a logged-out user, in Angular?"
     ],
     "negative": [
       "Write Vitest component tests for this Vue component using Vue Test Utils",

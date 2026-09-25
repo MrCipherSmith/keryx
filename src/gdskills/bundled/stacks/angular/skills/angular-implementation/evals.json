@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Create a new standalone Angular component that shows a user's order history",
+      "Put together a new standalone component for Angular that displays a user's order history.",
       "Add an Angular service using inject() that wraps our orders HTTP API",
       "Implement this Angular feature with signal()/computed() state instead of plain fields",
-      "Build a typed Angular reactive form for a shipping address with validators",
-      "Add an Angular route guard that redirects unauthenticated users to /login",
+      "What's the cleanest way to wire up a shipping-address form in Angular using Reactive Forms with fully typed, validated fields?",
+      "Add an Angular guard on this route that bounces anyone not logged in back to /login.",
       "Wire up a new Angular component with OnPush change detection reading a signal input",
-      "Convert this NgModule-declared component into a standalone Angular component"
+      "This component is still declared inside an NgModule — how do I convert it to a standalone Angular component with its own imports?"
     ],
     "negative": [
       "Create a new Vue component using the Composition API with <script setup>",

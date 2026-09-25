@@ -2,12 +2,12 @@
   "triggers": {
     "positive": [
       "Review this Next.js server action diff for missing auth checks before it merges",
-      "Check this diff for use client boundary mistakes in the app router pages",
-      "Review this new Nuxt server/api/orders.ts route for security issues",
-      "Does this Nuxt composable get called outside setup context anywhere in this diff",
-      "Review whether this Next.js route's rendering mode choice actually matches its data",
-      "Check this component for hydration mismatch risk before we ship it",
-      "Review this nuxt.config.ts routeRules change for correctness"
+      "In the app router pages touched by this diff, can you check for any 'use client' boundary mistakes?",
+      "There's a new server/api/orders.ts route in this Nuxt app that needs review, can you check it for security issues?",
+      "One of the reviewers on my team flagged that a composable in this PR might be running too late in the component lifecycle -- can you take a look and confirm whether that's a real problem?",
+      "This product page is marked for static generation, but the data behind it changes every few minutes -- before I approve this PR, can you sanity-check that the caching story here actually makes sense?",
+      "Before this ships, can you check whether this component carries any hydration mismatch risk given how it renders?",
+      "Someone on the team tweaked the SPA-only flag for one of our nuxt.config.ts routes and opened a PR -- can you sanity-check the change before I approve it?"
     ],
     "negative": [
       "Implement a new Next.js server action for creating an order",

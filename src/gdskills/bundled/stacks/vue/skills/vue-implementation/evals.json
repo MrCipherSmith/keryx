@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "build a vue component with props and emits",
+      "I need a new vue single file component that takes some typed props from its parent and emits an event back up when something happens",
       "add a pinia store action to update the cart",
-      "should this vue component use ref or reactive for this state",
-      "extract this vue logic into a composable",
-      "wire up v-model on this vue form",
+      "for this piece of local state in a vue component, is ref() or reactive() the better call here",
+      "two of my vue components need the same piece of reactive logic -- how do I pull it out into a composable so they can both use it",
+      "I want typing into this vue form's input to update the parent component's data automatically through v-model -- how do I wire that up",
       "implement this vue 3 script setup component"
     ],
     "negative": [

@@ -2,10 +2,10 @@
   "triggers": {
     "positive": [
       "Nest can't resolve dependencies of OrdersService, help me fix this",
-      "Fix this NestJS UnknownDependenciesException on startup",
+      "Our NestJS app crashes at bootstrap with a dependency-injection stack trace naming OrdersService's constructor -- Nest cannot resolve it.",
       "There's a circular dependency warning between UsersModule and AuthModule",
-      "My NestJS app won't bootstrap, it's throwing a dependency injection error",
-      "This provider isn't found at constructor index [2], NestJS DI error",
+      "Something in OrdersService's constructor keeps our NestJS app from finishing bootstrap -- Nest reports it cannot resolve the dependency.",
+      "Our NestJS app cannot bootstrap because Nest cannot resolve a dependency OrdersService needs -- what does the DI error at constructor index [2] actually mean?",
       "Fix this NestJS build error that's blocking npm run start:dev"
     ],
     "negative": [

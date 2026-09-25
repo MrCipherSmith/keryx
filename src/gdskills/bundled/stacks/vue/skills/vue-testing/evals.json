@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "write a vitest test for this vue component's click handler",
-      "test this vue composable's return value",
+      "write a vue test utils spec that clicks this component's button and asserts the result",
+      "I want a vitest spec that verifies the values this vue composable returns are correct",
       "debug why this vue test utils test fails intermittently",
-      "assert the emitted update event payload in this component test",
-      "mock the fetch call inside this vue component's vitest test",
-      "write a test that mounts this component with a pinia store"
+      "assert what payload this vue component's update event actually carries in its vue test utils spec",
+      "this vue component's vue test utils wrapper still triggers a real fetch call during its vitest spec -- how do I mock that out",
+      "how do I set up a test for this component that depends on a pinia store without hitting the real store"
     ],
     "negative": [
       "add React Testing Library coverage for this React component's onClick handler",

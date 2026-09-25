@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Add a new NestJS module for the invoices feature, with a controller and a service",
+      "We're adding an invoices feature to our NestJS API -- I need the module scaffolding: a controller, a service, and the provider wired up.",
       "I need to wire OrdersService into the DI container for this new module",
       "Implement a NestJS guard that checks the JWT and only allows admins through",
-      "Register a global interceptor in NestJS that logs every response's duration",
-      "Create an exception filter for this NestJS app that hides internal error details from clients",
-      "Should this NestJS provider be request-scoped or the default singleton?",
+      "Every response from our NestJS app should get its duration logged automatically -- I need an interceptor wired in globally rather than per-controller.",
+      "Right now if anything throws in our NestJS app, the client gets the raw stack trace back in the response -- I want every uncaught error across the whole app to come back as a clean, generic error instead.",
+      "A NestJS provider I'm writing reads something off the incoming request -- should that make it request-scoped, or is the default singleton still fine?",
       "Move this business logic out of the controller and into a proper service method"
     ],
     "negative": [

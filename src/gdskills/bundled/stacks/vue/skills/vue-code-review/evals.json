@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "review this vue component diff for reactivity bugs before merging",
+      "can you scan this vue component's diff before it merges for anything that could break reactivity",
       "check this pinia store change for state mutation across stores",
-      "does this vue composable leak a watcher on unmount",
-      "review this vue template for v-html injection risk",
-      "check this vue component's v-for keys in this pull request",
+      "does this vue composable's watch() call ever get cleaned up before the component unmounts, or is it leaking",
+      "is there an XSS risk from how this vue template renders raw HTML into the DOM",
+      "in this pull request's diff, take a look at whether this vue component's list rendering picks safe keys",
       "review this vue diff for prop mutation instead of emit"
     ],
     "negative": [

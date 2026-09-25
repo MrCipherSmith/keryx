@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Write a test for this Next.js server action that creates an order",
-      "How do I test this Nuxt composable that calls useAsyncData internally?",
-      "I need a mountSuspended test for this Nuxt component that reads useRoute",
+      "This server action creates a new order when called, what's the right way to get test coverage around it?",
+      "I've got a composable in my Nuxt app that internally kicks off useAsyncData, what's the best approach for testing it?",
+      "This Nuxt component pulls values from useRoute, and I need to render it in a test using @nuxt/test-utils, what's the setup for that?",
       "How do I write a test for what this Next.js App Router server component actually renders?",
       "Write a test for this server/api/orders.ts handler in Nuxt covering the unauthenticated case",
-      "This Next.js route handler's auth check needs a test",
-      "My Next.js page test is flaky because of Date.now, how do I fix that"
+      "There's an authorization check inside this route handler that has zero coverage right now, can you help me write a test for it?",
+      "One of my page tests only fails intermittently, and I traced it back to the component calling Date.now() during render, how do I make this deterministic?"
     ],
     "negative": [
       "Add a new page to this Next.js app router project",

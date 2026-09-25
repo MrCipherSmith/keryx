@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "vue-tsc is flagging a template type error in this .vue file, how do I fix it",
-      "vite build fails on this vue component's imports",
-      "eslint-plugin-vue no-mutating-props is failing on this component",
+      "our CI pipeline breaks on a type mismatch coming from vue-tsc, pointing at an expression inside this component's template block -- how do I resolve it",
+      "vite refuses to bundle this vue single file component because it can't resolve one of the imports inside it",
+      "our vue.js CI job fails because eslint's no-mutating-props check rejects a change in this component",
       "defineProps type error, generic doesn't match the props being passed",
-      "cannot find module error for this .vue file import",
+      "vite's build step can't locate this single file component when something else imports it, and throws a not found error",
       "vue template type check fails calling toFixed on this value"
     ],
     "negative": [

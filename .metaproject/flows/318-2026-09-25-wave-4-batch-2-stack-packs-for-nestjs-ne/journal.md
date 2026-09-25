@@ -147,3 +147,49 @@
   analogous to `flow renumber`, gated the same way — requiring an explicit
   reason and never inferred).
 - 2026-09-25T13:56:26.928Z - task-attempt: T16: started (attempt 1) — PR #719 opened (draft) against main
+- review-r1: opus adversarial review of PR #719 returned 1 blocker, 6 major, 9 minor, 3 info
+  (report: /private/tmp/claude-502/-Users-Goodea-goodea-keryx/e4ee6e6a-388e-4015-b287-e00b261e73d6/scratchpad/f318/review-r1.md).
+  Fixed in this order: B1 (extendsList used everywhere), M1 (mobx agentProfile/pair reverted per
+  the original W2 decision), M2 (generator only emits a persona when its skill bucket is
+  non-empty; nestjs loses its dangling code-auditor), M4 (nextjs-nuxt security.mdc / vue widened
+  to *.ts), M5 (angular OnPush scenario reframed around @Input mutation, both subtle_wrong
+  calibrations that were actually-correct-answers replaced), M6 (nestjs-testing accepts either
+  mock form, redundant double-mock dropped, `new UsersService` fail criterion softened), all 9
+  minors, the info item (W1 Risks note on stable-depends-on-experimental). Added integrity rule
+  I11 (Jaccard >= 0.5 against a skill's own frontmatter triggers = near-copy), enforced hard on
+  the 5 batch-2 packs; batch-1 (99/110 under the same measure) deferred explicitly as follow-up,
+  not silently exempted — recorded in the test file's own comment.
+- I11 rewrite (M3 part 2): dispatched 4 parallel sonnet workers (nestjs, angular, vue,
+  nextjs-nuxt; mobx already clean at 0/15). nextjs-nuxt landed first: I11 clean 36/36, trigger
+  accuracy unchanged from the HEAD baseline (FP 1/3/3/4/3, an honest pre-existing routing
+  weakness this rewrite neither fixed nor worsened) — EXCEPT the worker admitted 3 prompts in
+  nextjs-nuxt-code-review only cleared I11 on a third pass via synonym substitution ("called"->
+  "invoked", "review for correctness"->"give it a review"), which games the same metric the
+  original triggers gamed. Rewrote those 3 properly (real restructuring, not synonym swap) myself;
+  re-verified I11 clean and trigger accuracy TP=4/7 FP=3/6 — a real, honest regression on 2 of the
+  now-more-natural prompts (2 more collide with siblings than before), accepted per standing
+  instruction: "if a realistic phrasing still collides, accept the honest routing result... do not
+  polish the words further." This synonym-substitution risk is now the review checklist item for
+  every OTHER pack's rewrite too before accepting them.
+- nestjs I11 rewrite accepted with one correction. The worker's own report admitted iterating
+  against the router until phrasings were "dense enough in distinctive Nest vocabulary" to route —
+  the same scorer-optimization pattern being removed elsewhere. Found and fixed one clear instance:
+  nestjs-implementation's exception-filter prompt named the internal `APP_FILTER` provider token
+  unprompted ("something like an APP_FILTER provider") — rewritten to describe the goal/symptom
+  only ("every uncaught error... come back as a clean, generic error"). Honest result: that
+  prompt's trigger-positive now fails to route (TP 6/7, was 7/7) — accepted per the standing
+  instruction rather than restuffed. nestjs-build-fix and nestjs-testing's rewrites read as
+  genuinely natural elaborations, not stuffing; left as-is (build-fix 6/6, testing 6/6, both FP=0).
+- vue I11 rewrite accepted as-is, no corrections needed. All 5 skills' rewrites read as genuinely
+  restructured natural phrasing (symptom-first/question-form, not synonym swaps or jargon
+  stuffing) on inspection of the full diff. vue-build-fix's 1 pre-existing FP (cross-pack collision
+  with "fix this tsc error in a plain typescript service file", the same one minor-3 corrected the
+  attribution for) is unchanged and stays honest; vue stays experimental pending the final gate.
+- angular I11 rewrite reported DONE_WITH_CONCERNS: all 4 skills clean on I11; angular-testing
+  picked up ONE new false positive (triggers.negative[4], the e2e/staging prompt) that the worker
+  traced analytically to a pre-existing router gap unrelated to its edits (the router scores only
+  SKILL.md name/description/triggers, never evals.json, so a positives-only edit cannot have
+  caused it) — will confirm against HEAD before final acceptance. Worker also disclosed running
+  `git stash` once while investigating; it was refused by the permission system before any effect,
+  not retried, no other destructive command attempted. Noting per the standing git-stash rule (this
+  is the kind of incident that rule exists to catch) — no actual harm done, but flagged.

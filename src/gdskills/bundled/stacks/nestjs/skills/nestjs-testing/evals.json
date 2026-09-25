@@ -3,8 +3,8 @@
     "positive": [
       "I need a unit test for OrdersService that swaps in a fake for its Repository dependency instead of hitting the real database",
       "How do I replace the payment gateway provider with a stub when testing this NestJS module, without making real API calls",
-      "Write a NestJS e2e test for the POST /users endpoint with supertest against a booted Nest application",
-      "Exercise this NestJS auth guard in isolation by overriding the Reflector it injects",
+      "I need to drive the real POST /users route through supertest against a fully bootstrapped NestJS app instance, hitting actual guards and pipes instead of mocking the controller directly.",
+      "I want to unit test a NestJS route guard that checks role metadata, but without booting the whole app -- just fake out whatever it pulls from Reflector.",
       "My NestJS test throws saying a provider is missing when the test module tries to compile -- what's wrong with my test setup",
       "My NestJS e2e test suite hangs and never exits after the run finishes, even though every test passes"
     ],

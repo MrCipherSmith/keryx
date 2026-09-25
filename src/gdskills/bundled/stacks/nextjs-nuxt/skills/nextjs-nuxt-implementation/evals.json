@@ -4,11 +4,11 @@
       "I need to add a new order-history page to my Next.js app router project, should the data fetching happen in a server component?",
       "Write a Next.js server action that creates a post and revalidates the posts list",
       "This Nuxt page needs to fetch orders on load, should I use useFetch or a plain fetch call?",
-      "Add a Nuxt server/api route that returns the current user's profile",
+      "I need an endpoint under server/api in my Nuxt app that hands back the logged-in user's profile data, can you build that?",
       "Set up ISR on this Next.js product page so it revalidates every hour",
       "Configure routeRules in nuxt.config.ts so this one Nuxt route renders as SPA-only",
       "My Nuxt composable needs to call the API as soon as the page loads, how should I wire that up",
-      "Should this new Next.js component be a client component or a server component?"
+      "I'm adding a new component to my Next.js app and I'm not sure which rendering boundary it belongs in, how do I decide?"
     ],
     "negative": [
       "Write a test for this Next.js page's server component",

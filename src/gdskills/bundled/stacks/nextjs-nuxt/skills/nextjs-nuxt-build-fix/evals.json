@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Next.js build fails saying this Server Component imports useState, fix it",
-      "Fix this hydration mismatch warning showing up in the Next.js console",
-      "nuxi typecheck fails to resolve this auto-imported composable, fix the build",
+      "This Server Component in my Next.js app imports useState, and the build keeps failing because of it, what's the actual fix?",
+      "Every time this Next.js page renders, the console throws a hydration mismatch error, and I need to actually fix the root cause instead of suppressing it.",
+      "Running nuxi typecheck, I keep getting a failure because it can't resolve this auto-imported composable, how do I fix the build?",
       "This Next.js route.ts file has an invalid export and won't build",
       "Fix this nuxt build error about a composable being called outside setup",
-      "next build fails on this Server Component importing a browser-only API",
+      "My next build is failing because a Server Component in this file imports a browser-only API, what's the correct fix?",
       "Nuxt build can't find this component even though it's in the components folder"
     ],
     "negative": [

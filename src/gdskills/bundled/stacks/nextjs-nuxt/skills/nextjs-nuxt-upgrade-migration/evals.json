@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Migrate this Next.js app from the pages router to the app router",
+      "This Next.js app still uses the pages router everywhere, I need to migrate it over to the app router, where should I begin?",
       "Upgrade this Next.js project's pages/api routes to app router route handlers",
-      "Migrate this Nuxt 2 project to Nuxt 3",
-      "Convert getServerSideProps in this page to the app router equivalent",
-      "Move this Nuxt 2 asyncData call to useAsyncData for the Nuxt 3 migration",
-      "Migrate this Vuex store to Pinia as part of the Nuxt 3 upgrade",
-      "Replace this Options API component with script setup during the Nuxt 3 migration"
+      "This project is still running on the old Nuxt 2 major version and we need to bring it forward to Nuxt 3, what does that upgrade actually involve?",
+      "This page currently uses getServerSideProps for its data fetching, how do I convert that to the app router equivalent once we migrate it?",
+      "As part of bringing this page up to Nuxt 3, its old asyncData data-fetching call needs to become the new composable-based equivalent, how do I do that conversion?",
+      "As part of our Nuxt 3 upgrade, I need to migrate this store from Vuex over to Pinia, what does that conversion involve?",
+      "I still have a component built with the old Options API, and I want it rewritten to use script setup as part of moving to Nuxt 3, how should I approach that?"
     ],
     "negative": [
       "Add a brand new page to this already-on-app-router Next.js project",

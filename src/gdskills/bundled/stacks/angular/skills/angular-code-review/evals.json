@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "Review this Angular component diff for RxJS subscription leaks before merging",
-      "Check this Angular PR for OnPush change detection mistakes",
-      "Review this Angular service for unsafe DomSanitizer bypassSecurityTrustHtml usage",
-      "Audit this Angular component's inject() calls for injection context misuse",
-      "Review this standalone Angular component for signal anti-patterns in computed()",
+      "Before I merge this Angular component, can you check whether any of its .subscribe() calls are missing takeUntilDestroyed or another teardown?",
+      "Does this Angular pull request handle change detection correctly, or is it mutating an @Input array in place under OnPush?",
+      "This Angular service pipes some HTML through DomSanitizer's bypassSecurityTrustHtml — can you check whether that's actually safe here?",
+      "Take a look at where this Angular component calls inject() — are any of those calls happening outside a valid injection context?",
+      "In this standalone Angular component, does the way its computed() signal is written look like an anti-pattern worth flagging in review?",
       "Check this Angular diff for mixing NgModule and standalone components before merge"
     ],
     "negative": [

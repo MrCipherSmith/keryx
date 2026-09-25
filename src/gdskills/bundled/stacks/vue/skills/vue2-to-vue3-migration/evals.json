@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "migrate this vue 2 options api component to composition api",
-      "upgrade this vue 2 app to vue 3",
-      "migrate this vuex store to pinia",
-      "fix the v-model breaking change after upgrading to vue 3",
-      "replace this vue 2 currency filter for vue 3",
+      "this component still has data(), methods, and a beforeDestroy hook from vue 2 -- how do I bring it onto vue 3's composition api",
+      "we're on vue 2 and moving the whole app to vue 3 -- what's going to break across filters, v-model, and our vuex store",
+      "we're replacing vuex in this app with pinia -- how do I carry this store's state, mutations, and actions over",
+      "this vue app's custom input broke v-model after the vue 3 upgrade -- how do I fix the binding",
+      "this vue 2 template formats a price with a global filter -- vue 3 removed filters entirely, so what replaces that syntax",
       "migrate this app's global Vue.use plugin registration from Vue 2's new Vue() to Vue 3's createApp"
     ],
     "negative": [

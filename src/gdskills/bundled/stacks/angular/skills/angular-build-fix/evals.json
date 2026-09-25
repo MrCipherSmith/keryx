@@ -1,11 +1,11 @@
 {
   "triggers": {
     "positive": [
-      "Fix this ng build AOT template type-checking error about a missing property",
-      "Resolve this Angular NullInjectorError: No provider for OrdersService",
+      "My Angular template throws 'Property does not exist on type OrderDraft' the moment I run a production build — how do I get it compiling again?",
+      "My Angular app throws a NullInjectorError -- 'No provider for OrdersService' -- the instant it bootstraps after a clean build; what's the right way to resolve this DI resolution error?",
       "Fix this Angular error: 'app-order-card' is not a known element",
-      "The ng build fails after I added a new @if block referencing a signal",
-      "Fix this standalone Angular component's missing import causing a build failure",
+      "After wiring a signal into a brand-new @if block, `ng build` now reports a template type-checking error it didn't throw before -- what's the right way to fix this Angular build failure?",
+      "My standalone Angular component won't compile because I forgot to import CommonModule for @if — how do I track down and fix missing imports like this?",
       "Angular build fails with a template type mismatch on this @for loop"
     ],
     "negative": [
