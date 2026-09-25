@@ -1,0 +1,80 @@
+---
+extends: common
+paths: ["**/models.py", "**/models/**/*.py", "**/views.py", "**/views/**/*.py", "**/forms.py", "**/serializers.py", "**/urls.py", "**/admin.py", "**/*.py"]
+metadata:
+  origin: authored
+---
+
+# Django coding style
+
+Narrows `python`'s coding style to Django-project conventions. Applies to
+`*.py` files inside a Django project; non-Django Python in the same
+repository (a standalone script, a shared library package with no Django
+import) still comes from `python`'s own coding-style rule, not this file.
+
+## App and project layout
+
+- One Django "app" per cohesive domain concern (`billing/`, `accounts/`),
+  each with its own `models.py`/`views.py`/`urls.py`/`migrations/` — do not
+  grow a single app into an unrelated dumping ground once it outgrows one
+  clear responsibility.
+- Name an app's `urls.py` route names with the app as a namespace prefix
+  (`billing:invoice-detail`) and reverse them with `reverse()`/`{% url %}`,
+  never a hand-built path string, so a route can move without breaking every
+  caller.
+- Keep `settings.py` split by environment (`settings/base.py` +
+  `dev.py`/`prod.py`, or `django-environ`/`django-configurations`) when the
+  project already uses that layout; match the existing convention rather
+  than introducing a second settings-splitting scheme.
+
+## Models
+
+- Give every model field an explicit `verbose_name`/`help_text` when the
+  field name alone would not be self-explanatory to someone using the admin
+  or a generated form.
+- Use `related_name` on a `ForeignKey`/`ManyToManyField`/`OneToOneField`
+  whenever the default (`<model>_set`) would collide or read unclearly at
+  the call site; pick a name that reads naturally from the related side
+  (`author.books`, not `author.book_set`).
+- Put field-level defaults and choices near the field (`choices=Status.choices`
+  with a `TextChoices`/`IntegerChoices` enum), not a bare tuple of literal
+  strings repeated at each call site.
+- Override `save()`/add a `clean()` only for invariants that must hold for
+  every write path (including the admin and shell); a validation rule that
+  only applies to one form belongs on that `Form`, not the model.
+
+## Views and URLs
+
+- Prefer a class-based view (`ListView`, `DetailView`, `CreateView`, or a
+  DRF `APIView`/`ViewSet` when the project uses Django REST Framework) for
+  the framework's standard CRUD shapes; reach for a function-based view when
+  the logic does not map cleanly onto a generic view's hooks — current
+  Django guidance treats CBVs and FBVs as equally supported, not one as
+  deprecated.
+- Keep business logic out of the view body: a view coordinates
+  request/response and delegates the actual work to a model method, a form's
+  `clean`/`save`, or a service function — a view that inlines several
+  unrelated queries and branches is a sign the logic belongs elsewhere.
+- Name URL patterns and match the project's existing `path()`/`re_path()`
+  convention; prefer `path()` with converters (`<int:pk>`) over `re_path()`
+  unless the match genuinely needs a regex.
+
+## Forms and serializers
+
+- Validate with a `Form`/`ModelForm` (or DRF `Serializer`/`ModelSerializer`)
+  `clean_<field>`/`clean()`/`validate_<field>`/`validate()` method, not
+  ad-hoc validation scattered in the view after the fact.
+- Use `ModelForm`/`ModelSerializer` with an explicit `fields = [...]` list
+  (never `fields = "__all__"` on a form or serializer that accepts
+  user-submitted data) so a new model field is not silently exposed for
+  mass-assignment until it is deliberately added.
+
+## Imports and structure
+
+- Follow `python`'s stdlib/third-party/local import grouping; within
+  "third-party", Django's own imports (`django.db`, `django.http`, ...)
+  commonly sort before other third-party packages alphabetically — match
+  what the project's `ruff`/`isort` config already produces rather than
+  hand-ordering.
+- Import from `django.conf.settings`, never re-read environment variables
+  directly in application code that already has a settings value for it.

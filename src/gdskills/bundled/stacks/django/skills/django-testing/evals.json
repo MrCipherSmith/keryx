@@ -1,0 +1,48 @@
+{
+  "triggers": {
+    "positive": [
+      "Write a Django test for the InvoiceDetailView that checks a logged-out user gets redirected",
+      "Add pytest-django coverage for this ModelForm's clean method",
+      "Fix this failing Django test that logs in with self.client.login",
+      "Write a factory_boy factory for the Order model",
+      "Test this Django REST Framework serializer's validation for a duplicate email",
+      "Add a test for this permission-gated Django view covering both allowed and denied cases",
+      "Test that this Django model's UniqueConstraint actually rejects a duplicate row"
+    ],
+    "negative": [
+      "Write a pytest test for this FastAPI endpoint with no Django import",
+      "Implement the actual Django view logic this test file is supposed to cover",
+      "Review this Django pull request for N+1 queries before merging",
+      "Add a Jest test for this React component's rendering",
+      "Fix this failing pytest test in our plain Python parsing library",
+      "Write an integration test for this Express.js route in our Node service"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "permission-view-both-paths",
+      "prompt": "Write a Django test for `InvoiceDetailView`, a class-based view that should only be reachable by the invoice's owner (it redirects anyone else to a 403 page).",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer writes tests covering both the authorized case (the invoice owner gets a 200 response) and the unauthorized case (a different logged-in user gets a 403), each driven through the Django test client rather than by calling the view function directly.",
+          "pass_criteria": [
+            "includes a test asserting the invoice owner receives a 200 response when requesting the invoice detail page, driven through `self.client`/the `client` fixture",
+            "includes a separate test asserting a different logged-in user (not the owner) receives a 403 response for the same URL",
+            "shows the actual test code (imports, client calls, assertions), not just a description of what should be tested"
+          ],
+          "fail_criteria": [
+            "tests only the authorized/owner case and never asserts the 403 response for a non-owner request. Describing the unauthorized case as something that 'should also be tested' without an actual test asserting it is still this failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "```python\nfrom django.test import TestCase\nfrom django.urls import reverse\n\nclass InvoiceDetailViewTests(TestCase):\n    def setUp(self):\n        self.owner = UserFactory()\n        self.other_user = UserFactory()\n        self.invoice = InvoiceFactory(owner=self.owner)\n        self.url = reverse(\"billing:invoice-detail\", args=[self.invoice.pk])\n\n    def test_owner_can_view_invoice(self):\n        self.client.force_login(self.owner)\n        response = self.client.get(self.url)\n        self.assertEqual(response.status_code, 200)\n\n    def test_non_owner_gets_403(self):\n        self.client.force_login(self.other_user)\n        response = self.client.get(self.url)\n        self.assertEqual(response.status_code, 403)\n```\nBoth requests go through `self.client`, exercising the real URL resolution and view dispatch rather than calling the view function directly. Two separate tests cover the owner (expects 200) and a different logged-in user (expects 403), so the permission check itself is proven to run both ways, not just assumed from the happy path.",
+        "known_wrong": "```python\nfrom django.test import TestCase\nfrom django.urls import reverse\n\nclass InvoiceDetailViewTests(TestCase):\n    def test_owner_can_view_invoice(self):\n        owner = UserFactory()\n        invoice = InvoiceFactory(owner=owner)\n        self.client.force_login(owner)\n        response = self.client.get(reverse(\"billing:invoice-detail\", args=[invoice.pk]))\n        self.assertEqual(response.status_code, 200)\n```\nThis logs in as the invoice's owner and confirms the detail page loads with a 200 -- the core case anyone would want to verify first, and it's a clean, minimal test that exercises the real URL and view through the client.",
+        "vague": "Make sure the test covers both people who should be able to see the invoice and people who shouldn't be able to.",
+        "subtle_wrong": "```python\nfrom django.test import TestCase\nfrom django.urls import reverse\n\nclass InvoiceDetailViewTests(TestCase):\n    def test_owner_can_view_invoice(self):\n        owner = UserFactory()\n        invoice = InvoiceFactory(owner=owner)\n        self.client.force_login(owner)\n        response = self.client.get(reverse(\"billing:invoice-detail\", args=[invoice.pk]))\n        self.assertEqual(response.status_code, 200)\n        # Non-owners are redirected to a 403 page by the view's\n        # get_object() override, which is already covered by the\n        # view's own dispatch logic, so a separate test here would\n        # just be re-testing Django's permission plumbing.\n```\nThe owner path is tested directly against the client. The non-owner case is called out in a comment explaining that it's handled by the view's `get_object()` override, so it doesn't need its own test -- that logic already has its own responsibility for the 403, and duplicating it in the test file would just be redundant coverage of the same code path."
+      }
+    }
+  ]
+}

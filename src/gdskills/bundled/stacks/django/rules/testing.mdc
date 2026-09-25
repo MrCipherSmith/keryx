@@ -1,0 +1,89 @@
+---
+extends: common
+paths: ["**/tests.py", "**/tests/**/*.py", "**/test_*.py", "**/*_test.py", "**/conftest.py"]
+metadata:
+  origin: authored
+---
+
+# Django testing
+
+Narrows `python`'s `pytest` testing guidance (`python/rules/testing.mdc`) to
+Django's own test tooling: the Django `TestCase`/test `Client`, fixtures and
+factories for model data, and `pytest-django` where a project has adopted
+it. Applies to Django test files; a non-Django test module in the same repo
+still follows `python`'s own testing rule.
+
+## Choosing the test base
+
+- Use `django.test.TestCase` for anything that touches the ORM — it wraps
+  each test in a transaction that rolls back afterward, so tests stay
+  isolated without manually cleaning up rows.
+- Use `django.test.SimpleTestCase` (or mark it `databases = []`
+  under `pytest-django`) for a test that touches no database at all — it
+  skips the per-test transaction wrapper and is faster for pure logic.
+- Where the project has adopted `pytest-django`, use its `@pytest.mark.django_db`
+  fixture-based style (plain `def test_x(db, client): ...` functions,
+  `django_user_model`, `rf` for `RequestFactory`) rather than mixing it with
+  `unittest`-style `TestCase` subclasses in the same suite — match whichever
+  the project already uses; do not introduce the other style alongside it.
+
+## The test client
+
+- Drive request/response behavior through `self.client`
+  (`TestCase`)/the `client` fixture (`pytest-django`), not by calling a view
+  function directly with a hand-built request object — the client exercises
+  URL resolution, middleware, and template rendering the same way a real
+  request does.
+- Assert on `response.status_code`, `response.context`, and
+  `response.templates` (or the parsed JSON body for an API) rather than
+  inspecting internal view state that the client's response object doesn't
+  expose.
+- Log a test user in through `self.client.force_login(user)` (fast, skips
+  the auth backend) or `self.client.login(...)` (exercises the real auth
+  backend) — pick `force_login` for tests where the auth mechanism itself
+  isn't what's under test.
+
+## Model data: fixtures and factories
+
+- Prefer a factory (`factory_boy`'s `DjangoModelFactory`, if the project
+  already depends on it) over a JSON/YAML fixture file for test data —
+  factories build valid model instances from code, so a new required field
+  doesn't silently break every fixture file that predates it.
+- Keep a `conftest.py`/factory module for related test data in the
+  narrowest app-level location that covers the tests needing it, matching
+  `python`'s own "narrowest `conftest.py`" guidance.
+- Build only the fields a test actually asserts on or that a model
+  constraint requires; a factory that sets every field to a fixed literal
+  makes tests brittle to unrelated schema changes.
+
+## Forms, views, and permissions
+
+- Test a `Form`/DRF `Serializer` by constructing it directly with test data
+  and asserting `is_valid()`/`.errors`, separately from a full
+  client-driven view test — this isolates a validation bug from a
+  view-wiring bug.
+- For a permission-gated view, assert both the authorized case (200/302 to
+  the expected page) and the unauthorized case (302 to login, or 403) —
+  a view test that only exercises the happy path never proves the
+  permission check actually runs.
+
+## Migrations in tests
+
+- Do not disable migrations for the whole suite (`MIGRATION_MODULES` set to
+  a no-op) purely for speed unless the project has already made that
+  tradeoff deliberately — a suite that skips migrations can pass while a
+  real deploy's migration path is broken.
+- A test asserting data-migration behavior (a `RunPython` step) belongs in
+  its own test using `django.test.migrations`' testing utilities or the
+  project's configured migration-test helper, not folded into an unrelated
+  model test.
+
+## Determinism
+
+- Freeze time (`freezegun`, or `pytest-django`'s equivalent) instead of
+  asserting against `timezone.now()` computed twice in the test and the
+  code under test — a real few-millisecond drift between the two calls is a
+  known source of flaky Django tests.
+- Never depend on a specific queryset row order unless the code under test
+  applies an explicit `order_by()` — Django does not guarantee row order
+  without one, even for a small SQLite test database.

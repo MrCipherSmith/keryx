@@ -1,0 +1,48 @@
+{
+  "triggers": {
+    "positive": [
+      "Generate a Django migration for this new required field on the Order model",
+      "Write a data migration to backfill the display_name field from first and last name",
+      "Make this Django migration reversible, it's missing a reverse function",
+      "How do I safely drop this column in Django without breaking the running deploy",
+      "Squash these old Django migrations in the accounts app",
+      "Write a RunPython migration that normalizes existing phone numbers",
+      "Stage this Django schema change across two deploys since we can't drop the column yet"
+    ],
+    "negative": [
+      "Fix this Django migration conflict that's currently blocking makemigrations from running",
+      "Implement the actual view logic that will use this new field, not the migration",
+      "Write a database migration for our Node.js service using Knex",
+      "Write an Alembic migration for our FastAPI service's SQLAlchemy models",
+      "Add a pytest-django test for this model's new field",
+      "Run a Prisma migration for our TypeScript backend",
+      "Review this Django migration for correctness, don't write a new one"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "stage-destructive-column-drop",
+      "prompt": "We deploy Django app code and run migrations as separate steps, with a rolling deploy across several app servers. The `User` model has an old `full_name` column that's now replaced by separate `first_name`/`last_name` columns; all reads/writes of `full_name` in the codebase have already been removed in the code we're about to ship. How should the migration to actually drop the `full_name` column be sequenced?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer ships the code that stops reading/writing full_name in one release, and only drops the full_name column in a later, separate release/migration once that code is fully rolled out -- never combining the code change and the column drop in the same release when a rolling deploy can run old code against the new schema.",
+          "pass_criteria": [
+            "states that dropping the `full_name` column must happen in a separate, later migration/release from the code change that stops using it",
+            "explains why: during a rolling deploy, some app server instances still run the old code (which still reads/writes `full_name`) while others already run the new code, so dropping the column immediately would break the old instances"
+          ],
+          "fail_criteria": [
+            "recommends dropping the `full_name` column in the same release/migration as the code change that removes its usage. Noting that combining them would be 'faster' only to then reject it as unsafe is not this failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Ship the code change (already done here, since the codebase no longer reads/writes `full_name`) as its own release first, and let it fully roll out to every app server. Only after that -- in a separate, later release -- generate and apply the migration that actually drops the `full_name` column:\n```bash\npython manage.py makemigrations accounts   # in the follow-up release\n```\nThis produces a `RemoveField` operation for `full_name`. The reason for the two-release split: during a rolling deploy some servers are still running the previous release's code, which still references `full_name`, while others already run the new code. If the column were dropped in the same release as the code change, any still-running old-code instance would start erroring the moment the migration ran, regardless of deploy order. Splitting it so the column only gets dropped once nothing reads it anymore removes that window entirely.",
+        "known_wrong": "Since the code no longer reads or writes `full_name` at all, it's safe to include the column drop in this same release -- generate the migration now:\n```bash\npython manage.py makemigrations accounts\n```\nand ship it alongside the code change. There's no reason to wait for a second release since the application layer is already fully decoupled from that column.",
+        "vague": "Don't drop the column and remove the code that uses it at the same time -- give it some separation so nothing breaks during the rollout.",
+        "subtle_wrong": "You can ship the column drop in this same release as long as you run the migration *after* the code deploy finishes rolling out to all servers, rather than before or during it -- sequence the migration step to run last in the deploy pipeline so every server is already on the new code by the time `full_name` disappears. That keeps it to one release instead of splitting into two, since the ordering within the release is what actually matters, not which release it's in."
+      }
+    }
+  ]
+}
