@@ -38,7 +38,7 @@ describe("AC1: extractReferenceClauses — deterministic, no model call", () => 
   test("carries clause text with the explicit marker stripped", async () => {
     const clauses = extractReferenceClauses(await fixtureText());
     const changeSize1 = clauses.find((c) => c.clause_id === "change-size-1");
-    expect(changeSize1?.text).toBe("Hand-written code in a single contribution stays under a 900 lines budget.");
+    expect(changeSize1?.text).toBe("A contribution changes no more than 900 lines in total, tests included.");
     expect(changeSize1?.explicit).toEqual({ state_kind: "pr" });
   });
 

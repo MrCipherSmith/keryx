@@ -120,7 +120,7 @@ export function prRedactedStateText(input: { readonly title: string; readonly bo
 // AC4: report-kind state
 // ---------------------------------------------------------------------------
 
-export type FindingLocationClass = "file-and-line" | "file-only" | "none";
+export type FindingAnchorKind = "file-and-line" | "file-only" | "none";
 
 export interface ReportFindingLike {
   readonly id?: string | undefined;
@@ -130,7 +130,7 @@ export interface ReportFindingLike {
   readonly line?: number | null | undefined;
 }
 
-export function classifyFindingLocation(finding: ReportFindingLike): FindingLocationClass {
+export function classifyFindingAnchor(finding: ReportFindingLike): FindingAnchorKind {
   if (finding.file !== undefined && finding.file !== null && finding.file.length > 0) {
     return finding.line !== undefined && finding.line !== null ? "file-and-line" : "file-only";
   }
@@ -157,16 +157,16 @@ export interface ReportConformFacts {
   readonly findingsCount: number;
   readonly findingsMissingSeverity: number;
   readonly findingsMissingEvidence: number;
-  readonly locationClassCounts: Readonly<Record<FindingLocationClass, number>>;
+  readonly anchorCounts: Readonly<Record<FindingAnchorKind, number>>;
 }
 
 /** AC4: gather the report-kind deterministic facts from an existing review package's `report.md`/`findings.json`. */
 export function computeReportConformFacts(reportMarkdown: string, findings: readonly ReportFindingLike[]): ReportConformFacts {
-  const locationClassCounts: Record<FindingLocationClass, number> = { "file-and-line": 0, "file-only": 0, none: 0 };
+  const anchorCounts: Record<FindingAnchorKind, number> = { "file-and-line": 0, "file-only": 0, none: 0 };
   let missingSeverity = 0;
   let missingEvidence = 0;
   for (const finding of findings) {
-    locationClassCounts[classifyFindingLocation(finding)] += 1;
+    anchorCounts[classifyFindingAnchor(finding)] += 1;
     if (finding.severity === undefined || finding.severity.length === 0) missingSeverity += 1;
     if (finding.evidence === undefined || finding.evidence.length === 0) missingEvidence += 1;
   }
@@ -175,7 +175,7 @@ export function computeReportConformFacts(reportMarkdown: string, findings: read
     findingsCount: findings.length,
     findingsMissingSeverity: missingSeverity,
     findingsMissingEvidence: missingEvidence,
-    locationClassCounts,
+    anchorCounts,
   };
 }
 
@@ -187,7 +187,7 @@ export function reportClauseFacts(_clause: ReferenceClause, facts: ReportConform
     `findings: ${facts.findingsCount} total`,
     `findings missing a severity: ${facts.findingsMissingSeverity}`,
     `findings missing evidence: ${facts.findingsMissingEvidence}`,
-    `finding location class counts: file+line: ${facts.locationClassCounts["file-and-line"]}, file only: ${facts.locationClassCounts["file-only"]}, no location (PR/report-level): ${facts.locationClassCounts.none}`,
+    `finding anchor counts: file+line: ${facts.anchorCounts["file-and-line"]}, file only: ${facts.anchorCounts["file-only"]}, no location (PR/report-level): ${facts.anchorCounts.none}`,
   ];
   let decisive: ClauseStateFacts["decisive"];
   if (facts.findingsCount > 0 && (facts.findingsMissingSeverity > 0 || facts.findingsMissingEvidence > 0)) {

@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { extractReferenceClauses, applyClauseTags } from "./conform-clauses";
 import {
-  classifyFindingLocation,
+  classifyFindingAnchor,
   computePrConformFacts,
   computeReportConformFacts,
   hunkClauseFacts,
@@ -59,7 +59,7 @@ describe("AC3: pr-kind state", () => {
   test("a clause naming a size budget produces a decisive fact", () => {
     const diff = ["diff --git a/src/x.ts b/src/x.ts", "--- a/src/x.ts", "+++ b/src/x.ts", "@@ -1 +1,2 @@", " a", "+b", ""].join("\n");
     const facts = computePrConformFacts({ title: "t", body: "", diff });
-    const clause = taggedClause("Hand-written code stays under a 900 lines budget.");
+    const clause = taggedClause("A contribution changes no more than 900 lines in total.");
     const result = prClauseFacts(clause, facts);
     expect(result.decisive).toEqual({ satisfied: true, reason: expect.stringContaining("within") as unknown as string });
   });
@@ -85,13 +85,13 @@ describe("AC4: report-kind state", () => {
     expect(parseReportSections(md).map((s) => s.heading)).toEqual(["Report", "Findings", "Decisions"]);
   });
 
-  test("classifyFindingLocation distinguishes file+line, file-only, and none", () => {
-    expect(classifyFindingLocation({ file: "src/x.ts", line: 10 })).toBe("file-and-line");
-    expect(classifyFindingLocation({ file: "src/x.ts" })).toBe("file-only");
-    expect(classifyFindingLocation({})).toBe("none");
+  test("classifyFindingAnchor distinguishes file+line, file-only, and none", () => {
+    expect(classifyFindingAnchor({ file: "src/x.ts", line: 10 })).toBe("file-and-line");
+    expect(classifyFindingAnchor({ file: "src/x.ts" })).toBe("file-only");
+    expect(classifyFindingAnchor({})).toBe("none");
   });
 
-  test("computeReportConformFacts counts missing severity/evidence and location classes", () => {
+  test("computeReportConformFacts counts missing severity/evidence and anchor kindes", () => {
     const findings = [
       { id: "F-1", severity: "major", evidence: "e", file: "a.ts", line: 5 },
       { id: "F-2", severity: "", evidence: "e", file: "a.ts" },
@@ -101,12 +101,12 @@ describe("AC4: report-kind state", () => {
     expect(facts.findingsCount).toBe(3);
     expect(facts.findingsMissingSeverity).toBe(1);
     expect(facts.findingsMissingEvidence).toBe(1);
-    expect(facts.locationClassCounts).toEqual({ "file-and-line": 1, "file-only": 1, none: 1 });
+    expect(facts.anchorCounts).toEqual({ "file-and-line": 1, "file-only": 1, none: 1 });
   });
 
   test("missing severity/evidence produces a decisive (unsatisfied) fact", () => {
     const facts = computeReportConformFacts("# R", [{ id: "F-1", evidence: "" }]);
-    const clause = taggedClause("Every finding names a severity, evidence and a location class.");
+    const clause = taggedClause("Every finding names a severity, evidence and a anchor kind.");
     const result = reportClauseFacts(clause, facts);
     expect(result.decisive?.satisfied).toBe(false);
   });

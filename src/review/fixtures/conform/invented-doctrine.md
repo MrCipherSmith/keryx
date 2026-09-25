@@ -16,8 +16,8 @@ condition — grouped by workflow stage rather than by artefact kind.
 
 ## Change size
 
-1. Hand-written code in a single contribution stays under a 900 lines budget. [state:pr]
-2. Generated schema files are excluded from that count. [not-checkable: no artefact distinguishes generated from hand-written code for this reviewer]
+1. A contribution changes no more than 900 lines in total, tests included. [state:pr]
+2. The pipeline was run once against the staging dataset before sign-off. [not-checkable: no artefact records a staging run for this reviewer]
 
 ## Review pass
 

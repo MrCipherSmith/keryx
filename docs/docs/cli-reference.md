@@ -3768,8 +3768,8 @@ project skill is split deterministically into clauses (no model call), each
 tagged `state_kind: pr|report|hunk` and `checkable`. Every checkable clause is
 scored by Jev against DETERMINISTIC FACTS keryx computes first — PR body
 sections present/non-empty and hand-written size (via `src/review/scope.ts`)
-for `pr`; a report's section order and whether every finding carries a
-severity/evidence/location class for `report`; the hunk itself for `hunk` —
+for `pr`; a report's section order and whether every finding records the
+fields the document requires (e.g. severity, evidence, a file anchor) for `report`; the hunk itself for `hunk` —
 placed above the redacted state. A `not-checkable` clause (a live/manual step,
 or a reviewer-process obligation no artefact records) is always listed, never
 sent to Jev.

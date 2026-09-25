@@ -8,7 +8,7 @@
 
 ## Change limits
 
-1. Hand-written code in a single contribution stays under a 900 lines budget. [state:pr]
+1. A contribution changes no more than 900 lines in total, tests included. [state:pr]
 2. The change description names an explicit Data impact section. [state:pr]
 
 ## Findings

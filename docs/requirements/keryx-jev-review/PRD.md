@@ -433,18 +433,15 @@ second way for a `noul`/`choice` answer to become an authored artifact.
     extracted from it (Requirements 4-6's mechanism, extended) is tagged
     `state_kind: "pr" | "report" | "hunk"`: (1) `pr` — the PR's own description,
     metadata, and size against a stated budget; (2) `report` — whether one of keryx's
-    OWN reviewers' output follows the document's reviewer contract (every finding
-    carries severity/evidence/location-class, fixed lane order, no praise, pre-existing
-    kept apart); (3) `hunk` — code and test hunks checked against the sibling
+    OWN reviewers' output follows the document's stated reporting contract (which
+    fields a finding must carry, how findings are grouped and ordered); (3) `hunk` — code and test hunks checked against the sibling
     code-level documents the reference document points to (style patterns, testing
     conventions such as behaviour-level assertions and no vacuous tests), using the
     exact same hunk×rule mechanism as Requirements 7-9. A `hunk`-kind clause is not a
     new mechanism; it is an ordinary Requirement-4 rule whose source happens to be
     reached by following the reference document's own citations to sibling documents.
     Illustrative examples only (invented for this document, not quoted from any real
-    file): a `pr`-kind clause might read "the PR body names an explicit out-of-scope
-    list"; a `report`-kind clause might read "every blocker-severity finding names a
-    file and a line"; a `hunk`-kind clause might read "a new test asserts on a return
+    file): a `pr`-kind clause might read "the PR body has a Rollback plan section"; a `report`-kind clause might read "every finding lists a reproduction step"; a `hunk`-kind clause might read "a new test asserts on a return
     value or an observable side effect, not solely on a mock having been called."
 25. **Reference-document mode: state gathering per clause kind.** `pr`-kind clauses are
     checked against state gathered through the existing `GitHubPort` abstraction
