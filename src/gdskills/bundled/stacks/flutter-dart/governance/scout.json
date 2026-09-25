@@ -1,0 +1,33 @@
+[
+  {
+    "query": "Use when implementing or extending a feature in a Flutter app -- widget composition, state-management-agnostic lifecycle correctness, guarding BuildContext/setState across an async gap, and sound-null-safety idiom.",
+    "decision": "fork",
+    "topMatch": "flutter-dart/flutter-code-review",
+    "recordedAt": "2026-09-25T15:35:12.436Z",
+    "skillName": "flutter-implementation",
+    "justification": "Top match flutter-dart/flutter-code-review is this same pack's read-only review skill (different intent, action verb, workflow), not a real implementation duplicate; no existing implement skill covers Flutter widget composition, BuildContext-across-async-gap guarding, or Dart null safety."
+  },
+  {
+    "query": "Use when a Flutter app's test suite needs writing, extending, or fixing -- widget tests with testWidgets/WidgetTester, mocking the network/repository boundary with mocktail/mockito, and pump vs pumpAndSettle for animation- and async-aware assertions.",
+    "decision": "fork",
+    "topMatch": "ts-js-node/nodejs-testing",
+    "recordedAt": "2026-09-25T15:35:12.736Z",
+    "skillName": "flutter-testing",
+    "justification": "Nearest match ts-js-node/nodejs-testing tests TypeScript/Node code with Vitest/Jest, a different runtime and tooling entirely; no existing test skill covers Flutter widget tests, testWidgets/WidgetTester, or pump/pumpAndSettle semantics."
+  },
+  {
+    "query": "Use when reviewing a Flutter/Dart change for lifecycle and null-safety risks -- unguarded BuildContext/setState after an await, an undisposed controller/subscription, bang-operator misuse, and business logic inside build(). Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "flutter-dart/flutter-implementation",
+    "recordedAt": "2026-09-25T15:33:56.877Z",
+    "skillName": "flutter-code-review"
+  },
+  {
+    "query": "Use when flutter analyze/flutter build fails, or pubspec.yaml/pubspec.lock are out of sync -- resolves dependency version conflicts, analyzer/lint failures, null-safety compile errors, and a failing flutter test, with the smallest root-cause fix.",
+    "decision": "fork",
+    "topMatch": "kotlin-android/kotlin-android-build-fix",
+    "recordedAt": "2026-09-25T15:35:13.311Z",
+    "skillName": "flutter-build-fix",
+    "justification": "Nearest match kotlin-android/kotlin-android-build-fix fixes Gradle/AGP/Kotlin/detekt errors, not flutter analyze/pubspec/Dart null-safety compile errors; each build-fix skill is scoped to its own toolchain's specific failure surface."
+  }
+]

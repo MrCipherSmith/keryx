@@ -1,0 +1,98 @@
+---
+extends: common
+paths: ["**/*.dart"]
+metadata:
+  origin: authored
+---
+
+# Flutter/Dart coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern Dart
+(3.x, sound null safety — mandatory since Dart 3, it cannot be disabled)
+and Flutter widget idiom. Applies only to `*.dart` files — everything not
+Dart/Flutter-specific still comes from the common rules this file
+`extends`.
+
+## Naming and structure
+
+- `UpperCamelCase` for classes, enums, extensions, typedefs, and widgets;
+  `lowerCamelCase` for variables, parameters, and methods;
+  `lowercase_with_underscores` for file names and package/directory names —
+  never `snake_case` identifiers or `PascalCase` file names.
+- A widget file is named after the widget it defines
+  (`order_summary_card.dart` for `OrderSummaryCard`), one primary public
+  widget per file, matching how the project already splits `lib/`.
+- Keep a `build()` method reading top-to-bottom as layout, not a mix of
+  layout and business logic — push data fetching, formatting, and
+  validation into a controller/view-model/state object the widget reads
+  from, not inline inside `build()`.
+- An identifier's name shrinks with its scope: a short-lived loop index is
+  `i`, a public widget or service class gets a full descriptive name.
+
+## Const constructors and rebuild cost
+
+- Mark every widget constructor `const` when all of its fields can be
+  `final` and const-constructible — a `const` widget is skipped entirely
+  by `build()` on a parent rebuild instead of being rebuilt and diffed,
+  which is a real, measurable performance difference in a widget tree
+  that rebuilds often (a list item, an animated ancestor).
+- Prefer `const` at the call site too (`const SizedBox(height: 8)`, `const
+  Divider()`), not just on the constructor declaration — the analyzer's
+  `prefer_const_constructors` lint exists to catch the call sites that
+  could be const but are not; do not disable that lint to avoid fixing
+  them.
+- A widget with a non-const field (a callback closure built fresh each
+  `build()`, for instance) cannot be const — when that field does not
+  actually need to vary per-build, hoist it out (a `static` handler, a
+  field on the enclosing `State`) so the widget itself can go back to
+  being const.
+
+## Sound null safety idiom
+
+- Prefer `?.`/`??`/`??=` over the bang operator (`!`) — reach for `!` only
+  when the value's non-nullability is guaranteed by code the analyzer
+  cannot see (already checked a few lines above with no intervening
+  `await`, or a documented invariant), and say why in a comment when it is
+  not obvious.
+- Never use `!` on a value that crossed an `await` since it was last
+  checked, or on a field read from a widget/state that could have been
+  disposed in between — re-check (`if (value == null) return;` or
+  `context.mounted`) after the async gap instead of re-asserting non-null.
+- Declare a field `late` only when it is genuinely always initialized
+  before first read (e.g. in `initState`) — a `late` field that can
+  legitimately be unset just trades a compile-time nullability warning for
+  a runtime `LateInitializationError`, which is strictly worse.
+- Give a nullable parameter a sensible default via `??` at the point of
+  use rather than threading a null check through every downstream
+  consumer of that parameter.
+
+## Composition over deep nesting
+
+- Extract a widget into its own class (or a private `_SectionWidget`
+  below the file's main widget) once a single `build()` method's nesting
+  becomes hard to scan — composition of small, focused widgets is the
+  idiomatic Flutter equivalent of extracting a function, and each
+  extracted piece can independently be `const` and independently testable
+  with `testWidgets`.
+- Prefer a `Column`/`Row`/`Wrap` plus a handful of small child widgets
+  over one large widget expression with many positional/named-argument
+  levels of `Padding(child: Container(child: Column(children: [...])))` —
+  flatten with `SizedBox`/`Padding` siblings and extracted widgets instead
+  of nesting purely to achieve a visual effect a flatter tree would give
+  just as well.
+- A `build()` method that branches on more than two or three conditions to
+  decide what to render is a sign the widget is doing too much — extract
+  each branch into its own small widget so each one is readable and
+  testable in isolation.
+
+## Formatting and imports
+
+- Format with `dart format` before finishing a change — do not hand-format
+  around a formatter that is already configured; CI enforces `dart format
+  --set-exit-if-changed .` in most Flutter repos.
+- Order imports `dart:` / `package:flutter` / other `package:` / relative,
+  with a blank line between groups, matching whatever the project's
+  `analysis_options.yaml` (e.g. `directives_ordering`) already enforces.
+- Prefer relative imports within the same package's `lib/` tree and
+  `package:` imports for anything outside it, matching the project's
+  existing convention rather than switching styles mid-file.

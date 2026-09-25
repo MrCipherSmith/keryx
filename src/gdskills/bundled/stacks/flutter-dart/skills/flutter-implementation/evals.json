@@ -1,0 +1,77 @@
+{
+  "triggers": {
+    "positive": [
+      "Build a screen in this Flutter app that loads orders from a repository and shows a SnackBar when the load finishes",
+      "Add a submit button to this Flutter form that calls an async repository method and updates the UI afterward",
+      "Wire this new Flutter screen up to the app's existing Riverpod providers",
+      "Extend this Flutter widget to show a loading spinner while a Future resolves",
+      "Add a text field with a controller to this Flutter form",
+      "Implement pull-to-refresh on this Flutter list screen backed by an async call",
+      "Add navigation to a detail screen after this Flutter list item is tapped"
+    ],
+    "negative": [
+      "Add a SwiftUI view with @State that loads orders and shows an alert when done",
+      "Add a Jetpack Compose composable that loads orders from a repository and shows a Snackbar",
+      "Implement this feature in a C#/.NET minimal API service that calls a downstream client",
+      "Implement this React component with a form field and a submit handler",
+      "Review this Flutter diff for missing mounted checks",
+      "Fix this failing flutter test in the order package",
+      "Write widget tests for this Flutter screen's loading state"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "buildcontext-mounted-guard",
+      "prompt": "I'm showing a SnackBar with the result after an awaited repository call finishes inside this Flutter button's onPressed handler. What do I need to watch out for?",
+      "strictness": "high",
+      "expected_behavior": [
+        { "grader": "regex", "value": "mounted" },
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that after the await, the widget could have been disposed (the user navigated away, the screen was popped) before the callback resumes, so the code must check context.mounted immediately after the await and before using context again (e.g. to show the SnackBar via ScaffoldMessenger.of(context)) -- returning early when it is false, rather than using the context unconditionally or wrapping the use in a try/catch instead of checking mounted.",
+          "pass_criteria": [
+            "States that the widget/BuildContext could be gone (disposed, navigated away from) by the time the awaited call completes, not just that 'something could go wrong'.",
+            "Shows the concrete fix: checking context.mounted right after the await and before the next use of context (e.g. `if (!context.mounted) return;`), not merely naming 'mounted' as a concept.",
+            "Applies the check to the actual use in this prompt -- showing the SnackBar/using ScaffoldMessenger.of(context) after the check, not a generic unrelated example."
+          ],
+          "fail_criteria": [
+            "Recommends using context to show the SnackBar right after the await with no context.mounted (or mounted) check at all.",
+            "Substitutes a try/catch around the eventual error for an actual context.mounted check, or claims the check is unnecessary because the await 'usually' resolves quickly."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "After that await, the widget this callback belongs to might not be in the tree anymore -- the user could have popped the screen, navigated away, or the whole widget could have been disposed while the repository call was in flight. Using `context` at that point (via `ScaffoldMessenger.of(context)` to show the SnackBar, or any other context-dependent lookup) without checking first can throw or target a context that no longer makes sense. Add `if (!context.mounted) return;` immediately after the `await`, before you touch `context` again -- then the ScaffoldMessenger lookup and `showSnackBar` call that follow are safe. Don't wrap this in a try/catch instead; the point is to avoid using a stale context in the first place, not to recover from the exception it can throw.",
+        "known_wrong": "As long as the repository call succeeds, you can just call `ScaffoldMessenger.of(context).showSnackBar(...)` right after the `await` with the result -- no extra check needed for something like this. If it does occasionally throw because the screen moved on, that's rare enough that you can just wrap the whole thing in a try/catch and swallow the error rather than adding a mounted check before every context use after an await.",
+        "vague": "Just be careful about how you use context after the await finishes and make sure the widget is still around before doing anything with it.",
+        "subtle_wrong": "After the await, check `if (context.mounted)` -- but put the SnackBar call inside a try/catch as well just in case, so even if the mounted check somehow misses a case, the error from an unmounted context gets caught silently instead of crashing the app."
+      }
+    },
+    {
+      "id": "controller-disposal",
+      "prompt": "I'm adding a TextEditingController and an AnimationController to this Flutter form's State, both created in initState. What do I need to do to keep this correct?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer explains that every controller created in initState (the TextEditingController and the AnimationController) must be released in dispose(), calling super.dispose() last rather than first, so the underlying platform resources each controller holds are not leaked for the app's remaining lifetime.",
+          "pass_criteria": [
+            "States that both the TextEditingController and the AnimationController need to be disposed, not just one of them.",
+            "Shows the concrete mechanism: calling `.dispose()` on each controller inside the State's `dispose()` method.",
+            "States that `super.dispose()` should be called last in `dispose()`, after the controllers' own dispose calls, not first."
+          ],
+          "fail_criteria": [
+            "Omits disposing one or both of the controllers, or says disposal is optional/only needed for one of them because the screen is short-lived.",
+            "Recommends calling `super.dispose()` before disposing the controllers, or doesn't address ordering at all despite being asked what to do to keep this correct."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Override `dispose()` on this State and dispose both controllers there: call `_textController.dispose()` and `_animationController.dispose()`, then `super.dispose()` last, after your own cleanup -- not before it. Both controllers hold onto underlying platform/animation-ticker resources for as long as they're alive, so if either one isn't disposed when the State is torn down, that resource keeps existing for the rest of the app's lifetime even though nothing can reach it anymore. This applies to both controllers equally; it's not just the AnimationController (which people remember because of the ticker) or just the TextEditingController (which people forget because it looks like plain data) -- whichever ones this State created in initState, this State's dispose() has to release.",
+        "known_wrong": "For a form like this you really only need to worry about disposing the AnimationController -- that one drives a ticker that keeps running otherwise. The TextEditingController is pretty lightweight so it's fine to just leave it; not disposing it doesn't cause any real problem in practice, and skipping it keeps dispose() simpler.",
+        "vague": "Make sure to clean up the controllers you created so nothing sticks around after the widget goes away.",
+        "subtle_wrong": "Add a dispose() override and call super.dispose() first thing, then dispose both the TextEditingController and the AnimationController right after -- that way the base class cleanup happens before your own, which feels like the safer order to avoid any interference between the two."
+      }
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Write widget tests for this Flutter screen that loads data from a repository",
+      "Add a test for this Flutter form that checks the error banner appears on failure",
+      "Test this Flutter list widget's loading, data, and empty states",
+      "Add a widget test that taps this button and checks the resulting SnackBar",
+      "Fix this Flutter widget test that keeps timing out",
+      "Write a unit test for this Flutter view-model that calls a repository",
+      "Test this Flutter screen's pull-to-refresh behavior"
+    ],
+    "negative": [
+      "Write XCTest unit tests for this Swift view model",
+      "Add JUnit/Espresso tests for this Kotlin Android screen",
+      "Write xUnit tests for this C#/.NET service",
+      "Add Jest/React Testing Library tests for this React component",
+      "Implement the loading and error states for this Flutter screen",
+      "Review this Flutter diff for missing mounted checks",
+      "Fix the flutter analyze errors in this Dart file"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mock-repository-boundary",
+      "prompt": "This Flutter widget fetches orders through an OrderRepository interface, and OrderRepository's real implementation internally calls a private _parseOrderJson helper to turn the raw response into Order objects. I want to test the widget's loading/data/error states. What should I mock?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer mocks the OrderRepository interface itself (the external boundary the widget depends on), stubbing its methods to return canned data, an empty result, or a thrown error for the loading/data/error states -- and explicitly does not mock the private _parseOrderJson helper or any other internal collaborator of the real repository implementation, since that is an internal detail of a class the widget doesn't call directly.",
+          "pass_criteria": [
+            "States that OrderRepository (the interface/boundary the widget actually depends on) is what should be mocked.",
+            "Shows the concrete mechanism: a mock class implementing OrderRepository (e.g. via mocktail's `class MockOrderRepository extends Mock implements OrderRepository {}` or mockito's generated mock), stubbed per test case for loading/data/error.",
+            "Explicitly states that the private _parseOrderJson helper (or the repository's other internals) should not be mocked, since it's not the boundary the widget depends on."
+          ],
+          "fail_criteria": [
+            "Recommends mocking _parseOrderJson or another internal collaborator of the real repository implementation instead of, or in addition to, mocking the OrderRepository interface."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Mock OrderRepository itself -- that's the actual boundary the widget depends on and the only thing it calls directly. Build a `MockOrderRepository` (with mocktail: `class MockOrderRepository extends Mock implements OrderRepository {}`, or mockito's generated mock) and stub its fetch method per test case: `when(() => mockRepo.fetchOrders()).thenAnswer((_) async => [order1, order2])` for the data state, an empty list for the empty state, and `thenThrow(...)` for the error state. Inject that mock into the widget the same way the real app injects the real implementation. Don't touch `_parseOrderJson` at all -- it's a private implementation detail of the *real* OrderRepository, not something the widget calls, and the widget under test never sees it; mocking it wouldn't even be possible from outside that class, and reaching for it would mean testing the wrong layer even if it were.",
+        "known_wrong": "Since OrderRepository ultimately depends on _parseOrderJson to build the Order objects, mock _parseOrderJson directly so you can control exactly what data comes back -- have it return canned Order lists for the data case, an empty list for empty, and throw for the error case. That gives you full control over the parsing step without needing to set up a whole mock repository class.",
+        "vague": "Mock out the data layer so you can control what the widget receives for each state you're testing.",
+        "subtle_wrong": "Create a MockOrderRepository for the top-level fetch call, but also stub out _parseOrderJson underneath it so you can be extra sure the parsing logic doesn't interfere with the widget-level assertions -- that way both the repository call and the parsing step are fully controlled by the test."
+      }
+    },
+    {
+      "id": "pump-loading-then-settle",
+      "prompt": "This Flutter widget shows a loading spinner while a Future resolves, then shows the data. I want a widget test that verifies the loading spinner actually appears before the data does. How should I structure the pump calls?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer calls tester.pumpWidget(...) then tester.pump() exactly once (a single frame) to assert the loading spinner is showing before the mocked Future resolves, then advances again (another pump(), or pumpAndSettle() once the Future is controlled to resolve promptly) to assert the data state -- rather than calling pumpAndSettle() immediately after pumpWidget(), which jumps straight past the loading frame to the settled end state and would never actually observe the spinner.",
+          "pass_criteria": [
+            "Structures the test as pumpWidget() followed by a single pump() to capture and assert the loading state, before the mocked Future resolves.",
+            "Advances again afterward (a further pump() or pumpAndSettle()) to reach and assert the resolved data state, as a separate step from the loading assertion.",
+            "Explains why calling pumpAndSettle() immediately after pumpWidget() would skip over the loading state instead of showing it."
+          ],
+          "fail_criteria": [
+            "Calls pumpAndSettle() immediately after pumpWidget() as the only pump step before asserting the loading spinner is visible."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Call `await tester.pumpWidget(widget)` and then a single `await tester.pump()` -- that advances exactly one frame, which is enough for the widget to have started the async fetch and rendered its initial loading state, but not enough for the mocked Future to have resolved yet. Assert the spinner is present there: `expect(find.byType(CircularProgressIndicator), findsOneWidget)`. Then let the mocked Future resolve (control it directly via a Completer or a mock configured to resolve immediately) and call `await tester.pump()` again (or `pumpAndSettle()` if nothing else is still animating) to reach the data state, and assert on the rendered data. Don't call `pumpAndSettle()` right after `pumpWidget()` for the first assertion -- `pumpAndSettle()` keeps pumping frames until nothing is scheduled to rebuild, which means it runs straight past the loading frame to the fully-resolved end state, so the loading-spinner assertion would never actually see the spinner.",
+        "known_wrong": "Just call `await tester.pumpWidget(widget)` followed by `await tester.pumpAndSettle()`, then check that the spinner was shown at some point during that -- pumpAndSettle handles all the pumping you need in one call, so there's no reason to pump manually in between. If the spinner assertion doesn't pass afterward, that usually just means the widget didn't render it for long enough, not a problem with how the test is pumping.",
+        "vague": "Pump the widget enough times to see both the loading state and the final data state before you assert on them.",
+        "subtle_wrong": "Call `pumpWidget()` then `pump()` once to catch the loading state and assert the spinner -- that part's right. For the data state afterward, skip the second pump and just check `find.text('...')` right away without advancing the frame again, since the Future should already be far enough along by then for the widget tree to reflect it."
+      }
+    }
+  ]
+}

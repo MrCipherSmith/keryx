@@ -1,0 +1,85 @@
+---
+extends: common
+paths: ["**/*.dart"]
+metadata:
+  origin: authored
+---
+
+# Flutter/Dart security
+
+Narrows `core-common-rules`' stack-agnostic security rules to Flutter/Dart-
+specific risks and the safe APIs to use instead. Applies only to `*.dart`
+files.
+
+## Secret and credential storage
+
+- Store a token, session cookie, refresh token, or any other credential in
+  `flutter_secure_storage` (backed by Keychain on iOS, Keystore/
+  EncryptedSharedPreferences on Android), never in `shared_preferences` —
+  `SharedPreferences` persists as an unencrypted plist/XML file on disk
+  that any process with filesystem access (a rooted device, a backup
+  extraction) can read directly.
+- `shared_preferences` remains fine for genuinely non-sensitive
+  preferences (a theme choice, a "seen onboarding" flag) — the rule is
+  about what the value *is*, not a blanket ban on the package.
+- Never hard-code an API key, client secret, or signing credential as a
+  Dart string literal compiled into the app — every string in a release
+  build is recoverable from the compiled binary with straightforward
+  reverse-engineering tools. Load it from a backend-issued short-lived
+  token, a build-time `--dart-define`/`.env` mechanism the project already
+  uses that keeps the actual secret server-side, or a secrets manager
+  reached over an authenticated network call — not compiled directly into
+  client code.
+
+## Network calls and certificate pinning
+
+- Use `https://` for every network call that carries user data,
+  credentials, or tokens; a plaintext `http://` endpoint is trivially
+  interceptable on a shared or compromised network.
+- For a call carrying especially sensitive data (payment, health,
+  authentication) where the project has decided the risk of a
+  compromised/misissued CA in the platform trust store is worth guarding
+  against, use certificate pinning (`HttpClient.badCertificateCallback`
+  validated against a known pin, or a package such as
+  `http_certificate_pinning`/platform-native pinning) — but treat this as
+  a deliberate, project-level decision with a rotation plan, not a default
+  to apply to every request, since a mishandled pin update can lock out
+  legitimate traffic when a certificate rotates.
+- Never override `badCertificateCallback` (or an equivalent HTTP client
+  hook) to unconditionally return `true` — that disables certificate
+  validation entirely for that client, the same failure class as Go's
+  `InsecureSkipVerify: true`, and is never appropriate outside a
+  short-lived local test.
+
+## Platform channel and input validation
+
+- Validate and sanitize any value crossing a `MethodChannel`/
+  `EventChannel` in either direction — a payload from native code is
+  external input from the Dart side's perspective, and a payload from
+  Dart is external input from the native side's perspective; do not trust
+  a channel argument's shape or range without checking it, especially
+  before using it to index a collection, build a file path, or construct
+  a query.
+- Encode structured data crossing a platform channel with the codec the
+  channel already uses (the default standard codec, or an explicit
+  `MessageCodec`) rather than hand-rolling string concatenation/parsing
+  across the channel boundary, which reintroduces the same injection and
+  parsing-ambiguity risks as building a query string by hand.
+
+## Local storage and logging
+
+- Never write a secret, token, or PII value to `debugPrint`/`print` or any
+  logging sink that a release build still ships with enabled — a log
+  statement written for local debugging has a way of surviving into a
+  shipped build and into crash-reporting payloads.
+- A `WebView` rendering any content that includes user-controlled or
+  externally-fetched HTML must not run with JavaScript enabled on
+  untrusted content unless the content is sanitized first — the same XSS
+  risk class as an unescaped web template, just inside a native app.
+
+## Dependency hygiene
+
+- Run `flutter pub outdated` and review a dependency's changelog/CVE
+  history before a major-version bump, and prefer `dart pub deps` to
+  understand what a new transitive dependency actually pulls in before
+  adding it.

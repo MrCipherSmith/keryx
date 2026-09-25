@@ -1,0 +1,41 @@
+{
+  "id": "flutter-dart",
+  "family": "framework",
+  "modules": ["flutter-dart-rules", "flutter-dart-skills"],
+  "detectionMarkers": ["flutter", "dart"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 336, Wave 4 batch 4"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["flutter-implementation"],
+    "test": ["flutter-testing"],
+    "review": ["flutter-code-review"],
+    "build-fix": ["flutter-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Flutter/Dart",
+    "auditFocus": [
+      "a BuildContext used after an await with no context.mounted (or State.mounted) check first",
+      "a StatefulWidget with a TextEditingController/AnimationController/StreamSubscription/FocusNode created in initState but never released in dispose",
+      "setState called after an async gap with no mounted guard, risking 'setState() called after dispose()'",
+      "a widget tree many levels deep in one build method instead of extracted into smaller const-friendly widgets",
+      "a secret, token, or API key read from or written to SharedPreferences instead of flutter_secure_storage",
+      "a bang operator (!) on a nullable value with no preceding null check or non-null guarantee in scope"
+    ],
+    "buildCommands": [
+      "flutter analyze",
+      "dart format --set-exit-if-changed .",
+      "flutter test",
+      "flutter build apk --debug (or the project's actual target platform build)"
+    ],
+    "fixGuardrails": [
+      "never add // ignore: or a blanket // ignore_for_file: comment to silence an analyzer finding instead of fixing the root cause",
+      "never add the bang operator (!) to a nullable value just to satisfy the analyzer without first establishing the value is actually non-null there",
+      "never delete or weaken a failing widget test's expectation (find.text/find.byType assertion) to make it pass",
+      "never pin or downgrade a pub dependency to route around a real incompatibility without saying so in the report"
+    ]
+  }
+}
