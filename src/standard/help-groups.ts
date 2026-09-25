@@ -308,6 +308,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/jevrules",
+    group: "Managed work",
+    summary: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule.",
+  },
+  {
+    kind: "slash",
     name: "/guard",
     group: "Managed work",
     summary: "Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on|off].",

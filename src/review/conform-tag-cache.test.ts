@@ -70,4 +70,23 @@ describe("AC2: clause tag cache", () => {
     const mode = (await stat(path.join(dir, CONFORM_TAG_CACHE_PATH))).mode & 0o777;
     expect(mode).toBe(0o600);
   });
+
+  // review-jev-rules' precision-fix follow-up reuses this exact module for its
+  // own clause tags, at a jev-rules-specific path — `cacheRelPath` lets a
+  // caller do that WITHOUT colliding with `review conform`'s own cache file.
+  test("a caller-supplied cacheRelPath is a fully independent cache from CONFORM_TAG_CACHE_PATH", async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "keryx-conform-cache-"));
+    const jevRulesPath = ".metaproject/data/review-jev-rules/clause-tags.json";
+    const hash = hashConformDocContent("doc content v1");
+    await writeClauseTagCache(dir, "rules/x.mdc", hash, { "h-1": { state_kind: "pr", checkable: true } }); // conform's own path (default)
+    await writeClauseTagCache(dir, "rules/x.mdc", hash, { "h-1": { state_kind: "hunk", checkable: true } }, jevRulesPath);
+
+    const conformCache = await readClauseTagCache(dir);
+    const jevRulesCache = await readClauseTagCache(dir, jevRulesPath);
+    expect(cachedTagsFor(conformCache, "rules/x.mdc", hash)).toEqual({ "h-1": { state_kind: "pr", checkable: true } });
+    expect(cachedTagsFor(jevRulesCache, "rules/x.mdc", hash)).toEqual({ "h-1": { state_kind: "hunk", checkable: true } });
+    // Two files on disk, not one shared file.
+    expect((await stat(path.join(dir, CONFORM_TAG_CACHE_PATH))).isFile()).toBe(true);
+    expect((await stat(path.join(dir, jevRulesPath))).isFile()).toBe(true);
+  });
 });

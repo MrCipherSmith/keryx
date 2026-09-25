@@ -31,6 +31,10 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
 import { runImportReviewers } from "../review/import-reviewers";
+// flow 330: registration only. The command itself, and every helper it
+// needs, lives in `review-jev-rules.ts` — a NEW file, so flow 326's
+// concurrent work on this file's conform parts never collides with it.
+import { runJevRules } from "./review-jev-rules";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -554,6 +558,12 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "conform") {
       await runConform(args.slice(1));
+      return;
+    }
+    // flow 330: an ADDITIONAL, CLI-driven reviewer — see
+    // `src/commands/review-jev-rules.ts` for everything past registration.
+    if (command === "jev-rules") {
+      await runJevRules(args.slice(1));
       return;
     }
     if (command === "learn") {
@@ -3599,6 +3609,13 @@ Usage:
                        [--repo <owner/repo>] [--explain] [--threshold <0..1>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
                        [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
+  keryx review jev-rules (--diff <ref> | --pr <n> | --scope <scope.json>)
+                         [--rules <paths>] [--max-calls <n>] [--threshold <0..1>]
+                         [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                         [--fixtures <dir>] [--json]
+                         An ADDITIONAL reviewer, engine: jev. Checks every changed hunk
+                         against every applicable project rule clause. Opt-in via
+                         review.jev.rules in .metaproject/tasks.config.json.
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]

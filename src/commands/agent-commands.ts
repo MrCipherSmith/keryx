@@ -221,6 +221,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 330 (AC7): a one-shot check of the working diff's hunks against
+    // every applicable project rule clause, with Jev, printed grouped by
+    // rule. TUI-only, same reasoning as `/ci`/`/conform`.
+    name: "/jevrules",
+    description: "Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 329 (AC4/AC5): the opt-in turn guard — after a turn ends, checks
     // whether the request was done and catches a final message that
     // contradicts what the tools really did. TUI-only, same reasoning as

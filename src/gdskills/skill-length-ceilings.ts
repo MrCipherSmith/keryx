@@ -163,6 +163,7 @@ const CEILINGS_BY_KEY = {
   "review/review-frontend": 634,
   "review/review-frontend-conventions": 213,
   "review/review-highload": 550,
+  "review/review-jev-rules": 267,
   "review/review-layout": 238,
   "review/review-logic": 377,
   "review/review-orchestrator": 1723,
