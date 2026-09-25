@@ -131,7 +131,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "routing",
     group: "Connect a model provider",
-    summary: "Category -> model routing table: list, set, unset (per-user default; --project for the project layer).",
+    summary: "Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set).",
   },
   { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
   {

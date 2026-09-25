@@ -94,6 +94,7 @@ import {
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
+import type { ProfileRefreshSummary } from "../harness/routing/model-profile";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
 import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
@@ -165,6 +166,7 @@ import {
   classifyProviderConnection,
   disconnectProvider,
   fetchOpenAiCompatModelsDetailed,
+  formatProfileSummarySuffix,
   modelsFailureLine,
   providerByName,
   resolveModelsForPicker,
@@ -2716,7 +2718,16 @@ function pickConnectedProviderStep(
         return;
       }
       block.status.content = otui.t`${dimChunk(otui, "testing…")}`;
-      const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env);
+      // Flow 327 (AC2/AC13): refresh the model-profile store from this same
+      // probe (`opts.configDir` is the SAME test seam `providerByName` above
+      // already uses) and mention the diff in the result line.
+      let profileSummary: ProfileRefreshSummary | undefined;
+      const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env, {
+        ...(opts.configDir !== undefined ? { dir: opts.configDir } : {}),
+        onSummary: (s) => {
+          profileSummary = s;
+        },
+      });
       // The row (or the whole step) may be gone by the time the probe
       // resolves — a disconnect elsewhere repaints `rowBlocks`, and Esc/a
       // label selection closes the step outright. Re-look-up by name rather
@@ -2725,7 +2736,7 @@ function pickConnectedProviderStep(
       if (current === undefined || resolved) return;
       current.status.content =
         result.source === "live"
-          ? otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(result.models.length)} model(s)`
+          ? otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(result.models.length)} model(s)${formatProfileSummarySuffix(profileSummary)}`
           : otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(rows.find((d) => d.name === name) ?? { name, models: [] }), result.failure ?? { kind: "empty" })}`;
     }
 
@@ -5971,6 +5982,10 @@ export async function launchTuiAgentShell(opts: {
     const showRouting = (): void => {
       openRouting(otui, chrome, {
         cwd: inspectorCwd(),
+        // Flow 327 (AC12) — the session's own provider/model, for the
+        // `derived` layer (`deriveDefaultTable`, PRD §6.3 — derives from the
+        // SESSION's current provider only).
+        session: { providerId: currentSel.provider, modelId: currentSel.model },
         renderer: r,
         ...inspectorKeys,
       });

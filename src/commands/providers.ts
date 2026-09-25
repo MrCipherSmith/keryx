@@ -23,6 +23,11 @@ import {
   removeCustomCompatProvider,
 } from "../lib/provider-config";
 import { extraRequestHeaders } from "../lib/oauth/catalog";
+import {
+  parseModelProfileFieldsFromBody,
+  refreshModelProfiles,
+  type ProfileRefreshSummary,
+} from "../harness/routing/model-profile";
 import { envWithOAuthAccess, oauthEnvKeyFor } from "../lib/oauth/grants";
 import { logoutProvider } from "../lib/oauth/login";
 import { resolveCallerSession } from "../lib/caller-session";
@@ -689,14 +694,39 @@ async function boundedJsonBody(res: Response, maxBytes: number): Promise<{ ok: t
 }
 
 /**
+ * Flow 327 (AC2) — opt-in profile refresh, threaded through
+ * {@link fetchOpenAiCompatModelsDetailed}'s `opts.refreshProfiles`. Passing
+ * NOTHING (the default for every caller/test before this flow) skips the
+ * refresh entirely — zero disk writes, zero behavior change, so no existing
+ * caller or test needs to change. A caller that DOES want the profile store
+ * kept current (`testProviderConnection`'s own production call sites, the
+ * flow-309 live provider catalog, AC16) passes `{}` at minimum (production
+ * config dir) or `{dir}` (a test's temp dir).
+ */
+export interface ProfileRefreshOpts {
+  /** Per-user config dir override — the same test seam every writer in this codebase takes. Default: the real global config dir. */
+  readonly dir?: string;
+  readonly now?: () => number;
+  /** Fires with the diff summary (AC13) once the refresh completes — the return shape of this function itself stays `ModelsResolveResult` (AC2), so a caller that needs the counts reads them from here. */
+  readonly onSummary?: (summary: ProfileRefreshSummary) => void;
+}
+
+/**
  * Same as {@link fetchOpenAiCompatModels} but reports whether the list came from
  * the live endpoint or the curated fallback (for UI status lines / tests).
+ *
+ * Flow 327 (AC2): also parses `pricing`/`context_length` off the SAME response
+ * body — generically, for any gateway that carries them (confirmed for
+ * OpenRouter, PRD §6.1) — and, when `opts.refreshProfiles` is given, persists
+ * a diffed model-profile update (`refreshModelProfiles`,
+ * `../harness/routing/model-profile.ts`) as a side effect. The RETURN SHAPE
+ * (`ModelsResolveResult`) is unchanged either way.
  */
 export async function fetchOpenAiCompatModelsDetailed(
   fetchFn: typeof fetch,
   provider: OpenAiCompatProvider,
   apiKey?: string,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; refreshProfiles?: ProfileRefreshOpts },
 ): Promise<ModelsResolveResult> {
   const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.modelsPath ?? DEFAULT_MODELS_PATH}`;
   const timeoutMs = opts?.timeoutMs ?? MODELS_FETCH_TIMEOUT_MS;
@@ -745,7 +775,24 @@ export async function fetchOpenAiCompatModelsDetailed(
     if (ids.length === 0) {
       return fallback({ kind: "empty" });
     }
-    return { models: Array.from(new Set(ids)).sort(), source: "live" };
+    const models = Array.from(new Set(ids)).sort();
+    if (opts?.refreshProfiles !== undefined) {
+      // AC2/AC16 — same fetched body, no second request. Best-effort: a
+      // profile-store failure must never turn a successful `/models` fetch
+      // into a failed one.
+      const profileOpts = opts.refreshProfiles;
+      try {
+        const parsedFields = parseModelProfileFieldsFromBody(bounded.value);
+        const summary = await refreshModelProfiles(provider.name, models, parsedFields, {
+          ...(profileOpts.dir !== undefined ? { dir: profileOpts.dir } : {}),
+          ...(profileOpts.now !== undefined ? { now: profileOpts.now } : {}),
+        });
+        profileOpts.onSummary?.(summary);
+      } catch {
+        // Swallowed — see doc above.
+      }
+    }
+    return { models, source: "live" };
   } catch (err) {
     // An abort is the timeout above, not a network fault — say which.
     const aborted = controller.signal.aborted;
@@ -995,14 +1042,26 @@ export function providerApiKey(
  * the key the same way that filter does: an env var when the registry names
  * one, else the provider's own in-file `apiKey` (custom/local providers).
  * Never throws.
+ *
+ * Flow 327 (AC2/AC13): `profiles`, when given, refreshes the model-profile
+ * store from this SAME fetch (`fetchOpenAiCompatModelsDetailed`'s opt-in
+ * `refreshProfiles`) and — via `profiles.onSummary` — reports what changed
+ * (added/changed/newly-unavailable counts) for the `/connect` `[Test]` result
+ * and `keryx providers test`'s CLI output to mention (AC13). Omitted (the
+ * default — every pre-flow-327 caller/test), this is byte-identical to
+ * before: no profile refresh, no disk write.
  */
 export async function testProviderConnection(
   provider: OpenAiCompatProvider,
   fetchFn: typeof fetch = globalThis.fetch,
   env: Record<string, string | undefined> = process.env,
+  profiles?: ProfileRefreshOpts,
 ): Promise<ModelsResolveResult> {
   const apiKey = providerApiKey(provider, env) ?? provider.apiKey;
-  return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, { timeoutMs: MODELS_FETCH_TIMEOUT_MS });
+  return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, {
+    timeoutMs: MODELS_FETCH_TIMEOUT_MS,
+    ...(profiles !== undefined ? { refreshProfiles: profiles } : {}),
+  });
 }
 
 /**
@@ -1271,7 +1330,16 @@ async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Pro
   }
   const env = deps.env ?? envWithOAuthAccess(envWithSavedApiKeys(process.env, dir));
   const fetchFn = deps.fetch ?? globalThis.fetch;
-  const result = await testProviderConnection(provider, fetchFn, env);
+  // Flow 327 (AC2/AC13): the SAME `dir` test seam `updateProviderCatalogEntry`
+  // below already uses — a test that isolates the catalog cache isolates the
+  // profile store too, with no new seam to add.
+  let profileSummary: ProfileRefreshSummary | undefined;
+  const result = await testProviderConnection(provider, fetchFn, env, {
+    ...(dir !== undefined ? { dir } : {}),
+    onSummary: (s) => {
+      profileSummary = s;
+    },
+  });
   const label = provider.label ?? provider.name;
   // Flow 309 (AC3): `providers test`/the `[Test]` row button keep the SAME
   // on-disk catalog cache `/routing`, `/connect` and `providers status` read
@@ -1299,7 +1367,13 @@ async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Pro
   if (args.includes("--json")) {
     console.log(
       JSON.stringify(
-        { provider: name, ok: result.source === "live", models: result.models.length, failure: result.failure ?? null },
+        {
+          provider: name,
+          ok: result.source === "live",
+          models: result.models.length,
+          failure: result.failure ?? null,
+          ...(profileSummary !== undefined ? { profiles: profileSummary } : {}),
+        },
         null,
         2,
       ),
@@ -1308,11 +1382,21 @@ async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Pro
     return;
   }
   if (result.source === "live") {
-    console.log(`${label}: ok — ${result.models.length} model(s)`);
+    console.log(`${label}: ok — ${result.models.length} model(s)${formatProfileSummarySuffix(profileSummary)}`);
     return;
   }
   console.log(modelsFailureLine(label, result.failure ?? { kind: "empty" }));
   process.exitCode = 1;
+}
+
+/** AC13 — `", 3 added, 1 changed, 1 now unavailable"` (only the non-zero counts, in that order), or `""` when there is nothing to mention. */
+export function formatProfileSummarySuffix(summary: ProfileRefreshSummary | undefined): string {
+  if (summary === undefined) return "";
+  const parts: string[] = [];
+  if (summary.added > 0) parts.push(`${summary.added} added`);
+  if (summary.changed > 0) parts.push(`${summary.changed} changed`);
+  if (summary.unavailable > 0) parts.push(`${summary.unavailable} now unavailable`);
+  return parts.length === 0 ? "" : ` (profiles: ${parts.join(", ")})`;
 }
 
 /** `keryx providers remove <name> [--yes] [--json]` — the CLI form of the `[Disconnect]` row button. */

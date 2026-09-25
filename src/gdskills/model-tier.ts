@@ -201,6 +201,35 @@ export interface ModelRankHint {
  * to itself rather than being ordered by folklore. The previous version of this
  * file ordered exactly such codenames from a single conversation, and named one
  * that exists nowhere in this repository.
+ *
+ * VERSION IS DELIBERATELY NOT RANKED HERE. `rankModelId` never parses a
+ * version number out of an id, and `claude-opus-5.5` and `claude-opus-4.7`
+ * rank IDENTICALLY through this module — a session on either resolves
+ * `standard` to itself and `light`/`deep` the same way regardless of which
+ * one it is. That is intentional for THIS module's job (assigning a
+ * sub-agent dispatch one of three tiers from whatever the environment
+ * reports) and stays true after the operator's 2026-09-25 decision below —
+ * it does not reach here.
+ *
+ * The routing "derived default table" layer (`deriveDefaultTable`,
+ * `../harness/routing/derive-default-table.ts`, flow 327/PRD §6.3) is a
+ * DIFFERENT consumer with a different job: picking ONE model per routing
+ * category from a whole connected catalogue, not placing a dispatch
+ * relative to the session. For that job the operator decided, 2026-09-25
+ * (review of PR #718: the session's own `opus-5.5` lost a tie to the
+ * older `opus-4.7` it should have beaten), that a newer version WITHIN the
+ * same family and vendor ranks higher than an older one — because the
+ * family word (`opus`, `sonnet`, `flash`, …) already carries the size
+ * class this module's hints exist to capture, and version is then free to
+ * order GENERATIONS within it without inventing a second size signal.
+ * `deriveDefaultTable` reuses `rankModelId`/`MODEL_RANK_HINTS` from here
+ * UNMODIFIED for the size axis (same reuse AC5 already requires for
+ * `guessStrengthTier`, `../harness/routing/model-profile.ts`) and adds its
+ * OWN, separate, conservative version parse (`parseModelVersion`,
+ * `familyKey`) on top — this file's own tier resolution
+ * (`rankDiscoveredModels`/`resolveTierFromRanking`/`buildTierMap`) is
+ * untouched by that addition and stays exactly the size-word-only ranking
+ * described above.
  */
 export const MODEL_RANK_HINTS: readonly ModelRankHint[] = [
   { pattern: "\\bnano\\b", weight: -2, note: "vendor-neutral smallest-tier marker" },

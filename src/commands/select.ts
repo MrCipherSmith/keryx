@@ -30,6 +30,12 @@ import {
   resolveProviderBaseUrl,
   resolveModelsForPicker,
 } from "./providers";
+// Flow 327: the three curated lists moved to `./curated-model-lists.ts` so
+// `src/harness/routing/model-profile.ts`'s curated profile seed table (PRD
+// §6.1) can read the SAME ids without an import cycle back through this
+// file's own `../commands/providers` dependency. Re-imported here under the
+// same names so every other reference in this file is unchanged.
+import { ANTHROPIC_MODELS, GEMINI_MODELS, OPENAI_MODELS } from "./curated-model-lists";
 
 type ShellIO = {
   lines: AsyncIterable<string>;
@@ -70,27 +76,6 @@ export interface DetectProvidersDeps {
 
 /** Mirrors `OllamaProvider`'s `DEFAULT_BASE_URL` (loopback Ollama default). */
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
-
-/** Static `claude-*` model list surfaced when `ANTHROPIC_API_KEY` is present. */
-const ANTHROPIC_MODELS: readonly string[] = ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"];
-
-/**
- * Static OpenAI model list surfaced when `OPENAI_API_KEY` is present (flow
- * 183 T9). No live listing endpoint is wired (`OpenAiProvider.describe()`
- * declares `modelListing: false`) — this curated set mirrors
- * `ANTHROPIC_MODELS`'s pattern exactly. Current as of this writing; update
- * when OpenAI's model lineup moves on.
- */
-const OPENAI_MODELS: readonly string[] = ["gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"];
-
-/**
- * Static Gemini model list surfaced when `GEMINI_API_KEY`/`GOOGLE_API_KEY`
- * is present (flow 183 T9). No live listing endpoint is wired
- * (`GeminiProvider.describe()` declares `modelListing: false`) — mirrors
- * `ANTHROPIC_MODELS`'s pattern. Current as of this writing; update when
- * Gemini's model lineup moves on.
- */
-const GEMINI_MODELS: readonly string[] = ["gemini-3.7-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"];
 
 /**
  * Fetch OpenRouter's LIVE model list (`GET /api/v1/models`, public — no key) so the

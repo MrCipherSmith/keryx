@@ -83,6 +83,57 @@ residue, and it is kept in the smallest shape that works:
 A model whose name is a codename carrying no size is unrankable by design. That
 is the honest outcome, not a gap to be patched with folklore.
 
+**Version is deliberately not ranked here.** `rankModelId` never parses a
+version number out of an id — two ids in the same size-word family but a
+different generation (an older vs. a newer numbered release of the same
+line) rank IDENTICALLY through this resolution, and a
+`standard`/`light`/`deep` dispatch never distinguishes between them. That
+stays true for `spawn_subagent` and `keryx review tier` after the decision
+below; it is a DIFFERENT consumer's rule, not this one's.
+
+The routing "derived default table" (`deriveDefaultTable`,
+`src/harness/routing/derive-default-table.ts`, flow 327/PRD §6.3) is that
+different consumer: it picks one model per routing category (`review`,
+`subagents`, `quick`, …) from a whole connected catalogue, not a tier
+relative to the session. The operator decided, 2026-09-25 (review of PR #718:
+a session's newer release lost a tie to an older release of the SAME family
+it should have beaten), that WITHIN the same family and vendor a newer
+version ranks higher there — the family word (a size marker from this same
+`MODEL_RANK_HINTS` list) already carries the size class, so version is free
+to order generations within it. That table reuses
+`rankModelId`/`MODEL_RANK_HINTS` UNMODIFIED for the size axis and adds its
+own separate, conservative version parse on top of it — nothing above
+changes for this module's own tier resolution.
+
+That version parse (`parseModelVersion`/`familyKey`, round 2) reads BOTH a
+dotted id (`vendor-opus-5.5`, `gemini-3.8-flash`) and a real
+Anthropic-style HYPHENATED one, where a run of 2-3 adjacent short (1-2
+digit) numeric tokens reads as a dotted version (`vendor-opus-4-8` → `4.8`).
+It still refuses a date/snapshot-shaped token (6-8 bare digits) and more
+than one numeric group in the same id — no version rather than a guess. A
+`gpt-4o`-style id (a short number plus one trailing letter) parses the
+number alone as the version, the letter kept only as an ignored variant
+tag, so `gpt-4o` and `gpt-4.1` compare within the same family instead of
+never comparing at all. Two versions of the same family are never decided
+by alphabetical order — the id-string fallback only applies when neither
+side has a parseable version.
+
+**A parameter-size token is never a version (round 3, review of PR #718).**
+`7b`, `32b`, `70b`, `1.5b`, `8x7b` — a total or MoE "N experts x M billion"
+param count — always stay in `familyKey` and are never fed to
+`parseModelVersion`. Before this fix, the letter-variant shape meant for
+`gpt-4o` (`/^(\d{1,2})([a-z])$/`, any trailing lowercase letter) also
+matched a size token, so `qwen2.5-coder-7b` and `qwen2.5-coder-32b` were
+misread as the SAME family at "version" 7 vs. 32 — merging two genuinely
+different-sized models and ranking the smaller one "newer". The letter
+variant is now restricted to the one real vendor shape that needs it
+(`4o`'s trailing `o`); every other trailing letter after a short digit run
+is a size suffix, so `qwen2.5-coder-7b`/`qwen2.5-coder-32b` and
+`llama-3.3-70b`/`llama-3.3-8b` key to different families and are never
+version-compared against each other. A trailing `-latest`/`-preview` alias
+word is also stripped from `familyKey` only (never from the id itself), so
+`vendor-3-7-sonnet-latest` joins the same family as `vendor-sonnet-5`.
+
 ## Falling back
 
 Ranking is **refused**, and every tier keeps the session's provider and model,

@@ -158,7 +158,15 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // Flow 305 review finding (AC11): `keryx routing trust` — approve a
     // project routing.config.json's current content.
     "  keryx routing trust\n",
-    "  routing   Category -> model routing table: list, set, unset (per-user default; --project for the project layer)\n",
+    // Flow 327 (Routing A2): `keryx routing profile list|set` — the
+    // model-profile catalogue (tier/price/context/priority + sources), and
+    // the routing summary row's text widened to mention it. The row's TEXT
+    // is the flow-327 wording directly (not a REPLACED_LINES pair) because
+    // the row itself never existed in the pre-flow-303 fixture — flow 305
+    // added it as a NEW_LINES entry, and this just updates that same entry.
+    "  keryx routing profile list [--json]\n",
+    "  keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>\n",
+    "  routing   Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set)\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
