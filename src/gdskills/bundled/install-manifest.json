@@ -576,7 +576,7 @@
       ],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "angular-skills": {
       "kind": "skill",
@@ -593,7 +593,7 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "nextjs-nuxt-rules": {
       "kind": "rule",
@@ -646,7 +646,7 @@
       ],
       "defaultInstall": true,
       "cost": "light",
-      "stability": "stable"
+      "stability": "experimental"
     },
     "mobx-skills": {
       "kind": "skill",
@@ -663,7 +663,7 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
+      "stability": "experimental"
     }
   },
   "components": {

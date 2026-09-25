@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "Put together a new standalone component for Angular that displays a user's order history.",
-      "Add an Angular service using inject() that wraps our orders HTTP API",
-      "Implement this Angular feature with signal()/computed() state instead of plain fields",
-      "What's the cleanest way to wire up a shipping-address form in Angular using Reactive Forms with fully typed, validated fields?",
-      "Add an Angular guard on this route that bounces anyone not logged in back to /login.",
-      "Wire up a new Angular component with OnPush change detection reading a signal input",
-      "This component is still declared inside an NgModule — how do I convert it to a standalone Angular component with its own imports?"
+      "I need a new component in our Angular app that lists a user's past orders",
+      "We need a service in our Angular app that wraps the orders HTTP endpoints -- how should it get HttpClient?",
+      "How should I hold this component's state in Angular so the template updates when it changes, without plain fields?",
+      "Build me a shipping-address form in Angular where every field is typed and validated",
+      "Only logged-in users should be able to open /account in our Angular app; anyone else goes back to /login",
+      "This component re-renders the whole tree on every parent change -- how do I make it only update when its own signal input actually changes?",
+      "This Angular component still lives in an NgModule's declarations array -- I want it to stand on its own"
     ],
     "negative": [
       "Create a new Vue component using the Composition API with <script setup>",
@@ -56,7 +56,7 @@
           "rubric": "A correct answer explains that inject() only works inside Angular's injection context (constructor or field initializer, or code wrapped in runInInjectionContext) and must not be called inside a setTimeout callback; instead the service should be injected once in the constructor or as a field initializer and the resulting reference captured in a closure for use inside the callback.",
           "pass_criteria": [
             "States that inject() must be called inside an injection context (constructor/field initializer), not inside a setTimeout callback, and that calling it there will fail",
-            "Shows or names the actual fix: inject the service as a class field/constructor (e.g. `private readonly orders = inject(OrdersService);`) before the setTimeout, then reference that already-injected variable inside the callback"
+            "Shows or names an actual fix: either injecting the service as a class field/constructor (e.g. `private readonly orders = inject(OrdersService);`) before the setTimeout and referencing that already-injected variable inside the callback, OR wrapping the callback body in `runInInjectionContext(injector, () => { ... })` using an `Injector` that was itself captured in a valid injection context (e.g. `private readonly injector = inject(Injector);` in the constructor/field initializer) before the setTimeout"
           ],
           "fail_criteria": [
             "Recommends calling inject() inside the setTimeout callback as a working fix -- whether directly inline, or one level removed through a private helper method that is itself only ever invoked from inside the callback -- without actually injecting the service in the constructor/field initializer beforehand"

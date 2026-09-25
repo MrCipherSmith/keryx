@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*.vue"]
+paths: ["**/*.vue", "**/*.ts"]
 metadata:
   origin: authored
 ---
@@ -9,8 +9,12 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic design-pattern guidance to
 idiomatic Vue 3 Composition API design and its common anti-patterns.
-Applies only to `*.vue` files; composable `.ts` files follow
-`ts-js-node`'s patterns rule for their own module-level structure.
+Applies to `*.vue` files and plain `*.ts` files alike (R1 review, PR #719,
+M4): a composable (`useX()`) is routinely a standalone `.ts` file, not a
+`.vue` SFC, and the reactivity/composable guidance below (`ref()` vs.
+`reactive()`, lifecycle-hook-in-composables rules, the return-shape rule)
+is exactly what a `.ts` composable needs — `ts-js-node`'s own generic
+patterns rule has no notion of Vue's reactivity primitives at all.
 
 ## Reactivity
 

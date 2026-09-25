@@ -58,7 +58,7 @@
           ],
           "fail_criteria": [
             "Says the code is correct as-is with no OnPush-related concern",
-            "Claims reassigning items to itself (e.g. `this.items = this.items;`) or calling `this.items = [...this.items]` with no actual new item added forces CartList to update -- neither changes what CartList's own re-check condition needs (a genuinely different, mutation-carrying reference), and the first is a no-op no-reference-change at all"
+            "Claims reassigning items to itself (e.g. `this.items = this.items;`) forces CartList to update -- this is a no-op: the reference is identical to what it already was, so CartList's own @Input identity check has nothing new to see. (Spreading into a genuinely new array, e.g. `this.items = [...this.items, item]`, IS a real fix and must not be flagged here -- it produces an actual new reference.)"
           ]
         }
       ],

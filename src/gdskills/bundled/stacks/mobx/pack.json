@@ -13,7 +13,7 @@
     "origin": "authored",
     "sourceRef": "flow 318, Wave 4 batch 2"
   },
-  "stability": "stable",
+  "stability": "experimental",
   "skills": {
     "implement": [
       "mobx-store-implementation"

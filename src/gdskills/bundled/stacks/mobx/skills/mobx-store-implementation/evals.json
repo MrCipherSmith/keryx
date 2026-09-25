@@ -1,13 +1,13 @@
 {
   "triggers": {
     "positive": [
-      "I need this MobX store to keep track of which item is currently selected, and have it update automatically wherever it is shown",
+      "Whichever item the user clicks should stay highlighted everywhere it's shown on the page, even after they navigate away and back -- what's the cleanest way to track that in MobX?",
       "I have an async method on this MobX store that hits an API and then updates a few fields -- what's the right way to write that so the state updates correctly?",
       "I've got a new MobX store -- what's the right way to make it available to my React components so they can read from it and re-render when it changes?",
       "This component isn't re-rendering when the store's items array changes, help me fix the wiring",
-      "Add a computed getter to this store that derives the order total from line items",
-      "I want this MobX store to automatically do something whenever a value changes, and make sure that stops once the store isn't needed anymore",
-      "Create a new MobX store for the settings panel with loading/error state",
+      "The order total should be derived from the line items in this MobX store rather than kept in sync by hand",
+      "This store needs to log something every time a value on it changes, but only while the component using it is actually mounted -- how do I set that up in MobX?",
+      "Our settings panel needs its own MobX store that tracks loading and error while it saves",
       "Convert this async store method so the post-await mutations are wrapped correctly"
     ],
     "negative": [

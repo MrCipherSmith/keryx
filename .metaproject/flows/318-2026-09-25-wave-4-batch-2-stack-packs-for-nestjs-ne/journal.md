@@ -202,3 +202,59 @@
   testing vocabulary ("walk through the checkout flow on the live staging site and confirm login
   still works end to end"), avoiding literal "test"/"write" while staying natural. angular-testing
   now clean again: TP=6/6, FP=0/6.
+- review-r2: narrow Opus verification of PR #719's review-r1 fixes found every r1 blocker/major
+  genuinely fixed, but returned its OWN 1 blocker + 1 major (fix attempt 2 of 3):
+  - **N-B1 (blocker, CI red):** `bun run typecheck` failed with 9 TS18048 errors in
+    `src/agents/verify.test.ts:558-604` — `pair.auditor` used without a null check after
+    `GeneratedAgentPair.auditor` was widened to optional (T16's B1/M2 fix). Fixed with a local
+    `const auditor = pair.auditor!;` per test (the fixture's own `reviewPack()` always declares
+    both skill buckets non-empty, so this is always defined at runtime — `bun run typecheck` and
+    `bun run lint` both clean after).
+  - **N-M1 (major):** the realism sweep the owner asked for in review-r1 caught two of four I11
+    rewrites (nextjs-nuxt, nestjs) but not angular/mobx — angular-testing's e2e negative had been
+    quietly reworded away from an honest false positive, and several angular-implementation/
+    mobx-store-implementation positives were still trigger-prefix constructions (a trigger phrase
+    plus a tail, or a close synonym swap), never actually restructured. Fixed per the owner's exact
+    binding instructions: restored the natural e2e negative ("Write a Playwright e2e test..."),
+    rewrote the flagged positives using the reviewer's own natural probes, reverted
+    mobx-store-implementation's SKILL.md frontmatter (a description clause + 2 triggers that were
+    added ONLY to make the gamed positives route, in an earlier round) back to its pre-widening
+    shape, and explicitly did NOT iterate wording against the router afterward. Honest,
+    accepted-as-final result: angular-implementation TP collapsed to 1/7, angular-testing picked up
+    a real FP (1/6), mobx-store-implementation TP dropped to 4/8 — angular-build-fix,
+    angular-code-review, and mobx-observable-testing all stayed clean. Re-recorded judge calibration
+    for the two touched judge scenarios (angular-code-review's OnPush fix, angular-implementation's
+    inject fix — see minors below), ran the honest 10-trial gate once for angular and mobx, and
+    accepted the result with no further iteration: **both demoted from stable to experimental.**
+    Removed angular's generated pair (angular-code-auditor.md/angular-build-fixer.md), reverted
+    angular-rules/angular-skills/mobx-rules/mobx-skills to "experimental" in install-manifest.json,
+    and recorded the specific honest reason in both packs' agent-refs.json `note`.
+  - **Minors fixed:** the OnPush fail_criteria I wrote in T16's M5 fix was itself technically wrong
+    — it lumped a genuine no-op (`this.items = this.items`) together with a genuinely valid fix
+    (`this.items = [...this.items]`, which DOES create a new reference) as if both were the same
+    failure; narrowed to only the true no-op. The inject-inside-injection-context-only pass_criteria
+    still only accepted the field/constructor pattern even though the scenario's own rubric names
+    `runInInjectionContext()` as an equally valid fix; widened to accept either, as long as the
+    Injector itself was captured in a valid injection context beforehand. Corrected the stale "mobx
+    — gate PASS... ships mobx-code-auditor/mobx-build-fixer" line in W1 (never true even at the
+    time it was written — M1 had already removed the pair) to match the "superseded" pattern used
+    for nestjs. Actually widened `vue/rules/patterns.mdc`'s `paths:` to include `*.ts` (composables
+    are routinely plain `.ts` files, not `.vue` SFCs) rather than leaving the earlier M4 claim about
+    vue as a documentation-only non-fix. Fixed the generator's "A Angular-focused..."/"a Angular
+    build..." grammar (added an `indefiniteArticle`/`capitalizedIndefiniteArticle` helper, covered
+    by two new tests — a vowel-starting and a consonant-starting displayName). Reworded
+    nestjs-build-fix's awkward "circular dependency warning naming these NestJS
+    @Module()-decorated modules" trigger to natural phrasing ("these two NestJS modules have a
+    circular dependency on each other"), re-verified it doesn't reintroduce the go-build-fix
+    collision (checked immediately, since that exact collision class has now recurred three
+    times in this flow from unrelated wording changes).
+  - **Info (I11 containment threshold):** left unchanged in this PR per the owner's explicit
+    instruction — a follow-up flow will own a containment-based I11 variant (share of a trigger's
+    own tokens present in the prompt, threshold 0.75) plus the batch-1 rewrite (go 15/24,
+    python 18/25) this flow explicitly deferred.
+  - **Final settled coverage after review-r1 (both rounds): 2 generated-pair packs (go,
+    python).** angular, mobx, and nestjs all cleared the gate at some point in this flow and were
+    all honestly demoted once their trigger prompts were de-gamed. nextjs-nuxt and vue never
+    cleared it. AC6 evidence: every pack's `governance/eval.json` and `pack.json` `stability` field
+    (and, for `angular`/`mobx`/`nestjs`, `agent-refs.json`'s own `note`) agree with this outcome as
+    of this commit.

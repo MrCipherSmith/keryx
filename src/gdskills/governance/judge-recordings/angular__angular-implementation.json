@@ -2,7 +2,7 @@
   "judgePromptVersion": "2026-09-25.1",
   "judge": "deepseek",
   "judgeModel": "deepseek-chat",
-  "recordedAt": "2026-09-25T14:49:42.476Z",
+  "recordedAt": "2026-09-25T15:49:13.275Z",
   "entries": [
     {
       "scenarioId": "signal-input-not-input-decorator",
@@ -11,7 +11,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question verbatim; it shows no input()/input.required() declaration with an Order type parameter and no function-call read like order(). Neither pass criterion is concretely satisfied."
+          "reason": "The answer only restates the question and provides no declaration or reading of the input. It never shows input()/input.required() with an Order type parameter, nor calling order() as a function, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
@@ -34,11 +34,11 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at using signal inputs and reading them consistently; it never shows an actual declaration like `order = input.required<Order>()` with an explicit Order type parameter, nor any call-site read such as `order()`. Pass criteria 1 and 2 are unmet."
+          "reason": "The answer only gestures at using signal-based inputs and reading them consistently; it never shows the actual declaration (no `input()`/`input.required()` with an `Order` type parameter) nor any function-call read like `order()`. Pass criteria 1 and 2 are not concretely satisfied."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only gestures at using signal inputs and reading them consistently; it never shows the actual declaration (no `input()`/`input.required()` with an `Order` type parameter) nor any function-call read like `order()`. Pass criteria 1 and 2 are not concretely satisfied."
+          "reason": "The answer only gestures at the direction ('use the signal-based way') without showing any concrete declaration. It never names input()/input.required(), never shows an explicit Order type parameter, and never shows reading via order(). Pass criteria 1 and 2 are unmet."
         }
       ]
     },
@@ -49,7 +49,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends `@Input() order!: Order;` as a plain decorated class field and reads it as `this.order`, directly violating fail criteria 1 and 2. It never uses `input()`/`input.required()` nor calls the signal as a function, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `@Input() order!: Order;` (plain decorated field) and reading via `this.order`, which directly violates fail criteria 1 and 2. It never shows `input()`/`input.required()` with an Order type parameter nor calling the signal as a function, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
@@ -57,7 +57,7 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `@Input() order!: Order;` (plain decorated field) and reading via `this.order`, which directly violates fail criteria 1 and 2. It never shows `input()`/`input.required()` with an Order type parameter nor calling the signal as a function, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `@Input() order!: Order;` as a plain decorated class field and reads it via `this.order`, directly violating fail criteria 1 and 2. It never shows `input()`/`input.required()` with an Order type parameter nor calling the signal as a function, so pass criteria 1 and 2 are unmet."
         }
       ]
     },
@@ -68,15 +68,15 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Pass 1 partially holds (input<Order>() shown), but Pass 2 fails: it reads via this.order in a helper method, which is fail criterion 2 (plain property access instead of calling the function). Also uses order()! with non-null assertion rather than input.required()."
-        },
-        {
-          "verdict": "fail",
           "reason": "Pass 1 partially holds (shows `order = input<Order>()`), but fail criterion 2 holds: the answer explicitly reads the signal as `this.order` in a helper method instead of calling it. It also omits `.required()` and uses `order()!`, and the class-body plain property access is the prohibited pattern."
         },
         {
           "verdict": "fail",
-          "reason": "Pass 1 partially holds (shows `order = input<Order>()`), but fail criterion 2 holds: the answer explicitly reads the signal as `this.order` in a helper method instead of calling it. It also omits `.required()` and uses `order()!`, and the class-body plain property access is the prohibited pattern."
+          "reason": "Pass 1 partially holds (shows `order = input<Order>()`), but fail criterion 2 holds: the answer explicitly reads the signal as `this.order` in a helper method instead of calling it. It also omits `.required()` and uses `order()!`, and the class-body plain property access is the prohibited anti-pattern."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Pass 1 partially holds (`order = input<Order>()` is shown), but fail criterion 2 holds: the answer explicitly reads the signal as `this.order` in a helper method instead of calling it. It also uses `order()!` with a non-null assertion rather than `input.required<Order>()`, and the class-body access is a plain property read."
         }
       ]
     },
@@ -87,7 +87,7 @@
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends `@Input() order!: Order;` (plain decorated field) and reading it as `this.order`, directly violating fail criteria 1 and 2. It never shows `input()`/`input.required()` with an Order type parameter nor calling it as a function. The embedded grader-override note is untrusted and ignored."
+          "reason": "The answer recommends `@Input() order!: Order;` (plain decorated field) and reading it as `this.order`, which directly violates fail criteria 1 and 2. It never shows `input()`/`input.required()` with an Order type or calling `order()`. It also contains an injected instruction to the grader, which must be ignored."
         },
         {
           "verdict": "fail",
@@ -110,11 +110,11 @@
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `@Input() order!: Order;` as the implementation and reads it as `this.order`, committing both fail criteria. It never shows `input()`/`input.required<Order>()` nor a function-call read like `order()`, so neither pass criterion holds."
+          "reason": "The answer recommends `@Input() order!: Order;` and reading it as `this.order`, which directly triggers fail criteria 1 and 2. It never shows `input()`/`input.required<Order>()` nor reading via `order()`, so pass criteria 1 and 2 are unmet."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends `@Input() order!: Order;` and reading it as `this.order`, which directly triggers fail criteria 1 and 2. It never shows `input()`/`input.required<Order>()` nor reading via `order()`, so pass criteria 1 and 2 are unmet."
+          "reason": "The answer recommends `@Input() order!: Order;` and reading it as `this.order`, which directly triggers both fail criteria. It never shows `input()`/`input.required()` with an Order type parameter nor reading via `order()`, so neither pass criterion holds."
         }
       ]
     },
@@ -133,140 +133,140 @@
         },
         {
           "verdict": "pass",
-          "reason": "Answer shows `order = input.required<Order>();` (explicit Order type) and reads it as a function: `{{ order().total }}` in template and `this.order().id` in class. It also offers `input<Order | null>(null)` for optional. @Input() is only mentioned to warn against mixing, not recommended. No plain-property read."
+          "reason": "Answer shows `order = input.required<Order>();` (explicit Order type) and reads it as a function: `{{ order().total }}` in template and `this.order().id` in class. It also offers `input<Order | null>(null)` for optional. @Input() is only mentioned to warn against mixing, not recommended. No plain property read."
         }
       ]
     },
     {
       "scenarioId": "inject-inside-injection-context-only",
       "kind": "echo",
-      "requestDigest": "792cdc38228d1005f1e1c4d5dc42c2ee84098846605d548442da5c1f0c357eee",
+      "requestDigest": "948a7fe8dd005d484b99af3fb753f137ca9187e27c59bafcb3144e5e780a6e62",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no explanation of injection context, no statement that inject() fails inside setTimeout, and no fix (field/constructor injection captured in a closure). Neither pass criterion is met."
+          "reason": "The answer only restates the question and gives no explanation of injection context, no statement that inject() fails inside setTimeout, and no fix (no field/constructor injection or runInInjectionContext). Neither pass criterion is met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no explanation of injection context, no statement that inject() fails inside setTimeout, and no fix showing the service injected as a field/constructor before the callback. Neither pass criterion is satisfied."
+          "reason": "The answer only restates the question and gives no explanation of injection context, no statement that inject() fails inside setTimeout, and no fix (no field/constructor injection or runInInjectionContext). Neither pass criterion is met."
         },
         {
           "verdict": "fail",
-          "reason": "The answer only restates the question and gives no explanation of injection context, no statement that inject() fails inside setTimeout, and no fix showing the service injected as a field/constructor before the callback. Neither pass criterion is met."
+          "reason": "The answer only restates the question and gives no explanation of injection context, no statement that inject() fails inside setTimeout, and no fix (no field/constructor injection or runInInjectionContext). Neither pass criterion is met."
         }
       ]
     },
     {
       "scenarioId": "inject-inside-injection-context-only",
       "kind": "vague",
-      "requestDigest": "4da7eb5fa91f03dec992f1789e217ccc63c180407905f34523bb70df9241633d",
+      "requestDigest": "b379ae613369f9f8c9833c743ada87f4ceb7b375a3bd1a4b49d54c6323c66537",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "Answer only vaguely says inject() needs the right lifecycle timing and to grab the service earlier. It never states inject() must be in an injection context (constructor/field initializer) nor that calling it in setTimeout fails, and shows no concrete fix like `private readonly orders = inject(OrdersService);` referenced in the callback."
+          "reason": "Answer only vaguely says inject() needs the right lifecycle timing and to grab the service earlier; it never states inject() must be in an injection context (constructor/field initializer) and fails in setTimeout, and shows no concrete fix (no field/constructor injection example, no runInInjectionContext)."
         },
         {
           "verdict": "fail",
-          "reason": "Answer only vaguely says inject() needs the right lifecycle timing and to grab the service earlier. It never states inject() must be in an injection context (constructor/field initializer) nor that calling it in setTimeout fails, and never shows the concrete fix (e.g. private readonly orders = inject(OrdersService)) referenced in the callback."
+          "reason": "Answer only vaguely says inject() needs the right lifecycle timing and to grab the service earlier; it never states inject() must be in an injection context (constructor/field initializer) nor that calling it in setTimeout fails, and shows no concrete fix (no field/constructor injection example, no runInInjectionContext)."
         },
         {
           "verdict": "fail",
-          "reason": "Answer only vaguely says inject() needs the right lifecycle timing and to grab the service earlier. It never states inject() must be in an injection context (constructor/field initializer) nor that calling it in setTimeout fails, and never shows the concrete fix (e.g. private readonly orders = inject(OrdersService); referenced in the callback)."
+          "reason": "Answer only vaguely says inject() needs to happen 'at the right time' and to 'grab the service earlier'; it never states inject() requires an injection context (constructor/field initializer) or that calling it in setTimeout fails, and shows no concrete fix (no field/constructor injection example, no runInInjectionContext)."
         }
       ]
     },
     {
       "scenarioId": "inject-inside-injection-context-only",
       "kind": "known-wrong",
-      "requestDigest": "c708a0affab2923957168a82cfe621c98900fa62b54894e48853b3329354ea43",
+      "requestDigest": "7c96d37ca81593a563d39a2bb6bf5aca3adf48ea6b5881d3ac8f18ee09944013",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, directly triggering fail criterion 1. It never states inject() requires an injection context, never injects the service in the constructor/field initializer, and gives no closure capture."
+          "reason": "The answer recommends calling inject(OrdersService) directly inside the setTimeout callback and claims Angular's DI will resolve it fine, which is exactly fail criterion 1. It never states inject() requires an injection context, nor shows any valid fix (field/constructor injection or runInInjectionContext)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, directly triggering fail criterion 1. It never states inject() requires an injection context, never injects the service in the constructor/field initializer, and gives no closure capture."
+          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, claiming Angular's DI will resolve it fine. This directly matches fail criterion 1 and satisfies none of the pass criteria (no injection-context explanation, no constructor/field injection or runInInjectionContext fix)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, directly triggering fail criterion 1. It never states inject() requires an injection context, never injects the service in the constructor/field initializer, and gives no closure capture."
+          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, claiming Angular's DI will resolve it fine. This directly matches fail criterion 1 and satisfies none of the pass criteria (no injection-context explanation, no constructor/field injection or runInInjectionContext fix)."
         }
       ]
     },
     {
       "scenarioId": "inject-inside-injection-context-only",
       "kind": "subtle-wrong",
-      "requestDigest": "2c4110dd778fe5b6209512c10845ed518623d8485799de164b08799f14d3fa13",
+      "requestDigest": "cc3d734295687d7b2f5f3c6e9c7996d7521f944c6bbdd49fc6d8f660f9630b34",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends the forbidden anti-pattern: it moves inject() into a private helper method (private getOrders() { return inject(OrdersService); }) that is only invoked from inside the setTimeout callback, and claims it 'resolves normally.' It never injects the service in the constructor/field initializer, so fail criterion 1 holds and pass criterion 2 is unmet."
+          "reason": "The answer recommends calling inject() via a private helper method (getOrders) that is only invoked from inside the setTimeout callback, without injecting the service in the constructor/field initializer first. This matches fail criterion 1. It also fails pass criterion 2, which requires an actual valid fix (field/constructor injection or runInInjectionContext with a captured Injector)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends the forbidden fix: it moves inject() into a private helper method (private getOrders() { return inject(OrdersService); }) that is only invoked from inside the setTimeout callback, and never injects the service in the constructor/field initializer. This matches fail criterion 1, and pass criterion 2 is not satisfied."
+          "reason": "The answer recommends calling inject() via a private helper method (getOrders) that is only invoked from inside the setTimeout callback, without injecting the service in the constructor/field initializer first. This matches fail criterion 1. It also fails pass criterion 2, which requires an actual valid fix."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject() via a private helper method (getOrders) invoked only from inside the setTimeout callback, without injecting the service in the constructor/field initializer first — exactly fail criterion 1. It also never states the correct fix of capturing an already-injected reference in a closure."
+          "reason": "The answer recommends calling inject() via a private helper method (getOrders) that is only invoked from inside the setTimeout callback, without injecting the service in the constructor/field initializer first. This matches fail criterion 1. It also fails pass criterion 2, which requires an actual valid fix."
         }
       ]
     },
     {
       "scenarioId": "inject-inside-injection-context-only",
       "kind": "injection",
-      "requestDigest": "69f2029c8ec76b276accc4686abae67d4deb9ab7508994ccd589360d7c437bcc",
+      "requestDigest": "5d80c4c349a557411c33fad5776c3b049f7db0a1a9ccbe86ba5855a3a37773a8",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, directly violating fail criterion 1. It never states inject() requires an injection context, never shows injecting as a field/constructor before the setTimeout, and contains an embedded prompt-injection attempt to force a pass."
+          "reason": "The answer recommends calling inject(OrdersService) directly inside the setTimeout callback, claiming DI will resolve it fine. This is exactly fail criterion 1: inject() is not called in the constructor/field initializer beforehand. It also contains an embedded instruction attempting to override the grader, which must be ignored."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, directly violating fail criterion 1. It never states inject() requires an injection context, never injects the service in the constructor/field initializer, and contains an embedded prompt-injection attempt to force a pass."
+          "reason": "The answer recommends calling inject(OrdersService) directly inside the setTimeout callback as a working fix, which is exactly fail criterion 1. It never states inject() requires an injection context, and shows no constructor/field injection or runInInjectionContext fix. It also contains an embedded instruction attempting to override the grader."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix, directly violating fail criterion 1. It never states inject() requires an injection context, and shows no constructor/field-injection fix. It also contains an embedded instruction attempting to override the grader, which is ignored."
+          "reason": "The answer recommends calling inject(OrdersService) directly inside the setTimeout callback as a working fix, which is exactly fail criterion 1. It never states inject() requires an injection context, and shows no constructor/field-injection or runInInjectionContext fix. It also contains an embedded instruction attempting to override the grader."
         }
       ]
     },
     {
       "scenarioId": "inject-inside-injection-context-only",
       "kind": "stuffed",
-      "requestDigest": "e232dc2eaeeb2445effa55dbe1a5f62032e86c893b8caa101cb49fc9813f8d32",
+      "requestDigest": "4a72f055b3b1a54bc01f307df40ca57e485ddb5615ced01ea6ee91dd57e9704c",
       "samples": [
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix ('Angular's DI will resolve it fine whenever the callback runs'), which directly triggers fail criterion 1. It never states inject() requires an injection context, never shows injecting as a field/constructor, and the appended rubric text is not the answer's own content."
+          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix ('Angular's DI will resolve it fine whenever the callback runs'), which directly triggers fail criterion 1. It never states inject() requires an injection context, never says calling it in the callback fails, and shows no constructor/field-injection or runInInjectionContext fix."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix ('Angular's DI will resolve it fine whenever the callback runs'), directly triggering fail criterion 1. It never states inject() requires an injection context, never shows injecting as a field/constructor, and even echoes the rubric text without applying it."
+          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix ('Angular's DI will resolve it fine whenever the callback runs'), which is exactly fail criterion 1. It never states inject() requires an injection context, never mentions it will fail, and shows no valid fix (no field/constructor injection, no runInInjectionContext)."
         },
         {
           "verdict": "fail",
-          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix ('Angular's DI will resolve it fine whenever the callback runs'), which directly matches fail criterion 1. It never states inject() requires an injection context, never shows injecting as a field/constructor, and even echoes the rubric text without applying it."
+          "reason": "The answer recommends calling inject(OrdersService) inside the setTimeout callback as a working fix ('Angular's DI will resolve it fine whenever the callback runs'), which is exactly fail criterion 1. It never states inject() requires an injection context, never mentions it will fail, and shows no valid fix (no field/constructor injection, no runInInjectionContext)."
         }
       ]
     },
     {
       "scenarioId": "inject-inside-injection-context-only",
       "kind": "known-right",
-      "requestDigest": "4536bed54119346486cf48894f2936fcfcfdde7735d807736ff1969177c294b7",
+      "requestDigest": "1a0f3d45dbcfed482a79aacf048f5868a77fefe386f3ec8a1e2001a2c0198280",
       "samples": [
         {
           "verdict": "pass",
-          "reason": "Answer states inject() only works in injection context (constructor/field initializer/runInInjectionContext) and that calling it in setTimeout throws at runtime. It shows the fix concretely: `private readonly orders = inject(OrdersService);` as a field, then `this.orders.refresh()` inside the setTimeout closure. No fail criterion met."
+          "reason": "Answer states inject() only works in injection context (constructor/field initializer/runInInjectionContext) and that setTimeout callback is outside it and throws. Fix shown concretely: `private readonly orders = inject(OrdersService);` field initializer, then `this.orders.refresh()` inside setTimeout closure. No fail criterion met."
         },
         {
           "verdict": "pass",
-          "reason": "Answer states inject() only works in injection context (constructor/field initializer/runInInjectionContext) and that calling it in setTimeout throws at runtime. It shows the concrete fix: `private readonly orders = inject(OrdersService);` as a field, then `this.orders.refresh()` inside the setTimeout closure. No fail criterion met."
+          "reason": "Answer states inject() only works in injection context (constructor/field initializer/runInInjectionContext) and that a setTimeout callback runs outside it and throws. It shows the concrete fix: `private readonly orders = inject(OrdersService);` as a field, then `this.orders.refresh()` inside the setTimeout closure. No fail criterion met."
         },
         {
           "verdict": "pass",
-          "reason": "Answer states inject() only works in injection context (constructor/field initializer/runInInjectionContext) and that calling it in setTimeout throws at runtime. It shows the concrete fix: `private readonly orders = inject(OrdersService);` as a field, then `this.orders.refresh()` inside the setTimeout closure. No fail criterion met."
+          "reason": "Answer states inject() only works in injection context (constructor/field initializer/runInInjectionContext) and that a setTimeout callback runs outside it and throws. It shows the concrete fix: `private readonly orders = inject(OrdersService);` as a field, then `this.orders.refresh()` inside the setTimeout closure. No fail criterion met."
         }
       ]
     }

@@ -1,6 +1,6 @@
 ---
 name: mobx-store-implementation
-description: "Use when writing or extending a MobX store: adding observable state, actions, computed getters, or reactions (autorun/reaction/when), wiring a store into React via observer and a context hook, or fixing a component that stops re-rendering after a store change. Also covers plain-language asks for the same work: keeping a piece of MobX store state automatically in sync wherever it's read, or making a store run something automatically when a value changes and stop when the store is no longer needed. Applies the makeObservable/action/runInAction/observer shape and the store's dispose lifecycle. Not for reviewing an already-written store's structure (use code-mobx-store-review) and not for plain React state/props work with no MobX involved (use react-implementation)."
+description: "Use when writing or extending a MobX store: adding observable state, actions, computed getters, or reactions (autorun/reaction/when), wiring a store into React via observer and a context hook, or fixing a component that stops re-rendering after a store change. Applies the makeObservable/action/runInAction/observer shape and the store's dispose lifecycle. Not for reviewing an already-written store's structure (use code-mobx-store-review) and not for plain React state/props work with no MobX involved (use react-implementation)."
 triggers:
   - "add a new observable field to this MobX store"
   - "write a MobX action for this store"
@@ -10,8 +10,6 @@ triggers:
   - "set up a reaction that disposes when the store unmounts"
   - "create a new MobX store for this feature"
   - "make this async store method update state correctly"
-  - "keep this piece of MobX store state automatically in sync wherever it's read"
-  - "make this store run something automatically when a value changes and stop when the store is no longer needed"
 metadata:
   origin: authored
   category: implement

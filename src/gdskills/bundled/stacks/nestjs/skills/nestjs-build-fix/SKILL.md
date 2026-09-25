@@ -4,7 +4,7 @@ description: "Use when a NestJS app itself won't boot because of its own depende
 triggers:
   - "Nest can't resolve dependencies of this provider"
   - "fix this NestJS UnknownDependenciesException"
-  - "circular dependency warning naming these NestJS @Module()-decorated modules"
+  - "these two NestJS modules have a circular dependency on each other"
   - "NestJS app won't bootstrap, dependency injection error"
   - "this provider isn't found, NestJS DI error"
   - "NestJS app throws at startup over its own module graph"
