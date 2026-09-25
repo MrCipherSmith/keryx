@@ -196,13 +196,75 @@ Diagnosis, done rigorously before concluding this is unfixable:
    --` on the two SKILL.md files) rather than leave ineffective, disallowed
    changes in the tree.
 4. Per the explicit instruction ("if the collision can't be fixed
-   honestly, report it and stop"): stopping here. django, fastapi, rust,
-   java-kotlin-spring content is otherwise complete, tested, and
-   committed (this merge commit included). Did not push. Did not open the
-   PR. Awaiting the orchestrator's decision: possibilities include
-   accepting python's demotion to `stability: experimental` (this merge
-   commit's catalog genuinely no longer clears python's own stable-pack
-   gate, the same kind of finding that demoted ts-js-node in flow 317's
-   precedent) as a cross-cutting decision outside this flow's authority,
-   or another resolution the orchestrator prefers. Never touched
-   `python/`'s own files.
+   honestly, report it and stop"): stopped here and handed back BLOCKED
+   with the full diagnosis. Never touched `python/`'s own triggers or
+   eval prompts.
+
+## Owner decision and resolution (2026-09-26)
+
+**decided-by: MrCipherSmith (owner, in chat)** — demote `python` to
+`stability: "experimental"`. This is the honest-evals rule applied
+consistently: the gate genuinely fails against the merged catalog, so
+the pack's stability claim must follow the gate, not be propped up.
+Explicit: do not touch python's triggers or its eval prompts, and do not
+loosen the gate to route around this.
+
+Applied:
+- `src/gdskills/bundled/stacks/python/pack.json`: `stability:
+  "experimental"`.
+- `src/gdskills/bundled/install-manifest.json`: `python-rules` and
+  `python-skills` module entries moved to `stability: "experimental"` to
+  agree with pack.json (the pack.json <-> install-manifest guard test).
+- `src/gdskills/bundled/stacks/python/agent-refs.json`: `"agents": []`
+  with a note recording the exact reason (score 0.4736 vs 0.4848,
+  binary-per-skill-IDF cause, verification method, owner decision),
+  matching the format flow 317 used for `ts-js-node`'s removal.
+- Removed `src/gdskills/bundled/agents/python-code-auditor.md` and
+  `python-build-fixer.md` (the generated pair).
+- Updated the three test files that pinned the old "go and python
+  gate-cleared" state to "go only" (`src/agents/generate.test.ts`,
+  `src/agents/verify.test.ts`, `src/commands/agents-catalog-commands.test.ts`),
+  following flow 317's exact precedent for the equivalent ts-js-node
+  demotion (`git log --grep`, commit `df55b49af`).
+- `docs/docs/guides/agent-catalog.md`,
+  `docs/requirements/keryx-agent-platform-expansion/workstreams/
+  W1-stack-catalog.md`, and `.../W2-agent-catalog.md` updated with a new
+  "Implementation notes: Wave 4 batch 3 (flow 335)" section recording the
+  full reason, matching the style of every prior batch's own section.
+
+**Follow-up, recorded rather than attempted mid-flow:** route and gate
+only among packs of a project's detected/installed stacks (via `keryx
+stack detect`), not the whole bundled catalog — the mechanism that
+demoted python here is purely an artifact of scoring every trigger
+against every OTHER bundled pack regardless of whether a real project
+would ever have both `python` and `flutter-dart` installed at once. A
+scoped gate would never see this particular collision. Then re-gate
+`python` under that narrower scope as a genuine test of whether it
+recovers. Not attempted in this flow — it is a design change to the gate
+itself, not a content fix within this flow's four packs.
+
+**Unproven hypothesis, recorded per the standing rule (not acted on):**
+the I11 rewrite pass (reducing a prompt's Jaccard overlap with its own
+skill's frontmatter triggers, required by the I11 integrity floor)
+plausibly works directly against the `trigger-rank-fork-family` router's
+own need for that same overlap to outrank sibling packs — i.e. the fix
+for one integrity rule may be structurally undermining trigger accuracy
+for the honest gate. This would explain both batch 3's own weak trigger
+accuracy after the I11 rewrite and, more broadly, why corpus growth
+degrades even unrelated packs' (python's) trigger accuracy: every new
+skill's frontmatter triggers are themselves I11-compliant (low overlap
+with THEIR OWN triggers), which does nothing to prevent them from
+accidentally sharing high-IDF tokens with an unrelated skill's query.
+Not proven; no content was touched to test this hypothesis in this flow.
+
+**Verification after applying the demotion:**
+- `checkStablePackGate('go', 'stable')` — `status: "pass"` (unaffected,
+  confirmed directly).
+- `checkStablePackGate('python', 'experimental')` — `status:
+  "not-applicable"` (correct: a non-stable pack is out of the gate's
+  scope by design).
+- Full targeted suite re-run: `tsc --noEmit` clean; `stack-packs.test.ts`,
+  `scout.test.ts`, `manifest.test.ts`, `stack-pack-eval-integrity.test.ts`,
+  `src/agents/generate.test.ts`, `src/agents/verify.test.ts`,
+  `src/commands/agents-catalog-commands.test.ts` — see the commit for the
+  exact pass count.
