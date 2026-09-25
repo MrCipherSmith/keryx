@@ -8,17 +8,38 @@
   "id": "335",
   "slug": "wave-4-batch-3-stack-packs-for-django-fa",
   "title": "Wave 4 batch 3: stack packs for django, fastapi, rust, java-kotlin-spring",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-25T15:14:43.714Z",
-  "updatedAt": "2026-09-25T15:40:37.418Z",
+  "updatedAt": "2026-09-25T23:26:32.339Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-25T23:24:20.177Z",
+      "note": "django (249d0fe1), fastapi (b14f869c), rust (e50918a3), java-kotlin-spring (b924943d) each authored with pack.json, agent-refs.json, rules/*.mdc (paths-scoped, extends: common), skills/*/SKILL.md+evals.json per Phase A journal entry; java-kotlin-spring detectionMarkers narrowed in 2d0c3158 (F-003)."
+    },
+    "AC2": {
+      "at": "2026-09-25T23:24:20.474Z",
+      "note": "Every shipped skill's evals.json authored in judge-format (rubric+pass/fail criteria, known_right/known_wrong/vague/subtle_wrong) per Phase A journal; round-1/round-2 review findings against calibration content (F-001/F-002/F-004/F-005/F-006/F-008/F-016/F-017/F-018) fixed in commits c0ef2ec6, fa3bedc6, b67d6406, 9aebce7b, 06650f3f, e2c9c61c, 16d3e549, all verified refuted in review round .metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-26-ingest-head against PR head a6164669."
+    },
+    "AC3": {
+      "at": "2026-09-25T23:24:20.774Z",
+      "note": "install-manifest.json wired for all four packs in commit e4a07af8 (feat(stack-packs): wire batch-3 packs into install-manifest.json); re-narrowed java-kotlin-spring detectionMarkers in 2d0c3158; full profile includes them per Phase A journal wiring note."
+    },
+    "AC4": {
+      "at": "2026-09-25T23:24:21.074Z",
+      "note": "Phase A journal: stack-packs.test.ts 122/124 pass (2 pre-existing go/python failures unrelated to this batch), bundled-eval.test.ts+agent-catalogue-xref.test.ts+enforcement-claims.test.ts 73/73, src/gdskills/governance/*.test.ts 236/236, tsc --noEmit clean, eslint . clean -- all for the four new packs without editing unrelated existing packs."
+    },
+    "AC5": {
+      "at": "2026-09-25T23:24:21.385Z",
+      "note": "Phase A journal records: 4 per-pack commits (249d0fe1, b14f869c, e50918a3, b924943d) plus shared-wiring commit e4a07af8, branch pushed to origin/flow/335-w4b3, runner returned STATUS: READY_FOR_GATE with no calibration/gate run and no PR opened during Phase A, per instructions."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/747"
   },
   "baseBranch": "main",
   "owner": {
@@ -95,7 +116,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -103,7 +124,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review and PR performed: PR #747 opened, two adversarial review rounds (2026-09-25-ingest-main: F-001..F-010; 2026-09-25-ingest-main-r03: F-016..F-020) with all findings fixed and same-round verifier-refuted in 2026-09-25-ingest-main-r05, restated at the actual PR head a6164669 in 2026-09-26-ingest-head. Never marked done at the time; closing it now to match the work already completed."
     }
   ],
   "history": [
@@ -149,6 +172,316 @@
       "at": "2026-09-25T15:40:37.418Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T23:15:17.796Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/747 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-25T23:15:19.851Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-25T23:15:25.676Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-25T23:15:25.678Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4, AC5 | main-merge: 4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is not contained in origin/main | base-branch: violated: this flow recorded base main, but 4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is not contained in origin/main. The merge landed somewhere else. | tasks: not done: T4; never started since `flow init` generated them: T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 335 T4 --disposition skipped --reason \"<why this flow did not need it>\") | review: 2 of 5 conditions failed — terminal-dispositions (violated): 14 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-main#F-001 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-002 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-003 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-004 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-005 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-006 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-007 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-008 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-009 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-010 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-016 (major, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-017 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-018 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-019 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against 2ba72932, but the PR head is a6164669e03c3f32f21b69a9ec0d7a6bc7cef560. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-25T23:24:20.178Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: django (249d0fe1), fastapi (b14f869c), rust (e50918a3), java-kotlin-spring (b924943d) each authored with pack.json, agent-refs.json, rules/*.mdc (paths-scoped, extends: common), skills/*/SKILL.md+evals.json per Phase A journal entry; java-kotlin-spring detectionMarkers narrowed in 2d0c3158 (F-003). (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-25T23:24:20.474Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Every shipped skill's evals.json authored in judge-format (rubric+pass/fail criteria, known_right/known_wrong/vague/subtle_wrong) per Phase A journal; round-1/round-2 review findings against calibration content (F-001/F-002/F-004/F-005/F-006/F-008/F-016/F-017/F-018) fixed in commits c0ef2ec6, fa3bedc6, b67d6406, 9aebce7b, 06650f3f, e2c9c61c, 16d3e549, all verified refuted in review round .metaproject/flows/335-2026-09-25-wave-4-batch-3-stack-packs-for-django-fa/reviews/2026-09-26-ingest-head against PR head a6164669. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-25T23:24:20.774Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: install-manifest.json wired for all four packs in commit e4a07af8 (feat(stack-packs): wire batch-3 packs into install-manifest.json); re-narrowed java-kotlin-spring detectionMarkers in 2d0c3158; full profile includes them per Phase A journal wiring note. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-25T23:24:21.074Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Phase A journal: stack-packs.test.ts 122/124 pass (2 pre-existing go/python failures unrelated to this batch), bundled-eval.test.ts+agent-catalogue-xref.test.ts+enforcement-claims.test.ts 73/73, src/gdskills/governance/*.test.ts 236/236, tsc --noEmit clean, eslint . clean -- all for the four new packs without editing unrelated existing packs. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-25T23:24:21.385Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Phase A journal records: 4 per-pack commits (249d0fe1, b14f869c, e50918a3, b924943d) plus shared-wiring commit e4a07af8, branch pushed to origin/flow/335-w4b3, runner returned STATUS: READY_FOR_GATE with no calibration/gate run and no PR opened during Phase A, per instructions. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-09-25T23:24:34.536Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-25T23:24:39.232Z",
+      "event": "completing",
+      "detail": "merged commit: 4a85f8cd7d053d7bbeef91841c7aa31e1e605df7"
+    },
+    {
+      "at": "2026-09-25T23:24:44.503Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-25T23:24:44.504Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 14 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-main#F-001 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-002 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-003 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-004 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-005 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-006 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-007 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-008 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-009 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-010 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-016 (major, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-017 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-018 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-019 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-25T23:26:25.794Z",
+      "event": "completing",
+      "detail": "merged commit: 4a85f8cd7d053d7bbeef91841c7aa31e1e605df7"
+    },
+    {
+      "at": "2026-09-25T23:26:32.338Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-09-25T23:26:32.339Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-25T23:15:25.676Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "fail",
+          "detail": "unconfirmed: AC1, AC2, AC3, AC4, AC5"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "fail",
+          "detail": "violated: this flow recorded base main, but 4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is not contained in origin/main. The merge landed somewhere else."
+        },
+        {
+          "name": "tasks",
+          "status": "fail",
+          "detail": "not done: T4; never started since `flow init` generated them: T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 335 T4 --disposition skipped --reason \"<why this flow did not need it>\")"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "2 of 5 conditions failed — terminal-dispositions (violated): 14 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-main#F-001 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-002 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-003 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-004 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-005 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-006 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-007 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-008 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-009 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-010 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-016 (major, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-017 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-018 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-019 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against 2ba72932, but the PR head is a6164669e03c3f32f21b69a9ec0d7a6bc7cef560. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    },
+    {
+      "at": "2026-09-25T23:24:44.503Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 14 finding(s) at or above `minor` are not terminal: 2026-09-25-ingest-main#F-001 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-002 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-003 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-004 (major, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-005 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-006 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-007 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-008 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-009 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main#F-010 (minor, round 2026-09-25-ingest-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-016 (major, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-017 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-018 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-25-ingest-main-r03#F-019 (minor, round 2026-09-25-ingest-main-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    },
+    {
+      "at": "2026-09-25T23:26:32.338Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "4a85f8cd7d053d7bbeef91841c7aa31e1e605df7 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 4 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-25T23:24:20.177Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    },
+    {
+      "at": "2026-09-25T23:24:20.474Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    },
+    {
+      "at": "2026-09-25T23:24:20.774Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    },
+    {
+      "at": "2026-09-25T23:24:21.074Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    },
+    {
+      "at": "2026-09-25T23:24:21.385Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29"
+    },
+    {
+      "at": "2026-09-25T23:26:32.339Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:ab7fd174c51ef251776cac8973852d3c523e742ab732804caa974d711cc83d29",
+      "headCommit": "4a85f8cd7d053d7bbeef91841c7aa31e1e605df7"
+    }
+  ],
+  "merged": {
+    "commit": "4a85f8cd7d053d7bbeef91841c7aa31e1e605df7",
+    "ref": "origin/main",
+    "at": "2026-09-25T23:26:32.339Z"
+  }
 }
