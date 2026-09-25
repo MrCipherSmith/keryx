@@ -813,18 +813,29 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // `"full"` field, against a catalog that still contains that same
   // trigger verbatim in the entry's own indexed text — circular (the
   // trigger trivially "finds itself" regardless of negation handling), so
-  // it passed 512/513 identically whether or not the fix was present and
-  // proved nothing. The real, non-circular grader is
-  // `checkSkillSelectedLeaveOneOut` (excluding the trigger itself from the
-  // skill's own indexed text) — the SAME grader `keryx skills eval`'s
-  // trigger-accuracy check uses for a synthesized positive. Measured with
-  // this grader (flow 334 journal): 120 of 513 trigger phrases already
-  // fail on unmodified `main` (short/ambiguous/cross-language triggers, a
-  // pre-existing, unrelated gap this flow does not touch) — of those, this
-  // flow's fix flips exactly 4 from PASS to FAIL (honest losses, all
-  // caused by a trigger's description-support having relied on leaked
-  // exclusion-clause vocabulary) and 5 from FAIL to PASS (net: 119 vs 120,
-  // a small net improvement), see the journal for the full accounting.
+  // it passed identically whether or not the fix was present and proved
+  // nothing. The real, non-circular grader is `checkSkillSelectedLeaveOneOut`
+  // (excluding the trigger itself from the skill's own indexed text) — the
+  // SAME grader `keryx skills eval`'s trigger-accuracy check uses for a
+  // synthesized positive.
+  //
+  // RE-MEASURED after merging PR #719 (flow 318's five new stack packs —
+  // nestjs, vue, angular, nextjs-nuxt, mobx) into this branch: the catalog
+  // grew from 90 skills/513 triggers to 110 skills/642 triggers, and the
+  // gate re-scores triggers live against whatever is in the catalog, so the
+  // PREVIOUS 90-skill numbers (120 pre-existing fails, 4 losses, 5 gains)
+  // no longer describe reality and are superseded here. Measured the same
+  // way (`main`'s scout.ts vs this flow's scout.ts, BOTH against the SAME
+  // merged 110-skill catalog — see the flow 334 journal for the exact
+  // method): **167 of 642 already fail on `main`** (pre-existing, unrelated
+  // to this flow) — of those, this flow's fix flips **4 from PASS to FAIL**
+  // (honest losses, listed below) and **16 from FAIL to PASS** (net: 155 vs
+  // 167, a real net improvement). Two triggers pinned as losses under the
+  // OLD 90-skill catalog (`python-code-review::"check this python pr for
+  // bugs"`, `nodejs-implementation::"write a CLI command in Node"`) are
+  // NOT regressions under the merged catalog — both now fail (or pass)
+  // identically with or without this flow's fix, so they were removed from
+  // this set; keeping them would have pinned a false attribution.
   const KNOWN_HONEST_LOSSES = new Set([
     // job-orchestrator's OWN description explicitly disclaims "the same
     // pipeline under Task Manager flow state (use flow-orchestrator)" —
@@ -836,21 +847,18 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     // agent-entrypoint-distiller)" — this trigger names exactly the
     // territory the skill says belongs to a DIFFERENT skill.
     "platform/claude-md-management::agent entrypoint",
-    // A direct, accepted consequence of the "Does not X" marker (flow 334
-    // review round 1 minor, explicitly requested): python-code-review's
-    // description ends "... does not edit code." — a genuine scope
-    // statement, not vocabulary this skill can honestly claim as evidence
-    // for reviewing a PR. The cross-category outrank (react-code-review)
-    // is corpus-wide IDF redistribution, the same mechanism documented for
-    // react/react-build-fix in the flow journal.
-    "python/python-code-review::check this python pr for bugs",
-    // Corpus-wide IDF redistribution (flow journal): nodejs-implementation
-    // has no exclusion clause touching "CLI"/"write"/"Node" at all; this
-    // is the same second-order effect as the react/* false positives —
-    // stripping negated vocabulary elsewhere in the 90-skill corpus raises
-    // the IDF weight of common surviving terms, occasionally tipping a
-    // borderline cross-category comparison either direction.
-    "ts-js-node/nodejs-implementation::write a CLI command in Node",
+    // New after the #719 merge: context-collector's own text has no
+    // exclusion clause touching "build"/"context" at all — outranked by
+    // `angular/angular-build-fix` (a brand-new pack from #719). Corpus-wide
+    // IDF redistribution from combining two catalogs, the same mechanism
+    // documented for react/react-build-fix in the journal, not a
+    // clause-detection defect on context-collector's own text.
+    "orchestration/context-collector::build context",
+    // New after the #719 merge: react-code-review's own text has no
+    // exclusion clause touching "hooks"/"rules"/"pull request" — outranked
+    // by `vue/vue-code-review` (a brand-new pack from #719), the same
+    // cross-category corpus-redistribution mechanism.
+    "react/react-code-review::check the react hooks in this pull request for rules of hooks violations",
   ]);
 
   // `KNOWN_HONEST_LOSSES` is asserted directly below (`test.each` — a real,
@@ -859,8 +867,9 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // baseline would need that baseline STORED as a fixture to be a real
   // regression test at all (recomputing "before" at test time needs the
   // pre-fix scout.ts, which does not exist once this PR merges) — see the
-  // flow 334 journal for exactly how the 4 losses / 5 gains here were
-  // measured (a temporary checkout-and-restore of the pre-fix scout.ts).
+  // flow 334 journal for exactly how the 4 losses / 16 gains here were
+  // measured (a temporary swap-and-restore of the pre-fix scout.ts via
+  // `cp`, never `git checkout`/`git stash` on a file with uncommitted work).
   // Pin each named regression individually (flow 334 review round 1
   // requirement) so a future change to either the scorer or these skills'
   // descriptions must deliberately touch this test, not silently change
@@ -893,19 +902,26 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   // only cover the SPECIFIC triggers this flow's own diff is known to
   // touch. Without a catalog-wide ceiling, a future scorer change could
   // silently regress a trigger NOT in either pinned list and nothing here
-  // would catch it. 119 is the measured total after this flow (120
-  // pre-existing on `main`, minus the net +1 this flow's fix produces — see
-  // the journal for the full accounting); this asserts "at most", not
-  // "exactly", so a future genuine improvement lowering the count further
-  // does not itself fail this test — only a REGRESSION (more failures than
-  // this) does.
-  test("ratchet: no more than 119 of the 513 bundled triggers fail checkSkillSelectedLeaveOneOut", () => {
+  // would catch it.
+  //
+  // RE-MEASURED after merging PR #719 (five new stack packs — nestjs, vue,
+  // angular, nextjs-nuxt, mobx): the catalog grew from 90 to 110 skills and
+  // 513 to 642 triggers, so the previous ceiling of 119 no longer describes
+  // this catalog and would either false-fail (too low) or stop ratcheting
+  // anything (if left too high). 155 is the measured total AFTER this
+  // flow's fix against the merged 110-skill catalog (167 pre-existing on
+  // `main` against the same merged catalog — see the flow 334 journal for
+  // the exact measurement method and the full before/after accounting).
+  // This asserts "at most", not "exactly", so a future genuine improvement
+  // lowering the count further does not itself fail this test — only a
+  // REGRESSION (more failures than this) does.
+  test("ratchet: no more than 155 of the 642 bundled triggers fail checkSkillSelectedLeaveOneOut", () => {
     let failing = 0;
     for (const entry of catalog) {
       for (const trigger of entry.triggers) {
         if (!checkSkillSelectedLeaveOneOut(trigger, entry.id, catalog, trigger).selected) failing++;
       }
     }
-    expect(failing).toBeLessThanOrEqual(119);
+    expect(failing).toBeLessThanOrEqual(155);
   });
 });
