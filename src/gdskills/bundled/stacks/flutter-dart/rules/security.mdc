@@ -14,22 +14,28 @@ files.
 ## Secret and credential storage
 
 - Store a token, session cookie, refresh token, or any other credential in
-  `flutter_secure_storage` (backed by Keychain on iOS, Keystore/
-  EncryptedSharedPreferences on Android), never in `shared_preferences` —
-  `SharedPreferences` persists as an unencrypted plist/XML file on disk
-  that any process with filesystem access (a rooted device, a backup
-  extraction) can read directly.
+  `flutter_secure_storage` (backed by Keychain on iOS, the Android
+  Keystore on Android — check the plugin's current backing implementation
+  rather than assuming `EncryptedSharedPreferences`, which has known
+  reliability issues and is no longer recommended by Google for new
+  Android code), never in `shared_preferences` — `SharedPreferences`
+  persists as an unencrypted plist/XML file on disk that any process with
+  filesystem access (a rooted device, a backup extraction) can read
+  directly.
 - `shared_preferences` remains fine for genuinely non-sensitive
   preferences (a theme choice, a "seen onboarding" flag) — the rule is
   about what the value *is*, not a blanket ban on the package.
 - Never hard-code an API key, client secret, or signing credential as a
   Dart string literal compiled into the app — every string in a release
   build is recoverable from the compiled binary with straightforward
-  reverse-engineering tools. Load it from a backend-issued short-lived
-  token, a build-time `--dart-define`/`.env` mechanism the project already
-  uses that keeps the actual secret server-side, or a secrets manager
-  reached over an authenticated network call — not compiled directly into
-  client code.
+  reverse-engineering tools. `--dart-define`/a build-time `.env` file is
+  NOT a way to keep a secret server-side — both are compiled into the
+  binary at build time exactly like a string literal and are just as
+  recoverable from the shipped artifact; they only avoid committing the
+  secret to source control, which is a different property. For a value
+  that must actually stay off the device, fetch it at runtime from a
+  backend-issued short-lived token or a secrets manager reached over an
+  authenticated network call — never bake it into the build at all.
 
 ## Network calls and certificate pinning
 

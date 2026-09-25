@@ -2,7 +2,7 @@
   "id": "flutter-dart",
   "family": "framework",
   "modules": ["flutter-dart-rules", "flutter-dart-skills"],
-  "detectionMarkers": ["flutter", "dart"],
+  "detectionMarkers": ["flutter"],
   "provenance": {
     "origin": "authored",
     "sourceRef": "flow 336, Wave 4 batch 4"
