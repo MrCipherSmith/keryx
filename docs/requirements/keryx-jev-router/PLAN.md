@@ -18,10 +18,11 @@ used in
 Order, per the operator's direction: **the table before the classifier.**
 Flow A ships the routing-table infrastructure with zero classifier
 involvement — categories are chosen explicitly by the call site (review,
-subagents). Flow B adds the *idea* of a pluggable classifier plus the
-cheapest real implementation (the session's own model). Flow C adds Jev.
-Flow D widens which call sites auto-route and adds the metrics PRD §15
-asks for.
+subagents). Flow A2 adds model-profile discovery and a `derived` default
+table built from those profiles — still no classifier. Flow B adds the
+*idea* of a pluggable classifier plus the cheapest real implementation
+(the session's own model). Flow C adds Jev. Flow D widens which call
+sites auto-route and adds the metrics PRD §16 asks for.
 
 ## Flow A — routing table, `/routing` modal, CLI; wire review + subagents
 
@@ -63,7 +64,7 @@ Draft acceptance criteria:
   flattened across every `detectProviders()` entry
   (`src/commands/select.ts`), plus one "provider default" row per
   connected provider and one "session default" row — never a two-step
-  provider-then-model flow (PRD §6, §Non-goals). A confirmed pick writes
+  provider-then-model flow (PRD §7, §Non-goals). A confirmed pick writes
   immediately (to the per-user layer per AC3's default), not on modal
   close. Proven by a modal test over a fixture multi-provider catalogue.
 - AC5: `keryx review tier`'s dispatch-model computation
@@ -106,9 +107,92 @@ Tasks (sizes: S ≤ half day, M ≤ 2 days, L > 2 days):
 - T7 (S): docs (`docs/docs/cli-reference.md`, README, category catalogue
   table from PRD §4).
 
+## Flow A2 — model profile discovery and derived default routing
+
+Ships between Flow A (the table) and Flow B (the classifier), per the
+operator's direction — still no classifier anywhere in this flow. Extends
+Flow A's table/CLI/modal with per-model profiles and a new `derived`
+precedence layer, so an operator who has configured nothing still gets a
+sensible category -> model mapping built from whatever their session
+provider actually offers (PRD §6).
+
+Draft acceptance criteria:
+
+- AC1: `src/harness/routing/model-profile.ts` (new) defines `ModelProfile`/
+  `ProfileSource` (PRD §6.1): `strengthTier`, `priceInputPerMillion`,
+  `priceOutputPerMillion`, `contextLength` (each `{value, source}`,
+  `source` one of `reported`/`curated`/`guessed`/`unknown`), `priority`,
+  `overridden`, `refreshedAt`.
+- AC2: `fetchOpenAiCompatModelsDetailed` and `testProviderConnection`
+  (`src/commands/providers.ts:613`, `:838`) are extended to parse
+  `pricing`/`context_length` off a gateway's `/models` response body when
+  present (confirmed present for OpenRouter, PRD §6.1) and to call a new
+  `refreshModelProfiles(...)` after a successful live fetch — additive:
+  both functions' existing return shape (`ModelsResolveResult`) is
+  unchanged, profiles are a side effect written to the per-user store
+  (AC3), not a new return field, so no existing caller or test of either
+  function needs to change.
+- AC3: Profiles are stored per-user in `src/lib/shell-config.ts` (alongside
+  `apiKeys`/`modelParams`), keyed by `<providerId>/<modelId>`, readable/
+  writable through `loadModelProfiles`/`saveModelProfiles`.
+- AC4: Strength-tier guessing reuses `rankModelId`/`MODEL_RANK_HINTS`
+  (`src/gdskills/model-tier.ts:205-258`) unmodified: rank `< 0` -> `light`,
+  `0` -> `standard`, `> 0` -> `deep`, `undefined` -> `standard` (source
+  `guessed`) — never a new/second regex table.
+- AC5: A price or context-length field with no `reported`/`curated` source
+  is `{value:"unknown", source:"unknown"}` — NEVER `0` or a fabricated
+  number — verified by a test.
+- AC6: `keryx routing profile list [--json]` (extends
+  `src/commands/routing.ts` from Flow A) prints every stored profile with
+  its fields and sources; `keryx routing profile set <provider>/<model>
+  --tier|--price-in|--price-out|--context <value>` writes an operator
+  correction, marking that field `overridden: true`; a subsequent refresh
+  (AC2) leaves an `overridden` field untouched while updating the rest.
+- AC7: `resolveCategory` (Flow A AC1) gains a `derived` rung between
+  per-user and `default` (PRD §6.3 precedence: explicit > per-project >
+  per-user > derived > default). `deriveDefaultTable(providerId, models,
+  profiles)` is a PURE function: one model -> that model for every
+  category; several models -> lightest-priced (`quick`/`subagents`/
+  `docs`), strongest (`planning`/`review`), session model unchanged
+  (`default`/`coding`); a category with no comparable (all-`unknown`)
+  candidate falls through to the bare session model. Derivation reads only
+  the SESSION's current provider's models in v1 (cross-provider derivation
+  is out of scope — PLAN.md open question 10).
+- AC8: `keryx routing list` (Flow A AC3) reports a category with no
+  explicit config as `auto (derived from <provider>'s models)` — distinct
+  from `session default` — including which profile fields (and their
+  sources) the derivation used.
+- AC9: The `/routing` modal (Flow A AC4) shows, per model in the flat
+  picker, its strength tier, price (or "unknown"), context length, and
+  source per field, and marks which categories are currently derived vs.
+  explicit vs. session-default.
+- AC10: The `/connect` `[Test]` result and `keryx providers test`'s output
+  mention when the refresh updated stored model profiles (e.g. "3 model
+  profiles refreshed").
+- AC11: CI is green; `keryx health run` passes; Flow A's existing tests are
+  unmodified in their pre-existing assertions.
+
+Tasks:
+- T1 (S): `model-profile.ts` types (AC1).
+- T2 (M): extend `fetchOpenAiCompatModelsDetailed`/`testProviderConnection`
+  parsing + `refreshModelProfiles` wiring (AC2).
+- T3 (S): per-user profile store (AC3).
+- T4 (S): tier-guess via `rankModelId` reuse (AC4, AC5).
+- T5 (M): `keryx routing profile list|set` (AC6).
+- T6 (M): `deriveDefaultTable` + `resolveCategory` integration (AC7).
+- T7 (S): `keryx routing list` derived-entry reporting (AC8).
+- T8 (M): `/routing` modal profile display (AC9).
+- T9 (S): `/connect` Test / `keryx providers test` profile-refresh mention
+  (AC10).
+- T10 (M): tests — one-model provider, several models with known
+  (reported/curated) prices, several with guessed prices/unknown fields,
+  user override surviving a refresh, cross-checked against
+  `model.test.ts`-style fixtures.
+- T11 (S): docs.
+
 ## Flow B — classifier abstraction + main-model classifier
 
-Introduces `TaskClassifier` (PRD §8.1) and its cheapest real
+Introduces `TaskClassifier` (PRD §9.1) and its cheapest real
 implementation. Still no Jev/`DecisionPort` in this flow — that is Flow C.
 Nothing auto-classifies yet; this flow makes classification *possible* and
 exposes it through `keryx routing explain`, not through any live call site
@@ -117,10 +201,10 @@ exposes it through `keryx routing explain`, not through any live call site
 Draft acceptance criteria:
 
 - AC1: `src/harness/decision/classifier.ts` defines `TaskClassifier` (PRD
-  §8.1: `classify(task, categories) -> {ok, category, confidence, source}
+  §9.1: `classify(task, categories) -> {ok, category, confidence, source}
   | {ok:false, reason}`), and a `NullClassifier` that always returns
   `{ok:false, reason:"no classifier configured"}` — the default when
-  nothing is configured (PRD §8.4).
+  nothing is configured (PRD §9.4).
 - AC2: `MainModelTaskClassifier`
   (`src/harness/decision/main-model-classifier.ts`) sends one short,
   non-streaming, tool-free request to the session's own current
@@ -168,7 +252,7 @@ Draft acceptance criteria:
   `DecisionAnswer`, and `DecisionPort` (`decide(state, questions) ->
   {answers, usage}`), structurally independent of `ProviderPort`
   (`src/harness/provider/types.ts:345`) — no shared method name, no
-  import of provider types into the new file (PRD §8.2).
+  import of provider types into the new file (PRD §9.2).
 - AC2: `src/harness/decision/jev-decision-port.ts` implements
   `JevDecisionPort`, constructed with `{fetch, apiKey}`. `decide()` makes
   exactly one `POST https://openrouter.ai/api/v1/systemone` call with
@@ -181,12 +265,12 @@ Draft acceptance criteria:
   documented as approximate) — an over-budget call returns a named
   refusal rather than sending a request TypeSafe would reject. `decide()`
   honors a `timeoutMs` (default 2000) via `AbortSignal`, reporting a
-  timeout as a distinct reason (PRD §12).
+  timeout as a distinct reason (PRD §13).
 - AC4: `JevTaskClassifier`
   (`src/harness/decision/jev-classifier.ts`) implements `TaskClassifier`
   (Flow B AC1) over a `DecisionPort`: one `choice` question whose
   `criteria` are the wired category names (PRD §4), plus a `confidence`
-  `noul` question (PRD §8.2). Confidence below the configured threshold
+  `noul` question (PRD §9.2). Confidence below the configured threshold
   (default 0.6) is `{ok:false, reason:"low confidence"}`, not a returned
   category.
 - AC5: `JevTaskClassifier` is selected only when `classifier: "jev"` is
@@ -194,7 +278,7 @@ Draft acceptance criteria:
   resolves (same resolution as the `openrouter` compat-provider entry,
   `src/commands/providers.ts:312-321`) — otherwise construction falls
   back to `MainModelTaskClassifier` or `NullClassifier` per the chain in
-  PRD §8.4, proven by a test with the key present but `classifier` unset.
+  PRD §9.4, proven by a test with the key present but `classifier` unset.
 - AC6: The task text assembled into `state` is passed through
   `redactSensitiveText` (`src/security/redact.ts:128`) before the
   `DecisionPort` call — proven by a test planting a secret/PII-shaped
@@ -234,7 +318,7 @@ Tasks:
 
 Wires more call sites to classify automatically (rather than requiring an
 explicit category or a manual `keryx routing explain`), and builds the
-TUI surfaces PRD §10 requires plus the PRD §15 metrics. This is the flow
+TUI surfaces PRD §11 requires plus the PRD §16 metrics. This is the flow
 where `quick`/`coding`/`planning`/`docs` categories can first actually get
 used automatically; `unattended` stays a Flow E-or-later candidate (open
 question 4 below).
@@ -244,7 +328,7 @@ Draft acceptance criteria:
 - AC1: At least one additional call site (recommend: the interactive
   main-agent turn's pre-dispatch hook, following the same "gated,
   cancellable, never blocking" shape as Flow B AC3) calls the configured
-  classifier (Jev if enabled, else main-model, else none — PRD §8.4) when
+  classifier (Jev if enabled, else main-model, else none — PRD §9.4) when
   no explicit category/model was given for that turn, and applies the
   resolved category's table entry (Flow A) to the turn's provider/model
   choice.
@@ -260,7 +344,7 @@ Draft acceptance criteria:
 - AC3: Whenever a turn or dispatch used a routed (non-`default`) category,
   a one-line summary appears — `routed to <provider>/<model> (<category>,
   <classifier>, <confidence>)` — as a toast or inline transcript note
-  (PRD §10), proven by a test asserting the line's fields for a
+  (PRD §11), proven by a test asserting the line's fields for a
   Jev-routed, a main-model-routed, and an explicit (no classifier) case.
 - AC4: From that summary or from the `/routing` modal (Flow A AC4), the
   operator can override — for just the next call, or persistently (writes
@@ -274,7 +358,7 @@ Draft acceptance criteria:
   existing shell smoke test (`shell-pty-launch.smoke.test.ts`) still finds
   `Model`, `Context`, `Tools`, `Status`, `Ready` on an 80x24 pty — the new
   section does not push existing chrome off a small terminal.
-- AC7: Metrics per PRD §15 (category-agreement rate between classifiers,
+- AC7: Metrics per PRD §16 (category-agreement rate between classifiers,
   override rate per category, cost delta via `spendFromTokens`,
   classifier overhead, fallback rate) are computed from the per-turn
   routing-decision log AC3 writes — reported via `keryx routing report`
@@ -300,16 +384,23 @@ Tasks:
 
 ## Cross-flow dependencies
 
-Flow A -> Flow B -> Flow C -> Flow D, strictly in that order: Flow B's
-`TaskClassifier` interface is designed once Flow A's table exists to feed
-it into; Flow C is a second implementation behind the same interface;
-Flow D is the only flow that makes classification *automatic* anywhere,
-so it depends on both a working classifier (Flow B at minimum, Flow C for
-the richer option) and the table it applies the result to (Flow A). Flow A
-itself has an internal order: the table/config/CLI (T1–T3) before the TUI
-modal (T4) before the two call-site integrations (T5–T6), since the modal
-and the CLI are two independent ways to exercise the same `resolveCategory`
-function T1 ships.
+Flow A -> Flow A2 -> Flow B -> Flow C -> Flow D, strictly in that order:
+Flow A2 extends the exact `resolveCategory`/table/CLI/modal Flow A ships
+with a `derived` rung and profile display, so it cannot start before Flow
+A's T1–T4 land; Flow B's `TaskClassifier` interface is designed once a
+table (with or without Flow A2's derived layer) exists to feed it into;
+Flow C is a second implementation behind the same interface; Flow D is the
+only flow that makes classification *automatic* anywhere, so it depends on
+both a working classifier (Flow B at minimum, Flow C for the richer
+option) and the table it applies the result to (Flow A/A2). Flow A itself
+has an internal order: the table/config/CLI (T1–T3) before the TUI modal
+(T4) before the two call-site integrations (T5–T6), since the modal and
+the CLI are two independent ways to exercise the same `resolveCategory`
+function T1 ships. Flow A2 could, in principle, ship in parallel with
+Flow A's T5–T6 (the review/subagent wiring) once Flow A's T1–T4 are done,
+since profile discovery does not touch either call site directly — but is
+listed strictly after Flow A here for a simpler, one-thing-at-a-time
+review.
 
 ## Test strategy
 
@@ -335,10 +426,17 @@ function T1 ships.
   malformed response, timeout, network/provider error, low confidence,
   and "classifier not configured" — one test per failure mode, none
   touching the network.
+- Flow A2's `deriveDefaultTable` (PRD §6.3) is a pure function tested
+  without any fetch/provider stub at all: one-model provider; several
+  models with known (reported/curated) prices; several models with
+  guessed prices and/or `unknown` fields; and a per-user override winning
+  over a derived entry for the same category. `refreshModelProfiles`
+  itself is tested with an injected `/models` response fixture (with and
+  without `pricing`/`context_length` present), never a real network call.
 
 ## Open questions for the operator
 
-1. **"Provider default" semantics** (PRD §5, §14): is repurposing
+1. **"Provider default" semantics** (PRD §5, §15): is repurposing
    `OPENAI_COMPAT_PROVIDERS[].models[0]` as each compat provider's
    "default model" acceptable, or should each registry entry gain an
    explicit `defaultModel` field (mirroring `OLLAMA_COMPAT_IDENTITY`)
@@ -370,3 +468,23 @@ function T1 ships.
    but the operator may prefer starting with scheduled/`flow-next`
    authoring instead, or a different subagent path. Needs a decision
    before Flow D is scheduled.
+8. **Per-gateway `reported` pricing/context coverage** (PRD §6.1): only
+   OpenRouter's `/api/v1/models` is confirmed to carry `pricing`/
+   `context_length` per model. Which of DeepSeek/Z.AI/Cerebras/Groq/
+   Moonshot/Grok's `/v1/models` responses (if any) also carry usable
+   pricing/context needs a per-gateway check before Flow A2 ships
+   `reported`-source parsing for anything beyond OpenRouter — until then,
+   every non-OpenRouter model profile falls through to `curated`/`guessed`/
+   `unknown`.
+9. **Curated table starting scope** (PRD §6.1, `curated` source): start
+   with just the three native adapters (Anthropic/OpenAI/Gemini), whose
+   pricing/context are stable and well-documented, or is a wider
+   hand-maintained table worth the maintenance burden from day one?
+10. **Cross-provider derivation** (PRD §6.3, §Non-goals): confirmed out of
+    scope for v1 per the operator's own suggestion (derive from the
+    session's current provider only). Worth revisiting once there is usage
+    data showing operators keep multiple providers connected where none of
+    them, alone, has a good `planning`/`quick` spread.
+11. **`priority` field provenance** (PRD §6.1): operator-only forever, or
+    should it ever be set automatically (e.g. from a vendor-published
+    benchmark score) once such a source exists?
