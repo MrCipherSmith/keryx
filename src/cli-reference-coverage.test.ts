@@ -116,8 +116,18 @@ function routedSubcommands(source: string): Set<string> {
 function referenceSection(reference: string, verb: string): string | undefined {
   const start = reference.indexOf(`\n## ${verb}\n`);
   if (start < 0) return undefined;
-  const end = reference.indexOf("\n## ", start + 1);
-  return reference.slice(start, end < 0 ? reference.length : end);
+  // The section ends at the next `## ` heading OUTSIDE a fenced code block:
+  // an example report inside ``` may itself print a `## ` line (review
+  // conform's text output does), and that is content, not a heading.
+  const lines = reference.slice(start + 1).split("\n");
+  let offset = start + 1;
+  let inFence = false;
+  for (const [index, line] of lines.entries()) {
+    if (line.startsWith("```")) inFence = !inFence;
+    else if (index > 0 && !inFence && line.startsWith("## ")) return reference.slice(start, offset - 1);
+    offset += line.length + 1;
+  }
+  return reference.slice(start);
 }
 
 test("every routed subcommand is named in its verb's reference section", async () => {
