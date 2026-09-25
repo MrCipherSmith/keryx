@@ -1,4 +1,4 @@
 {
   "agents": [],
-  "note": "gate not yet run for Wave 4 batch 5 (flow 337) — auditor/fixer generated only after the honest gate clears in Phase B"
+  "note": "honest gate (DeepSeek deepseek-chat runner+judge, strictness high, trials 10, flow 337) ran and failed for all four skills -- trigger accuracy, not behavior content (all but two behavior scenarios scored 1.0; ruby-rails-build-fix's weakest scenario scored 0.4 on this run). No generated pair ships; pack stays stability: experimental. See governance/eval.json for the recorded reports and W1-stack-catalog.md's Wave 4 batch 5 implementation notes for the diagnosis."
 }
