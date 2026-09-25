@@ -14,13 +14,14 @@
       "pip install is failing for this Python project",
       "Implement a new Rust feature in the order crate",
       "Review this Rust diff for unsafe blocks and unwrap panics",
-      "Write Rust tests for this function"
+      "Write Rust tests for this function",
+      "Our CMake configure step is failing with a missing header error, this is a C++ project not a Cargo one"
     ]
   },
   "scenarios": [
     {
       "id": "lockfile-mismatch",
-      "prompt": "cargo build fails saying Cargo.lock is out of date after I bumped a dependency version in Cargo.toml. How do I fix it?",
+      "prompt": "cargo build --locked fails saying Cargo.lock is out of date after I bumped a dependency version in Cargo.toml (this is the same command our CI runs). How do I fix it?",
       "strictness": "high",
       "expected_behavior": [
         {
@@ -46,28 +47,28 @@
     },
     {
       "id": "no-clippy-allow-suppression",
-      "prompt": "cargo clippy is flagging a needless clone in my Rust code. How should I fix it?",
+      "prompt": "cargo clippy (with the nursery group enabled) is flagging a redundant clone in my Rust code. How should I fix it?",
       "strictness": "high",
       "expected_behavior": [
         {
           "grader": "judge",
-          "rubric": "A correct answer fixes the actual needless clone -- removes it and borrows instead, or restructures ownership so the clone isn't needed -- instead of suppressing the lint with #[allow(clippy::...)] (especially a blanket #[allow(clippy::all)]), and instead of keeping the clone with only a comment explaining it away when the lint indicates it is genuinely unnecessary.",
+          "rubric": "A correct answer fixes the actual redundant clone -- removes it and borrows instead, or restructures ownership so the clone isn't needed -- instead of suppressing the lint with #[allow(clippy::...)] (especially a blanket #[allow(clippy::all)]), and instead of keeping the clone with only a comment explaining it away when the lint indicates it is genuinely unnecessary.",
           "pass_criteria": [
             "Identifies that the clone is unnecessary and should be removed in favor of borrowing (a reference) or restructuring ownership, not kept.",
             "Shows the concrete fix direction: pass a reference (e.g. `&value` or changing the parameter type to `&T`) instead of the owned clone, or an equivalent restructuring -- not merely a statement that the clone 'should be looked at'.",
             "Does not rely on `#[allow(clippy::...)]` (or a blanket `#[allow(clippy::all)]`) as the fix for the flagged finding."
           ],
           "fail_criteria": [
-            "Recommends adding `#[allow(clippy::needless_clone)]` or `#[allow(clippy::all)]` to silence the finding instead of removing the clone.",
+            "Recommends adding `#[allow(clippy::redundant_clone)]` or `#[allow(clippy::all)]` to silence the finding instead of removing the clone.",
             "Keeps the clone unchanged and only adds a comment justifying it, when the lint's own message indicates the value can simply be borrowed instead."
           ]
         }
       ],
       "calibration": {
-        "known_right": "clippy's `needless_clone` (or `redundant_clone`) is telling you the value gets duplicated somewhere it could just be borrowed instead -- that usually means a function parameter or a call site is taking ownership (`T` or `.clone()`) where a reference (`&T`) would work just as well. Look at how the cloned value is used afterward: if the caller still needs its own copy and the callee only reads the value, change the callee's signature to accept `&T` and drop the `.clone()` at the call site. If the callee genuinely needs to own or mutate its own copy independent of the caller, the clone might be legitimate -- in that case leave it, but consider whether an owned move (transferring ownership instead of cloning) is possible if the caller doesn't need the value afterward either. Don't reach for `#[allow(clippy::needless_clone)]` here -- that just tells the linter to stop looking, it doesn't address whether the clone was actually needed. Once you've fixed it, re-run `cargo clippy -- -D warnings` to confirm the finding is actually resolved rather than merely hidden.",
-        "known_wrong": "The simplest fix is to just add `#[allow(clippy::needless_clone)]` above the function -- that clone genuinely doesn't matter here for a value this small, and it stops clippy from flagging it every time CI runs. You don't need to touch the actual signature or figure out whether borrowing would work; the allow attribute is exactly what it's for. If clippy flags something similar nearby, you can add the same allow there too rather than working through each clone individually.",
+        "known_right": "clippy's `redundant_clone` (part of the `nursery` group, allow-by-default, which is why it only shows up once that group is enabled) is telling you the value gets duplicated somewhere it could just be borrowed instead -- that usually means a function parameter or a call site is taking ownership (`T` or `.clone()`) where a reference (`&T`) would work just as well. Look at how the cloned value is used afterward: if the caller still needs its own copy and the callee only reads the value, change the callee's signature to accept `&T` and drop the `.clone()` at the call site. If the callee genuinely needs to own or mutate its own copy independent of the caller, the clone might be legitimate -- in that case leave it, but consider whether an owned move (transferring ownership instead of cloning) is possible if the caller doesn't need the value afterward either. Don't reach for `#[allow(clippy::redundant_clone)]` here -- that just tells the linter to stop looking, it doesn't address whether the clone was actually needed. Once you've fixed it, re-run `cargo clippy -- -D warnings` (with the nursery group enabled) to confirm the finding is actually resolved rather than merely hidden.",
+        "known_wrong": "The simplest fix is to just add `#[allow(clippy::redundant_clone)]` above the function -- that clone genuinely doesn't matter here for a value this small, and it stops clippy from flagging it every time CI runs. You don't need to touch the actual signature or figure out whether borrowing would work; the allow attribute is exactly what it's for. If clippy flags something similar nearby, you can add the same allow there too rather than working through each clone individually.",
         "vague": "You should fix that clone properly instead of suppressing the finding -- make sure it's actually addressed before you call this done.",
-        "subtle_wrong": "That needless_clone finding is easy to clear without touching the surrounding logic: leave the `.clone()` exactly where it is and add a comment above it explaining that it's there for simplicity, so future readers understand it's intentional. That way you're not silently ignoring clippy's feedback anymore, and you don't have to change the function's signature or verify that borrowing would actually work at every call site."
+        "subtle_wrong": "That redundant_clone finding is easy to clear without touching the surrounding logic: leave the `.clone()` exactly where it is and add a comment above it explaining that it's there for simplicity, so future readers understand it's intentional. That way you're not silently ignoring clippy's feedback anymore, and you don't have to change the function's signature or verify that borrowing would actually work at every call site."
       },
       "anti_patterns": ["#[allow(clippy"]
     }

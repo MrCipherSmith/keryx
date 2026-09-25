@@ -124,7 +124,7 @@ State the root cause in one sentence, not just "fixed the error."
 
 | Rationalization | Why it is wrong |
 |---|---|
-| "I'll add `#[allow(clippy::needless_clone)]` here so the linter stops complaining" | Silences the finding without addressing whether the clone is actually needed; check the ownership shape instead |
+| "I'll add `#[allow(clippy::redundant_clone)]` here so the linter stops complaining" | Silences the finding without addressing whether the clone is actually needed; check the ownership shape instead. `redundant_clone` lives in clippy's `nursery` group (allow-by-default), so it only surfaces when that group is enabled -- but once it fires, suppressing it is the same mistake as suppressing any other clippy finding |
 | "Bumping the edition to 2024 makes this compile" | Changes the crate's declared minimum edition for every consumer to dodge one error; understand why the code needs 2024 first, or fix the code to work at the declared edition |
 | "This test is flaky, I'll add `#[ignore]` for now" | Hides a real bug or a real flake source instead of fixing the underlying issue; find the actual cause |
 | "I'll just `.clone()` past this borrow error" | A reflexive clone can mask an ownership design issue the compiler is correctly catching; read the compiler's own suggestion first |
