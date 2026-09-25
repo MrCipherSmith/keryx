@@ -109,17 +109,15 @@ remains.
 ### Step 5: Report
 
 ```
-Fixed: FastAPI app failed to start with `PydanticUserError` because a
-  model defined both `Config` and `model_config`
-  Root cause: schemas/notifications.py's `NotificationSettings` model still
-    had its original v1-style `class Config:` block, and someone added a
-    v2-style `model_config = ConfigDict(...)` alongside it -- Pydantic v2
-    rejects a model that carries both configuration mechanisms at once,
-    which surfaced as an import-time failure, not just a warning.
-  Fix: removed the old `class Config:` block and migrated its one setting
-    (`orm_mode` -> `from_attributes`) into `model_config =
-    ConfigDict(from_attributes=True)`, leaving the model with exactly one
-    config mechanism.
+Fixed: new `/webhooks/stripe` endpoint returns 404 in every environment
+  Root cause: routers/webhooks.py defines `router = APIRouter()` and the
+    route with `@router.post("/stripe")`, but main.py still calls
+    `app.include_router(legacy_router)` -- a leftover router object from
+    an earlier refactor that was never renamed -- so the new router
+    object is built but never mounted onto the app at all.
+  Fix: changed main.py to `app.include_router(webhooks_router,
+    prefix="/webhooks")`, pointing at the actual router object the new
+    route was added to, and removed the unused `legacy_router` import.
   Verified: ruff check, mypy, pytest -x -q, and app import all green
 ```
 
