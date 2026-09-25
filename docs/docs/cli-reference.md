@@ -3883,6 +3883,14 @@ picked up by that signal today. Diff proximity is also a heuristic that can
 point the wrong way on a PR whose OWN diff is the flakiness fix landing in
 the same commit as the failure (also observed in the evaluation set).
 
+**Another known signal gap, found in post-merge review:** the same-head
+job-level check above matches the later run's job by NAME too, and a later
+run can have more than one job sharing that name (a matrix leg, a reused
+workflow). When that happens the deterministic override is withheld — which
+one of them is "this job" cannot be told apart from the name alone — and the
+run is only mentioned as an advisory-only evidence line, the same degrade
+path a missing, skipped, or unreadable job already gets.
+
 **Measured accuracy (flow 307, AC6) — honestly, whatever it is.** A live run
 of `--eval` against the real runs of the eight cases in
 `src/commands/fixtures/ci-triage-eval/` (`gh`/Jev, not fixtures; 2026-09-25):
