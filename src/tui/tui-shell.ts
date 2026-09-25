@@ -94,6 +94,9 @@ import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
 import { isConformCommand, openConform } from "./conform-inspector";
 import { loadConformSetup, runConformForTarget } from "./conform-source";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
+import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
+import { createTurnGuardCollector, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
+import { renderTurnGuardNoticeLine } from "../review/turn-guard";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -3488,6 +3491,14 @@ export async function launchTuiAgentShell(opts: {
    * `DEFAULT_PERMISSION_MODE`.
    */
   initialPermissionMode?: PermissionMode;
+  /**
+   * Flow 329: `keryx shell --guard` (`commands/shell.ts`'s `--guard` flag) —
+   * turns the turn guard ON for this session only, overriding the persisted
+   * `ShellConfig.turnGuard.enabled` default (off) without writing it.
+   * `undefined` (no flag) falls back to that persisted setting; either way
+   * `/guard on|off` can still change it live and persists the new default.
+   */
+  initialGuardEnabled?: boolean;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -4017,6 +4028,13 @@ export async function launchTuiAgentShell(opts: {
         },
       }),
     );
+    // flow 329 (AC5): "Guard" row — a `BoxRenderable` that renders ZERO rows
+    // while the turn guard is off (the default), same "no fixed-height cost
+    // for a feature nobody turned on" idiom the Workspace/Review boxes above
+    // use. Created here (sidebar position); filled by `refreshGuardSidebar`,
+    // defined below once `guardEnabled`/`guardHistory` exist.
+    const sbGuard = new otui.BoxRenderable(r, { id: "sb-guard", flexDirection: "column", flexShrink: 0 });
+    sidebar.add(sbGuard);
     // Multi-agent / page-worker fleet (enrich swarm + future harness subagents).
     // Live activity: main agent phase + optional enrich/subagent fleet.
     // Yellow when blocked (user must act), red on failure — not cryptic glyphs only.
@@ -4446,6 +4464,65 @@ export async function launchTuiAgentShell(opts: {
         setMainAgent("failed", text.includes("[budget]") ? "budget" : "error");
       }
       baseOnSystem?.(text);
+    };
+
+    // --- flow 329: turn guard ------------------------------------------------
+    // Opt-in (AC5, default off): `--guard` (session-only) or the persisted
+    // `ShellConfig.turnGuard.enabled` (from a prior `/guard on`). `guardEnabled`
+    // is a plain mutable binding — read fresh at each turn's settle below, so
+    // a live `/guard on|off` takes effect starting with the very next turn.
+    let guardEnabled = opts.initialGuardEnabled ?? loadShellConfig().turnGuard?.enabled === true;
+    /** This session's guard history, newest first when read by the `/guard` modal — capped so a long session cannot grow it unbounded. */
+    const GUARD_HISTORY_CAP = 20;
+    const guardHistory: TurnGuardResult[] = [];
+    const recordGuardResult = (result: TurnGuardResult): void => {
+      guardHistory.unshift(result);
+      guardHistory.length = Math.min(guardHistory.length, GUARD_HISTORY_CAP);
+    };
+    // Collects tool calls/results + the final assistant text for the CURRENT
+    // turn only. Wrapped ONCE here (permanent, same "wrap the base hook"
+    // pattern `io.write`/`io.onUsage`/`io.onSystem` already use above) rather
+    // than per-turn — a per-turn re-wrap would stack a new closure on every
+    // turn for the life of the session.
+    const guardCollector = createTurnGuardCollector();
+    const baseOnToolCallForGuard = io.onToolCall?.bind(io);
+    io.onToolCall = (name, toolInput) => {
+      guardCollector.onToolCall(name, toolInput);
+      baseOnToolCallForGuard?.(name, toolInput);
+    };
+    const baseOnToolResultForGuard = io.onToolResult?.bind(io);
+    io.onToolResult = (name, toolResult) => {
+      guardCollector.onToolResult(name, toolResult);
+      baseOnToolResultForGuard?.(name, toolResult);
+    };
+    const baseOnAssistantTextForGuard = io.onAssistantText?.bind(io);
+    io.onAssistantText = (text) => {
+      guardCollector.onAssistantText(text);
+      baseOnAssistantTextForGuard?.(text);
+    };
+    /** AC5: sidebar state — zero rows while off, "on · N checked[, M flagged]" while on. */
+    const refreshGuardSidebar = (): void => {
+      clearTranscriptChildren(sbGuard);
+      if (!guardEnabled) return;
+      sbGuard.add(new otui.TextRenderable(r, { id: "sb-guard-k", content: otui.t`${dimChunk(otui, "Guard")}`, marginTop: 1 }));
+      const flaggedCount = guardHistory.filter((g) => g.verdict.flagged).length;
+      sbGuard.add(
+        new otui.TextRenderable(r, {
+          id: "sb-guard-v",
+          content: otui.t`${dimChunk(otui, `on · ${guardHistory.length} checked${flaggedCount > 0 ? `, ${flaggedCount} flagged` : ""}`)}`,
+          onMouseDown: () => {
+            showTurnGuard();
+          },
+        }),
+      );
+    };
+    refreshGuardSidebar();
+    /** `/guard on|off` (AC5): live toggle + persistence. */
+    const setGuardEnabled = (next: boolean): void => {
+      guardEnabled = next;
+      saveShellConfig({ turnGuard: { enabled: next } });
+      refreshGuardSidebar();
+      io.onSystem?.(`Guard: ${next ? "on" : "off"}\n`);
     };
 
     // Approval gate: `shell_exec` (remembered patterns) + `spawn_subagent` (MAE).
@@ -5880,6 +5957,16 @@ export async function launchTuiAgentShell(opts: {
         ...inspectorKeys,
       });
     };
+    /** `/guard` (flow 329, AC4): this session's turn-guard history, newest first, with each entry's facts/probabilities/reason. */
+    const showTurnGuard = (): void => {
+      openTurnGuard(otui, chrome, {
+        history: () => guardHistory,
+        enabled: () => guardEnabled,
+        onKeypress: (handler) => onKeypress(r, handler),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+      });
+    };
     /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
     const showBus = (): void => {
       if (liveBus === undefined) {
@@ -7278,6 +7365,22 @@ export async function launchTuiAgentShell(opts: {
           showConform();
           return;
         }
+        if (isTurnGuardCommand(command.name)) {
+          // flow 329 (AC5): `/guard` alone opens the modal; `/guard on|off`
+          // toggles + persists, mirroring `/think <mode>`'s own arg-vs-bare
+          // shape above.
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+          if (arg === "on" || arg === "off") {
+            setGuardEnabled(arg === "on");
+            return;
+          }
+          if (arg.length > 0) {
+            io.onSystem?.(`Unknown /guard argument '${arg}'. Usage: ${TURN_GUARD_COMMAND} [on|off]\n`);
+            return;
+          }
+          showTurnGuard();
+          return;
+        }
         if (command.name === "/bus") {
           runBusCommand(line);
           return;
@@ -7771,6 +7874,9 @@ export async function launchTuiAgentShell(opts: {
           // (including an aborted request — AbortError lands here too)
         }
       };
+      // flow 329: starts collecting THIS turn's tool calls/final text fresh —
+      // must run before `runAgentTurn` so no early tool call is missed.
+      guardCollector.reset(line);
       const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
       void runAgentTurn(foregroundIo, deps, history, line, {
         signal: foregroundOperation.signal,
@@ -7792,6 +7898,27 @@ export async function launchTuiAgentShell(opts: {
         // Flow 300 (AC7): whatever the turn wrote — a trigger record, a new
         // governance report — reaches the sidebar now, not on the next tick.
         void ops.afterTurn();
+        // flow 329 (AC2/AC4): fired with `void`, never awaited here — the
+        // guard runs AFTER the turn has already settled and must never delay
+        // the user's next prompt. `runTurnGuard` itself never throws (every
+        // failure mode degrades to an unflagged, `skipped` result), and this
+        // is a defensive second layer around that, same idiom `suggestNextStep`'s
+        // own catch above uses for an optional, best-effort side effect.
+        if (guardEnabled) {
+          const guardTranscript = guardCollector.transcript();
+          void (async () => {
+            try {
+              const guardResult = await runTurnGuard(guardTranscript, { enabled: guardEnabled });
+              recordGuardResult(guardResult);
+              refreshGuardSidebar();
+              if (guardResult.verdict.flagged) {
+                io.onSystem?.(`${renderTurnGuardNoticeLine(guardResult.verdict)}\n`);
+              }
+            } catch {
+              // best-effort — the guard must never surface an error into the shell
+            }
+          })();
+        }
         setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
         try {
           flushSessionCheckpoint();

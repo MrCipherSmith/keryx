@@ -3041,6 +3041,15 @@ export interface ShellCliFlags {
    * which would otherwise silently fall back to `agent-<n>`.
    */
   name?: string;
+  /**
+   * Flow 329: `keryx shell --guard` turns the turn guard ON for this session
+   * only — the same session-only-override shape `--permission-mode` uses.
+   * `undefined` means no flag was passed; the TUI then falls back to the
+   * persisted `ShellConfig.turnGuard.enabled` (default off). TUI-only (the
+   * modal `/guard` opens has no readline equivalent); harmless no-op on the
+   * readline surface.
+   */
+  guard?: boolean;
 }
 
 /**
@@ -3093,6 +3102,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let eventsMaxField: number | undefined;
   let debug: boolean | undefined;
   let name: string | undefined;
+  let guard: boolean | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -3165,6 +3175,8 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       eventsFile = valueAfter(i++);
     } else if (arg === "--debug") {
       debug = true;
+    } else if (arg === "--guard") {
+      guard = true;
     } else if (arg === "--events-max-field") {
       const raw = valueAfter(i++);
       const parsed = Number(raw);
@@ -3215,6 +3227,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(eventsMaxField !== undefined ? { eventsMaxField } : {}),
     ...(debug === true ? { debug: true } : {}),
     ...(name !== undefined ? { name } : {}),
+    ...(guard === true ? { guard: true } : {}),
   };
 }
 
@@ -3305,6 +3318,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --events-max-field <n>        Per-field character cap in that transcript (default 4000)
   --debug                       Log the session (input, keys, dialogs, tools) and start a watcher
                                 that re-arms terminal input if it stops; see debug/latest.txt
+  --guard                       Turn on the turn guard for this session (TUI only; default off — /guard on|off persists it)
 
 Session continuation and resume are mutually exclusive. Permission flags
 are ignored in chat mode. Without a TTY, resume without an ID uses the latest
@@ -3845,6 +3859,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // needing to touch, that type's shape.
         session: tuiAgentSessionOpts,
         ...(flags.permissionModeFlag !== undefined ? { initialPermissionMode: flags.permissionModeFlag } : {}),
+        // Flow 329: `--guard` turns the turn guard on for THIS session only
+        // (never persisted) — `undefined` lets the TUI fall back to the
+        // persisted `ShellConfig.turnGuard.enabled` default (off).
+        ...(flags.guard === true ? { initialGuardEnabled: true } : {}),
         versionCheck,
       })
     ) {
