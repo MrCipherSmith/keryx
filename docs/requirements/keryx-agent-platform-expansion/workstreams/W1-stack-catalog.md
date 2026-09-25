@@ -1,5 +1,5 @@
 # W1 — Stack-aware skills & rules catalog
-Version: 0.2.5
+Version: 0.2.6
 
 ## Summary
 
@@ -1068,10 +1068,17 @@ cover MobX's build-failure surface).
   - **nestjs — gate PASS (superseded, see "fix attempt 1" below).** All 3
     skills pass. Promoted to `stability: "stable"`; ships
     `nestjs-code-auditor`/`nestjs-build-fixer`.
-  - **angular — gate PASS.** All 4 skills pass. Promoted to `stability:
-    "stable"`; ships `angular-code-auditor`/`angular-build-fixer`.
-  - **mobx — gate PASS.** Both skills pass. Promoted to `stability:
-    "stable"`; ships `mobx-code-auditor`/`mobx-build-fixer`.
+  - **angular — gate PASS (superseded, see "fix attempt 2" below).** All 4
+    skills pass. Promoted to `stability: "stable"`; ships
+    `angular-code-auditor`/`angular-build-fixer`.
+  - **mobx — gate PASS (pair claim superseded, see "fix attempt 1"
+    below).** Both skills pass. Promoted to `stability: "stable"`. This
+    section originally also said it ships `mobx-code-auditor`/
+    `mobx-build-fixer` — WRONG even at the time this section was written:
+    it silently reversed this document's own §Design decision that mobx's
+    review ground is already covered by `code-mobx-store-review`/
+    `mobx-store-template.mdc`, caught in review round 1 (M1). mobx has no
+    `agentProfile` and ships no generated pair.
   - **nextjs-nuxt — gate FAIL.** Every skill's trigger accuracy carries real
     false positives, matching the worker's own honestly-reported self-check
     exactly: `nextjs-nuxt-implementation` 3/6, `nextjs-nuxt-testing` 4/6,
@@ -1197,13 +1204,96 @@ provisional 5:
   (the same cross-pack collision, its attribution corrected by minor-3, and
   the `template-union-type-narrowing` behavior scenario at `0.4`). Every
   other `vue` skill passes cleanly. Stays `experimental`.
-- **Stack coverage: 2 → 3 generated-pair packs.** `go` and `python` (flow
-  317) plus `angular` (this flow) ship a generated pair. `mobx` is
-  `stable` with no pair by design. `ts-js-node`/`react`/`nestjs`/
-  `nextjs-nuxt`/`vue` are `experimental` with none — `nestjs` having
-  reached and then honestly lost `stable` status within this same flow,
-  the direct cost of removing a trigger prompt's scorer-gaming rather than
-  keeping it.
+- **Stack coverage: 2 → 3 generated-pair packs (superseded, see "fix
+  attempt 2" below).** `go` and `python` (flow 317) plus `angular` (this
+  flow) ship a generated pair. `mobx` is `stable` with no pair by design.
+  `ts-js-node`/`react`/`nestjs`/`nextjs-nuxt`/`vue` are `experimental` with
+  none — `nestjs` having reached and then honestly lost `stable` status
+  within this same flow, the direct cost of removing a trigger prompt's
+  scorer-gaming rather than keeping it.
+
+## Implementation notes: fix attempt 2 (flow 318, review round 2)
+
+A narrow Opus verification of fix attempt 1 (above) confirmed every review
+round 1 blocker/major was genuinely fixed, but returned its own findings
+(fix attempt 2 of the runner's 3-attempt budget):
+
+- **N-B1 (blocker, CI red).** `bun run typecheck` failed with 9 TS18048
+  ("possibly undefined") errors in `src/agents/verify.test.ts:558-604` —
+  three fixture tests used `pair.auditor` directly after `M2` widened
+  `GeneratedAgentPair.auditor`/`.fixer` to optional. Fixed with a local
+  `const auditor = pair.auditor!` per test (the fixture's own
+  `reviewPack()` always declares both skill buckets non-empty, so this is
+  always defined at runtime).
+- **N-M1 (major).** Review round 1's realism sweep caught the gaming
+  pattern in two of the four I11-rewritten packs (`nextjs-nuxt`, `nestjs`)
+  but missed it in `angular`/`mobx`: `angular-testing`'s e2e/staging
+  negative had been quietly reworded away from an honest false positive
+  (traced to an earlier `minor-4` fix in fix attempt 1, itself a
+  self-inflicted regression, already corrected), and several
+  `angular-implementation`/`mobx-store-implementation` positives were
+  still trigger-prefix constructions (a trigger phrase plus a tail, or a
+  close synonym swap) rather than genuinely restructured phrasing.
+  Rewritten using the reviewer's own natural probes, `mobx-store-
+  implementation`'s SKILL.md frontmatter reverted (a description clause +
+  2 triggers that existed only to make an earlier round's gamed positives
+  route), and explicitly NOT iterated against the router afterward, per
+  the same standing instruction fix attempt 1 already established.
+- **The honest, accepted-as-final consequence.** Re-recorded judge
+  calibration for the two touched judge scenarios (see the minors below)
+  and ran the honest 10-trial gate once for `angular` and `mobx`, with no
+  further iteration:
+  - `angular-implementation`'s trigger accuracy collapsed (`truePositive`
+    1/7).
+  - `angular-testing` picked up a real false positive (1/6) — the
+    restored, honest e2e/staging negative.
+  - `mobx-store-implementation`'s trigger accuracy dropped (`truePositive`
+    4/8).
+  - `angular-build-fix`, `angular-code-review`, and `mobx-observable-
+    testing` all stayed clean.
+  - A pack needs every skill to pass: both `angular` and `mobx` revert to
+    `stability: "experimental"`. `angular-code-auditor.md`/`angular-
+    build-fixer.md` are removed; `install-manifest.json`'s `angular-rules`/
+    `angular-skills`/`mobx-rules`/`mobx-skills` revert to `"experimental"`;
+    each pack's `agent-refs.json` `note` records the specific honest
+    reason.
+- **Two scenario-content bugs the review also caught.** The OnPush
+  `fail_criteria` fix attempt 1's M5 wrote lumped a genuine no-op
+  (`this.items = this.items`) together with a genuinely valid fix
+  (`this.items = [...this.items]`, which DOES create a new array
+  reference) as if both were the same failure — narrowed to the true no-op
+  only. The `inject-inside-injection-context-only` `pass_criteria` still
+  only accepted the field/constructor pattern even though the scenario's
+  own rubric names `runInInjectionContext()` as an equally valid fix —
+  widened to accept either, provided the `Injector` itself was captured in
+  a valid injection context beforehand.
+- **Minors fixed.** `nestjs-build-fix`'s awkward "circular dependency
+  warning naming these NestJS @Module()-decorated modules" trigger
+  reworded to natural phrasing ("these two NestJS modules have a circular
+  dependency on each other"), re-verified against the exact `go-build-fix`
+  collision class this flow has now hit three separate times from
+  unrelated wording changes elsewhere in the catalog. `vue/rules/
+  patterns.mdc`'s `paths:` actually widened to `*.ts` (composables are
+  routinely plain `.ts` files, not `.vue` SFCs) rather than leaving fix
+  attempt 1's M4 note as vue-side documentation with no real change. The
+  generator's "A Angular-focused..."/"a Angular build..." grammar fixed
+  (an `indefiniteArticle` helper, covered by two new tests). The stale
+  "mobx — gate PASS... ships mobx-code-auditor/mobx-build-fixer" line
+  above (never true even when it was written — M1 had already removed the
+  pair) corrected to the same "superseded" pattern used for `nestjs`.
+- **Info (I11 containment threshold) — deliberately NOT changed in this
+  PR.** A follow-up flow will own a containment-based I11 variant (the
+  share of a trigger's OWN tokens present in the prompt, at a `0.75`
+  threshold, rather than symmetric Jaccard) plus the batch-1 rewrite this
+  flow's own M3 explicitly deferred (`go` 15/24, `python` 18/25 under the
+  same measure).
+- **Stack coverage: 2 generated-pair packs (final, this flow).** Only `go`
+  and `python` (flow 317) ship a generated pair. `angular`, `mobx`, and
+  `nestjs` each cleared the honest gate at some point in this flow and
+  were each honestly demoted once their trigger prompts were de-gamed —
+  the direct, accepted cost of removing scorer-optimization rather than
+  keeping it. `ts-js-node`/`react`/`nextjs-nuxt`/`vue` remain
+  `experimental` for their own, unrelated reasons.
 
 ## Data contracts
 

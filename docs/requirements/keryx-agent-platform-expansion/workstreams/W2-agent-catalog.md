@@ -1,7 +1,21 @@
 # W2 — Agent Definitions Catalog
-Version: 0.1.10
+Version: 0.1.11
 
-**Changelog (0.1.10, flow 318, review round 1 on PR #719):** corrects the
+**Changelog (0.1.11, flow 318, review round 2 on PR #719):** corrects the
+0.1.10 line below, which recorded review round 1's outcome — superseded by
+review round 2's own realism-sweep findings (N-M1). `angular` briefly
+cleared the gate with a full generated pair, but review round 2 found its
+positive trigger prompts (and mobx's) still had trigger-prefix/synonym-swap
+gaming the round 1 sweep missed. Rewritten honestly and not iterated
+against the router; the honest re-run demotes `angular` back to
+`stability: experimental` (its pair removed) alongside `mobx`, which was
+already pair-less by design (M1) but now also drops from `stable` on its
+own skills. Real, on-disk generated coverage as of this flow: `go`,
+`python` (2 packs, 4 files); `angular`, `mobx`, `nestjs`, `ts-js-node`,
+`react`, `nextjs-nuxt`, `vue` are all `experimental` with none.
+
+**Changelog (0.1.10, flow 318, review round 1 on PR #719 — superseded by
+0.1.11 above):** corrects the
 0.1.9 line below, which recorded flow 318's FIRST honest gate run (T13) —
 superseded by the review fix pass. `mobx` never ships a generated pair
 (the pack.json `agentProfile` review round 1 found was a silent reversal
