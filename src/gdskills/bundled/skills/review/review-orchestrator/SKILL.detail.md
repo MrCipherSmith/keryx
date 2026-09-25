@@ -129,6 +129,14 @@ differently in the report:
 | `merge_candidates` | `{id, a, b, reason, p}` per candidate pair | A high `p` is a suggestion to a human that `a` and `b` may be the same defect — surface it in the report as a note on both findings. Never merge, drop, or renumber either finding from this alone. |
 | `verify_order` | `{id, p}`, sorted lowest-`p`-first | Feed this order into Wave C's own dispatch — verify the lowest-plausibility findings first — never as a reason to skip verifying any of them. |
 
+`status` is `DONE_WITH_CONCERNS` — never `DONE` — when any `severity_check` is
+`flagged` OR any `merge_candidates` pair scores `p >= 0.5`
+(`LIKELY_DUPLICATE_THRESHOLD`, `src/commands/review-jev-triage.ts`). Live-check
+calibration found same-file pairs that were NOT duplicates scoring around
+0.6, so a merge candidate above the threshold is a prompt to look, never a
+merge — the status flip is a nudge to read the pair, not a verdict that the
+findings are duplicates.
+
 Show its annotations in the report as their own subsection, next to (not
 inside) the findings they annotate — same separation the finding schema
 itself draws between a reviewer's claim (`severity`, `problem`, …) and what

@@ -4515,6 +4515,14 @@ Three tracks, one Jev `noul` per item:
   plausibly follow from the quoted code? Recorded as `verify_order`, sorted
   lowest-plausibility-first. Prioritisation only; never skips verification.
 
+`status` is `DONE_WITH_CONCERNS` — never `DONE` — when any `severity_check` is
+`flagged` OR any `merge_candidates` pair scores `p >= 0.5`
+(`LIKELY_DUPLICATE_THRESHOLD`, `src/commands/review-jev-triage.ts`). Live-check
+calibration found same-file pairs that were NOT duplicates scoring around
+0.6, so a merge candidate above the threshold is a prompt to look, never a
+merge — the status flip is a nudge to read the pair, not a verdict that the
+findings are duplicates.
+
 ```bash
 keryx review jev-triage --report .metaproject/flows/327-*/reviews/327-r01 --json
 keryx review jev-triage --report ./findings.json --max-calls 20 --json
