@@ -1,0 +1,67 @@
+---
+extends: common
+paths: ["**/*.java", "**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Java/Kotlin + Spring coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to current Spring
+Boot 3.x idiom, for both Java and Kotlin sources. Applies only to
+`*.java`/`*.kt`/`*.kts` files — everything not Spring/Java/Kotlin-specific
+still comes from the common rules this file `extends`.
+
+## Dependency injection
+
+- Prefer constructor injection over field injection: a Java `@Service`
+  declares its dependencies as `private final` fields set in the
+  constructor (no `@Autowired` needed on the constructor once there is
+  only one), or a Kotlin class declares them as constructor `val`
+  properties. Field-level `@Autowired` is discouraged — it hides the
+  dependency graph, prevents the field from being `final`/`val`, and
+  makes the class impossible to construct without the Spring container in
+  a plain unit test.
+- A class with more than 4-5 constructor dependencies is a signal the
+  class has too many responsibilities, not a reason to fall back to field
+  injection to make the constructor shorter.
+
+## Layered architecture
+
+- Keep the controller/service/repository layers distinct: a
+  `@RestController` parses/validates the request and delegates to a
+  `@Service`; business logic and transaction boundaries live in the
+  service layer; a `@Repository`/Spring Data interface is the only layer
+  that talks to persistence. Do not put query logic in a controller or
+  HTTP concerns in a service.
+- Expose a request/response DTO at the API boundary, never a JPA `@Entity`
+  directly — an entity carries lazy associations and persistence-specific
+  fields that leak internal structure and can trigger
+  `LazyInitializationException` when serialized outside a transaction.
+
+## Naming and structure
+
+- Java: standard `PascalCase` for types, `camelCase` for members/methods,
+  packages lowercase with no underscores.
+- Kotlin: `PascalCase` for classes, `camelCase` for functions/properties;
+  prefer a `data class` for a DTO/value-holder instead of a plain class
+  with manually written `equals`/`hashCode`/`toString`.
+- Kotlin null-safety: model an optional field as a nullable type (`String?`)
+  and handle it with `?.`/`?:`/`requireNotNull`, not `!!` — a `!!` on
+  anything that can plausibly be null at runtime (a request field, a
+  lookup result) reintroduces the NPE the type system exists to prevent.
+
+## Bean Validation and DTOs
+
+- Annotate request DTO fields with `jakarta.validation` constraints
+  (`@NotNull`, `@NotBlank`, `@Size`, `@Email`, etc.) and mark the
+  controller parameter `@Valid`/`@Validated` — validation belongs on the
+  DTO at the boundary, not re-implemented as manual `if` checks inside
+  the service.
+
+## Formatting
+
+- Follow the project's configured formatter (`spotless`, `ktlint`,
+  google-java-format, or whatever `build.gradle(.kts)`/`pom.xml` already
+  wires up) rather than hand-formatting around it; do not introduce a
+  second formatter into a project that has already standardized on one.

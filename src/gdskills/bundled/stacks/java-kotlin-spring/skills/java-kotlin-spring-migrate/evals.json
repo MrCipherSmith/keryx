@@ -1,0 +1,74 @@
+{
+  "triggers": {
+    "positive": [
+      "Add a Flyway migration for this new order_status column",
+      "Write a Liquibase changeset to add an index on the orders table",
+      "Review this Flyway migration before I apply it to the shared database",
+      "Add a versioned migration to rename this column safely in Spring Boot",
+      "Fix this failing flywayValidate check after a migration checksum mismatch",
+      "Add a new database migration for this Spring Boot project's schema change",
+      "Write a Flyway migration that backfills a new not-null column"
+    ],
+    "negative": [
+      "Write a Django migration for this new model field",
+      "Add a Rails ActiveRecord migration for this column",
+      "Implement a new Spring service method that reads from this table",
+      "Review this Spring controller for entity leakage",
+      "Fix this failing Gradle build for the Spring project",
+      "Write JUnit tests for this Spring repository"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "never-edit-applied-migration",
+      "prompt": "I found a typo in a column name inside V7__add_users_table.sql, which has already been applied in staging. Should I just fix the typo in that file?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer refuses to edit V7__add_users_table.sql directly because it has already been applied, explaining that changing an applied migration's content changes its checksum and will fail validation in any environment that already ran it. It directs adding a new migration (e.g. a rename statement) instead.",
+          "pass_criteria": [
+            "States explicitly that V7__add_users_table.sql must not be edited because it has already been applied in staging.",
+            "Explains the concrete consequence: editing it changes its checksum, which will fail Flyway/Liquibase validation in staging (or anywhere else it already ran).",
+            "Directs creating a new migration (e.g. a rename/correction statement in a new versioned file) as the fix instead."
+          ],
+          "fail_criteria": [
+            "Recommends editing V7__add_users_table.sql directly to fix the typo, with no new migration created."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- don't edit V7__add_users_table.sql. Flyway records a checksum for every migration it has applied, and once V7 has run in staging, changing its file content (even a one-character typo fix) changes that checksum. The next time Flyway validates against staging, it'll detect the mismatch and fail -- staging has a different version of V7 recorded than what's now on disk. Instead, add a new migration (say V13__rename_users_typo_column.sql) that does the correction with an ALTER TABLE ... RENAME COLUMN statement. That way every environment, no matter which point it's already migrated to, gets the fix applied cleanly as a new step rather than needing V7 itself to change underneath it.",
+        "known_wrong": "Since it's just a typo and hasn't gone to production yet, I'd just fix it directly in V7__add_users_table.sql -- staging can just re-run the migration or you can manually correct the column name there once. It's a one-character change, adding a whole new migration file for something this small feels like overkill.",
+        "vague": "You probably shouldn't touch a migration that's already been applied -- handle the typo the right way instead.",
+        "subtle_wrong": "Since it's only in staging and not production yet, you can edit V7__add_users_table.sql directly and then just re-apply Flyway's `repair` command in staging to reset the checksum before running the corrected migration again -- that gets the file itself clean without needing an extra V13 migration cluttering up the history for what's really just a typo fix."
+      },
+      "anti_patterns": ["v7__add_users_table.sql"]
+    },
+    {
+      "id": "verify-before-reporting-done",
+      "prompt": "I wrote a new Flyway migration that adds a NOT NULL column with a default value to the orders table. It looks correct to me -- is writing the SQL enough, or do I need to do anything else before considering this done?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer states that the migration must actually be run against a real database with a real migration command (flywayMigrate, with flywayValidate, or the project's equivalent) before being considered done -- reading the SQL and judging it correct by eye is not sufficient, since a migration can fail on the real database (constraint conflicts, backfill issues) even when the SQL looks right.",
+          "pass_criteria": [
+            "States that reading/reviewing the SQL is not sufficient on its own -- the migration must actually be executed with a real migration command.",
+            "Names a concrete command (flywayMigrate/flywayValidate, or the project's Liquibase equivalent) to run against a local/test database.",
+            "Gives a concrete reason verification matters here specifically -- e.g. a NOT NULL column addition can fail against existing rows with no default applied correctly, or a constraint conflict only surfaces at execution time."
+          ],
+          "fail_criteria": [
+            "States or implies that reading the SQL and confirming it looks correct is sufficient, with no actual migration command needing to be run before considering the work done."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Reading the SQL isn't enough here -- run it. Execute `flywayMigrate` (or your build tool's equivalent, e.g. `./gradlew flywayMigrate`) against a local or test database that has representative existing data, then `flywayValidate` to confirm the applied state matches what's on disk. This matters especially for a NOT NULL column with a default: the syntax can look completely correct while still failing against existing rows if the default isn't actually being applied the way you expect on this database engine, or if there's a constraint you didn't account for. Only after it actually runs cleanly against a real database should you consider this done -- never claim a migration is correct purely from reading the SQL.",
+        "known_wrong": "If the SQL syntax looks right and follows the same pattern as your other migrations, that's good enough -- you don't need to actually run it locally first, since ADD COLUMN ... NOT NULL DEFAULT ... is a pretty standard, low-risk statement. Just commit it and let it apply automatically when the app starts up in the next environment; if something's actually wrong you'll find out then.",
+        "vague": "Make sure the migration actually works before you call it done, not just that it reads fine.",
+        "subtle_wrong": "The SQL pattern here is common enough (ADD COLUMN with NOT NULL and a DEFAULT) that as long as it matches how earlier migrations in this project added similar columns, you can be confident it'll apply cleanly -- I'd skip a separate local run for something this standard and just let flywayMigrate pick it up the first time the app boots against the target database, same as any other migration."
+      }
+    }
+  ]
+}

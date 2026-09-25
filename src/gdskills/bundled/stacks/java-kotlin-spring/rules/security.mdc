@@ -1,0 +1,69 @@
+---
+extends: common
+paths: ["**/*controller*.java", "**/*Controller*.java", "**/*controller*.kt", "**/*Controller*.kt", "**/*.java", "**/*.kt", "**/*.kts"]
+metadata:
+  origin: authored
+---
+
+# Java/Kotlin + Spring security
+
+Narrows `core-common-rules`' stack-agnostic security rules to Spring Boot
+3.x-specific, OWASP-relevant risks. Broadly scoped to all Java/Kotlin
+sources for data-access and secrets guidance below, with extra emphasis
+on controller/security-config files for the HTTP-facing rules.
+
+## Spring Security configuration
+
+- Configure security with a `SecurityFilterChain` `@Bean` returned from a
+  `@Configuration` class (`http.build()` on an `HttpSecurity` you have
+  customized) — this is the current Spring Boot 3.x idiom. Do not extend
+  `WebSecurityConfigurerAdapter`; it was removed in Spring Security 6 /
+  Spring Boot 3 and any code still referencing it is targeting an old
+  major version.
+- Scope authorization rules explicitly (`authorizeHttpRequests` with
+  path/role matchers) rather than leaving a catch-all `permitAll()` that
+  was only meant for one endpoint during development.
+
+## CSRF
+
+- A stateless, token-authenticated API (bearer JWT/OAuth2, no session
+  cookie) legitimately disables CSRF protection (`csrf(AbstractHttpConfigurer::disable)`)
+  because CSRF exploits ambient cookie auth, which does not apply here —
+  state this reasoning explicitly when disabling it.
+- A session-cookie-authenticated endpoint (browser form login, `JSESSIONID`)
+  must keep CSRF protection enabled; disabling it there reopens the exact
+  attack the stateless-API exception does not apply to.
+
+## SQL and data access
+
+- Use Spring Data JPA derived queries or parameterized `@Query`
+  (JPQL/native, with named or positional bind parameters), never
+  string-concatenated or `String.format`-built SQL/JPQL with any
+  user-influenced value — parameterization is the injection defense, not
+  an input-validation substitute for it.
+- The same applies to `JdbcTemplate`/`NamedParameterJdbcTemplate`: use its
+  parameter-binding API, never interpolate a value into the SQL string.
+
+## Input validation as the DTO boundary defense
+
+- Validate untrusted input at the DTO boundary with `jakarta.validation`
+  annotations plus `@Valid`/`@Validated` on the controller method — this
+  is the primary injection/malformed-input defense point for request
+  data, on top of (not instead of) parameterized queries downstream.
+
+## Secrets and configuration
+
+- Never hard-code a credential, API key, or signing secret in source or
+  in `application.yml`/`application.properties` committed to the repo —
+  load it from environment variables, a config server, or the secret
+  store the project already uses (Spring's externalized configuration
+  supports both cleanly).
+- Do not log a request/response body that may carry credentials, tokens,
+  or PII at `INFO`/`DEBUG` level without redaction.
+
+## Dependency hygiene
+
+- Run the project's configured dependency-vulnerability check (OWASP
+  Dependency-Check plugin, `./gradlew dependencyCheckAnalyze`, or
+  whatever the build already wires up) when introducing or bumping a
+  dependency, rather than skipping it because "it's just a minor bump."

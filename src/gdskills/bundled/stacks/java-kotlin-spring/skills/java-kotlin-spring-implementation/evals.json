@@ -1,0 +1,75 @@
+{
+  "triggers": {
+    "positive": [
+      "Implement a new Spring Boot REST endpoint for placing an order",
+      "Add a Kotlin Spring service with constructor injection for this feature",
+      "Wire this OrderRequest DTO with jakarta.validation constraints in Spring",
+      "Implement a Spring Data JPA repository method with @EntityGraph to avoid N+1",
+      "Add a @Transactional method to this Java Spring service",
+      "Implement this feature in a Spring Boot Kotlin microservice",
+      "Add a new @RestController endpoint that delegates to this Spring service"
+    ],
+    "negative": [
+      "Implement this feature in Go using errgroup for concurrency",
+      "Implement this feature in a Python FastAPI service",
+      "Implement this React component with the new form fields",
+      "Add a new Node.js Express endpoint for this feature",
+      "Review this Spring Boot service for @Transactional self-invocation bugs",
+      "Fix this failing Maven build for the Spring project"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "constructor-vs-field-injection",
+      "prompt": "I'm adding a new @Service in this Spring Boot app that depends on a PaymentClient. How should I wire the dependency?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer wires the dependency with constructor injection -- a private final field in Java or a constructor val property in Kotlin -- rather than field-level @Autowired, and explains at least briefly why (immutability, or constructing the class in a plain unit test without the Spring container).",
+          "pass_criteria": [
+            "States that the dependency should be constructor-injected as a private final field (Java) or constructor val property (Kotlin), not annotated directly on the field.",
+            "Shows the concrete constructor shape (a constructor parameter assigned to the field, or a Kotlin primary-constructor property), not just 'use constructor injection' in the abstract.",
+            "Explains why, even briefly -- immutability (final/val) or testability without the Spring container."
+          ],
+          "fail_criteria": [
+            "Recommends field-level @Autowired injection (annotating a field directly, e.g. `@Autowired private PaymentClient paymentClient;`) as an acceptable or preferred way to wire this dependency, rather than constructor injection. Mentioning field @Autowired only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Add a constructor to the @Service class that takes the PaymentClient as a parameter and assign it to a private final field (Java): `private final PaymentClient paymentClient; public OrderService(PaymentClient paymentClient) { this.paymentClient = paymentClient; }` -- or, in Kotlin, declare it directly in the primary constructor: `class OrderService(private val paymentClient: PaymentClient)`. Don't reach for field-level `@Autowired` (`@Autowired private PaymentClient paymentClient;`) instead -- constructor injection lets the field be `final`/`val`, so the dependency can never be reassigned after construction, and it lets you construct `OrderService` directly with a mock in a plain unit test without spinning up the Spring container at all.",
+        "known_wrong": "Simplest way: just annotate the field directly with `@Autowired private PaymentClient paymentClient;` and Spring will inject it for you -- no need to write a constructor by hand for a single dependency, and you can always add more `@Autowired` fields later without touching a constructor signature. It works exactly the same as constructor injection at runtime, so there's no real downside for a straightforward case like this.",
+        "vague": "Just inject the PaymentClient dependency the way Spring expects and make sure it's wired in correctly.",
+        "subtle_wrong": "Spring supports constructor injection, but for a single dependency like this, field injection with `@Autowired private PaymentClient paymentClient;` is idiomatic enough and keeps the constructor signature stable as you add more collaborators later -- that's what I'd use here, keeping the field package-private so a test can swap it directly via reflection without needing a mock framework or constructor wiring."
+      },
+      "anti_patterns": ["@Autowired"]
+    },
+    {
+      "id": "transactional-self-invocation",
+      "prompt": "This Spring service has two @Transactional methods, and one calls the other via `this.processPayment()` inside the same class. Does that work as expected?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies that Spring's @Transactional is implemented with a proxy, and a same-class call like this.processPayment() bypasses that proxy entirely, so the inner method's own @Transactional annotation is silently ignored -- no new transaction, no separate propagation/rollback boundary for that call. The fix is to extract the inner method into a separate, constructor-injected bean so the call goes through the proxy.",
+          "pass_criteria": [
+            "States that the proxy-based nature of @Transactional means a same-class call such as this.processPayment() bypasses the proxy, so that method's own @Transactional annotation does not apply to that call.",
+            "Names the concrete fix: extract the inner method into a separate bean/class, constructor-inject it into the original service, and call it through that injected reference instead of this.",
+            "States the concrete consequence -- the inner method's own transactional semantics (its own propagation/rollback boundary) are silently skipped -- not just a vague 'it might not work'."
+          ],
+          "fail_criteria": [
+            "Claims the self-invocation call (this.processPayment()) works fine and gets full transactional behavior without extracting it into a separate bean, whether described as starting its own transaction normally or as safely inheriting the outer transaction's boundary with nothing to fix. Mentioning this only to warn against relying on it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- that call doesn't get the transactional behavior you're probably expecting. Spring's @Transactional is implemented with a proxy (JDK dynamic proxy or CGLIB) wrapped around the bean; the proxy only intercepts calls that arrive through it from outside the bean. A call like this.processPayment() from another method in the same class goes straight to the real object, bypassing the proxy entirely -- so the inner method's @Transactional is silently ignored: no new transaction starts for it, no propagation setting applies, and there's no separate rollback boundary for that call. To fix it, extract processPayment() into its own Spring bean (a separate class), constructor-inject that bean into the original service, and call it through the injected reference instead of this -- that call now goes through the proxy and the annotation actually takes effect.",
+        "known_wrong": "That's fine -- @Transactional applies to any method annotated with it regardless of how it's called, so this.processPayment() will start its own transaction (or join the existing one, depending on propagation) exactly the same as if some other bean called it. Spring resolves the annotation per-method, not just at the proxy boundary, so same-class calls are covered too. No changes needed here.",
+        "vague": "Same-class calls to a @Transactional method can be tricky with proxies -- might be worth double-checking that this actually behaves the way you expect.",
+        "subtle_wrong": "That'll mostly work fine in practice -- since both methods live in the same proxied bean, this.processPayment() still executes inside whatever transaction the outer method already opened, so it inherits that same commit/rollback boundary rather than needing its own. You'd only need to extract it into a separate bean if you actually wanted processPayment() to run in an independent transaction (e.g. REQUIRES_NEW), which doesn't sound like the case here, so there's nothing to fix as written."
+      },
+      "anti_patterns": ["this.processPayment()"]
+    }
+  ]
+}

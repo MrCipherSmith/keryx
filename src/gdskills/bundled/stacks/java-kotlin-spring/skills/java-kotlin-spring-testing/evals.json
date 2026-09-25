@@ -1,0 +1,73 @@
+{
+  "triggers": {
+    "positive": [
+      "Write JUnit 5 tests for this Spring @Service class",
+      "Add MockMvc tests for this Spring @RestController",
+      "Write a @DataJpaTest for this Spring Data repository",
+      "Fix this failing Spring Boot test in the order module",
+      "Add Mockito unit tests for this Java Spring class",
+      "Write MockK tests for this Kotlin Spring service",
+      "Add a Testcontainers integration test for this JPA repository"
+    ],
+    "negative": [
+      "Write pytest tests for this Python function",
+      "Add Jest tests for this React component",
+      "Write table-driven Go tests for this parser",
+      "Add Rust unit tests for this crate",
+      "Review this Spring service for goroutine-style concurrency issues",
+      "Implement a new Spring Boot endpoint that calls this repository"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "no-sleep-awaitility",
+      "prompt": "My Spring test kicks off an async @Async method and I want to wait for it to finish before asserting. What's the right way in this Spring Boot test?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer waits for the async result using an actual synchronization/polling mechanism -- Awaitility's await().atMost(...).until(...), a CompletableFuture join, or a CountDownLatch -- rather than a fixed Thread.sleep delay used as the wait mechanism, whether alone or as extra insurance alongside a real wait.",
+          "pass_criteria": [
+            "Names a concrete synchronization mechanism -- Awaitility, a CompletableFuture join, or a CountDownLatch -- shown concretely, not just 'wait for it to finish' in the abstract.",
+            "Explains why this is reliable/deterministic compared to a fixed delay (it doesn't depend on how long the async method happens to take)."
+          ],
+          "fail_criteria": [
+            "Recommends Thread.sleep as the wait mechanism, whether as the sole way to wait or as additional insurance alongside a real synchronization mechanism. Mentioning Thread.sleep only to warn against it is not a failure."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Use Awaitility: `await().atMost(Duration.ofSeconds(2)).until(() -> repository.findById(id).isPresent())` (or whatever condition marks the async work as done) -- it polls the condition instead of guessing a fixed delay, so the test passes as soon as the condition is true and fails clearly if it never becomes true within the timeout. If the @Async method itself returns a `CompletableFuture`, you can instead just call `.get(2, TimeUnit.SECONDS)` on it directly in the test and assert on the result once it resolves. Either way, avoid Thread.sleep for this -- a fixed sleep either wastes time when the async work finishes early or flakes under CI load when it doesn't finish within your guessed window.",
+        "known_wrong": "Easiest way is to just add `Thread.sleep(500)` right after triggering the async call, then run your assertions -- that gives it enough time to complete in almost every case without pulling in Awaitility or restructuring the method to return a Future just for a test. If it's still flaky in CI sometimes, bump it up to `Thread.sleep(2000)`.",
+        "vague": "Wait for the async method to actually finish before asserting instead of just guessing how long it'll take.",
+        "subtle_wrong": "Use Awaitility for the polling: `await().atMost(Duration.ofSeconds(2)).until(() -> repository.findById(id).isPresent())` -- that's the reliable part. If it's still occasionally flaky in CI, add a small `Thread.sleep(200)` right before the await() call too, just to give the async method a head start before polling begins."
+      },
+      "anti_patterns": ["Thread.sleep"]
+    },
+    {
+      "id": "narrowest-test-slice",
+      "prompt": "I need to add tests for a new Spring @RestController that calls a service to fetch an order. Should I use @SpringBootTest?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer recommends the narrowest slice that actually covers a controller -- @WebMvcTest with MockMvc and the service mocked via @MockBean -- instead of @SpringBootTest, and explains that @SpringBootTest loads the whole application context and is unnecessary/slower for testing just the web layer's request/response mapping.",
+          "pass_criteria": [
+            "Recommends @WebMvcTest (with MockMvc) rather than @SpringBootTest for testing this controller.",
+            "States that the service dependency should be mocked (e.g. via @MockBean) rather than using the real service or the full application context.",
+            "States a concrete reason @SpringBootTest is the wrong choice here -- it loads the entire application context and is slower/broader than what testing a controller's request/response mapping needs."
+          ],
+          "fail_criteria": [
+            "Recommends @SpringBootTest as the right or default choice for testing this controller's request/response mapping, without a stated reason the wider context is actually needed here."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "No -- for testing a single controller's request/response mapping, `@WebMvcTest(OrderController.class)` is the better fit. It loads only the web layer (Spring MVC infrastructure, your controller, message converters, validation), not the full application context, so it starts faster and keeps the test focused on what a controller test should actually check: routing, status codes, request/response body shape, and validation errors. Mock the service dependency with `@MockBean` and use `MockMvc` to perform the request and assert on the result -- you don't need a real service implementation or a database for this. Reach for `@SpringBootTest` only when you actually need the full wired context -- for example, a true end-to-end test spanning multiple layers -- which isn't what's being described here.",
+        "known_wrong": "Yes, just use `@SpringBootTest` -- it boots the full application context so you know everything is wired correctly, including the real service and repository, which gives you more confidence than a narrower slice would. You can autowire the real `OrderController` and `MockMvc` through `@AutoConfigureMockMvc` and test it the same way; there's no real downside to using the full context by default, it's simpler to reach for one annotation everywhere instead of picking between different test slices.",
+        "vague": "Pick whichever Spring test setup makes sense for testing this controller and keep it reasonably fast.",
+        "subtle_wrong": "You could use @WebMvcTest, but honestly @SpringBootTest with @AutoConfigureMockMvc works just as well here and is one less thing to think about when choosing between slices -- it's a bit slower per test class, but for a single new controller that's not going to matter much, and you still get MockMvc the same way. I'd just default to @SpringBootTest for controller tests going forward unless the suite's startup time becomes a real problem."
+      }
+    }
+  ]
+}
