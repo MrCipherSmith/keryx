@@ -27,7 +27,7 @@ export function isCiTriageCommand(line: string): boolean {
 export const CI_TRIAGE_FOOTER = [
   { key: "↑/↓", label: "move" },
   { key: "enter", label: "detail" },
-  { key: "t", label: "triage" },
+  { key: "t/r", label: "triage/retry" },
   { key: "esc", label: "close" },
 ] as const;
 
@@ -48,13 +48,15 @@ export interface CiTriageListRead {
 
 export type CiTriageRunResult =
   | { readonly ok: true; readonly verdict: CiTriageVerdict; readonly testName?: string }
-  | { readonly ok: false; readonly reason: string };
+  /** `timedOut` (flow 306 review, items 1/3): the request was aborted — by the client's own default timeout, or by this modal closing mid-request. */
+  | { readonly ok: false; readonly reason: string; readonly timedOut?: boolean };
 
 type ItemState =
   | { readonly kind: "idle" }
   | { readonly kind: "triaging" }
   | { readonly kind: "done"; readonly verdict: CiTriageVerdict; readonly testName?: string }
-  | { readonly kind: "error"; readonly reason: string };
+  | { readonly kind: "error"; readonly reason: string }
+  | { readonly kind: "timeout" };
 
 function itemKey(item: CiTriageJobItem): string {
   return `${item.runId}:${item.jobName}`;
@@ -64,7 +66,8 @@ export interface CiTriageModalOptions {
   cwd: string;
   onKeypress: (handler: (key: { name: string; sequence: string }) => void) => () => void;
   load: (cwd: string) => Promise<CiTriageListRead>;
-  triage: (cwd: string, item: CiTriageJobItem) => Promise<CiTriageRunResult>;
+  /** `signal` (flow 306 review): aborted when this modal closes with the triage still in flight. */
+  triage: (cwd: string, item: CiTriageJobItem, signal?: AbortSignal) => Promise<CiTriageRunResult>;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   /**
@@ -91,6 +94,7 @@ function pct(n: number): string {
 function stateSummary(state: ItemState): string {
   if (state.kind === "idle") return "not triaged — press t";
   if (state.kind === "triaging") return "triaging…";
+  if (state.kind === "timeout") return "timed out — r to retry";
   if (state.kind === "error") return `error: ${state.reason}`;
   return `${state.verdict.top} ${pct(state.verdict.topProbability)} (advisory)`;
 }
@@ -116,6 +120,7 @@ export function formatCiTriageDetailLines(item: CiTriageJobItem | undefined, sta
   const s = state ?? { kind: "idle" as const };
   if (s.kind === "idle") return [`${item.jobName} (run ${item.runId}) has not been triaged yet.`, "", "Press t to triage — this sends a redacted, bounded log excerpt to OpenRouter/TypeSafe."];
   if (s.kind === "triaging") return [`Triaging ${item.jobName} (run ${item.runId})…`];
+  if (s.kind === "timeout") return [`${item.jobName} (run ${item.runId}) timed out — r to retry.`];
   if (s.kind === "error") return [`Could not triage ${item.jobName} (run ${item.runId}):`, "", s.reason];
   return renderCiTriageAdvisory({
     runId: item.runId,
@@ -137,6 +142,8 @@ export function openCiTriage(otui: unknown, chrome: unknown, options: CiTriageMo
 
   let read: CiTriageListRead = { items: [] };
   const states = new Map<string, ItemState>();
+  /** One in-flight triage's abort handle per item key (flow 306 review, items 1/3). */
+  const controllers = new Map<string, AbortController>();
   let selected = 0;
   let listScroll = 0;
   let detailScroll = 0;
@@ -174,12 +181,26 @@ export function openCiTriage(otui: unknown, chrome: unknown, options: CiTriageMo
 
   const runTriage = (item: CiTriageJobItem): void => {
     const key = itemKey(item);
+    // A retry replaces whatever controller was there (there is at most one
+    // per key at a time — `t`/`r` on an item already `triaging` just re-arms
+    // the same slot, it does not stack a second request).
+    controllers.get(key)?.abort();
+    const controller = new AbortController();
+    controllers.set(key, controller);
     states.set(key, { kind: "triaging" });
     paint();
-    inFlight = options.triage(options.cwd, item).then((result) => {
+    inFlight = options.triage(options.cwd, item, controller.signal).then((result) => {
+      controllers.delete(key);
+      // The modal is gone: nothing left to update, and nothing left to
+      // paint into (review item 3 — no crash, no stale paint after close).
+      if (closed) return;
       states.set(
         key,
-        result.ok ? { kind: "done", verdict: result.verdict, ...(result.testName !== undefined ? { testName: result.testName } : {}) } : { kind: "error", reason: result.reason },
+        result.ok
+          ? { kind: "done", verdict: result.verdict, ...(result.testName !== undefined ? { testName: result.testName } : {}) }
+          : result.timedOut === true
+            ? { kind: "timeout" }
+            : { kind: "error", reason: result.reason },
       );
       paint();
     });
@@ -204,6 +225,11 @@ export function openCiTriage(otui: unknown, chrome: unknown, options: CiTriageMo
       closed = true;
       keys.off?.();
       unsubscribeTheme();
+      // Flow 306 review, items 1/3: an in-flight triage does not outlive the
+      // modal that asked for it — abort every request still open rather than
+      // let it run to `callJevSystemOne`'s own 30s default in the background.
+      for (const controller of controllers.values()) controller.abort();
+      controllers.clear();
     },
   });
   if (handle === undefined) return undefined;
@@ -228,7 +254,7 @@ export function openCiTriage(otui: unknown, chrome: unknown, options: CiTriageMo
         detailScroll = 0;
       }
     };
-    if (token === "t") {
+    if (token === "t" || token === "r") {
       const item = selectedItem();
       if (item !== undefined) runTriage(item);
     } else if (token === "return" || token === "enter") {

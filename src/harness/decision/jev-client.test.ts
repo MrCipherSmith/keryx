@@ -5,15 +5,18 @@ import { describe, expect, test } from "bun:test";
 import {
   callJevSystemOne,
   DEFAULT_JEV_MODEL,
+  DEFAULT_JEV_TIMEOUT_MS,
   JEV_ENDPOINT,
   JEV_MODEL_1_13,
   JEV_MODEL_LATEST,
   JEV_TOKEN_BUDGET,
+  JevAnswerValidationError,
   JevBudgetError,
   JevCredentialError,
   JevRequestError,
   JevResponseParseError,
   JevResponseShapeError,
+  JevTimeoutError,
   preflightBudget,
   resolveJevApiKey,
   type JevQuestions,
@@ -157,5 +160,158 @@ describe("AC5: one test per fixture shape", () => {
     await expect(callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY })).rejects.toBeInstanceOf(
       JevResponseShapeError,
     );
+  });
+});
+
+/**
+ * A `fetch` stand-in that never settles on its own, exactly like a real
+ * `fetch` against a hung connection — it only rejects when its `init.signal`
+ * fires, the same contract the real WHATWG `fetch` honours. Without that
+ * listener this fake would hang the test forever regardless of what
+ * `callJevSystemOne` does; WITH it, the test proves `callJevSystemOne`
+ * actually wires the signal through, not merely that some promise resolved.
+ */
+function hangingFetch(): typeof fetch & { calls: { init?: RequestInit }[] } {
+  const fn = (async (_url: string, init?: RequestInit) => {
+    (fn as unknown as { calls: unknown[] }).calls.push({ init });
+    return new Promise<Response>((_resolve, reject) => {
+      // A real `fetch` checks an ALREADY-aborted signal synchronously and
+      // rejects immediately rather than waiting for an "abort" event that
+      // already fired in the past — `addEventListener` on a signal that is
+      // already aborted never sees that event again. Matching that here is
+      // what makes the "already-aborted signal" test below resolve at all
+      // instead of hanging.
+      if (init?.signal?.aborted === true) {
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+        return;
+      }
+      init?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+      });
+    });
+  }) as unknown as typeof fetch & { calls: { init?: RequestInit }[] };
+  (fn as unknown as { calls: unknown[] }).calls = [];
+  return fn;
+}
+
+describe("timeout / abort (flow 306 review item 1)", () => {
+  test("DEFAULT_JEV_TIMEOUT_MS is a sane, named default", () => {
+    expect(DEFAULT_JEV_TIMEOUT_MS).toBeGreaterThan(1000);
+  });
+
+  test("a request that never resolves times out with JevTimeoutError, not a hang", async () => {
+    const fetchFn = hangingFetch();
+    await expect(
+      callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, timeoutMs: 20 }),
+    ).rejects.toBeInstanceOf(JevTimeoutError);
+    // The fetch really was asked to carry a signal — a reverted fix (no
+    // `signal` in the request init) would leave this fake hanging forever
+    // and the assertion above would never be reached in the first place,
+    // but this also pins the WIRING, not just the outcome.
+    expect(fetchFn.calls[0]?.init?.signal).toBeDefined();
+  });
+
+  test("the reported timeoutMs matches what was asked for", async () => {
+    const fetchFn = hangingFetch();
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, timeoutMs: 15 });
+      throw new Error("expected a timeout");
+    } catch (error) {
+      expect(error).toBeInstanceOf(JevTimeoutError);
+      expect((error as JevTimeoutError).timeoutMs).toBe(15);
+    }
+  });
+
+  test("a caller-supplied signal aborts the request before the timeout, with the same error", async () => {
+    const fetchFn = hangingFetch();
+    const controller = new AbortController();
+    const call = callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, timeoutMs: 60_000, signal: controller.signal });
+    controller.abort();
+    await expect(call).rejects.toBeInstanceOf(JevTimeoutError);
+  });
+
+  test("an already-aborted signal refuses immediately", async () => {
+    const fetchFn = hangingFetch();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, timeoutMs: 60_000, signal: controller.signal }),
+    ).rejects.toBeInstanceOf(JevTimeoutError);
+  });
+
+  test("a normal, fast response is unaffected by the timeout wiring", async () => {
+    const fetchFn = fakeFetch({ answers: { warranted: { type: "noul", noul: 0.4 } }, usage: {} });
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, timeoutMs: 20 });
+    expect(result.answers.warranted).toEqual({ type: "noul", noul: 0.4 });
+  });
+});
+
+describe("answer validation (flow 306 review item 4)", () => {
+  test("every requested key must be present", async () => {
+    const fetchFn = fakeFetch({ answers: {}, usage: {} });
+    await expect(callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY })).rejects.toBeInstanceOf(
+      JevAnswerValidationError,
+    );
+  });
+
+  test("a noul answer whose type does not match the question is rejected", async () => {
+    const fetchFn = fakeFetch({ answers: { warranted: { type: "choice", choice: "yes" } }, usage: {} });
+    await expect(callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY })).rejects.toBeInstanceOf(
+      JevAnswerValidationError,
+    );
+  });
+
+  test("a non-finite noul is rejected, not silently clamped to 0", async () => {
+    const fetchFn = fakeFetch({ answers: { warranted: { type: "noul", noul: Number.NaN } }, usage: {} });
+    const call = callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY });
+    await expect(call).rejects.toBeInstanceOf(JevAnswerValidationError);
+  });
+
+  test("a noul outside 0..1 is rejected", async () => {
+    const overOne = fakeFetch({ answers: { warranted: { type: "noul", noul: 1.5 } }, usage: {} });
+    await expect(callJevSystemOne(overOne, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY })).rejects.toBeInstanceOf(
+      JevAnswerValidationError,
+    );
+    const negative = fakeFetch({ answers: { warranted: { type: "noul", noul: -0.1 } }, usage: {} });
+    await expect(callJevSystemOne(negative, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY })).rejects.toBeInstanceOf(
+      JevAnswerValidationError,
+    );
+  });
+
+  test("the 0..1 boundary values are valid", async () => {
+    const zero = fakeFetch({ answers: { warranted: { type: "noul", noul: 0 } }, usage: {} });
+    expect((await callJevSystemOne(zero, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY })).answers.warranted).toEqual({
+      type: "noul",
+      noul: 0,
+    });
+    const one = fakeFetch({ answers: { warranted: { type: "noul", noul: 1 } }, usage: {} });
+    expect((await callJevSystemOne(one, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY })).answers.warranted).toEqual({
+      type: "noul",
+      noul: 1,
+    });
+  });
+
+  test("a choice answer with an empty/non-string choice is rejected", async () => {
+    const choiceQuestion: JevQuestions = { pick: { type: "choice", instructions: "pick one", criteria: ["a", "b"] } };
+    const empty = fakeFetch({ answers: { pick: { type: "choice", choice: "" } }, usage: {} });
+    await expect(callJevSystemOne(empty, { state: "s", questions: choiceQuestion }, { env: ENV_WITH_KEY })).rejects.toBeInstanceOf(
+      JevAnswerValidationError,
+    );
+  });
+
+  test("a well-formed choice answer is accepted", async () => {
+    const choiceQuestion: JevQuestions = { pick: { type: "choice", instructions: "pick one", criteria: ["a", "b"] } };
+    const fetchFn = fakeFetch({ answers: { pick: { type: "choice", choice: "a" } }, usage: {} });
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: choiceQuestion }, { env: ENV_WITH_KEY });
+    expect(result.answers.pick).toEqual({ type: "choice", choice: "a" });
+  });
+
+  test("an extra answer key the caller never asked about is dropped, not trusted", async () => {
+    const fetchFn = fakeFetch({
+      answers: { warranted: { type: "noul", noul: 0.5 }, unrequested: { type: "noul", noul: 0.9 } },
+      usage: {},
+    });
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY });
+    expect(Object.keys(result.answers)).toEqual(["warranted"]);
   });
 });

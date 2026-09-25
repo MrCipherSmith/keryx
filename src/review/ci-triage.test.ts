@@ -84,6 +84,14 @@ describe("AC11: bounded, redacted state", () => {
     expect(state).toContain("failing test: src/x.test.ts:1");
     expect(state).toContain("boom");
   });
+
+  test("flow 306 review item 2: a planted secret in testName or jobName never reaches the built state either", () => {
+    const planted = "sk-ant-api03-PLANTED-SECRET-TOKEN-abcdefghijklmnopqrstuvwxyz0123456789";
+    const inTestName = buildCiTriageState({ testName: `src/x.test.ts:1 ${planted}`, jobName: "job", rawLog: "boom" });
+    expect(inTestName).not.toContain(planted);
+    const inJobName = buildCiTriageState({ testName: "src/x.test.ts:1", jobName: `job ${planted}`, rawLog: "boom" });
+    expect(inJobName).not.toContain(planted);
+  });
 });
 
 describe("extractFailingTestName", () => {

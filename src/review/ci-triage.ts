@@ -82,13 +82,20 @@ export function buildCiTriageQuestions(): Readonly<Record<CiTriageCriterion, CiT
  * truncation point and let the redactor miss the half that remained, so
  * nothing leaves this function un-redacted regardless of where the tail cut
  * falls.
+ *
+ * `testName` and `jobName` are redacted too, as defence in depth (flow 306
+ * review, LOW): today both are extracted from `--log-failed` text or CLI/TUI
+ * flags, never free-form user text, so neither is expected to carry a
+ * secret — but "not expected to" is exactly the gap a redaction boundary
+ * exists to close, and the cost of also redacting two short strings is
+ * negligible next to the log excerpt itself.
  */
 export function buildCiTriageState(input: { readonly testName: string; readonly jobName: string; readonly rawLog: string }): string {
-  const redacted = redactSensitiveText(input.rawLog);
-  const tail = redacted.length > CI_TRIAGE_LOG_CHARS ? redacted.slice(-CI_TRIAGE_LOG_CHARS) : redacted;
-  return [`job: ${input.jobName}`, `failing test: ${input.testName}`, "", "log excerpt (tail, redacted before leaving this machine):", tail].join(
-    "\n",
-  );
+  const jobName = redactSensitiveText(input.jobName);
+  const testName = redactSensitiveText(input.testName);
+  const redactedLog = redactSensitiveText(input.rawLog);
+  const tail = redactedLog.length > CI_TRIAGE_LOG_CHARS ? redactedLog.slice(-CI_TRIAGE_LOG_CHARS) : redactedLog;
+  return [`job: ${jobName}`, `failing test: ${testName}`, "", "log excerpt (tail, redacted before leaving this machine):", tail].join("\n");
 }
 
 /** `state`'s estimated token count, for a caller that wants to report it (e.g. `--json`). */

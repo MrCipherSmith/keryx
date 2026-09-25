@@ -5722,7 +5722,10 @@ export async function launchTuiAgentShell(opts: {
       openCiTriage(otui, chrome, {
         cwd,
         load: loadCiTriageList,
-        triage: runCiTriageForItem,
+        // `runCiTriageForItem`'s `spawn`/`fetchFn` params sit before `signal` and
+        // default when omitted — this wrapper keeps the modal's own
+        // `(cwd, item, signal?)` contract without exposing those two.
+        triage: (cwd, item, signal) => runCiTriageForItem(cwd, item, undefined, undefined, signal),
         renderer: r,
         inputBlocked: () => chrome.keyboardOwnedElsewhere(),
         ...inspectorKeys,

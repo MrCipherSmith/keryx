@@ -20,7 +20,7 @@ import {
   readCiTriageEnabled,
 } from "../review/ci-triage";
 import { createGhCiPort } from "../review/ci-port";
-import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey } from "../harness/decision/jev-client";
+import { callJevSystemOne, DEFAULT_JEV_MODEL, JevTimeoutError, resolveJevApiKey } from "../harness/decision/jev-client";
 import type { CiTriageJobItem, CiTriageListRead, CiTriageRunResult } from "./ci-triage-inspector";
 
 export interface CiSpawnResult {
@@ -126,12 +126,24 @@ export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defau
   return items.length > 0 ? { items } : { items, note: `No failed jobs found across ${failedRuns.length} failed run(s) on ${branch}.` };
 }
 
-/** AC12/AC7: triage one job, through the exact Phase 0/Phase 1 pipeline `keryx review ci-triage` uses. */
+/**
+ * AC12/AC7: triage one job, through the exact Phase 0/Phase 1 pipeline
+ * `keryx review ci-triage` uses.
+ *
+ * `signal` (flow 306 review, items 1/3) is forwarded to `callJevSystemOne`:
+ * the caller (the `/ci` modal) aborts it when the modal closes, so a request
+ * still in flight after the operator has moved on is cancelled rather than
+ * left to run to `callJevSystemOne`'s own 30s default timeout in the
+ * background. Either the external `signal` or that default firing surfaces
+ * here as `JevTimeoutError`, reported back as `timedOut: true` so the caller
+ * can show "timed out" rather than a generic error.
+ */
 export async function runCiTriageForItem(
   cwd: string,
   item: CiTriageJobItem,
   spawn: CiSourceSpawn = defaultSpawn,
   fetchFn: typeof fetch = globalThis.fetch,
+  signal?: AbortSignal,
 ): Promise<CiTriageRunResult> {
   if (!(await readCiTriageEnabled(cwd))) {
     return { ok: false, reason: "review.jev.ci_triage is not enabled for this project." };
@@ -146,10 +158,13 @@ export async function runCiTriageForItem(
     const testName = extractFailingTestName(rawLog, item.jobName);
     const state = buildCiTriageState({ testName: testName ?? "(unknown test)", jobName: item.jobName, rawLog });
     const questions = buildCiTriageQuestions();
-    const result = await callJevSystemOne(fetchFn, { model: DEFAULT_JEV_MODEL, state, questions });
+    const result = await callJevSystemOne(fetchFn, { model: DEFAULT_JEV_MODEL, state, questions }, { ...(signal !== undefined ? { signal } : {}) });
     const verdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
     return { ok: true, verdict, ...(testName !== undefined ? { testName } : {}) };
   } catch (error) {
+    if (error instanceof JevTimeoutError) {
+      return { ok: false, reason: error.message, timedOut: true };
+    }
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }
 }

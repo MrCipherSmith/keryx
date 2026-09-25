@@ -9,6 +9,7 @@ import {
   openCiTriage,
   type CiTriageJobItem,
   type CiTriageListRead,
+  type CiTriageRunResult,
 } from "./ci-triage-inspector";
 import { formatModalFooter } from "./modal-host";
 import { applyThemeId, getThemeId, roleColor } from "./theme";
@@ -46,6 +47,14 @@ test("formatCiTriageDetailLines: no selection, idle, triaging, error and done st
   const done = formatCiTriageDetailLines(ITEMS[0], { kind: "done", verdict }).join("\n");
   expect(done).toContain("ADVISORY ONLY");
   expect(done).toContain("top: flaky");
+});
+
+test("flow 306 review item 1: a timeout state reads distinctly from a generic error, in both the list row and the detail", () => {
+  const listLine = formatCiTriageListLines(ITEMS, new Map([["1:typecheck-and-tests", { kind: "timeout" as const }]]), 0);
+  expect(listLine[0]).toContain("timed out — r to retry");
+  const detail = formatCiTriageDetailLines(ITEMS[0], { kind: "timeout" }).join("\n");
+  expect(detail).toContain("timed out");
+  expect(detail).toContain("r to retry");
 });
 
 const roots: string[] = [];
@@ -116,6 +125,81 @@ otuiTest("AC12: a triage failure is shown, not swallowed", async () => {
     expect(modal!.visibleLines()[0]).toContain("error: OPENROUTER_API_KEY is not set");
   } finally {
     modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("flow 306 review item 1: `r` retries a selected item exactly like `t`", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const verdict = computeCiTriageVerdict({ flaky: { noul: 0.6 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.3 } });
+  let calls = 0;
+  const modal = openCiTriage(otui.core, h.chrome, {
+    cwd: "/tmp/does-not-matter",
+    onKeypress: keypressSource(h.renderer),
+    load,
+    triage: async () => {
+      calls += 1;
+      return { ok: true, verdict };
+    },
+    visibleRows: 10,
+  });
+  try {
+    await modal!.ready;
+    h.mockInput.pressKey("r");
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toBe(1);
+    expect(modal!.visibleLines()[0]).toContain("flaky 60% (advisory)");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("flow 306 review items 1/3: closing the modal mid-triage aborts the signal; the late response causes no crash and no stale paint", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  let capturedSignal: AbortSignal | undefined;
+  let resolveTriage: ((result: CiTriageRunResult) => void) | undefined;
+  const pending = new Promise<CiTriageRunResult>((resolve) => {
+    resolveTriage = resolve;
+  });
+  const modal = openCiTriage(otui.core, h.chrome, {
+    cwd: "/tmp/does-not-matter",
+    onKeypress: keypressSource(h.renderer),
+    load,
+    triage: async (_cwd, _item, signal) => {
+      capturedSignal = signal;
+      return pending;
+    },
+    visibleRows: 10,
+  });
+  try {
+    await modal!.ready;
+    h.mockInput.pressKey("t");
+    await settle(h);
+    expect(modal!.visibleLines()[0]).toContain("triaging…");
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal!.aborted).toBe(false);
+
+    modal!.close();
+    // The whole point of item 1/3: the modal does not merely stop LISTENING
+    // to the request, it actually cancels it.
+    expect(capturedSignal!.aborted).toBe(true);
+
+    // The in-flight call "comes back" after close, as a real abort racing a
+    // late response would. Awaiting it here is the "no crash" assertion:
+    // if `runTriage`'s `.then()` handler touched a destroyed renderable or
+    // threw on a closed modal, this would reject or throw instead of
+    // resolving quietly.
+    resolveTriage!({ ok: false, reason: "aborted", timedOut: true });
+    await modal!.settled();
+    // No live renderable is left to paint into — `findById` on a closed
+    // modal's panel finds nothing, which is the "no stale paint" half: there
+    // is nothing on screen a late response could have overwritten.
+    expect(findById(h.renderer.root, "ci-triage-body")).toBeUndefined();
+  } finally {
     h.destroy();
   }
 });

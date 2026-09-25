@@ -53,6 +53,15 @@ export const DEFAULT_JEV_MODEL: string = JEV_MODEL_1_13;
 /** The combined `state`+`questions` token budget the vendor documents. */
 export const JEV_TOKEN_BUDGET = 64_000;
 
+/**
+ * Default wall-clock ceiling for one `/systemone` call. Without this a hung
+ * request hung the CLI forever and left a TUI item stuck at "triaging…" with
+ * no way out (flow 306 review, MEDIUM). Same order of magnitude as
+ * `fetchProviderBalance`'s own `BALANCE_FETCH_TIMEOUT_MS`
+ * (`src/commands/providers.ts`), the precedent this mirrors.
+ */
+export const DEFAULT_JEV_TIMEOUT_MS = 30_000;
+
 export type JevQuestionType = "noul" | "choice";
 
 export interface JevQuestion {
@@ -143,6 +152,38 @@ export class JevResponseShapeError extends Error {
 }
 
 /**
+ * The request was aborted before a response arrived — by the internal
+ * `timeoutMs` ceiling, or by a caller-supplied `signal` firing first (flow
+ * 306 review). Named so a caller (the CLI's generic error printer, the TUI's
+ * per-item state) can react to "this never came back" differently from "it
+ * came back malformed".
+ */
+export class JevTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Jev request to ${JEV_ENDPOINT} did not complete within ${timeoutMs}ms and was aborted.`);
+    this.name = "JevTimeoutError";
+  }
+}
+
+/**
+ * One requested answer key came back missing, wrongly typed, or out of
+ * range. Raised rather than silently defaulted: a caller that clamped a
+ * malformed `noul` to `0` (the shape `computeCiTriageVerdict`'s own
+ * defensive fallback used, for input that never went through this client)
+ * would read a vendor error as "definitely not this bucket", which skews the
+ * verdict instead of surfacing the problem (flow 306 review, INFO).
+ */
+export class JevAnswerValidationError extends Error {
+  constructor(
+    readonly key: string,
+    reason: string,
+  ) {
+    super(`Jev response's answer "${key}" is malformed: ${reason}`);
+    this.name = "JevAnswerValidationError";
+  }
+}
+
+/**
  * AC2's resolution path: `OPENROUTER_API_KEY`, falling back to a saved
  * `openrouterKey` (`src/lib/shell-config.ts:28,253-254`) — the exact merge
  * `envWithSavedApiKeys` already performs for every other OpenRouter-keyed call
@@ -176,14 +217,53 @@ export function preflightBudget(state: string, questions: JevQuestions): void {
 }
 
 /**
+ * Validate one answer against the question that asked it (flow 306 review,
+ * INFO): every key the caller asked about must come back with the right
+ * `type` and, for `noul`, a finite probability in `0..1`. A key that is
+ * missing, mistyped, or out of range throws {@link JevAnswerValidationError}
+ * rather than being handed to a caller that might clamp it to `0` and read a
+ * vendor error as a confident "not this bucket".
+ */
+function validatedAnswer(key: string, question: JevQuestion, raw: unknown): JevAnswer {
+  if (typeof raw !== "object" || raw === null) {
+    throw new JevAnswerValidationError(key, `expected a "${question.type}" answer, got ${JSON.stringify(raw)}`);
+  }
+  const a = raw as Record<string, unknown>;
+  if (question.type === "noul") {
+    if (a.type !== "noul") {
+      throw new JevAnswerValidationError(key, `expected type "noul", got ${JSON.stringify(a.type)}`);
+    }
+    const noul = a.noul;
+    if (typeof noul !== "number" || !Number.isFinite(noul) || noul < 0 || noul > 1) {
+      throw new JevAnswerValidationError(key, `"noul" must be a finite number in 0..1, got ${JSON.stringify(noul)}`);
+    }
+    return { type: "noul", noul };
+  }
+  if (a.type !== "choice") {
+    throw new JevAnswerValidationError(key, `expected type "choice", got ${JSON.stringify(a.type)}`);
+  }
+  const choice = a.choice;
+  if (typeof choice !== "string" || choice.length === 0) {
+    throw new JevAnswerValidationError(key, `"choice" must be a non-empty string, got ${JSON.stringify(choice)}`);
+  }
+  return { type: "choice", choice };
+}
+
+/**
  * `POST /api/v1/systemone`. AC1: injectable `fetch` (default
  * `globalThis.fetch`), `{model, state, questions}` in, parsed `{answers,
  * usage}` out — no vendor SDK, no `ProviderPort`/`makeProvider` dependency.
+ *
+ * `timeoutMs` (default {@link DEFAULT_JEV_TIMEOUT_MS}) always applies, even
+ * when the caller passes no `signal` at all — a CLI invocation gets a bound
+ * with zero extra wiring. `signal`, when given, aborts the SAME request: a
+ * caller (the TUI closing its modal) can cancel early without waiting out
+ * the timeout. Either firing raises {@link JevTimeoutError}.
  */
 export async function callJevSystemOne(
   fetchFn: typeof fetch = globalThis.fetch,
   input: JevRequestInput,
-  opts?: { env?: Readonly<Record<string, string | undefined>>; dir?: string },
+  opts?: { env?: Readonly<Record<string, string | undefined>>; dir?: string; signal?: AbortSignal; timeoutMs?: number },
 ): Promise<JevResult> {
   const apiKey = resolveJevApiKey(opts?.env ?? process.env, opts?.dir);
   if (apiKey === undefined || apiKey.length === 0) {
@@ -196,14 +276,48 @@ export async function callJevSystemOne(
     state: input.state,
     questions: input.questions,
   };
-  const res = await fetchFn(JEV_ENDPOINT, {
-    method: "POST",
-    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new JevRequestError(res.status, text);
+
+  const timeoutMs = opts?.timeoutMs ?? DEFAULT_JEV_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const external = opts?.signal;
+  let onExternalAbort: (() => void) | undefined;
+  if (external !== undefined) {
+    if (external.aborted) {
+      controller.abort();
+    } else {
+      onExternalAbort = () => controller.abort();
+      external.addEventListener("abort", onExternalAbort);
+    }
+  }
+
+  let text: string;
+  let status: number;
+  let ok: boolean;
+  try {
+    const res = await fetchFn(JEV_ENDPOINT, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    status = res.status;
+    ok = res.ok;
+    text = await res.text();
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      throw new JevTimeoutError(timeoutMs);
+    }
+    throw cause;
+  } finally {
+    clearTimeout(timer);
+    if (onExternalAbort !== undefined) {
+      external?.removeEventListener("abort", onExternalAbort);
+    }
+  }
+
+  if (!ok) {
+    throw new JevRequestError(status, text);
   }
   let parsed: unknown;
   try {
@@ -221,11 +335,16 @@ export async function callJevSystemOne(
   if (typeof record.usage !== "object" || record.usage === null) {
     throw new JevResponseShapeError("usage");
   }
+  const rawAnswers = record.answers as Record<string, unknown>;
+  const answers: Record<string, JevAnswer> = {};
+  for (const [key, question] of Object.entries(input.questions)) {
+    answers[key] = validatedAnswer(key, question, rawAnswers[key]);
+  }
   return {
     ...(typeof record.id === "string" ? { id: record.id } : {}),
     ...(typeof record.model === "string" ? { model: record.model } : {}),
     ...(typeof record.provider === "string" ? { provider: record.provider } : {}),
-    answers: record.answers as Record<string, JevAnswer>,
+    answers,
     usage: record.usage as JevUsage,
   };
 }

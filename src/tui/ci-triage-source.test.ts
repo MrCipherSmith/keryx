@@ -194,4 +194,61 @@ describe("runCiTriageForItem", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  test("flow 306 review items 1/3: an aborted signal maps to {ok:false, timedOut:true}, not a generic error", async () => {
+    const dir = await withEnabledProject();
+    const prevKey = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    try {
+      const { spawn } = recordingSpawn((argv) => {
+        if (argv.includes("--log-failed")) return { stdout: "typecheck-and-tests\tstep\tboom\n", stderr: "", exitCode: 0 };
+        throw new Error(`unexpected argv: ${argv.join(" ")}`);
+      });
+      // A real `fetch` given an already-aborted signal rejects immediately —
+      // this fake matches that, which is the case that actually matters here:
+      // the modal aborts the signal it already handed to `runCiTriageForItem`.
+      const fetchFn = (async (_url: string, init?: RequestInit) => {
+        if (init?.signal?.aborted === true) {
+          return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+        }
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+        });
+      }) as unknown as typeof fetch;
+      const controller = new AbortController();
+      const call = runCiTriageForItem(dir, item, spawn, fetchFn, controller.signal);
+      controller.abort();
+      const result = await call;
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.timedOut).toBe(true);
+      }
+    } finally {
+      if (prevKey !== undefined) process.env.OPENROUTER_API_KEY = prevKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a non-timeout error (e.g. a malformed response) is NOT reported as timedOut", async () => {
+    const dir = await withEnabledProject();
+    const prevKey = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    try {
+      const { spawn } = recordingSpawn((argv) => {
+        if (argv.includes("--log-failed")) return { stdout: "typecheck-and-tests\tstep\tboom\n", stderr: "", exitCode: 0 };
+        throw new Error(`unexpected argv: ${argv.join(" ")}`);
+      });
+      const fetchFn = (async () => new Response("{not json", { status: 200 })) as unknown as typeof fetch;
+      const result = await runCiTriageForItem(dir, item, spawn, fetchFn);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.timedOut).toBeUndefined();
+      }
+    } finally {
+      if (prevKey !== undefined) process.env.OPENROUTER_API_KEY = prevKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
