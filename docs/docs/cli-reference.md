@@ -3515,7 +3515,7 @@ keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
                      [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
 keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
                       [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
-                      [--fixtures <dir>] [--json]
+                      [--fixtures <dir>] [--include <glob>]... [--json]
 keryx review jev-comments --pr <n> --repo <owner/repo>
                           [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
@@ -4114,32 +4114,41 @@ re-fetched per job.
 ### `review jev-docs`
 
 Flow 333. An ADDITIONAL orchestrator reviewer — never replacing any other —
-that finds documentation sections that went STALE because of a diff.
+that finds documentation sections that went STALE because of a diff. The
+default doc corpus is USER-FACING documentation only: `docs/**`, the root
+`README*` (never `CHANGELOG*`), and gdwiki pages (`.metaproject/wiki/**`) —
+`.metaproject/skills/**`/`.metaproject/rules/**`/`rules/**` are excluded by
+default (`--include <glob>`, repeatable, widens the corpus back out).
 Sections are linked to code DETERMINISTICALLY (an explicit path, a
 backtick-quoted symbol that appears in one of the diff's own hunks, or a
 `keryx <verb>` invocation whose command file the diff changed); only a
 section linked to code the diff CHANGES, and that the diff does not itself
-edit, is asked about, one Jev `noul` "is this section now inaccurate?"
-question per section. A CLI flag renamed or removed in the diff but still
-mentioned by an untouched section is flagged with NO Jev call at all. Like
-`review jev-rules`, this is dispatched by `review-orchestrator` itself
-(Wave B), as a CLI call rather than an LLM sub-agent — `keryx review
-reviewers --json` marks it `"engine": "jev"`.
+edit, is a candidate. Candidates are RANKED by link strength — path mention
+> symbol mention > verb mention; more distinct links to changed code within
+the same kind rank higher — never alphabetically, then asked one Jev `noul`
+"is this section now inaccurate?" question per selected section, up to
+`--max-calls` (default 30) and 8 per doc file. A CLI flag renamed or removed
+in the diff but still mentioned by an untouched section is flagged with NO
+Jev call at all. Like `review jev-rules`, this is dispatched by
+`review-orchestrator` itself (Wave B), as a CLI call rather than an LLM
+sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
 
 ```bash
 keryx review jev-docs --diff HEAD~1 --json
 keryx review jev-docs --pr 712 --repo MrCipherSmith/keryx --max-calls 20 --json
+keryx review jev-docs --diff HEAD~1 --include ".metaproject/skills/**" --json
 ```
 
 | Flag | Description |
 |---|---|
 | `--diff <ref>` \| `--pr <n>` | Exactly one is required. |
-| `--max-calls <n>` | Caps how many linked sections are scored by Jev, default 30. Anything beyond the cap is reported dropped (`selection.droppedSections`), never silently. The deterministic flag check runs regardless of this cap. |
+| `--max-calls <n>` | Caps how many linked sections are scored by Jev, default 30, plus a fixed cap of 8 per doc file so one large file cannot fill the whole budget. Anything beyond either cap is reported dropped (`selection.droppedSections`), never silently. The deterministic flag check runs regardless of this cap. |
 | `--threshold <0..1>` | Below this Jev probability a section is not reported. Default `0.5`. |
 | `--repo <owner/repo>` | Passed to the live `gh` adapter for `--pr`. |
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--include <glob>` | Repeatable. Widens the default user-facing-only doc corpus (`docs/**`, `README*`, `.metaproject/wiki/**`) back out — e.g. `--include ".metaproject/skills/**"` to also score skill/rule prose. |
 | `--fixtures <dir>` | Answers the pr-kind read (`pr.json`) and every Jev call (`jev-responses.json`) from files on disk — no real `gh` call, no real network. |
-| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-docs"`, `summary`, `findings`, `stats`, plus `tokens`/`selection`) conforming to `reviewer-finding.schema.json`. |
+| `--json` | Prints a `REVIEW_RESULT`-shaped object (`status`, `reviewer: "review-jev-docs"`, `summary`, `findings`, `stats`, plus `tokens`/`selection`, including `selection.rankingBasis`) conforming to `reviewer-finding.schema.json`. |
 
 **Opt-in, and named as a privacy decision.** Disabled by default. A project
 enables it with `review.jev.docs: true` in `.metaproject/tasks.config.json`.

@@ -68,7 +68,7 @@ describe("renderStaledocsForShell", () => {
       findings: [finding()],
       stats: { blocker: 0, major: 0, minor: 1, info: 0 },
       tokens: { jevCalls: 1 },
-      selection: { maxCalls: 30, linkedSections: 1, selectedSections: 1, droppedSections: 0 },
+      selection: { maxCalls: 30, maxPerFile: 8, linkedSections: 1, selectedSections: 1, droppedSections: 0, rankingBasis: "ranked by link strength" },
     };
     const text = renderStaledocsForShell(result);
     expect(text).toContain("review-jev-docs: DONE_WITH_CONCERNS");
@@ -85,7 +85,7 @@ describe("renderStaledocsForShell", () => {
       findings: [],
       stats: { blocker: 0, major: 0, minor: 0, info: 0 },
       tokens: { jevCalls: 0 },
-      selection: { maxCalls: 30, linkedSections: 0, selectedSections: 0, droppedSections: 0 },
+      selection: { maxCalls: 30, maxPerFile: 8, linkedSections: 0, selectedSections: 0, droppedSections: 0, rankingBasis: "ranked by link strength" },
     };
     expect(renderStaledocsForShell(result)).toContain("No stale-doc candidates at or above threshold.");
   });

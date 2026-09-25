@@ -215,6 +215,89 @@ describe("usage: exactly one of --diff/--pr is required", () => {
   });
 });
 
+describe("flow 333 T4 (live-check fix): default doc corpus is user-facing only; --include widens it back", () => {
+  /** A minimal doc file whose `## Section` (line 3) names `src/widget.ts` — the diff every test in this block changes. */
+  function widgetSection(): string {
+    return ["# Title", "", "## Section", "", "See `src/widget.ts` for details."].join("\n");
+  }
+
+  async function writeCorpus(root: string): Promise<void> {
+    await mkdir(path.join(root, "docs"), { recursive: true });
+    await writeFile(path.join(root, "docs", "widget.md"), widgetSection(), "utf8");
+    await writeFile(path.join(root, "README.md"), widgetSection(), "utf8");
+    // Never discovered, default or --include: CHANGELOG is explicitly excluded.
+    await writeFile(path.join(root, "CHANGELOG.md"), widgetSection(), "utf8");
+    await mkdir(path.join(root, ".metaproject", "wiki"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "wiki", "index.md"), widgetSection(), "utf8");
+    // Excluded by DEFAULT (the live-check regression: these used to fill the
+    // whole --max-calls budget alphabetically ahead of docs/**), reachable
+    // only via --include.
+    await mkdir(path.join(root, ".metaproject", "skills", "gdskills", "review", "foo"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "skills", "gdskills", "review", "foo", "SKILL.md"), widgetSection(), "utf8");
+    await mkdir(path.join(root, ".metaproject", "rules"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "rules", "foo.mdc"), widgetSection(), "utf8");
+  }
+
+  test("default run links only docs/**, README*, and gdwiki — never CHANGELOG, skills, or rules", async () => {
+    ROOT = await projectRoot(true);
+    await writeCorpus(ROOT);
+    const answers = {
+      "docs/widget.md::3": { type: "noul" as const, noul: 0.9 },
+      "README.md::3": { type: "noul" as const, noul: 0.9 },
+      ".metaproject/wiki/index.md::3": { type: "noul" as const, noul: 0.9 },
+    };
+    const fixturesDir = await writeFixtures(ROOT, answers);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["jev-docs", "--pr", "7", "--fixtures", fixturesDir, "--json"]);
+    const parsed = JSON.parse(output()) as { findings: Array<{ file: string }>; selection: { linkedSections: number; rankingBasis: string } };
+
+    expect(parsed.selection.linkedSections).toBe(3);
+    const files = parsed.findings.map((f) => f.file).sort();
+    expect(files).toEqual([".metaproject/wiki/index.md", "README.md", "docs/widget.md"]);
+    expect(files.some((f) => f.includes("CHANGELOG"))).toBe(false);
+    expect(files.some((f) => f.includes(".metaproject/skills"))).toBe(false);
+    expect(files.some((f) => f.includes(".metaproject/rules"))).toBe(false);
+    expect(parsed.selection.rankingBasis).toContain("link strength");
+  });
+
+  test("--include (repeatable) widens the corpus back to skills and rules", async () => {
+    ROOT = await projectRoot(true);
+    await writeCorpus(ROOT);
+    const answers = {
+      "docs/widget.md::3": { type: "noul" as const, noul: 0.9 },
+      "README.md::3": { type: "noul" as const, noul: 0.9 },
+      ".metaproject/wiki/index.md::3": { type: "noul" as const, noul: 0.9 },
+      ".metaproject/skills/gdskills/review/foo/SKILL.md::3": { type: "noul" as const, noul: 0.9 },
+      ".metaproject/rules/foo.mdc::3": { type: "noul" as const, noul: 0.9 },
+    };
+    const fixturesDir = await writeFixtures(ROOT, answers);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand([
+      "jev-docs",
+      "--pr",
+      "7",
+      "--fixtures",
+      fixturesDir,
+      "--include",
+      ".metaproject/skills/**",
+      "--include",
+      ".metaproject/rules/**",
+      "--json",
+    ]);
+    const parsed = JSON.parse(output()) as { findings: Array<{ file: string }>; selection: { linkedSections: number } };
+
+    expect(parsed.selection.linkedSections).toBe(5);
+    const files = parsed.findings.map((f) => f.file).sort();
+    expect(files).toContain(".metaproject/skills/gdskills/review/foo/SKILL.md");
+    expect(files).toContain(".metaproject/rules/foo.mdc");
+    expect(files.some((f) => f.includes("CHANGELOG"))).toBe(false); // --include never resurrects the CHANGELOG exclusion
+  });
+});
+
 describe("keryx review reviewers --json lists review-jev-docs with engine: jev", () => {
   test("once its SKILL.md is installed under .metaproject", async () => {
     ROOT = await projectRoot(true);

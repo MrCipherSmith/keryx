@@ -120,19 +120,74 @@ describe("AC1: linkSectionsToDiff — path > symbol > verb, first match wins", (
     expect(linked).toHaveLength(1);
     expect(linked[0]!.linkKind).toBe("verb");
   });
+
+  test("matchCount counts every DISTINCT link to changed code, not only the winning one — the ranking signal", () => {
+    // Two different changed paths named in the same section: linkKind still
+    // "path" (the first match), but matchCount reflects both hits.
+    const sections = extractDocSections("docs/widget.md", "## Widget\n\nSee `src/widget.ts` and also `src/other.ts`.");
+    const linked = linkSectionsToDiff(sections, [region(), region({ path: "src/other.ts", text: "+export const x = 1;" })]);
+    expect(linked).toHaveLength(1);
+    expect(linked[0]!.matchCount).toBe(2);
+  });
+
+  test("matchCount is 1 when only one link resolves to changed code", () => {
+    const sections = extractDocSections("docs/widget.md", "## Widget\n\nSee `src/widget.ts` for details.");
+    const linked = linkSectionsToDiff(sections, [region()]);
+    expect(linked[0]!.matchCount).toBe(1);
+  });
 });
 
-describe("AC1: boundLinkedSections — --max-calls, truncation reported", () => {
-  function fakeLinked(file: string, line: number): LinkedSection {
-    return { section: { file, heading: "H", headingPath: ["H"], line, text: "text" }, linkKind: "path", linkedTo: file, relevantRegions: [] };
+describe("AC1 (fixed, flow 333 T4): boundLinkedSections — ranked selection, --max-calls and per-file cap, truncation reported", () => {
+  function fakeLinked(file: string, line: number, overrides: Partial<Pick<LinkedSection, "linkKind" | "matchCount">> = {}): LinkedSection {
+    return {
+      section: { file, heading: "H", headingPath: ["H"], line, text: "text" },
+      linkKind: overrides.linkKind ?? "path",
+      linkedTo: file,
+      relevantRegions: [],
+      matchCount: overrides.matchCount ?? 1,
+    };
   }
 
-  test("keeps a stable prefix and reports the rest as dropped", () => {
+  test("same rank: keeps a stable file/line prefix and reports the rest as dropped", () => {
     const items = [fakeLinked("b.md", 5), fakeLinked("a.md", 3), fakeLinked("a.md", 1)];
     const result = boundLinkedSections(items, 2);
     expect(result.selected.map((i) => i.section.file)).toEqual(["a.md", "a.md"]);
     expect(result.dropped).toHaveLength(1);
     expect(result.maxCalls).toBe(2);
+  });
+
+  test("ranks by link kind — path beats symbol beats verb — NOT alphabetically", () => {
+    // "verb.md" and "z-symbol.md" both sort before "a-path.md" alphabetically,
+    // but a `path` link outranks `symbol`, which outranks `verb` — the exact
+    // regression a live run against keryx's own repo hit: alphabetical
+    // selection filled the budget from the wrong (but earlier-sorting) files.
+    const items = [fakeLinked("verb.md", 1, { linkKind: "verb" }), fakeLinked("z-symbol.md", 1, { linkKind: "symbol" }), fakeLinked("a-path.md", 1, { linkKind: "path" })];
+    const result = boundLinkedSections(items, 2);
+    expect(result.selected.map((i) => i.section.file)).toEqual(["a-path.md", "z-symbol.md"]);
+    expect(result.dropped.map((i) => i.section.file)).toEqual(["verb.md"]);
+  });
+
+  test("within the same kind, more distinct links to changed code rank higher", () => {
+    const weak = fakeLinked("z-weak.md", 1, { linkKind: "path", matchCount: 1 });
+    const strong = fakeLinked("a-strong.md", 1, { linkKind: "path", matchCount: 3 });
+    const result = boundLinkedSections([weak, strong], 1);
+    expect(result.selected.map((i) => i.section.file)).toEqual(["a-strong.md"]);
+    expect(result.dropped.map((i) => i.section.file)).toEqual(["z-weak.md"]);
+  });
+
+  test("caps selection per doc file so one large file cannot fill the whole budget", () => {
+    const items = [fakeLinked("big.md", 1), fakeLinked("big.md", 2), fakeLinked("big.md", 3), fakeLinked("small.md", 1)];
+    const result = boundLinkedSections(items, 10, 2); // maxCalls has plenty of room; the per-file cap is what bites
+    expect(result.selected.filter((i) => i.section.file === "big.md")).toHaveLength(2);
+    expect(result.selected.some((i) => i.section.file === "small.md")).toBe(true);
+    expect(result.dropped.map((i) => `${i.section.file}:${i.section.line}`)).toEqual(["big.md:3"]);
+    expect(result.maxPerFile).toBe(2);
+  });
+
+  test("rankingBasis names the method, not alphabetical order", () => {
+    const result = boundLinkedSections([fakeLinked("a.md", 1)]);
+    expect(result.rankingBasis).toContain("link strength");
+    expect(result.rankingBasis).toContain("not alphabetically");
   });
 });
 

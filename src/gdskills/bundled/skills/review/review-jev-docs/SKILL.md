@@ -41,20 +41,23 @@ nothing it returns is quoted verbatim into a finding.
 
 ## What it does
 
-1. Splits every discovered documentation file (`docs/**`, the root
-   `README.md`, `.metaproject/wiki/**`, installed/project skill `SKILL.md`
-   files, and the `.metaproject/rules/**`/`rules/**` corpus) into sections by
-   heading, deterministically (`src/review/jev-docs.ts`'s `extractDocSections`
-   — no model call).
+1. Splits every discovered documentation file — the default corpus is
+   USER-FACING docs only: `docs/**`, the root `README*` (never `CHANGELOG*`),
+   and gdwiki pages (`.metaproject/wiki/**`) — into sections by heading,
+   deterministically (`src/review/jev-docs.ts`'s `extractDocSections` — no
+   model call). `--include <glob>` (repeatable) widens the corpus back out
+   (skills, rules, anything project-specific); see Input Contract.
 2. Links each section to code deterministically — an explicit repo-relative
    path it quotes, a backtick-quoted symbol that appears verbatim in one of
    the diff's own hunks, or a `keryx <verb>` invocation whose command file the
    diff changed. Only sections linked to code the diff CHANGES, and that the
    diff does NOT itself edit, are candidates.
-3. Asks Jev exactly ONE `noul` question per linked section — "given this code
-   change, is this section now inaccurate?" — batched under the vendor's 64k
-   token budget, capped at `--max-calls` (default 30), with the selection and
-   every drop reported, never silent.
+3. Ranks linked sections by link strength — path mention > symbol mention >
+   verb mention; more distinct links to changed code within the same kind
+   rank higher — and asks Jev exactly ONE `noul` question per selected
+   section, up to `--max-calls` (default 30) and 8 per doc file, batched
+   under the vendor's 64k token budget, with the ranking basis and every drop
+   reported (`selection`), never silent, never alphabetical.
 4. Separately, and with NO Jev call: a CLI flag that disappears from a
    changed file's diff (present on a removed line, absent from every added
    line of the same file) and is still mentioned by an untouched doc section
@@ -74,7 +77,7 @@ Not dispatched with a prompt — invoked as a CLI command:
 ```text
 keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
                       [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
-                      [--fixtures <dir>] [--json]
+                      [--fixtures <dir>] [--include <glob>]... [--json]
 ```
 
 `review-orchestrator` passes `--diff <ref>` (or `--pr <n>`) matching the same
@@ -136,7 +139,7 @@ section.
 | Rationalization | Why it is wrong |
 |---|---|
 | "Jev said 0.9, so the doc is definitely wrong now" | A `noul` score is a probability, not a verdict — read the linked hunk yourself before editing the doc |
-| "No findings means the docs are current" | `--max-calls` bounds how many linked sections are scored; a capped run reports `selection.droppedSections` for exactly this reason |
+| "No findings means the docs are current" | The default corpus is `docs/**`/`README*`/gdwiki only — a project's `.metaproject/skills/**`/`rules/**` need `--include` to be scored at all; `--max-calls`/8-per-file also bound what gets scored (`selection.droppedSections`) |
 | "This section wasn't linked, so it's fine" | Linking is deliberately narrow (explicit paths/symbols/verbs) — a section describing behaviour with no explicit code reference is out of this reviewer's reach by design, not proven current |
 
 ---

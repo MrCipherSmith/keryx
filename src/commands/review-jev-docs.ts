@@ -20,6 +20,7 @@ import { readJevDocsEnabled } from "../review/jev-docs-config";
 import {
   DEFAULT_JEV_DOCS_THRESHOLD,
   DEFAULT_MAX_JEV_DOCS_CALLS,
+  DEFAULT_MAX_SECTIONS_PER_DOC_FILE,
   batchDocsSections,
   boundLinkedSections,
   detectRemovedFlags,
@@ -34,7 +35,7 @@ import {
 } from "../review/jev-docs";
 import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey, type JevQuestions } from "../harness/decision/jev-client";
 
-export const JEV_DOCS_FLAGS = ["--diff", "--pr", "--max-calls", "--threshold", "--model", "--repo", "--fixtures", "--json"];
+export const JEV_DOCS_FLAGS = ["--diff", "--pr", "--max-calls", "--threshold", "--model", "--repo", "--fixtures", "--include", "--json"];
 
 function rejectUnknownJevDocsFlags(args: readonly string[]): void {
   const unknown = args.filter((arg) => arg.startsWith("--") && !JEV_DOCS_FLAGS.includes(arg.split("=")[0]!));
@@ -44,6 +45,21 @@ function rejectUnknownJevDocsFlags(args: readonly string[]): void {
         `Accepted: ${JEV_DOCS_FLAGS.join(", ")}.`,
     );
   }
+}
+
+/** Every occurrence of `--flag <value>`/`--flag=<value>`, one entry per occurrence — same shape `src/commands/bundle.ts`'s own `collectRepeatableRaw` already uses for its own repeatable `--include <glob>`. No comma-splitting: a glob may legitimately contain one. */
+function collectRepeatableRaw(args: readonly string[], flag: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (token === flag) {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("--")) out.push(next);
+    } else if (token?.startsWith(`${flag}=`)) {
+      out.push(token.slice(flag.length + 1));
+    }
+  }
+  return out;
 }
 
 function parseMaxCalls(raw: string | undefined): number {
@@ -97,33 +113,124 @@ async function walkMatching(root: string, suffixes: readonly string[]): Promise<
   return out.sort();
 }
 
+/** File names directly under `dir` (not recursive) matching `namePattern`. Never throws on a missing `dir`. */
+async function matchingFileNames(dir: string, namePattern: RegExp): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries.filter((entry) => entry.isFile() && namePattern.test(entry.name)).map((entry) => entry.name);
+}
+
+// ---------------------------------------------------------------------------
+// `--include <glob>` — a minimal `*`/`**` matcher, walking only the glob's
+// own static prefix directory (never the whole repo) and only `.md`/`.mdc`
+// files. Same hand-rolled shape `src/gdskills/manifest/glob.ts`,
+// `src/bundle/export.ts`, and `src/testing/selection.ts` each already carry
+// (duplicated rather than shared, per that first file's own header: the
+// vocabulary a doc corpus needs is narrow enough that a dependency costs
+// more than it saves).
+// ---------------------------------------------------------------------------
+
+function includeGlobToRegExp(glob: string): RegExp {
+  let out = "";
+  for (let i = 0; i < glob.length; i += 1) {
+    const c = glob[i];
+    if (c === "*") {
+      if (glob[i + 1] === "*") {
+        out += ".*";
+        i += 1;
+        if (glob[i + 1] === "/") i += 1;
+      } else {
+        out += "[^/]*";
+      }
+    } else if ("+.^$(){}|[]\\".includes(c ?? "")) {
+      out += `\\${c}`;
+    } else {
+      out += c;
+    }
+  }
+  return new RegExp(`^${out}$`);
+}
+
+/** The directory to walk: everything in `glob` before its first `*`, so `--include ".metaproject/skills/**"` only ever reads `.metaproject/skills/`, never the repo root. */
+function includeGlobRootDir(glob: string): string {
+  const starIndex = glob.indexOf("*");
+  const prefix = starIndex === -1 ? glob : glob.slice(0, starIndex);
+  if (prefix.endsWith("/")) return prefix.slice(0, -1);
+  const lastSlash = prefix.lastIndexOf("/");
+  return lastSlash === -1 ? "" : prefix.slice(0, lastSlash);
+}
+
+/** Directory names never worth recursing into for a `--include` glob, whatever root it resolves to — a broad, no-slash `--include` (`*.md`) would otherwise walk these in full. */
+const INCLUDE_WALK_PRUNE_DIRS = new Set([".git", "node_modules", "dist"]);
+
+async function walkAllDocFiles(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (INCLUDE_WALK_PRUNE_DIRS.has(entry.name)) continue;
+      out.push(...(await walkAllDocFiles(full)));
+    } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".mdc"))) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+/** Every `.md`/`.mdc` file under `cwd` whose repo-relative, forward-slash path matches `glob` — the escape hatch back to a wider corpus (`.metaproject/skills/**`, `rules/**`, or anything else) `discoverDocFiles`'s default no longer walks. */
+async function resolveIncludeGlob(cwd: string, glob: string): Promise<string[]> {
+  const rootDir = includeGlobRootDir(glob);
+  const regex = includeGlobToRegExp(glob);
+  const candidates = await walkAllDocFiles(join(cwd, rootDir));
+  return candidates.filter((file) => regex.test(relative(cwd, file)));
+}
+
 /**
- * AC1: "doc sections (docs/**, README, wiki pages, skill/rule docs)" —
- * discovery is deliberately the same narrow, documented set
- * `src/review/jev-rules.ts`'s module header already chose for rule
- * discovery, extended to the doc-shaped roots this flow's AC names by name:
- * `docs/**`, the root `README.md`, `.metaproject/wiki/**`,
- * `.metaproject/skills/**` and `.metaproject/project-skills/**`
- * (`SKILL.md`), and `.metaproject/rules/**`/`rules/**` (the same rule corpus
- * `review-jev-rules` reads).
+ * The default doc corpus is USER-FACING documentation only: `docs/**`, the
+ * repo's own `README*` (never `CHANGELOG*`, even though a loose `README*`
+ * match would not by itself catch it — the exclusion is explicit and
+ * tested, not merely assumed from the two names differing), and gdwiki
+ * pages (`.metaproject/wiki/**`).
+ *
+ * It used to also walk `.metaproject/skills/**`, `.metaproject/project-skills/**`,
+ * `.metaproject/rules/**`, and `rules/**` by default. A live run of this
+ * reviewer against keryx's OWN repository showed why that was wrong in
+ * practice, not merely in theory: 1,454-2,361 doc sections got linked per
+ * PR, almost all of them skill/rule prose sorting alphabetically ahead of
+ * `docs/**` (`.metaproject` < `docs`), so the (then-alphabetical) selection
+ * filled the entire `--max-calls` budget before `docs/**` was ever reached —
+ * "0 findings" that meant "nothing under docs/** was ever scored", not
+ * "nothing is stale". `--include <glob>` (repeatable) is the escape hatch
+ * back to that wider corpus, or to anything else project-specific, for a
+ * project that genuinely wants it scored too — see `JEV_DOCS_FLAGS`.
  */
-async function discoverDocFiles(cwd: string): Promise<string[]> {
+async function discoverDocFiles(cwd: string, includeGlobs: readonly string[] = []): Promise<string[]> {
   const files = new Set<string>();
   for (const file of await walkMatching(join(cwd, "docs"), [".md"])) files.add(file);
-  const readme = join(cwd, "README.md");
-  if ((await readIfExists(readme)) !== undefined) files.add(readme);
+  for (const name of await matchingFileNames(cwd, /^readme/i)) {
+    if (/^changelog/i.test(name)) continue; // defensive: never, even if a future README-ish name could collide.
+    files.add(join(cwd, name));
+  }
   for (const file of await walkMatching(join(cwd, ".metaproject", "wiki"), [".md"])) files.add(file);
-  for (const file of await walkMatching(join(cwd, ".metaproject", "skills"), ["SKILL.md"])) files.add(file);
-  for (const file of await walkMatching(join(cwd, ".metaproject", "project-skills"), ["SKILL.md"])) files.add(file);
-  for (const root of [join(cwd, ".metaproject", "rules"), join(cwd, "rules")]) {
-    for (const file of await walkMatching(root, [".md", ".mdc"])) files.add(file);
+  for (const glob of includeGlobs) {
+    for (const file of await resolveIncludeGlob(cwd, glob)) files.add(file);
   }
   return [...files].sort();
 }
 
-async function loadDocSections(cwd: string): Promise<DocSection[]> {
+async function loadDocSections(cwd: string, includeGlobs: readonly string[] = []): Promise<DocSection[]> {
   const sections: DocSection[] = [];
-  for (const file of await discoverDocFiles(cwd)) {
+  for (const file of await discoverDocFiles(cwd, includeGlobs)) {
     const text = await readIfExists(file);
     if (text === undefined) continue;
     sections.push(...extractDocSections(relative(cwd, file), text));
@@ -169,7 +276,15 @@ export interface JevDocsComputedResult {
   readonly findings: readonly DocsFinding[];
   readonly stats: ReturnType<typeof docsFindingStats>;
   readonly tokens: { readonly jevCalls: number; readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number };
-  readonly selection: { readonly maxCalls: number; readonly linkedSections: number; readonly selectedSections: number; readonly droppedSections: number };
+  readonly selection: {
+    readonly maxCalls: number;
+    readonly maxPerFile: number;
+    readonly linkedSections: number;
+    readonly selectedSections: number;
+    readonly droppedSections: number;
+    /** How `selected` was chosen — verbatim from `boundLinkedSections`'s `rankingBasis`, so a run's choice is auditable from `--json` alone. */
+    readonly rankingBasis: string;
+  };
 }
 
 export interface JevDocsRunOptions {
@@ -177,9 +292,12 @@ export interface JevDocsRunOptions {
   readonly regions: readonly ScopedRegion[];
   readonly targetLabel: string;
   readonly maxCalls?: number;
+  readonly maxPerFile?: number;
   readonly threshold?: number;
   readonly model?: string;
   readonly fetchFn?: typeof fetch;
+  /** `--include <glob>`, repeatable — widens `discoverDocFiles`'s default user-facing-only corpus back out (`.metaproject/skills/**`, `rules/**`, or anything project-specific). */
+  readonly includeGlobs?: readonly string[];
 }
 
 /**
@@ -195,14 +313,16 @@ export interface JevDocsRunOptions {
 export async function computeJevDocsResult(options: JevDocsRunOptions): Promise<JevDocsComputedResult> {
   const { cwd, regions, targetLabel } = options;
   const maxCalls = options.maxCalls ?? DEFAULT_MAX_JEV_DOCS_CALLS;
+  const maxPerFile = options.maxPerFile ?? DEFAULT_MAX_SECTIONS_PER_DOC_FILE;
   const threshold = options.threshold ?? DEFAULT_JEV_DOCS_THRESHOLD;
   const model = options.model ?? DEFAULT_JEV_MODEL;
   const fetchFn = options.fetchFn ?? globalThis.fetch;
+  const includeGlobs = options.includeGlobs ?? [];
 
-  const sections = await loadDocSections(cwd);
+  const sections = await loadDocSections(cwd, includeGlobs);
   const changedFiles = new Set(regions.map((r) => r.path));
   const linked = linkSectionsToDiff(sections, regions, changedCommandNamesFromRegions(regions));
-  const selection = boundLinkedSections(linked, maxCalls);
+  const selection = boundLinkedSections(linked, maxCalls, maxPerFile);
 
   // AC2's deterministic-without-Jev flag check — runs regardless of the Jev
   // budget, over every discovered section, not only the ones selected above.
@@ -246,7 +366,8 @@ export async function computeJevDocsResult(options: JevDocsRunOptions): Promise<
   const status = findings.length > 0 ? "DONE_WITH_CONCERNS" : "DONE";
   const summary =
     `Checked ${sections.length} doc section(s) against ${targetLabel}; ${linked.length} linked to changed code, ` +
-    `${selection.selected.length} scored by Jev (${selection.dropped.length} dropped by --max-calls ${maxCalls}); ` +
+    `${selection.selected.length} scored by Jev (${selection.dropped.length} dropped by --max-calls ${maxCalls} or the ` +
+    `${maxPerFile}-per-file cap, ranked by link strength, not alphabetically); ` +
     `${flagFindings.length} deterministic flag finding(s), ${jevFindings.length} Jev-scored finding(s).`;
 
   return {
@@ -256,7 +377,14 @@ export async function computeJevDocsResult(options: JevDocsRunOptions): Promise<
     findings,
     stats,
     tokens: sawUsage ? { jevCalls, inputTokens, outputTokens, costUsd } : { jevCalls },
-    selection: { maxCalls, linkedSections: linked.length, selectedSections: selection.selected.length, droppedSections: selection.dropped.length },
+    selection: {
+      maxCalls,
+      maxPerFile,
+      linkedSections: linked.length,
+      selectedSections: selection.selected.length,
+      droppedSections: selection.dropped.length,
+      rankingBasis: selection.rankingBasis,
+    },
   };
 }
 
@@ -303,7 +431,7 @@ export async function runJevDocs(args: string[]): Promise<void> {
   const prArg = optionValue(args, "--pr");
   const provided = [diffRef, prArg].filter((value) => value !== undefined);
   if (provided.length !== 1) {
-    throw new Error("Usage: keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls N] [--threshold 0..1] [--json]");
+    throw new Error("Usage: keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls N] [--threshold 0..1] [--include <glob>]... [--json]");
   }
 
   // AC5: opt-in per project, refused before any read or network call.
@@ -318,6 +446,7 @@ export async function runJevDocs(args: string[]): Promise<void> {
   const model = optionValue(args, "--model") ?? DEFAULT_JEV_MODEL;
   const maxCalls = parseMaxCalls(optionValue(args, "--max-calls"));
   const threshold = parseThreshold(optionValue(args, "--threshold"));
+  const includeGlobs = collectRepeatableRaw(args, "--include");
 
   let regions: readonly ScopedRegion[];
   let targetLabel: string;
@@ -337,7 +466,7 @@ export async function runJevDocs(args: string[]): Promise<void> {
   }
 
   const fetchFn: typeof fetch = fixturesDir === undefined ? globalThis.fetch : await fixtureJevFetch(fixturesDir);
-  const result = await computeJevDocsResult({ cwd, regions, targetLabel, maxCalls, threshold, model, fetchFn });
+  const result = await computeJevDocsResult({ cwd, regions, targetLabel, maxCalls, threshold, model, fetchFn, includeGlobs });
 
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));

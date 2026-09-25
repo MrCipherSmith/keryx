@@ -3634,10 +3634,12 @@ Usage:
                        [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
   keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
                         [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
-                        [--fixtures <dir>] [--json]
+                        [--fixtures <dir>] [--include <glob>]... [--json]
                         An ADDITIONAL reviewer, engine: jev. Finds doc sections that went
                         stale because of the diff. Opt-in via review.jev.docs in
-                        .metaproject/tasks.config.json.
+                        .metaproject/tasks.config.json. Default corpus is user-facing docs
+                        only (docs/**, README*, gdwiki pages) — never CHANGELOG, skills, or
+                        rules; --include <glob> (repeatable) widens the corpus back out.
   keryx review jev-comments --pr <n> --repo <owner/repo>
                             [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
                             An ADDITIONAL reviewer, engine: jev. Checks whether open PR review

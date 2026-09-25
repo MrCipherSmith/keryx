@@ -198,6 +198,36 @@ export interface LinkedSection {
   readonly linkKind: DocLinkKind;
   readonly linkedTo: string;
   readonly relevantRegions: readonly ScopedRegion[];
+  /**
+   * How many of the section's own `extractDocLinks` are DISTINCT and each
+   * individually resolve to changed code (not only `linkedTo`, the single
+   * strongest one `linkKind` names) — the signal `boundLinkedSections` uses,
+   * alongside `linkKind`, to rank a section that names three changed things
+   * above one that names only the one `linkedTo` itself already counts.
+   * Always >= 1 (a `LinkedSection` exists only because at least one link hit).
+   */
+  readonly matchCount: number;
+}
+
+/** How many of `links` are individually a changed path, a symbol appearing in one of `regions`' own hunk text, or a `keryx <verb>` whose command file changed — every DISTINCT hit, not just the first (`linkSectionsToDiff`'s own `linkKind`/`linkedTo` only ever name the strongest one). Used to rank sections that cite more of the diff's own evidence above ones that cite only one thing. */
+function countDistinctChangedLinks(
+  links: readonly DocLink[],
+  changedFiles: ReadonlySet<string>,
+  regions: readonly ScopedRegion[],
+  changedCommandNames: ReadonlySet<string>,
+): number {
+  let count = 0;
+  for (const link of links) {
+    if (link.kind === "path" && changedFiles.has(link.value)) {
+      count += 1;
+    } else if (link.kind === "symbol" && regions.some((region) => region.text.includes(link.value))) {
+      count += 1;
+    } else if (link.kind === "verb") {
+      const verb = link.value.split(/\s+/)[1];
+      if (verb !== undefined && changedCommandNames.has(verb)) count += 1;
+    }
+  }
+  return count;
 }
 
 /**
@@ -206,7 +236,9 @@ export interface LinkedSection {
  * is their path set; `changedCommandNames` is the adapter's file-existence
  * check for `keryx <verb>` mentions. A section can match more than one link
  * kind — the first match wins, deterministically, in the order path > symbol
- * > verb (the strongest, least ambiguous evidence first).
+ * > verb (the strongest, least ambiguous evidence first) — but every
+ * DISTINCT matching link is still counted into `matchCount` for
+ * `boundLinkedSections`'s ranking, below.
  */
 export function linkSectionsToDiff(
   sections: readonly DocSection[],
@@ -224,41 +256,113 @@ export function linkSectionsToDiff(
   for (const section of sections) {
     if (section.heading === "") continue; // nothing to name in a finding
     const links = extractDocLinks(section.text);
+    const matchCount = countDistinctChangedLinks(links, changedFiles, regions, changedCommandNames);
     const path = linksToChangedPath(links, changedFiles);
     if (path !== undefined) {
-      linked.push({ section, linkKind: "path", linkedTo: path, relevantRegions: regionsByPath.get(path) ?? [] });
+      linked.push({ section, linkKind: "path", linkedTo: path, relevantRegions: regionsByPath.get(path) ?? [], matchCount });
       continue;
     }
     const symbolHit = linksToChangedSymbol(links, regions);
     if (symbolHit !== undefined) {
-      linked.push({ section, linkKind: "symbol", linkedTo: symbolHit.symbol, relevantRegions: [symbolHit.region] });
+      linked.push({ section, linkKind: "symbol", linkedTo: symbolHit.symbol, relevantRegions: [symbolHit.region], matchCount });
       continue;
     }
     const verb = linksToChangedVerb(links, changedCommandNames);
     if (verb !== undefined) {
       const verbFile = `src/commands/${verb.split(/\s+/)[1]}.ts`;
-      linked.push({ section, linkKind: "verb", linkedTo: verb, relevantRegions: regionsByPath.get(verbFile) ?? [] });
+      linked.push({ section, linkKind: "verb", linkedTo: verb, relevantRegions: regionsByPath.get(verbFile) ?? [], matchCount });
     }
   }
   return linked;
 }
 
 // ---------------------------------------------------------------------------
-// AC1: bounding by --max-calls, with truncation reported.
+// AC1 (and the live-check fix, flow 333 T4): bounding by --max-calls AND a
+// per-file cap, selected by RANK, with the ranking basis and every drop
+// reported.
+//
+// A live run of this reviewer against keryx's OWN repository linked
+// 1,454-2,361 doc sections per PR, almost all of them under
+// `.metaproject/skills/**`/`.metaproject/rules/**` (see
+// `src/commands/review-jev-docs.ts`'s `discoverDocFiles` header for why that
+// corpus is narrowed now) — and the alphabetical selection this function
+// used to do filled the whole `--max-calls` budget from that corpus before
+// `docs/**` was ever reached, alphabetically after `.metaproject`. The run
+// reported "0 findings" not because nothing was stale, but because nothing
+// under `docs/**` was ever scored. Narrowing the corpus is the primary fix;
+// ranking by evidence strength instead of by filename is the second: even
+// with `--include` widening the corpus back out, or a project whose own
+// `docs/**` is large, the sections most likely to be worth a Jev call (an
+// exact path mention, then a symbol, then a verb; more distinct links to
+// changed code within the same kind) win the budget over whichever file
+// happens to sort first.
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_MAX_JEV_DOCS_CALLS = 30;
+/** How many linked sections from the SAME doc file `boundLinkedSections` will select, regardless of remaining `--max-calls` budget — so one large file (a long CLI reference, a sprawling README) cannot fill the whole run by itself. */
+export const DEFAULT_MAX_SECTIONS_PER_DOC_FILE = 8;
 
 export interface JevDocsSelection {
   readonly selected: readonly LinkedSection[];
   readonly dropped: readonly LinkedSection[];
   readonly maxCalls: number;
+  readonly maxPerFile: number;
+  /** Human-readable description of how `selected` was chosen — surfaced verbatim in `--json`'s `selection.rankingBasis` so a run's choice is auditable without reading this file. */
+  readonly rankingBasis: string;
 }
 
-/** A prefix of `linked` (stable, file/heading order), first-N kept, the rest reported dropped — never a silent truncation. */
-export function boundLinkedSections(linked: readonly LinkedSection[], maxCalls: number = DEFAULT_MAX_JEV_DOCS_CALLS): JevDocsSelection {
-  const sorted = [...linked].sort((a, b) => a.section.file.localeCompare(b.section.file) || a.section.line - b.section.line);
-  return { selected: sorted.slice(0, maxCalls), dropped: sorted.slice(maxCalls), maxCalls };
+const RANKING_BASIS =
+  "ranked by link strength, not alphabetically: an exact changed-file path mention outranks a symbol mention, which " +
+  "outranks a keryx-verb mention; within the same kind, a section with more DISTINCT links to changed code outranks " +
+  "one with fewer; remaining ties break by file then line (stable). Bounded by --max-calls total and " +
+  `${DEFAULT_MAX_SECTIONS_PER_DOC_FILE} section(s) per doc file, so one large file cannot fill the whole budget.`;
+
+function linkKindRank(kind: DocLinkKind): number {
+  // "flag" never appears as a LinkedSection.linkKind (deterministic flag findings bypass Jev/ranking entirely — see findDeterministicFlagFindings), so it is unreachable here; ranked lowest defensively rather than throwing.
+  return kind === "path" ? 3 : kind === "symbol" ? 2 : kind === "verb" ? 1 : 0;
+}
+
+/** Highest rank first: `linkKind` (path > symbol > verb), then `matchCount` (more distinct links first), then stable file/line order. */
+function compareByRank(a: LinkedSection, b: LinkedSection): number {
+  const kindDiff = linkKindRank(b.linkKind) - linkKindRank(a.linkKind);
+  if (kindDiff !== 0) return kindDiff;
+  const matchDiff = b.matchCount - a.matchCount;
+  if (matchDiff !== 0) return matchDiff;
+  return a.section.file.localeCompare(b.section.file) || a.section.line - b.section.line;
+}
+
+/**
+ * Selects `linked` by RANK (`compareByRank`, above) up to `maxCalls` total
+ * and `maxPerFile` per doc file — never a silent truncation: everything not
+ * selected is `dropped`, and `rankingBasis` states the method in the same
+ * string a `--json` reader sees.
+ */
+export function boundLinkedSections(
+  linked: readonly LinkedSection[],
+  maxCalls: number = DEFAULT_MAX_JEV_DOCS_CALLS,
+  maxPerFile: number = DEFAULT_MAX_SECTIONS_PER_DOC_FILE,
+): JevDocsSelection {
+  const ranked = [...linked].sort(compareByRank);
+  const selected: LinkedSection[] = [];
+  const dropped: LinkedSection[] = [];
+  const perFile = new Map<string, number>();
+  for (const item of ranked) {
+    const usedForFile = perFile.get(item.section.file) ?? 0;
+    if (selected.length < maxCalls && usedForFile < maxPerFile) {
+      selected.push(item);
+      perFile.set(item.section.file, usedForFile + 1);
+    } else {
+      dropped.push(item);
+    }
+  }
+  const byFileLine = (a: LinkedSection, b: LinkedSection): number => a.section.file.localeCompare(b.section.file) || a.section.line - b.section.line;
+  return {
+    selected: [...selected].sort(byFileLine),
+    dropped: [...dropped].sort(byFileLine),
+    maxCalls,
+    maxPerFile,
+    rankingBasis: RANKING_BASIS,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -423,7 +527,9 @@ export function synthesizeDocsFinding(linked: LinkedSection, probability: number
     problem: `Section "${heading}" in ${linked.section.file} is linked (${linked.linkKind}: "${linked.linkedTo}") to code this diff changed at ${codeChange}, and Jev scored it ${probability.toFixed(2)} likely stale (threshold ${threshold}).`,
     impact: "A reader following this section would be told something the code no longer does, which is worse than no documentation at all.",
     suggested_fix: `Re-read "${heading}" in ${linked.section.file} against ${codeChange} and update it to match the current behaviour.`,
-    evidence: `Jev noul probability: ${probability.toFixed(2)} (threshold ${threshold}); linked via ${linked.linkKind} "${linked.linkedTo}"; hunk(s): ${codeChange}.`,
+    evidence:
+      `Jev noul probability: ${probability.toFixed(2)} (threshold ${threshold}); linked via ${linked.linkKind} "${linked.linkedTo}" ` +
+      `(${linked.matchCount} distinct link${linked.matchCount === 1 ? "" : "s"} to changed code — this run's ranking basis); hunk(s): ${codeChange}.`,
     confidence: confidenceFor(probability),
     reviewer: "review-jev-docs",
     dedupe_key: key,
