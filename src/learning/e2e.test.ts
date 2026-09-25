@@ -111,7 +111,12 @@ describe("learning e2e: observe (Claude hook) -> extract -> accept -> apply", ()
         { ...storeOptions, now: () => "2026-09-24T00:00:02.000Z" },
       );
 
-      const today = new Date().toISOString().slice(0, 10);
+      // The observation file is dated from the mocked `now` passed to
+      // `observeHostHookPayload` above (2026-09-24), never the real wall
+      // clock -- deriving `today` from `new Date()` drifts one day off (and
+      // the read then 404s) the moment the real calendar date moves past
+      // the hardcoded one, which is exactly what happened here.
+      const today = "2026-09-24";
       const observationsRaw = await readFile(observationFilePath(root, today), "utf8");
       const observationLines = observationsRaw.split("\n").filter((line) => line.length > 0);
       expect(observationLines).toHaveLength(2);
