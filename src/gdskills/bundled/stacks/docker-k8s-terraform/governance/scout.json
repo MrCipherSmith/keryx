@@ -1,0 +1,16 @@
+[
+  {
+    "query": "Use when reviewing a Dockerfile, Docker Compose file, Kubernetes/Helm manifest, or Terraform change for security and config-authoring risks -- root containers, unpinned base images, secrets baked into image layers, missing Kubernetes securityContext/NetworkPolicy, and Terraform state/secrets handling. Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "docker-k8s-terraform/docker-k8s-terraform-build-fix",
+    "recordedAt": "2026-09-25T15:30:30.700Z",
+    "skillName": "docker-k8s-terraform-review"
+  },
+  {
+    "query": "Use when a Docker build fails, a Kubernetes/Helm manifest is rejected by validation or the API server, or a Terraform validate/plan fails -- resolves the actual root cause (a bad COPY path, an ownership/permission mismatch after switching to a non-root USER, a schema-invalid manifest, a Terraform state/address mismatch) with the smallest fix, never a suppression.",
+    "decision": "create",
+    "topMatch": "ci-github-gitlab/ci-pipeline-build-fix",
+    "recordedAt": "2026-09-25T15:30:36.249Z",
+    "skillName": "docker-k8s-terraform-build-fix"
+  }
+]

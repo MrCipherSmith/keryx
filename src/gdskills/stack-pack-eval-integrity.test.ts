@@ -428,7 +428,7 @@ function collectRealPackSkills(): PackSkillFixture[] {
  * explicitly rather than silently: tracked as follow-up work for a future
  * flow, not exempted forever.
  */
-const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set(["nestjs", "nextjs-nuxt", "vue", "angular", "mobx"]);
+const I11_ENFORCED_PACKS: ReadonlySet<string> = new Set(["nestjs", "nextjs-nuxt", "vue", "angular", "mobx", "docker-k8s-terraform", "ci-github-gitlab"]);
 
 describe("stack-pack eval integrity (I1-I9, AG) over the real bundled tree", () => {
   const packSkills = collectRealPackSkills();

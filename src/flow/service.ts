@@ -44,6 +44,12 @@ export {
   classifyNotCheckable,
   computeAcFacts,
   evaluatedVerdict,
+  // flow 335: re-exported so `src/review/jev-contract.ts` (a DIFFERENT core
+  // owner, `review`) reuses the exact same artefact-token extractor a
+  // criterion's text already uses, for a PR-description claim's own text —
+  // same shape, no logic duplicated. Core-to-core through this facade, not
+  // `./check-ac` directly, same discipline every other re-export here follows.
+  extractCriterionTokens,
   factsOnlyVerdict,
   hashDiff,
   isFrozen,

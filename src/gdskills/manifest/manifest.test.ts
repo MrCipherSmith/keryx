@@ -11,7 +11,9 @@ test("the bundled install-manifest.json validates against install-manifest.schem
   expect(manifest.schemaVersion).toBe("1.0.0");
   expect(Object.keys(manifest.profiles).sort()).toEqual([
     "angular",
+    "ci-github-gitlab",
     "core",
+    "docker-k8s-terraform",
     "full",
     "go",
     "minimal",

@@ -98,6 +98,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
 | `/staledocs` | List doc sections that likely went stale because of the working diff, with Jev. |
 | `/opencomments` | List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>. |
+| `/contract` | Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev. |
 | `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
