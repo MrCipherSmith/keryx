@@ -67,7 +67,8 @@ Applies only to `*.php` files.
 ## Queues and background work
 
 - A queue job handling anything security- or money-relevant is written
-  assuming at-least-once delivery: guard the side effect with
+  assuming its connection can redeliver it (true of most production
+  configurations): guard the side effect with
   `ShouldBeUnique`, a `uniqueId()`, or an idempotency check recorded
   before the effect runs, not an assumption that retries "shouldn't
   normally happen."

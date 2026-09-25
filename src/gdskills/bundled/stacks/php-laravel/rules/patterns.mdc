@@ -56,8 +56,8 @@ Laravel application design and its common anti-patterns. Applies only to
 
 ## Jobs, events, and idempotency
 
-- A queued job that can be delivered more than once (Laravel's queues are
-  at-least-once) either implements `ShouldBeUnique`/`uniqueId()`, or
+- A queued job that can be delivered more than once (most production
+  queue connections are at-least-once) either implements `ShouldBeUnique`/`uniqueId()`, or
   checks/records its own side effect before repeating it — do not assume
   a job runs exactly once.
 - Prefer a domain event (`event(new OrderShipped($order))`) with
