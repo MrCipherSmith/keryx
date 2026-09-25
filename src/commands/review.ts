@@ -49,6 +49,7 @@ import {
   renderReviewScopeMarkdown,
   renderScopedDiff,
   type ReviewScope,
+  type ScopedRegion,
 } from "../review/scope";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import { loadRoutingConfig } from "../harness/routing/config";
@@ -181,12 +182,18 @@ import {
   type ReportFindingLike,
 } from "../review/conform-state";
 import {
+  activeClausesAt,
   batchConformItems,
+  boundHunkRegions,
   DEFAULT_CONFORM_THRESHOLD,
+  DEFAULT_MAX_HUNK_CALLS,
+  DEFAULT_MAX_HUNKS,
   evaluatedVerdict,
   notCheckableVerdict,
   notEvaluatedVerdict,
+  aggregateConformVerdicts,
   type ConformBatchItem,
+  type ConformHunkLocation,
   type ConformVerdict,
 } from "../review/conform-jev";
 import { createFixtureConformPrPort, createGhConformPrPort } from "../review/conform-pr-port";
@@ -196,6 +203,7 @@ import {
   renderConformMarkdown,
   withRecentDoc,
   CONFORM_RECENTS_PATH,
+  type ConformHunkBudget,
   type ConformTarget,
 } from "../review/conform-report";
 import { runModelTurn } from "../harness/provider/single-turn";
@@ -325,6 +333,9 @@ const CONFORM_FLAGS = [
   "--model",
   "--fixtures",
   "--json",
+  "--max-hunks",
+  "--max-hunk-calls",
+  "--detail",
 ] as const;
 
 /**
@@ -1834,7 +1845,13 @@ async function resolveConformClauseTags(
   return applyClauseTags(rawClauses, resolved);
 }
 
-/** AC5: score every checkable clause of one kind against its shared redacted state, batched under budget. */
+/**
+ * AC5: score every checkable clause of one kind against its shared redacted
+ * state, batched under budget. `location` (flow 326, AC1) is set by the
+ * caller when `items` is one hunk region's hunk-kind clauses — it is stamped
+ * onto every verdict produced here so a later aggregation pass can group
+ * multiple hunks' verdicts for the same clause_id back into one row.
+ */
 async function scoreConformClauses(
   items: readonly ConformBatchItem[],
   sharedRedactedText: string,
@@ -1842,6 +1859,7 @@ async function scoreConformClauses(
   model: string,
   threshold: number,
   acc: ConformUsageAccumulator,
+  location?: ConformHunkLocation,
 ): Promise<ConformVerdict[]> {
   const verdicts: ConformVerdict[] = [];
   for (const batch of batchConformItems(items, sharedRedactedText)) {
@@ -1850,7 +1868,7 @@ async function scoreConformClauses(
     for (const item of batch.items) {
       const answer = result.answers[item.clause.clause_id];
       const probability = answer?.type === "noul" ? answer.noul : 0;
-      verdicts.push(evaluatedVerdict(item.clause, item.facts, probability, threshold));
+      verdicts.push(evaluatedVerdict(item.clause, item.facts, probability, threshold, location));
     }
   }
   return verdicts;
@@ -1938,6 +1956,17 @@ function parseThresholdFlag(args: string[]): number {
   return value;
 }
 
+/** Flow 326, AC1: `--max-hunks` (default {@link DEFAULT_MAX_HUNKS}) — further violating hunk locations shown per clause, beyond the worst. */
+function parsePositiveIntFlag(args: string[], flag: string, fallback: number): number {
+  const raw = optionValue(args, flag);
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${flag} must be a non-negative integer, got "${raw}".`);
+  }
+  return value;
+}
+
 async function readReportFindings(reportDir: string): Promise<readonly ReportFindingLike[]> {
   try {
     const raw = JSON.parse(await readFile(join(reportDir, "findings.json"), "utf8")) as unknown;
@@ -1945,6 +1974,67 @@ async function readReportFindings(reportDir: string): Promise<readonly ReportFin
   } catch {
     return [];
   }
+}
+
+interface HunkScoringResult {
+  readonly verdicts: readonly ConformVerdict[];
+  /** clause_ids that got at least 1 judged hunk this run — AC3: a clause whose budget share rounded to 0 is NOT in here. */
+  readonly supplied: ReadonlySet<string>;
+  readonly hunkBudget?: ConformHunkBudget;
+  /** The diff's own hunk count (AC3's "N" in "0 of N hunks judged") — 0 when the diff has no hunks at all, distinct from "budget ran out". */
+  readonly totalRegions: number;
+}
+
+/**
+ * Flow 326, AC3: score every hunk-kind clause against `allRegions`, honoring
+ * `--max-hunk-calls`'s per-clause floor (`boundHunkRegions`) — each region is
+ * scored only for the clauses whose quota still reaches it
+ * (`activeClausesAt`), so a clause that got fewer hunks than another (or
+ * none at all) never gets asked about a hunk beyond its own share. Shared by
+ * both the `--pr` and the diff/`--report`-absent branches of `runConform`
+ * below, which otherwise duplicated this exact loop.
+ */
+async function scoreHunkClauses(
+  hunkClauses: readonly ReferenceClause[],
+  allRegions: readonly ScopedRegion[],
+  maxHunkCalls: number,
+  fetchFn: typeof fetch,
+  model: string,
+  threshold: number,
+  acc: ConformUsageAccumulator,
+): Promise<HunkScoringResult> {
+  const hunkClauseIds = hunkClauses.map((c) => c.clause_id);
+  const byId = new Map(hunkClauses.map((c) => [c.clause_id, c]));
+  const bounded = boundHunkRegions(allRegions, hunkClauseIds, maxHunkCalls);
+  const supplied = new Set<string>();
+  for (const id of hunkClauseIds) {
+    if ((bounded.judgedPerClause.get(id) ?? 0) > 0) supplied.add(id);
+  }
+  let verdicts: ConformVerdict[] = [];
+  let index = 0;
+  for (const region of bounded.regions) {
+    const activeClauses = activeClausesAt(bounded.judgedPerClause, index, hunkClauseIds).map((id) => byId.get(id)!);
+    const items: ConformBatchItem[] = activeClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
+    verdicts = verdicts.concat(
+      await scoreConformClauses(items, hunkRedactedStateText(region), fetchFn, model, threshold, acc, {
+        path: region.path,
+        startLine: region.startLine,
+        endLine: region.endLine,
+      }),
+    );
+    index += 1;
+  }
+  let hunkBudget: ConformHunkBudget | undefined;
+  if (bounded.skippedRegions > 0) {
+    hunkBudget = {
+      maxHunkCalls,
+      totalHunks: bounded.totalRegions,
+      hunksJudged: bounded.regions.length,
+      hunksSkipped: bounded.skippedRegions,
+      truncatedClauses: hunkClauseIds.filter((id) => (bounded.judgedPerClause.get(id) ?? 0) < bounded.totalRegions),
+    };
+  }
+  return { verdicts, supplied, ...(hunkBudget !== undefined ? { hunkBudget } : {}), totalRegions: bounded.totalRegions };
 }
 
 async function runConform(args: string[]): Promise<void> {
@@ -1955,9 +2045,17 @@ async function runConform(args: string[]): Promise<void> {
   const reportDir = optionValue(args, "--report");
   const diffRef = optionValue(args, "--diff");
   if ([prArg, reportDir, diffRef].filter((v) => v !== undefined).length !== 1) {
-    throw new Error("Usage: keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>) [--explain] [--json]");
+    throw new Error(
+      "Usage: keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>) [--explain] [--json] " +
+        "[--max-hunks N] [--max-hunk-calls N] [--detail]",
+    );
   }
   const threshold = parseThresholdFlag(args);
+  // Flow 326, AC1/AC3: how many further violating hunk locations a clause row
+  // shows, and how many hunk × clause questions the whole run may ask.
+  const maxHunks = parsePositiveIntFlag(args, "--max-hunks", DEFAULT_MAX_HUNKS);
+  const maxHunkCalls = parsePositiveIntFlag(args, "--max-hunk-calls", DEFAULT_MAX_HUNK_CALLS);
+  const detail = args.includes("--detail");
   const fixturesDir = optionValue(args, "--fixtures");
   const explain = args.includes("--explain");
 
@@ -2008,6 +2106,13 @@ async function runConform(args: string[]): Promise<void> {
   // diff, an empty report) still reports its clauses as not-evaluated rather
   // than silently vanishing them.
   const supplied = new Set<string>();
+  // Flow 326, AC3: set only when `--max-hunk-calls` actually truncated the
+  // hunks judged this run — never silently.
+  let hunkBudget: ConformHunkBudget | undefined;
+  // Flow 326, AC3: the diff's own hunk count, so a hunk-kind clause the
+  // budget skipped entirely (0 judged) can say "0 of N" rather than being
+  // indistinguishable from a diff with no hunks in it at all (N === 0 there).
+  let hunkTotalRegions = 0;
 
   if (prArg !== undefined) {
     const number = Number(prArg);
@@ -2023,12 +2128,11 @@ async function runConform(args: string[]): Promise<void> {
     evaluated = evaluated.concat(await scoreConformClauses(prItems, redacted, fetchFn, model, threshold, acc));
 
     const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
-    const regions = hunkRegionsFromDiff(info.diff);
-    if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
-    for (const region of regions) {
-      const hunkItems: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
-      evaluated = evaluated.concat(await scoreConformClauses(hunkItems, hunkRedactedStateText(region), fetchFn, model, threshold, acc));
-    }
+    const hunkResult = await scoreHunkClauses(hunkClauses, hunkRegionsFromDiff(info.diff), maxHunkCalls, fetchFn, model, threshold, acc);
+    evaluated = evaluated.concat(hunkResult.verdicts);
+    for (const id of hunkResult.supplied) supplied.add(id);
+    hunkBudget = hunkResult.hunkBudget;
+    hunkTotalRegions = hunkResult.totalRegions;
   } else if (reportDir !== undefined) {
     target = { kind: "report", label: reportDir };
     const reportMarkdown = await readFile(join(reportDir, "report.md"), "utf8").catch(() => "");
@@ -2043,18 +2147,36 @@ async function runConform(args: string[]): Promise<void> {
     const diff = await gitDiff(diffRef, DEFAULT_CONTEXT_LINES);
     target = { kind: "diff", label: diffRef ?? "working diff" };
     const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
-    const regions = hunkRegionsFromDiff(diff);
-    if (regions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
-    for (const region of regions) {
-      const items: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
-      evaluated = evaluated.concat(await scoreConformClauses(items, hunkRedactedStateText(region), fetchFn, model, threshold, acc));
-    }
+    const hunkResult = await scoreHunkClauses(hunkClauses, hunkRegionsFromDiff(diff), maxHunkCalls, fetchFn, model, threshold, acc);
+    evaluated = evaluated.concat(hunkResult.verdicts);
+    for (const id of hunkResult.supplied) supplied.add(id);
+    hunkBudget = hunkResult.hunkBudget;
+    hunkTotalRegions = hunkResult.totalRegions;
   }
 
-  const notEvaluated = checkable.filter((c) => !supplied.has(c.clause_id)).map((c) => notEvaluatedVerdict(c));
+  // Flow 326, AC3: a hunk-kind clause the budget skipped entirely (0 judged,
+  // but the diff DID have hunks — hunkTotalRegions > 0) is not-evaluated for
+  // a specific, visible reason — distinct from a kind with no state at all
+  // this run (a --report target, or a diff with literally no hunks).
+  const notEvaluated = checkable
+    .filter((c) => !supplied.has(c.clause_id))
+    .map((c) =>
+      c.state_kind === "hunk" && hunkTotalRegions > 0
+        ? notEvaluatedVerdict(c, `skipped by --max-hunk-calls (0 of ${hunkTotalRegions} hunks judged)`)
+        : notEvaluatedVerdict(c),
+    );
   const verdicts: ConformVerdict[] = [...evaluated, ...notEvaluated, ...notCheckable.map((c) => notCheckableVerdict(c))];
 
-  const explanations = explain ? await explainConformVerdicts(cwd, refPath, verdicts, threshold, fixturesDir) : undefined;
+  // Flow 326, AC1: explain the WORST hunk per clause, not every hunk that
+  // scored below threshold — one advisory explanation per clause, matching
+  // the one-row-per-clause report rather than re-introducing the hunk ×
+  // clause explosion this flow removes from the report itself.
+  const explainCandidates = explain
+    ? aggregateConformVerdicts(verdicts, maxHunks)
+        .map((a) => a.worstVerdict)
+        .filter((v): v is ConformVerdict => v !== undefined)
+    : [];
+  const explanations = explain ? await explainConformVerdicts(cwd, refPath, explainCandidates, threshold, fixturesDir) : undefined;
 
   const result = {
     refPath,
@@ -2062,16 +2184,17 @@ async function runConform(args: string[]): Promise<void> {
     threshold,
     verdicts,
     ...(explanations !== undefined && Object.keys(explanations).length > 0 ? { explanations } : {}),
+    ...(hunkBudget !== undefined ? { hunkBudget } : {}),
     usage: acc.sawUsage
       ? { jevCalls: acc.jevCalls, inputTokens: acc.inputTokens, outputTokens: acc.outputTokens, costUsd: acc.costUsd }
       : { jevCalls: acc.jevCalls },
   };
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify(conformResultToJson(result), null, 2));
+    console.log(JSON.stringify(conformResultToJson(result, { maxHunks, detail }), null, 2));
     return;
   }
-  console.log(renderConformMarkdown(result));
+  console.log(renderConformMarkdown(result, { maxHunks, detail }));
 }
 
 async function readRecentConformDocs(cwd: string): Promise<readonly string[]> {
@@ -3410,6 +3533,7 @@ Usage:
   keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
                        [--repo <owner/repo>] [--explain] [--threshold <0..1>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+                       [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
   keryx review jev-rules (--diff <ref> | --pr <n> | --scope <scope.json>)
                          [--rules <paths>] [--max-calls <n>] [--threshold <0..1>]
                          [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
@@ -3541,6 +3665,15 @@ conform:
   \`--fixtures <dir>\` answers the pr-kind read (\`pr.json\`), every Jev call
   (\`jev-response.json\`), and (with \`--explain\`) the explanation pass
   (\`explain-response.json\`) — no real \`gh\` call, no real network.
+  Flow 326: the report is ONE row per clause, not one row per hunk × clause.
+  A hunk-kind clause's row names how many hunks were judged and how many fell
+  below \`--threshold\`, the single worst hunk (location + probability), and up
+  to \`--max-hunks\` (default ${DEFAULT_MAX_HUNKS}) further violating hunk locations;
+  \`--json\` nests the full per-hunk detail under each clause regardless, and
+  \`--detail\` prints it in the text report too. \`--max-hunk-calls\` (default
+  ${DEFAULT_MAX_HUNK_CALLS}) caps hunk × clause Jev questions per run; when it truncates,
+  the report names which clauses were judged on a subset and how many hunks
+  were skipped.
   Honest limits: this mode is the least mechanical use of Jev in this
   repository — deciding whether a PR body names an out-of-scope list is closer
   to judgement than a styling checklist bullet. See flow 308's own journal

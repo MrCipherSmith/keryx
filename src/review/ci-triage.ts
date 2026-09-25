@@ -35,11 +35,25 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { estimateTokens } from "./cost";
-// Through the security facade, not `security/redact` directly: reaching past
-// a facade is exactly what the import-policy ratchet in `src/lib/import-
-// policy.ts` (`client-imports-core-internal`, capped not zero-tolerant) exists
-// to catch, and it is already at its measured cap — `security/service.ts`
-// re-exports `redactSensitiveText` for precisely this reason.
+// Through the security facade, not `security/redact` directly.
+//
+// Flow 326, AC6 (CI-triage leftover from PR #713): this is NOT because the
+// import-policy ratchet (`client-imports-core-internal`, checked by
+// `src/lib/import-policy.live.test.ts`) would catch a direct import here —
+// it would not. This module is a CORE owner (`src/review/`, see the header
+// above) importing another CORE owner (`src/security/`); `client-imports-
+// core-internal` only fires on a CLIENT/ADAPTER -> CORE edge
+// (`src/lib/import-policy.ts`'s `findingFor`), and a core -> core edge is
+// neither that nor `owner-imports-client` (core -> client/adapter). This
+// import trips neither rule.
+//
+// The real reason is plain consistency: every caller outside `src/security/`
+// itself — core or not — reaches redaction through `security/service.ts`,
+// which exists precisely so that CALLERS NEVER HAVE TO KNOW which internal
+// module (`redact.ts` today) actually implements it. Importing `redact.ts`
+// directly from here would still work and would still pass every import
+// check, but it would make this module the one exception to a convention the
+// rest of the codebase holds uniformly, for no benefit.
 import { redactSensitiveText } from "../security/service";
 import { REVIEW_GATE_CONFIG_PATH } from "../flow/review-gate";
 import {
