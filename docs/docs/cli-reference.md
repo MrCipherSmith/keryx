@@ -3775,7 +3775,7 @@ or a reviewer-process obligation no artefact records) is always listed, never
 sent to Jev.
 
 ```bash
-keryx review conform --ref docs/review-doctrine.md --pr 999 --json
+keryx review conform --ref docs/pipeline-contribution-policy.md --pr 999 --json
 ```
 
 | Flag | Description |

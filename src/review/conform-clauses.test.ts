@@ -22,31 +22,30 @@ describe("AC1: extractReferenceClauses — deterministic, no model call", () => 
   test("pins the stable ids of the invented fixture document", async () => {
     const clauses = extractReferenceClauses(await fixtureText());
     expect(clauses.map((c) => c.clause_id)).toEqual([
-      "scope-1",
-      "scope-2",
-      "scope-3",
-      "review-rounds-1",
-      "review-rounds-2",
-      "reviewer-contract-1",
-      "reviewer-contract-2",
-      "reviewer-contract-3",
+      "before-you-open-a-change-1",
+      "before-you-open-a-change-2",
+      "change-size-1",
+      "change-size-2",
+      "review-pass-1",
+      "review-pass-2",
+      "review-pass-3",
       "code-and-test-hunks-1",
       "code-and-test-hunks-2",
-      "exit-criterion-1",
+      "sign-off-1",
     ]);
   });
 
   test("carries clause text with the explicit marker stripped", async () => {
     const clauses = extractReferenceClauses(await fixtureText());
-    const scope2 = clauses.find((c) => c.clause_id === "scope-2");
-    expect(scope2?.text).toBe("Hand-written code in one PR stays under a 600 lines budget.");
-    expect(scope2?.explicit).toEqual({ state_kind: "pr" });
+    const changeSize1 = clauses.find((c) => c.clause_id === "change-size-1");
+    expect(changeSize1?.text).toBe("Hand-written code in a single contribution stays under a 900 lines budget.");
+    expect(changeSize1?.explicit).toEqual({ state_kind: "pr" });
   });
 
   test("carries the full heading path, not just the nearest heading", async () => {
     const clauses = extractReferenceClauses(await fixtureText());
-    const scope1 = clauses.find((c) => c.clause_id === "scope-1");
-    expect(scope1?.heading_path).toEqual(["Invented Review Doctrine (fixture)", "Scope"]);
+    const first = clauses.find((c) => c.clause_id === "before-you-open-a-change-1");
+    expect(first?.heading_path).toEqual(["Data Pipeline Contribution Policy (fixture)", "Before you open a change"]);
   });
 
   test("re-extracting the same content reproduces byte-identical ids (idempotent, no model call)", async () => {
@@ -56,9 +55,9 @@ describe("AC1: extractReferenceClauses — deterministic, no model call", () => 
 
   test("a not-checkable explicit marker is parsed with its reason", async () => {
     const clauses = extractReferenceClauses(await fixtureText());
-    const roundsExit = clauses.find((c) => c.clause_id === "exit-criterion-1");
-    expect(roundsExit?.explicit).toEqual({
-      not_checkable_reason: "an obligation on the review process itself, not something a single artefact records",
+    const signOff = clauses.find((c) => c.clause_id === "sign-off-1");
+    expect(signOff?.explicit).toEqual({
+      not_checkable_reason: "a judgment call the reviewer makes personally, not read back from any artefact",
     });
   });
 

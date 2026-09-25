@@ -1,36 +1,35 @@
 <!--
 Flow 308 fixture (AC10): an INVENTED reference document, written for this
 repository's tests only. No wording, structure detail, name or path is
-copied from any real reference document. Shape only: numbered rules under
-headings about one concern per PR, a size budget, named PR-body sections,
-a scope-freeze rule, an author gate, a reviewer contract with a severity
-ladder, and an exit criterion.
+copied from any real reference document. Shape only: numbered rules mixed
+across headings about opening a change, a change-size limit, a per-pass
+review record with a priority field, code/test hunks, and a sign-off
+condition — grouped by workflow stage rather than by artefact kind.
 -->
 
-# Invented Review Doctrine (fixture)
+# Data Pipeline Contribution Policy (fixture)
 
-## Scope
+## Before you open a change
 
-1. Each pull request addresses exactly one concern. [not-checkable: no artefact records what the author considered in scope before opening the PR]
-2. Hand-written code in one PR stays under a 600 lines budget. [state:pr]
-3. The PR body names an explicit Out of Scope section. [state:pr]
+1. A single contribution changes at most one pipeline stage end-to-end. [not-checkable: no artefact records what the author considered in scope before opening the change]
+2. The change description names a Rollback plan. [state:pr]
 
-## Review rounds
+## Change size
 
-1. Scope freezes after the first review round: no new files enter the diff afterward. [not-checkable: verified by the human moderating the round, not recorded by any artefact this reviewer reads]
-2. A change to test coverage is answered in the PR body's Testing section. [state:pr]
+1. Hand-written code in a single contribution stays under a 900 lines budget. [state:pr]
+2. Generated schema files are excluded from that count. [not-checkable: no artefact distinguishes generated from hand-written code for this reviewer]
 
-## Reviewer contract
+## Review pass
 
-1. Every finding names a severity, evidence and a location class. [state:report]
-2. Findings appear in fixed lanes, blockers before majors before minors before info. [state:report]
-3. Pre-existing issues are kept in a section separate from this round's findings. [state:report]
+1. A reviewer records each finding with a priority, evidence and a reproduction step. [state:report]
+2. A finding that predates this pass stays listed apart from one raised in it. [state:report]
+3. A change to validation coverage is described in the change description's Validation section. [state:pr]
 
 ## Code and test hunks
 
-1. A new test asserts on a return value or an observable side effect, not solely on a mock having been called. [state:hunk]
-2. A raw hue class is never hand-written in component code. [state:hunk]
+1. A new test asserts on a materialized output, not solely that a mock was invoked. [state:hunk]
+2. A raw connection string is never hand-written in pipeline code. [state:hunk]
 
-## Exit criterion
+## Sign-off
 
-1. The round closes only once every blocker and major finding has a recorded disposition. [not-checkable: an obligation on the review process itself, not something a single artefact records]
+1. The pass closes only once every high-priority finding has a recorded disposition. [not-checkable: a judgment call the reviewer makes personally, not read back from any artefact]

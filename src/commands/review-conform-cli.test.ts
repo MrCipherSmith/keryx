@@ -89,21 +89,21 @@ describe("AC6: keryx review conform --pr — pr-kind and hunk-kind clauses, from
     const byId = new Map(parsed.clauses.map((c) => [c.clause_id, c]));
 
     // pr-kind: satisfied (0.91 >= 0.5) and likely-violated (0.22 < 0.5).
-    expect(byId.get("scope-1")?.status).toBe("satisfied");
-    expect(byId.get("scope-1")?.probability).toBe(0.91);
-    expect(byId.get("scope-2")?.status).toBe("likely-violated");
+    expect(byId.get("change-limits-1")?.status).toBe("satisfied");
+    expect(byId.get("change-limits-1")?.probability).toBe(0.91);
+    expect(byId.get("change-limits-2")?.status).toBe("likely-violated");
 
     // hunk-kind: evaluated against the PR's own diff.
     expect(byId.get("hunks-1")?.status).toBe("satisfied");
     expect(byId.get("hunks-1")?.state_kind).toBe("hunk");
 
     // report-kind: no report supplied this run.
-    expect(byId.get("reports-1")?.status).toBe("not-evaluated");
+    expect(byId.get("findings-1")?.status).toBe("not-evaluated");
 
     // not-checkable: always listed, never dropped, never scored.
-    expect(byId.get("process-1")?.status).toBe("not-checkable");
-    expect(byId.get("process-1")?.reason).toContain("no artefact");
-    expect(byId.get("process-1")?.probability).toBeUndefined();
+    expect(byId.get("ownership-1")?.status).toBe("not-checkable");
+    expect(byId.get("ownership-1")?.reason).toContain("no artefact");
+    expect(byId.get("ownership-1")?.probability).toBeUndefined();
 
     expect(process.exitCode ?? 0).toBe(0);
   });
@@ -129,7 +129,7 @@ describe("AC6: keryx review conform --pr — pr-kind and hunk-kind clauses, from
     await reviewCommand(["conform", "--ref", REF_PATH, "--pr", "999", "--fixtures", FIXTURES_DIR, "--explain"]);
 
     expect(output()).toContain("ADVISORY");
-    expect(output()).toContain("Clause scope-2 looks violated");
+    expect(output()).toContain("Clause change-limits-2 looks violated");
   });
 
   test("--threshold changes which clauses are satisfied vs likely-violated", async () => {
@@ -140,7 +140,7 @@ describe("AC6: keryx review conform --pr — pr-kind and hunk-kind clauses, from
     await reviewCommand(["conform", "--ref", REF_PATH, "--pr", "999", "--fixtures", FIXTURES_DIR, "--threshold", "0.95", "--json"]);
     const parsed = JSON.parse(output()) as JsonResult;
     const byId = new Map(parsed.clauses.map((c) => [c.clause_id, c]));
-    expect(byId.get("scope-1")?.status).toBe("likely-violated");
+    expect(byId.get("change-limits-1")?.status).toBe("likely-violated");
   });
 
   test("an out-of-range --threshold is refused", async () => {
@@ -164,11 +164,11 @@ describe("AC6: keryx review conform --report — report-kind clauses only", () =
     const parsed = JSON.parse(output()) as JsonResult;
     expect(parsed.target.kind).toBe("report");
     const byId = new Map(parsed.clauses.map((c) => [c.clause_id, c]));
-    expect(byId.get("reports-1")?.status).toBe("likely-violated");
-    expect(byId.get("reports-1")?.evidence.join(" ")).toContain("findings missing");
-    expect(byId.get("scope-1")?.status).toBe("not-evaluated");
+    expect(byId.get("findings-1")?.status).toBe("likely-violated");
+    expect(byId.get("findings-1")?.evidence.join(" ")).toContain("findings missing");
+    expect(byId.get("change-limits-1")?.status).toBe("not-evaluated");
     expect(byId.get("hunks-1")?.status).toBe("not-evaluated");
-    expect(byId.get("process-1")?.status).toBe("not-checkable");
+    expect(byId.get("ownership-1")?.status).toBe("not-checkable");
   });
 });
 
@@ -209,7 +209,7 @@ describe("AC7 privacy: --explain never sends the reference document's full path 
     const refPath = path.join(ROOT, "private-project", `notes-${secret}.md`);
 
     const verdict: ConformVerdict = {
-      clause_id: "scope-1",
+      clause_id: "change-limits-1",
       state_kind: "pr",
       status: "likely-violated",
       probability: 0.1,
@@ -224,7 +224,7 @@ describe("AC7 privacy: --explain never sends the reference document's full path 
 
     const explanations = await explainConformVerdicts(ROOT, refPath, [verdict], 0.5, undefined, fakeRunTurn);
 
-    expect(explanations["scope-1"]).toBe("explanation text");
+    expect(explanations["change-limits-1"]).toBe("explanation text");
     expect(capturedUser).toBeDefined();
     expect(capturedUser).not.toContain(ROOT);
     expect(capturedUser).not.toContain("private-project");

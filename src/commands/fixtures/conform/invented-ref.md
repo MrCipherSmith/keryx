@@ -1,20 +1,20 @@
 <!-- Flow 308 fixture (AC10): invented, for tests only. -->
 
-# Invented CLI Fixture Doctrine
-
-## Scope
-
-1. Hand-written code stays under a 600 lines budget. [state:pr]
-2. The PR body names an explicit Out of Scope section. [state:pr]
+# Data Pipeline CLI Fixture
 
 ## Hunks
 
-1. A new test asserts on an observable effect, not solely a mock call. [state:hunk]
+1. A new test asserts on a materialized output, not solely that a mock was invoked. [state:hunk]
 
-## Reports
+## Change limits
 
-1. Every finding names a severity and evidence. [state:report]
+1. Hand-written code in a single contribution stays under a 900 lines budget. [state:pr]
+2. The change description names an explicit Data impact section. [state:pr]
 
-## Process
+## Findings
 
-1. The round starts by reading prior discussion. [not-checkable: no artefact records this]
+1. Every finding names a priority, a reproduction, and a file. [state:report]
+
+## Ownership
+
+1. Ownership of the change is confirmed by a named maintainer before merge. [not-checkable: no artefact records this]

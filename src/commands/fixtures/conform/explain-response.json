@@ -1,3 +1,3 @@
 {
-  "scope-2": "Clause scope-2 looks violated: the invented PR body has no Out of Scope section among its named sections."
+  "change-limits-2": "Clause change-limits-2 looks violated: the invented change description has no Data impact section among its named sections."
 }

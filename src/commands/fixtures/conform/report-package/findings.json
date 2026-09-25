@@ -1,4 +1,4 @@
 [
-  { "id": "F-1", "reviewer": "invented-reviewer", "severity": "major", "problem": "p", "impact": "i", "suggested_fix": "s", "evidence": "e", "confidence": "high", "file": "src/invented/example.ts", "line": 12 },
-  { "id": "F-2", "reviewer": "invented-reviewer", "severity": "minor", "problem": "p", "impact": "i", "suggested_fix": "s", "evidence": "", "confidence": "low" }
+  { "id": "F-1", "reviewer": "pipeline-reviewer", "severity": "major", "problem": "p", "impact": "i", "suggested_fix": "s", "evidence": "e", "confidence": "high", "file": "src/pipelines/example.ts", "line": 12 },
+  { "id": "F-2", "reviewer": "pipeline-reviewer", "severity": "minor", "problem": "p", "impact": "i", "suggested_fix": "s", "evidence": "", "confidence": "low" }
 ]

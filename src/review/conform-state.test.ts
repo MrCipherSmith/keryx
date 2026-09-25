@@ -59,7 +59,7 @@ describe("AC3: pr-kind state", () => {
   test("a clause naming a size budget produces a decisive fact", () => {
     const diff = ["diff --git a/src/x.ts b/src/x.ts", "--- a/src/x.ts", "+++ b/src/x.ts", "@@ -1 +1,2 @@", " a", "+b", ""].join("\n");
     const facts = computePrConformFacts({ title: "t", body: "", diff });
-    const clause = taggedClause("Hand-written code stays under a 400 lines budget.");
+    const clause = taggedClause("Hand-written code stays under a 900 lines budget.");
     const result = prClauseFacts(clause, facts);
     expect(result.decisive).toEqual({ satisfied: true, reason: expect.stringContaining("within") as unknown as string });
   });

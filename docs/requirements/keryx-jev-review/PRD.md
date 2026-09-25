@@ -461,7 +461,8 @@ second way for a `noul`/`choice` answer to become an authored artifact.
     unchanged.
 26. **Reference-document mode: a clause Jev cannot check is recorded, not dropped.** A
     clause phrased as a live/manual action with no gatherable state to check it against
-    — "verified on a live instance," "the round starts by reading the discussion" —
+    — "verified against a running pipeline instance," "ownership of the change is
+    confirmed by a named maintainer" —
     is tagged `checkable: false` with a one-line `reason` at extraction time
     (Requirement 6's extraction pass), kept in the normalized clause set, reported in
     coverage as `not_checkable` (never silently omitted, never counted as `0`

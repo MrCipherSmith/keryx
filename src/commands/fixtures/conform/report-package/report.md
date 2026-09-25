@@ -1,4 +1,4 @@
-# Invented review report (fixture)
+# Invented pipeline review report (fixture)
 
 ## Findings
 
