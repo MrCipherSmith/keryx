@@ -95,7 +95,7 @@ export interface RoutingModalOptions {
   /** Per-user config dir override (test seam only) — the "user" layer. Default: the real global config dir. */
   userConfigDir?: string;
   onKeypress: (handler: (key: KeypressEvent) => void) => () => void;
-  /** Connected providers for the flat picker AND AC10's resolution check. Defaults to a live `detectProviders()` call, fetched ONCE per `reload()` — never a second probe for resolution alone. */
+  /** Connected providers for the flat picker AND AC10's resolution check. Defaults to the live provider catalog (flow 309, `../harness/provider-catalog.ts`), read ONCE per `reload()` — never a second probe for resolution alone. */
   providers?: () => Promise<readonly FlatPickerProvider[]>;
   load?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
   loadRaw?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
@@ -338,10 +338,18 @@ function windowLines(lines: readonly string[], rows: number): readonly string[] 
   return lines.slice(0, Math.max(1, rows));
 }
 
-/** Live connected-provider list for the flat picker, from `detectProviders()`. */
+/**
+ * Live connected-provider list for the flat picker (flow 309) — the SAME
+ * on-disk catalog `keryx shell`'s startup refresh and `keryx providers
+ * status` read/write, not a fresh probe on every `/routing` open. A fresh
+ * cache answers immediately; a stale/missing one triggers exactly one
+ * refresh (AC3). Root cause this replaces: `detectProviders()`'s result
+ * handed straight to the picker — curated model ids, and every OpenAI-compat
+ * provider offered whether or not it had a credential.
+ */
 async function defaultProviders(): Promise<readonly FlatPickerProvider[]> {
-  const { detectProviders } = await import("../commands/select");
+  const { loadOrRefreshProviderCatalog, catalogToFlatPickerProviders } = await import("../harness/provider-catalog");
   const { envWithSavedApiKeys } = await import("../lib/shell-config");
-  const detected = await detectProviders({ fetch, env: envWithSavedApiKeys() });
-  return detected.map((p) => ({ name: p.name, models: p.models }));
+  const catalog = await loadOrRefreshProviderCatalog({ fetch, env: envWithSavedApiKeys() });
+  return catalogToFlatPickerProviders(catalog);
 }

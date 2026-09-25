@@ -125,7 +125,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "providers",
     group: "Connect a model provider",
-    summary: "Providers this operator has configured, and cross-family review eligibility.",
+    summary: "Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility.",
   },
   {
     kind: "cli",

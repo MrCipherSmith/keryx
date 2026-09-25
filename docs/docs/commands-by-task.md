@@ -22,7 +22,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | CLI command | Summary |
 |---|---|
 | `keryx auth` | Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status. |
-| `keryx providers` | Providers this operator has configured, and cross-family review eligibility. |
+| `keryx providers` | Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility. |
 | `keryx routing` | Category -> model routing table: list, set, unset (per-user default; --project for the project layer). |
 
 | Shell command | Summary |

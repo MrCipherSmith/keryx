@@ -218,6 +218,16 @@ export interface FlatModelOption {
 export interface FlatPickerProvider {
   readonly name: string;
   readonly models?: readonly string[];
+  /**
+   * Flow 309, AC4 — `models` is the curated OFFLINE fallback (the provider's
+   * live `/models` fetch failed, or it has no live listing endpoint) rather
+   * than a live catalog reading. `flatModelOptions` suffixes every model row
+   * " (offline list)" so the picker never presents a stale/documentary id as
+   * though it were confirmed available. Omitted (the default, `false`) is
+   * byte-identical to every caller before flow 309 — `search` is unaffected
+   * either way, so filtering by a bare model id still works.
+   */
+  readonly offline?: boolean;
 }
 
 /**
@@ -236,10 +246,11 @@ export function flatModelOptions(providers: readonly FlatPickerProvider[]): Flat
       label: `${provider.name} (provider default)`,
       search: `${provider.name} provider default`.toLowerCase(),
     });
+    const offlineSuffix = provider.offline === true ? " (offline list)" : "";
     for (const modelId of provider.models ?? []) {
       options.push({
         assignment: { kind: "model", providerId: provider.name, modelId },
-        label: `${provider.name}/${modelId}`,
+        label: `${provider.name}/${modelId}${offlineSuffix}`,
         search: `${provider.name}/${modelId}`.toLowerCase(),
       });
     }
