@@ -116,6 +116,13 @@ export function batchConformItems(items: readonly ConformBatchItem[], sharedReda
 
 export type ConformClauseStatus = "satisfied" | "likely-violated" | "not-checkable" | "not-evaluated";
 
+/** Flow 326, AC1: where a hunk-kind verdict came from — set only on a verdict produced against one hunk region. */
+export interface ConformHunkLocation {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
 export interface ConformVerdict {
   readonly clause_id: string;
   readonly state_kind: ReferenceClause["state_kind"];
@@ -124,6 +131,8 @@ export interface ConformVerdict {
   readonly factLines: readonly string[];
   readonly decisive?: { readonly satisfied: boolean; readonly reason: string };
   readonly reason?: string;
+  /** Flow 326, AC1/AC2: the hunk this verdict was judged against, when it is one of possibly many for the same clause_id. */
+  readonly location?: ConformHunkLocation;
 }
 
 /** Below this Jev `noul` score (AC7's default), a clause is treated as likely violated / explained under `--explain`. */
@@ -140,9 +149,22 @@ export function notCheckableVerdict(clause: ReferenceClause): ConformVerdict {
   };
 }
 
-/** A checkable clause whose kind has no state supplied this run (AC6: "listed as not evaluated"). */
-export function notEvaluatedVerdict(clause: ReferenceClause): ConformVerdict {
-  return { clause_id: clause.clause_id, state_kind: clause.state_kind, status: "not-evaluated", factLines: [] };
+/**
+ * A checkable clause whose kind has no state supplied this run (AC6: "listed
+ * as not evaluated"). Flow 326, AC3: a hunk-kind clause that lost its entire
+ * `--max-hunk-calls` share carries a `reason` naming why — the caller (e.g.
+ * `runConform`'s hunk scoring) passes one such as
+ * `"skipped by --max-hunk-calls (0 of 12 hunks judged)"` rather than leaving
+ * this indistinguishable from "no hunks existed at all in the diff".
+ */
+export function notEvaluatedVerdict(clause: ReferenceClause, reason?: string): ConformVerdict {
+  return {
+    clause_id: clause.clause_id,
+    state_kind: clause.state_kind,
+    status: "not-evaluated",
+    factLines: [],
+    ...(reason !== undefined ? { reason } : {}),
+  };
 }
 
 /** A checkable clause that WAS asked — Jev's probability decides `satisfied` vs `likely-violated` against `threshold`. */
@@ -151,6 +173,7 @@ export function evaluatedVerdict(
   facts: ClauseStateFacts,
   probability: number,
   threshold: number = DEFAULT_CONFORM_THRESHOLD,
+  location?: ConformHunkLocation,
 ): ConformVerdict {
   return {
     clause_id: clause.clause_id,
@@ -159,5 +182,213 @@ export function evaluatedVerdict(
     probability,
     factLines: facts.factLines,
     ...(facts.decisive !== undefined ? { decisive: facts.decisive } : {}),
+    ...(location !== undefined ? { location } : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Flow 326, AC3: bound hunk × clause Jev questions per run.
+// ---------------------------------------------------------------------------
+
+/** Flow 326, AC3's documented default: `--max-hunk-calls` caps hunk × clause questions per run. */
+export const DEFAULT_MAX_HUNK_CALLS = 40;
+
+/** Flow 326, AC1's documented default: `--max-hunks` further violating hunk locations shown per clause, beyond the worst. */
+export const DEFAULT_MAX_HUNKS = 3;
+
+export interface HunkBudgetResult<T> {
+  /** The regions to actually score this run — a prefix of the input, kept in order. The union of every clause's own share: the longest a clause's quota goes. */
+  readonly regions: readonly T[];
+  readonly totalRegions: number;
+  readonly skippedRegions: number;
+  /**
+   * How many of `regions` (a prefix, first-encountered-first) each hunk-kind
+   * clause gets judged against — keyed by `clause_id`, same keys as the
+   * `hunkClauseIds` passed in. A clause missing 0 here still has an entry (0
+   * is a valid quota, not an absence) so a caller can always `.get(id) ?? 0`.
+   */
+  readonly judgedPerClause: ReadonlyMap<string, number>;
+}
+
+/**
+ * AC3: cap the number of hunk × clause questions a run sends.
+ *
+ * When the budget covers at least one full round (`maxHunkCalls >=
+ * hunkClauseIds.length`), every clause gets the same `floor(maxHunkCalls /
+ * hunkClauseCount)` region budget — unchanged from the original design, and
+ * what keeps every clause's report row directly comparable.
+ *
+ * When the budget is SMALLER than the clause count, `floor` alone would give
+ * every clause 0 (rounds down to nothing) and silently drop every hunk-kind
+ * clause from the report. Instead, the per-clause floor: while the budget
+ * allows, give each clause (in the order given) 1 judged hunk before giving
+ * any clause a 2nd — so a budget of `maxHunkCalls` with more clauses than
+ * that spends itself on the first `maxHunkCalls` clauses (1 hunk each) and
+ * leaves the rest at 0, rather than spending it on nobody. Those 0-quota
+ * clauses are what the caller reports as not-evaluated (AC3), not silently
+ * vanished.
+ *
+ * A prefix of the input regions is kept (deterministic, first-encountered/
+ * diff order), and the rest are reported as skipped rather than silently
+ * dropped. `hunkClauseIds` empty or no regions at all needs no bounding:
+ * there is nothing to ask.
+ */
+export function boundHunkRegions<T>(
+  regions: readonly T[],
+  hunkClauseIds: readonly string[],
+  maxHunkCalls: number = DEFAULT_MAX_HUNK_CALLS,
+): HunkBudgetResult<T> {
+  if (hunkClauseIds.length === 0 || regions.length === 0) {
+    const judgedPerClause = new Map(hunkClauseIds.map((id) => [id, regions.length]));
+    return { regions, totalRegions: regions.length, skippedRegions: 0, judgedPerClause };
+  }
+  const clauseCount = hunkClauseIds.length;
+  const base = Math.max(0, Math.floor(maxHunkCalls / clauseCount));
+  const perClauseQuota =
+    base >= 1
+      ? hunkClauseIds.map(() => base)
+      : hunkClauseIds.map((_, i) => (i < maxHunkCalls ? 1 : 0));
+  const judgedPerClause = new Map(hunkClauseIds.map((id, i) => [id, Math.min(regions.length, perClauseQuota[i]!)]));
+  const maxJudged = Math.max(0, ...judgedPerClause.values());
+  const kept = regions.slice(0, maxJudged);
+  return { regions: kept, totalRegions: regions.length, skippedRegions: regions.length - kept.length, judgedPerClause };
+}
+
+/**
+ * Flow 326, AC3: which of `hunkClauseIds` still have a judged slot at
+ * `index` (0-based) into `boundHunkRegions`'s own `regions` prefix — a clause
+ * whose quota is shorter than another's stops appearing once `index` passes
+ * its own quota, letting a caller score one region for only the clauses that
+ * still want it (the per-clause floor means quotas can differ per clause).
+ */
+export function activeClausesAt(judgedPerClause: ReadonlyMap<string, number>, index: number, hunkClauseIds: readonly string[]): readonly string[] {
+  return hunkClauseIds.filter((id) => (judgedPerClause.get(id) ?? 0) > index);
+}
+
+// ---------------------------------------------------------------------------
+// Flow 326, AC1/AC2: per-clause aggregation — one row per clause, not one
+// row per hunk × clause. Pure, synchronous, no I/O.
+// ---------------------------------------------------------------------------
+
+export interface ConformAggregateHunk {
+  readonly location: ConformHunkLocation;
+  readonly probability: number;
+}
+
+export interface ConformClauseAggregate {
+  readonly clause_id: string;
+  readonly state_kind: ReferenceClause["state_kind"];
+  readonly status: ConformClauseStatus;
+  /** 0 for a not-checkable/not-evaluated clause, or a pr/report-kind clause (which is never scored per-hunk). */
+  readonly hunksJudged: number;
+  readonly hunksBelowThreshold: number;
+  /** The single worst-scoring judged hunk, hunk-kind clauses only. */
+  readonly worst?: ConformAggregateHunk;
+  /** Up to `--max-hunks` further violating hunk locations, beyond `worst`, most severe first. */
+  readonly furtherViolations: readonly ConformAggregateHunk[];
+  /** A single-verdict clause's own evidence (pr/report-kind, or not-checkable); empty for a hunk-kind clause — see `detail`. */
+  readonly factLines: readonly string[];
+  readonly probability?: number;
+  readonly decisive?: { readonly satisfied: boolean; readonly reason: string };
+  readonly reason?: string;
+  /** The raw verdict the worst/probability figures above were computed from — reused for `--explain`, never rendered directly. */
+  readonly worstVerdict?: ConformVerdict;
+  /** The full per-hunk detail behind this row — always available under `--json` (nested per clause) and `--detail`. */
+  readonly detail: readonly ConformVerdict[];
+}
+
+function byAscendingProbability(a: ConformVerdict, b: ConformVerdict): number {
+  return (a.probability ?? 0) - (b.probability ?? 0);
+}
+
+/**
+ * AC2: group verdicts by `clause_id` and reduce each group to one row.
+ *
+ * - A not-checkable/not-evaluated clause has exactly one verdict (never asked
+ *   per-hunk) and passes through unchanged.
+ * - A pr/report-kind clause likewise has exactly one verdict (its state is
+ *   shared across the whole target, not per-hunk) and passes through with its
+ *   own probability/decisive/factLines at the top level.
+ * - A hunk-kind clause can have one verdict per judged hunk (AC3's budget
+ *   permitting): `likely-violated` when ANY retained hunk falls below the
+ *   threshold, `satisfied` only when EVERY judged hunk is at or above it
+ *   (ties — probability === threshold — read as satisfied, matching
+ *   `evaluatedVerdict`'s own `>=` comparison, computed once there and never
+ *   re-derived here). An empty set of hunk verdicts cannot reach this
+ *   function at all — `notEvaluatedVerdict` is what a caller uses instead —
+ *   so "no hunks" is covered by the not-evaluated pass-through above.
+ */
+export function aggregateConformVerdicts(verdicts: readonly ConformVerdict[], maxHunks: number = DEFAULT_MAX_HUNKS): ConformClauseAggregate[] {
+  const order: string[] = [];
+  const byClause = new Map<string, ConformVerdict[]>();
+  for (const verdict of verdicts) {
+    let group = byClause.get(verdict.clause_id);
+    if (group === undefined) {
+      group = [];
+      byClause.set(verdict.clause_id, group);
+      order.push(verdict.clause_id);
+    }
+    group.push(verdict);
+  }
+
+  return order.map((clauseId): ConformClauseAggregate => {
+    const group = byClause.get(clauseId)!;
+    const first = group[0]!;
+
+    if (first.status === "not-checkable" || first.status === "not-evaluated") {
+      return {
+        clause_id: first.clause_id,
+        state_kind: first.state_kind,
+        status: first.status,
+        hunksJudged: 0,
+        hunksBelowThreshold: 0,
+        furtherViolations: [],
+        factLines: first.factLines,
+        detail: group,
+        ...(first.reason !== undefined ? { reason: first.reason } : {}),
+      };
+    }
+
+    const withLocation = group.filter((v) => v.location !== undefined);
+    if (withLocation.length === 0) {
+      // pr/report-kind: exactly one verdict, no per-hunk multiplicity.
+      return {
+        clause_id: first.clause_id,
+        state_kind: first.state_kind,
+        status: first.status,
+        hunksJudged: 0,
+        hunksBelowThreshold: 0,
+        furtherViolations: [],
+        factLines: first.factLines,
+        detail: group,
+        worstVerdict: first,
+        ...(first.probability !== undefined ? { probability: first.probability } : {}),
+        ...(first.decisive !== undefined ? { decisive: first.decisive } : {}),
+      };
+    }
+
+    // hunk-kind: one verdict per judged hunk.
+    const sorted = [...withLocation].sort(byAscendingProbability);
+    const worstVerdict = sorted[0]!;
+    const belowThreshold = withLocation.filter((v) => v.status === "likely-violated").length;
+    const status: ConformClauseStatus = belowThreshold > 0 ? "likely-violated" : "satisfied";
+    const furtherViolations: ConformAggregateHunk[] = sorted
+      .slice(1)
+      .filter((v) => v.status === "likely-violated")
+      .slice(0, maxHunks)
+      .map((v) => ({ location: v.location!, probability: v.probability ?? 0 }));
+
+    return {
+      clause_id: first.clause_id,
+      state_kind: first.state_kind,
+      status,
+      hunksJudged: withLocation.length,
+      hunksBelowThreshold: belowThreshold,
+      worst: { location: worstVerdict.location!, probability: worstVerdict.probability ?? 0 },
+      furtherViolations,
+      factLines: [],
+      detail: group,
+      worstVerdict,
+    };
+  });
 }

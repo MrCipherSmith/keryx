@@ -1,0 +1,8 @@
+{
+  "answers": {
+    "hunks-1": { "type": "noul", "noul": 0.2 },
+    "hunks-2": { "type": "noul", "noul": 0.7 },
+    "change-limits-1": { "type": "noul", "noul": 0.9 }
+  },
+  "usage": { "input_tokens": 400, "output_tokens": 10, "cost": 0.00001 }
+}
