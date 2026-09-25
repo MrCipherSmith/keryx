@@ -1728,6 +1728,174 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
   chars) after translation — export never rewrites content past those
   limits.
 
+## Implementation notes: Wave 4 batch 5 (flow 337)
+
+Four new stack packs authored under `src/gdskills/bundled/stacks/`:
+`php-laravel`, `ruby-rails`, `c-cpp`, `sql-db` — the same shape as batches 1-2
+(`pack.json`, `rules/*.mdc`, `skills/*/SKILL.md` + `evals.json`,
+`governance/scout.json`, `agent-refs.json`). Every pack ships
+`stability: "experimental"`. **Superseded below**: this note originally said
+the honest DeepSeek gate had not run yet — it has now run (Phase B, after PR
+#719 and flow 334 landed on main); see "Implementation notes: Wave 4 batch 5,
+Phase B (flow 337)" further down for the outcome.
+
+- **Family/extends judgment calls.** The target-stack table's "extends:
+  lang:php"/"extends: lang:ruby" presuppose `lang:php`/`lang:ruby` packs that
+  do not exist yet in this batch (only `php-laravel`/`ruby-rails` were
+  scoped). Both ship as self-contained `family: "framework"` packs with no
+  `extends` field — general PHP/Ruby idiom lives alongside the
+  Laravel/Rails-specific content in the one pack, the same shape `ts-js-node`
+  had before `react` extended it. `c-cpp` is `family: "language"`,
+  standalone. `sql-db` is `family: "capability"`, standalone; its rules
+  narrow the existing generic `database-patterns.mdc` core rule in prose (not
+  via `extends`, since that rule is not itself a stack pack).
+- **Detection tags already existed.** `src/stack/detect.ts`'s
+  `STACK_DETECT_TAGS` already carried `php`, `laravel`, `ruby`, `rails`,
+  `c-cpp`, `sql` before this flow — no stack-detection code changes were
+  needed; each pack's `detectionMarkers` reuses these tag names directly.
+- **`sql-db`'s scope answers the "Open questions" note below in part**: this
+  batch ships `sql-db` covering Postgres and MySQL (generic SQL); Mongo is
+  out of scope (not a SQL engine). Per-engine marker detection in `keryx
+  stack detect` (rather than a manually declared component) remains an open
+  question, unchanged by this batch.
+- **`sql-db`'s `paths:` scope is `.sql` files only.** Framework-specific
+  migration files that are not literally `.sql` (Rails `.rb` migrations,
+  Laravel `.php` migrations, a Python ORM's `.py` migration scripts) are
+  covered by their own stack pack's rules, not `sql-db`'s — kept deliberately
+  narrow since `STACK_EXTENSIONS`' lint matches only a glob's trailing file
+  extension, never a directory name.
+- **`migrate` left empty in all four packs.** No pack found a
+  framework-major-version-upgrade concern distinct enough, at this batch's
+  effort budget, to match the bar `react-upgrade-migration` set. `sql-db` in
+  particular is *about* database migrations at the `implement`-skill level
+  already; the pack.json `migrate` lifecycle bucket is a different concept
+  (upgrading the stack/framework's own major version), which `sql-db` has no
+  analog of — not to be conflated with schema-migration authoring.
+- **A scout overlap between two new packs — resolved in Phase B, see below.**
+  `keryx skills scout` initially recorded a `"use"` decision for
+  `php-laravel-code-review` against `ruby-rails-code-review` (0.58 overlap),
+  with a justification recorded per the F21 policy. This batch's scout
+  scorer predated flow 334's negation-aware trigger scorer at authoring time;
+  Phase B re-ran it on the landed scorer and found the overlap genuine
+  (boilerplate template similarity, not a scorer artifact) — resolved by
+  rewording, not by policy exception. See "Implementation notes: Wave 4
+  batch 5, Phase B" below.
+- **Offline verification (Phase A gate, not the honest model gate).** `bun
+  test src/gdskills/stack-packs.test.ts src/gdskills/governance/
+  authoring-lint.test.ts src/gdskills/governance/authoring-lint-guard.test.ts
+  src/gdskills/manifest/manifest.test.ts` were green for all four new packs
+  at authoring time. **Correction (Phase B):** the `go`/`python` stable-pack
+  gate failure seen at this point was NOT pre-existing/unrelated as first
+  claimed here — `checkStablePackGate` re-scores trigger scenarios live
+  against the CURRENT whole catalog, and this batch's own new trigger
+  vocabulary was the cause (see Phase B notes below for the root cause and
+  fix). `src/gdskills/stack-pack-eval-integrity.test.ts`'s I1-I9 checks all
+  passed; only the AG (anti-gaming judge recording) checks failed, expected
+  at that point since calibration was Phase B work.
+- **Shared wiring.** `install-manifest.json` gained `<id>-rules`/`<id>-skills`
+  modules, a `framework:php-laravel` / `framework:ruby-rails` / `lang:c-cpp`
+  / `capability:sql-db` component, and a `stackDetectionAware` profile per
+  pack (all `stability: "experimental"`), plus the `full` profile's module/
+  component lists. `STACK_EXTENSIONS` in `src/gdskills/governance/
+  authoring-lint.ts` gained `php-laravel: ["php"]`, `ruby-rails: ["rb"]`,
+  `c-cpp: ["c","h","cpp","cc","cxx","hpp","hxx"]`, `sql-db: ["sql"]`.
+
+## Implementation notes: Wave 4 batch 5, Phase B (flow 337)
+
+After PR #719 (batch 2's shared infrastructure — `extends` as an array, I11,
+`extendsList`) and flow 334 (the negation-aware trigger scorer, #725) merged
+to main, flow 337 rebased and ran calibration and the honest gate.
+
+- **Stable-pack collision, root cause and fix.** `checkStablePackGate`
+  re-scores every pack's trigger scenarios live against the CURRENT whole
+  bundled catalog — adding this batch's four packs pushed `go`/`python` out
+  of their gate-cleared state, which the flow initially and incorrectly
+  reported as a pre-existing, unrelated failure (see the correction above).
+  Root cause: `c-cpp-build-fix`'s `"UndefinedBehaviorSanitizer reports signed
+  overflow"` trigger contributed the literal token `undefined`, beating
+  `go-build-fix`'s own `"go build is failing with an undefined symbol error"`
+  trigger prompt; `c-cpp-build-fix`'s `"ThreadSanitizer reports a data race"`
+  trigger shared `data`+`race` with `go-build-fix`'s `-race` trigger; and
+  `sql-db-testing`'s generic `database`/`fixture` vocabulary out-scored
+  `python-testing`'s own pytest-fixture trigger. Fixed honestly in this
+  batch's own packs only — `go`/`python`'s evals were never touched:
+  `c-cpp-build-fix`'s two colliding triggers were reworded (`UBSan` in place
+  of the literal `Undefined...` spelling; the data-race trigger reworded to
+  drop the literal "data race" phrase while keeping the same TSan scenario),
+  and `sql-db-testing`'s description/triggers were narrowed to state its real
+  scope (schema/engine-level test tooling only, explicitly "Not for a
+  language/ORM-specific test-fixture convention such as a pytest fixture, an
+  RSpec factory, or a Laravel model factory"). `checkStablePackGate` for
+  `go` and `python` confirmed `status: "pass"` after the fix, and stayed
+  clean through every later commit in this batch.
+- **I11, now enforced for this batch.** I11 (Jaccard trigger-overlap floor
+  against a skill's own frontmatter `triggers:`) exists as of flow 334 and
+  was added to `I11_ENFORCED_PACKS` for all four batch-5 packs (previously
+  only the five batch-2 packs). The initial run found 38 failures — evals.json
+  positive prompts too textually similar to their own frontmatter triggers —
+  reworded into concrete, distinct, realistic scenarios (not synonym swaps).
+  All 38 cleared; the full integrity suite (I1-I11, AG) is 3593/3593 passing
+  offline as of the final commit in this batch.
+- **Scout overlap, resolved.** Re-running `skills scout` for
+  `php-laravel-code-review` against `ruby-rails-code-review` on the landed
+  negation-aware scorer still showed 0.59 overlap ("use" decision) — genuine
+  boilerplate-template duplication ("Use when reviewing a `<X>` change for
+  framework-specific risks -- ... Read-only, no edits." was near-identical
+  sentence shape in both), not a scorer artifact. Fixed by rewording
+  `php-laravel-code-review`'s description to lead with concrete
+  Eloquent/Blade/`VerifyCsrfToken` mechanism names; re-scores at ~0.28-0.29,
+  decision now `"create"`.
+- **Calibration.** `keryx skills judge-check <pack>/<skill> --judge
+  deepseek:deepseek-chat --scope bundled --samples 3 --record` for all 16
+  skills across the four packs — every judge scenario's eight canned answers
+  graded unanimously (3/3 samples) to the expected verdict, exit 0 for all
+  16, zero mismatches.
+- **Honest 10-trial DeepSeek gate — outcome: all four packs stay
+  `experimental`.** `keryx skills eval <pack>/<skill> --scope bundled
+  --runner deepseek:deepseek-chat --judge deepseek:deepseek-chat --strictness
+  high --trials 10` for all 16 skills. Every skill's `verdict` is `fail`,
+  driven by `triggerAccuracy` in every case, not behavior content overall —
+  but three of `ruby-rails`' eight behavior scenarios scored below 1.0 on
+  this run: `ruby-rails-build-fix#no-rubocop-disable-suppression` scored 0.4
+  (below the 0.8 pack floor on its own, so this skill would also fail on
+  behavior alone this run), `ruby-rails-testing#no-sleep-for-jobs` scored
+  0.8, and `ruby-rails-testing#stub-external-boundary` scored 0.9.
+  `sql-db-implementation`'s weakest scenario scored 0.8, `c-cpp-
+  implementation`'s scored 0.9. Every other ran behavior scenario across all
+  16 skills scored 1.0. `sql-db-code-review` was the worst on trigger
+  accuracy (0/7 true-positive, 3/7 false-
+  positive — essentially no correct routing). A first attempt found 13
+  trigger-negative false positives; all were genuine collisions (a query
+  naming a stack this pack doesn't cover, or a same-pack implementation/
+  testing boundary) and got one true, general "Not for X (use Y instead)"
+  description sentence each, per the standing rule that a post-gate content
+  change may only state a skill's real scope, never react to which prompt
+  failed and never touch `evals.json`. **Correction (round 1 review, M1):**
+  none of these ten clauses moved `triggerAccuracy` at all, cross-category or
+  same-pack alike — a direct diff of every skill's `(truePositive,
+  falsePositive)` pair between the two raw gate runs is identical for all 16
+  skills, with no exception. `stripExclusionClauses` (flow 334) removes an
+  entry's own "Not for X" sentence from its scored coverage tokens before
+  either run's trigger-accuracy check, and none of the added words (Rust,
+  Django, Prisma, "tests") appeared anywhere else in these descriptions, so
+  each clause contributes exactly zero coverage with or without it — the fix
+  is inert on this metric by the scorer's own design. The clauses are kept
+  as true, freestanding scope statements, not as something that changed the
+  gate outcome. No trigger-positive under-triggering was "fixed" at all: it
+  is recorded as genuine routing weakness, the sanctioned outcome per the
+  standing rule, matching batch-1's original all-four-failed first honest
+  run. `governance/eval.json` (pack-
+  level `{schemaVersion, reports}`) is written verbatim from the raw runs for
+  all four packs; each `agent-refs.json`'s note now states the real outcome
+  (gate ran, failed on trigger accuracy) instead of "gate not yet run"; no
+  generated `<stack>-code-auditor`/`<stack>-build-fixer` pair ships for any
+  of the four, and `keryx agents generate --stack <id>` refuses each with
+  `stack-pack-not-gate-cleared`, confirmed directly.
+- **Stack coverage.** Unchanged by this batch — four new packs exist with
+  full authored content (rules + skills + evals + governance), but none
+  cleared the honest gate, so none counts toward "cleared" coverage. This
+  mirrors batch 1's first honest run exactly.
+
 ## Open questions
 
 - Should `keryx stack detect` walk `workspaces` globs at all (even bounded to

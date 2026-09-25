@@ -1,0 +1,93 @@
+---
+extends: common
+paths: ["**/*.rb", "**/*.erb"]
+metadata:
+  origin: authored
+---
+
+# Ruby on Rails patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+Rails application design and its common anti-patterns. Applies to
+`*.rb` and `*.erb` files.
+
+## MVC boundaries
+
+- A controller action orchestrates: it reads params, calls into a
+  model/service, and renders/redirects — it does not contain business
+  logic (validation rules, multi-step workflows, external API calls)
+  inline in the action body.
+- A view renders presentation only; move any non-trivial conditional or
+  data-shaping logic in a view into a helper or a presenter/decorator
+  object instead of embedded Ruby blocks doing real work.
+- `ApplicationRecord` models hold persistence concerns (validations,
+  associations, scopes) and behavior that genuinely belongs to the
+  record itself; a model accumulating callbacks that orchestrate
+  unrelated side effects (send an email, call a third-party API, update
+  a different model) is a "fat model" — extract that orchestration into
+  a service object or an `ActiveJob`.
+
+## Concerns
+
+- A `Concern` (`app/models/concerns`, `app/controllers/concerns`) should
+  bundle genuinely reusable, cohesive behavior shared by more than one
+  class — not become a dumping ground for one model's unrelated methods
+  split out just to shrink the file. If nothing else in the app is ever
+  going to `include` it, it is not a concern, it is the class's own
+  method.
+- Name a concern for the *capability* it adds (`Archivable`,
+  `Sluggable`), not for the model it happens to have been extracted
+  from.
+
+## Service objects and fat controllers/models
+
+- When an action's logic spans multiple models, calls an external
+  service, or has enough branching to need its own tests independent of
+  the controller, extract a plain Ruby service object (a
+  `SomethingVerb` class with one public entry point, e.g. `.call`) that
+  the controller/model delegates to — do not grow the controller action
+  or a model callback to hold it, and match the app's own existing
+  service-object convention (directory, base class, `.call` vs `#call`)
+  if one already exists rather than inventing a second style.
+- A service object should be easy to unit test without spinning up a
+  full request — keep framework concerns (params, session, rendering)
+  out of it; pass it plain values or model instances instead.
+
+## ActiveRecord query patterns
+
+- Eager-load an association before iterating over it in a loop
+  (`Book.includes(:author)`), not after the N+1 has already happened —
+  prefer `includes` (Rails picks `preload` or `eager_load` for you) over
+  hand-choosing one of the lower-level methods unless you have a
+  specific reason to force one.
+- Push filtering/aggregation into the database (`where`, `group`,
+  `count`, a named `scope`) rather than loading full ActiveRecord
+  objects into Ruby and filtering/reducing them in memory.
+- A named `scope` (`scope :published, -> { where(published: true) }`)
+  for a query fragment reused in more than one place, instead of
+  copy-pasting the same `where` clause across controllers/models.
+
+## Background jobs
+
+- An `ActiveJob` should be idempotent — most production queue adapters
+  (Sidekiq, SQS) are at-least-once, so a retried or duplicated job run must not
+  double-charge, double-send, or otherwise corrupt state; guard with a
+  uniqueness check, an idempotency key, or an upsert instead of assuming
+  `perform` runs exactly once.
+- Pass simple identifiers (an id) into a job's `perform`, not a whole
+  ActiveRecord object — the record can change or be deleted between
+  enqueue and execution (GlobalID serializes it, but the job should
+  re-fetch and handle a missing record rather than trust a stale copy).
+
+## Anti-patterns to flag
+
+- A "fat controller" action with inline business logic, or a "fat
+  model" whose callbacks orchestrate unrelated side effects — extract a
+  service object per above.
+- A concern used purely to split up one class's file size rather than to
+  share real behavior.
+- Raw SQL string interpolation instead of ActiveRecord's parameterized
+  query interface or `sanitize_sql` (see `rules/security.mdc`).
+- A `default_scope` that silently changes every query against a model —
+  usually surprising at a call site far from the model definition;
+  prefer an explicit named scope callers opt into.

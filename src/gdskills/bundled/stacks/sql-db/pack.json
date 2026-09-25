@@ -1,0 +1,40 @@
+{
+  "id": "sql-db",
+  "family": "capability",
+  "modules": ["sql-db-rules", "sql-db-skills"],
+  "detectionMarkers": ["sql"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 337, Wave 4 batch 5"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["sql-db-implementation"],
+    "test": ["sql-db-testing"],
+    "review": ["sql-db-code-review"],
+    "build-fix": ["sql-db-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "SQL / Database",
+    "auditFocus": [
+      "a query built with string concatenation or f-string/template interpolation of a user-influenced value instead of a parameterized placeholder or prepared statement, including inside an ORM's raw-SQL/raw-query escape hatch",
+      "an ADD COLUMN ... NOT NULL with no default, or a SET NOT NULL with no prior NOT VALID CHECK + VALIDATE CONSTRAINT step, on a table that can have existing rows",
+      "a WHERE/JOIN/ORDER BY column with no supporting index, or a composite index whose column order does not match the query's actual equality-then-range filter shape",
+      "a loop that issues one query per row (a classic N+1) where a JOIN, an IN-clause batch, or eager loading would do it in one round trip",
+      "a migration with no reverse/down operation, or one that is not safe to run twice (missing IF EXISTS/IF NOT EXISTS on a DDL statement that isn't naturally idempotent)",
+      "a transaction held open across a slow external call (an HTTP request, a queue publish, a sleep) instead of being committed before or reopened after it"
+    ],
+    "buildCommands": [
+      "EXPLAIN (ANALYZE, BUFFERS) <query>  -- Postgres: confirm no unexpected sequential scan on the touched tables",
+      "EXPLAIN ANALYZE <query>  -- MySQL: confirm the query uses the intended index",
+      "the project's own migration runner in dry-run/plan mode when one exists, before applying against a real database"
+    ],
+    "fixGuardrails": [
+      "Never fix a slow query by adding an index without checking its column order against the query's actual WHERE/JOIN/ORDER BY shape first.",
+      "Never rewrite a parameterized query into a string-concatenated one to work around a driver quirk; fix the parameter binding instead.",
+      "Never resolve a migration failure by dropping the failing constraint or making a NOT NULL column nullable again without saying so explicitly in the report.",
+      "Never skip or delete a migration step to reach a green migration run."
+    ]
+  }
+}

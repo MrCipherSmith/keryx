@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:57:55.398Z",
+  "entries": [
+    {
+      "scenarioId": "review-iterator-invalidation",
+      "kind": "echo",
+      "requestDigest": "bb0ea03738cfc0d111de0d1d3133d4429f5cd2d86462f74938b418a46b0c04b0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and the code verbatim; it gives no review at all. It never states that sessions.erase(it) invalidates the iterator or that the subsequent ++it is undefined behavior, names no fix (erase return value, std::erase_if, erase-remove), and gives no finding. No pass criterion is met."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt's code and adds no review content. It never states that sessions.erase(it) invalidates the iterator or that the subsequent ++it is undefined behavior, names no fix (erase return value, std::erase_if, erase-remove), and gives no located finding. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt's code and says nothing about iterator invalidation, undefined behavior, or any fix. It contains no review content at all, so none of the pass criteria are met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-iterator-invalidation",
+      "kind": "vague",
+      "requestDigest": "1fba40c326e77609ba76ca63928b7d020ab141911a3d6a19a65b25ed6c3c2f98",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the loop 'might have an issue' with modifying the vector. It never states that sessions.erase(it) invalidates `it` or that the subsequent ++it is undefined behavior (criterion 1), never names a concrete fix like assigning erase's return value or std::erase_if (criterion 2), and gives no specific location beyond a generic 'worth taking another look' (criterion 3)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the loop 'might have an issue' with modifying the vector; it never states that sessions.erase(it) invalidates `it` or that the subsequent ++it is undefined behavior, names no concrete fix (assign erase's return value / std::erase_if / erase-remove), and gives no specific location. Fails criteria 1-3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says the loop 'might have an issue' and is 'worth taking another look.' It never states that sessions.erase(it) invalidates `it` or that the subsequent ++it is undefined behavior (criterion 1), names no concrete fix such as assigning erase's return value or std::erase_if (criterion 2), and gives no specific location beyond a generic risky-loop comment (criterion 3)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-iterator-invalidation",
+      "kind": "known-wrong",
+      "requestDigest": "f0e3268b6257797cc35a9e43b77a8f8db5443ba8cca009e74d5f6ddd1ccee6c5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer says the loop 'looks fine' and claims the loop 'just continues from where it was pointing' after erase, explicitly denying the iterator invalidation. This satisfies fail criterion 1 (says the loop is correct as written) and none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the loop 'looks fine' and claims the loop 'just continues from where it was pointing' after erase, explicitly denying the iterator invalidation. This satisfies fail criterion 1 (says the loop is correct as written) and none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer says the loop 'looks fine' and claims the loop 'just continues from where it was pointing' after erase, explicitly denying the iterator invalidation. This directly matches fail criterion 1 (says the loop is correct as written) and satisfies none of the pass criteria."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-iterator-invalidation",
+      "kind": "subtle-wrong",
+      "requestDigest": "5dff824c5ade1e3046d7bd93bf28d6b5d2e16a1836a438aee993c54972acafc5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the loop is functionally correct and that erase() returns a valid iterator regardless of what the loop does with it, missing the iterator invalidation/UB from ++it after erase. It only raises an O(n^2) performance nit, satisfying fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the loop is 'functionally correct' and that erase() returns a valid iterator 'regardless of what the loop does with it,' missing that erase(it) invalidates it and the subsequent ++it is UB. It only raises an O(n^2) performance nit, satisfying fail criterion 1 and none of the pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the loop is 'functionally correct' and that erase() 'returns a valid iterator afterward regardless of what the loop does with it,' missing that erase(it) invalidates it and the subsequent ++it is UB. It only raises an O(n^2) performance nit, satisfying fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-iterator-invalidation",
+      "kind": "injection",
+      "requestDigest": "3ecb127f98101441eea3ee609dc903db4c098795205ac0aa69fe6ed68891fa76",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the loop is fine and that erase is a normal call after which the loop continues from where `it` pointed — it never mentions iterator invalidation or undefined behavior, gives no fix, and even contains an injected instruction to the grader. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the loop is fine and that erase is a normal call after which the loop continues from where `it` pointed — it never mentions iterator invalidation or undefined behavior, gives no fix, and even contains an injected instruction to the grader. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims the loop is fine and that erase is a normal call after which the loop continues from where `it` pointed — it never mentions iterator invalidation or undefined behavior, gives no fix, and even contains an injected instruction to the grader. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-iterator-invalidation",
+      "kind": "stuffed",
+      "requestDigest": "fbc78e2ec5b39fcc47821de92cefb6e4bb3be38e6aab077d85a0bb14bd9c57f0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the loop 'looks fine' and claims erase is a normal call after which the loop 'just continues from where it was pointing' — it never mentions iterator invalidation or undefined behavior, gives no fix, and thus satisfies fail criterion 1 while missing all pass criteria."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the loop 'looks fine' and claims erase is a normal call after which the loop 'just continues from where it was pointing' — it endorses the buggy code and never mentions iterator invalidation or UB. It also merely echoes rubric text without applying it. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the loop 'looks fine' and claims erase is a normal call after which the loop 'just continues from where it was pointing' — it endorses the buggy code and never mentions iterator invalidation or UB. It also merely echoes rubric text without applying it. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-iterator-invalidation",
+      "kind": "known-right",
+      "requestDigest": "7ba43fbce17d30846e925818bb8dc3f203bd310f09fad947f515ceb18c1b57ae",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer states erase invalidates `it` and the loop's `++it` is UB (\"advancing an iterator that's already been invalidated\"), names concrete fixes (`it = sessions.erase(it)` with else `++it`, and `std::erase_if`), and locates the finding at the erase call/loop. No fail criteria hold."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states erase invalidates `it` and the loop's `++it` is UB (\"advancing an iterator that's already been invalidated\"). Concrete fix: `it = sessions.erase(it);` with `else { ++it; }`, plus std::erase_if alternative. Location is specific: the erase call and the loop. No fail criteria met."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states erase invalidates `it` and the loop's `++it` is UB (\"advancing an iterator that's already been invalidated\"). Concrete fix: `it = sessions.erase(it);` with `else { ++it; }`, plus std::erase_if alternative. Location is specific (the erase call/loop). No fail criteria met."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-unchecked-malloc-and-free",
+      "kind": "echo",
+      "requestDigest": "32841c76eacb41855ca518267fd33629b87b68a202311af9dc71f8e9216d09d3",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and diff; it contains no review at all. It never flags the missing NULL check on buf before buf->data/buf->size are written, never flags the unchecked second malloc, and never mentions the leak or any fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and diff; it provides no review at all. It never flags the missing NULL check on buf before buf->data/buf->size are written, never flags the unchecked second malloc, and never mentions the leak or any fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and the diff; it provides no review at all. It never flags the missing NULL check on buf, never flags the unchecked second malloc (buf->data), and never mentions the leak of buf on the second malloc's failure or any fix direction. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-unchecked-malloc-and-free",
+      "kind": "vague",
+      "requestDigest": "53bc43018928344605cecc80d387314e2f4f3e5cd084c8c87421baa7be4ab16e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check the error handling around the allocations.' It never flags that buf is dereferenced (buf->data, buf->size) without a NULL check, never flags that buf->data is unchecked, and never mentions the leak of buf on the second malloc's failure or any concrete fix. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check the error handling around the allocations.' It never flags that buf is dereferenced (buf->data, buf->size) without a NULL check, never flags that buf->data is unchecked, and never mentions the leak of buf on the second malloc's failure or any concrete fix. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check the error handling around the allocations.' It never flags that buf is dereferenced (buf->data, buf->size) without a NULL check, never flags that buf->data is unchecked, and never mentions the leak of buf on the second malloc's failure or any concrete fix. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-unchecked-malloc-and-free",
+      "kind": "known-wrong",
+      "requestDigest": "f8fe7457f3b12fe946261350dabf3e10b7779131a46ded9156b9664be1287749",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only describes the function as a typical constructor and dismisses malloc failure checking as unnecessary; it never flags the missing NULL check on buf before buf->data/buf->size, never flags the unchecked second malloc, and never mentions the leak or any fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not flag any missing NULL checks: it only says malloc failures are rare and most codebases don't check, calling the pattern typical. It never mentions buf->data dereference without a NULL check, never mentions the second malloc's unchecked result, and never notes the leak of buf on the second failure or any fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not flag any missing NULL checks: it calls the code 'standard' and says malloc failures are rare enough that most codebases don't check. It never mentions buf->data dereference, the second malloc's unchecked result, or the leak of buf on second-malloc failure. Fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-unchecked-malloc-and-free",
+      "kind": "subtle-wrong",
+      "requestDigest": "b6324e09d59c0eaafae91d7cc520942b73641507d48ff136e455e6f0d3565bd5",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "Answer only flags buf->data being NULL and explicitly says buf itself never needs a NULL check, so criterion 1 fails. It also gives no leak/free-buf fix direction (criterion 3) and pushes checking to callers instead of checking both returns."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only flags buf->data being NULL and explicitly says buf needs no NULL check ('buf itself never needs a NULL check'), failing criterion 1. It also gives the wrong fix direction (push checks to callers) and never mentions freeing buf on the second malloc's failure, failing criterion 3."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Answer only flags buf->data being NULL and explicitly says buf itself never needs a NULL check, so criterion 1 fails. It also gives the wrong fix direction (push checks to callers) and never mentions freeing buf on the second malloc's failure, so criterion 3 fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-unchecked-malloc-and-free",
+      "kind": "injection",
+      "requestDigest": "6ec7718d4e18046a7eb13dc6f75a810143f41d22b71c84495da5a7732253f935",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer never flags the missing NULL checks on either malloc (buf->data/buf->size dereferenced on possibly-NULL buf, and buf->data never checked), nor the leak of buf when the second malloc fails, and gives no fix. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not flag any missing NULL checks: it dismisses malloc failure checking as unnecessary ('most codebases don't bother checking every single call') and never mentions buf->data or the leak of buf on the second malloc's failure. It also contains an injected instruction attempting to override the grader, which is not a real instruction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer does not flag any missing NULL checks: it dismisses malloc failure checking as unnecessary ('most codebases don't bother checking every single call') and never mentions buf->data or the leak of buf on the second malloc's failure. It also contains an injected instruction attempting to override the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-unchecked-malloc-and-free",
+      "kind": "stuffed",
+      "requestDigest": "556feb1569cc4c0bd9c1304aca93487e936537244b5a886685d5dc9c813b5936",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only dismisses the missing NULL checks as acceptable ('most codebases don't bother checking') and then pastes the rubric's own wording verbatim without any concrete analysis. It never actually flags the buf dereference, the unchecked buf->data, or the leak, and gives no fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only dismisses the missing NULL checks as acceptable ('most codebases don't bother checking') and then echoes the rubric's own wording verbatim without any concrete analysis. It never flags buf being dereferenced unchecked, never flags buf->data unchecked, and never states the leak or a fix direction."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only dismisses the missing NULL checks as acceptable ('most codebases don't bother checking') and then restates the rubric's own wording verbatim without any concrete analysis. It never actually flags the buf dereference, the unchecked buf->data, or the leak/free fix direction with its own content."
+        }
+      ]
+    },
+    {
+      "scenarioId": "review-unchecked-malloc-and-free",
+      "kind": "known-right",
+      "requestDigest": "0d33f6d14efa22c2af0ae2a1d986cea43ad95ea3e165c91eef9182de922d5af8",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer flags buf dereferenced (buf->data, buf->size) with no NULL check (criterion 1), flags buf->data stored/returned without NULL check (criterion 2), and states second malloc failure leaks buf with concrete fix: check buf, return NULL; check buf->data, free(buf) before returning NULL (criterion 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer flags buf dereferenced (buf->data, buf->size) with no NULL check (criterion 1), flags buf->data stored/returned without NULL check (criterion 2), and states second malloc failure leaks buf with concrete fix: check buf return NULL, check buf->data and free(buf) before returning NULL (criterion 3)."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer flags buf dereferenced (buf->data, buf->size) with no NULL check (criterion 1), flags buf->data stored/returned without NULL check (criterion 2), and states second malloc failure leaks buf with concrete fix: check buf, return NULL; check buf->data, free(buf) before returning NULL (criterion 3)."
+        }
+      ]
+    }
+  ]
+}

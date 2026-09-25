@@ -1,0 +1,82 @@
+---
+extends: common
+paths: ["**/*.php"]
+metadata:
+  origin: authored
+---
+
+# PHP / Laravel coding style
+
+Narrows `core-common-rules`' stack-agnostic style rules to modern PHP
+(8.2+) and Laravel (11/12/13) idiom. Applies only to `*.php` files —
+everything not PHP/Laravel-specific still comes from the common rules
+this file `extends`.
+
+## Naming and structure
+
+- Classes, interfaces, enums, and traits are `StudlyCase`; methods and
+  properties are `camelCase`; constants and enum cases are
+  `SCREAMING_SNAKE_CASE` unless the enum case is meant to read as a label.
+- Follow Laravel's default directory conventions
+  (`app/Models`, `app/Http/Controllers`, `app/Http/Requests`,
+  `app/Providers`, `app/Jobs`, `database/migrations`) rather than
+  inventing a parallel structure for the same kind of class.
+- A controller method stays thin: validate (via a Form Request), delegate
+  to a model/action/service, return a response — push business rules into
+  a model method, an action class, or a service, not the controller.
+- Type-hint every parameter, property, and return value that can be
+  typed; PHP 8.2+ intersection types and `never`/`static` return types are
+  fair game where they genuinely describe the contract.
+
+## PHP 8.2+ language features
+
+- `readonly` properties for value objects and anything constructed once
+  and never mutated (a DTO, an immutable config value) instead of a
+  mutable property guarded only by convention.
+- Native `enum` (backed by `string`/`int` when the value needs to persist
+  to a column or API payload) instead of class constants for a fixed set
+  of related values.
+- First-class callable syntax (`$this->method(...)`, `Str::slug(...)`)
+  instead of a string/array callable (`[$this, 'method']`) or an
+  unnecessary closure wrapper when passing a method as a callback.
+- Constructor property promotion (`public function __construct(private
+  readonly OrderRepository $orders) {}`) for simple DTOs and services
+  instead of repeating each property as a separate declaration plus
+  assignment.
+
+## Eloquent models
+
+- Declare `protected $fillable` (an explicit allowlist) or `protected
+  $guarded` on every model that is ever mass-assigned; do not leave a
+  model without either and rely on `Model::unguard()` outside of a
+  seeder/test context.
+- Cast attributes with the model's `casts()` method (or the `$casts`
+  property on codebases not yet migrated to it) rather than hand-parsing
+  dates/JSON/enums in accessors.
+- Put a relationship's return type on the method
+  (`: HasMany`, `: BelongsTo`, ...) so IDEs and static analysis can follow
+  it.
+
+## Controllers, routes, and requests
+
+- Route parameters use route-model binding
+  (`Route::get('/users/{user}', ...)` resolving to a typed `User $user`
+  parameter) instead of manually calling `User::findOrFail($id)` in every
+  controller method that already receives the bound model.
+- Validate every request that accepts user input through a Form Request
+  class (`php artisan make:request`) or `$request->validate([...])`, not
+  by reading raw `$request->all()`/`$request->input()` values straight
+  into model or database calls.
+- Register route-specific middleware with `->middleware(...)` on the
+  route/group; keep global middleware in `bootstrap/app.php`
+  (or `app/Http/Kernel.php` on codebases still on that structure) rather
+  than duplicating a global concern per-route.
+
+## Formatting
+
+- Follow PSR-12 spacing/brace conventions; run the project's configured
+  formatter (`./vendor/bin/pint` is Laravel's default) instead of
+  hand-formatting around one that is already configured.
+- One class per file, filename matching the class name, matching the
+  namespace to the directory per PSR-4 — do not add a second top-level
+  class/interface/enum to an existing file.

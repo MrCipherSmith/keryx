@@ -1,0 +1,42 @@
+{
+  "id": "ruby-rails",
+  "family": "framework",
+  "modules": ["ruby-rails-rules", "ruby-rails-skills"],
+  "detectionMarkers": ["ruby", "rails"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "flow 337, Wave 4 batch 5"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": ["ruby-rails-implementation"],
+    "test": ["ruby-rails-testing"],
+    "review": ["ruby-rails-code-review"],
+    "build-fix": ["ruby-rails-build-fix"],
+    "migrate": []
+  },
+  "agentProfile": {
+    "displayName": "Ruby on Rails",
+    "auditFocus": [
+      "a controller action that builds a model from raw params without strong parameters (params.expect/params.require+permit), enabling mass assignment",
+      "raw SQL built with string interpolation instead of ActiveRecord parameterized conditions or sanitize_sql",
+      "a loop over an association that triggers N+1 queries because includes/preload/eager_load was not used",
+      "raw/html_safe applied to a value that can contain user input, bypassing ERB's automatic HTML escaping",
+      "a controller action reachable without before_action :authenticate_user! (or the app's equivalent) or an authorization check",
+      "an ActiveJob whose perform is not safe to run twice (no idempotency key or guard) on an adapter that can redeliver it -- true of most production Active Job adapters",
+      "a credential, API key, or signing secret committed in source instead of Rails credentials or ENV"
+    ],
+    "buildCommands": [
+      "bundle exec rspec (or bin/rails test, whichever the project uses)",
+      "bundle exec rubocop",
+      "bin/rails db:test:prepare (when a migration changed the schema)",
+      "bundle exec brakeman -q (only when the project has Brakeman configured)"
+    ],
+    "fixGuardrails": [
+      "Never add rubocop:disable to silence an offense instead of fixing the underlying code.",
+      "Never edit db/schema.rb by hand to make a migration pass; fix or add the migration and re-run it.",
+      "Never loosen strong parameters (e.g. permit!) or drop a before_action authentication/authorization filter just to make a failing request test pass.",
+      "Never delete or skip a failing test to reach a green build."
+    ]
+  }
+}

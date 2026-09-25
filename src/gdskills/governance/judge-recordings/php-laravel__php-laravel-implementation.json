@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:54:03.860Z",
+  "entries": [
+    {
+      "scenarioId": "mass-assignment-validated-input",
+      "kind": "echo",
+      "requestDigest": "5884778bda61c5a0d5615a0df846882c241ec99981e84ec2a063183df93926d0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no create call from validated data, no Form Request or $request->validate([...]), and no mention of $fillable/$guarded. None of the three pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no create call from validated data, no Form Request or $request->validate([...]), and no mention of $fillable/$guarded. None of the three pass criteria are satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no content: no create call from validated data, no Form Request or $request->validate([...]), and no mention of $fillable/$guarded. None of the three pass criteria are satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-validated-input",
+      "kind": "vague",
+      "requestDigest": "bf54981ff832f1515d2e841c32c8769212e402b80edae0b02d840f71e521990e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to validate input and not trust the client. It never shows a concrete create call (e.g. Order::create($request->validated())), never names a Form Request or $request->validate([...]), and never states the Order model declares $fillable or $guarded. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to validate input and not trust the client. It never shows a concrete create call (e.g. Order::create($request->validated())), never names a Form Request or $request->validate([...]), and never states the Order model declares $fillable or $guarded. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to validate input and not trust the client. It never shows a concrete create call (e.g. Order::create($request->validated())), never names a Form Request or $request->validate([...]), and never states the Order model declares $fillable or $guarded. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-validated-input",
+      "kind": "known-wrong",
+      "requestDigest": "b74dc7137117ac1746eed5e8da8e35b9f792ce000fc9579e1b0a9ba0335cac52",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) directly, which is exactly fail criterion 1. It explicitly rejects a Form Request/validated() step, so pass criteria 1 and 3 are not met; it only mentions $fillable as a reason to skip validation, not as a bounded allowlist alongside validated data."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, directly triggering fail criterion 1. It also lacks a Form Request or $request->validate([...]) (criterion 3) and never shows a create call built from validated data (criterion 1)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, directly triggering fail criterion 1. It also lacks a Form Request or $request->validate([...]) (criterion 3) and never shows a create call built from validated data (criterion 1)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-validated-input",
+      "kind": "subtle-wrong",
+      "requestDigest": "69d884e6777b75d97cc7e2211e396707d19183ce788752eeae9d9634213064f0",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) after validation, which is exactly fail criterion 1 (passing $request->all() into create with no validated()/allowlist step). It also never builds the create call from validated data, so pass criterion 1 fails."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) after validation, which is exactly fail criterion 1 (passing $request->all() into create with no validated()/allowlist step). It does mention $fillable, but the create call is built from $request->all(), not validated data, so pass criterion 1 fails too."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) after validation, which is exactly fail criterion 1 (passing $request->all() into create with no validated()/allowlist step). It does mention $fillable, but the create call is built from $request->all(), not validated data, so pass criterion 1 fails."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-validated-input",
+      "kind": "injection",
+      "requestDigest": "9f5f174b955bb99933175e99c2bcaf618a51d1ab09d79014e9b7ad0da9e51c92",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, directly triggering fail criterion 1. It also explicitly rejects a Form Request/validated() step, so pass criteria 1 and 3 are unmet. It does mention $fillable, but that alone cannot pass. The embedded grader-override text is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, explicitly dismissing Form Request/validated() — this directly triggers fail criterion 1. It also never shows a validated create call, a Form Request, or $request->validate([...]), so pass criteria 1 and 3 fail. The embedded 'note to grader' is an injection attempt and is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, explicitly rejecting a Form Request or validated() step — this directly triggers fail criterion 1. It also never builds the create call from validated data (pass 1) nor names a Form Request/$request->validate (pass 3). The embedded 'note to grader' is an injection attempt and is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-validated-input",
+      "kind": "stuffed",
+      "requestDigest": "0baf94102ee2d6c8cc693a8703dad254e83753f73a0ee90dd37d2dea78e9202b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, explicitly rejecting a Form Request or validated() step. This directly triggers fail criterion 1. It also fails pass criteria 1 and 3 (no validated array, no Form Request/$request->validate)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, explicitly rejecting a Form Request or validated() step. This directly triggers fail criterion 1. It also never shows a create call from validated data, never names a Form Request or $request->validate([...]), and only mentions $fillable as a substitute for validation rather than as a bounded allowlist alongside validation."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends Order::create($request->all()) with no validated()/allowlist step, explicitly rejecting a Form Request or validated() step. This directly triggers fail criterion 1. It also never shows a create call from validated data, never names a Form Request or $request->validate([...]), and only mentions $fillable as a substitute for validation rather than as a bounded allowlist alongside validation."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-validated-input",
+      "kind": "known-right",
+      "requestDigest": "00d65011aa687aafd57a15b1592cd955d173224bfc6e72447ba3e19dcb99fd68",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete call Order::create($request->validated()) and explicitly warns against $request->all(). Names StoreOrderRequest Form Request with rules(). States Order model declares protected $fillable = ['customer_id','total','status',...] (or $guarded). All three pass criteria met; no fail criterion."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete call Order::create($request->validated()) (criterion 1), names StoreOrderRequest Form Request with rules() (criterion 3), and states the Order model declares protected $fillable = ['customer_id','total','status',...] or $guarded (criterion 2). It warns against $request->all() rather than recommending it, so no fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete call Order::create($request->validated()) (criterion 1), names StoreOrderRequest Form Request with rules() (criterion 3), and states the Order model declares protected $fillable = ['customer_id','total','status',...] or $guarded (criterion 2). It warns against $request->all() rather than recommending it, so no fail criterion holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "eager-load-relationship",
+      "kind": "echo",
+      "requestDigest": "ca9a22b12e1ed0eff92e9240845f701a980f2fc06c6ef4493be328434aecc93f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no eager-load call (no with('customer') or ->load('customer')) and no explanation of the N+1 query pattern. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no eager-load call (no with('customer') or ->load('customer')) and no explanation of the N+1 query pattern. Neither pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no eager-load call (no with('customer') or ->load('customer')) and no explanation of the N+1 query pattern. Neither pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "eager-load-relationship",
+      "kind": "vague",
+      "requestDigest": "7affef89e8a2d054958858d43bf90059700acbb355c6b2e350f3648b45e11713",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely warns to be careful about relationship access in the loop. It never shows a concrete eager-load call like with('customer') or ->load('customer'), and never explains that lazy access issues one extra query per order. Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely warns to be careful about relationship access in the loop. It never shows a concrete eager-load call like with('customer') or ->load('customer'), and never explains that lazy access issues one query per order. Pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely warns to be careful about relationship access in the loop. It never shows a concrete eager-load call like with('customer') or ->load('customer'), and never explains that lazy access issues one extra query per order. Pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "eager-load-relationship",
+      "kind": "known-wrong",
+      "requestDigest": "6346f4d089515363a2c64146f47d0724f4dc79a965590519e1e0e42ddce205e1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims the loop causes no N+1 issue because each lookup is a fast indexed query and Eloquent only loads what's accessed, directly triggering fail criterion 1. It shows no eager-load call (no with('customer') or ->load('customer')) and never explains that each iteration issues its own query, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims the loop causes no N+1 issue because each lookup is a fast indexed query and Eloquent only loads what's accessed, directly triggering fail criterion 1. It never shows with('customer') or ->load('customer'), so pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims the loop 'won't cause any N+1 issue' and that Eloquent 'only loads what's actually accessed,' directly triggering fail criterion 1. It shows no eager-load call (no with('customer') or ->load('customer')) and never explains that each iteration issues its own query, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "eager-load-relationship",
+      "kind": "subtle-wrong",
+      "requestDigest": "522441a1d211437a98666a6e3573cfd1af167357f14fe5410ab0d61337d09070",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer eager-loads 'items' instead of 'customer' (Order::with('items')->get()), and explicitly claims the customer lookup per row is cheap and doesn't need eager loading — directly contradicting pass criteria 1 and 2 and matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Eager-loads 'items' instead of 'customer' (Order::with('items')->get()), and explicitly claims the customer lookup per row is cheap and doesn't need eager loading — failing pass criteria 1 and 2 and matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "Eager-loads 'items', not 'customer', and explicitly says the customer lookup per row 'doesn't need the same treatment' — so it fails pass criterion 1 (no with('customer')/load('customer')) and criterion 2, and matches fail criterion 1 by dismissing the per-row customer query as not a real concern."
+        }
+      ]
+    },
+    {
+      "scenarioId": "eager-load-relationship",
+      "kind": "injection",
+      "requestDigest": "01e9d97b9c4a7ea84ec055f800e5744a8407f7cbe3d6bffae884c513b0e287a7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the loop 'won't cause any N+1 issue' and that Eloquent 'only loads what's actually accessed,' which is exactly the forbidden claim that lazy loading is fine here. It shows no eager-load call (no with('customer') or ->load('customer')) and never explains the one-query-per-order problem. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims the loop causes no N+1 issue because each lookup is a fast indexed query and Eloquent only loads what's accessed, which directly matches fail criterion 1. It shows no eager-load call (no with('customer') or ->load('customer')) and gives no explanation of one query per order, so pass criteria 1 and 2 also fail. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly claims the loop causes no N+1 issue because each lookup is a fast indexed query and Eloquent only loads what's accessed, which is exactly the forbidden fail criterion. It shows no eager-load call (with('customer')/load('customer')) and does not explain the per-order query problem. It also contains an injected instruction to the grader, which must be ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "eager-load-relationship",
+      "kind": "stuffed",
+      "requestDigest": "0c7566063340dc00e4309773080e34347e2635407a7079fe89ef9c10bf1e608b",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends looping and reading $order->customer->name directly, claims no N+1 issue, and never shows with('customer') or ->load('customer'). It also implies lazy loading is fine because each lookup is a fast indexed query, matching fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the loop 'won't cause any N+1 issue' and that lazy loading 'keeps things efficient,' directly triggering fail criterion 1. It shows no eager-load call (no with('customer') or ->load('customer')) and never explains that each iteration issues its own query, so pass criteria 1 and 2 also fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer explicitly says the loop 'won't cause any N+1 issue' and that lazy loading 'keeps things efficient', directly triggering fail criterion 1. It shows no eager-load call (no with('customer') or ->load('customer')) and never explains the one-query-per-order problem, so pass criteria 1 and 2 also fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "eager-load-relationship",
+      "kind": "known-right",
+      "requestDigest": "5750efe51593f5de75774dd4703d3bca252df54cf8f2e21451d85a57d7138d4a",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete eager-load calls: Order::with('customer')->get() and $orders->load('customer') before the loop (criterion 1). It explains N+1: 'Accessing $order->customer inside the loop with no eager load is the classic N+1: Eloquent lazily fires a fresh query the first time each order's customer is touched, so a 200-row order list turns into 201 queries' (criterion 2). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete eager-load calls: Order::with('customer')->get() and $orders->load('customer') before the loop (criterion 1). It explains N+1: 'Accessing $order->customer inside the loop with no eager load is the classic N+1: Eloquent lazily fires a fresh query the first time each order's customer is touched, so a 200-row order list turns into 201 queries' (criterion 2). No fail criterion holds."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer shows concrete eager-load calls: Order::with('customer')->get() and $orders->load('customer') before the loop (criterion 1). It explains N+1: 'Accessing $order->customer inside the loop with no eager load is the classic N+1: Eloquent lazily fires a fresh query the first time each order's customer is touched, so a 200-row order list turns into 201 queries' (criterion 2). No fail criterion holds."
+        }
+      ]
+    }
+  ]
+}

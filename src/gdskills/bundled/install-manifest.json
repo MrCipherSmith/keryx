@@ -172,7 +172,15 @@
         "docker-k8s-terraform-rules",
         "docker-k8s-terraform-skills",
         "ci-github-gitlab-rules",
-        "ci-github-gitlab-skills"
+        "ci-github-gitlab-skills",
+        "php-laravel-rules",
+        "php-laravel-skills",
+        "ruby-rails-rules",
+        "ruby-rails-skills",
+        "c-cpp-rules",
+        "c-cpp-skills",
+        "sql-db-rules",
+        "sql-db-skills"
       ],
       "components": [
         "lang:ts-js-node",
@@ -185,8 +193,56 @@
         "framework:angular",
         "framework:nextjs-nuxt",
         "tool:docker-k8s-terraform",
-        "tool:ci-github-gitlab"
+        "tool:ci-github-gitlab",
+        "framework:php-laravel",
+        "framework:ruby-rails",
+        "lang:c-cpp",
+        "capability:sql-db"
       ]
+    },
+    "php-laravel": {
+      "description": "Common rules plus the PHP/Laravel stack pack component (`php-laravel-rules` + `php-laravel-skills`, from src/gdskills/bundled/stacks/php-laravel/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:php-laravel"
+      ],
+      "stackDetectionAware": true
+    },
+    "ruby-rails": {
+      "description": "Common rules plus the Ruby on Rails stack pack component (`ruby-rails-rules` + `ruby-rails-skills`, from src/gdskills/bundled/stacks/ruby-rails/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "framework:ruby-rails"
+      ],
+      "stackDetectionAware": true
+    },
+    "c-cpp": {
+      "description": "Common rules plus the C/C++ stack pack component (`c-cpp-rules` + `c-cpp-skills`, from src/gdskills/bundled/stacks/c-cpp/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "lang:c-cpp"
+      ],
+      "stackDetectionAware": true
+    },
+    "sql-db": {
+      "description": "Common rules plus the SQL/database stack pack component (`sql-db-rules` + `sql-db-skills`, from src/gdskills/bundled/stacks/sql-db/), installed when `keryx stack detect` finds a matching tag.",
+      "modules": [
+        "core-common-rules",
+        "skill-lifecycle"
+      ],
+      "components": [
+        "capability:sql-db"
+      ],
+      "stackDetectionAware": true
     }
   },
   "modules": {
@@ -752,6 +808,126 @@
       "defaultInstall": true,
       "cost": "medium",
       "stability": "experimental"
+    },
+    "php-laravel-rules": {
+      "kind": "rule",
+      "description": "PHP/Laravel stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/php-laravel/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/php-laravel/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "php-laravel-skills": {
+      "kind": "skill",
+      "description": "PHP/Laravel stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/php-laravel/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/php-laravel/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "ruby-rails-rules": {
+      "kind": "rule",
+      "description": "Ruby on Rails stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/ruby-rails/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ruby-rails/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "ruby-rails-skills": {
+      "kind": "skill",
+      "description": "Ruby on Rails stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/ruby-rails/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/ruby-rails/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "c-cpp-rules": {
+      "kind": "rule",
+      "description": "C/C++ stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/c-cpp/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/c-cpp/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "c-cpp-skills": {
+      "kind": "skill",
+      "description": "C/C++ stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/c-cpp/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/c-cpp/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
+    },
+    "sql-db-rules": {
+      "kind": "rule",
+      "description": "SQL/database stack pack rules (coding-style, patterns, security, testing) from src/gdskills/bundled/stacks/sql-db/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/sql-db/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "sql-db-skills": {
+      "kind": "skill",
+      "description": "SQL/database stack pack skills (implementation, testing, code review, build-fix) from src/gdskills/bundled/stacks/sql-db/skills/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/sql-db/skills/**"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "medium",
+      "stability": "experimental"
     }
   },
   "components": {
@@ -905,6 +1081,60 @@
       "detectionMarkers": [
         "github-actions",
         "gitlab-ci"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:php-laravel": {
+      "family": "framework",
+      "modules": [
+        "php-laravel-rules",
+        "php-laravel-skills"
+      ],
+      "detectionMarkers": [
+        "php",
+        "laravel"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "framework:ruby-rails": {
+      "family": "framework",
+      "modules": [
+        "ruby-rails-rules",
+        "ruby-rails-skills"
+      ],
+      "detectionMarkers": [
+        "ruby",
+        "rails"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "lang:c-cpp": {
+      "family": "language",
+      "modules": [
+        "c-cpp-rules",
+        "c-cpp-skills"
+      ],
+      "detectionMarkers": [
+        "c-cpp"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "capability:sql-db": {
+      "family": "capability",
+      "modules": [
+        "sql-db-rules",
+        "sql-db-skills"
+      ],
+      "detectionMarkers": [
+        "sql"
       ],
       "provenance": {
         "origin": "authored"

@@ -1,0 +1,82 @@
+---
+extends: common
+paths: ["**/*.php"]
+metadata:
+  origin: authored
+---
+
+# PHP / Laravel testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to Laravel's
+testing stack — Pest (the current default for new Laravel apps) or
+PHPUnit, plus Laravel's HTTP/database testing helpers. Applies only to
+`*.php` files.
+
+## Layout and naming
+
+- Tests live under `tests/Feature` (anything touching the framework —
+  HTTP, database, queue, auth) or `tests/Unit` (a class tested in
+  isolation, no framework boot needed); match whichever the project
+  already uses for a given kind of test rather than defaulting one way.
+- Pest: a test file is a plain script of `test('...', function () {...})`/
+  `it('...', function () {...})` calls, optionally grouped with
+  `describe(...)`. PHPUnit: a test class extends `Tests\TestCase`, with
+  each test a `public function test_...(): void` method or a method
+  annotated `#[Test]`.
+- Name a test for the behavior it verifies ("rejects an order with no
+  line items"), not the method under test alone ("test_store").
+
+## Database and factories
+
+- Use model factories (`app/Models/*` + `database/factories/*Factory.php`,
+  `User::factory()->create([...])`) to build test data instead of
+  hand-inserting rows; override only the fields the test cares about.
+- Apply `RefreshDatabase` (or `DatabaseTransactions`, on a project already
+  using it) on any test that touches the database, so each test starts
+  from a known, isolated state — do not rely on execution order between
+  tests for shared fixture data.
+
+## HTTP and feature tests
+
+- Exercise routes through Laravel's HTTP testing helpers
+  (`$this->get(...)`, `$this->postJson(...)`, `actingAs($user)`) and
+  assert on the response (`assertStatus`, `assertJson`, `assertSee`,
+  `assertRedirect`) rather than calling controller methods directly —
+  a feature test should exercise the same path a real request takes
+  (routing, middleware, validation included).
+- Assert authorization/validation failures explicitly
+  (`assertForbidden()`, `assertInvalid(['field'])`) instead of only
+  checking the happy path.
+
+## Fakes over real side effects
+
+- Use Laravel's fakes (`Queue::fake()`, `Mail::fake()`, `Event::fake()`,
+  `Storage::fake('disk')`, `Http::fake([...])`) to assert a job was
+  dispatched, a mail was queued, or an HTTP call was made — never let a
+  test actually send an email, hit a real queue, or make a real outbound
+  HTTP request.
+- After `Queue::fake()`, assert with `Queue::assertPushed(JobClass::class,
+  fn ($job) => ...)` to check the job's own state, not just that some job
+  of that class was pushed.
+
+## Assertions and determinism
+
+- Never synchronize with `sleep()`/a fixed delay to wait for a queued job
+  or async side effect in a test — use `Queue::fake()` and assert what
+  was dispatched, or run the job synchronously in the test
+  (`ShouldQueue` jobs can be dispatched and handled inline via
+  `Bus::fake()`/direct `handle()` invocation) instead of waiting on a
+  real worker.
+- Prefer Pest's `expect($value)->toBe(...)` (or PHPUnit's
+  `assertSame`) over a loose equality check when the type matters (`===`
+  semantics), especially for IDs, enum cases, and money values.
+
+## Static analysis and running
+
+- Run the project's configured static analysis (`./vendor/bin/phpstan
+  analyse`, typically via Larastan on a Laravel app) alongside the test
+  suite when configured — a green test suite with new static-analysis
+  errors is not a finished change.
+- Run `php artisan test` (Pest or PHPUnit, whichever the project uses) or
+  `./vendor/bin/pest`/`./vendor/bin/phpunit` directly; do not skip a slow
+  test file to get a faster local loop without saying so in the report.

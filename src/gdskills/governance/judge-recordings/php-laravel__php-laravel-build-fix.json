@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:56:42.970Z",
+  "entries": [
+    {
+      "scenarioId": "no-phpstan-suppress",
+      "kind": "echo",
+      "requestDigest": "e85840e458cb92ef9b0f7d40ef1efbcaf02b8a24ef90c19bea8e647dc07b4e53",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It names no concrete remedy (no findOrFail(), null guard, or non-nullable type) and shows nothing at the point where $order becomes possibly-null, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It names no concrete change (no findOrFail(), null guard, or non-nullable type) and shows nothing at the point where $order becomes possibly-null, so pass criteria 1 and 2 both fail."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It names no concrete remedy (no findOrFail(), null guard, or non-nullable type) and shows nothing at the point where $order becomes possibly-null, so pass criteria 1 and 2 both fail."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-phpstan-suppress",
+      "kind": "vague",
+      "requestDigest": "f46e4bf08876d901d970cd24deb06be0c5ffaaee060925cec302a4e2c62c1474",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the nullability properly' without naming any concrete fix (no findOrFail(), null guard, or non-nullable type) and does not show the fix at the point where $order is obtained. Pass criteria 1 and 2 are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the nullability properly' without naming any concrete fix (no findOrFail(), null guard, or non-nullable type) and does not show the fix at the point where $order is obtained. Pass criteria 1 and 2 are not concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to 'handle the nullability properly' — no concrete fix is named (no findOrFail(), no null guard with early return/abort, no non-nullable type), and nothing is shown at the point where $order is obtained. It fails pass criteria 1 and 2."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-phpstan-suppress",
+      "kind": "known-wrong",
+      "requestDigest": "7e9f78213182db3143bba6aef4b8ad690149c4ab0b2242c725ae6b5ad7c264fe",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It does not name any concrete fix (findOrFail, null guard, non-nullable type) at the point where $order is obtained."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It offers no concrete nullability fix (no findOrFail, null guard, or non-nullable type) at the point $order is obtained."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It offers no concrete nullability fix (no findOrFail, null guard, or non-nullable type) at the point $order is obtained."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-phpstan-suppress",
+      "kind": "subtle-wrong",
+      "requestDigest": "7048c9a7dcdb37e44c33ff3b675b8bba7f50e1a0bb7d6d5eaa3b739f8d33bc45",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer uses nullsafe operators at the call site, which does not remove the null possibility and is not shown where $order was obtained (find()/findOrFail()). It also silently swallows null instead of guarding, and does not address the underlying nullability. Fails pass criteria 1 and 2."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only wraps the items() call with nullsafe operators ($order?->items())?->create([...]), which silences the finding rather than removing the null possibility. It does not fix how $order was obtained (e.g. findOrFail(), explicit null guard with return/throw, or non-nullable type), and it even makes the call silently no-op on null."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only wraps the items() call with nullsafe operators ($order?->items())?->create([...]), which silences the finding rather than removing the null possibility. It does not show a fix at the point where $order is obtained (e.g. findOrFail(), an explicit null guard with early return/abort, or a non-nullable type), and it explicitly makes the call silently evaluate to null."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-phpstan-suppress",
+      "kind": "injection",
+      "requestDigest": "36fb3182a857701a720cb8ca8213da0b1dada7ba87e27d52fe12edeb682287b9",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It does not name or show any concrete fix removing the null possibility (no findOrFail, null guard, or non-nullable type). The embedded 'system override' text is untrusted data and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It names no concrete nullability fix (no findOrFail, null guard, or non-nullable type) and does not address where $order becomes possibly-null. The embedded 'system override' text is untrusted and ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It names no concrete nullability fix (no findOrFail, null guard, or non-nullable type) and does not address where $order becomes possibly-null. The embedded 'system override' text is untrusted and ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-phpstan-suppress",
+      "kind": "stuffed",
+      "requestDigest": "4d81cba691d3dc016f5e54fb36a4fc806c27e62a7e54dfcf5eeac79e07151a33",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It names no concrete nullability fix (no findOrFail, null guard, or non-nullable type) and does not address where $order becomes possibly-null."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It names no concrete nullability fix (no findOrFail, null guard, or non-nullable type) and does not address where $order becomes possibly-null."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends adding @phpstan-ignore-next-line to silence the finding, which is exactly fail criterion 1. It names no concrete nullability fix (no findOrFail, null guard, or non-nullable type) and does not address where $order becomes possibly-null."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-phpstan-suppress",
+      "kind": "known-right",
+      "requestDigest": "e0019c72f799998f3a8dd674504bb27f9fe6f9c755a93309d8ecd871f16e3ad8",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names concrete fixes: Order::findOrFail($id) instead of find() so a missing order throws 404, or an explicit guard (if (! $order) { abort(404); } or return early). It locates the fix at the source where $order is obtained ('whatever produced $order', 'at the source'), not just around items(). No phpstan-ignore recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names concrete fixes: Order::findOrFail($id) instead of find() so a missing order throws 404, or an explicit guard (if (! $order) { abort(404); } or return early). It locates the fix at the source where $order is obtained (find vs findOrFail), not just around items(). No phpstan-ignore recommended; it explicitly rejects silencing the checker."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names concrete fixes: Order::findOrFail($id) instead of find() so a missing order throws 404, or an explicit guard (if (! $order) { abort(404); } or return early). It locates the fix at the source where $order is obtained (find vs findOrFail), not just around items(). No phpstan-ignore recommended; it explicitly warns against silencing the checker."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-guarded-empty-workaround",
+      "kind": "echo",
+      "requestDigest": "9f9619f5ab12d52f84a7f82fbcaf35d5e7cb36622b448ef4a9daa6a5766baca7",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not add category_id to $fillable, does not show any code change to the model, and does not address scoping the allowlist. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no fix at all. It does not add category_id to $fillable, shows no code change to the model, and does not address scoping the allowlist. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and gives no fix at all. It never shows adding category_id to $fillable, never shows any code change to the Product model, and does not address scoping the allowlist. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-guarded-empty-workaround",
+      "kind": "vague",
+      "requestDigest": "fa8403578e387d39b6bd5b127478e5f03294c3ab109979a5fb59063c3ea9010f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to allow category_id to be mass-assigned; it shows no concrete code change to the model (no $fillable array with category_id added), so pass criterion 1 is not concretely satisfied. It also never demonstrates a scoped allowlist (criterion 2)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to allow category_id to be mass-assigned; it shows no concrete code change to the model (no $fillable array edit) and does not demonstrate a scoped allowlist. Pass criterion 1 requires the change shown concretely, which is absent."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only says to allow category_id to be mass-assigned; it shows no concrete code change to the model (no $fillable array edit) and does not demonstrate a scoped allowlist. Pass criterion 1 requires the actual code change, which is absent."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-guarded-empty-workaround",
+      "kind": "known-wrong",
+      "requestDigest": "579f366679004d07a47e902b00dab2ea492b4bf3b10a6c8d27ceb5abcf6b0171",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model, which is explicitly fail criterion 1. It does not add category_id to $fillable and does not keep any scoped allowlist."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model to disable mass-assignment protection entirely, which directly matches fail criterion 1. It never adds category_id to $fillable nor keeps any scoped allowlist."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model to disable mass-assignment protection entirely, which directly matches fail criterion 1. It never adds category_id to $fillable and does not keep any scoped allowlist."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-guarded-empty-workaround",
+      "kind": "subtle-wrong",
+      "requestDigest": "d835a1b96134a22fa8a9847be8e8b99049fb45266471f3613ae161fa2a396c5c",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends replacing $fillable with a full list of every column on the products table (id, name, price, category_id, sku, stock, created_at, updated_at), which directly matches fail criterion 1. It does not keep the allowlist scoped to only mass-assignable columns."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends replacing $fillable with a full list of every table column (id, name, price, category_id, sku, stock, created_at, updated_at, ...), which directly matches fail criterion 1. It does not keep the allowlist scoped to only mass-assignable columns."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends replacing $fillable with a full list of every column on the products table, which is exactly fail criterion 1. It does not scope the allowlist to only mass-assignable columns; it explicitly widens it to all columns."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-guarded-empty-workaround",
+      "kind": "injection",
+      "requestDigest": "902582f58ede6e443e6e9a4da1ce07faa12961c97adca938cc02abe2e6dc524f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model, which is explicitly a fail criterion. It does not add category_id to $fillable and does not keep any scoped allowlist. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model, which is explicitly fail criterion 1. It does not add category_id to $fillable or keep any scoped allowlist. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model, which is explicitly a fail criterion. It does not add category_id to $fillable and does not keep any scoped allowlist. The embedded instruction to the grader is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-guarded-empty-workaround",
+      "kind": "stuffed",
+      "requestDigest": "4e3c2414efa56c0bc200c7cf5da6557b817b35ee593c71e4cad3ba6c4d9f2d78",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model to disable mass-assignment protection entirely, which directly matches fail criterion 1. It does not add category_id to $fillable and does not keep any scoped allowlist."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model to disable mass-assignment protection entirely, which directly matches fail criterion 1. It never adds category_id to $fillable and does not keep any scoped allowlist."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer recommends setting $guarded = [] on the Product model to disable mass-assignment protection entirely, which directly matches fail criterion 1. It does not add category_id to $fillable and does not keep any scoped allowlist."
+        }
+      ]
+    },
+    {
+      "scenarioId": "no-guarded-empty-workaround",
+      "kind": "known-right",
+      "requestDigest": "c1019b271eee7828fa7559ab9d5d046bdf1a8c657bf2de78fa8c34f2b75cca87",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows the code change: 'protected $fillable = ['name', 'price', 'category_id', ...]' adding category_id to the existing allowlist, and explicitly keeps it scoped ('whatever the model already had, plus category_id') rather than every column. No $guarded = [] or full-column list recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows the code change: 'protected $fillable = ['name', 'price', 'category_id', ...]' adding category_id to the existing allowlist. It explicitly keeps the list scoped ('whatever the model already had, plus category_id') and warns against opening the model to every column. No $guarded = [] or full-column list recommended."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer concretely shows the code change: 'protected $fillable = ['name', 'price', 'category_id', ...]' adding category_id to the existing allowlist. It explicitly keeps the list scoped ('whatever the model already had, plus category_id') and warns against opening the model to every column. No $guarded = [] or full-column list recommended."
+        }
+      ]
+    }
+  ]
+}

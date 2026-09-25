@@ -1,0 +1,31 @@
+[
+  {
+    "query": "Use when implementing or extending a feature in C or modern C++ (17/20/23) -- ownership and RAII, smart pointer choice, move semantics, std::span, manual malloc/free lifetime in C, and choosing safe standard-library APIs over unsafe ones.",
+    "decision": "create",
+    "topMatch": "python/python-implementation",
+    "recordedAt": "2026-09-25T15:29:36.971Z",
+    "skillName": "c-cpp-implementation"
+  },
+  {
+    "query": "Use when reviewing a C or C++ change for memory-safety and undefined-behavior risks -- use-after-free, double-free, buffer overflows, dangling references, iterator invalidation, unchecked allocations, signed overflow, and unsynchronized shared state. Read-only, no edits.",
+    "decision": "create",
+    "topMatch": "c-cpp/c-cpp-build-fix",
+    "recordedAt": "2026-09-25T15:29:43.782Z",
+    "skillName": "c-cpp-code-review"
+  },
+  {
+    "query": "Use when a C/C++ build fails -- CMake configure/link errors, missing headers, template/generic-instantiation errors, ABI/linker mismatches -- or when a sanitizer (ASan/UBSan/TSan) or ctest run reports a memory-safety, UB, or race failure, with the smallest root-cause fix.",
+    "decision": "create",
+    "topMatch": "go/go-build-fix",
+    "recordedAt": "2026-09-25T15:29:46.104Z",
+    "skillName": "c-cpp-build-fix"
+  },
+  {
+    "query": "Use when a C or C++ test suite needs writing, extending, or fixing -- GoogleTest TEST/TEST_F/TEST_P, death tests, fixture setup/teardown, and verifying a memory-safety or concurrency fix under AddressSanitizer/UndefinedBehaviorSanitizer/ThreadSanitizer.",
+    "decision": "fork",
+    "topMatch": "c-cpp/c-cpp-build-fix",
+    "recordedAt": "2026-09-25T15:30:02.567Z",
+    "skillName": "c-cpp-testing",
+    "justification": "Nearest match c-cpp-build-fix (0.39) shares this pack's own sanitizer vocabulary (ASan/UBSan/TSan) because both skills verify fixes under sanitizers, but they are distinct capabilities: c-cpp-testing writes/extends/fixes GoogleTest test files (TEST_F fixtures, TEST_P, death tests) and never touches source under test, while c-cpp-build-fix diagnoses and fixes compile/link/CMake failures and root-causes a sanitizer-reported bug in production source, never writing new tests. No other matched skill (go-testing, php-laravel-testing, react-testing, ruby-rails-testing, all ~0.21) covers GoogleTest/C++ test idiom or sanitizer-backed test verification at all, so this is a genuine fork of a sibling skill within the same new pack, not a substitute for an existing one."
+  }
+]

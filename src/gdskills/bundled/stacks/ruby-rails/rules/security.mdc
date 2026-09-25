@@ -1,0 +1,90 @@
+---
+extends: common
+paths: ["**/*.rb", "**/*.erb"]
+metadata:
+  origin: authored
+---
+
+# Ruby on Rails security
+
+Narrows `core-common-rules`' stack-agnostic security rules to
+Rails-specific, OWASP-relevant risks and the safe framework API to use
+instead. Applies to `*.rb` and `*.erb` files.
+
+## Mass assignment and strong parameters
+
+- Never build or update a model from a raw `params` hash
+  (`Model.new(params[:model])`, `record.update(params)`); require the
+  permitted shape first with `params.expect(model: [:field, ...])`
+  (current Rails idiom) or `params.require(:model).permit(:field, ...)`,
+  and never call `permit!` on user-controlled params — it disables
+  strong parameters entirely and lets any attacker-supplied key through,
+  including ones like `admin`/`role` that were never meant to be
+  user-settable.
+- List every permitted attribute explicitly; do not permit a whole
+  nested hash with a bare `permit(:nested)` when only specific
+  sub-keys should be writable.
+
+## SQL and data access
+
+- Use ActiveRecord's parameterized conditions (`where("age > ?", age)`,
+  `where(age: age)`, or named placeholders) — never
+  string-interpolate a user-influenced value into `where`,
+  `find_by_sql`, `order`, or any other query method
+  (`where("name = '#{params[:name]}'")` is SQL injection).
+- When raw SQL genuinely cannot be avoided (a fragment passed to
+  `order`/`pluck` built from a dynamic column list, for instance), pass
+  untrusted values through `ActiveRecord::Base.sanitize_sql`/
+  `sanitize_sql_array`, never through direct string interpolation.
+
+## Output encoding and XSS
+
+- Rely on ERB's automatic HTML escaping for any value that can contain
+  user input; using `raw(value)` or `value.html_safe` on
+  user-controlled or user-influenced content reintroduces XSS by
+  marking untrusted text as pre-escaped. Reserve `raw`/`html_safe` for
+  genuinely static, developer-authored content, and prefer a sanitizer
+  (`sanitize`) over `html_safe` when some user-supplied markup must be
+  allowed through.
+
+## Authentication and authorization
+
+- Every controller action that requires a logged-in user runs a
+  `before_action` (e.g. `:authenticate_user!` or the app's own
+  equivalent) — an action added to an already-protected controller
+  inherits the filter only if it is not explicitly skipped
+  (`skip_before_action`); check that a new action was not accidentally
+  excluded.
+- Authentication (who is this) is not authorization (what can they do):
+  confirm the current user is allowed to act on *this specific* record
+  (ownership/role check), not just that they are logged in at all —
+  an unauthorized action on someone else's resource (IDOR) is a
+  distinct bug from a missing login check.
+
+## CSRF
+
+- Keep `protect_from_forgery with: :exception` (or the equivalent
+  `ActionController::Base` default) enabled for any controller serving
+  browser-submitted forms; do not disable CSRF protection
+  (`skip_before_action :verify_authenticity_token`,
+  `protect_from_forgery with: :null_session`) on an action reachable
+  from a standard HTML form just to make a request easier to test or
+  call from a script — scope any real exception (a webhook endpoint
+  verified by its own signature, for instance) as narrowly as possible
+  and say why in the change.
+
+## Background jobs
+
+- An `ActiveJob` must tolerate being run more than once for the same
+  logical unit of work (most production queue adapters are at-least-once) —
+  guard non-idempotent side effects (charging a card, sending an email)
+  with a uniqueness check or an idempotency key rather than assuming
+  single delivery.
+
+## Secrets
+
+- Never commit a credential, API key, or signing secret in source —
+  store it in Rails encrypted credentials (`bin/rails credentials:edit`)
+  or an environment variable the deployment already manages, and load it
+  through `Rails.application.credentials`/`ENV`, not a literal in a
+  `.rb` file.

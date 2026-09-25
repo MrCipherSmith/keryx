@@ -1,0 +1,83 @@
+---
+extends: common
+paths: ["**/*.c", "**/*.h", "**/*.cpp", "**/*.cc", "**/*.cxx", "**/*.hpp", "**/*.hxx", "**/*.hh", "**/*.ipp", "**/*.inl", "**/*.tpp", "**/*.cppm", "**/*.ixx"]
+metadata:
+  origin: authored
+---
+
+# C / C++ testing
+
+Narrows `core-common-rules`' stack-agnostic testing rules to GoogleTest
+(and Catch2, where a project already uses it) plus sanitizer-backed
+verification. Applies to both C and C++ test files.
+
+## Layout and naming
+
+- Tests live under a project's own existing test tree (commonly
+  `tests/`, `test/`, or beside the source with a `_test.cpp` suffix) —
+  match whichever convention the project already uses, do not invent a
+  second one.
+- `TEST(SuiteName, CaseName)` for a standalone case; `TEST_F(FixtureName,
+  CaseName)` when the case needs shared `SetUp()`/`TearDown()` state via a
+  fixture class derived from `::testing::Test`. Name suites/cases for the
+  behavior under test, not `Test1`/`Test2`.
+- `TEST_P` with `INSTANTIATE_TEST_SUITE_P` for a parameterized case run
+  against a range of inputs, instead of copy-pasting the same body with
+  different literals across several `TEST`s.
+
+## Fixtures and lifecycle
+
+- Put shared per-test setup in `SetUp()` and teardown in `TearDown()`,
+  not the fixture's constructor/destructor, when the setup can fail in a
+  way the test should assert on (`SetUp()` runs inside the test's own
+  assertion context; a constructor failure does not).
+- A fixture that owns a resource (a temp file, a mock server, a thread)
+  releases it in `TearDown()` even when the test body fails an assertion
+  partway through — do not rely on a `TEST_F` body reaching a cleanup
+  statement at its end.
+
+## Assertions
+
+- `ASSERT_*` when the test cannot meaningfully continue after a failure
+  (a null pointer that every following line would dereference);
+  `EXPECT_*` when later checks in the same test still give useful
+  information after one fails.
+- `ASSERT_DEATH`/`EXPECT_DEATH` for code whose contract is to terminate
+  the process on a given input (an assertion failure, a `CHECK`) — set
+  `GTEST_FLAG_SET(death_test_style, "threadsafe")` (or the project's own
+  configured style) when the test binary is multi-threaded, since the
+  default `fast` style can misbehave by forking a process with more than
+  one live thread.
+- Compare floating-point values with `EXPECT_NEAR`/`EXPECT_FLOAT_EQ`, not
+  `EXPECT_EQ`, unless the value is provably exact (an integer-valued
+  computation stored in a float).
+
+## Determinism and concurrency
+
+- Never synchronize a multi-threaded test with `sleep`/`usleep`/
+  `std::this_thread::sleep_for` to "give the other thread time" — join
+  the thread, wait on a condition variable, or use a future/promise so
+  the test is deterministic and not flaky under load.
+- A test exercising concurrent code is run under ThreadSanitizer
+  (`-fsanitize=thread`) at least once before being trusted, since a data
+  race can pass every assertion while still being undefined behavior.
+
+## Sanitizer-backed verification
+
+- Build and run the test suite under AddressSanitizer + UndefinedBehavior-
+  Sanitizer for any change touching manual memory management, buffers, or
+  pointer arithmetic — a leaking or corrupting test can still report
+  green under plain assertions while ASan/UBSan catch the actual bug.
+- New behavior gets a new test in the same change; a bug fix (especially
+  a memory-safety or UB fix) gets a regression test that reproduces the
+  failure under the relevant sanitizer before the fix and passes clean
+  after it.
+
+## Fuzzing
+
+- A parser, decoder, or anything else that touches untrusted input
+  formats gets a libFuzzer harness (`LLVMFuzzerTestOneInput`, built with
+  `-fsanitize=fuzzer,address,undefined`) when the project already has
+  fuzzing infrastructure, or a documented seed corpus ready for one to be
+  added — do not skip fuzz coverage for a new untrusted-input parser
+  solely because unit tests pass.

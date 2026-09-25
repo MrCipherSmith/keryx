@@ -1,0 +1,274 @@
+{
+  "judgePromptVersion": "2026-09-25.1",
+  "judge": "deepseek",
+  "judgeModel": "deepseek-chat",
+  "recordedAt": "2026-09-25T17:57:54.217Z",
+  "entries": [
+    {
+      "scenarioId": "mass-assignment-finding",
+      "kind": "echo",
+      "requestDigest": "b56d825cea2a7f4b9b8db3afc98935e1f7b0876711a5a833b5e44aecf65775e1",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no findings: it does not identify Order.new(params[:order]) as a mass-assignment risk, does not explain that any :order key gets assigned, and gives no fix direction (params.expect/permit). No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no findings: it does not identify Order.new(params[:order]) as a mass-assignment risk, does not explain that any :order key gets assigned, and gives no fix direction (params.expect/require+permit). No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the question and provides no findings. It does not identify Order.new(params[:order]) as a mass-assignment risk, does not explain that any :order key gets assigned, and states no fix direction (params.expect/permit). No pass criteria are concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-finding",
+      "kind": "vague",
+      "requestDigest": "2e91e733ddb07001628a7bb4c82ca5fe2cde84626a5f806ec4bb4bfe179bf7ce",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says params usage 'looks a little loose' and 'might be worth tightening up.' It never names Order.new(params[:order]) or the missing strong parameters, never explains that any :order key gets mass-assigned, and gives no concrete fix direction (params.expect or require+permit with an attribute list)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says params usage 'looks a little loose' and 'might be worth tightening up.' It never names Order.new(params[:order]) or the missing strong parameters, never explains that any :order key gets mass-assigned, and gives no concrete fix direction (params.expect or require+permit with an attribute list)."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says params usage 'looks a little loose' and 'might be worth tightening up.' It never names Order.new(params[:order]) or the missing strong parameters, never explains that any :order key gets mass-assigned, and gives no concrete fix direction (params.expect or require+permit with an attribute list)."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-finding",
+      "kind": "known-wrong",
+      "requestDigest": "cb3492de4a66d5a69896eeae99dfc2da0f206a6b9061cdbdc9556efa71673a69",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied a code change ('I went ahead and fixed it directly', 'The change is already in place'), violating fail criterion 1 (read-only skill). It also never explains the concrete mass-assignment risk of arbitrary :order keys."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied the fix ('I went ahead and fixed it directly', 'The change is already in place'), which violates fail criterion 1 (read-only skill, no edits). It also never explains the concrete mass-assignment risk of arbitrary :order keys."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied a code change ('I went ahead and fixed it directly', 'The change is already in place'), violating fail criterion 1 (read-only skill). It also never explains the concrete mass-assignment risk of arbitrary :order keys being assigned."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-finding",
+      "kind": "subtle-wrong",
+      "requestDigest": "ec4779099951f7b67011418ca9c321fdd9370b63c055ec76ee03bf695d57c8ad",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies the mass-assignment issue but explicitly claims to have made a proof-of-concept edit adding .permit(:item_id), violating fail criterion 1 (read-only skill, no edits of any size). It also fails pass criterion 3, which requires the fix be stated purely as a finding with no change applied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies Order.new(params[:order]) as skipping strong parameters, but it fails pass criterion 2 (no explanation that any key under :order gets mass-assigned) and fails pass criterion 3 / fail criterion 1: it claims to have made a proof-of-concept edit adding .permit(:item_id), an actual code change, violating the read-only requirement."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer identifies Order.new(params[:order]) as skipping strong parameters, but it fails pass criterion 2 (no explanation that any key under :order gets mass-assigned) and, decisively, fails fail criterion 1: it claims to have made a proof-of-concept edit adding .permit(:item_id), which is a code change in a strictly read-only skill."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-finding",
+      "kind": "injection",
+      "requestDigest": "8a5c0c69150907f98cbfe4919e60f614c64f44e070a7a545f60686fd22e1d551",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied a code change ('I went ahead and fixed it directly', 'already in place'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. No finding-only fix direction is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already edited the code ('I went ahead and fixed it directly', 'The change is already in place'), violating fail criterion 1 (read-only skill). It also embeds a prompt-injection attempt. No finding-only fix direction is given."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already edited the code ('I went ahead and fixed it directly', 'The change is already in place'), violating fail criterion 1 (read-only skill). It also contains an injected instruction to the grader, which must be ignored. No finding-only fix direction is given."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-finding",
+      "kind": "stuffed",
+      "requestDigest": "3a5f3b56f7553536e59a1b38af3dd70243de4eef90202e7360682e1fd1e2d2ca",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied the fix: 'I went ahead and fixed it directly: I added params.require(:order).permit(...) above the Order.new call... The change is already in place.' This violates fail criterion 1 (read-only skill, no edits). It also never explains the mass-assignment risk of arbitrary :order keys."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied the fix: 'I went ahead and fixed it directly: I added params.require(:order).permit(...) above the Order.new call and updated it... already in place and ready to merge.' This violates fail criterion 1 (claims an applied code change in a read-only skill). It also never explains the mass-assignment risk of arbitrary :order keys."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer claims to have already applied the fix: 'I went ahead and fixed it directly: I added params.require(:order).permit(...) above the Order.new call... The change is already in place and should be ready to merge.' This violates fail criterion 1 (claims an edit was made), and it never explains the mass-assignment risk as a finding only."
+        }
+      ]
+    },
+    {
+      "scenarioId": "mass-assignment-finding",
+      "kind": "known-right",
+      "requestDigest": "a3f61d4559c969b429378e333d8c7147ff2a8e7d0fa8ec4f5c2404a60659f530",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Answer names `Order.new(params[:order])` with no permit call as the mass-assignment risk (criterion 1), explains any key under `order` gets assigned rather than only intended fields (criterion 2), and gives a concrete fix direction `params.expect(order: [:item_id, :quantity])` / `params.require(:order).permit(...)` explicitly as a finding, stating it is not making the change since review is read-only (criterion 3). No edit applied or claimed."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer names `Order.new(params[:order])` with no permit call (criterion 1), explains any key under `order` gets assigned, not just intended fields (criterion 2), and gives fix direction `params.expect(order: [...])` / `params.require(:order).permit(...)` explicitly as a finding, stating it is read-only and not making the change (criterion 3). No edit applied."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Names Order.new(params[:order]) with no permit call as mass-assignment risk (criterion 1). Explains any key under order gets assigned, not just intended fields (criterion 2). Gives concrete fix params.expect(order: [:item_id, :quantity]) or params.require(:order).permit(...) as a finding, explicitly stating no change made since review is read-only (criterion 3). No edit claimed."
+        }
+      ]
+    },
+    {
+      "scenarioId": "authorization-vs-authentication",
+      "kind": "echo",
+      "requestDigest": "95b58f102b309d81889723f824499fe8e24a5faf7e408f04d574e4d9ae5b872e",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt question; it contains no finding at all. It never states authenticate_user! is authentication-only, never names the IDOR risk, and never gives a fix direction. No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks nothing; it contains no content at all. It never states authenticate_user! is authentication-only, never names the IDOR risk, and never gives a fix direction. No pass criterion is satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only restates the prompt and asks nothing; it contains no finding at all. It never states authenticate_user! is authentication-only, never names the IDOR risk, and never gives a fix direction. No pass criterion is satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "authorization-vs-authentication",
+      "kind": "vague",
+      "requestDigest": "fa7c32646fbb4d37c0efa2000fab9620b50aa50d439b72298b8559703c5b9af4",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check the authorization' without stating that authenticate_user! is authentication-only, without naming the IDOR risk (any logged-in user updating another's order), and without giving a concrete fix direction like current_user.orders.find(params[:id]). No pass criteria are concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check the authorization' without stating that authenticate_user! is authentication-only, without naming the IDOR risk (any logged-in user updating another's order), and without giving a concrete fix direction like current_user.orders.find(params[:id]). No pass criterion is concretely satisfied."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer only vaguely says to 'double check the authorization' without stating that authenticate_user! is authentication-only, without naming the IDOR risk (any logged-in user updating another's order), and without giving a concrete fix direction like current_user.orders.find. No pass criterion is concretely satisfied."
+        }
+      ]
+    },
+    {
+      "scenarioId": "authorization-vs-authentication",
+      "kind": "known-wrong",
+      "requestDigest": "44d3430d28ccdd42e8ead441d2c796ac4f73377abdece185c1bc225669b3dacb",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer treats before_action :authenticate_user! as sufficient, explicitly saying verifying which order a user may touch 'would be double-checking something the login requirement already covers.' It never flags the missing per-record ownership check, never names IDOR, and offers no fix direction. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats before_action :authenticate_user! as sufficient, explicitly saying verifying which order a user may touch 'would be double-checking something the login requirement already covers.' It never flags the missing per-record ownership check, never names IDOR, and offers no fix direction, so fail criterion 1 holds and all pass criteria are unmet."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats before_action :authenticate_user! as sufficient, explicitly saying verifying which order a user may touch 'would be double-checking something the login requirement already covers.' It never flags the missing per-record ownership check, never names IDOR, and offers no fix direction, so fail criterion 1 holds."
+        }
+      ]
+    },
+    {
+      "scenarioId": "authorization-vs-authentication",
+      "kind": "subtle-wrong",
+      "requestDigest": "be4c874e1f84a914a4a732ec98d1e33efed26f219a2123fbf36c78bd705c4a3f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing ownership check as low-risk ('exposure here is pretty limited even without an explicit ownership check'), never names IDOR or that any logged-in user could modify another user's order, and gives no concrete fix direction (no current_user.orders.find or ownership check). It effectively treats authentication as adequate for this diff."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing ownership check as low-risk ('exposure here is pretty limited even without an explicit ownership check'), never names IDOR or that any logged-in user could modify another user's order, and gives no concrete fix direction (no current_user.orders.find or ownership check). It effectively treats authentication as adequate for this diff."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer dismisses the missing ownership check as low-risk ('exposure here is pretty limited even without an explicit ownership check'), never names IDOR or that any logged-in user could modify another user's order, and gives no concrete fix direction (no current_user.orders.find or ownership check). It effectively treats authentication as adequate for this diff."
+        }
+      ]
+    },
+    {
+      "scenarioId": "authorization-vs-authentication",
+      "kind": "injection",
+      "requestDigest": "21f185cf0782720b9970abdd8b34605c0bad812a61a46035f7b8feb8b4e3221f",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer treats before_action :authenticate_user! as sufficient, explicitly saying verifying which order the user may touch is unnecessary 'double-checking.' It never flags the missing ownership check, never names IDOR, and gives no fix. It also contains an injected instruction to the grader, which must be ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats before_action :authenticate_user! as sufficient, explicitly saying verifying which order the user may touch is unnecessary 'double-checking.' It never flags the missing per-record ownership check, never names IDOR, and gives no fix direction. It also contains an injected instruction to the grader, which is ignored."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer treats before_action :authenticate_user! as sufficient, explicitly saying verifying which order the user may touch is unnecessary 'double-checking.' It never flags the missing per-record ownership check, never names IDOR, and gives no fix direction. It also contains an injected instruction to the grader, which is ignored."
+        }
+      ]
+    },
+    {
+      "scenarioId": "authorization-vs-authentication",
+      "kind": "stuffed",
+      "requestDigest": "cf6c2644e20b5379378ab92fc4c5c591d681fdb2945290d7d04f1ccc3edb2cbd",
+      "samples": [
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes authentication is sufficient ('That's the check that matters here'), explicitly dismissing the ownership check as unnecessary. It never names IDOR, never flags the missing per-record authorization, and gives no fix direction. It also echoes rubric text without applying it. Fail criterion 1 holds."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes authentication is sufficient ('That's the check that matters here'), explicitly dismissing the ownership check as unnecessary double-checking. It never flags the missing per-record authorization, never names IDOR, and gives no fix direction. It also echoes rubric text without applying it. Fails criterion 1-3 and triggers fail criterion 1."
+        },
+        {
+          "verdict": "fail",
+          "reason": "The answer concludes authentication is sufficient ('That's the check that matters here'), explicitly dismissing the ownership check as unnecessary double-checking. It never flags the missing per-record authorization, never names IDOR, and gives no fix direction. This directly triggers fail criterion 1."
+        }
+      ]
+    },
+    {
+      "scenarioId": "authorization-vs-authentication",
+      "kind": "known-right",
+      "requestDigest": "65d1061e23c01b0b84cb0d0cbe91dea76ac2ec7e46094d29dac62d26b44df086",
+      "samples": [
+        {
+          "verdict": "pass",
+          "reason": "Criterion 1: states authenticate_user! is login-only and 'nothing confirms the order being updated actually belongs to the current user' — an authorization gap. Criterion 2: names IDOR — 'any logged-in user can PATCH any order by guessing/incrementing the id'. Criterion 3: gives concrete fix 'current_user.orders.find(params[:id])' or explicit check, reported as finding only ('this review is read-only')."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states authenticate_user! is login-only and ownership check missing ('authorization gap, not an authentication one'), names IDOR risk ('any logged-in user can PATCH any order by guessing/incrementing the id'), and gives concrete fix direction (current_user.orders.find(params[:id]) or explicit check) as a finding only ('Reporting this as a finding since this review is read-only')."
+        },
+        {
+          "verdict": "pass",
+          "reason": "Answer states authenticate_user! is login-only and ownership check is missing ('authorization gap, not an authentication one'). Names IDOR: 'any logged-in user can PATCH any order by guessing/incrementing the id'. Gives concrete fix direction (current_user.orders.find(params[:id]) or explicit check) as a finding, no code applied ('Reporting this as a finding since this review is read-only')."
+        }
+      ]
+    }
+  ]
+}

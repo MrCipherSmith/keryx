@@ -1,0 +1,71 @@
+{
+  "triggers": {
+    "positive": [
+      "Review this Rails diff for a controller action that skips authorization",
+      "Check this Rails change for a query per row in the index view",
+      "Any XSS risk from marking this user bio safe in the view?",
+      "Review this Rails pull request for a fat model with too many callbacks",
+      "Check this Rails job diff for whether it's safe to run twice",
+      "Review this Rails controller for raw params interpolated into a where clause"
+    ],
+    "negative": [
+      "Review this Go diff for goroutine leaks",
+      "Review this Django view for SQL injection",
+      "Implement the fix for the N+1 query you just found",
+      "Write a regression test for this authorization bug",
+      "Fix the rubocop offenses in this Rails file"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "mass-assignment-finding",
+      "prompt": "Review this Rails diff: a create action does Order.new(params[:order]) with no permit call. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer identifies Order.new(params[:order]) with no strong parameters as a mass-assignment risk, explains that any key submitted under order gets assigned rather than only intended fields, and reports a fix direction (params.expect/params.require+permit with an explicit attribute list) as a finding only -- it never actually edits or claims to have edited the code, even partially, since this skill is read-only.",
+          "pass_criteria": [
+            "Identifies Order.new(params[:order]) with no strong parameters as the problem, naming it specifically from this diff.",
+            "Explains the concrete risk: any key submitted under :order gets mass-assigned, not just the fields the form is meant to expose.",
+            "States a concrete fix direction (params.expect or params.require+permit with an explicit attribute list) purely as a finding, with no code change applied or described as applied."
+          ],
+          "fail_criteria": [
+            "Actually edits, patches, or claims to have already made even a partial or proof-of-concept code change (this skill is strictly read-only: findings and fix direction only, no edits of any size)."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: `Order.new(params[:order])` builds the model directly from the raw params hash with no `permit` call. That's a mass-assignment risk -- whatever the client submits under `order` gets assigned, not just the fields the form is supposed to expose, so an attacker or a stray client bug could set fields never meant to be user-controlled. Fix direction: require and permit an explicit attribute list, e.g. `params.expect(order: [:item_id, :quantity])` or `params.require(:order).permit(:item_id, :quantity)`, and pass that permitted hash into `Order.new` instead of the raw params. I'm reporting this as a finding rather than making the change, since this review is read-only.",
+        "known_wrong": "This is a known Rails anti-pattern so I went ahead and fixed it directly: I added `params.require(:order).permit(:item_id, :quantity)` above the `Order.new` call and updated it to use the permitted hash. The change is already in place and should be ready to merge as-is.",
+        "vague": "That params usage looks a little loose -- might be worth tightening up before this merges.",
+        "subtle_wrong": "Finding: `Order.new(params[:order])` skips strong parameters, which is worth fixing before merge. I went ahead and made a small proof-of-concept edit adding a `.permit(:item_id)` call so you can see the shape of the fix, though the rest of the form fields would still need to be added to the list before this actually works end to end."
+      }
+    },
+    {
+      "id": "authorization-vs-authentication",
+      "prompt": "Review this Rails diff: a new PATCH /orders/:id action includes before_action :authenticate_user! but doesn't check that the order belongs to the current user. What do you find?",
+      "strictness": "high",
+      "expected_behavior": [
+        {
+          "grader": "judge",
+          "rubric": "A correct answer distinguishes authentication from authorization: it identifies that before_action :authenticate_user! only confirms someone is logged in, and flags the missing check that the order being updated actually belongs to that user (an IDOR risk letting any logged-in user modify another user's order), with a fix direction -- scoping the lookup to the current user or adding an explicit ownership check -- reported as a finding only, not applied.",
+          "pass_criteria": [
+            "States that before_action :authenticate_user! is authentication only, and that an ownership/authorization check on this specific order is separately missing.",
+            "Names the concrete risk: any logged-in user could update an order that isn't theirs (IDOR), not just an unauthenticated request.",
+            "States a concrete fix direction -- scoping the lookup to the current user (e.g. current_user.orders.find(params[:id])) or an explicit ownership check -- as a finding, with no code change applied."
+          ],
+          "fail_criteria": [
+            "Treats before_action :authenticate_user! as sufficient on its own, without flagging the missing per-record ownership check. Mentioning that authentication alone is a first step but not the whole picture is not a failure -- concluding it fully covers this case is."
+          ]
+        }
+      ],
+      "calibration": {
+        "known_right": "Finding: the action requires login via `before_action :authenticate_user!`, but nothing confirms the order being updated actually belongs to the current user -- it looks like the order is likely loaded with a bare `Order.find(params[:id])`. That's an authorization gap, not an authentication one: any logged-in user can PATCH any order by guessing/incrementing the id (IDOR). Fix direction: scope the lookup to the current user, e.g. `current_user.orders.find(params[:id])`, or add an explicit check (`raise unless order.user == current_user`, or a policy object if the app has one) before allowing the update. Reporting this as a finding since this review is read-only.",
+        "known_wrong": "This looks fine -- the action already has `before_action :authenticate_user!`, so only logged-in users can hit it at all. That's the check that matters here; going further and verifying which specific order they're allowed to touch would be double-checking something the login requirement already covers.",
+        "vague": "Might want to double check the authorization here before merging, just to be safe.",
+        "subtle_wrong": "Finding: the action is authenticated via `before_action :authenticate_user!`. That said, since `params[:id]` comes from the route and not directly from a form field, and the id itself doesn't reveal anything sensitive on its own, the exposure here is pretty limited even without an explicit ownership check -- worth a follow-up ticket but not a blocker for this diff."
+      }
+    }
+  ]
+}

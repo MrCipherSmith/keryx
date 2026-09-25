@@ -1,0 +1,87 @@
+---
+extends: common
+paths: ["**/*.c", "**/*.h", "**/*.cpp", "**/*.cc", "**/*.cxx", "**/*.hpp", "**/*.hxx", "**/*.hh", "**/*.ipp", "**/*.inl", "**/*.tpp", "**/*.cppm", "**/*.ixx"]
+metadata:
+  origin: authored
+---
+
+# C / C++ patterns
+
+Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
+C/C++ ownership, resource management, and their common anti-patterns.
+Applies to both C and C++ files.
+
+## RAII and ownership (C++)
+
+- Every resource (heap memory, a file handle, a mutex lock, a socket) is
+  owned by exactly one object whose destructor releases it — a raw `new`
+  with a matching `delete` written by hand somewhere else in the function
+  is a bug waiting for an early return or an exception to skip the
+  `delete`. Wrap it in a smart pointer, `std::lock_guard`/`std::unique_lock`,
+  or another RAII type instead.
+- A class that manually manages a resource follows the Rule of
+  Zero (own nothing directly — compose from types that already manage
+  their own resources) or, when it must own a resource directly, the Rule
+  of Five (copy ctor, copy assign, move ctor, move assign, destructor —
+  define all five, or `= delete` the ones that should not exist).
+- A function that hands back a resource does so by return value (RVO/move
+  makes this free), not by an out-parameter raw pointer the caller must
+  remember to release.
+- Never return a pointer or reference to a local (stack) variable, or to a
+  member of a temporary — the referent is destroyed when the function
+  returns, and the caller is left with a dangling reference.
+
+## Manual resource management (C)
+
+- Pair every `malloc`/`fopen`/`pthread_mutex_lock`-style acquire with a
+  `free`/`fclose`/`pthread_mutex_unlock` on every exit path from the
+  function that acquired it, error paths included — a `goto cleanup;`
+  pattern with a single exit-and-release block is the idiomatic way to
+  keep this from being repeated (and missed) at every early `return`.
+- A function that allocates and returns a pointer documents, in its
+  header comment, who owns the result and how it must be released — an
+  API with no stated ownership contract is a leak or a double-free
+  waiting to happen at the call site.
+- Never call `free` on a pointer twice, and set a pointer to `NULL`
+  immediately after freeing it when it could otherwise be read or freed
+  again on a later path — a double-free and a use-after-free are both
+  more likely once a stale non-null value survives past its `free`.
+
+## Containers and iterators
+
+- An iterator, pointer, or reference into a `std::vector` (or similar
+  contiguous container) is invalidated by any operation that can
+  reallocate or shift the underlying storage (`push_back` past capacity,
+  `insert`, `erase`) — do not hold one across such a call; re-fetch it, or
+  use the iterator `erase`/`insert` return to keep iterating correctly.
+- Prefer `std::vector`/`std::array`/`std::string` over a raw
+  owning array or a hand-rolled dynamic buffer — the standard container
+  already manages growth, bounds, and destruction correctly.
+
+## Composition and interfaces
+
+- Prefer composition over deep inheritance hierarchies; reach for
+  polymorphism only when callers genuinely need to treat different
+  concrete types uniformly through a shared interface, not as a default
+  way to share code.
+- A C++ base class meant to be used polymorphically through a base
+  pointer/reference has a `virtual` (or `= default`d, explicitly
+  `virtual`) destructor — a non-virtual destructor on a polymorphic base
+  is undefined behavior when deleting through the base pointer.
+- Keep a public C API's surface small and its ownership rules explicit in
+  the header; do not expose an internal struct's full layout when an
+  opaque handle plus accessor functions would let the implementation
+  change without breaking callers.
+
+## Anti-patterns to flag
+
+- A "god header" with unrelated free functions and macros accumulating
+  under a generic name (`utils.h`, `common.h`) — split by what the code
+  actually does.
+- C-style casts (`(Type)x`) in C++ where a named cast
+  (`static_cast`/`dynamic_cast`/`const_cast`/`reinterpret_cast`) would say
+  which conversion is actually intended and let the compiler catch the
+  wrong one.
+- Output parameters used to fake multiple return values where
+  `std::tuple`/`std::pair`/a small struct (or, in C, a returned struct)
+  would be clearer and harder to call incorrectly.
