@@ -1,7 +1,7 @@
 // Flow 308 (AC8): the `/conform` modal, driven by real keypresses. Invented
 // content throughout (AC10).
 
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   flattenConformClauses,
   formatConformClauseLines,
@@ -10,6 +10,7 @@ import {
   isConformCommand,
   openConform,
   type ConformClauseRow,
+  type ConformHunkBudget,
   type ConformSetupRead,
   type ConformTargetOption,
 } from "./conform-inspector";
@@ -89,6 +90,99 @@ test("formatConformClauseLines: grouped by kind, in pr/report/hunk order, with s
 
 test("formatConformClauseLines: an empty clause list says so", () => {
   expect(formatConformClauseLines([], 0)).toEqual(["No clauses in this reference document."]);
+});
+
+// Flow 326, AC3/item 2: the TUI surfaces the same budget info the CLI's
+// text/JSON report does — a header line, and a per-clause "judged on K of N"
+// marker — not just the aggregated hunksJudged/hunksBelowThreshold counts.
+describe("Flow 326, AC3/item 2: the TUI surfaces --max-hunk-calls budget info same as the CLI", () => {
+  const HUNK_BUDGET: ConformHunkBudget = {
+    maxHunkCalls: 6,
+    totalHunks: 12,
+    hunksJudged: 3,
+    hunksSkipped: 9,
+    truncatedClauses: ["hunks-1", "hunks-2"],
+  };
+
+  const TRUNCATED_ROW: ConformClauseRow = {
+    clause_id: "hunks-1",
+    state_kind: "hunk",
+    status: "likely-violated",
+    evidence: [],
+    hunksJudged: 3,
+    hunksBelowThreshold: 2,
+    hunksTotal: 12,
+  };
+
+  const SKIPPED_ROW: ConformClauseRow = {
+    clause_id: "hunks-2",
+    state_kind: "hunk",
+    status: "not-evaluated",
+    evidence: [],
+    reason: "skipped by --max-hunk-calls (0 of 12 hunks judged)",
+  };
+
+  test("a hunk budget line renders above the grouped clause rows, same shape as the CLI's report", () => {
+    const lines = formatConformClauseLines([TRUNCATED_ROW], 0, HUNK_BUDGET);
+    expect(lines[0]).toBe("hunk budget: judged 3/12 hunk(s) (--max-hunk-calls 6); 9 hunk(s) skipped for clause(s): hunks-1, hunks-2");
+  });
+
+  test("no budget line when nothing was skipped", () => {
+    const lines = formatConformClauseLines([TRUNCATED_ROW], 0);
+    expect(lines.some((l) => l.startsWith("hunk budget:"))).toBe(false);
+  });
+
+  test("a clause judged on a subset of hunks carries a 'judged K of N' marker on its own row", () => {
+    const lines = formatConformClauseLines([TRUNCATED_ROW], 0, HUNK_BUDGET);
+    expect(lines.some((l) => l.includes("hunks-1") && l.includes("(judged 3 of 12 hunks)"))).toBe(true);
+  });
+
+  test("a clause the budget skipped entirely shows the not-evaluated reason, not a generic fallback", () => {
+    const lines = formatConformClauseLines([SKIPPED_ROW], 0, HUNK_BUDGET);
+    expect(lines.some((l) => l.includes("hunks-2") && l.includes("skipped by --max-hunk-calls (0 of 12 hunks judged)"))).toBe(true);
+  });
+
+  test("a not-evaluated row with no budget reason still falls back to the generic text", () => {
+    const lines = formatConformClauseLines([{ clause_id: "hunks-3", state_kind: "hunk", status: "not-evaluated", evidence: [] }], 0);
+    expect(lines.some((l) => l.includes("hunks-3") && l.includes("no state supplied this run"))).toBe(true);
+  });
+
+  otuiTest("AC8/item 2: a run outcome's hunkBudget renders in the Clauses tab", async () => {
+    const otui = OTUI!;
+    const h = await mountChrome(otui);
+    const modal = openConform(otui.core, h.chrome, {
+      cwd: "/tmp/does-not-matter",
+      onKeypress: keypressSource(h.renderer),
+      loadSetup: async () => SETUP,
+      run: async (_cwd, refPath, target) => ({ ok: true, refPath, target, clauses: [TRUNCATED_ROW, SKIPPED_ROW], hunkBudget: HUNK_BUDGET }),
+      visibleRows: 12,
+    });
+    try {
+      expect(modal).toBeDefined();
+      await modal!.ready;
+      // Pick the first recent doc (cursor starts at row 0), then move down
+      // twice (past the second doc row) onto the first target row and run it
+      // — the same sequence the AC8 "pick a doc, pick a target" test above
+      // uses.
+      await h.mockInput.pressEnter();
+      await settle(h);
+      await h.mockInput.pressArrow("down");
+      await settle(h);
+      await h.mockInput.pressArrow("down");
+      await settle(h);
+      await h.mockInput.pressEnter();
+      await settle(h);
+      await modal!.settled();
+
+      const text = modal!.visibleLines().join("\n");
+      expect(text).toContain("hunk budget: judged 3/12 hunk(s)");
+      expect(text).toContain("(judged 3 of 12 hunks)");
+      expect(text).toContain("skipped by --max-hunk-calls");
+    } finally {
+      modal?.close();
+      h.destroy();
+    }
+  });
 });
 
 test("flattenConformClauses matches formatConformClauseLines's own row order", () => {

@@ -149,9 +149,22 @@ export function notCheckableVerdict(clause: ReferenceClause): ConformVerdict {
   };
 }
 
-/** A checkable clause whose kind has no state supplied this run (AC6: "listed as not evaluated"). */
-export function notEvaluatedVerdict(clause: ReferenceClause): ConformVerdict {
-  return { clause_id: clause.clause_id, state_kind: clause.state_kind, status: "not-evaluated", factLines: [] };
+/**
+ * A checkable clause whose kind has no state supplied this run (AC6: "listed
+ * as not evaluated"). Flow 326, AC3: a hunk-kind clause that lost its entire
+ * `--max-hunk-calls` share carries a `reason` naming why — the caller (e.g.
+ * `runConform`'s hunk scoring) passes one such as
+ * `"skipped by --max-hunk-calls (0 of 12 hunks judged)"` rather than leaving
+ * this indistinguishable from "no hunks existed at all in the diff".
+ */
+export function notEvaluatedVerdict(clause: ReferenceClause, reason?: string): ConformVerdict {
+  return {
+    clause_id: clause.clause_id,
+    state_kind: clause.state_kind,
+    status: "not-evaluated",
+    factLines: [],
+    ...(reason !== undefined ? { reason } : {}),
+  };
 }
 
 /** A checkable clause that WAS asked — Jev's probability decides `satisfied` vs `likely-violated` against `threshold`. */
@@ -184,27 +197,72 @@ export const DEFAULT_MAX_HUNK_CALLS = 40;
 export const DEFAULT_MAX_HUNKS = 3;
 
 export interface HunkBudgetResult<T> {
-  /** The regions to actually score this run — a prefix of the input, kept in order. */
+  /** The regions to actually score this run — a prefix of the input, kept in order. The union of every clause's own share: the longest a clause's quota goes. */
   readonly regions: readonly T[];
   readonly totalRegions: number;
   readonly skippedRegions: number;
+  /**
+   * How many of `regions` (a prefix, first-encountered-first) each hunk-kind
+   * clause gets judged against — keyed by `clause_id`, same keys as the
+   * `hunkClauseIds` passed in. A clause missing 0 here still has an entry (0
+   * is a valid quota, not an absence) so a caller can always `.get(id) ?? 0`.
+   */
+  readonly judgedPerClause: ReadonlyMap<string, number>;
 }
 
 /**
- * AC3: cap the number of hunk × clause questions a run sends. Each region
- * scored costs one question per hunk-kind clause, so the region budget is
- * `floor(maxHunkCalls / hunkClauseCount)` — a prefix of the input regions is
- * kept (deterministic, first-encountered-first), and the rest are reported as
- * skipped rather than silently dropped. `hunkClauseCount <= 0` or no regions
- * at all needs no bounding: there is nothing to ask.
+ * AC3: cap the number of hunk × clause questions a run sends.
+ *
+ * When the budget covers at least one full round (`maxHunkCalls >=
+ * hunkClauseIds.length`), every clause gets the same `floor(maxHunkCalls /
+ * hunkClauseCount)` region budget — unchanged from the original design, and
+ * what keeps every clause's report row directly comparable.
+ *
+ * When the budget is SMALLER than the clause count, `floor` alone would give
+ * every clause 0 (rounds down to nothing) and silently drop every hunk-kind
+ * clause from the report. Instead, the per-clause floor: while the budget
+ * allows, give each clause (in the order given) 1 judged hunk before giving
+ * any clause a 2nd — so a budget of `maxHunkCalls` with more clauses than
+ * that spends itself on the first `maxHunkCalls` clauses (1 hunk each) and
+ * leaves the rest at 0, rather than spending it on nobody. Those 0-quota
+ * clauses are what the caller reports as not-evaluated (AC3), not silently
+ * vanished.
+ *
+ * A prefix of the input regions is kept (deterministic, first-encountered/
+ * diff order), and the rest are reported as skipped rather than silently
+ * dropped. `hunkClauseIds` empty or no regions at all needs no bounding:
+ * there is nothing to ask.
  */
-export function boundHunkRegions<T>(regions: readonly T[], hunkClauseCount: number, maxHunkCalls: number = DEFAULT_MAX_HUNK_CALLS): HunkBudgetResult<T> {
-  if (hunkClauseCount <= 0 || regions.length === 0) {
-    return { regions, totalRegions: regions.length, skippedRegions: 0 };
+export function boundHunkRegions<T>(
+  regions: readonly T[],
+  hunkClauseIds: readonly string[],
+  maxHunkCalls: number = DEFAULT_MAX_HUNK_CALLS,
+): HunkBudgetResult<T> {
+  if (hunkClauseIds.length === 0 || regions.length === 0) {
+    const judgedPerClause = new Map(hunkClauseIds.map((id) => [id, regions.length]));
+    return { regions, totalRegions: regions.length, skippedRegions: 0, judgedPerClause };
   }
-  const maxRegions = Math.max(0, Math.floor(maxHunkCalls / hunkClauseCount));
-  const kept = regions.slice(0, maxRegions);
-  return { regions: kept, totalRegions: regions.length, skippedRegions: regions.length - kept.length };
+  const clauseCount = hunkClauseIds.length;
+  const base = Math.max(0, Math.floor(maxHunkCalls / clauseCount));
+  const perClauseQuota =
+    base >= 1
+      ? hunkClauseIds.map(() => base)
+      : hunkClauseIds.map((_, i) => (i < maxHunkCalls ? 1 : 0));
+  const judgedPerClause = new Map(hunkClauseIds.map((id, i) => [id, Math.min(regions.length, perClauseQuota[i]!)]));
+  const maxJudged = Math.max(0, ...judgedPerClause.values());
+  const kept = regions.slice(0, maxJudged);
+  return { regions: kept, totalRegions: regions.length, skippedRegions: regions.length - kept.length, judgedPerClause };
+}
+
+/**
+ * Flow 326, AC3: which of `hunkClauseIds` still have a judged slot at
+ * `index` (0-based) into `boundHunkRegions`'s own `regions` prefix — a clause
+ * whose quota is shorter than another's stops appearing once `index` passes
+ * its own quota, letting a caller score one region for only the clauses that
+ * still want it (the per-clause floor means quotas can differ per clause).
+ */
+export function activeClausesAt(judgedPerClause: ReadonlyMap<string, number>, index: number, hunkClauseIds: readonly string[]): readonly string[] {
+  return hunkClauseIds.filter((id) => (judgedPerClause.get(id) ?? 0) > index);
 }
 
 // ---------------------------------------------------------------------------

@@ -4036,9 +4036,9 @@ keryx review conform --ref docs/pipeline-contribution-policy.md --pr 999 --json
 | `--threshold <0..1>` | Below this Jev probability a clause is `likely-violated` (and, with `--explain`, explained). Default `0.5`. |
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
 | `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), every Jev call (`jev-response.json`), and (with `--explain`) the explanation pass (`explain-response.json`) — no real `gh` call, no real network. |
-| `--json` | Prints `{ref, target, threshold, clauses, usage}` instead of the human-readable report. |
+| `--json` | Prints `{ref, target, threshold, clauses, usage, hunkBudget?}` instead of the human-readable report. Each `clauses[]` entry carries `clause_id`, `state_kind`, `status`, and (hunk-kind only) `hunksJudged`/`hunksBelowThreshold` and, only when `--max-hunk-calls` cut that clause down to fewer hunks than the diff has, `hunksTotal` (the "N" in "judged on K of N"). `hunks` (the full per-hunk detail) is present only for hunk-kind clauses — a pr/report-kind clause is never scored per-hunk, so it no longer carries an always-empty `hunks: []` (flow 326). `hunkBudget` (`{maxHunkCalls, totalHunks, hunksJudged, hunksSkipped, truncatedClauses}`) is present only when `--max-hunk-calls` actually truncated something this run. See the example below. |
 | `--max-hunks <n>` | Flow 326. How many further violating hunk locations a hunk-kind clause's row shows, beyond the single worst one. Default `3`. |
-| `--max-hunk-calls <n>` | Flow 326. Caps hunk × clause Jev questions for the WHOLE run — each judged hunk costs one question per hunk-kind clause, so the region budget is `floor(--max-hunk-calls / hunk-kind-clause-count)`. Default `40`. When it truncates, the report names which clauses were judged on a subset and how many hunks were skipped — never silently. |
+| `--max-hunk-calls <n>` | Flow 326. Caps hunk × clause Jev questions for the WHOLE run. With enough budget for every hunk-kind clause to get at least one full share (`--max-hunk-calls >= hunk-kind-clause-count`), every clause gets the same `floor(--max-hunk-calls / hunk-kind-clause-count)` region budget, and the hunks kept are the FIRST that many, in diff order, per clause. With a SMALLER budget than the clause count, the per-clause floor takes over: while the budget allows, each clause (in the order its `[state:hunk]` line appears in the reference document) gets 1 judged hunk before any clause gets a 2nd — so `--max-hunk-calls 1` with 2 hunk-kind clauses judges the FIRST clause on its first hunk and leaves the second at 0, rather than rounding both down to 0. At `--max-hunk-calls 0`, every hunk-kind clause gets 0 judged hunks. A clause left at 0 this way is never dropped from the report — it appears with `status: "not-evaluated"` and a reason naming the budget (`"skipped by --max-hunk-calls (0 of N hunks judged)"`); a clause judged on a subset keeps its usual status but carries the `hunksTotal`/"judged on K of N hunks" marker described above (text, JSON, and the `/conform` TUI). Default `40`. |
 | `--detail` | Flow 326. Prints the full per-hunk breakdown (every judged hunk's status/location/probability) under each hunk-kind clause's row in the TEXT report. `--json` always nests this detail, with or without `--detail`. |
 
 **One row per clause, not one row per hunk × clause (flow 326).** A live run
@@ -4067,6 +4067,54 @@ shown — always stays available: nested under each clause's `hunks` field in
       - src/invented/module4.ts:1-3 (20%)
 ```
 
+**`--json` with `--max-hunk-calls 1` in effect** (2 hunk-kind clauses against
+a 12-hunk diff — a budget smaller than the clause count, the per-clause floor
+case). `hunks-1` (the first `[state:hunk]` clause in the reference document)
+got the single available hunk, so it carries `hunksJudged`/`hunksTotal` (the
+"1 of 12" marker, present only because this clause was actually cut short)
+and its usual `hunks`/`worst` detail. `hunks-2` got none of the budget — it
+is `not-evaluated` with a reason naming why, not dropped from `clauses[]`.
+The pr-kind `change-limits-1` clause is unaffected by the hunk budget at all,
+and has no `hunks` field (flow 326 nit: a pr/report-kind clause is never
+scored per-hunk):
+
+```json
+{
+  "ref": "docs/pipeline-contribution-policy.md",
+  "target": { "kind": "pr", "label": "PR #998 — ..." },
+  "threshold": 0.5,
+  "clauses": [
+    {
+      "clause_id": "change-limits-1",
+      "state_kind": "pr",
+      "status": "satisfied",
+      "probability": 0.91,
+      "evidence": ["..."]
+    },
+    {
+      "clause_id": "hunks-1",
+      "state_kind": "hunk",
+      "status": "likely-violated",
+      "evidence": [],
+      "hunksJudged": 1,
+      "hunksBelowThreshold": 1,
+      "hunksTotal": 12,
+      "worst": { "location": { "path": "src/invented/module1.ts", "startLine": 1, "endLine": 3 }, "probability": 0.2 },
+      "hunks": [{ "status": "likely-violated", "probability": 0.2, "location": { "path": "src/invented/module1.ts", "startLine": 1, "endLine": 3 }, "evidence": [] }]
+    },
+    {
+      "clause_id": "hunks-2",
+      "state_kind": "hunk",
+      "status": "not-evaluated",
+      "reason": "skipped by --max-hunk-calls (0 of 12 hunks judged)",
+      "evidence": []
+    }
+  ],
+  "hunkBudget": { "maxHunkCalls": 1, "totalHunks": 12, "hunksJudged": 1, "hunksSkipped": 11, "truncatedClauses": ["hunks-1", "hunks-2"] },
+  "usage": { "jevCalls": 2 }
+}
+```
+
 **Opt-in, and named as a privacy decision.** Disabled by default. The
 document's clauses, PR text, report and diff are sent to Jev after secret
 redaction, and nothing leaves the machine unless `review.jev.conform` is on.
@@ -4081,6 +4129,13 @@ the command refuses before any read and makes no network call.
 
 **A checkable clause whose kind has no target this run is `not evaluated`**,
 never silently dropped — the same discipline `not-checkable` clauses get.
+This also covers a hunk-kind clause `--max-hunk-calls` left with 0 judged
+hunks (flow 326, AC3): it is `not-evaluated` with a reason naming the budget
+(`"skipped by --max-hunk-calls (0 of N hunks judged)"`), distinct from a
+target that supplied no state for that kind at all. The `/conform` TUI runs
+the identical budget (fixed at the default `--max-hunk-calls`, not
+configurable there) and shows the same "hunk budget:" line and per-clause
+"judged on K of N" marker.
 
 **Honest limits.** This mode is the least mechanical use of Jev in this
 repository: deciding whether a PR body names an out-of-scope list is closer

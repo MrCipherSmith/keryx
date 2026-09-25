@@ -98,10 +98,22 @@ function locationLabel(loc: { readonly path: string; readonly startLine: number;
  * hunk locations — never the full hunk × clause cross-product. A pr/report
  * clause (already one verdict) renders the same as before flow 326.
  */
-function renderAggregateLines(agg: ConformClauseAggregate, explanation: string | undefined, detail: boolean): string[] {
+function renderAggregateLines(
+  agg: ConformClauseAggregate,
+  explanation: string | undefined,
+  detail: boolean,
+  hunkBudget?: ConformHunkBudget,
+): string[] {
   const lines: string[] = [`- [${STATUS_LABEL[agg.status]}] ${agg.clause_id}`];
+  const truncatedByBudget = hunkBudget !== undefined && hunkBudget.truncatedClauses.includes(agg.clause_id);
   if (agg.hunksJudged > 0) {
     lines.push(`    hunks judged: ${agg.hunksJudged}, below threshold: ${agg.hunksBelowThreshold}`);
+    // Flow 326, AC3: a clause judged on a SUBSET of the diff's hunks (the
+    // budget's per-clause floor gave it fewer than the diff has) still stays
+    // satisfied/likely-violated as usual — but the subset is never silent.
+    if (truncatedByBudget) {
+      lines.push(`    judged on ${agg.hunksJudged} of ${hunkBudget!.totalHunks} hunks (--max-hunk-calls ${hunkBudget!.maxHunkCalls})`);
+    }
   }
   if (agg.worst !== undefined) {
     lines.push(`    worst hunk: ${locationLabel(agg.worst.location)} (${pct(agg.worst.probability)})`);
@@ -156,7 +168,7 @@ export function renderConformMarkdown(result: ConformRunResult, options: Conform
     if (inKind.length === 0) continue;
     lines.push(`## ${kind}`, "");
     for (const agg of inKind) {
-      lines.push(...renderAggregateLines(agg, result.explanations?.[agg.clause_id], detail));
+      lines.push(...renderAggregateLines(agg, result.explanations?.[agg.clause_id], detail, result.hunkBudget));
     }
     lines.push("");
   }
@@ -185,7 +197,7 @@ export function renderConformMarkdown(result: ConformRunResult, options: Conform
   return lines.join("\n");
 }
 
-/** AC6/flow 326 AC1's `--json` shape — one object per clause, the same aggregate the markdown rendering reads, plus the full per-hunk detail nested under `hunks`. */
+/** AC6/flow 326 AC1's `--json` shape — one object per clause, the same aggregate the markdown rendering reads, plus (hunk-kind clauses only) the full per-hunk detail nested under `hunks`. */
 export function conformResultToJson(result: ConformRunResult, options: ConformRenderOptions = {}): unknown {
   const maxHunks = options.maxHunks ?? DEFAULT_MAX_HUNKS;
   const aggregates = aggregateConformVerdicts(result.verdicts, maxHunks);
@@ -202,16 +214,29 @@ export function conformResultToJson(result: ConformRunResult, options: ConformRe
       evidence: a.factLines,
       ...(a.decisive !== undefined ? { decisive: a.decisive } : {}),
       ...(a.hunksJudged > 0 ? { hunksJudged: a.hunksJudged, hunksBelowThreshold: a.hunksBelowThreshold } : {}),
+      // Flow 326, AC3: visible in JSON too — only when the budget actually
+      // cut this clause down to fewer hunks than the diff has.
+      ...(a.hunksJudged > 0 && result.hunkBudget !== undefined && result.hunkBudget.truncatedClauses.includes(a.clause_id)
+        ? { hunksTotal: result.hunkBudget.totalHunks }
+        : {}),
       ...(a.worst !== undefined ? { worst: a.worst } : {}),
       ...(a.furtherViolations.length > 0 ? { furtherViolations: a.furtherViolations } : {}),
       ...(result.explanations?.[a.clause_id] !== undefined ? { explanation: result.explanations[a.clause_id] } : {}),
-      // AC1: the full per-hunk detail stays available under --json, nested per clause.
-      hunks: a.detail.map((v) => ({
-        status: v.status,
-        ...(v.probability !== undefined ? { probability: v.probability } : {}),
-        ...(v.location !== undefined ? { location: v.location } : {}),
-        evidence: v.factLines,
-      })),
+      // AC1: the full per-hunk detail stays available under --json, nested per
+      // clause — but only for a hunk-kind clause. A pr/report-kind clause is
+      // never scored per-hunk (its single verdict already renders above as
+      // `probability`/`decisive`/`evidence`), so `hunks: []` there was noise,
+      // not data (flow 326 nit).
+      ...(a.state_kind === "hunk"
+        ? {
+            hunks: a.detail.map((v) => ({
+              status: v.status,
+              ...(v.probability !== undefined ? { probability: v.probability } : {}),
+              ...(v.location !== undefined ? { location: v.location } : {}),
+              evidence: v.factLines,
+            })),
+          }
+        : {}),
     })),
     ...(result.hunkBudget !== undefined ? { hunkBudget: result.hunkBudget } : {}),
     ...(result.usage !== undefined ? { usage: result.usage } : {}),

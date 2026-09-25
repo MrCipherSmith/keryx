@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { applyClauseTags, extractReferenceClauses } from "./conform-clauses";
 import {
+  activeClausesAt,
   aggregateConformVerdicts,
   batchConformItems,
   boundHunkRegions,
@@ -90,6 +91,16 @@ describe("AC6: verdict computation", () => {
     const c = clause("A pr-kind rule.");
     const verdict = notEvaluatedVerdict(c);
     expect(verdict.status).toBe("not-evaluated");
+    expect(verdict.reason).toBeUndefined();
+  });
+
+  // Flow 326, AC3: a hunk-kind clause skipped by the `--max-hunk-calls`
+  // budget carries a reason distinguishing it from "no hunks in the diff".
+  test("notEvaluatedVerdict carries a reason when the caller names one (AC3: budget-skipped)", () => {
+    const c = clause("A pr-kind rule.");
+    const verdict = notEvaluatedVerdict(c, "skipped by --max-hunk-calls (0 of 12 hunks judged)");
+    expect(verdict.status).toBe("not-evaluated");
+    expect(verdict.reason).toBe("skipped by --max-hunk-calls (0 of 12 hunks judged)");
   });
 
   test("evaluatedVerdict: at/above the threshold is satisfied, below is likely-violated", () => {
@@ -218,31 +229,36 @@ describe("Flow 326, AC2: aggregateConformVerdicts — one row per clause, not on
 });
 
 describe("Flow 326, AC3: boundHunkRegions — caps hunk × clause questions per run", () => {
+  const CLAUSE_IDS_4 = ["c0", "c1", "c2", "c3"];
+
   test("under budget: every region is kept, nothing skipped", () => {
-    const result = boundHunkRegions(["r1", "r2", "r3"], 4, 40);
+    const result = boundHunkRegions(["r1", "r2", "r3"], CLAUSE_IDS_4, 40);
     expect(result.regions).toEqual(["r1", "r2", "r3"]);
     expect(result.skippedRegions).toBe(0);
     expect(result.totalRegions).toBe(3);
+    for (const id of CLAUSE_IDS_4) expect(result.judgedPerClause.get(id)).toBe(3);
   });
 
   test("over budget: a deterministic prefix is kept, the rest counted as skipped", () => {
     const regions = Array.from({ length: 10 }, (_, i) => `r${i}`);
-    // 4 clauses * 10 regions = 40 questions; budget 12 -> floor(12/4) = 3 regions kept.
-    const result = boundHunkRegions(regions, 4, 12);
+    // 4 clauses * 10 regions = 40 questions; budget 12 -> floor(12/4) = 3 regions kept, EVERY clause equally.
+    const result = boundHunkRegions(regions, CLAUSE_IDS_4, 12);
     expect(result.regions).toEqual(["r0", "r1", "r2"]);
     expect(result.skippedRegions).toBe(7);
     expect(result.totalRegions).toBe(10);
+    for (const id of CLAUSE_IDS_4) expect(result.judgedPerClause.get(id)).toBe(3);
   });
 
   test("no hunk-kind clauses at all: nothing to bound, every region kept", () => {
     const regions = ["r1", "r2"];
-    const result = boundHunkRegions(regions, 0, 40);
+    const result = boundHunkRegions(regions, [], 40);
     expect(result.regions).toEqual(regions);
     expect(result.skippedRegions).toBe(0);
+    expect(result.judgedPerClause.size).toBe(0);
   });
 
   test("no regions: nothing to bound", () => {
-    const result = boundHunkRegions([], 5, 40);
+    const result = boundHunkRegions([], ["c0", "c1", "c2", "c3", "c4"], 40);
     expect(result.regions).toEqual([]);
     expect(result.skippedRegions).toBe(0);
     expect(result.totalRegions).toBe(0);
@@ -250,5 +266,52 @@ describe("Flow 326, AC3: boundHunkRegions — caps hunk × clause questions per 
 
   test("the default max-hunk-calls constant is 40", () => {
     expect(DEFAULT_MAX_HUNK_CALLS).toBe(40);
+  });
+
+  // Flow 326: budget smaller than the clause count — floor(maxHunkCalls /
+  // clauseCount) alone would round every clause down to 0 and silently drop
+  // every hunk-kind clause. The per-clause floor instead spends the budget on
+  // the first `maxHunkCalls` clauses (1 hunk each), 0 for the rest.
+  describe("per-clause floor: budget smaller than the clause count", () => {
+    const regions = Array.from({ length: 12 }, (_, i) => `r${i}`);
+    const clauseIds = ["hunks-1", "hunks-2"];
+
+    test("--max-hunk-calls 0: every clause gets 0, nothing is asked", () => {
+      const result = boundHunkRegions(regions, clauseIds, 0);
+      expect(result.regions).toEqual([]);
+      expect(result.judgedPerClause.get("hunks-1")).toBe(0);
+      expect(result.judgedPerClause.get("hunks-2")).toBe(0);
+      expect(result.skippedRegions).toBe(12);
+    });
+
+    test("--max-hunk-calls 1: the FIRST clause gets 1 judged hunk, the rest get 0 — not floor(1/2)=0 for everyone", () => {
+      const result = boundHunkRegions(regions, clauseIds, 1);
+      expect(result.regions).toEqual(["r0"]);
+      expect(result.judgedPerClause.get("hunks-1")).toBe(1);
+      expect(result.judgedPerClause.get("hunks-2")).toBe(0);
+    });
+
+    test("--max-hunk-calls 3 with 4 clauses: the first 3 clauses get 1 hunk each, the 4th gets 0", () => {
+      const result = boundHunkRegions(regions, [...clauseIds, "hunks-3", "hunks-4"], 3);
+      expect(result.judgedPerClause.get("hunks-1")).toBe(1);
+      expect(result.judgedPerClause.get("hunks-2")).toBe(1);
+      expect(result.judgedPerClause.get("hunks-3")).toBe(1);
+      expect(result.judgedPerClause.get("hunks-4")).toBe(0);
+    });
+  });
+
+  describe("activeClausesAt", () => {
+    test("returns only the clauses whose quota reaches this index", () => {
+      const judgedPerClause = new Map([
+        ["a", 3],
+        ["b", 1],
+        ["c", 0],
+      ]);
+      const ids = ["a", "b", "c"];
+      expect(activeClausesAt(judgedPerClause, 0, ids)).toEqual(["a", "b"]);
+      expect(activeClausesAt(judgedPerClause, 1, ids)).toEqual(["a"]);
+      expect(activeClausesAt(judgedPerClause, 2, ids)).toEqual(["a"]);
+      expect(activeClausesAt(judgedPerClause, 3, ids)).toEqual([]);
+    });
   });
 });

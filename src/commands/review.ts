@@ -45,6 +45,7 @@ import {
   renderReviewScopeMarkdown,
   renderScopedDiff,
   type ReviewScope,
+  type ScopedRegion,
 } from "../review/scope";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import { loadRoutingConfig } from "../harness/routing/config";
@@ -177,6 +178,7 @@ import {
   type ReportFindingLike,
 } from "../review/conform-state";
 import {
+  activeClausesAt,
   batchConformItems,
   boundHunkRegions,
   DEFAULT_CONFORM_THRESHOLD,
@@ -1964,6 +1966,67 @@ async function readReportFindings(reportDir: string): Promise<readonly ReportFin
   }
 }
 
+interface HunkScoringResult {
+  readonly verdicts: readonly ConformVerdict[];
+  /** clause_ids that got at least 1 judged hunk this run — AC3: a clause whose budget share rounded to 0 is NOT in here. */
+  readonly supplied: ReadonlySet<string>;
+  readonly hunkBudget?: ConformHunkBudget;
+  /** The diff's own hunk count (AC3's "N" in "0 of N hunks judged") — 0 when the diff has no hunks at all, distinct from "budget ran out". */
+  readonly totalRegions: number;
+}
+
+/**
+ * Flow 326, AC3: score every hunk-kind clause against `allRegions`, honoring
+ * `--max-hunk-calls`'s per-clause floor (`boundHunkRegions`) — each region is
+ * scored only for the clauses whose quota still reaches it
+ * (`activeClausesAt`), so a clause that got fewer hunks than another (or
+ * none at all) never gets asked about a hunk beyond its own share. Shared by
+ * both the `--pr` and the diff/`--report`-absent branches of `runConform`
+ * below, which otherwise duplicated this exact loop.
+ */
+async function scoreHunkClauses(
+  hunkClauses: readonly ReferenceClause[],
+  allRegions: readonly ScopedRegion[],
+  maxHunkCalls: number,
+  fetchFn: typeof fetch,
+  model: string,
+  threshold: number,
+  acc: ConformUsageAccumulator,
+): Promise<HunkScoringResult> {
+  const hunkClauseIds = hunkClauses.map((c) => c.clause_id);
+  const byId = new Map(hunkClauses.map((c) => [c.clause_id, c]));
+  const bounded = boundHunkRegions(allRegions, hunkClauseIds, maxHunkCalls);
+  const supplied = new Set<string>();
+  for (const id of hunkClauseIds) {
+    if ((bounded.judgedPerClause.get(id) ?? 0) > 0) supplied.add(id);
+  }
+  let verdicts: ConformVerdict[] = [];
+  let index = 0;
+  for (const region of bounded.regions) {
+    const activeClauses = activeClausesAt(bounded.judgedPerClause, index, hunkClauseIds).map((id) => byId.get(id)!);
+    const items: ConformBatchItem[] = activeClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
+    verdicts = verdicts.concat(
+      await scoreConformClauses(items, hunkRedactedStateText(region), fetchFn, model, threshold, acc, {
+        path: region.path,
+        startLine: region.startLine,
+        endLine: region.endLine,
+      }),
+    );
+    index += 1;
+  }
+  let hunkBudget: ConformHunkBudget | undefined;
+  if (bounded.skippedRegions > 0) {
+    hunkBudget = {
+      maxHunkCalls,
+      totalHunks: bounded.totalRegions,
+      hunksJudged: bounded.regions.length,
+      hunksSkipped: bounded.skippedRegions,
+      truncatedClauses: hunkClauseIds.filter((id) => (bounded.judgedPerClause.get(id) ?? 0) < bounded.totalRegions),
+    };
+  }
+  return { verdicts, supplied, ...(hunkBudget !== undefined ? { hunkBudget } : {}), totalRegions: bounded.totalRegions };
+}
+
 async function runConform(args: string[]): Promise<void> {
   rejectUnknownFlags(args, CONFORM_FLAGS, "conform");
   const cwd = process.cwd();
@@ -2036,6 +2099,10 @@ async function runConform(args: string[]): Promise<void> {
   // Flow 326, AC3: set only when `--max-hunk-calls` actually truncated the
   // hunks judged this run — never silently.
   let hunkBudget: ConformHunkBudget | undefined;
+  // Flow 326, AC3: the diff's own hunk count, so a hunk-kind clause the
+  // budget skipped entirely (0 judged) can say "0 of N" rather than being
+  // indistinguishable from a diff with no hunks in it at all (N === 0 there).
+  let hunkTotalRegions = 0;
 
   if (prArg !== undefined) {
     const number = Number(prArg);
@@ -2051,28 +2118,11 @@ async function runConform(args: string[]): Promise<void> {
     evaluated = evaluated.concat(await scoreConformClauses(prItems, redacted, fetchFn, model, threshold, acc));
 
     const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
-    const allRegions = hunkRegionsFromDiff(info.diff);
-    if (allRegions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
-    const boundedRegions = boundHunkRegions(allRegions, hunkClauses.length, maxHunkCalls);
-    for (const region of boundedRegions.regions) {
-      const hunkItems: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
-      evaluated = evaluated.concat(
-        await scoreConformClauses(hunkItems, hunkRedactedStateText(region), fetchFn, model, threshold, acc, {
-          path: region.path,
-          startLine: region.startLine,
-          endLine: region.endLine,
-        }),
-      );
-    }
-    if (boundedRegions.skippedRegions > 0) {
-      hunkBudget = {
-        maxHunkCalls,
-        totalHunks: boundedRegions.totalRegions,
-        hunksJudged: boundedRegions.regions.length,
-        hunksSkipped: boundedRegions.skippedRegions,
-        truncatedClauses: hunkClauses.map((c) => c.clause_id),
-      };
-    }
+    const hunkResult = await scoreHunkClauses(hunkClauses, hunkRegionsFromDiff(info.diff), maxHunkCalls, fetchFn, model, threshold, acc);
+    evaluated = evaluated.concat(hunkResult.verdicts);
+    for (const id of hunkResult.supplied) supplied.add(id);
+    hunkBudget = hunkResult.hunkBudget;
+    hunkTotalRegions = hunkResult.totalRegions;
   } else if (reportDir !== undefined) {
     target = { kind: "report", label: reportDir };
     const reportMarkdown = await readFile(join(reportDir, "report.md"), "utf8").catch(() => "");
@@ -2087,31 +2137,24 @@ async function runConform(args: string[]): Promise<void> {
     const diff = await gitDiff(diffRef, DEFAULT_CONTEXT_LINES);
     target = { kind: "diff", label: diffRef ?? "working diff" };
     const hunkClauses = checkable.filter((c) => c.state_kind === "hunk");
-    const allRegions = hunkRegionsFromDiff(diff);
-    if (allRegions.length > 0) for (const clause of hunkClauses) supplied.add(clause.clause_id);
-    const boundedRegions = boundHunkRegions(allRegions, hunkClauses.length, maxHunkCalls);
-    for (const region of boundedRegions.regions) {
-      const items: ConformBatchItem[] = hunkClauses.map((clause) => ({ clause, facts: hunkClauseFacts(region) }));
-      evaluated = evaluated.concat(
-        await scoreConformClauses(items, hunkRedactedStateText(region), fetchFn, model, threshold, acc, {
-          path: region.path,
-          startLine: region.startLine,
-          endLine: region.endLine,
-        }),
-      );
-    }
-    if (boundedRegions.skippedRegions > 0) {
-      hunkBudget = {
-        maxHunkCalls,
-        totalHunks: boundedRegions.totalRegions,
-        hunksJudged: boundedRegions.regions.length,
-        hunksSkipped: boundedRegions.skippedRegions,
-        truncatedClauses: hunkClauses.map((c) => c.clause_id),
-      };
-    }
+    const hunkResult = await scoreHunkClauses(hunkClauses, hunkRegionsFromDiff(diff), maxHunkCalls, fetchFn, model, threshold, acc);
+    evaluated = evaluated.concat(hunkResult.verdicts);
+    for (const id of hunkResult.supplied) supplied.add(id);
+    hunkBudget = hunkResult.hunkBudget;
+    hunkTotalRegions = hunkResult.totalRegions;
   }
 
-  const notEvaluated = checkable.filter((c) => !supplied.has(c.clause_id)).map((c) => notEvaluatedVerdict(c));
+  // Flow 326, AC3: a hunk-kind clause the budget skipped entirely (0 judged,
+  // but the diff DID have hunks — hunkTotalRegions > 0) is not-evaluated for
+  // a specific, visible reason — distinct from a kind with no state at all
+  // this run (a --report target, or a diff with literally no hunks).
+  const notEvaluated = checkable
+    .filter((c) => !supplied.has(c.clause_id))
+    .map((c) =>
+      c.state_kind === "hunk" && hunkTotalRegions > 0
+        ? notEvaluatedVerdict(c, `skipped by --max-hunk-calls (0 of ${hunkTotalRegions} hunks judged)`)
+        : notEvaluatedVerdict(c),
+    );
   const verdicts: ConformVerdict[] = [...evaluated, ...notEvaluated, ...notCheckable.map((c) => notCheckableVerdict(c))];
 
   // Flow 326, AC1: explain the WORST hunk per clause, not every hunk that

@@ -7,7 +7,7 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { explainConformVerdicts, reviewCommand } from "./review";
-import type { ConformVerdict } from "../review/conform-jev";
+import { aggregateConformVerdicts, type ConformVerdict } from "../review/conform-jev";
 import type { ModelTurnInput, ModelTurnResult } from "../harness/provider/single-turn";
 import { CONFORM_RECENTS_PATH } from "../review/conform-report";
 
@@ -262,6 +262,74 @@ describe("Flow 326, AC1/AC5: the aggregated report fits a human read for a large
     expect(text).toContain("hunk budget:");
     expect(text).toContain("judged 3/12 hunk(s)");
     expect(text).toContain("9 hunk(s) skipped for clause(s): hunks-1, hunks-2");
+    // Flow 326, AC3: a clause judged on a subset of the diff's hunks carries
+    // its own visible "judged on K of N" marker, not just the run-wide line.
+    expect(text).toContain("judged on 3 of 12 hunks (--max-hunk-calls 6)");
+  });
+
+  // Flow 326, AC3: `floor(maxHunkCalls / hunkClauseCount)` alone rounds every
+  // hunk-kind clause down to 0 whenever the budget is smaller than the clause
+  // count — the bug this flow fixes vanished every such clause from the
+  // report instead of reporting it not-evaluated. Every checkable clause
+  // (the pr-kind one and both hunk-kind ones) must still be present.
+  describe("Flow 326, AC3: a budget share that rounds to 0 never vanishes a clause from the report", () => {
+    test("--max-hunk-calls 0: both hunk-kind clauses are not-evaluated, with a reason — never dropped", async () => {
+      ROOT = await projectRoot(true);
+      process.chdir(ROOT);
+      process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+      await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--max-hunk-calls", "0", "--json"]);
+
+      const parsed = JSON.parse(output()) as {
+        clauses: readonly { clause_id: string; status: string; reason?: string; state_kind: string }[];
+      };
+      // Every checkable clause from the reference document is present.
+      expect(parsed.clauses.map((c) => c.clause_id).sort()).toEqual(["change-limits-1", "hunks-1", "hunks-2"]);
+
+      const hunks1 = parsed.clauses.find((c) => c.clause_id === "hunks-1")!;
+      const hunks2 = parsed.clauses.find((c) => c.clause_id === "hunks-2")!;
+      expect(hunks1.status).toBe("not-evaluated");
+      expect(hunks1.reason).toBe("skipped by --max-hunk-calls (0 of 12 hunks judged)");
+      expect(hunks2.status).toBe("not-evaluated");
+      expect(hunks2.reason).toBe("skipped by --max-hunk-calls (0 of 12 hunks judged)");
+
+      // The pr-kind clause is unaffected by the hunk budget.
+      const changeLimits = parsed.clauses.find((c) => c.clause_id === "change-limits-1")!;
+      expect(changeLimits.status).not.toBe("not-evaluated");
+
+      logs = [];
+      await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--max-hunk-calls", "0"]);
+      const text2 = output();
+      expect(text2).toContain("hunks-1");
+      expect(text2).toContain("hunks-2");
+      expect(text2).toContain("skipped by --max-hunk-calls (0 of 12 hunks judged)");
+    });
+
+    test("--max-hunk-calls 1 with 2 hunk-kind clauses: the per-clause floor gives ONE clause 1 judged hunk rather than rounding everyone to 0", async () => {
+      ROOT = await projectRoot(true);
+      process.chdir(ROOT);
+      process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+      await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--max-hunk-calls", "1", "--json"]);
+
+      const parsed = JSON.parse(output()) as {
+        clauses: readonly { clause_id: string; status: string; reason?: string; hunksJudged?: number; hunksTotal?: number }[];
+      };
+      expect(parsed.clauses.map((c) => c.clause_id).sort()).toEqual(["change-limits-1", "hunks-1", "hunks-2"]);
+
+      const hunks1 = parsed.clauses.find((c) => c.clause_id === "hunks-1")!;
+      const hunks2 = parsed.clauses.find((c) => c.clause_id === "hunks-2")!;
+      // Exactly one of the two hunk-kind clauses got the single available
+      // hunk judged; the other is not-evaluated with the budget's reason —
+      // never BOTH rounded down to 0.
+      const judged = [hunks1, hunks2].filter((c) => c.status !== "not-evaluated");
+      const skipped = [hunks1, hunks2].filter((c) => c.status === "not-evaluated");
+      expect(judged).toHaveLength(1);
+      expect(skipped).toHaveLength(1);
+      expect(judged[0]?.hunksJudged).toBe(1);
+      expect(judged[0]?.hunksTotal).toBe(12);
+      expect(skipped[0]?.reason).toBe("skipped by --max-hunk-calls (0 of 12 hunks judged)");
+    });
   });
 
   test("--detail prints the full per-hunk breakdown in the text report", async () => {
@@ -289,6 +357,90 @@ describe("Flow 326, AC1/AC5: the aggregated report fits a human read for a large
     const parsed = JSON.parse(output()) as { clauses: readonly { clause_id: string; hunks?: readonly unknown[] }[] };
     const hunks1 = parsed.clauses.find((c) => c.clause_id === "hunks-1");
     expect(hunks1?.hunks).toHaveLength(12);
+  });
+
+  // Flow 326 nit: `hunks: []` on a pr-kind clause was noise (it is never
+  // scored per-hunk) — the field is omitted for it entirely now.
+  test("--json omits `hunks` for the pr-kind clause, keeps it for the hunk-kind clauses", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--json"]);
+
+    const parsed = JSON.parse(output()) as { clauses: readonly Record<string, unknown>[] };
+    const byId = new Map(parsed.clauses.map((c) => [c["clause_id"] as string, c]));
+    expect(byId.get("change-limits-1")).not.toHaveProperty("hunks");
+    expect(byId.get("hunks-1")).toHaveProperty("hunks");
+    expect(byId.get("hunks-2")).toHaveProperty("hunks");
+  });
+});
+
+// Flow 326, AC1: `--explain` sends the model one prompt per VIOLATED clause,
+// never one per judged hunk — `runConform` builds its explain candidates
+// with `aggregateConformVerdicts(verdicts, maxHunks).map((a) =>
+// a.worstVerdict).filter(...)` (review.ts), collapsing every judged hunk for
+// a clause down to its single worst one before `--explain` ever sees it.
+// `--fixtures` answers `--explain` from a canned `explain-response.json`
+// (AC7) — it never calls a model at all — so to actually COUNT prompts this
+// exercises `explainConformVerdicts` with an injected `runTurn`, on verdict
+// data drawn from the many-hunks fixture's real per-hunk detail (the same
+// canned Jev response scores every one of hunks-1's 12 hunks 0.2 — below the
+// default 0.5 threshold — so all 12 are "likely-violated" candidates if the
+// worst-only collapse were ever removed).
+describe("Flow 326, AC1: --explain sends one prompt per violated clause, not one per judged hunk", () => {
+  test("explainConformVerdicts is called once for hunks-1 despite 12 judged (likely-violated) hunks", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+
+    await reviewCommand(["conform", "--ref", MANY_HUNKS_REF, "--pr", "998", "--fixtures", MANY_HUNKS_DIR, "--json"]);
+    const parsed = JSON.parse(output()) as {
+      clauses: readonly {
+        clause_id: string;
+        state_kind: string;
+        hunks?: readonly { status: string; probability?: number; location?: { path: string; startLine: number; endLine: number }; evidence: string[] }[];
+      }[];
+    };
+    const hunks1 = parsed.clauses.find((c) => c.clause_id === "hunks-1")!;
+    expect(hunks1.hunks).toHaveLength(12);
+    // Every one of the 12 judged hunks for hunks-1 is likely-violated —
+    // if `--explain` sent one prompt per hunk instead of the worst one per
+    // clause, this test would see 12 prompts, not 1.
+    expect(hunks1.hunks!.every((h) => h.status === "likely-violated")).toBe(true);
+
+    const rawVerdicts: ConformVerdict[] = parsed.clauses.flatMap((c) =>
+      (c.hunks ?? []).map((h) => ({
+        clause_id: c.clause_id,
+        state_kind: c.state_kind as ConformVerdict["state_kind"],
+        status: h.status as ConformVerdict["status"],
+        ...(h.probability !== undefined ? { probability: h.probability } : {}),
+        factLines: h.evidence,
+        ...(h.location !== undefined ? { location: h.location } : {}),
+      })),
+    );
+
+    // The exact expression `runConform` uses to build `--explain` candidates:
+    // one worst verdict per hunk-kind clause GROUP (hunks-1 AND hunks-2, 2
+    // entries — `aggregateConformVerdicts` sets `worstVerdict` regardless of
+    // status), never one per judged hunk. `explainConformVerdicts` itself
+    // then filters down to the likely-violated ones — only hunks-1 qualifies.
+    const explainCandidates = aggregateConformVerdicts(rawVerdicts)
+      .map((a) => a.worstVerdict)
+      .filter((v): v is ConformVerdict => v !== undefined);
+    expect(explainCandidates).toHaveLength(2);
+    expect(explainCandidates.map((v) => v.clause_id).sort()).toEqual(["hunks-1", "hunks-2"]);
+
+    const prompts: string[] = [];
+    const fakeRunTurn = async (input: ModelTurnInput): Promise<ModelTurnResult> => {
+      prompts.push(input.user);
+      return { provider: "fixture", model: "fixture", credentialAvailable: true, text: "explanation text" };
+    };
+
+    const explanations = await explainConformVerdicts(ROOT, MANY_HUNKS_REF, explainCandidates, 0.5, undefined, fakeRunTurn);
+
+    expect(prompts).toHaveLength(1);
+    expect(explanations["hunks-1"]).toBe("explanation text");
   });
 });
 

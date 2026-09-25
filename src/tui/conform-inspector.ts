@@ -62,6 +62,15 @@ export interface ConformAggregateHunk {
   readonly probability: number;
 }
 
+/** Flow 326, AC3: how many hunks this run judged vs skipped under `--max-hunk-calls`, and which clauses were affected — mirrors `src/review/conform-report.ts`'s `ConformHunkBudget` (own type, not imported: `src/tui/conform-inspector.ts` keeps its own mirrored shapes rather than reaching into core, same as `ConformClauseStatus`/`ConformHunkLocation` above). */
+export interface ConformHunkBudget {
+  readonly maxHunkCalls: number;
+  readonly totalHunks: number;
+  readonly hunksJudged: number;
+  readonly hunksSkipped: number;
+  readonly truncatedClauses: readonly string[];
+}
+
 /** Flow 326, AC4: one row per CLAUSE — a hunk-kind clause carries how many hunks were judged/below threshold, the worst hunk, and up to `--max-hunks` further violations, never one row per hunk. */
 export interface ConformClauseRow {
   readonly clause_id: string;
@@ -73,12 +82,21 @@ export interface ConformClauseRow {
   readonly explanation?: string;
   readonly hunksJudged?: number;
   readonly hunksBelowThreshold?: number;
+  /** Flow 326, AC3: the diff's own hunk count — set only when this clause was judged on FEWER hunks than that (the `--max-hunk-calls` budget cut it short). Drives the "judged on K of N" marker alongside `hunksJudged`. */
+  readonly hunksTotal?: number;
   readonly worst?: ConformAggregateHunk;
   readonly furtherViolations?: readonly ConformAggregateHunk[];
 }
 
 export type ConformRunOutcome =
-  | { readonly ok: true; readonly refPath: string; readonly target: ConformTargetOption; readonly clauses: readonly ConformClauseRow[] }
+  | {
+      readonly ok: true;
+      readonly refPath: string;
+      readonly target: ConformTargetOption;
+      readonly clauses: readonly ConformClauseRow[];
+      /** Flow 326, AC3/item 2: the TUI is a second, independent entry point into the same budget — it surfaces the same info the CLI's text/JSON report does, not just the per-clause markers. */
+      readonly hunkBudget?: ConformHunkBudget;
+    }
   | { readonly ok: false; readonly reason: string };
 
 export interface ConformModalOptions {
@@ -149,22 +167,39 @@ function locationLabel(loc: ConformHunkLocation): string {
   return `${loc.path}:${loc.startLine}-${loc.endLine}`;
 }
 
+/** Flow 326, AC3: "judged on K of N hunks" — only when the budget actually cut this clause down to fewer than the diff has. */
+function judgedOfTotalSuffix(row: ConformClauseRow): string {
+  if (row.hunksJudged === undefined || row.hunksTotal === undefined || row.hunksJudged >= row.hunksTotal) return "";
+  return ` (judged ${row.hunksJudged} of ${row.hunksTotal} hunks)`;
+}
+
 function statusSummary(row: ConformClauseRow): string {
   if (row.status === "not-checkable") return `not checkable — ${row.reason ?? "no reason recorded"}`;
-  if (row.status === "not-evaluated") return "not evaluated — no state supplied this run";
+  if (row.status === "not-evaluated") return `not evaluated — ${row.reason ?? "no state supplied this run"}`;
   if (row.hunksJudged !== undefined && row.hunksJudged > 0) {
-    return `${STATUS_LABEL[row.status]} (${row.hunksBelowThreshold ?? 0}/${row.hunksJudged} hunks below threshold)`;
+    return `${STATUS_LABEL[row.status]} (${row.hunksBelowThreshold ?? 0}/${row.hunksJudged} hunks below threshold)${judgedOfTotalSuffix(row)}`;
   }
   if (row.probability === undefined) return STATUS_LABEL[row.status];
   return `${STATUS_LABEL[row.status]} (${pct(row.probability)})`;
 }
 
-/** AC8: clauses grouped by kind with status. */
-export function formatConformClauseLines(clauses: readonly ConformClauseRow[], selected: number): string[] {
+/** Flow 326, AC3/item 2: the same "hunk budget:" line the CLI's text report prints, for the Clauses tab header. */
+function formatHunkBudgetLine(hunkBudget: ConformHunkBudget): string {
+  return (
+    `hunk budget: judged ${hunkBudget.hunksJudged}/${hunkBudget.totalHunks} hunk(s) (--max-hunk-calls ${hunkBudget.maxHunkCalls}); ` +
+    `${hunkBudget.hunksSkipped} hunk(s) skipped for clause(s): ${hunkBudget.truncatedClauses.join(", ")}`
+  );
+}
+
+/** AC8: clauses grouped by kind with status. Flow 326, AC3/item 2: `hunkBudget`, when the run's `--max-hunk-calls` (fixed for the TUI, {@link DEFAULT_MAX_HUNK_CALLS}) actually truncated any hunk-kind clause, prints as a header line above the grouped rows — the same info the CLI's text/JSON report carries. */
+export function formatConformClauseLines(clauses: readonly ConformClauseRow[], selected: number, hunkBudget?: ConformHunkBudget): string[] {
   if (clauses.length === 0) {
     return ["No clauses in this reference document."];
   }
   const lines: string[] = [];
+  if (hunkBudget !== undefined && hunkBudget.hunksSkipped > 0) {
+    lines.push(formatHunkBudgetLine(hunkBudget), "");
+  }
   let lastKind: string | undefined;
   let index = 0;
   for (const kind of ["pr", "report", "hunk"] as const) {
@@ -223,6 +258,7 @@ export function openConform(otui: unknown, chrome: unknown, options: ConformModa
   let selectedDocIndex: number | undefined;
   let setupCursor = 0;
   let clauses: readonly ConformClauseRow[] = [];
+  let hunkBudget: ConformHunkBudget | undefined;
   let clauseSelected = 0;
   let runError: string | undefined;
   let running = false;
@@ -252,7 +288,7 @@ export function openConform(otui: unknown, chrome: unknown, options: ConformModa
   const clauseLines = (): string[] => {
     if (running) return ["Running conformance check…"];
     if (runError !== undefined) return [`Could not run: ${runError}`];
-    return formatConformClauseLines(clauses, clauseSelected);
+    return formatConformClauseLines(clauses, clauseSelected, hunkBudget);
   };
   const detailLines = (): string[] => formatConformDetailLines(flat()[clauseSelected]);
   const setupLines = (): string[] => formatConformSetupLines(setup, selectedDocIndex, setupCursor);
@@ -306,6 +342,7 @@ export function openConform(otui: unknown, chrome: unknown, options: ConformModa
       running = false;
       if (outcome.ok) {
         clauses = outcome.clauses;
+        hunkBudget = outcome.hunkBudget;
         clauseSelected = 0;
         runError = undefined;
       } else {
