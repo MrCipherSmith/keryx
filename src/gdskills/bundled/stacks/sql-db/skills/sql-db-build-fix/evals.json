@@ -6,7 +6,7 @@
       "This migration is erroring that the index already exists on a re-run, fix it",
       "We're seeing a deadlock during this migration's backfill, help me resolve it",
       "This backfill is failing a NOT NULL check on some rows, figure out why",
-      "Two migrations conflict on the same version number and one won't apply",
+      "Our migration tool errors that 0047_add_orders_index has the same timestamp prefix as a teammate's 0047_add_wallet_column, and only one of them applies",
       "The migration times out acquiring a lock in production, what's actually going on?"
     ],
     "negative": [

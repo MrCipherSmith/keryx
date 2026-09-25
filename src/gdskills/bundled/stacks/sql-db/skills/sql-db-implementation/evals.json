@@ -3,7 +3,7 @@
     "positive": [
       "I need to add a required column to a table that already has millions of rows, what's the safe way to do this?",
       "Design an index for a query that filters orders by status and sorts by created_at",
-      "Write a migration that adds a foreign key to this orders table without locking it in production",
+      "I need a migration that adds a foreign key from payments.order_id to orders.id on a 20-million-row table, and it can't take the app down while it runs",
       "This endpoint loops over orders and fetches the user for each one separately -- rewrite it as one query",
       "I'm writing a query that filters by a value from an API request, how should I build it safely?",
       "Add a unique constraint to this column and make sure it doesn't take the table down while it runs",

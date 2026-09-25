@@ -1,13 +1,13 @@
 ---
 name: sql-db-testing
-description: "Use when writing or fixing tests for SQL migrations and queries -- transactional test wrapping with rollback, fixture/seed data design, testing a migration's up/down path on representative row counts, and asserting on actual query results and query counts rather than just 'no error'."
+description: "Use when writing or fixing tests for SQL migrations and queries at the schema/engine level -- transactional test wrapping with rollback, seed-data design for a migration or query test, testing a migration's up/down path on representative row counts, and asserting on actual query results and query counts rather than just 'no error'. Not for a language/ORM-specific test-fixture convention such as a pytest fixture, an RSpec factory, or a Laravel model factory (use that stack's own testing skill)."
 triggers:
   - "write a test for this migration's rollback"
   - "add a test that this backfill updates every row exactly once"
   - "test that this query returns the right rows in the right order"
   - "write a regression test for this N+1 fix"
-  - "set up transactional test isolation for these database tests"
-  - "add a test fixture for an order with an expired token"
+  - "set up transactional isolation so each migration test rolls back automatically"
+  - "seed representative row counts for this migration's up/down test"
 metadata:
   origin: authored
   category: test

@@ -5,7 +5,7 @@
       "Add a test fixture for a user whose invite token expired two days ago",
       "How should I isolate these database tests from each other so one doesn't affect the next?",
       "Write a regression test proving this order-listing query no longer issues one query per row",
-      "Test that this batched backfill updates every row in the table exactly once",
+      "Write a test proving the batched backfill script for orders.legacy_status touches every row with no row skipped or double-updated",
       "Add test cases for this query's empty-result and boundary conditions",
       "Set up a test that seeds fifty thousand rows to check this migration at realistic scale"
     ],

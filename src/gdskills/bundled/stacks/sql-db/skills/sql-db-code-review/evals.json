@@ -1,12 +1,12 @@
 {
   "triggers": {
     "positive": [
-      "Review this migration diff for safety before we merge it to production",
-      "Check whether this new query diff is vulnerable to SQL injection",
-      "Does this ALTER TABLE statement lock the orders table when it runs?",
-      "Review this diff for a missing index on the new filter column",
-      "Check this diff for an N+1 query pattern in the order-listing endpoint",
-      "Review this transaction for locks held across a slow API call",
+      "Before this goes out, look over the diff that adds a partial unique index on orders.tracking_number and flag anything risky",
+      "This PR builds the invoice search filter by interpolating customer_id from the request straight into the SQL string -- is that exploitable?",
+      "We're about to run ALTER TABLE payments ADD COLUMN refunded_at against a 40-million-row table -- will that block writers?",
+      "This PR adds a query filtering invoices by customer_email but I don't see a matching index anywhere in the diff -- can you check?",
+      "The /api/invoices list handler in this PR loops and fetches the customer record per invoice -- does that pattern show up here?",
+      "This diff wraps a Stripe charge call inside the same DB transaction as the order insert -- is that going to hold locks too long?",
       "Look over this composite index and tell me if the column order is right for the query"
     ],
     "negative": [
