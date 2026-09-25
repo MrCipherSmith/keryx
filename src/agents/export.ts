@@ -26,7 +26,9 @@
 import { readFile, readdir, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, isNotFound, isPathInside } from "../lib/fs";
+import { readJsonObjectFile } from "../lib/json";
 import { removeContained, writeContained } from "../lib/contained-write";
+import { MODEL_GUIDANCE_CONFIG_PATH } from "../lib/model-choice";
 import { getHarnessAdapter, surfacesOf } from "../integrations/registry";
 import { classifySurfaceState, type MatrixSurfaceState } from "../integrations/matrix";
 import {
@@ -35,6 +37,7 @@ import {
   agentManagedSentinelText,
   finalizeAgentContentHash,
   verifyAgentContentHash,
+  type CompileTargetOptions,
   type HostAgentExport,
   type KeryxShellCompileResult,
 } from "./compile";
@@ -225,6 +228,49 @@ function decideAction(existing: string | undefined, generated: string, format: A
   return { action: "update" };
 }
 
+// ---------------------------------------------------------------------------
+// Flow 339: the claude-target `model:` alias opt-out.
+// ---------------------------------------------------------------------------
+
+/**
+ * Read `.metaproject/tasks.config.json`'s `modelGuidance.claudeSubagentAliases`
+ * — the opt-out for `compile.ts`'s claude-target `model:` mapping (deep ->
+ * opus, standard -> sonnet, light -> haiku). A SIBLING key on the SAME
+ * `modelGuidance` object `src/lib/model-choice.ts`'s `readModelGuidanceConfig`
+ * reads (flow 336's `modelGuidance.enabled`) — not a second file, and not
+ * gated by `enabled`: that key turns off a completely different feature (the
+ * Model choice policy sentence rendered into the managed CLAUDE.md/AGENTS.md
+ * block), unrelated to what a claude export's own `model:` frontmatter line
+ * says. Mirrors `readModelGuidanceConfig`'s own "absence is normal" contract
+ * exactly: an absent file, an absent key, or a non-boolean value all mean
+ * "aliases on" (the shipped default) — only an explicit `false` restores
+ * `model: inherit`. `compile.ts` itself stays pure/synchronous (no fs); this
+ * is the one caller with a `projectRoot` that resolves the flag before
+ * calling it.
+ */
+export async function readClaudeSubagentAliasesConfig(projectRoot: string): Promise<{ readonly enabled: boolean; readonly note?: string }> {
+  const file = path.join(projectRoot, MODEL_GUIDANCE_CONFIG_PATH);
+  if (!(await pathExists(file))) {
+    return { enabled: true };
+  }
+  const read = await readJsonObjectFile(file);
+  if (read.state !== "object") {
+    return { enabled: true, note: `${MODEL_GUIDANCE_CONFIG_PATH} could not be read as a JSON object; claude subagent aliases stayed enabled` };
+  }
+  const modelGuidance = read.value["modelGuidance"];
+  if (typeof modelGuidance !== "object" || modelGuidance === null || Array.isArray(modelGuidance)) {
+    return { enabled: true };
+  }
+  const value = (modelGuidance as Record<string, unknown>)["claudeSubagentAliases"];
+  if (value === false) {
+    return { enabled: false };
+  }
+  if (value !== undefined && value !== true) {
+    return { enabled: true, note: `${MODEL_GUIDANCE_CONFIG_PATH}: modelGuidance.claudeSubagentAliases is not a boolean; aliases stayed enabled` };
+  }
+  return { enabled: true };
+}
+
 /**
  * Plan one definition's export for one runtime, WITHOUT writing anything
  * (`writeAgentExport` is the only writer). Never throws for an
@@ -312,8 +358,13 @@ export async function planAgentExport(
     };
   }
 
-  // native | adapter: a real host renderer backs this runtime.
-  const compiled = compileAgentDefinition(definition, runtime as HostToolTarget);
+  // native | adapter: a real host renderer backs this runtime. The
+  // claude-alias opt-out is resolved here (the one caller with a
+  // `projectRoot`) and only ever matters to the claude renderer — every other
+  // `HostToolTarget` ignores `CompileTargetOptions` entirely.
+  const compileOptions: CompileTargetOptions =
+    runtime === "claude" ? { claudeSubagentAliases: (await readClaudeSubagentAliasesConfig(projectRoot)).enabled } : {};
+  const compiled = compileAgentDefinition(definition, runtime as HostToolTarget, compileOptions);
   if (!compiled.ok) {
     return {
       runtime,

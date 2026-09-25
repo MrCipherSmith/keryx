@@ -12,10 +12,29 @@
 //      `spawn_subagent` input subset (AC2) plus a policy sidecar; a host
 //      target returns a `HostAgentExport`.
 //
-// `model_tier` is passed through UNCHANGED — never resolved to a model name
-// here (AC7). `src/gdskills/model-tier.ts` (`isModelTier`) is the only tier
-// authority this module defers to; the actual model resolution happens later,
-// inside `spawn_subagent` itself, against the session's own provider.
+// `model_tier` is passed through UNCHANGED for `target: "keryx-shell"` —
+// never resolved to a model name here (AC7). `src/gdskills/model-tier.ts`
+// (`isModelTier`) is the only tier authority this module defers to; the
+// actual model resolution happens later, inside `spawn_subagent` itself,
+// against the session's own provider.
+//
+// Flow 339 (operator policy: Sonnet for subagents, Haiku only for trivial
+// work) is the ONE deliberate exception, scoped to `target: "claude"` alone:
+// Claude Code's own frontmatter `model:` field accepts exactly the four
+// version-free aliases `opus|sonnet|haiku|inherit` (never a concrete/
+// versioned id), so `renderClaudeExport` maps `model_tier` onto one of them
+// (`CLAUDE_MODEL_ALIAS` below). This is NOT the guess-a-model-id resolution
+// AC7 forbids — it is a static, host-documented enum lookup with no
+// candidate discovery, no ranking, and no possibility of going stale (the
+// alias names a size class Claude Code itself resolves, the same way
+// `model_tier` names one `spawn_subagent` resolves). A project can opt out
+// via `.metaproject/tasks.config.json`'s `modelGuidance.claudeSubagentAliases:
+// false`, which restores the previous `model: inherit` for every tier —
+// `export.ts`'s `planAgentExport` reads that config (this module stays pure/
+// synchronous, no fs) and passes the resolved `CompileTargetOptions` in.
+// Every OTHER target is untouched: codex/kiro omit `model` entirely (their
+// own "omit = inherit parent" contract) and opencode's frontmatter carries no
+// tier field either.
 
 import { createHash } from "node:crypto";
 import { PROMPT_DEFENSE_BASELINE } from "./baseline";
@@ -39,6 +58,25 @@ import type { AgentDefinition, AgentExportRuntime, ExportSupportLevel, Isolation
 // never a bare substring test). Re-exported here so every pre-existing
 // importer of `compile.ts` keeps working unchanged.
 export { AGENT_SENTINEL_PREFIX };
+
+/**
+ * Options that vary a compile without varying the {@link AgentDefinition}
+ * itself — currently the one flag flow 339 added. Every field is a target-
+ * specific opt-out with a fixed, documented default, never a knob whose
+ * absence is ambiguous.
+ */
+export interface CompileTargetOptions {
+  /**
+   * `target: "claude"` ONLY: `true` (the default — omitting this field or
+   * passing `undefined` means the same thing) maps `model_tier` onto
+   * Claude's own frontmatter alias (`CLAUDE_MODEL_ALIAS`). `false` restores
+   * `model: inherit` for every tier — the
+   * `.metaproject/tasks.config.json` `modelGuidance.claudeSubagentAliases:
+   * false` opt-out, resolved by `export.ts`'s `planAgentExport` and passed in
+   * here. Ignored by every other target.
+   */
+  readonly claudeSubagentAliases?: boolean;
+}
 
 export type CompileErrorReason =
   | "invalid-definition"
@@ -458,6 +496,21 @@ const CLAUDE_READ_BASELINE: readonly string[] = ["Read", "Grep", "Glob"];
 const KIRO_READ_BASELINE: readonly string[] = ["read"];
 
 /**
+ * `model_tier` -> Claude Code's own frontmatter alias (flow 339). Total over
+ * `ModelTier`: every declared tier maps to exactly one alias, and an
+ * undeclared tier already defaults to `"standard"` upstream (`AgentDefinition
+ * .model_tier` is required — see `types.ts` — so there is no fourth case to
+ * handle here). These three words are the whole vocabulary Claude Code's own
+ * docs define for this field alongside `inherit`; nothing here names a
+ * concrete or versioned model id.
+ */
+const CLAUDE_MODEL_ALIAS: Readonly<Record<ModelTier, "opus" | "sonnet" | "haiku">> = {
+  deep: "opus",
+  standard: "sonnet",
+  light: "haiku",
+};
+
+/**
  * Claude Code renderer (`.claude/agents/<name>.md`) — the one host renderer
  * this task implements end-to-end, so the compile path is testable without
  * waiting on T7. codex/kiro/opencode are the hook point T7 fills in; they
@@ -473,18 +526,24 @@ function mdSentinelLine(definition: AgentDefinition): string {
   return `<!-- ${agentManagedSentinelText(definition)} -->`;
 }
 
-function renderClaudeExport(definition: AgentDefinition, header: string): HostAgentExport {
+function renderClaudeExport(definition: AgentDefinition, header: string, options: CompileTargetOptions = {}): HostAgentExport {
   const { allowed, strippedForPolicy } = stripMutationToolsForPolicy(definition.tools, definition.policy_profile);
   const { mappedTools, droppedTools } = mapToolsForTarget(allowed, "claude");
   const claudeTools = mappedTools.length > 0 ? mappedTools : CLAUDE_READ_BASELINE;
+  // Flow 339: `model_tier` maps to Claude's own version-free alias
+  // (`CLAUDE_MODEL_ALIAS`) by default — never a concrete/versioned model id,
+  // and never a downgrade below what the skill itself declared. The
+  // `modelGuidance.claudeSubagentAliases: false` opt-out (resolved by the
+  // caller, `export.ts`'s `planAgentExport`) restores `inherit` for every
+  // tier, the pre-flow-339 behavior (AC7's original "never resolved to a
+  // model name" reading, kept available for a project that wants it).
+  const modelLine = options.claudeSubagentAliases === false ? "model: inherit" : `model: ${CLAUDE_MODEL_ALIAS[definition.model_tier]}`;
   const frontmatter = [
     "---",
     `name: ${yamlDoubleQuoted(definition.name)}`,
     `description: ${yamlDoubleQuoted(definition.description)}`,
     `tools: ${yamlDoubleQuoted(claudeTools.join(", "))}`,
-    // Tier is never mapped to a model alias (AC7) — `inherit` never
-    // downgrades and names no concrete model.
-    "model: inherit",
+    modelLine,
     "---",
   ].join("\n");
   const draft = `${frontmatter}\n${mdSentinelLine(definition)}\n\n${header}\n`;
@@ -680,9 +739,10 @@ export function renderHostExport(
   definition: AgentDefinition,
   target: HostToolTarget,
   header: string,
+  options: CompileTargetOptions = {},
 ): CompileResult {
   if (target === "claude") {
-    return { ok: true, result: renderClaudeExport(definition, header) };
+    return { ok: true, result: renderClaudeExport(definition, header, options) };
   }
   if (target === "codex") {
     return renderCodexExport(definition, header);
@@ -741,7 +801,11 @@ export function compileAgentHeader(definition: AgentDefinition): CompileHeaderRe
 }
 
 /** The only producer of dispatch/export inputs from an {@link AgentDefinition} (D-2). Never throws. */
-export function compileAgentDefinition(definition: AgentDefinition, target: AgentExportRuntime): CompileResult {
+export function compileAgentDefinition(
+  definition: AgentDefinition,
+  target: AgentExportRuntime,
+  options: CompileTargetOptions = {},
+): CompileResult {
   const headerResult = compileAgentHeader(definition);
   if (!headerResult.ok) {
     return { ok: false, error: headerResult.error };
@@ -750,5 +814,5 @@ export function compileAgentDefinition(definition: AgentDefinition, target: Agen
   if (target === "keryx-shell") {
     return compileKeryxShell(definition, header);
   }
-  return renderHostExport(definition, target, header);
+  return renderHostExport(definition, target, header, options);
 }
