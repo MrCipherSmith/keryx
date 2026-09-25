@@ -15,5 +15,10 @@
   // benchmark harness read a property its own result type does not have, and
   // typechecked clean for weeks, because `include` stopped at `src/`. The gates
   // this repository relies on are written here.
-  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+  //
+  // `bench/` (flow 331) is included on the same ratchet: it imports from
+  // `src/metrics/benchmark.ts` and `src/harness/decision/jev-client.ts` the
+  // same way `scripts/benchmark/**` does, and a benchmark whose own cost-cap
+  // arithmetic silently typechecked wrong would be worse than no benchmark.
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "bench/**/*.ts"]
 }

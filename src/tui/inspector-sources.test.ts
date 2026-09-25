@@ -5,6 +5,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createSession } from "../session/store";
 import { writeSlate } from "../session/slate";
+import { createFlowService } from "../flow/service";
+import type { FlowServiceDeps } from "../flow/types";
+import { acCheckCacheKey, acCheckCachePath, writeAcCheckCache } from "../flow/check-ac";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "../sac/workspace-service";
 import type { CatchUpBlockedItem, CatchUpProposalItem, CatchUpReport } from "../sac/catch-up";
 import {
@@ -13,6 +16,7 @@ import {
   formatSessionFlowLines,
   formatWorkspaceLines,
   loadInspectorCatchUp,
+  loadInspectorFlows,
   loadInspectorSlates,
   loadInspectorWorkspace,
   sortFlowsNewestFirst,
@@ -196,6 +200,121 @@ test("loadInspectorCatchUp: an ordinary project with no proposals/sessions retur
     if (originalDataDir !== undefined) process.env.KERYX_DATA_DIR = originalDataDir;
     else delete process.env.KERYX_DATA_DIR;
     await rm(dataDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+/** A local `git` invocation for the freshness-detection fixtures below — same shape as `flow-check-ac.test.ts`'s own helper. */
+async function git(cwd: string, args: string[]): Promise<void> {
+  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const code = await proc.exited;
+  if (code !== 0) {
+    throw new Error(`git ${args.join(" ")} failed: ${await new Response(proc.stderr).text()}`);
+  }
+}
+
+// Flow 328, AC7: `loadInspectorFlows` reads a flow's CACHED check-ac result
+// (never triggers a Jev call itself) and exposes it as `acMarkers`.
+test("loadInspectorFlows: no cache -> acMarkers absent (not run); a checksum mismatch is always stale; no git repo -> freshness unknown", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-inspector-ac-"));
+  try {
+    const deps: FlowServiceDeps = { tracker: null, healthGate: async () => ({ status: "pass", reasons: [] }), now: () => new Date("2026-09-25T00:00:00Z") };
+    const service = createFlowService(deps);
+    const created = await service.init({ cwd, title: "AC markers fixture" });
+    const dir = path.basename(created.dir);
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(
+      path.join(cwd, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+      "# Acceptance Criteria\n\n## Criteria\n\n- AC1: the fixture criterion holds\n",
+      "utf8",
+    );
+    const frozen = await service.freeze({ cwd, id: dir });
+
+    const noCache = await loadInspectorFlows(cwd);
+    expect(noCache[0]?.acMarkers).toBeUndefined();
+
+    // Review finding: staleness must compare the FULL key (criteria checksum
+    // + diff hash), not just the checksum half — this key's checksum half
+    // matches, but its diff-hash half ("deadbeef") is fabricated and this
+    // `cwd` is not even a git repo, so the diff cannot be computed at all.
+    // That must read as `"unknown"`, never as fresh.
+    await writeAcCheckCache(acCheckCachePath(cwd, dir), {
+      key: `${frozen.acChecksum}:deadbeef`,
+      at: "2026-09-25T01:00:00.000Z",
+      jevAsked: true,
+      verdicts: [{ id: "AC1", text: "the fixture criterion holds", status: "likely-met", probability: 0.9, factLines: [], evidencePaths: [] }],
+    });
+    const cached = await loadInspectorFlows(cwd);
+    expect(cached[0]?.acMarkers).toEqual([{ id: "AC1", status: "likely-met", label: "likely met" }]);
+    expect(cached[0]?.acCheckedAt).toBe("2026-09-25T01:00:00.000Z");
+    expect(cached[0]?.acCheckStale).toBe("unknown");
+
+    // Re-freeze over changed criteria text -> checksum changes -> the cached
+    // result (keyed to the OLD checksum) is now stale — decidable with NO
+    // git call, so this stays `true` even with no repo present.
+    await writeFile(
+      path.join(cwd, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+      "# Acceptance Criteria\n\n## Criteria\n\n- AC1: a DIFFERENT criterion text\n",
+      "utf8",
+    );
+    await service.acUpdate({ cwd, id: dir, reason: "criterion changed for the stale-detection test" });
+    const stale = await loadInspectorFlows(cwd);
+    expect(stale[0]?.acMarkers).toBeDefined();
+    expect(stale[0]?.acCheckStale).toBe(true);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+// Review finding: the full-key comparison's other half — a criteria checksum
+// that has NOT changed, but the diff HAS. A real git repo is needed here
+// (unlike the fixture above) because this case can only be told apart from
+// "fresh" by actually computing the diff.
+test("loadInspectorFlows: checksum unchanged but the diff changed since the cache was written -> stale, with a real git repo", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-inspector-ac-git-"));
+  try {
+    await git(cwd, ["init", "-q", "-b", "main"]);
+    await git(cwd, ["config", "user.email", "fixture@example.invalid"]);
+    await git(cwd, ["config", "user.name", "fixture"]);
+
+    const deps: FlowServiceDeps = { tracker: null, healthGate: async () => ({ status: "pass", reasons: [] }), now: () => new Date("2026-09-25T00:00:00Z") };
+    const service = createFlowService(deps);
+    const created = await service.init({ cwd, title: "AC freshness fixture", baseBranch: "main" });
+    const dir = path.basename(created.dir);
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(
+      path.join(cwd, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+      "# Acceptance Criteria\n\n## Criteria\n\n- AC1: the fixture criterion holds\n",
+      "utf8",
+    );
+    const frozen = await service.freeze({ cwd, id: dir });
+
+    // Commit everything so the working tree is CLEAN and `main` IS the
+    // current commit — merge-base(HEAD, "main") = HEAD, so the diff against
+    // it is empty, with a deterministic, known hash.
+    await git(cwd, ["add", "-A"]);
+    await git(cwd, ["commit", "-q", "-m", "fixture base"]);
+
+    await writeAcCheckCache(acCheckCachePath(cwd, dir), {
+      key: acCheckCacheKey(frozen.acChecksum ?? "", ""),
+      at: "2026-09-25T01:00:00.000Z",
+      jevAsked: true,
+      verdicts: [{ id: "AC1", text: "the fixture criterion holds", status: "likely-met", probability: 0.9, factLines: [], evidencePaths: [] }],
+    });
+
+    const fresh = await loadInspectorFlows(cwd);
+    expect(fresh[0]?.acCheckStale).toBe(false);
+
+    // The criteria are untouched (checksum unchanged) — only the DIFF
+    // changes, via an uncommitted edit in the worktree. Staged (`git add`),
+    // because `git diff <commit>` (comparing a commit to the working tree)
+    // never shows a brand-new file until it is at least staged — an
+    // untracked file is invisible to `git diff` entirely, staged or not.
+    await writeFile(path.join(cwd, "unrelated-change.txt"), "something changed after the check ran\n", "utf8");
+    await git(cwd, ["add", "-A"]);
+    const diffChanged = await loadInspectorFlows(cwd);
+    expect(diffChanged[0]?.acCheckStale).toBe(true);
+  } finally {
     await rm(cwd, { recursive: true, force: true });
   }
 });

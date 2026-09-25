@@ -143,7 +143,7 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
             [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
-            [--tui|--no-tui] [--debug] [--name <name>]
+            [--tui|--no-tui] [--debug] [--name <name>] [--guard]
 ```
 
 | Flag | Description |
@@ -159,6 +159,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
 | `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
+| `--guard` | Turn on the turn guard for this session only (TUI, agent mode; off by default). `/guard on` turns it on for every future session too. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
@@ -178,6 +179,25 @@ both together, or either with `-c`.
 If a TUI session stops reacting to the keyboard and mouse while it still draws
 (spinner and timer running), run `kill -USR2 <keryx pid>` from another
 terminal: every session re-arms its terminal input on `SIGUSR2`.
+
+**Turn guard** (opt-in, off by default). After an agent turn ends with a final
+message, the guard checks — advisory only, never blocking — whether the
+request looks done and whether the message contradicts what the tools really
+did (a claimed passing test suite when the last test run failed, a failure
+never mentioned). A likely-incomplete or contradicted turn prints one compact
+notice line; `/guard` opens a modal with this session's history, each entry's
+deterministic facts, Jev's probabilities when it was asked, and the reason.
+Deterministic contradictions are caught even without a Jev credential. Turn on
+for one session with `--guard`, or persist it with `/guard on` (`/guard off`
+turns it back off); the setting lives in `ShellConfig.turnGuard.enabled`
+(`~/.local/share/keryx/auth.json`). A turn with no tool calls and a short
+reply to a short question is skipped without asking Jev. When the guard IS
+asked (i.e. no deterministic contradiction already decided the turn and it
+was not skipped as trivial), the turn's user request, the final assistant
+reply, and the deterministic facts (tools called and failures, files
+written/edited, commands run and their exit status, tests run and their
+pass/fail counts) are sent — redacted through the same security service every
+other Jev-backed review command uses — to Jev on OpenRouter.
 
 ---
 
@@ -2805,6 +2825,7 @@ keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
+keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]
 keryx flow implemented <id> --pr <url>
 keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]
 keryx flow confirm <id> [--merged]
@@ -2836,6 +2857,7 @@ keryx flow schema [--out <path>]
 | `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
 
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
+| `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
 | `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
 | `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
@@ -2855,6 +2877,80 @@ When the `security` module is enabled, `complete` adds a `security` completion
 gate. Advisory (the default) makes it informational (`pass`, never blocks);
 `enforced`/`ci`/`gateway` mode can fail the gate and hold the flow in
 `in-progress`. The gate is omitted entirely when the module is disabled.
+
+### `flow check-ac`
+
+Jev checks a flow's change against its FROZEN acceptance criteria (flow 328). **Always
+advisory**: it never changes flow state, never confirms an AC, and its own errors
+never fail a caller command.
+
+```
+keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]
+```
+
+The change defaults to the flow worktree's diff against its base branch (or
+`origin/main`), against their MERGE BASE — same reasoning `review floor`'s
+`--ref` uses. `--diff <ref>` diffs against another ref's merge base instead;
+`--pr <n>` reads the pull request's diff via `gh pr diff <n>` (repo inferred
+from the checkout's `origin` remote) instead of local git.
+
+Results are cached per flow, keyed on (criteria checksum, diff hash) — a
+repeat call against an unchanged diff and unchanged frozen criteria reads the
+cache instead of asking Jev again. `--refresh` bypasses that cache even when
+both match, forcing a fresh Jev call — the same "the cache exists, ask
+anyway" shape as `keryx providers status --refresh` and `keryx learn accept
+--refresh`.
+
+For every criterion in `acceptance-criteria.md`:
+
+1. **Deterministic facts first (AC2).** Backticked tokens, file paths and
+   `keryx <cmd>` names named IN the criterion's own text are checked against
+   the diff and the changed-file list, and any changed TEST file mentioning
+   one is noted — computed with no model call, and placed above the diff in
+   Jev's `state`.
+2. **`not-checkable`, without a model (AC3).** A criterion about a live
+   check, CI green, `keryx health run`, docs being published, or a manual/
+   human-process step is recognised by an explicit, documented marker list
+   and never sent to Jev — always listed, never dropped.
+3. **One `noul` question per remaining criterion (AC4).** Batched under the
+   vendor's 64k `state`+`questions` budget (packed to half that, with a cap
+   on criteria per batch — a real large diff can make a few generic tokens
+   match far more hunks than the documented ceiling actually affords), with
+   only the diff regions the criterion's own tokens matched — redacted via
+   `src/security/service.ts` — or, when nothing matched, the changed-file
+   list and that fact. Opt-in per project:
+   `{"review":{"jev":{"ac_check":true}}}` in `.metaproject/tasks.config.json`.
+   Without the opt-in, or without an OpenRouter credential, the command
+   still prints every criterion's deterministic evidence and says plainly
+   that Jev was not asked — nothing is silently skipped.
+
+Each checkable criterion is reported `likely-met` or `not-evident` (Jev's
+probability against a 0.5 threshold), alongside its probability, facts and
+matched evidence paths.
+
+**Cached (AC8).** Results are cached per flow under `.metaproject/data/ac-check/`
+(gitignored, mode 0600), keyed by (criteria checksum, diff hash) — an
+unchanged diff against unchanged criteria reads the cache rather than asking
+Jev again.
+
+**Advisory notices (AC5).** `flow implemented` and `flow complete` print a
+one-line summary (counts, and which criteria are not evident) when the
+opt-in is on — never blocking, and a check failure is one line, not a
+command failure.
+
+**Review attachment (AC6).** `keryx review ingest` for a flow with the
+opt-in attaches the latest CACHED result as `ac-check.md` in the review
+package, so reviewers see which criteria are in doubt — this never triggers
+a fresh Jev call itself. The cache is attached only when its key (criteria
+checksum + diff hash) matches THIS round's own diff (the merge-base of
+`--ref`/the recorded `--head`, the same shape `check-ac` itself diffs
+against); a cache that exists but does not match gets a short STALE note
+instead (naming when it WAS checked, and that `--refresh` re-checks it),
+never a report that reads as current when it is not.
+
+**Shell (AC7).** `/flows`' modal carries an "AC" tab with per-criterion
+markers (met / not evident / not checkable / not run); `c` re-runs the check
+for the selected flow, and `/ac` opens the modal straight to that tab.
 
 ### The default task scaffold
 

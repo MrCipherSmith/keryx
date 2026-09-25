@@ -139,6 +139,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/flows", description: "Browse project flows and inspect one", modes: BOTH },
   {
+    name: "/ac",
+    description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check",
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/workspace",
     description: "Show this session's SAC workspace and its slates",
     // TUI-only: the sidebar entry, mouse click, and 3-tab modal all need the
@@ -229,6 +234,17 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // actionable/needs-escalation choice per open comment. TUI-only.
     name: "/opencomments",
     description: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 329 (AC4/AC5): the opt-in turn guard — after a turn ends, checks
+    // whether the request was done and catches a final message that
+    // contradicts what the tools really did. TUI-only, same reasoning as
+    // `/ci`/`/conform`: the notice + list/detail modal need the OpenTUI
+    // surface. Bare `/guard` opens the modal; `/guard on|off` toggles and
+    // persists the per-user setting (default off).
+    name: "/guard",
+    description: "Opt-in turn guard: checks whether the request was done, catches contradictions — /guard [on|off]",
     modes: AGENT_ONLY,
   },
   {

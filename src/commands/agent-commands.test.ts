@@ -37,6 +37,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/sessions",
     "/status",
     "/flows",
+    "/ac",
     "/workspace",
     "/review",
     "/governance",
@@ -49,6 +50,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/conform",
     "/staledocs",
     "/opencomments",
+    "/guard",
     "/mcp",
     "/compact",
     "/theme",
@@ -78,8 +80,10 @@ test("SLATE-15: findAgentCommand resolves /goal (with args) in agent mode, never
   expect(findAgentCommand("/goal", "chat")).toBeUndefined();
 });
 
-test("SLATE-15: filterCommands('/g', 'agent') resolves to /goal, /governance and /game (registry order)", () => {
-  expect(filterCommands("/g", "agent").map((c) => c.name)).toEqual(["/goal", "/governance", "/game"]);
+test("SLATE-15: filterCommands('/g', 'agent') resolves to /goal, /governance, /guard and /game (registry order)", () => {
+  // Flow 329: `/guard` (registry order between /conform and /mcp) also
+  // starts with "g" and now appears in this prefix match.
+  expect(filterCommands("/g", "agent").map((c) => c.name)).toEqual(["/goal", "/governance", "/guard", "/game"]);
 });
 
 test("filterCommands: a trailing space after a fully-typed command name matches nothing (the composer dropdown must not stay open once the user is typing arguments)", () => {
@@ -134,6 +138,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/sessions",
     "/status",
     "/flows",
+    "/ac",
     "/workspace",
     "/review",
     "/governance",
@@ -146,6 +151,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/conform",
     "/staledocs",
     "/opencomments",
+    "/guard",
     "/mcp",
     "/compact",
     "/theme",
@@ -263,6 +269,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/sessions",
     "/status",
     "/flows",
+    "/ac",
     "/workspace",
     "/review",
     "/governance",
@@ -275,6 +282,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/conform",
     "/staledocs",
     "/opencomments",
+    "/guard",
     "/mcp",
     "/compact",
     "/theme",

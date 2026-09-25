@@ -7,6 +7,8 @@ import {
   acCriterionKnown,
   confirmPreconditionError,
   createFlowService,
+  renderAcCheckAdvisoryNotice,
+  renderAcCheckReport,
   validateCriterionName,
 } from "../flow/service";
 import { durableExternalCommentsGate } from "../flow/review-gate";
@@ -19,6 +21,7 @@ import {
 } from "../flow/store";
 import { githubAdapter } from "../flow/tracker/github";
 import { repairMovedFlowReviewRecords } from "../review/flow-move";
+import { runCheckAc, tryAdvisoryCheckAc } from "./flow-check-ac";
 import { createCodeHealthService } from "../health/service";
 import { securityFlowGate } from "../security/guard";
 import {
@@ -336,6 +339,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runTask(args.slice(1));
       case "ac":
         return await runAc(args.slice(1));
+      case "check-ac":
+        return await runCheckAcCommand(args.slice(1));
       case "owner":
         return await runOwner(args.slice(1));
       case "implemented":
@@ -933,6 +938,77 @@ async function runAc(args: string[]): Promise<void> {
   );
 }
 
+/**
+ * Flow 328, AC1: `keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]`.
+ * ADVISORY ONLY — reads the flow's FROZEN acceptance criteria and the change,
+ * reports per criterion, and NEVER changes flow state or confirms an AC (this
+ * command never touches `getService()` at all).
+ *
+ * `--refresh` (review finding, item 5): `CheckAcOptions.noCache` existed from
+ * the start but nothing ever set it — this is the CLI flag it was written
+ * for, matching the `--refresh` this repository already uses for the same
+ * "the cache exists, ask anyway" shape (`providers status --refresh`, `learn
+ * accept --refresh`).
+ */
+async function runCheckAcCommand(args: string[]): Promise<void> {
+  const id = requireId(args);
+  const diffRef = optionValue(args, "--diff");
+  const prRaw = optionValue(args, "--pr");
+  if (diffRef !== undefined && prRaw !== undefined) {
+    throw new Error("Usage: keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh] — --diff and --pr are mutually exclusive.");
+  }
+  let pr: number | undefined;
+  if (prRaw !== undefined) {
+    pr = Number.parseInt(prRaw, 10);
+    if (!Number.isFinite(pr) || pr <= 0) {
+      throw new Error(`Invalid --pr "${prRaw}": expected a positive PR number.`);
+    }
+  }
+  const asJson = args.includes("--json");
+  const refresh = args.includes("--refresh");
+  const result = await runCheckAc(process.cwd(), id, {
+    ...(diffRef !== undefined ? { diffRef } : {}),
+    ...(pr !== undefined ? { pr } : {}),
+    ...(refresh ? { noCache: true } : {}),
+  });
+
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(
+      renderAcCheckReport({
+        flowId: result.flowId,
+        verdicts: result.verdicts,
+        jevAsked: result.jevAsked,
+        ...(result.usage !== undefined ? { usage: result.usage } : {}),
+        at: result.at,
+        criteriaChecksum: result.criteriaChecksum,
+        diffHash: result.diffHash,
+      }),
+    );
+    if (result.cached) {
+      note("(cached result — the diff and criteria checksum matched a prior check; nothing was re-asked. `--refresh` bypasses the cache.)");
+    }
+    if (result.jevError !== undefined) {
+      note(`Jev could not be reached: ${result.jevError}`);
+    }
+    if (!result.acCheckEnabled) {
+      note('`review.jev.ac_check` is not enabled for this project (.metaproject/tasks.config.json: `{"review":{"jev":{"ac_check":true}}}`) — deterministic evidence only, Jev was not asked.');
+    }
+  }
+}
+
+/** Flow 328, AC5: the one-line advisory notice — never blocking, and silent when the opt-in is off. */
+async function printAcCheckAdvisory(cwd: string, id: string): Promise<void> {
+  const outcome = await tryAdvisoryCheckAc(cwd, id);
+  if (outcome === undefined) return;
+  if ("error" in outcome) {
+    note(`acceptance-criteria check (advisory) could not run: ${outcome.error}`);
+    return;
+  }
+  note(renderAcCheckAdvisoryNotice(outcome.verdicts));
+}
+
 async function runImplemented(args: string[]): Promise<void> {
   const id = requireId(args);
   const prUrl = optionValue(args, "--pr");
@@ -943,6 +1019,7 @@ async function runImplemented(args: string[]): Promise<void> {
   console.log(
     `  ${style.green(symbols.ok)} Flow ${flow.id} ${style.cyan(symbols.arrow)} ${flowStatusLabel(flow.status)} ${style.dim(`(PR: ${prUrl})`)}`,
   );
+  await printAcCheckAdvisory(process.cwd(), flow.id);
 }
 
 /**
@@ -1020,6 +1097,7 @@ async function runComplete(args: string[]): Promise<void> {
       note("No source issue. Ask the user whether to create a ticket for the record.");
     }
   }
+  await printAcCheckAdvisory(cwd, id);
   process.exitCode = result.passed ? 0 : 1;
 }
 
@@ -1268,6 +1346,7 @@ function printHelp(): void {
     'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
     "  every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone",
+    "keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)",
     "keryx flow implemented <id> --pr <url>",
     'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]',
     "keryx flow confirm <id> [--merged]   (mint a completion confirmation token; needs a terminal and a typed challenge)",
