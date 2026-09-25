@@ -135,6 +135,43 @@ export class JevRequestError extends Error {
   }
 }
 
+/** Where the OpenRouter credential this request used came from. */
+export type JevApiKeySource = "env" | "saved" | "none";
+
+function sourceLabel(source: JevApiKeySource): string {
+  if (source === "env") return "the OPENROUTER_API_KEY environment variable";
+  if (source === "saved") return "the saved OpenRouter key in the keryx shell config";
+  return "no credential";
+}
+
+/** True when `key` has the `sk-or-` prefix every real OpenRouter key carries. */
+export function looksLikeOpenRouterKey(key: string): boolean {
+  return key.startsWith("sk-or-");
+}
+
+/**
+ * AC7: OpenRouter rejected the credential (HTTP 401). A subclass of
+ * {@link JevRequestError} — `instanceof JevRequestError` still holds for
+ * every caller that only distinguishes "non-2xx" — that additionally names
+ * WHERE the rejected key came from and flags a missing `sk-or-` prefix,
+ * without ever printing the key itself.
+ */
+export class JevAuthRejectedError extends JevRequestError {
+  constructor(
+    readonly source: JevApiKeySource,
+    status: number,
+    body: string,
+    keyLooksValid: boolean,
+  ) {
+    const from = sourceLabel(source);
+    const prefixNote = keyLooksValid
+      ? ""
+      : ` That key does not look like an OpenRouter key — an OpenRouter key starts with "sk-or-".`;
+    super(status, `credential from ${from} was rejected.${prefixNote}${body.length > 0 ? ` (${body.slice(0, 300)})` : ""}`);
+    this.name = "JevAuthRejectedError";
+  }
+}
+
 /** The response body was not valid JSON. */
 export class JevResponseParseError extends Error {
   constructor(cause: unknown) {
@@ -183,17 +220,43 @@ export class JevAnswerValidationError extends Error {
   }
 }
 
+/** {@link resolveJevApiKey}'s key, plus which of the two sources it came from (AC7). */
+export interface JevApiKeyResolution {
+  readonly key: string | undefined;
+  readonly source: JevApiKeySource;
+}
+
 /**
- * AC2's resolution path: `OPENROUTER_API_KEY`, falling back to a saved
+ * AC2/AC7's resolution path: `OPENROUTER_API_KEY`, falling back to a saved
  * `openrouterKey` (`src/lib/shell-config.ts:28,253-254`) — the exact merge
  * `envWithSavedApiKeys` already performs for every other OpenRouter-keyed call
- * site. No new credential type.
+ * site. No new credential type. Checks the RAW env var first (rather than
+ * reading it back out of the merged map) so `source` reports "env" only when
+ * the caller's own environment actually set it, never when the merge helper
+ * happened to leave an env-shaped key in place.
  */
+export function resolveJevApiKeyResolution(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  dir?: string,
+): JevApiKeyResolution {
+  const fromEnv = env.OPENROUTER_API_KEY;
+  if (typeof fromEnv === "string" && fromEnv.length > 0) {
+    return { key: fromEnv, source: "env" };
+  }
+  const merged = envWithSavedApiKeys(env as Record<string, string | undefined>, dir);
+  const fromSaved = merged.OPENROUTER_API_KEY;
+  if (typeof fromSaved === "string" && fromSaved.length > 0) {
+    return { key: fromSaved, source: "saved" };
+  }
+  return { key: undefined, source: "none" };
+}
+
+/** `resolveJevApiKeyResolution(...).key`, kept for every existing caller that only wants the key. */
 export function resolveJevApiKey(
   env: Readonly<Record<string, string | undefined>> = process.env,
   dir?: string,
 ): string | undefined {
-  return envWithSavedApiKeys(env as Record<string, string | undefined>, dir).OPENROUTER_API_KEY;
+  return resolveJevApiKeyResolution(env, dir).key;
 }
 
 /** A stable, order-independent text of `questions`, for the token estimate only. */
@@ -265,7 +328,8 @@ export async function callJevSystemOne(
   input: JevRequestInput,
   opts?: { env?: Readonly<Record<string, string | undefined>>; dir?: string; signal?: AbortSignal; timeoutMs?: number },
 ): Promise<JevResult> {
-  const apiKey = resolveJevApiKey(opts?.env ?? process.env, opts?.dir);
+  const keyResolution = resolveJevApiKeyResolution(opts?.env ?? process.env, opts?.dir);
+  const apiKey = keyResolution.key;
   if (apiKey === undefined || apiKey.length === 0) {
     throw new JevCredentialError();
   }
@@ -317,6 +381,12 @@ export async function callJevSystemOne(
   }
 
   if (!ok) {
+    // AC7: a 401 means OpenRouter rejected THIS credential specifically —
+    // named by source, with a prefix check, rather than the generic
+    // "request failed" text every other non-2xx status gets.
+    if (status === 401) {
+      throw new JevAuthRejectedError(keyResolution.source, status, text, looksLikeOpenRouterKey(apiKey));
+    }
     throw new JevRequestError(status, text);
   }
   let parsed: unknown;

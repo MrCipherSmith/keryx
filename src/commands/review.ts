@@ -130,15 +130,27 @@ import {
   type VerificationSource,
 } from "../review/types";
 import {
+  applyDeterministicOverride,
   buildCiTriageQuestions,
   buildCiTriageState,
+  computeCiSignals,
   computeCiTriageVerdict,
   extractFailingTestName,
   readCiTriageEnabled,
   renderCiTriageAdvisory,
+  type CiTriageCriterion,
+  type CiTriageVerdict,
 } from "../review/ci-triage";
-import { createFixtureCiPort, createGhCiPort, type CiPort, type CiRunHistoryEntry, type CiRunInfo } from "../review/ci-port";
-import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKey } from "../harness/decision/jev-client";
+import {
+  createFixtureCiPort,
+  createGhCiPort,
+  type CiAttemptJobs,
+  type CiJobSummary,
+  type CiPort,
+  type CiRunHistoryEntry,
+  type CiRunInfo,
+} from "../review/ci-port";
+import { callJevSystemOne, DEFAULT_JEV_MODEL, resolveJevApiKeyResolution, type JevUsage } from "../harness/decision/jev-client";
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -234,13 +246,16 @@ const COMMENTS_REPLY_FLAGS = [
 const LOOP_FLAGS = ["--flow", "--task"] as const;
 
 /**
- * Flow 306: `keryx review ci-triage`. `--fixtures <dir>` answers BOTH the CI
- * read port and the Jev call from files on disk (`ci-run-info.json`,
- * `ci-failed-log.txt`, optional `ci-history.json`, `jev-response.json`) —
+ * Flow 306/307: `keryx review ci-triage`. `--fixtures <dir>` answers BOTH the
+ * CI read port and the Jev call from files on disk (`ci-run-info.json`,
+ * `ci-failed-log.txt`, optional `ci-history.json`/`ci-attempts.json`/
+ * `ci-changed-files.json`/`ci-runs-by-head-sha.json`, `jev-response.json`) —
  * the same "no real network in any test" discipline `--fixtures` already
- * gives `review comments`.
+ * gives `review comments`. `--eval <file>` (AC5/AC6) replaces `--run`/`--job`
+ * with a labelled-case manifest; `--live` (only meaningful with `--eval`)
+ * replays it against the real `gh`/Jev instead of each case's fixtures.
  */
-const CI_TRIAGE_FLAGS = ["--run", "--job", "--test", "--repo", "--model", "--fixtures", "--json"] as const;
+const CI_TRIAGE_FLAGS = ["--run", "--job", "--test", "--repo", "--model", "--fixtures", "--json", "--eval", "--live"] as const;
 
 /**
  * No `--authors` and no `--skill`.
@@ -1269,14 +1284,43 @@ async function resolvePort(args: string[]): Promise<GitHubPort> {
 // to the client-zone Jev client — the one place both may legally meet.
 // ---------------------------------------------------------------------------
 
-/** `--fixtures <dir>`: the CI port answered from `ci-run-info.json`/`ci-failed-log.txt`/`ci-history.json`. */
+/**
+ * `--fixtures <dir>`: the CI port answered from `ci-run-info.json`/
+ * `ci-failed-log.txt`/`ci-history.json`, plus flow 307's signal files — all
+ * optional; a fixtures dir built for flow 306 (none of them present) still
+ * triages, just with every signal reading "not checked".
+ *
+ * `ci-related-runs.json` (optional: `{runs: {...}, logs: {...}}`, keyed by
+ * run id) answers `runInfo`/`failedLog` for the OTHER runs a signal read
+ * asks about — flow 307's cross-branch-history signal (AC1(b)) needs a
+ * second run's own job list and log, not just the one under triage.
+ */
 async function fixtureCiPort(dir: string): Promise<CiPort> {
   const runInfo = JSON.parse(await readFile(join(dir, "ci-run-info.json"), "utf8")) as CiRunInfo;
   const log = await readFile(join(dir, "ci-failed-log.txt"), "utf8").catch(() => "");
   const history = await readFile(join(dir, "ci-history.json"), "utf8")
     .then((raw) => JSON.parse(raw) as Record<string, readonly CiRunHistoryEntry[]>)
     .catch(() => ({}) as Record<string, readonly CiRunHistoryEntry[]>);
-  return createFixtureCiPort({ runs: { [runInfo.runId]: runInfo }, logs: { [runInfo.runId]: log }, history });
+  const attempts = await readFile(join(dir, "ci-attempts.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly CiAttemptJobs[]>)
+    .catch(() => ({}) as Record<string, readonly CiAttemptJobs[]>);
+  const changedFiles = await readFile(join(dir, "ci-changed-files.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly string[]>)
+    .catch(() => ({}) as Record<string, readonly string[]>);
+  const runsByHeadSha = await readFile(join(dir, "ci-runs-by-head-sha.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as Record<string, readonly CiRunHistoryEntry[]>)
+    .catch(() => ({}) as Record<string, readonly CiRunHistoryEntry[]>);
+  const related = await readFile(join(dir, "ci-related-runs.json"), "utf8")
+    .then((raw) => JSON.parse(raw) as { runs?: Record<string, CiRunInfo>; logs?: Record<string, string> })
+    .catch(() => ({}) as { runs?: Record<string, CiRunInfo>; logs?: Record<string, string> });
+  return createFixtureCiPort({
+    runs: { [runInfo.runId]: runInfo, ...related.runs },
+    logs: { [runInfo.runId]: log, ...related.logs },
+    history,
+    attempts,
+    changedFiles,
+    runsByHeadSha,
+  });
 }
 
 /** `--fixtures <dir>`: the Jev call answered from `jev-response.json`, verbatim, as a canned `Response`. No network call. */
@@ -1286,15 +1330,53 @@ async function fixtureJevFetch(dir: string): Promise<typeof fetch> {
   return fn as unknown as typeof fetch;
 }
 
-async function runCiTriage(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, CI_TRIAGE_FLAGS, "ci-triage");
-  const cwd = process.cwd();
-  const runId = requiredOption(args, "--run", "ci-triage");
-  const repo = optionValue(args, "--repo");
-  const fixturesDir = optionValue(args, "--fixtures");
+/** One job's full triage result — shared by the default `--run` path and the `--eval` harness. */
+interface CiTriageJobResult {
+  readonly runId: string;
+  readonly job: string;
+  readonly testName: string;
+  readonly verdict: CiTriageVerdict;
+  readonly signalLines: readonly string[];
+  readonly usage: JevUsage;
+}
 
-  // AC10: opt-in per project, and refused before any network call — the log
-  // excerpt leaves the machine only when the project asked for that.
+/**
+ * Flow 307: the shared pipeline — read the log, compute signals (AC1) when
+ * `useSignals`, build `state`/`questions` accordingly (AC2), ask Jev, apply
+ * the deterministic override (AC8). `useSignals: false` reproduces the flow
+ * 306 pipeline byte-for-byte, which is exactly what `--eval`'s "before"
+ * column needs to stay an honest comparison.
+ */
+async function triageOneJob(
+  ciPort: CiPort,
+  fetchFn: typeof fetch,
+  info: CiRunInfo,
+  job: CiJobSummary,
+  opts: { readonly runId: string; readonly testNameOverride?: string | undefined; readonly model?: string | undefined; readonly useSignals: boolean },
+): Promise<CiTriageJobResult> {
+  const rawLog = await ciPort.failedLog(opts.runId);
+  const testName = opts.testNameOverride ?? extractFailingTestName(rawLog, job.name) ?? "(unknown test)";
+  const signals = opts.useSignals
+    ? await computeCiSignals(ciPort, {
+        runId: opts.runId,
+        jobName: job.name,
+        testName: testName === "(unknown test)" ? undefined : testName,
+        rawLog,
+        headSha: info.headSha,
+        workflowName: info.workflowName,
+      })
+    : undefined;
+  const signalLines = signals?.lines ?? [];
+  const state = buildCiTriageState({ testName, jobName: job.name, rawLog, ...(signalLines.length > 0 ? { signalLines } : {}) });
+  const questions = buildCiTriageQuestions(opts.useSignals);
+  const result = await callJevSystemOne(fetchFn, { model: opts.model ?? DEFAULT_JEV_MODEL, state, questions });
+  const rawVerdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
+  const verdict = signals !== undefined ? applyDeterministicOverride(rawVerdict, signals) : rawVerdict;
+  return { runId: opts.runId, job: job.name, testName, verdict, signalLines, usage: result.usage };
+}
+
+/** AC10: the opt-in + credential gate, shared by `--run` and `--eval --live` — both refuse before any read/network call. */
+async function refuseWithoutCiTriageGate(cwd: string): Promise<boolean> {
   if (!(await readCiTriageEnabled(cwd))) {
     console.error(
       "`review.jev.ci_triage` is not enabled for this project (.metaproject/tasks.config.json: " +
@@ -1302,15 +1384,39 @@ async function runCiTriage(args: string[]): Promise<void> {
         "so it is opt-in — nothing was read and no network call was made.",
     );
     process.exitCode = 1;
-    return;
+    return true;
   }
-  const apiKey = resolveJevApiKey(process.env);
-  if (apiKey === undefined || apiKey.length === 0) {
+  // AC7: the pre-flight message (no key at all) also names the two places a
+  // key could have come from, even though there is no rejected credential to
+  // attribute yet — consistent phrasing with the AC7 error the live call
+  // raises when OpenRouter itself rejects one.
+  const { key } = resolveJevApiKeyResolution(process.env);
+  if (key === undefined || key.length === 0) {
     console.error(
       "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config: CI triage needs a " +
-        "Jev/OpenRouter credential and made no network call.",
+        "Jev/OpenRouter credential (from either source) and made no network call.",
     );
     process.exitCode = 1;
+    return true;
+  }
+  return false;
+}
+
+async function runCiTriage(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CI_TRIAGE_FLAGS, "ci-triage");
+  const cwd = process.cwd();
+  const evalFile = optionValue(args, "--eval");
+  if (evalFile !== undefined) {
+    await runCiTriageEval(cwd, args, evalFile);
+    return;
+  }
+  const runId = requiredOption(args, "--run", "ci-triage");
+  const repo = optionValue(args, "--repo");
+  const fixturesDir = optionValue(args, "--fixtures");
+
+  // AC10: opt-in per project, and refused before any network call — the log
+  // excerpt leaves the machine only when the project asked for that.
+  if (await refuseWithoutCiTriageGate(cwd)) {
     return;
   }
 
@@ -1319,31 +1425,158 @@ async function runCiTriage(args: string[]): Promise<void> {
 
   const info = await ciPort.runInfo(runId);
   const jobArg = optionValue(args, "--job");
-  const failedJob =
-    jobArg !== undefined ? info.jobs.find((j) => j.name === jobArg) : info.jobs.find((j) => j.conclusion === "failure");
-  if (failedJob === undefined) {
+  // AC3: every failed job by default, one verdict per job; `--job` narrows to one.
+  const failedJobs = jobArg !== undefined ? info.jobs.filter((j) => j.name === jobArg) : info.jobs.filter((j) => j.conclusion === "failure");
+  if (failedJobs.length === 0) {
     throw new Error(
       `Run ${runId} has no ${jobArg !== undefined ? `job named "${jobArg}"` : "failed job"} to triage ` +
         `(jobs: ${info.jobs.map((j) => `${j.name} [${j.conclusion ?? "unknown"}]`).join(", ") || "none"}).`,
     );
   }
-  const rawLog = await ciPort.failedLog(runId);
-  const testName = optionValue(args, "--test") ?? extractFailingTestName(rawLog, failedJob.name) ?? "(unknown test)";
-  const state = buildCiTriageState({ testName, jobName: failedJob.name, rawLog });
-  const questions = buildCiTriageQuestions();
-  const result = await callJevSystemOne(fetchFn, {
-    model: optionValue(args, "--model") ?? DEFAULT_JEV_MODEL,
-    state,
-    questions,
-  });
-  const verdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
-  const advisory = renderCiTriageAdvisory({ runId, jobName: failedJob.name, testName, verdict });
+  // `--test` only makes sense pinned to exactly one job; with several failed
+  // jobs in scope it is ignored rather than silently mislabeling every job
+  // with the same test name.
+  const testOverride = failedJobs.length === 1 ? optionValue(args, "--test") : undefined;
+  const model = optionValue(args, "--model");
+
+  const results: CiTriageJobResult[] = [];
+  for (const job of failedJobs) {
+    results.push(await triageOneJob(ciPort, fetchFn, info, job, { runId, testNameOverride: testOverride, model, useSignals: true }));
+  }
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ runId, job: failedJob.name, testName, verdict, usage: result.usage }, null, 2));
+    console.log(JSON.stringify(results.map((r) => ({ runId: r.runId, job: r.job, testName: r.testName, verdict: r.verdict, usage: r.usage })), null, 2));
     return;
   }
-  console.log(advisory);
+  console.log(
+    results
+      .map((r) => renderCiTriageAdvisory({ runId: r.runId, jobName: r.job, testName: r.testName, verdict: r.verdict, signalLines: r.signalLines }))
+      .join("\n\n"),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// `keryx review ci-triage --eval` — flow 307, AC5/AC6. A committed, labelled
+// evaluation set replayed either offline (each case's own fixtures, the
+// default) or live (`--live`: real `gh` + real Jev, budgeted, opt-in and
+// credential-gated exactly like `--run`). Reports "before" (flow 306: log
+// only) and "after" (flow 307: log + signals) accuracy side by side, so a
+// signals regression would show up as "after" reading worse than "before"
+// rather than disappearing into a single number.
+// ---------------------------------------------------------------------------
+
+interface CiTriageEvalCase {
+  readonly id: string;
+  readonly runId: string;
+  readonly job: string;
+  readonly truth: CiTriageCriterion;
+  /** Relative to the manifest file's own directory. Required unless `--live`. */
+  readonly fixturesDir?: string;
+}
+
+interface CiTriageEvalManifest {
+  readonly cases: readonly CiTriageEvalCase[];
+}
+
+interface CiTriageEvalCaseResult {
+  readonly id: string;
+  readonly runId: string;
+  readonly job: string;
+  readonly truth: CiTriageCriterion;
+  readonly predictedBefore: CiTriageCriterion;
+  readonly predictedAfter: CiTriageCriterion;
+  readonly correctBefore: boolean;
+  readonly correctAfter: boolean;
+  readonly usageBefore: JevUsage;
+  readonly usageAfter: JevUsage;
+}
+
+function accuracyOf(results: readonly CiTriageEvalCaseResult[], key: "correctBefore" | "correctAfter"): number {
+  return results.length === 0 ? 0 : results.filter((r) => r[key]).length / results.length;
+}
+
+function costOf(results: readonly CiTriageEvalCaseResult[], key: "usageBefore" | "usageAfter"): number {
+  return results.reduce((sum, r) => sum + (r[key].cost ?? 0), 0);
+}
+
+async function runCiTriageEval(cwd: string, args: string[], evalFile: string): Promise<void> {
+  const live = args.includes("--live");
+  const repo = optionValue(args, "--repo");
+  const model = optionValue(args, "--model");
+
+  if (live && (await refuseWithoutCiTriageGate(cwd))) {
+    return;
+  }
+
+  let manifest: CiTriageEvalManifest;
+  try {
+    manifest = JSON.parse(await readFile(evalFile, "utf8")) as CiTriageEvalManifest;
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- The file path is the actionable part; the cause is summarised inline.
+    throw new Error(`\`--eval ${evalFile}\` could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!Array.isArray(manifest.cases) || manifest.cases.length === 0) {
+    throw new Error(`\`--eval ${evalFile}\` has no "cases" array — nothing to evaluate.`);
+  }
+  const manifestDir = path.dirname(evalFile);
+
+  const results: CiTriageEvalCaseResult[] = [];
+  for (const c of manifest.cases) {
+    if (!live && c.fixturesDir === undefined) {
+      throw new Error(`case "${c.id}" has no "fixturesDir", and this is not a \`--live\` run — nothing to replay it from.`);
+    }
+    const caseDir = c.fixturesDir !== undefined ? path.join(manifestDir, c.fixturesDir) : undefined;
+    const ciPort: CiPort = live ? createGhCiPort(undefined, repo) : await fixtureCiPort(caseDir as string);
+    const jevFetch: typeof fetch = live ? globalThis.fetch : await fixtureJevFetch(caseDir as string);
+    const info = await ciPort.runInfo(c.runId);
+    const job = info.jobs.find((j) => j.name === c.job);
+    if (job === undefined) {
+      throw new Error(`case "${c.id}": run ${c.runId} has no job named "${c.job}".`);
+    }
+    const before = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, model, useSignals: false });
+    const after = await triageOneJob(ciPort, jevFetch, info, job, { runId: c.runId, model, useSignals: true });
+    results.push({
+      id: c.id,
+      runId: c.runId,
+      job: c.job,
+      truth: c.truth,
+      predictedBefore: before.verdict.top,
+      predictedAfter: after.verdict.top,
+      correctBefore: before.verdict.top === c.truth,
+      correctAfter: after.verdict.top === c.truth,
+      usageBefore: before.usage,
+      usageAfter: after.usage,
+    });
+  }
+
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          live,
+          cases: results.length,
+          before: { accuracy: accuracyOf(results, "correctBefore"), costUsd: costOf(results, "usageBefore") },
+          after: { accuracy: accuracyOf(results, "correctAfter"), costUsd: costOf(results, "usageAfter") },
+          results,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  const pct = (n: number): string => `${Math.round(n * 100)}%`;
+  console.log(`# CI triage evaluation (${live ? "LIVE" : "fixtures"}) — ${results.length} case(s)`);
+  console.log("");
+  console.log(`before (flow 306, log only):     ${pct(accuracyOf(results, "correctBefore"))} correct, ~$${costOf(results, "usageBefore").toFixed(4)}`);
+  console.log(`after  (flow 307, log + signals): ${pct(accuracyOf(results, "correctAfter"))} correct, ~$${costOf(results, "usageAfter").toFixed(4)}`);
+  console.log("");
+  for (const r of results) {
+    const beforeMark = r.correctBefore ? "OK" : "X ";
+    const afterMark = r.correctAfter ? "OK" : "X ";
+    console.log(`  ${r.id}: truth=${r.truth}  before=${r.predictedBefore} [${beforeMark}]  after=${r.predictedAfter} [${afterMark}]`);
+  }
 }
 
 /**

@@ -5,15 +5,20 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createFixtureCiPort } from "./ci-port";
 import {
+  applyDeterministicOverride,
   buildCiTriageQuestions,
   buildCiTriageState,
   CI_TRIAGE_CRITERIA,
   CI_TRIAGE_LOG_CHARS,
+  computeCiSignals,
   computeCiTriageVerdict,
   extractFailingTestName,
+  normalizeRepoRelativePath,
   readCiTriageEnabled,
   renderCiTriageAdvisory,
+  type GitShow,
 } from "./ci-triage";
 
 describe("AC7: one noul question per criterion, not one choice question", () => {
@@ -163,5 +168,335 @@ describe("AC10: opt-in gate", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("flow 307 AC1: deterministic signals, computed before Jev is asked", () => {
+  const fakeGitShow = (content?: string): GitShow => async () => content;
+
+  test("(a) rerun: a job that passed on an earlier attempt of the same run is deterministic evidence", async () => {
+    const port = createFixtureCiPort({
+      attempts: {
+        "9": [
+          { attempt: 1, jobs: [{ name: "typecheck-and-tests", conclusion: "success" }] },
+          { attempt: 2, jobs: [{ name: "typecheck-and-tests", conclusion: "failure" }] },
+        ],
+      },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "typecheck-and-tests", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.rerun).toEqual({ attemptsChecked: 2, samePassedOnPriorAttempt: true });
+    expect(signals.deterministic).toEqual({ verdict: "flaky", reason: expect.stringContaining("earlier attempt") });
+    expect(signals.lines.some((l) => l.startsWith("rerun:") && l.includes("SAME job passed"))).toBe(true);
+  });
+
+  test("(a) rerun: never rerun -> zero attempts checked, no deterministic evidence from this signal", async () => {
+    const port = createFixtureCiPort({});
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "typecheck-and-tests", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.rerun).toEqual({ attemptsChecked: 0, samePassedOnPriorAttempt: false });
+    expect(signals.deterministic).toBeUndefined();
+  });
+
+  test("(b) history: another failed run of the same job/test, and whether it later passed on that branch", async () => {
+    const port = createFixtureCiPort({
+      history: {
+        CI: [
+          { runId: "9", conclusion: "failure", createdAt: "2026-09-23T12:00:00Z", headBranch: "this-pr" },
+          { runId: "5", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "feat/x" },
+          { runId: "6", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "feat/x" },
+        ],
+      },
+      runs: {
+        "5": {
+          runId: "5",
+          workflowName: "CI",
+          headBranch: "feat/x",
+          headSha: "aaa",
+          conclusion: "failure",
+          jobs: [{ name: "typecheck-and-tests", conclusion: "failure" }],
+        },
+      },
+      logs: { "5": "typecheck-and-tests\tTest\tsrc/x.test.ts:1 boom\n" },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "typecheck-and-tests", testName: "src/x.test.ts:1", rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.history.runsInspected).toBe(1);
+    expect(signals.history.sameTestFailuresOnOtherBranches).toBe(1);
+    expect(signals.history.sameTestFailuresThenPassed).toBe(1);
+  });
+
+  test("(b) history: a candidate run whose job did NOT fail is inspected but not counted", async () => {
+    const port = createFixtureCiPort({
+      history: { CI: [{ runId: "5", conclusion: "failure", createdAt: null, headBranch: "feat/x" }] },
+      runs: {
+        "5": {
+          runId: "5",
+          workflowName: "CI",
+          headBranch: "feat/x",
+          headSha: "aaa",
+          conclusion: "failure",
+          jobs: [{ name: "typecheck-and-tests", conclusion: "success" }, { name: "other-job", conclusion: "failure" }],
+        },
+      },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "typecheck-and-tests", testName: "src/x.test.ts:1", rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.history.runsInspected).toBe(1);
+    expect(signals.history.sameTestFailuresOnOtherBranches).toBe(0);
+  });
+
+  test("(c) diff: the commit changes the failing test file itself", async () => {
+    const port = createFixtureCiPort({ changedFiles: { deadbeef: ["src/x.test.ts", "src/other.ts"] } });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: "src/x.test.ts:1", rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.diff).toEqual({ changedFileCount: 2, touchesFailingFile: true, touchesFailingDir: false, touchesImportedFile: false });
+  });
+
+  test("(c) diff: the commit changes a sibling file in the failing test's own directory", async () => {
+    const port = createFixtureCiPort({ changedFiles: { deadbeef: ["src/review/ci-port.ts"] } });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: "src/review/ci-triage.test.ts:1", rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.diff.touchesFailingDir).toBe(true);
+    expect(signals.diff.touchesFailingFile).toBe(false);
+  });
+
+  test("(c) diff: a runner-absolute test path is normalized to repo-relative before comparison", async () => {
+    const port = createFixtureCiPort({ changedFiles: { deadbeef: ["src/commands/trigger-dispatch.test.ts"] } });
+    const signals = await computeCiSignals(
+      port,
+      {
+        runId: "9",
+        jobName: "j",
+        testName: "/home/runner/work/keryx/keryx/src/commands/trigger-dispatch.test.ts:766",
+        rawLog: "",
+        headSha: "deadbeef",
+        workflowName: "CI",
+      },
+      fakeGitShow(),
+    );
+    expect(signals.diff.touchesFailingFile).toBe(true);
+  });
+
+  test("(c) diff: no file/dir match, but the test imports a changed file (via git show)", async () => {
+    // The changed file lives in a DIFFERENT directory from the failing test, so
+    // touchesFailingDir stays false and the import-based check is what fires.
+    const port = createFixtureCiPort({ changedFiles: { deadbeef: ["src/review/cost.ts"] } });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: "src/tui/ci-triage-source.test.ts:1", rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow('import { estimateTokens } from "../review/cost";\n'),
+    );
+    expect(signals.diff.touchesImportedFile).toBe(true);
+    expect(signals.diff.touchesFailingFile).toBe(false);
+    expect(signals.diff.touchesFailingDir).toBe(false);
+  });
+
+  test("(c) diff: none of file/dir/import touched", async () => {
+    const port = createFixtureCiPort({ changedFiles: { deadbeef: ["docs/readme.md"] } });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: "src/review/ci-triage.test.ts:1", rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow("no imports here"),
+    );
+    expect(signals.diff.touchesFailingFile).toBe(false);
+    expect(signals.diff.touchesFailingDir).toBe(false);
+    expect(signals.diff.touchesImportedFile).toBe(false);
+  });
+
+  test("(d) log markers: a timeout marker sets both the infra label and the timeout flag", async () => {
+    const port = createFixtureCiPort({});
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "this test timed out after 5000ms.", headSha: "x", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.logMarkers.infra).toContain("timeout");
+    expect(signals.logMarkers.timeout).toBe(true);
+  });
+
+  test("(d) log markers: a network error marker is detected", async () => {
+    const port = createFixtureCiPort({});
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "fetch failed: ECONNRESET", headSha: "x", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.logMarkers.infra).toContain("network error");
+  });
+
+  test("(d) log markers: a real self-hosted-runner dependency-install corruption is recognised (regression fixture)", async () => {
+    const port = createFixtureCiPort({});
+    const rawLog = 'error: failed to enqueue lifecycle scripts for protobufjs: ParserError\n... at .../node_modules/protobufjs/package.json:1:1';
+    const signals = await computeCiSignals(port, { runId: "9", jobName: "j", testName: undefined, rawLog, headSha: "x", workflowName: "CI" }, fakeGitShow());
+    expect(signals.logMarkers.infra).toContain("dependency-install corruption");
+  });
+
+  test("(d) log markers: a clean pass-through log detects nothing", async () => {
+    const port = createFixtureCiPort({});
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "expect(received).toBe(expected)\nReceived: true\n", headSha: "x", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.logMarkers.infra).toEqual([]);
+    expect(signals.logMarkers.timeout).toBe(false);
+  });
+
+  test("AC8: a later run of the exact same commit passing is deterministic evidence (same-head)", async () => {
+    const port = createFixtureCiPort({
+      runsByHeadSha: {
+        "CI:deadbeef": [
+          { runId: "9", conclusion: "failure", createdAt: "2026-09-23T09:00:00Z", headBranch: "b" },
+          { runId: "11", conclusion: "success", createdAt: "2026-09-23T10:00:00Z", headBranch: "b" },
+        ],
+      },
+    });
+    const signals = await computeCiSignals(
+      port,
+      { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.sameHeadLaterPassed).toBe(true);
+    expect(signals.deterministic).toEqual({ verdict: "flaky", reason: expect.stringContaining("later run of the exact same commit") });
+  });
+
+  test("AC8: rerun evidence takes priority over same-head evidence when both are present", async () => {
+    const port = createFixtureCiPort({
+      attempts: { "9": [{ attempt: 1, jobs: [{ name: "j", conclusion: "success" }] }] },
+      runsByHeadSha: { "CI:deadbeef": [{ runId: "11", conclusion: "success", createdAt: null, headBranch: "b" }] },
+    });
+    const signals = await computeCiSignals(port, { runId: "9", jobName: "j", testName: undefined, rawLog: "", headSha: "deadbeef", workflowName: "CI" }, fakeGitShow());
+    expect(signals.deterministic?.reason).toContain("earlier attempt");
+  });
+
+  test("a port that throws on every read degrades every signal to 'not checked' rather than failing the triage", async () => {
+    const throwingPort = createFixtureCiPort({});
+    // No fixtures registered for anything: runInfo/failedLog throw for unknown ids, priorAttempts/changedFiles/runsForHeadSha answer empty.
+    const signals = await computeCiSignals(
+      throwingPort,
+      { runId: "missing", jobName: "j", testName: "src/x.test.ts:1", rawLog: "boom", headSha: "missing", workflowName: "CI" },
+      fakeGitShow(),
+    );
+    expect(signals.rerun.attemptsChecked).toBe(0);
+    expect(signals.history.runsInspected).toBe(0);
+    expect(signals.diff.changedFileCount).toBe(0);
+    expect(signals.sameHeadLaterPassed).toBe(false);
+    expect(signals.lines.length).toBeGreaterThan(0);
+  });
+
+  test("normalizeRepoRelativePath strips a runner-absolute prefix and leaves a repo-relative path alone", () => {
+    expect(normalizeRepoRelativePath("/home/runner/work/keryx/keryx/src/x.test.ts")).toBe("src/x.test.ts");
+    expect(normalizeRepoRelativePath("/Users/runner/work/keryx/keryx/src/x.test.ts")).toBe("src/x.test.ts");
+    expect(normalizeRepoRelativePath("src/x.test.ts")).toBe("src/x.test.ts");
+  });
+});
+
+describe("flow 307 AC8: applyDeterministicOverride shows Jev's probabilities beside, not instead of, the forced verdict", () => {
+  test("no deterministic signal -> verdict returned unchanged", () => {
+    const verdict = computeCiTriageVerdict({ flaky: { noul: 0.2 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.6 } });
+    const port = createFixtureCiPort({});
+    // A signals object with no deterministic field, built directly rather than through computeCiSignals for a pure-function test.
+    const signals = { deterministic: undefined } as unknown as Parameters<typeof applyDeterministicOverride>[1];
+    expect(applyDeterministicOverride(verdict, signals)).toEqual(verdict);
+    void port;
+  });
+
+  test("a deterministic signal overrides top/topProbability but leaves probabilities untouched", () => {
+    const verdict = computeCiTriageVerdict({ flaky: { noul: 0.1 }, infra: { noul: 0.05 }, "real-regression": { noul: 0.8 } });
+    const signals = { deterministic: { verdict: "flaky" as const, reason: "same run rerun passed" } } as unknown as Parameters<
+      typeof applyDeterministicOverride
+    >[1];
+    const overridden = applyDeterministicOverride(verdict, signals);
+    expect(overridden.top).toBe("flaky");
+    expect(overridden.topProbability).toBe(0.1);
+    expect(overridden.probabilities).toEqual(verdict.probabilities);
+    expect(overridden.deterministic).toEqual({ reason: "same run rerun passed" });
+  });
+});
+
+describe("flow 307 AC2: signal lines placed above the log excerpt, questions rewritten to reference them", () => {
+  test("buildCiTriageState places a labelled signals block above the log excerpt, redacted", () => {
+    const planted = "sk-ant-api03-PLANTED-SECRET-TOKEN-abcdefghijklmnopqrstuvwxyz0123456789";
+    const state = buildCiTriageState({
+      testName: "src/x.test.ts:1",
+      jobName: "typecheck-and-tests",
+      rawLog: "boom",
+      signalLines: [`rerun: 1 prior attempt(s) checked; contains ${planted}`, "history: 0 other failures"],
+    });
+    const lines = state.split("\n");
+    expect(lines[0]).toBe("job: typecheck-and-tests");
+    expect(lines[1]).toBe("failing test: src/x.test.ts:1");
+    expect(state).toContain("signals (computed deterministically, before asking you):");
+    expect(state.indexOf("signals (computed")).toBeLessThan(state.indexOf("log excerpt (tail"));
+    expect(state).not.toContain(planted);
+  });
+
+  test("buildCiTriageState with no signalLines is byte-identical to the flow 306 shape", () => {
+    const withoutSignals = buildCiTriageState({ testName: "t", jobName: "job", rawLog: "boom" });
+    const withEmptySignals = buildCiTriageState({ testName: "t", jobName: "job", rawLog: "boom", signalLines: [] });
+    expect(withoutSignals).not.toContain("signals (computed");
+    expect(withEmptySignals).toBe(withoutSignals);
+  });
+
+  test("buildCiTriageQuestions(true) rewrites instructions to reference the signals block explicitly", () => {
+    const withSignals = buildCiTriageQuestions(true);
+    const withoutSignals = buildCiTriageQuestions();
+    for (const criterion of CI_TRIAGE_CRITERIA) {
+      expect(withSignals[criterion].instructions).toContain("signals block");
+      expect(withoutSignals[criterion].instructions).not.toContain("signals block");
+    }
+  });
+});
+
+describe("flow 307 AC3/AC4/AC8: renderCiTriageAdvisory prints evidence lines and a deterministic marker", () => {
+  test("signalLines are printed as evidence bullets", () => {
+    const verdict = computeCiTriageVerdict({ flaky: { noul: 0.6 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.3 } });
+    const text = renderCiTriageAdvisory({
+      runId: "42",
+      jobName: "typecheck-and-tests",
+      verdict,
+      signalLines: ["rerun: 0 prior attempt(s) checked; no earlier attempt of this job passed.", "log markers: none detected."],
+    });
+    expect(text).toContain("evidence (computed signals, before Jev):");
+    expect(text).toContain("  - rerun: 0 prior attempt(s) checked; no earlier attempt of this job passed.");
+    expect(text).toContain("  - log markers: none detected.");
+  });
+
+  test("a deterministic verdict prints DETERMINISTIC above the probabilities, which are still shown in full", () => {
+    const verdict = applyDeterministicOverride(computeCiTriageVerdict({ flaky: { noul: 0.2 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.7 } }), {
+      deterministic: { verdict: "flaky", reason: "same run rerun passed" },
+    } as unknown as Parameters<typeof applyDeterministicOverride>[1]);
+    const text = renderCiTriageAdvisory({ runId: "1", jobName: "j", verdict });
+    expect(text).toContain("DETERMINISTIC: same run rerun passed");
+    expect(text).toContain("top: flaky");
+    // The un-overridden probabilities are still all printed, beside the forced top.
+    expect(text).toContain("real-regression: 70%");
+    expect(text.indexOf("DETERMINISTIC")).toBeLessThan(text.indexOf("top: flaky"));
+  });
+
+  test("no signalLines/deterministic -> output is byte-identical to the flow 306 shape", () => {
+    const verdict = computeCiTriageVerdict({ flaky: { noul: 0.6 }, infra: { noul: 0.1 }, "real-regression": { noul: 0.3 } });
+    const before = renderCiTriageAdvisory({ runId: "42", jobName: "typecheck-and-tests", testName: "src/x.test.ts:1", verdict });
+    expect(before).not.toContain("evidence (computed signals");
+    expect(before).not.toContain("DETERMINISTIC");
   });
 });

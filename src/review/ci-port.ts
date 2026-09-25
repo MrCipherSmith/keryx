@@ -42,6 +42,19 @@ export interface CiRunHistoryEntry {
   readonly headBranch: string | null;
 }
 
+/** One earlier attempt of a run that was rerun ("re-run failed jobs"/"re-run all jobs") — flow 307, AC1(a). */
+export interface CiAttemptJobs {
+  readonly attempt: number;
+  readonly jobs: readonly CiJobSummary[];
+}
+
+/**
+ * Flow 307 (AC1, AC8): three more READ methods, added to compute deterministic
+ * triage signals before asking Jev — history/diff/rerun evidence, never a
+ * write. `CiPort` still has no method that could rerun a job, touch a status
+ * check, or merge anything; every new method here is a `gh run view`/`gh api
+ * .../commits`/`gh run list` read, parsed and nothing else.
+ */
 export interface CiPort {
   /** `gh run view <runId> --json jobs,workflowName,headBranch,headSha,conclusion`. */
   runInfo(runId: string): Promise<CiRunInfo>;
@@ -49,6 +62,25 @@ export interface CiPort {
   failedLog(runId: string): Promise<string>;
   /** Recent runs of `workflowName`, newest first. See the file header on "job name" history. */
   recentRuns(workflowName: string, limit?: number): Promise<readonly CiRunHistoryEntry[]>;
+  /**
+   * AC1(a): jobs from every attempt of `runId` BEFORE its current (latest)
+   * attempt — empty when the run was never rerun. `gh run view <runId>
+   * --attempt <n> --json jobs` per prior attempt, oldest first.
+   */
+  priorAttempts(runId: string): Promise<readonly CiAttemptJobs[]>;
+  /**
+   * AC1(c): the file paths this commit touched — `gh api
+   * repos/{owner}/{repo}/commits/{headSha}`'s `.files[].filename`. Empty on
+   * any read failure rather than throwing: diff proximity is one signal among
+   * several, not a hard dependency.
+   */
+  changedFiles(headSha: string): Promise<readonly string[]>;
+  /**
+   * AC8: every run of `workflowName` whose head commit is exactly `headSha`
+   * (`gh run list --commit <sha>`) — used only to check whether a LATER run
+   * of the SAME commit (a manual re-trigger, not a new push) passed.
+   */
+  runsForHeadSha(headSha: string, workflowName: string): Promise<readonly CiRunHistoryEntry[]>;
 }
 
 export type CiSpawn = (argv: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
@@ -141,8 +173,94 @@ export function createGhCiPort(spawn: CiSpawn = defaultCiSpawn, repo?: string): 
         headBranch: r.headBranch ?? null,
       }));
     },
+    // AC1(a): bounded to the last MAX_PRIOR_ATTEMPTS_CHECKED attempts before
+    // the current one — a run rerun a handful of times reads a handful of
+    // extra `gh run view --attempt` calls, not one per historical attempt
+    // ever taken.
+    async priorAttempts(runId: string): Promise<readonly CiAttemptJobs[]> {
+      const attemptArgv = ["gh", "run", "view", runId, ...repoArgs(repo), "--json", "attempt"];
+      const attemptResult = await spawn(attemptArgv);
+      if (attemptResult.exitCode !== 0) {
+        // Best-effort signal, not a hard dependency: a run whose attempt
+        // number cannot be read contributes no rerun evidence rather than
+        // failing the whole triage.
+        return [];
+      }
+      let currentAttempt: number;
+      try {
+        currentAttempt = Number((JSON.parse(attemptResult.stdout) as { attempt?: number }).attempt ?? 1);
+      } catch {
+        return [];
+      }
+      if (!Number.isFinite(currentAttempt) || currentAttempt <= 1) {
+        return [];
+      }
+      const first = Math.max(1, currentAttempt - MAX_PRIOR_ATTEMPTS_CHECKED);
+      const out: CiAttemptJobs[] = [];
+      for (let attempt = first; attempt < currentAttempt; attempt += 1) {
+        const argv = ["gh", "run", "view", runId, "--attempt", String(attempt), ...repoArgs(repo), "--json", "jobs"];
+        const result = await spawn(argv);
+        if (result.exitCode !== 0) continue;
+        try {
+          const parsed = JSON.parse(result.stdout) as GhJobsJson;
+          out.push({
+            attempt,
+            jobs: (parsed.jobs ?? []).map((j) => ({
+              name: j.name ?? "",
+              conclusion: j.conclusion ?? null,
+              ...(j.status !== undefined ? { status: j.status } : {}),
+            })),
+          });
+        } catch {
+          // A malformed attempt read contributes nothing; the others still can.
+        }
+      }
+      return out;
+    },
+    async changedFiles(headSha: string): Promise<readonly string[]> {
+      const path = repo !== undefined ? `repos/${repo}/commits/${headSha}` : "repos/{owner}/{repo}/commits/" + headSha;
+      const result = await spawn(["gh", "api", path, "--jq", ".files[].filename"]);
+      if (result.exitCode !== 0) {
+        return [];
+      }
+      return result.stdout.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+    },
+    async runsForHeadSha(headSha: string, workflowName: string): Promise<readonly CiRunHistoryEntry[]> {
+      const argv = [
+        "gh",
+        "run",
+        "list",
+        ...repoArgs(repo),
+        "--workflow",
+        workflowName,
+        "--commit",
+        headSha,
+        "--json",
+        "databaseId,conclusion,createdAt,headBranch",
+        "-L",
+        "10",
+      ];
+      const result = await spawn(argv);
+      if (result.exitCode !== 0) {
+        return [];
+      }
+      try {
+        const parsed = JSON.parse(result.stdout) as readonly GhRunListEntry[];
+        return parsed.map((r) => ({
+          runId: String(r.databaseId ?? ""),
+          conclusion: r.conclusion ?? null,
+          createdAt: r.createdAt ?? null,
+          headBranch: r.headBranch ?? null,
+        }));
+      } catch {
+        return [];
+      }
+    },
   };
 }
+
+/** AC1(a): how many attempts BEFORE the current one `priorAttempts` will actually fetch. */
+export const MAX_PRIOR_ATTEMPTS_CHECKED = 5;
 
 export interface CiFixtureFiles {
   /** Keyed by run id. */
@@ -151,12 +269,21 @@ export interface CiFixtureFiles {
   readonly logs?: Readonly<Record<string, string>>;
   /** Keyed by workflow name. */
   readonly history?: Readonly<Record<string, readonly CiRunHistoryEntry[]>>;
+  /** Keyed by run id: earlier attempts of that run (AC1(a)). Absent/empty = never rerun. */
+  readonly attempts?: Readonly<Record<string, readonly CiAttemptJobs[]>>;
+  /** Keyed by head sha: file paths that commit touched (AC1(c)). */
+  readonly changedFiles?: Readonly<Record<string, readonly string[]>>;
+  /** Keyed by `${workflowName}:${headSha}`: every run of that workflow on that exact commit (AC8). */
+  readonly runsByHeadSha?: Readonly<Record<string, readonly CiRunHistoryEntry[]>>;
 }
 
 export type CiPortCall =
   | { readonly op: "runInfo"; readonly runId: string }
   | { readonly op: "failedLog"; readonly runId: string }
-  | { readonly op: "recentRuns"; readonly workflowName: string };
+  | { readonly op: "recentRuns"; readonly workflowName: string }
+  | { readonly op: "priorAttempts"; readonly runId: string }
+  | { readonly op: "changedFiles"; readonly headSha: string }
+  | { readonly op: "runsForHeadSha"; readonly headSha: string; readonly workflowName: string };
 
 export type FixtureCiPort = CiPort & { readonly calls: readonly CiPortCall[] };
 
@@ -187,6 +314,18 @@ export function createFixtureCiPort(files: CiFixtureFiles): FixtureCiPort {
     async recentRuns(workflowName: string, limit = 10): Promise<readonly CiRunHistoryEntry[]> {
       calls.push({ op: "recentRuns", workflowName });
       return (files.history?.[workflowName] ?? []).slice(0, limit);
+    },
+    async priorAttempts(runId: string): Promise<readonly CiAttemptJobs[]> {
+      calls.push({ op: "priorAttempts", runId });
+      return files.attempts?.[runId] ?? [];
+    },
+    async changedFiles(headSha: string): Promise<readonly string[]> {
+      calls.push({ op: "changedFiles", headSha });
+      return files.changedFiles?.[headSha] ?? [];
+    },
+    async runsForHeadSha(headSha: string, workflowName: string): Promise<readonly CiRunHistoryEntry[]> {
+      calls.push({ op: "runsForHeadSha", headSha, workflowName });
+      return files.runsByHeadSha?.[`${workflowName}:${headSha}`] ?? [];
     },
   };
 }

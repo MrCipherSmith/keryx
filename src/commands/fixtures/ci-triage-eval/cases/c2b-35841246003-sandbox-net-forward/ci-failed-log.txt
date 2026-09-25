@@ -1,0 +1,13 @@
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	##[group]src/commands/commands.test.ts:
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	+   "__sandbox-net-forward",
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	error: expect(received).toEqual(expected)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	      at <anonymous> (/home/runner/work/keryx/keryx/src/commands/commands.test.ts:412:9)
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	(fail) command registry coverage > every CLI verb is either described or excluded with a reason [0.36ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	1 tests failed:
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	(fail) command registry coverage > every CLI verb is either described or excluded with a reason [0.36ms]
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 7758 pass
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 12 skip
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	 1 fail
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	Ran 7771 tests across 591 files.
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	error: script "test:core" exited with code 1
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	##[error]Process completed with exit code 1.

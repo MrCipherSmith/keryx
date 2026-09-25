@@ -13,8 +13,10 @@
 // written.
 
 import {
+  applyDeterministicOverride,
   buildCiTriageQuestions,
   buildCiTriageState,
+  computeCiSignals,
   computeCiTriageVerdict,
   extractFailingTestName,
   readCiTriageEnabled,
@@ -128,7 +130,10 @@ export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defau
 
 /**
  * AC12/AC7: triage one job, through the exact Phase 0/Phase 1 pipeline
- * `keryx review ci-triage` uses.
+ * `keryx review ci-triage` uses. Flow 307 (AC4): also computes the same
+ * deterministic signals the CLI does (AC1), through the same `CiPort`, so
+ * `/ci`'s detail view shows the same evidence lines `keryx review ci-triage`
+ * prints — one pipeline, two entry points.
  *
  * `signal` (flow 306 review, items 1/3) is forwarded to `callJevSystemOne`:
  * the caller (the `/ci` modal) aborts it when the modal closes, so a request
@@ -154,13 +159,28 @@ export async function runCiTriageForItem(
   }
   try {
     const port = createGhCiPort((argv) => spawn(argv, cwd));
+    const info = await port.runInfo(item.runId);
     const rawLog = await port.failedLog(item.runId);
     const testName = extractFailingTestName(rawLog, item.jobName);
-    const state = buildCiTriageState({ testName: testName ?? "(unknown test)", jobName: item.jobName, rawLog });
-    const questions = buildCiTriageQuestions();
+    const signals = await computeCiSignals(port, {
+      runId: item.runId,
+      jobName: item.jobName,
+      testName,
+      rawLog,
+      headSha: info.headSha,
+      workflowName: info.workflowName,
+    });
+    const state = buildCiTriageState({
+      testName: testName ?? "(unknown test)",
+      jobName: item.jobName,
+      rawLog,
+      ...(signals.lines.length > 0 ? { signalLines: signals.lines } : {}),
+    });
+    const questions = buildCiTriageQuestions(true);
     const result = await callJevSystemOne(fetchFn, { model: DEFAULT_JEV_MODEL, state, questions }, { ...(signal !== undefined ? { signal } : {}) });
-    const verdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
-    return { ok: true, verdict, ...(testName !== undefined ? { testName } : {}) };
+    const rawVerdict = computeCiTriageVerdict(result.answers as Record<string, { noul?: number }>);
+    const verdict = applyDeterministicOverride(rawVerdict, signals);
+    return { ok: true, verdict, signalLines: signals.lines, ...(testName !== undefined ? { testName } : {}) };
   } catch (error) {
     if (error instanceof JevTimeoutError) {
       return { ok: false, reason: error.message, timedOut: true };

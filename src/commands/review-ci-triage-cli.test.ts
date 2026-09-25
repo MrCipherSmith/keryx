@@ -63,8 +63,8 @@ afterEach(async () => {
   }
 });
 
-describe("AC8: keryx review ci-triage --run <id> prints the triage for a failed run", () => {
-  test("--json prints the verdict, top pick, job and test name, from fixtures alone", async () => {
+describe("AC8/AC3: keryx review ci-triage --run <id> prints the triage for a failed run", () => {
+  test("--json prints an array (one verdict per failed job — here, one), with job/test/verdict/usage", async () => {
     ROOT = await projectRoot(true);
     process.chdir(ROOT);
     process.env.OPENROUTER_API_KEY = "sk-or-test";
@@ -77,13 +77,14 @@ describe("AC8: keryx review ci-triage --run <id> prints the triage for a failed 
       testName: string;
       verdict: { top: string; topProbability: number; probabilities: Record<string, number> };
       usage: { input_tokens?: number };
-    };
-    expect(parsed.runId).toBe("36095133327");
-    expect(parsed.job).toBe("typecheck-and-tests");
-    expect(parsed.testName).toContain("e2e.test.ts:115");
-    expect(parsed.verdict.top).toBe("flaky");
-    expect(parsed.verdict.probabilities.flaky).toBe(0.74);
-    expect(parsed.usage.input_tokens).toBe(612);
+    }[];
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.runId).toBe("36095133327");
+    expect(parsed[0]?.job).toBe("typecheck-and-tests");
+    expect(parsed[0]?.testName).toContain("e2e.test.ts:115");
+    expect(parsed[0]?.verdict.top).toBe("flaky");
+    expect(parsed[0]?.verdict.probabilities.flaky).toBe(0.74);
+    expect(parsed[0]?.usage.input_tokens).toBe(612);
     expect(process.exitCode ?? 0).toBe(0);
   });
 
@@ -104,8 +105,9 @@ describe("AC8: keryx review ci-triage --run <id> prints the triage for a failed 
     process.env.OPENROUTER_API_KEY = "sk-or-test";
 
     await reviewCommand(["ci-triage", "--run", "36095133327", "--job", "typecheck-and-tests", "--fixtures", FIXTURES_DIR, "--json"]);
-    const parsed = JSON.parse(output()) as { job: string };
-    expect(parsed.job).toBe("typecheck-and-tests");
+    const parsed = JSON.parse(output()) as { job: string }[];
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.job).toBe("typecheck-and-tests");
   });
 
   test("a job name that does not exist on the run is refused, naming the jobs that do", async () => {
@@ -159,5 +161,92 @@ describe("AC9: no rerun/status-check/merge call exists in the output path", () =
 
     await reviewCommand(["ci-triage", "--run", "1", "--rerun"]);
     expect(output()).toContain("Unknown option");
+  });
+});
+
+describe("flow 307 AC5/AC6: keryx review ci-triage --eval <file> — the labelled evaluation set", () => {
+  const EVAL_MANIFEST = path.join(import.meta.dir, "fixtures", "ci-triage-eval", "manifest.json");
+
+  test("offline (no --live) needs no opt-in gate — every case replays from its own fixtures", async () => {
+    // callJevSystemOne itself still requires SOME credential string to be
+    // present before it will build a request at all (flow 306's own AC2),
+    // even though nothing here is ever sent anywhere — the canned
+    // `jev-response.json` answers every call. Same precedent `--run
+    // --fixtures` already sets in the describe block above.
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    await reviewCommand(["ci-triage", "--eval", EVAL_MANIFEST, "--json"]);
+    expect(process.exitCode ?? 0).toBe(0);
+    const parsed = JSON.parse(output()) as {
+      live: boolean;
+      cases: number;
+      before: { accuracy: number; costUsd: number };
+      after: { accuracy: number; costUsd: number };
+      results: readonly { id: string; truth: string; predictedBefore: string; predictedAfter: string }[];
+    };
+    expect(parsed.live).toBe(false);
+    expect(parsed.cases).toBe(8);
+    expect(parsed.results).toHaveLength(8);
+    for (const key of ["before", "after"] as const) {
+      expect(parsed[key].accuracy).toBeGreaterThanOrEqual(0);
+      expect(parsed[key].accuracy).toBeLessThanOrEqual(1);
+    }
+    for (const r of parsed.results) {
+      expect(["flaky", "infra", "real-regression"]).toContain(r.truth);
+      expect(["flaky", "infra", "real-regression"]).toContain(r.predictedBefore);
+      expect(["flaky", "infra", "real-regression"]).toContain(r.predictedAfter);
+    }
+    // AC5: at least the five 2026-09-25 cases the operator named are present, by id.
+    const ids = parsed.results.map((r) => r.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "c1-35867790817-deepseek",
+        "c2a-35841246003-schedules-flaky",
+        "c2b-35841246003-sandbox-net-forward",
+        "c3-35861001135-core-gate",
+        "c4-35856434575-schedules-flaky",
+        "c5-35885829526-provider-retry-timeout",
+      ]),
+    );
+  });
+
+  test("the non-JSON report prints before/after accuracy and a per-case line naming truth and both predictions", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    await reviewCommand(["ci-triage", "--eval", EVAL_MANIFEST]);
+    expect(output()).toContain("before (flow 306, log only):");
+    expect(output()).toContain("after  (flow 307, log + signals):");
+    expect(output()).toContain("c7-35897000167-macos-infra: truth=infra");
+  });
+
+  test("a manifest with no fixturesDir on any case, replayed offline, is refused rather than guessing", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "keryx-ci-eval-bad-"));
+    const manifestPath = path.join(dir, "manifest.json");
+    await writeFile(manifestPath, JSON.stringify({ cases: [{ id: "x", runId: "1", job: "j", truth: "flaky" }] }), "utf8");
+    await reviewCommand(["ci-triage", "--eval", manifestPath]);
+    expect(output()).toContain("fixturesDir");
+    expect(process.exitCode).toBe(1);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("--run and --eval are both accepted flags, but --eval takes priority", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    // --run is simply not consulted once --eval is present — this only proves
+    // the command does not crash trying to treat --run as a case id.
+    await reviewCommand(["ci-triage", "--run", "not-a-real-run", "--eval", EVAL_MANIFEST, "--json"]);
+    const parsed = JSON.parse(output()) as { cases: number };
+    expect(parsed.cases).toBe(8);
+  });
+});
+
+describe("flow 307 AC7: a rejected credential names its source, at the CLI's own pre-flight message", () => {
+  test("no credential at all: the pre-flight message names both possible sources", async () => {
+    ROOT = await projectRoot(true);
+    process.chdir(ROOT);
+    delete process.env.OPENROUTER_API_KEY;
+
+    await reviewCommand(["ci-triage", "--run", "1", "--fixtures", path.join(ROOT, "does-not-exist")]);
+
+    expect(output()).toContain("OPENROUTER_API_KEY");
+    expect(output()).toContain("openrouterKey");
+    expect(process.exitCode).toBe(1);
   });
 });

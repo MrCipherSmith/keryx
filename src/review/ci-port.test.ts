@@ -63,11 +63,59 @@ describe("createGhCiPort (live adapter)", () => {
     await port.runInfo("1").catch(() => undefined);
     await port.failedLog("1").catch(() => undefined);
     await port.recentRuns("CI").catch(() => undefined);
+    await port.priorAttempts("1").catch(() => undefined);
+    await port.changedFiles("deadbeef").catch(() => undefined);
+    await port.runsForHeadSha("deadbeef", "CI").catch(() => undefined);
     const calls = (spawn as unknown as { calls: string[][] }).calls;
     for (const argv of calls) {
       const joined = argv.join(" ");
       expect(joined).not.toMatch(/rerun|cancel|delete|--method\s+(POST|PUT|PATCH|DELETE)/i);
     }
+  });
+
+  test("flow 307 AC1(a): priorAttempts reads `attempt`, then fetches each earlier attempt's jobs", async () => {
+    const calls: string[][] = [];
+    const spawn: CiSpawn = async (argv) => {
+      calls.push(argv);
+      if (argv.includes("--attempt")) {
+        return { stdout: JSON.stringify({ jobs: [{ name: "typecheck-and-tests", conclusion: "failure" }] }), stderr: "", exitCode: 0 };
+      }
+      return { stdout: JSON.stringify({ attempt: 2 }), stderr: "", exitCode: 0 };
+    };
+    const port = createGhCiPort(spawn, "acme/widget");
+    const attempts = await port.priorAttempts("123");
+    expect(attempts).toEqual([{ attempt: 1, jobs: [{ name: "typecheck-and-tests", conclusion: "failure" }] }]);
+    expect(calls[0]).toEqual(["gh", "run", "view", "123", "--repo", "acme/widget", "--json", "attempt"]);
+    expect(calls[1]).toEqual(["gh", "run", "view", "123", "--attempt", "1", "--repo", "acme/widget", "--json", "jobs"]);
+  });
+
+  test("flow 307 AC1(a): a run at its first attempt has no prior attempts, and fetches only `attempt`", async () => {
+    const spawn = spawnReturning(JSON.stringify({ attempt: 1 }));
+    const port = createGhCiPort(spawn);
+    expect(await port.priorAttempts("123")).toEqual([]);
+    expect((spawn as unknown as { calls: string[][] }).calls).toHaveLength(1);
+  });
+
+  test("flow 307 AC1(c): changedFiles reads the commit's file list", async () => {
+    const spawn = spawnReturning("src/a.ts\nsrc/a.test.ts\n");
+    const port = createGhCiPort(spawn, "acme/widget");
+    expect(await port.changedFiles("deadbeef")).toEqual(["src/a.ts", "src/a.test.ts"]);
+    const calls = (spawn as unknown as { calls: string[][] }).calls;
+    expect(calls[0]).toEqual(["gh", "api", "repos/acme/widget/commits/deadbeef", "--jq", ".files[].filename"]);
+  });
+
+  test("flow 307 AC1(c): changedFiles answers empty, not throws, on a non-zero exit", async () => {
+    const port = createGhCiPort(spawnReturning("", 1));
+    expect(await port.changedFiles("deadbeef")).toEqual([]);
+  });
+
+  test("flow 307 AC8: runsForHeadSha shells `gh run list --commit`", async () => {
+    const spawn = spawnReturning(JSON.stringify([{ databaseId: 2, conclusion: "success", createdAt: "2026-09-24T00:00:00Z", headBranch: "main" }]));
+    const port = createGhCiPort(spawn, "acme/widget");
+    const runs = await port.runsForHeadSha("deadbeef", "CI");
+    expect(runs).toEqual([{ runId: "2", conclusion: "success", createdAt: "2026-09-24T00:00:00Z", headBranch: "main" }]);
+    const calls = (spawn as unknown as { calls: string[][] }).calls;
+    expect(calls[0]).toEqual(["gh", "run", "list", "--repo", "acme/widget", "--workflow", "CI", "--commit", "deadbeef", "--json", "databaseId,conclusion,createdAt,headBranch", "-L", "10"]);
   });
 
   test("a non-zero exit throws with the command and stderr named", async () => {
@@ -121,6 +169,29 @@ describe("createFixtureCiPort (offline adapter)", () => {
   test("AC9: the fixture port has no method that could rerun, cancel, or write a status check", () => {
     const port = createFixtureCiPort({});
     const methods = Object.keys(port).filter((k) => k !== "calls");
-    expect(methods.sort()).toEqual(["failedLog", "recentRuns", "runInfo"]);
+    expect(methods.sort()).toEqual(["changedFiles", "failedLog", "priorAttempts", "recentRuns", "runInfo", "runsForHeadSha"]);
+  });
+
+  test("flow 307: the fixture port answers the three new read signals from files, and records calls", async () => {
+    const port = createFixtureCiPort({
+      attempts: { "9": [{ attempt: 1, jobs: [{ name: "typecheck-and-tests", conclusion: "success" }] }] },
+      changedFiles: { deadbeef: ["src/a.ts"] },
+      runsByHeadSha: { "CI:deadbeef": [{ runId: "10", conclusion: "success", createdAt: null, headBranch: "main" }] },
+    });
+    expect(await port.priorAttempts("9")).toHaveLength(1);
+    expect(await port.changedFiles("deadbeef")).toEqual(["src/a.ts"]);
+    expect(await port.runsForHeadSha("deadbeef", "CI")).toHaveLength(1);
+    expect(port.calls).toEqual([
+      { op: "priorAttempts", runId: "9" },
+      { op: "changedFiles", headSha: "deadbeef" },
+      { op: "runsForHeadSha", headSha: "deadbeef", workflowName: "CI" },
+    ]);
+  });
+
+  test("flow 307: missing fixture data answers empty, not undefined", async () => {
+    const port = createFixtureCiPort({});
+    expect(await port.priorAttempts("missing")).toEqual([]);
+    expect(await port.changedFiles("missing")).toEqual([]);
+    expect(await port.runsForHeadSha("missing", "CI")).toEqual([]);
   });
 });

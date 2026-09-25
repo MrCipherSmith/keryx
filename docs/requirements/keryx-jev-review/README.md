@@ -28,8 +28,26 @@ an automatic action (a rerun, a merge, a status-check write, a posted reply), or
 
 ## Status
 
-**Phase 0 and the CI-triage early win are implemented (flow 306).** Everything else in
-PLAN.md remains design only.
+**Phase 0 and the CI-triage early win are implemented (flow 306), and flow 307 added
+deterministic pre-Jev signals, a committed evaluation set, and a measured accuracy
+number.** Everything else in PLAN.md remains design only.
+
+- Flow 307: before asking Jev, `keryx review ci-triage` now computes four deterministic
+  signals per failed job — same-run rerun evidence, cross-branch history (same test
+  failing elsewhere and whether it later passed), diff proximity (does this commit touch
+  the failing file/directory/imports), and timeout/infra log markers — through the CI
+  read port and `git show` only (`src/review/ci-port.ts` gained three more READ methods,
+  never a write). The signals sit in a labelled block above the log excerpt in `state`,
+  and the questions reference them explicitly. When the rerun or same-head signal alone
+  answers the question, the verdict is marked `DETERMINISTIC`, with Jev's own
+  probabilities still shown beside it. Every failed job of a run is triaged by default
+  (`--job` narrows to one); `/ci`'s detail view shows the same signal evidence lines.
+  A live evaluation against eight labelled real failed jobs from this repository's own
+  history (`src/commands/fixtures/ci-triage-eval/`, `keryx review ci-triage --eval
+  <manifest> --live`) measured **before (log only): 4/8 = 50%, after (log + signals):
+  4/8 = 50%** — raw top-1 accuracy did not improve on this sample (one case fixed, one
+  broken); see `docs/docs/cli-reference.md`'s `review ci-triage` section and the flow 307
+  journal for the full breakdown. The classifier remains a hint, not a diagnosis.
 
 - The Jev client (Phase 0) lives at `src/harness/decision/jev-client.ts`, not this
   document's originally proposed `src/review/jev-client.ts` — flow 306's frozen

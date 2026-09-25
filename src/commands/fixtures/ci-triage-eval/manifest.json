@@ -1,0 +1,74 @@
+{
+  "//": [
+    "Flow 307 AC5/AC6 — a committed evaluation set of labelled failed CI jobs",
+    "from this repository. Every runId/job/headSha/headBranch below is the real",
+    "value read live via `gh run view`/`gh run list --commit` on 2026-09-25",
+    "against MrCipherSmith/keryx; each truth label was checked against the",
+    "job's own `gh run view --json jobs` and its real `--log-failed` text",
+    "before being recorded here (see the flow 307 journal for the evidence).",
+    "Log excerpts are authored to be representative of the real failure rather",
+    "than a byte-exact copy (the same discipline `src/commands/fixtures/",
+    "ci-triage/` already follows) — no secret appears in any of these files.",
+    "`--live` replays the same runId/job pairs against the real `gh`/Jev",
+    "instead of the fixturesDir below; the fixturesDir replay is the offline,",
+    "hermetic half used by CI and by `bun test`."
+  ],
+  "cases": [
+    {
+      "id": "c1-35867790817-deepseek",
+      "runId": "35867790817",
+      "job": "typecheck-and-tests",
+      "truth": "real-regression",
+      "fixturesDir": "cases/c1-35867790817-deepseek"
+    },
+    {
+      "id": "c2a-35841246003-schedules-flaky",
+      "runId": "35841246003",
+      "job": "opentui native (darwin-x64)",
+      "truth": "flaky",
+      "fixturesDir": "cases/c2a-35841246003-schedules-flaky"
+    },
+    {
+      "id": "c2b-35841246003-sandbox-net-forward",
+      "runId": "35841246003",
+      "job": "typecheck-and-tests",
+      "truth": "real-regression",
+      "fixturesDir": "cases/c2b-35841246003-sandbox-net-forward"
+    },
+    {
+      "id": "c3-35861001135-core-gate",
+      "runId": "35861001135",
+      "job": "typecheck-and-tests",
+      "truth": "real-regression",
+      "fixturesDir": "cases/c3-35861001135-core-gate"
+    },
+    {
+      "id": "c4-35856434575-schedules-flaky",
+      "runId": "35856434575",
+      "job": "opentui native (linux-x64)",
+      "truth": "flaky",
+      "fixturesDir": "cases/c4-35856434575-schedules-flaky"
+    },
+    {
+      "id": "c5-35885829526-provider-retry-timeout",
+      "runId": "35885829526",
+      "job": "opentui native (darwin-x64)",
+      "truth": "flaky",
+      "fixturesDir": "cases/c5-35885829526-provider-retry-timeout"
+    },
+    {
+      "id": "c6-35865793959-deepseek-main",
+      "runId": "35865793959",
+      "job": "typecheck-and-tests",
+      "truth": "real-regression",
+      "fixturesDir": "cases/c6-35865793959-deepseek-main"
+    },
+    {
+      "id": "c7-35897000167-macos-infra",
+      "runId": "35897000167",
+      "job": "macOS real-host legs — OS sandbox + TUI pty launch",
+      "truth": "infra",
+      "fixturesDir": "cases/c7-35897000167-macos-infra"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "runId": "35841246003",
+  "workflowName": "CI",
+  "headBranch": "feat/sandbox-allowlist-network",
+  "headSha": "cbe2e6dace7c40572d046c6c36828137023c7750",
+  "conclusion": "failure",
+  "jobs": [
+    { "name": "opentui native (darwin-x64)", "conclusion": "failure", "status": "completed" },
+    { "name": "typecheck-and-tests", "conclusion": "failure", "status": "completed" },
+    { "name": "opentui native (linux-x64)", "conclusion": "success", "status": "completed" }
+  ]
+}
