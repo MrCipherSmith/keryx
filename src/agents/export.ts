@@ -28,7 +28,6 @@ import path from "node:path";
 import { pathExists, isNotFound, isPathInside } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { removeContained, writeContained } from "../lib/contained-write";
-import { MODEL_GUIDANCE_CONFIG_PATH } from "../lib/model-choice";
 import { getHarnessAdapter, surfacesOf } from "../integrations/registry";
 import { classifySurfaceState, type MatrixSurfaceState } from "../integrations/matrix";
 import {
@@ -233,6 +232,18 @@ function decideAction(existing: string | undefined, generated: string, format: A
 // ---------------------------------------------------------------------------
 
 /**
+ * Same `.metaproject/tasks.config.json` path as `MODEL_GUIDANCE_CONFIG_PATH`
+ * in `src/lib/model-choice.ts` (and `REVIEW_GATE_CONFIG_PATH` in
+ * `src/flow/review-gate.ts`, which duplicates it for the same reason) —
+ * declared locally rather than imported. `model-choice.ts` pulls in
+ * `src/harness/routing/*` (zone `client`) to resolve the routing table;
+ * `src/agents` is zone `core` and reachable from the published core entry
+ * (AFC-19), so importing that module here for one string constant would drag
+ * the routing stack into the shipped core graph.
+ */
+const CLAUDE_SUBAGENT_ALIASES_CONFIG_PATH = ".metaproject/tasks.config.json";
+
+/**
  * Read `.metaproject/tasks.config.json`'s `modelGuidance.claudeSubagentAliases`
  * — the opt-out for `compile.ts`'s claude-target `model:` mapping (deep ->
  * opus, standard -> sonnet, light -> haiku). A SIBLING key on the SAME
@@ -249,13 +260,13 @@ function decideAction(existing: string | undefined, generated: string, format: A
  * calling it.
  */
 export async function readClaudeSubagentAliasesConfig(projectRoot: string): Promise<{ readonly enabled: boolean; readonly note?: string }> {
-  const file = path.join(projectRoot, MODEL_GUIDANCE_CONFIG_PATH);
+  const file = path.join(projectRoot, CLAUDE_SUBAGENT_ALIASES_CONFIG_PATH);
   if (!(await pathExists(file))) {
     return { enabled: true };
   }
   const read = await readJsonObjectFile(file);
   if (read.state !== "object") {
-    return { enabled: true, note: `${MODEL_GUIDANCE_CONFIG_PATH} could not be read as a JSON object; claude subagent aliases stayed enabled` };
+    return { enabled: true, note: `${CLAUDE_SUBAGENT_ALIASES_CONFIG_PATH} could not be read as a JSON object; claude subagent aliases stayed enabled` };
   }
   const modelGuidance = read.value["modelGuidance"];
   if (typeof modelGuidance !== "object" || modelGuidance === null || Array.isArray(modelGuidance)) {
@@ -266,7 +277,7 @@ export async function readClaudeSubagentAliasesConfig(projectRoot: string): Prom
     return { enabled: false };
   }
   if (value !== undefined && value !== true) {
-    return { enabled: true, note: `${MODEL_GUIDANCE_CONFIG_PATH}: modelGuidance.claudeSubagentAliases is not a boolean; aliases stayed enabled` };
+    return { enabled: true, note: `${CLAUDE_SUBAGENT_ALIASES_CONFIG_PATH}: modelGuidance.claudeSubagentAliases is not a boolean; aliases stayed enabled` };
   }
   return { enabled: true };
 }
