@@ -184,9 +184,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     // The installer view under the name that says what it does: it wires this
-    // project into an editor, the TUI half of `keryx integrate`.
-    name: "/integrations",
-    description: "Wire this project into an editor over MCP (keryx integrate)",
+    // project into an editor, the TUI half of `keryx integrate`. R700-09:
+    // renamed from `/integrations` — that name sat one letter from the CLI
+    // `integrations` verb (installs hooks/instructions for agent runtimes),
+    // a different command this view does not touch.
+    name: "/integrate",
+    description: "Wire this project into an editor over MCP (keryx integrate; see also keryx integrations)",
     modes: AGENT_ONLY,
   },
   {
@@ -196,7 +199,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // aimed at nothing is worse than one aimed at the old thing.
     //
     // It is the consumer view now — the servers keryx CONNECTS TO, which
-    // is what D-04 says the word means. `/integrations` above is the
+    // is what D-04 says the word means. `/integrate` above is the
     // installer and keeps its own name.
     //
     // `/mcps` is deliberately absent and cannot be added: it would differ

@@ -12,7 +12,7 @@
 // description is written for the editor, because several shell descriptions
 // promise a TUI picker that does not exist here. A command whose whole meaning
 // is a TUI surface (`/workspace`, `/review`, `/governance`, `/triggers`,
-// `/integrations`, `/mcp`, `/game`,
+// `/integrate`, `/mcp`, `/game`,
 // and every picker or transcript command) is not advertised.
 
 import type { AcpAvailableCommand } from "./protocol";
@@ -59,7 +59,7 @@ export const ACP_TUI_ONLY_COMMANDS: readonly string[] = [
   // Flow 295: scheduling confirms a card in the TUI; an editor never reaches it.
   "schedule",
   "schedules",
-  "integrations",
+  "integrate",
   "mcp",
   "game",
 ];

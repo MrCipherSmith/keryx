@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
 import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
@@ -1172,7 +1173,12 @@ async function delegateToLocalRunner(
   }
 
   const exitCode = await new Promise<number>((resolve, reject) => {
-    const child = spawn(process.execPath, [localRunner, ...args], {
+    // R1-01: `localRunner` is a `.metaproject/core/gdgraph/cli.ts` keryx
+    // itself scaffolded into the project — not a user-authored tool — and it
+    // runs with `cwd: process.cwd()`, the same directory a hostile `.env`/
+    // `bunfig.toml` could occupy. Same flags as every other bun-entry spawn;
+    // see `src/lib/safe-exec.ts`.
+    const child = spawn(process.execPath, [...SAFE_BUN_SPAWN_ARGS, localRunner, ...args], {
       cwd: process.cwd(),
       stdio: "inherit",
       env: {

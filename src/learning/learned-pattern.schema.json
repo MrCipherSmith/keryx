@@ -216,6 +216,29 @@
         "extractorKind": {
           "type": "string",
           "enum": ["deterministic", "model-backed"]
+        },
+        "importedFrom": {
+          "type": "object",
+          "description": "Present only on a record that arrived via `keryx bundle import` (R700-11). Distinct from extractor/extractorKind, which describe how the pattern was originally mined, not how it got into this project.",
+          "additionalProperties": false,
+          "required": ["bundleId", "importedAt"],
+          "properties": {
+            "bundleId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "importedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 date-time of this import, not of the original export."
+            },
+            "originalConfidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "The record's confidence before the import-time cap was applied, for audit only — never used to restore it."
+            }
+          }
         }
       }
     },

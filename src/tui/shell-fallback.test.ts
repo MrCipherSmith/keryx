@@ -29,6 +29,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 
 const SRC_ROOT = join(import.meta.dir, "..");
 const CLI = join(SRC_ROOT, "cli.ts");
@@ -166,7 +167,11 @@ async function runChild(opts: {
   runId += 1;
   const probeFile = join(workspace, `probe-${runId}.json`);
   const files: Record<string, string> = {};
-  const proc = Bun.spawn(["bun", "--preload", preload, ...opts.argv], {
+  // R3 (flow 319 CI regression): the safe flags precede `--preload` so
+  // execArgv already carries them on THIS FIRST process — src/lib/
+  // safe-exec.ts's guard returns immediately instead of re-execing (which
+  // used to silently drop `--preload`, the AC5 regression this fixed).
+  const proc = Bun.spawn(["bun", ...SAFE_BUN_SPAWN_ARGS, "--preload", preload, ...opts.argv], {
     cwd,
     stdin: new Blob([opts.stdin ?? ""]),
     stdout: "pipe",

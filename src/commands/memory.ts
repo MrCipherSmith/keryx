@@ -523,6 +523,10 @@ async function runReflect(args: string[] = []): Promise<void> {
  * whatever partial set the scan collected as if it were the whole answer.
  */
 async function runHandoff(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printHandoffHelp();
+    return;
+  }
   const json = args.includes("--json");
   const from = optionValue(args, "--from");
   const target = optionValue(args, "--target");
@@ -587,6 +591,22 @@ async function runHandoff(args: string[]): Promise<void> {
   // Never label a smaller/partial result "complete": exit 1 whenever the
   // underlying scan is incomplete, regardless of how many entries matched.
   process.exitCode = scan.status === "complete" ? 0 : 1;
+}
+
+function printHandoffHelp(): void {
+  console.log(`keryx memory handoff
+
+Explicit cross-harness memory read: selects entries written by one harness that name
+another harness (or all harnesses) as a target. Fails closed (exit 1, status "incomplete")
+rather than returning a partial scan as if it were the whole answer.
+
+Usage:
+  keryx memory handoff --from <harness> --target <harness> [--scope project|user] [--json]
+
+Examples:
+  keryx memory handoff --from claude --target codex
+  keryx memory handoff --from claude --target codex --scope user --json
+`);
 }
 
 function printHandoffError(json: boolean, reason: string, message: string): void {

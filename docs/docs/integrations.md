@@ -34,17 +34,17 @@ other's entries again.
 
 ```text
 keryx integrations install   --runtime <id> [--surface <flag|surface-id>]... [--dry-run] [--json]
-keryx integrations doctor    --runtime <id> [--json]
+keryx integrations doctor    --runtime <id> [--surface <flag|surface-id>]... [--json]
 keryx integrations uninstall --runtime <id> [--surface <flag|surface-id>]... [--dry-run] [--json]
-keryx integrations matrix    [--check] [--write] [--json]
+keryx integrations matrix    [--check] [--write] [--json] [--file <path>]
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `install` | `--runtime <id>`, `--surface <flag>...`, `--dry-run`, `--json` | Resolves every registered surface for `<id>` (or only the named surfaces, repeatable), applies each surface's merge in deterministic order, and records what it wrote to install-state. `--dry-run` reports what it would write and changes nothing. |
-| `doctor` | `--runtime <id>`, `--json` | Re-validates every surface already recorded in install-state against the live settings file and reports drift — a surface that install-state says should be there but is now missing, or has gone stale. |
+| `doctor` | `--runtime <id>`, `--surface <flag>...`, `--json` | Re-validates every surface already recorded in install-state against the live settings file and reports drift — a surface that install-state says should be there but is now missing, or has gone stale. `--surface` restricts the check to the named surface(s), including one never installed yet. |
 | `uninstall` | `--runtime <id>`, `--surface <flag>...`, `--dry-run`, `--json` | Removes only the sentinel-tagged entries Keryx itself installed for the named runtime/surfaces, leaving every other entry in the file — including the operator's own — untouched. |
-| `matrix` | `--check`, `--write`, `--json` | Prints (or validates) the generated capability matrix. `--check` regenerates the matrix from the registry and diffs it against the checked-in artifact, exiting non-zero on drift, with no file written — this is the command CI runs. `--write` regenerates and overwrites `docs/integrations/harness-capability-matrix.json` in place. |
+| `matrix` | `--check`, `--write`, `--json`, `--file <path>` | Prints (or validates) the generated capability matrix. `--check` regenerates the matrix from the registry and diffs it against the checked-in artifact, exiting non-zero on drift, with no file written — this is the command CI runs. `--write` regenerates and overwrites the matrix artifact in place. `--file <path>` uses a matrix artifact path other than the default `docs/integrations/harness-capability-matrix.json`. |
 
 ### Example: install the ctx guard and instructions for Gemini CLI
 

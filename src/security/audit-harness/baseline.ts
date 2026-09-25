@@ -4,8 +4,9 @@
 // `security.config.json` (`computeObjectChecksum`, reused as-is).
 
 import path from "node:path";
-import { copyFile, readFile } from "node:fs/promises";
-import { pathExists, writeFileAtomic } from "../../lib/fs";
+import { readFile } from "node:fs/promises";
+import { pathExists } from "../../lib/fs";
+import { writeContained } from "../../lib/contained-write";
 import { readJsonObjectFile } from "../../lib/json";
 import { computeObjectChecksum } from "../config";
 import { validateAgainstSchema, type JsonSchema } from "../schemas";
@@ -248,7 +249,12 @@ export async function addBaselineEntry(
       // only chance to keep its bytes once the rewrite below lands.
       const now = options.now ? options.now() : new Date();
       backupPath = `${filePath}.bak-${now.toISOString().replace(/[:.]/g, "-")}`;
-      await copyFile(filePath, backupPath);
+      // R700-04: `copyFile` is a raw-write shape too — read the pre-reseal
+      // bytes and write them back out through `writeContained` rather than
+      // copying the file directly, so the backup gets the same containment
+      // check as everything else this function writes.
+      const preResealBytes = await readFile(filePath);
+      await writeContained(root, path.relative(root, backupPath), preResealBytes);
       // `state.entries` is the raw, schema-valid entry list even when the
       // checksum mismatches (only an "unreadable" file — failed schema
       // validation entirely — has none to recover).
@@ -265,6 +271,6 @@ export async function addBaselineEntry(
   const next = [...entries.filter((existing) => existing.findingId !== entry.findingId), entry];
   const checksum = computeObjectChecksum(next);
   const payload = { schemaVersion: 1, entries: next, checksum };
-  await writeFileAtomic(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+  await writeContained(root, path.relative(root, filePath), `${JSON.stringify(payload, null, 2)}\n`);
   return { resealed, carriedOver, discarded, ...(backupPath ? { backupPath } : {}) };
 }

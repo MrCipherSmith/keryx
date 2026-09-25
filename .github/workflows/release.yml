@@ -229,7 +229,15 @@ jobs:
           for target in bun-darwin-arm64 bun-darwin-x64 bun-linux-x64 bun-linux-arm64; do
             asset="./.release/keryx-$target"
             echo "building $target"
-            bun build ./src/cli.ts --compile --target=$target --outfile "$asset"
+            # R1-01 (flow 319, review round 1, blocker): a compiled binary
+            # has no shebang for `--no-env-file`/`--config=/dev/null` to sit
+            # on, so the equivalent compile-time flags go here instead —
+            # otherwise the standalone binary would auto-load a cwd `.env`/
+            # `bunfig.toml` same as an unpatched `bun <script>` would. See
+            # `src/lib/safe-exec.ts` and `src/cli.ts`'s shebang comment.
+            bun build ./src/cli.ts --compile --target=$target \
+              --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
+              --outfile "$asset"
 
             if [ ! -s "$asset" ]; then
               echo "::error::$asset was not produced or is empty"

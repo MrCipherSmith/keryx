@@ -3425,6 +3425,34 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
   }
   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
+  // R700-01 fix (flow 319): shared across the TUI attempt AND the readline
+  // fallback below — built at most once per process (`getShellHooks` caches
+  // it) and its notices consumed at most once (`takeNotices()`, from
+  // `agent-hooks.ts`). Before this fix each branch called
+  // `buildShellHookRuntime` separately: a TUI session that starts, prints
+  // its "gate stays on"/"not trusted" notices, then hits an unrelated
+  // exception deep in the session and falls through to the readline shell
+  // (the broad `catch { return false; }` in `tui-shell.ts`'s
+  // `launchTuiAgentShell`) rebuilt the SAME hook config and printed the
+  // SAME notices a second time — the operator saw every line twice for no
+  // reason tied to the hooks themselves. One shared, lazily-built context
+  // with a consume-once notices getter fixes both the redundant rebuild and
+  // the redundant print, without changing what a single surface prints.
+  const shellHookSessionId = randomUUID();
+  let shellHooks: ShellHookContext | undefined;
+  const getShellHooks = (): ShellHookContext | undefined => {
+    if (shellHooks === undefined) {
+      shellHooks = buildShellHookRuntime({
+        projectRoot: resolveProjectRoot(process.cwd()),
+        sessionId: shellHookSessionId,
+        runId: randomUUID(),
+        interactive: true,
+        profileId: "monitored-trusted-local",
+        ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
+      });
+    }
+    return shellHooks;
+  };
   if (surface !== "readline") {
     const cwd = process.cwd();
     const tuiProviderFactory = realMakeProvider(() => {});
@@ -3470,30 +3498,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // Flow 306 (W6 T9): session-scoped, built ONCE like `mcpRuntime` above —
     // `makeAgentDeps` reruns on every `/model`/`/connect` rebuild, and a fresh
     // `HookRuntime` per rebuild would re-read both config files and reset
-    // `HookRuntime.inheritedHookIds()`'s dedup state for no reason. `profileId`
-    // is fixed at construction (`createHookRuntime`'s own contract — it gates
-    // WHICH registrations apply, unlike the per-call `policyProfile` this
-    // module's `agent.ts` counterpart sends a hook command in its stdin,
-    // which DOES track a live `/plan` toggle): an interactive `keryx shell`
-    // session is always built as `monitored-trusted-local`, so a hook scoped
-    // ONLY to `read-only-review` never fires here even while `/plan` is on —
-    // a known v1 gap, not a regression (no interactive call site rebuilds
-    // this runtime on `/plan` toggle either). `KERYX_HOOKS=off` disables it
-    // entirely (see `buildShellHookRuntime`'s own doc comment).
-    const shellHookSessionId = randomUUID();
-    let shellHooks: ShellHookContext | undefined;
-    const getShellHooks = (): ShellHookContext | undefined => {
-      if (shellHooks === undefined) {
-        shellHooks = buildShellHookRuntime({
-          projectRoot: resolveProjectRoot(cwd),
-          sessionId: shellHookSessionId,
-          runId: randomUUID(),
-          interactive: true,
-          profileId: "monitored-trusted-local",
-        });
-      }
-      return shellHooks;
-    };
+    // `HookRuntime.inheritedHookIds()`'s dedup state for no reason.
+    // `getShellHooks`/`shellHooks` themselves are declared ABOVE, shared with
+    // the readline fallback below (R700-01 fix, flow 319) — see the comment
+    // there for why.
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
       getSlateSession: () => SlateSessionRef | undefined,
@@ -4060,17 +4068,22 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // this point and would otherwise have nothing to close.
       readlineMcp = mcpRuntime;
       reportMcpProblems(mcpRuntime);
-      // Flow 306 (W6 T9): one hook runtime per readline agent session,
-      // mirroring the TUI branch's `getShellHooks` above (same rationale as
-      // `jobRegistry`/`mcpRuntime`: built once, never rebuilt — this branch
-      // has no `/model`-rebuild path at all).
-      const shellHooks = buildShellHookRuntime({
-        projectRoot: resolveProjectRoot(agentCwd),
-        sessionId: randomUUID(),
-        runId: randomUUID(),
-        interactive: true,
-        profileId: "monitored-trusted-local",
-      });
+      // R700-01 fix (flow 319): the SAME shared, lazily-built context the TUI
+      // branch above would have used (`getShellHooks`, declared before the
+      // surface split) — never a second `buildShellHookRuntime` call. A
+      // fresh call here re-read both config files AND re-printed every
+      // "not trusted"/"gate stays on" notice a second time whenever the TUI
+      // attempt had already started (and already shown them) before an
+      // unrelated failure fell through to this readline path.
+      const shellHooks = getShellHooks();
+      // R700-01: the readline path fires SessionStart before the TUI ever
+      // paints, so the notice goes to stderr right here — the one place this
+      // branch can still say it before the hooks that would have run are
+      // silently skipped. `takeNotices()` (falling back to `.notices` for a
+      // `ShellHookContext` built by hand, e.g. in a test) returns the lines
+      // only the FIRST time anything asks — empty if the TUI attempt above
+      // already showed them.
+      for (const line of shellHooks?.takeNotices?.() ?? shellHooks?.notices ?? []) console.error(line);
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
       // CURRENT session dir at tool-invoke time, not whatever was true when

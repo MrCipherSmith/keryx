@@ -8,6 +8,7 @@
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { parseAgentFrontmatter, validateAgentFrontmatter } from "../agents/service";
 import { checkPrivateDirGitignore } from "../lib/private-dir";
+import { SEED_MODEL_BACKED, confidenceLevelFor } from "../learning/confidence";
 import { userStorePaths } from "../lib/keryx-home";
 import hookConfigSchemaJson from "../../docs/requirements/keryx-agent-platform-expansion/schemas/hook-config.schema.json" with {
   type: "json",
@@ -115,15 +116,65 @@ function defaultLearnedPatternTtl(manifestCreatedAt: string, now: () => Date): L
  * Rewrite a learned-pattern record to `status: "candidate"` (per the spec,
  * `keryx learn accept` is the only command that may leave a record
  * `accepted` — an imported record, project- or user-scope, always lands as a
- * candidate, R1-F25), adding a deterministic `ttl` only if it is absent.
- * Stable JSON, 2-space indent + trailing newline — these bytes are what
- * `incomingSha256` covers.
+ * candidate, R1-F25). Stable JSON, 2-space indent + trailing newline — these
+ * bytes are what `incomingSha256` covers.
+ *
+ * R700-11 (three additional things an imported candidate must never carry
+ * over unchanged from the exporting machine):
+ *
+ * - **TTL is always reset**, not only added when absent. The bundle's
+ *   `ttl.expiresAt` was computed relative to the SOURCE project's evidence
+ *   history; carrying it through verbatim can hand the importing project a
+ *   record that is already expired (or absurdly long-lived) the moment it
+ *   lands. `defaultLearnedPatternTtl` is the same "30 days from
+ *   max(manifestCreatedAt, importDay)" default `keryx learn extract` seeds a
+ *   brand-new candidate with (`CANDIDATE_TTL_DAYS` in extract.ts), so an
+ *   imported candidate decays on the same schedule a locally-observed one
+ *   would.
+ * - **Confidence is capped, never raised, at `SEED_MODEL_BACKED` (0.3)** —
+ *   the LOWER of the two seed confidences `keryx learn extract` itself uses
+ *   for a first-ever candidate (`SEED_DETERMINISTIC` 0.4 for a
+ *   deterministic extractor, `SEED_MODEL_BACKED` 0.3 for the weaker
+ *   model-backed one). An imported record has not been reinforced by ANY
+ *   evidence gathered in the importing project, so it must start at or below
+ *   the floor a genuinely fresh local candidate starts at — never arrive
+ *   pre-primed near `graduate.ts`'s 0.75 average-confidence bar off a single
+ *   record. `confidenceLevel` is re-derived to match.
+ * - **Provenance records the import**: `provenance.importedFrom` carries the
+ *   source `bundleId`, `importedAt` (this import, not the export), and the
+ *   record's `confidence` as it stood BEFORE the cap (`originalConfidence`)
+ *   for audit/debugging — never used to restore the original value.
  */
-function rewriteLearnedPatternCandidate(record: Record<string, unknown>, manifestCreatedAt: string, now: () => Date): Buffer {
-  const rewritten: Record<string, unknown> = { ...record, status: "candidate", supersededBy: null };
-  if (rewritten.ttl === undefined || rewritten.ttl === null) {
-    rewritten.ttl = defaultLearnedPatternTtl(manifestCreatedAt, now);
-  }
+function rewriteLearnedPatternCandidate(
+  record: Record<string, unknown>,
+  manifestCreatedAt: string,
+  now: () => Date,
+  bundleId: string,
+): Buffer {
+  const originalConfidence = typeof record.confidence === "number" ? record.confidence : undefined;
+  const confidence = originalConfidence === undefined ? SEED_MODEL_BACKED : Math.min(originalConfidence, SEED_MODEL_BACKED);
+
+  const existingProvenance =
+    typeof record.provenance === "object" && record.provenance !== null && !Array.isArray(record.provenance)
+      ? (record.provenance as Record<string, unknown>)
+      : {};
+
+  const rewritten: Record<string, unknown> = {
+    ...record,
+    status: "candidate",
+    supersededBy: null,
+    confidence,
+    confidenceLevel: confidenceLevelFor(confidence),
+    ttl: defaultLearnedPatternTtl(manifestCreatedAt, now),
+    provenance: {
+      ...existingProvenance,
+      importedFrom: {
+        bundleId,
+        importedAt: now().toISOString(),
+        ...(originalConfidence !== undefined ? { originalConfidence } : {}),
+      },
+    },
+  };
   return Buffer.from(`${JSON.stringify(rewritten, null, 2)}\n`, "utf8");
 }
 
@@ -149,6 +200,12 @@ function stableStringify(value: unknown): string {
  * `ttl.expiresAt`, breaking "inspect after import reports identical"
  * (R1-F11). Two learned-pattern records are treated as identical content
  * when they match on every field except `ttl.expiresAt`.
+ *
+ * R700-11: `provenance.importedFrom.importedAt` is likewise always
+ * `now()`-stamped on every rewrite (see `rewriteLearnedPatternCandidate`),
+ * so it is stripped the same way `ttl.expiresAt` is — otherwise replanning
+ * the identical bundle import on a later day would report a spurious
+ * `update` forever, on that field alone.
  */
 function learnedPatternEqualModuloTtl(currentBytes: Buffer, candidateBytes: Buffer): boolean {
   try {
@@ -159,6 +216,15 @@ function learnedPatternEqualModuloTtl(currentBytes: Buffer, candidateBytes: Buff
         const ttl = { ...(obj.ttl as Record<string, unknown>) };
         delete ttl.expiresAt;
         obj.ttl = ttl;
+      }
+      if (typeof obj.provenance === "object" && obj.provenance !== null && !Array.isArray(obj.provenance)) {
+        const provenance = { ...(obj.provenance as Record<string, unknown>) };
+        if (typeof provenance.importedFrom === "object" && provenance.importedFrom !== null && !Array.isArray(provenance.importedFrom)) {
+          const importedFrom = { ...(provenance.importedFrom as Record<string, unknown>) };
+          delete importedFrom.importedAt;
+          provenance.importedFrom = importedFrom;
+        }
+        obj.provenance = provenance;
       }
       return obj;
     };
@@ -317,7 +383,7 @@ export async function planBundleImport(opts: PlanBundleImportOptions): Promise<B
         });
         continue;
       }
-      effectiveBytes = rewriteLearnedPatternCandidate(recordObj, opts.manifest.createdAt, now);
+      effectiveBytes = rewriteLearnedPatternCandidate(recordObj, opts.manifest.createdAt, now, opts.manifest.bundleId);
       // Validate AFTER the candidate rewrite — the rewrite is what actually
       // gets written, so that is what must be schema-valid (R1-F12).
       let rewrittenParsed: unknown;

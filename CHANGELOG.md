@@ -3,6 +3,37 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Security
+- **`keryx` no longer auto-loads a cloned project's `.env`/`bunfig.toml`.**
+  Bun's default shebang auto-loads both from the current working directory —
+  a repository could commit a `.env` setting `KERYX_HOME` to a directory
+  inside itself, planting a fully trusted, un-gated user-scope
+  `hooks.json` that ran on a plain `keryx shell` with no prompt. `keryx`'s
+  shipped binary now starts with `--no-env-file --config=/dev/null`, every
+  place it spawns itself carries the same flags, and a `KERYX_HOME` that
+  still resolves inside the current project is refused for user-scope hooks
+  as defence in depth. If you relied on a project `.env` for provider keys or
+  other settings, see "Environment isolation" in the onboarding guide for how
+  to opt back in.
+- **The startup guard for `bun src/cli.ts`/`bun dist/cli.js`/`bunx keryx`
+  invocations no longer trusts an environment variable to decide it is
+  already safe, and no longer skips re-executing just because a project's
+  `.env`/`bunfig.toml` happened not to exist under those exact names.** It
+  now re-execs whenever the actual interpreter flags are missing, for every
+  `.env*` filename Bun itself auto-loads, and strips by variable NAME (never
+  by re-deriving and comparing a value), which closes several ways the
+  previous version could be bypassed — including one where a single `.env`
+  reached code execution through `BUN_OPTIONS`. Every place `keryx` spawns
+  its own interpreter to run a `trigger`/schedule now carries the same two
+  safe flags too, including an installed cron/systemd/launchd unit's command
+  line — a schedule installed before this change is rewritten with the
+  flags the next time it is confirmed or reinstalled. Re-execing the guard's
+  child now forwards `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT`/`SIGWINCH` to it,
+  so a signal sent to a bypassing invocation reaches the real process the
+  same way it would without the guard in the way.
+
 ## [0.2.161] — 2026-09-23
 
 A provider can be tested and disconnected from where it was connected.

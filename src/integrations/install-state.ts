@@ -220,6 +220,21 @@ async function writeInstallState(root: string, runtimeId: string, state: Install
 }
 
 /**
+ * R700-06: true when two states carry the same `target`/`profile`/
+ * `installedModules` — everything a write actually changes about what is
+ * installed — ignoring `recordedAt`, which is a timestamp of the write
+ * itself, not of the installed state. `installedModules` entries (including
+ * `installedAt`) are built the same way on every call (same key order), so a
+ * plain `JSON.stringify` comparison is exact here without needing a
+ * key-sorting stable-stringify.
+ */
+function installStateContentEqual(a: InstallState, b: InstallState): boolean {
+  if (a.target !== b.target) return false;
+  if (a.profile !== b.profile) return false;
+  return JSON.stringify(a.installedModules) === JSON.stringify(b.installedModules);
+}
+
+/**
  * Upsert one surface's install-state record (keyed by `moduleId`, one record
  * per installed surface). `writtenPaths` are project-relative; their sha256
  * is computed by reading back the actual on-disk content this call is
@@ -258,6 +273,9 @@ export async function recordSurfaceInstalled(
     if (hash) sha256[relativePath] = hash;
   }
 
+  const existing = await readInstallState(root, runtimeId);
+  const existingRecord = existing?.installedModules.find((r) => r.moduleId === entry.moduleId);
+
   const record: InstalledModuleRecord = {
     moduleId: entry.moduleId,
     ...(entry.surface !== undefined ? { surface: entry.surface } : {}),
@@ -265,22 +283,33 @@ export async function recordSurfaceInstalled(
     sha256,
     managedSentinel: entry.managedSentinel,
     keryxVersion: currentWriterVersion(),
-    installedAt: new Date().toISOString(),
+    // R700-06: keep the FIRST install's timestamp — a re-run that changes
+    // nothing else must not look like a fresh install.
+    installedAt: existingRecord?.installedAt ?? new Date().toISOString(),
   };
 
-  const existing = await readInstallState(root, runtimeId);
   const installedModules = sortedRecords([
     ...(existing?.installedModules.filter((r) => r.moduleId !== entry.moduleId) ?? []),
     record,
   ]);
 
-  await writeInstallState(root, runtimeId, {
+  const candidate: InstallState = {
     schemaVersion: INSTALL_STATE_SCHEMA_VERSION,
     target: runtimeId,
     ...(existing?.profile !== undefined ? { profile: existing.profile } : {}),
     installedModules,
-    recordedAt: new Date().toISOString(),
-  });
+    // Placeholder — replaced below only when the write actually happens, so
+    // an unchanged `recordedAt` never causes a false "content differs".
+    recordedAt: existing?.recordedAt ?? "",
+  };
+
+  // R700-06: idempotent `keryx update` — when nothing about what is
+  // installed actually changed (same modules, same paths, same hashes, same
+  // installedAt), skip the write entirely rather than rewriting the file
+  // with a bumped `recordedAt` on every run.
+  if (existing && installStateContentEqual(existing, candidate)) return;
+
+  await writeInstallState(root, runtimeId, { ...candidate, recordedAt: new Date().toISOString() });
 }
 
 /**

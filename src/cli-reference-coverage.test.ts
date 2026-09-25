@@ -1,6 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import { expect, test } from "bun:test";
 import { CLI_ROUTES, USAGE_BODY } from "./cli";
+import { skillsCommand } from "./commands/skills";
+import { memoryCommand } from "./commands/memory";
+import { securityCommand } from "./commands/security";
 
 // Documentation drift is invisible to every check this repository already
 // runs. `check:doc-links` proves a relative link resolves; `mkdocs build
@@ -216,6 +219,68 @@ test("the CLI reference documents every keryx workspace subcommand", async () =>
   // The flag, specifically: it is the one whose absence left a refusal with no
   // documented exit, so it gets its own assertion rather than riding along.
   expect(section).toContain("--acknowledge-security");
+});
+
+// R700-07: `keryx skills --help`, `keryx memory --help` and `keryx security
+// --help` must list every subcommand and print the SAME text `keryx skills`
+// (bare, no args) prints — the two used to drift because `--help` was caught
+// by `cli.ts`'s generic interception before it ever reached these handlers'
+// own `--help` branch. Verb-level command handlers are invoked directly here
+// (not through `cli.ts`'s routing, which `cli.test.ts`'s `shouldInterceptHelp`
+// tests already cover) so a subcommand dropped from the printed list — with no
+// change to the routing decision — still fails this test.
+async function captureLog(run: () => Promise<void>): Promise<string> {
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...args: unknown[]): void => {
+    lines.push(args.map((a) => String(a)).join(" "));
+  };
+  try {
+    await run();
+  } finally {
+    console.log = original;
+  }
+  return lines.join("\n");
+}
+
+test("`keryx skills --help` matches `keryx skills` and lists every subcommand", async () => {
+  const bare = await captureLog(() => skillsCommand([]));
+  const help = await captureLog(() => skillsCommand(["--help"]));
+  expect(help).toEqual(bare);
+  for (const sub of ["doctor", "uninstall", "scout", "eval", "judge-check", "stocktake"]) {
+    expect(help).toContain(`skills ${sub}`);
+  }
+});
+
+test("`keryx memory --help` matches `keryx memory` and lists `handoff`", async () => {
+  const bare = await captureLog(() => memoryCommand([]));
+  const help = await captureLog(() => memoryCommand(["--help"]));
+  expect(help).toEqual(bare);
+  expect(help).toContain("memory handoff");
+});
+
+test("`keryx security --help` matches `keryx security` and lists `audit-harness`/`impact-evidence`", async () => {
+  const bare = await captureLog(() => securityCommand([]));
+  const help = await captureLog(() => securityCommand(["--help"]));
+  expect(help).toEqual(bare);
+  for (const sub of ["audit-harness", "impact-evidence"]) {
+    expect(help).toContain(`security ${sub}`);
+  }
+});
+
+// The new subcommands' OWN `--help` must print their own dedicated text (not
+// the generic verb banner) and must not run anything — the same guard
+// `keryx skills install --help` needed after it once ran a real install.
+test("skills eval/judge-check/stocktake --help print dedicated help and do nothing else", async () => {
+  const evalHelp = await captureLog(() => skillsCommand(["eval", "--help"]));
+  expect(evalHelp).toContain("keryx skills eval");
+  expect(evalHelp).not.toContain("keryx skills status");
+
+  const judgeCheckHelp = await captureLog(() => skillsCommand(["judge-check", "--help"]));
+  expect(judgeCheckHelp).toContain("keryx skills judge-check");
+
+  const stocktakeHelp = await captureLog(() => skillsCommand(["stocktake", "--help"]));
+  expect(stocktakeHelp).toContain("keryx skills stocktake");
 });
 
 test("the docs index lists exactly the guides the mkdocs nav publishes", async () => {

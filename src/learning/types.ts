@@ -81,6 +81,21 @@ export type ExtractorKind = "deterministic" | "model-backed";
 export interface Provenance {
   extractor: string;
   extractorKind?: ExtractorKind;
+  /**
+   * Present only on a record that arrived via `keryx bundle import`
+   * (R700-11) — records where this bundle's rewrite last touched the
+   * record, distinct from `extractor`/`extractorKind`, which describe how
+   * the pattern was originally mined, not how it got into THIS project.
+   * Optional so pre-existing records (mined locally, never imported) still
+   * validate without it.
+   */
+  importedFrom?: {
+    bundleId: string;
+    /** ISO 8601 date-time of this import, not of the original export. */
+    importedAt: string;
+    /** The record's `confidence` before the import-time cap was applied, for audit only — never used to restore it. */
+    originalConfidence?: number;
+  };
 }
 
 export interface LearningTtl {

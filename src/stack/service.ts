@@ -10,9 +10,10 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { writeContained } from "../lib/contained-write";
 import { STACK_DETECTION_SCHEMA_VERSION, detectStack, type DetectStackOptions, type StackDetection } from "./detect";
 
 export { STACK_DETECTION_SCHEMA_VERSION };
@@ -114,8 +115,7 @@ export async function runStackDetect(root: string, opts: RunStackDetectOptions =
 
   if (write) {
     const target = stackJsonPath(root);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, serializeStackDetection(doc), "utf8");
+    await writeContained(root, path.relative(root, target), serializeStackDetection(doc));
   }
 
   return doc;

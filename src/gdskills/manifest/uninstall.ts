@@ -5,9 +5,10 @@
 // reported first (recorded content is never stored, so the "diff" is a hash
 // mismatch plus the current file's head bytes, not a textual diff).
 
-import { readFile, rm } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
+import { removeContained } from "../../lib/contained-write";
 import { destinationRootsForTarget } from "./plan";
 import {
   NotARegularFileError,
@@ -153,7 +154,7 @@ export async function uninstallInstall(
         diffs.push({ path: filePath, message: `${reason}; removing with --force. Current head: ${await headSnippet(abs)}` });
       }
 
-      await rm(abs, { force: true });
+      await removeContained(repoRoot, filePath);
       removed.push(filePath);
     }
 

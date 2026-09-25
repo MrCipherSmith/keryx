@@ -30,6 +30,7 @@ import type { AcpClientCapabilities, AcpImplementation, AcpMcpServerStdio, AcpSt
 import type { AgentIO } from "../../commands/agent";
 import type { PermissionMode } from "../../commands/permission-mode";
 import { withoutGitDiscoveryOverrides } from "../../lib/git-env";
+import { SAFE_BUN_SPAWN_ARGS } from "../../lib/safe-exec";
 import { loadDiscovery } from "../../mcp/discovery";
 import { redactSensitiveText } from "../../security/service";
 import { createSession, persistHistory } from "../../session/store";
@@ -69,7 +70,17 @@ export function keryxServeMcpServer(
   return {
     name: "keryx",
     command: execPath,
-    args: [...(cliEntry === undefined ? [] : [cliEntry]), "serve-mcp", "--read-only", "--cwd", projectRoot],
+    // R1-01: when `cliEntry` is present this launches `bun <cli.ts>`
+    // directly, bypassing the shebang, INSIDE the run's (possibly
+    // attacker-controlled) worktree — the safe flags must ride along too.
+    // See `src/lib/safe-exec.ts`.
+    args: [
+      ...(cliEntry === undefined ? [] : [...SAFE_BUN_SPAWN_ARGS, cliEntry]),
+      "serve-mcp",
+      "--read-only",
+      "--cwd",
+      projectRoot,
+    ],
     env: [],
   };
 }

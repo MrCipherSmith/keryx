@@ -8,7 +8,7 @@ metadata:
 # React coding style
 
 Narrows `ts-js-node`'s coding style to React component files. Applies only
-to `*.tsx`/`*.jsx` (W1-AC8) — non-component TypeScript/JavaScript still
+to `*.tsx`/`*.jsx` — non-component TypeScript/JavaScript still
 comes from `ts-js-node`'s own coding-style rule, not this file.
 
 ## Components

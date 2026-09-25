@@ -569,6 +569,10 @@ async function installFromManifest(opts: {
 }
 
 async function doctorSkillsCommand(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printDoctorHelp();
+    return;
+  }
   const targetFlagError = valuelessFlagError(args, "--target");
   if (targetFlagError !== undefined) {
     console.error(targetFlagError);
@@ -608,6 +612,10 @@ async function doctorSkillsCommand(args: string[]): Promise<void> {
 }
 
 async function uninstallSkillsCommand(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printUninstallHelp();
+    return;
+  }
   for (const error of [valuelessFlagError(args, "--target"), valuelessFlagError(args, "--module")]) {
     if (error !== undefined) {
       console.error(error);
@@ -1798,6 +1806,37 @@ Commands:
               empty/echo/known-wrong/injection/stuffed/known-right answers through the live
               judge and exits 1 on any mismatch. --record saves the verdicts for offline replay.
   stocktake Periodic catalog health check: keep|improve|update|retire|merge
+`);
+}
+
+function printDoctorHelp(): void {
+  console.log(`keryx skills doctor
+
+Compares recorded install-state to disk for one target: ok/drifted/missing/orphaned per path.
+orphaned is a file under the target's destination roots that install-state doesn't know about
+(reported, never fails the command); only a drifted/missing recorded path, or an unreadable/
+unsafe install-state file, sets a non-zero exit code.
+
+Usage:
+  keryx skills doctor [--target <harness>] [--json]
+
+Examples:
+  keryx skills doctor
+  keryx skills doctor --target claude --json
+`);
+}
+
+function printUninstallHelp(): void {
+  console.log(`keryx skills uninstall
+
+Removes only the paths recorded in install-state for a target (optionally one module).
+
+Usage:
+  keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
+
+Examples:
+  keryx skills uninstall --target claude
+  keryx skills uninstall --target claude --module core --force
 `);
 }
 

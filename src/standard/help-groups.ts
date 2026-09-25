@@ -252,7 +252,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "bundle",
     group: "Project knowledge",
-    summary: "Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses (W4).",
+    summary: "Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses.",
   },
 
   // ---- Managed work -----------------------------------------------------
@@ -307,7 +307,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "hooks",
     group: "Automation",
-    summary: "Keryx shell lifecycle hooks: list/validate/test the runtime, enable/disable a registration.",
+    summary: "Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration.",
   },
   {
     kind: "cli",
@@ -369,7 +369,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "integrations",
     group: "External agents, ACP and MCP",
-    summary: "Install, audit and uninstall Keryx's hooks and instructions in another coding agent.",
+    summary: "Install, audit and uninstall Keryx's hooks and instructions in another coding agent (see also /integrate, unrelated).",
   },
   {
     kind: "cli",
@@ -409,9 +409,9 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
-    name: "/integrations",
+    name: "/integrate",
     group: "External agents, ACP and MCP",
-    summary: "Wire this project into an editor over MCP (keryx integrate).",
+    summary: "Wire this project into an editor over MCP (keryx integrate; see also keryx integrations).",
   },
   {
     kind: "slash",

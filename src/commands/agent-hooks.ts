@@ -15,11 +15,14 @@
 // (`resolveHooksHomeDir`/`resolveHooksProjectRoot`, review finding 11), so
 // the two agree on which `hooks.json`/project root a session and the CLI
 // each resolve.
+import path from "node:path";
 import {
   createHookRuntime,
   createRealHookRunner,
+  formatHookLoadNotices,
   loadHookConfig,
   resolveHookHomeDir,
+  type HookNoticeSurface,
   type HookRegistration,
   type HookRuntime,
 } from "../harness/hooks";
@@ -111,6 +114,29 @@ export interface ShellHookContext {
   runtime: HookRuntime;
   sessionId: string;
   runId: string;
+  /**
+   * R700-01: session-start text for the caller to print (untrusted/changed
+   * project hooks, a load failure, tighten-only warnings, gate-off banners —
+   * see `harness/hooks/notices.ts`). Always computed, even when `loaded.ok`
+   * is false, so a caller that only wired `onConfigError` before this flow
+   * keeps getting that AND has this array to print instead of duplicating
+   * the formatting itself. Optional so a `ShellHookContext` literal built
+   * elsewhere (e.g. a fake/test context with nothing new to announce) does
+   * not have to supply an empty array by hand; a reader treats an absent
+   * value as `[]`.
+   */
+  notices?: readonly string[];
+  /**
+   * R700-01 fix (flow 319): returns `notices` the FIRST time any caller asks,
+   * then `[]` on every later call — so a `ShellHookContext` shared between
+   * two consumers (the TUI attempt and the readline fallback it falls
+   * through to in `commands/shell.ts`, when a TUI session starts, shows
+   * these notices, then hits an unrelated exception) prints each line at
+   * most once instead of once per consumer. Optional, like `notices` above:
+   * a hand-built context (tests) that never calls this just falls back to
+   * reading `notices` directly, unaffected.
+   */
+  takeNotices?: () => readonly string[];
 }
 
 /**
@@ -175,6 +201,22 @@ export interface BuildShellHookRuntimeOptions {
   env?: NodeJS.ProcessEnv;
   /** Surfaced diagnostics sink for a config-load failure (tests / callers that want to log it). */
   onConfigError?: (diagnostics: readonly { code: string; message: string }[]) => void;
+  /** R700-01: where the trust store lives. Omitted reads it from the real per-user config dir. */
+  configDir?: string;
+  /**
+   * R700-01/D9: where project-hook trust is looked up. Omitted defaults to
+   * `projectRoot` — the one caller that differs is trigger-dispatch, which
+   * runs against a worktree's `projectRoot` but must check trust under the
+   * MAIN project root (the one the operator actually ran `keryx hooks trust`
+   * in).
+   */
+  trustRoot?: string;
+  /**
+   * R700-01: which notice text to produce (terminal: "trust them from a
+   * terminal here"; headless: "this session cannot ask"). Defaults to
+   * `"terminal"` when `interactive`, else `"headless"`.
+   */
+  noticeSurface?: HookNoticeSurface;
   /**
    * Overrides the real W3 `LearningObservationSink` (tests). Defaults to
    * `createLearningObservationSink({ root: projectRoot })` — a real sink for
@@ -206,7 +248,20 @@ export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): Shell
   // instead of reading `os.homedir()` unconditionally — see
   // `resolveHooksHomeDir`'s own doc comment.
   const homeDir = resolveHooksHomeDir(env, opts.homeDir);
-  const loaded = loadHookConfig({ projectRoot: opts.projectRoot, homeDir });
+  const loaded = loadHookConfig({
+    projectRoot: opts.projectRoot,
+    homeDir,
+    projectTrust: {
+      ...(opts.configDir !== undefined ? { configDir: opts.configDir } : {}),
+      ...(opts.trustRoot !== undefined ? { trustRoot: opts.trustRoot } : {}),
+    },
+  });
+  const noticeSurface: HookNoticeSurface = opts.noticeSurface ?? (opts.interactive ? "terminal" : "headless");
+  const notices = formatHookLoadNotices(loaded, {
+    projectRoot: opts.projectRoot,
+    userFile: path.join(homeDir, ".keryx", "hooks.json"),
+    surface: noticeSurface,
+  });
   let registrations: readonly HookRegistration[] | undefined;
   let runtime: HookRuntime;
   if (loaded.ok) {
@@ -246,5 +301,11 @@ export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): Shell
     opts.onConfigError?.(loaded.diagnostics);
     runtime = createInvalidConfigRuntime(opts.interactive);
   }
-  return { runtime, sessionId: opts.sessionId, runId: opts.runId };
+  let noticesTaken = false;
+  const takeNotices = (): readonly string[] => {
+    if (noticesTaken) return [];
+    noticesTaken = true;
+    return notices;
+  };
+  return { runtime, sessionId: opts.sessionId, runId: opts.runId, notices, takeNotices };
 }

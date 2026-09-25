@@ -41,6 +41,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import path from "node:path";
 import { isNotFound } from "../lib/fs";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import type { ConfirmedRunner } from "./config";
 import { cronToLaunchdIntervals, cronToOnCalendar } from "./cron";
 import {
@@ -167,8 +168,22 @@ export function currentRunner(host: ScheduleHost = {}): ConfirmedRunner {
   return { argv: invocationArgv(invocation), env: xdg !== undefined && xdg.length > 0 ? { XDG_DATA_HOME: xdg } : {} };
 }
 
+/**
+ * R2-02 follow-up: `confirmed.argv` is `invocationArgv(...)`'s OWN output,
+ * captured at draft time (`currentRunner`) — which, after the R2-02 fix,
+ * already carries `SAFE_BUN_SPAWN_ARGS` BETWEEN `execPath` and `scriptPath`
+ * for a script invocation. Naively destructuring `[execPath, scriptPath] =
+ * confirmed.argv` would grab `"--no-env-file"` as `scriptPath`. Every
+ * downstream use of the `KeryxInvocation` this returns goes straight back
+ * through `invocationArgv` (in `renderScheduleLines`/this file's own
+ * `execStart`/plist `ProgramArguments`), which ADDS the flags again — so
+ * they are stripped back out here first, whether `confirmed.argv` came from
+ * a pre-fix stored entry (no flags present, filter is a no-op) or a
+ * post-fix one (flags present, filtered out), so they are inserted exactly
+ * once rather than accumulating on every re-plan.
+ */
 function runnerInvocation(confirmed: ConfirmedRunner): KeryxInvocation {
-  const [execPath, scriptPath] = confirmed.argv;
+  const [execPath, scriptPath] = confirmed.argv.filter((token) => !SAFE_BUN_SPAWN_ARGS.includes(token));
   return scriptPath === undefined ? { execPath: execPath! } : { execPath: execPath!, scriptPath };
 }
 
@@ -394,6 +409,23 @@ export interface InstallResult {
   /** Files written this time (unchanged files are not rewritten). */
   readonly wrote: readonly string[];
   readonly unit: string;
+  /**
+   * R2-02 follow-up: true when at least one artifact in `wrote` EXISTED
+   * before this call (this is a re-install/resume of an already-installed
+   * schedule, not a fresh one) and its PREVIOUS content did not carry the
+   * `SAFE_BUN_SPAWN_ARGS` flags (`--no-env-file`) that `invocationArgv` now
+   * always inserts — i.e. this call just upgraded a unit/plist/crontab
+   * block that was installed before that fix landed. A caller (a command,
+   * the TUI) can use this to tell the operator their installed schedule was
+   * just brought up to date, rather than staying silent about a file it
+   * just rewrote for a reason the operator did not ask for.
+   */
+  readonly upgradedSafeFlags: boolean;
+}
+
+/** Did `previousContent` exist (not a fresh install) and lack a safe flag that `newContent` carries? */
+function isSafeFlagsUpgrade(previousContent: string | undefined, newContent: string): boolean {
+  return previousContent !== undefined && !previousContent.includes(SAFE_BUN_SPAWN_ARGS[0]!) && newContent.includes(SAFE_BUN_SPAWN_ARGS[0]!);
 }
 
 /**
@@ -411,12 +443,14 @@ export async function installSchedule(
   if (plan.problem !== undefined) throw new Error(`cannot install "${name}" on ${plan.backend}: ${plan.problem}`);
   const run = runner(host);
   const wrote: string[] = [];
+  let upgradedSafeFlags = false;
   for (const file of plan.files) {
     const existing = await readText(file.path);
     if (existing !== undefined && !isManagedBy(existing, projectRoot, name)) {
       throw new Error(`${file.path} exists and was not written by keryx for this project — refusing to overwrite it`);
     }
     if (existing !== file.content) {
+      if (isSafeFlagsUpgrade(existing, file.content)) upgradedSafeFlags = true;
       await mkdir(path.dirname(file.path), { recursive: true });
       await writeFile(file.path, file.content, "utf8");
       wrote.push(file.path);
@@ -433,11 +467,12 @@ export async function installSchedule(
     const crontab = await currentCrontab(host);
     const next = `${withoutBlock(crontab, projectRoot, name)}${plan.cronBlock}`;
     if (next !== crontab) {
+      if (isSafeFlagsUpgrade(crontab.includes(cronMarkers(projectRoot, name).begin) ? crontab : undefined, next)) upgradedSafeFlags = true;
       await check(await run("crontab", ["-"], next), "crontab -");
       wrote.push("crontab");
     }
   }
-  return { backend: plan.backend, wrote, unit: plan.unit };
+  return { backend: plan.backend, wrote, unit: plan.unit, upgradedSafeFlags };
 }
 
 /** Pause: stop the timer, and keep its files so resume needs no new confirmation. Cron removes the block (resume re-adds it). */

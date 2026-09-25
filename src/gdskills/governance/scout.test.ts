@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ContainedWriteError } from "../../lib/contained-write";
 import { loadSkillCatalog } from "./catalog-index";
 import {
   auditSkillSnapshot,
@@ -162,11 +163,11 @@ describe("checkSkillSelected", () => {
 });
 
 describe("scout record", () => {
-  test("readScoutRecord returns [] when none recorded; recordScout appends and is readable back", () => {
+  test("readScoutRecord returns [] when none recorded; recordScout appends and is readable back", async () => {
     const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
     try {
       expect(readScoutRecord(packDir)).toEqual([]);
-      recordScout(packDir, {
+      await recordScout(packDir, {
         query: "python testing",
         decision: "create",
         topMatch: null,
@@ -181,10 +182,10 @@ describe("scout record", () => {
     }
   });
 
-  test("recordScout accepts and round-trips an optional justification", () => {
+  test("recordScout accepts and round-trips an optional justification", async () => {
     const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
     try {
-      recordScout(packDir, {
+      await recordScout(packDir, {
         query: "python pytest testing",
         decision: "fork",
         topMatch: "review/review-testing-practices",
@@ -203,10 +204,10 @@ describe("scout record", () => {
 
   // Flow 312, W3 T10: `origin` is optional and round-trips through plain
   // JSON.parse — `readScoutRecord` needed no code change to tolerate it.
-  test("recordScout accepts and round-trips an optional learned origin", () => {
+  test("recordScout accepts and round-trips an optional learned origin", async () => {
     const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
     try {
-      recordScout(packDir, {
+      await recordScout(packDir, {
         query: "extract shared helper logic",
         decision: "fork",
         topMatch: "review/review-flow-graph",
@@ -221,10 +222,10 @@ describe("scout record", () => {
     }
   });
 
-  test("readScoutRecord omits justification when not recorded", () => {
+  test("readScoutRecord omits justification when not recorded", async () => {
     const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
     try {
-      recordScout(packDir, {
+      await recordScout(packDir, {
         query: "anything",
         decision: "create",
         topMatch: null,
@@ -234,6 +235,29 @@ describe("scout record", () => {
       expect(readScoutRecord(packDir)[0]?.justification).toBeUndefined();
     } finally {
       rmSync(packDir, { recursive: true, force: true });
+    }
+  });
+
+  test("recordScout refuses a governance directory that is a symlink pointing outside packDir, and writes nothing outside (flow 319 follow-up to R700-04)", async () => {
+    const packDir = mkdtempSync(path.join(tmpdir(), "scout-record-"));
+    const outside = mkdtempSync(path.join(tmpdir(), "scout-record-outside-"));
+    try {
+      symlinkSync(outside, path.join(packDir, "governance"));
+
+      await expect(
+        recordScout(packDir, {
+          query: "anything",
+          decision: "create",
+          topMatch: null,
+          recordedAt: "2026-01-01T00:00:00.000Z",
+          skillName: "anything",
+        }),
+      ).rejects.toThrow(ContainedWriteError);
+
+      expect(existsSync(path.join(outside, "scout.json"))).toBe(false);
+    } finally {
+      rmSync(packDir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
     }
   });
 });

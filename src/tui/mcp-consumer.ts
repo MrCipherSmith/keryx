@@ -9,7 +9,7 @@
 //
 // It exists now. `/mcp` is the consumer view — what keryx is connected
 // to, what failed, and what is waiting for `keryx mcp trust`.
-// `/integrations` stays the installer view: where keryx ITSELF is
+// `/integrate` stays the installer view: where keryx ITSELF is
 // registered into an editor's config. The two are easy to confuse, which
 // is why they are two commands with two captions rather than two tabs.
 //

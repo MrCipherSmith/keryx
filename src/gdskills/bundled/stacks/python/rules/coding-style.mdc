@@ -8,7 +8,7 @@ metadata:
 # Python coding style
 
 Narrows `core-common-rules`' stack-agnostic style rules to Python's own
-idiom. Applies only to `*.py`/`*.pyi` files (W1-AC8) — everything not
+idiom. Applies only to `*.py`/`*.pyi` files — everything not
 Python-specific still comes from the common rules this file `extends`.
 
 ## Formatting and typing

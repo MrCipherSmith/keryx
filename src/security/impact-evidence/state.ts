@@ -3,8 +3,8 @@
 
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { appendFile, mkdir } from "node:fs/promises";
-import { pathExists, writeFileAtomic } from "../../lib/fs";
+import { pathExists } from "../../lib/fs";
+import { appendContained, writeContained } from "../../lib/contained-write";
 import { readJsonObjectFile } from "../../lib/json";
 import type { ImpactEvidenceLogEvent, ImpactEvidenceLogRecord } from "./types";
 
@@ -77,13 +77,23 @@ export async function loadSessionState(root: string, sessionId: string): Promise
   return { touched, denials, pendingAck };
 }
 
+// R700-03: both writers below route through `contained-write.ts` instead of
+// a raw `node:fs/promises` write — `writeContained`/`appendContained` walk
+// every segment of the path (root down to the target) with the same
+// symlink-chain refusal `contained-write.ts`'s other callers share, and
+// refuse (rather than follow) a symlink whose resolved real path leaves
+// `root`. This closes the same hole R700-03 found in `src/learning/observe.ts`:
+// a committed `.metaproject/data/security/impact-evidence -> <outside>`
+// symlink used to get session state and log records appended straight
+// through it.
+
 export async function saveSessionState(
   root: string,
   sessionId: string,
   state: ImpactEvidenceSessionState,
 ): Promise<void> {
   const file = sessionStatePath(root, sessionId);
-  await writeFileAtomic(file, `${JSON.stringify(state, null, 2)}\n`);
+  await writeContained(root, path.relative(root, file), `${JSON.stringify(state, null, 2)}\n`);
 }
 
 export function logPath(root: string): string {
@@ -102,8 +112,7 @@ export async function appendLogRecord(
     ...(record.detail !== undefined ? { detail: record.detail } : {}),
   };
   const file = logPath(root);
-  await mkdir(path.dirname(file), { recursive: true });
-  await appendFile(file, `${JSON.stringify(full)}\n`, "utf8");
+  await appendContained(root, path.relative(root, file), `${JSON.stringify(full)}\n`);
   return full;
 }
 

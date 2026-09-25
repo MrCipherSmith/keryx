@@ -7,9 +7,9 @@
 // `.metaproject/project-skills/`. A `domain: "review-conventions"` record is
 // refused here: it is applied through `keryx review learn --reviewer <id>`
 // (`reviewer-profile.ts`), not through this path.
-import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { isPathInside, withFileLock, writeFileAtomic } from "../lib/fs";
+import { isPathInside, withFileLock } from "../lib/fs";
+import { removeContained, writeContained } from "../lib/contained-write";
 import { renderProposalMarkdown, resolveRegisteredSkillTarget, suggestedSectionsFor } from "../gdskills/learn";
 import type { ApplyLearningProposalResult, LearningProposal, LearningSourceType } from "../gdskills/learn";
 import { applyLearningProposal } from "../gdskills/learn";
@@ -255,21 +255,23 @@ export async function applyLearnedPattern(
     // `.metaproject/data/gdskills/proposals/` directory the non-dry-run path
     // uses — nothing observable on disk survives this call.
     const scratchDir = path.join(root, ".metaproject", "data", "learning", ".apply-dry-run");
-    const scratchPath = path.join(scratchDir, `${proposal.proposalId}.json`);
     const scratchRelative = path.posix.join(".metaproject", "data", "learning", ".apply-dry-run", `${proposal.proposalId}.json`);
-    await mkdir(scratchDir, { recursive: true });
     try {
-      await writeFileAtomic(scratchPath, `${JSON.stringify(proposal, null, 2)}\n`);
+      await writeContained(root, scratchRelative, `${JSON.stringify(proposal, null, 2)}\n`);
       const applied = await applyLearningProposal(root, scratchRelative, { dryRun: true });
       return { proposalPath: proposal.proposalPath, applied };
     } finally {
-      await rm(scratchDir, { recursive: true, force: true });
+      await removeContained(root, path.relative(root, scratchDir));
     }
   }
 
   await withFileLock(path.join(root, ".metaproject", "data", "gdskills", "learn.lock"), async () => {
-    await writeFileAtomic(proposalJsonPath, `${JSON.stringify(proposal, null, 2)}\n`);
-    await writeFileAtomic(path.join(proposalsRoot, `${proposal.proposalId}.md`), renderProposalMarkdown(proposal));
+    await writeContained(root, path.relative(root, proposalJsonPath), `${JSON.stringify(proposal, null, 2)}\n`);
+    await writeContained(
+      root,
+      path.relative(root, path.join(proposalsRoot, `${proposal.proposalId}.md`)),
+      renderProposalMarkdown(proposal),
+    );
   });
 
   const applied = await applyLearningProposal(root, proposal.proposalPath, { dryRun });

@@ -8,7 +8,7 @@ metadata:
 # React testing
 
 Test layout, runner, and assertion conventions for React component files
-(`*.tsx`/`*.jsx`, W1-AC8), narrowing `ts-js-node`'s generic testing rule.
+(`*.tsx`/`*.jsx`), narrowing `ts-js-node`'s generic testing rule.
 
 ## Layout and runner
 

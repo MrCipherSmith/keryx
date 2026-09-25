@@ -20,6 +20,7 @@ import type { ShellHookContext } from "./agent-hooks";
 import { detectSandboxLauncher } from "../harness/process/sandbox/detect";
 import { BUILTIN_HOOK_REGISTRATIONS } from "../harness/hooks/builtins";
 import { createHookRuntime } from "../harness/hooks/runtime";
+import { projectHooksDigestOfDoc, recordProjectHooksTrust } from "../harness/hooks";
 import type { HookFireResult, HookRuntime } from "../harness/hooks/runtime";
 import type { HookProcessRunner } from "../harness/hooks/runner";
 import type { HookEventName } from "../harness/hooks/types";
@@ -1108,6 +1109,12 @@ test.skipIf(!detectSandboxLauncher().available)(
   "finding 17: the real buildShellHookRuntime denies a real shell_exec call via a real gate hook script",
   async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-real-"));
+    // R1-01 (flow 319, review round 1): OUTSIDE `dir` — `loadHookConfig`'s
+    // guard refuses a user-scope home that resolves inside the project root
+    // (see `src/harness/hooks/config.ts`), which would make `home/.keryx/
+    // hooks.json` below invisible and silently leave the three built-in
+    // gates enabled, defeating this test's own isolation comment below.
+    const home = await mkdtemp(path.join(tmpdir(), "keryx-agent-hooks-real-home-"));
     try {
       await mkdir(path.join(dir, ".metaproject"), { recursive: true });
       const scriptPath = path.join(dir, "deny-bash.js");
@@ -1120,12 +1127,27 @@ test.skipIf(!detectSandboxLauncher().available)(
       // may not have installed. Disabling them keeps this test about the ONE
       // thing under test: a real, hand-authored gate hook denying a real
       // call, not about whether a `keryx` binary happens to be on `PATH`.
+      //
+      // R700-02: all three are protected built-in GATES, so a PROJECT-scope
+      // disable of them is now ignored (D10/D12) — they move to the USER
+      // file with the explicit acknowledgement instead.
+      const userDoc = {
+        schemaVersion: "1.0.0",
+        hooks: {
+          PreToolUse: [
+            { id: "keryx.ctx-guard", enabled: false, acknowledge: "disable-builtin-gate" },
+            { id: "keryx.security-check-output", enabled: false, acknowledge: "disable-builtin-gate" },
+          ],
+          UserPromptSubmit: [{ id: "keryx.security-check-input", enabled: false, acknowledge: "disable-builtin-gate" }],
+        },
+      };
+      await mkdir(path.join(home, ".keryx"), { recursive: true });
+      await writeFile(path.join(home, ".keryx", "hooks.json"), JSON.stringify(userDoc, null, 2), "utf8");
+
       const doc = {
         schemaVersion: "1.0.0",
         hooks: {
           PreToolUse: [
-            { id: "keryx.ctx-guard", enabled: false },
-            { id: "keryx.security-check-output", enabled: false },
             {
               id: "real-deny-bash",
               matcher: "Bash",
@@ -1136,10 +1158,25 @@ test.skipIf(!detectSandboxLauncher().available)(
               // real production path, never the `unsandboxed` fallback.
             },
           ],
-          UserPromptSubmit: [{ id: "keryx.security-check-input", enabled: false }],
         },
       };
       await writeFile(path.join(dir, ".metaproject", "hooks.json"), JSON.stringify(doc, null, 2), "utf8");
+
+      // R700-01: a project full registration only loads once trusted — this
+      // test's own point is the REAL runtime denying a real call, not the
+      // trust prompt, so trust it directly the way `keryx hooks trust`
+      // itself would record it.
+      //
+      // R2-04 (flow 319 review round 2): `configDir` must be OUTSIDE `dir`
+      // (the project root / trust root), not a subdirectory of it —
+      // `recordProjectHooksTrust` now refuses to write a trust store that
+      // resolves inside the project, the same defence `home` above already
+      // gets for the exact same reason (R1-01).
+      const configDir = path.join(home, "config");
+      const digest = projectHooksDigestOfDoc(doc);
+      if (digest === undefined) throw new Error("expected a digest for a project file with one full registration");
+      const trustResult = recordProjectHooksTrust({ trustRoot: dir, digest, hookIds: ["real-deny-bash"], configDir });
+      if (!trustResult.ok) throw new Error(`recordProjectHooksTrust failed: ${trustResult.error}`);
 
       const hooks = buildShellHookRuntime({
         projectRoot: dir,
@@ -1147,7 +1184,8 @@ test.skipIf(!detectSandboxLauncher().available)(
         runId: "r1",
         interactive: true,
         profileId: "monitored-trusted-local",
-        homeDir: dir, // no ~/.keryx/hooks.json either
+        homeDir: home, // ~/.keryx/hooks.json is home/.keryx/hooks.json (the user doc above)
+        configDir,
         // Explicitly NOT "off" — this IS the opt-in.
         env: { KERYX_HOOKS: "on" },
       });
@@ -1202,6 +1240,7 @@ test.skipIf(!detectSandboxLauncher().available)(
       expect(shellResult?.output).toContain("denied by real gate hook");
     } finally {
       await rm(dir, { recursive: true, force: true });
+      await rm(home, { recursive: true, force: true });
     }
   },
   20000,

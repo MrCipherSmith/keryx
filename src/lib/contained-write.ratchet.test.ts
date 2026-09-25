@@ -23,12 +23,33 @@ import { describe, expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-const COVERED_DIRS = ["src/integrations", "src/rules", "src/bundle"];
+// R700-04 (review round PR #700): widened to cover the modules the review
+// named as writing through raw `node:fs` primitives outside the ratchet's
+// reach — `src/learning`, `src/security/impact-evidence`,
+// `src/security/audit-harness`, `src/stack` and the `gdskills`
+// manifest/governance subtrees. Each directory added here was first checked
+// by hand for any file NOT owned by this fix (flow 319 lane B) that also
+// writes raw — none did, so widening to the whole directory (rather than
+// per-file) does not risk flagging a file this lane cannot fix.
+const COVERED_DIRS = [
+  "src/integrations",
+  "src/rules",
+  "src/bundle",
+  "src/learning",
+  "src/security/impact-evidence",
+  "src/security/audit-harness",
+  "src/stack",
+  "src/gdskills/manifest",
+  "src/gdskills/governance",
+];
 const COVERED_FILES = [
   "src/agents/export.ts",
+  "src/agents/bootstrap.ts",
   "src/lib/private-dir.ts",
   "src/commands/rules.ts",
   "src/commands/update.ts",
+  "src/commands/security-audit-harness.ts",
+  "src/commands/hooks.ts",
   "src/lib/install-plan.ts",
   "src/commands/init.ts",
   "src/testing/service.ts",
@@ -36,6 +57,7 @@ const COVERED_FILES = [
   "src/lib/project-sandbox-policy.ts",
   "src/assets/seed.ts",
   "src/gdskills/install.ts",
+  "src/gdskills/guarded-fs-ops.ts",
   "src/lib/routing-entrypoint.ts",
   "src/mcp/client-config.ts",
   "src/capability/registry.ts",
@@ -289,6 +311,12 @@ describe("contained-write ratchet", () => {
     for (const entry of ALLOWLIST) {
       expect(entry.reason.length).toBeGreaterThan(10);
     }
+    // Flow 319 follow-up to R700-04: judge-recordings.ts, scout.ts and
+    // stocktake.ts were converted to the async containment primitive
+    // (writeJudgeRecording/recordScout/runStocktake are now async, and their
+    // one caller, src/commands/skills-governance.ts, awaits them) rather
+    // than staying on the allowlist — the cap is back to its pre-R700-04
+    // value of 8.
     expect(ALLOWLIST.length).toBeLessThanOrEqual(8);
   });
 });
@@ -362,9 +390,15 @@ describe("contained-write ratchet: R2-F3 (install.ts is no longer whole-file all
     expect(isAllowed("src/gdskills/install.ts")).toBe(false);
   });
 
-  test("the new guarded-fs-ops.ts module is the only src/gdskills allowlist entry", () => {
+  test("src/gdskills allowlist entries are exactly guarded-fs-ops.ts (flow 319 follow-up to R700-04)", () => {
+    // R700-04 widened `src/gdskills/manifest` and `src/gdskills/governance`
+    // into COVERED_DIRS — every file in those subtrees is scanned. Flow 319
+    // converted judge-recordings.ts/scout.ts/stocktake.ts to the async
+    // containment primitive instead of exempting them, so only
+    // guarded-fs-ops.ts remains here. Anything else under `src/gdskills/`
+    // reintroducing a raw write is still caught.
     const gdskillsEntries = ALLOWLIST.filter((entry) => entry.file.startsWith("src/gdskills/"));
-    expect(gdskillsEntries.map((entry) => entry.file)).toEqual(["src/gdskills/guarded-fs-ops.ts"]);
+    expect(gdskillsEntries.map((entry) => entry.file).sort()).toEqual(["src/gdskills/guarded-fs-ops.ts"].sort());
   });
 
   test("a raw writeFile reintroduced into install.ts's text would be caught", () => {

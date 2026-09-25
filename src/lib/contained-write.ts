@@ -36,6 +36,7 @@
 // previous inode are NOT preserved, because the replacement is a new inode
 // by construction (that is what makes the write atomic).
 import { chmod, lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, stat } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { refuseEscapingSymlink } from "./symlink-safety";
@@ -304,6 +305,57 @@ export async function writeContained(
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => {});
     throw error;
+  }
+}
+
+/**
+ * Append `data` to `root`/`rel`, containment-checked (R700-03 fix). Creates
+ * the file and its parent directories when absent. Unlike `writeContained`,
+ * this is not an atomic-replace: an append is inherently a modification of
+ * whatever is already there, so there is no temp-file-then-rename dance —
+ * the write goes straight to the target through a file descriptor opened
+ * with `O_APPEND`.
+ *
+ * The same containment walk `writeContained` runs (`assertContained`:
+ * lexical checks, cycle/dangling detection, `refuseEscapingSymlink` over
+ * every segment, and a final resolved-realpath confirmation) refuses a
+ * symlinked directory or file anywhere on the path BEFORE this function ever
+ * opens anything. The `open()` call itself then adds `O_NOFOLLOW` (where the
+ * platform defines it — POSIX only; a no-op bitmask on platforms that
+ * don't) on the FINAL component as a second, independent guard: it closes
+ * the narrow TOCTOU window between that check and this open (a symlink
+ * swapped into place at `resolvedPath` after `assertContained` resolved it
+ * but before `open` runs) by refusing to follow a symlink at open time,
+ * rather than trusting the earlier resolution to still hold.
+ */
+export async function appendContained(
+  root: string,
+  rel: string,
+  data: string | Uint8Array,
+  opts: { readonly mode?: number } = {},
+): Promise<void> {
+  const { resolvedPath, resolvedDir } = await assertContained(root, rel, { requireRegularIfExists: true });
+  await mkdir(resolvedDir, { recursive: true });
+
+  const noFollow = fsConstants.O_NOFOLLOW ?? 0;
+  const flags = fsConstants.O_APPEND | fsConstants.O_CREAT | fsConstants.O_WRONLY | noFollow;
+  let handle;
+  try {
+    handle = await open(resolvedPath, flags, opts.mode);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ELOOP") {
+      throw new ContainedWriteError(
+        "escaping-symlink",
+        `${rel}: refuses to append through a symlink at the final path component (raced into place after the containment check)`,
+      );
+    }
+    throw error;
+  }
+  try {
+    await handle.writeFile(data);
+  } finally {
+    await handle.close();
   }
 }
 

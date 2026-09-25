@@ -27,8 +27,9 @@
 // whose hash has not moved since the version that already reasoned about it.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { writeContained } from "../../lib/contained-write";
 import { lintSkill } from "./authoring-lint";
 import { loadSkillCatalogWithDiagnostics, type CatalogEntry, type CatalogScope, type UnreadableCatalogEntry } from "./catalog-index";
 import { checkSkillSelectedLeaveOneOut, SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
@@ -189,9 +190,15 @@ function loadCache(cachePath: string): Cache {
   }
 }
 
-function saveCache(cachePath: string, cache: Cache): void {
-  mkdirSync(path.dirname(cachePath), { recursive: true });
-  writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
+/**
+ * R700-04 follow-up (flow 319): routed through `writeContained` — `root` is
+ * the containment boundary, `path.relative(root, cachePath)` the relative
+ * path within it (the default `cachePath`, `<root>/.metaproject/data/skills/
+ * stocktake/cache.json`, is already nested there; a caller-supplied override
+ * outside `root` is refused rather than silently written through).
+ */
+async function saveCache(root: string, cachePath: string, cache: Cache): Promise<void> {
+  await writeContained(root, path.relative(root, cachePath), `${JSON.stringify(cache, null, 2)}\n`);
 }
 
 function verificationReportPath(root: string, entry: CatalogEntry): string {
@@ -437,7 +444,7 @@ function tagDuplicateReasons(entries: readonly StocktakeEntry[]): StocktakeEntry
  * report, and returns it. `--quick` skips the (still cheap, but O(n) extra
  * scout calls) trigger-accuracy pass; a full run adds it.
  */
-export function runStocktake(root: string, options: StocktakeOptions = {}): StocktakeReport {
+export async function runStocktake(root: string, options: StocktakeOptions = {}): Promise<StocktakeReport> {
   const scope = options.scope ?? "bundled";
   const quick = options.quick ?? false;
   const now = options.now ?? ((): Date => new Date());
@@ -480,11 +487,10 @@ export function runStocktake(root: string, options: StocktakeOptions = {}): Stoc
     unreadable,
   };
 
-  saveCache(cachePath, cache);
+  await saveCache(root, cachePath, cache);
   const dateStamp = generatedAt.slice(0, 10);
   const reportPath = path.join(root, ".metaproject", "data", "skills", "stocktake", `${dateStamp}.json`);
-  mkdirSync(path.dirname(reportPath), { recursive: true });
-  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeContained(root, path.relative(root, reportPath), `${JSON.stringify(report, null, 2)}\n`);
 
   return report;
 }

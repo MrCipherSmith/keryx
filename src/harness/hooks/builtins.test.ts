@@ -95,12 +95,20 @@ describe("resolveKeryxArgv", () => {
     expect(resolveKeryxArgv(["echo", "hi"])).toEqual(["echo", "hi"]);
   });
 
-  test("replaces a leading keryx with execPath + scriptPath", () => {
+  test("replaces a leading keryx with execPath + the safe bun flags (R1-01) + scriptPath", () => {
     const resolved = resolveKeryxArgv(["keryx", "ctx", "hook", "claude"], {
       execPath: "/usr/local/bin/node",
       scriptPath: "/repo/dist/cli.js",
     });
-    expect(resolved).toEqual(["/usr/local/bin/node", "/repo/dist/cli.js", "ctx", "hook", "claude"]);
+    expect(resolved).toEqual([
+      "/usr/local/bin/node",
+      "--no-env-file",
+      "--config=/dev/null",
+      "/repo/dist/cli.js",
+      "ctx",
+      "hook",
+      "claude",
+    ]);
   });
 
   test("an empty argv is passed through unchanged", () => {
@@ -112,7 +120,15 @@ describe("resolveKeryxArgv", () => {
       execPath: "/usr/local/bin/bun",
       scriptPath: "/repo/src/cli.ts",
     });
-    expect(resolved).toEqual(["/usr/local/bin/bun", "/repo/src/cli.ts", "ctx", "hook", "claude"]);
+    expect(resolved).toEqual([
+      "/usr/local/bin/bun",
+      "--no-env-file",
+      "--config=/dev/null",
+      "/repo/src/cli.ts",
+      "ctx",
+      "hook",
+      "claude",
+    ]);
   });
 
   test("a compiled keryx binary (execPath basename keryx) spawns itself alone, no second argv", () => {

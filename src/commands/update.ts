@@ -22,9 +22,13 @@ import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/manage
 // lives in the shared `src/lib/managed-git-hook.ts` (R1-F3/R1-F6), which
 // runs its own containment check before writing rather than relying on
 // `resolveGitHooksRoot`'s resolution alone.
-function containFromMetaprojectPath(filePath: string): { root: string; rel: string } {
+export function containFromMetaprojectPath(filePath: string): { root: string; rel: string } {
   const marker = `${path.sep}.metaproject${path.sep}`;
-  const idx = filePath.indexOf(marker);
+  // R700-14: LAST `.metaproject` segment, per the comment above — a project
+  // nested under an ancestor `.metaproject/` directory (e.g. a worktree
+  // checked out inside another project's own `.metaproject/`) must bound
+  // containment at the innermost `.metaproject`, not the outermost one.
+  const idx = filePath.lastIndexOf(marker);
   if (idx < 0) {
     if (filePath.endsWith(`${path.sep}.metaproject`)) {
       const root = filePath.slice(0, filePath.length - ".metaproject".length - path.sep.length);
@@ -373,7 +377,8 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
         ? "metaproject.json is readable; module flags come from it."
         : "metaproject.json is missing or unreadable; a real run would recover it from the folders on disk.",
       "Not digest-planned by this release: module manifests, skills, templates, the dashboard, " +
-        "the managed runtime, metaproject.json (it carries an updatedAt timestamp and is rewritten on every run), " +
+        "the managed runtime, metaproject.json (it carries an updatedAt timestamp and is only rewritten " +
+        "when something besides that timestamp changed), " +
         "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
       "Hooks are merged into existing files by their own installers and are not digest-planned; " +
         "a real run reports which of them it touched.",
@@ -1377,8 +1382,11 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
     return;
   }
   let raw: Record<string, unknown>;
+  let onDisk: Record<string, unknown>;
   try {
-    raw = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    const text = await readFile(manifestPath, "utf8");
+    raw = JSON.parse(text) as Record<string, unknown>;
+    onDisk = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return;
   }
@@ -1387,6 +1395,16 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
   agentEntrypoints.metaproject = ".metaproject/index.md";
   raw.agentEntrypoints = agentEntrypoints;
   applyStandardManifestFields(raw);
+  // R700-06: `applyStandardManifestFields` always stamps a fresh `updatedAt`,
+  // but on a repo where nothing else changed that turns `keryx update` into
+  // pure timestamp churn (a dirty git tree with no real diff). When the only
+  // difference from what's on disk is `updatedAt` itself, skip the write
+  // entirely so the file — and its mtime — stay untouched. A real change
+  // (module flags, entrypoints, profiles, …) still writes with a fresh
+  // timestamp as before.
+  if (manifestsEqualIgnoringUpdatedAt(raw, onDisk)) {
+    return;
+  }
   {
     const { root, rel } = containFromMetaprojectPath(manifestPath);
     await writeContained(root, rel, `${JSON.stringify(raw, null, 2)}\n`);
@@ -1398,6 +1416,11 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
 // manifest created before the standard fields existed is backfilled in place,
 // and `profiles` stays in sync with the currently enabled module set. Mirrors
 // the fields written by `init` (see src/commands/init.ts buildManifest).
+//
+// Always stamps a fresh `updatedAt` on `raw` — callers that want idempotence
+// on an unchanged manifest compare against the on-disk copy with
+// `manifestsEqualIgnoringUpdatedAt` and skip the write when that's the only
+// difference (see `updateManifestAgentEntrypoints`).
 function applyStandardManifestFields(raw: Record<string, unknown>): void {
   raw.standardVersion = STANDARD_VERSION;
   const modules = (raw.modules ?? {}) as Record<string, { enabled?: boolean }>;
@@ -1406,6 +1429,38 @@ function applyStandardManifestFields(raw: Record<string, unknown>): void {
     .map(([key]) => key);
   raw.profiles = computeProfiles(enabledModuleKeys);
   raw.updatedAt = new Date().toISOString();
+}
+
+// Deep-equal comparison that ignores object key order (JSON round-tripping
+// and rebuilding an object literal can reorder keys without changing
+// meaning) but is order-sensitive for arrays. Used to detect whether a
+// rebuilt metaproject.json manifest is substantively unchanged from what's
+// already on disk, aside from a fresh `updatedAt` stamp.
+function deepEqualIgnoringKeyOrder(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((value, index) => deepEqualIgnoringKeyOrder(value, b[index]));
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const aKeys = Object.keys(a as Record<string, unknown>).sort();
+    const bKeys = Object.keys(b as Record<string, unknown>).sort();
+    if (aKeys.length !== bKeys.length || aKeys.some((key, index) => key !== bKeys[index])) {
+      return false;
+    }
+    return aKeys.every((key) =>
+      deepEqualIgnoringKeyOrder((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+    );
+  }
+  return false;
+}
+
+// True when two metaproject.json manifests are identical in every field
+// except `updatedAt`.
+function manifestsEqualIgnoringUpdatedAt(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const { updatedAt: _aUpdatedAt, ...restA } = a;
+  const { updatedAt: _bUpdatedAt, ...restB } = b;
+  return deepEqualIgnoringKeyOrder(restA, restB);
 }
 
 async function updateRuntime(projectRoot: string): Promise<void> {

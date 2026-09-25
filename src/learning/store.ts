@@ -4,8 +4,10 @@
 // the caller holds the accept capability minted by `accept-capability.ts`
 // (only `accept.ts`, T8, is meant to hold one).
 import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import { isAcceptCapability, type AcceptCapability } from "./accept-capability";
-import { pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
+import { pathExists, withFileLock } from "../lib/fs";
+import { writeContained } from "../lib/contained-write";
 import {
   assertInsideLearningRoot,
   assertValidLearningId,
@@ -284,8 +286,9 @@ async function writeRecordUnlocked(root: string, record: LearnedPattern, options
     );
   }
   const target = patternPathFor(root, record.id, record.scope, options);
-  assertInsideLearningRoot(target, [allowedRootFor(root, record.scope, options)]);
-  await writeFileAtomic(target, `${JSON.stringify(record, null, 2)}\n`);
+  const containmentRoot = allowedRootFor(root, record.scope, options);
+  assertInsideLearningRoot(target, [containmentRoot]);
+  await writeContained(containmentRoot, path.relative(containmentRoot, target), `${JSON.stringify(record, null, 2)}\n`);
 }
 
 /**
@@ -498,8 +501,9 @@ async function writeIndexUnlocked(index: LearningIndex, options: StoreEnvOptions
     }
   }
   const target = userIndexPath(envOf(options), options.homeDir);
-  assertInsideLearningRoot(target, [userLearningDir(envOf(options), options.homeDir)]);
-  await writeFileAtomic(target, `${JSON.stringify(index, null, 2)}\n`);
+  const userRoot = userLearningDir(envOf(options), options.homeDir);
+  assertInsideLearningRoot(target, [userRoot]);
+  await writeContained(userRoot, path.relative(userRoot, target), `${JSON.stringify(index, null, 2)}\n`);
 }
 
 /** Validates every entry has exactly the four documented fields, then atomically writes the whole index under the user lock. Low-level primitive — a caller changing existing entries (rather than replacing the whole index wholesale, as tests do) should prefer `updateIndex` (R1-F7: a read-then-write split outside any lock can drop a concurrent writer's entry). */

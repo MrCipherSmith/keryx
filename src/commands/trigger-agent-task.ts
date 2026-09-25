@@ -524,6 +524,10 @@ async function runLocked(
         interactive: false,
         profileId: "unattended-untrusted",
       });
+      // R700-01: headless — no terminal to ask "trust this?" in, so surface
+      // untrusted/changed project hooks, a load failure, tighten-only
+      // warnings and gate-off banners on stderr instead.
+      for (const line of shellHooks?.notices ?? []) console.error(line);
       const agentDeps: AgentDeps = {
         provider,
         providerId: dispatch.provider,

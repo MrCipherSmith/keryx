@@ -8,7 +8,7 @@ metadata:
 # Python testing
 
 Narrows `core-common-rules`' stack-agnostic testing guidance to `pytest`
-conventions. Applies only to `*.py`/`*.pyi` files (W1-AC8); see
+conventions. Applies only to `*.py`/`*.pyi` files; see
 `skills/python-testing/SKILL.md` for the full test-authoring workflow this
 rule file backs.
 

@@ -409,3 +409,35 @@ describe("AC14: spend is reserved before the first call and closed by the run's 
     expect(provider.calls()).toBe(0);
   });
 });
+
+describe("R700-01: an untrusted project hook is reported headless, on stderr", () => {
+  test("an untrusted .metaproject/hooks.json produces the notice; the hook does not run", async () => {
+    await addConfirmedSchedule(root, entry({ mode: "trust" }));
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "hooks.json"),
+      JSON.stringify({
+        schemaVersion: "1.0.0",
+        hooks: {
+          PreToolUse: [{ id: "agent-task-poc", matcher: "*", class: "observe", command: { argv: ["true"] } }],
+        },
+      }),
+      "utf8",
+    );
+    const savedHooks = process.env["KERYX_HOOKS"];
+    process.env["KERYX_HOOKS"] = "on";
+    try {
+      const provider = scripted([finalText("done")]);
+      await run(provider);
+      const noticeText = logged.join("\n");
+      expect(noticeText).toContain("not trusted");
+      expect(noticeText).toContain("agent-task-poc");
+      // Headless wording: no terminal to ask "trust this?" in.
+      expect(noticeText).toContain("This session cannot ask");
+      expect(noticeText).toContain("keryx hooks trust");
+    } finally {
+      if (savedHooks === undefined) delete process.env["KERYX_HOOKS"];
+      else process.env["KERYX_HOOKS"] = savedHooks;
+    }
+  });
+});

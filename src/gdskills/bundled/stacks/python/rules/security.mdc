@@ -9,7 +9,7 @@ metadata:
 
 Narrows `core-common-rules`' stack-agnostic security guidance to Python's own
 OWASP-style sinks and the safe API each one has a direct replacement for.
-Applies only to `*.py`/`*.pyi` files (W1-AC8).
+Applies only to `*.py`/`*.pyi` files.
 
 ## Command and code execution
 

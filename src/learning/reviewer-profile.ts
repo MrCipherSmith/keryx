@@ -8,7 +8,8 @@
 // login.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { isPathInside, pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
+import { isPathInside, pathExists, withFileLock } from "../lib/fs";
+import { writeContained } from "../lib/contained-write";
 import { loadReviewLearningConfig } from "../review/review-learning";
 import { gateReviewerText, generalizeLesson } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
@@ -262,7 +263,7 @@ export async function applyReviewerProfile(
     });
 
     if (opts.dryRun !== true) {
-      await writeFileAtomic(target, rendered);
+      await writeContained(root, path.relative(root, target), rendered);
     }
 
     return { path: path.posix.join(".metaproject", "rules", "reviewers", `${reviewerId}.mdc`), version, added };

@@ -8,8 +8,7 @@ metadata:
 # Go patterns
 
 Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
-Go design and its common anti-patterns. Applies only to `*.go` files
-(W1-AC8).
+Go design and its common anti-patterns. Applies only to `*.go` files.
 
 ## Module and package layout
 

@@ -60,13 +60,13 @@ function screen(servers: ResolvedMcpServer[], states: ServerState[] = []): strin
   ].join("\n");
 }
 
-describe("AC1/AC2 — /mcp and /integrations are DIFFERENT views", () => {
+describe("AC1/AC2 — /mcp and /integrate are DIFFERENT views", () => {
   test("/mcp is the consumer view", () => {
     expect(isMcpConsumerCommand("/mcp")).toBe(true);
     expect(MCP_CONSUMER_COMMAND).toBe("/mcp");
   });
 
-  test("/integrations is the installer view and is NOT the consumer view", () => {
+  test("/integrate is the installer view and is NOT the consumer view", () => {
     // The assertion that matters. Before P2 both commands opened the same
     // modal, so a test that each was "accepted" passed while the rename
     // was only half done.

@@ -89,6 +89,20 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   },
 ];
 
+/**
+ * Subcommands deliberately absent from the registry even though their verb IS
+ * described — each with a reason. The verb-level `EXCLUSIONS` above cannot
+ * express this: `hooks` carries real descriptors (`hooks enable`, `hooks
+ * list`, …), so the verb is never excluded, but one specific subcommand must
+ * still never be agent-callable (R700-05).
+ */
+const SUBCOMMAND_EXCLUSIONS: ReadonlyArray<{ command: string; reason: string }> = [
+  {
+    command: "hooks disable",
+    reason: "can switch off the agent's own security gates",
+  },
+];
+
 /** Verbs that carry at least one descriptor, derived from the registry. */
 function describedVerbs(): Set<string> {
   const verbs = new Set<string>();
@@ -159,6 +173,15 @@ describe("command registry coverage", () => {
       (descriptor) => descriptor.model === true && isAutoAllowable(descriptor),
     ).map((descriptor) => descriptor.command);
     expect(spendsSilently).toEqual([]);
+  });
+
+  test("every subcommand exclusion states a reason and names no descriptor", () => {
+    const described = new Set(COMMAND_DESCRIPTORS.map((descriptor) => descriptor.command));
+    for (const exclusion of SUBCOMMAND_EXCLUSIONS) {
+      expect(exclusion.command.length).toBeGreaterThan(0);
+      expect(exclusion.reason.trim().length).toBeGreaterThan(0);
+      expect(described.has(exclusion.command)).toBe(false);
+    }
   });
 
   test("commands are unique", () => {

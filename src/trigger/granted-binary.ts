@@ -59,11 +59,37 @@ export function sameIdentity(a: FileIdentity, b: FileIdentity | undefined): bool
   return b !== undefined && a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs;
 }
 
-function realOr(p: string): string {
+/**
+ * `p`'s realpath when it exists — otherwise the realpath of its NEAREST
+ * EXISTING ancestor, with the missing tail rejoined, rather than the
+ * unresolved `path.resolve(p)`.
+ *
+ * R3 regression fix (flow 319 CI): `resolvesInsideProject` compares this
+ * function's output for a project root (which exists, so it always got a
+ * real, symlink-resolved path) against its output for an invocation's
+ * `scriptPath` — which does NOT exist yet for a schedule that has never
+ * actually been installed (`keryx trigger install` writes the timer; it
+ * never creates the entry script). The plain `path.resolve(p)` fallback left
+ * a symlinked ancestor UNresolved on the file side while the project-root
+ * side WAS resolved — on macOS, where `/tmp`/`/var` are themselves symlinks
+ * into `/private/...`, a project root under `os.tmpdir()` realpath'd to
+ * `/private/var/folders/...` while a non-existent script path under the same
+ * directory stayed `/var/folders/...`, so `isInside` compared two paths that
+ * disagreed on a leading `/private` and never matched — silently defeating
+ * the "keryx running from inside this project is refused" check (`schedules.
+ * ts`'s `insideRunner`) for the exact case (a script path, not yet on disk,
+ * under a project) it exists to catch. Walking up to the nearest existing
+ * ancestor and rejoining the missing tail resolves the SAME symlinks a real
+ * file at that path would have resolved through, without requiring the file
+ * to exist first.
+ */
+export function realOr(p: string): string {
   try {
     return realpathSync(p);
   } catch {
-    return path.resolve(p);
+    const parent = path.dirname(p);
+    if (parent === p) return path.resolve(p); // reached the filesystem root without finding anything real
+    return path.join(realOr(parent), path.basename(p));
   }
 }
 

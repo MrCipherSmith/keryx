@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { invocationArgv, projectScheduleHash, renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry, type KeryxInvocation } from "./schedule";
+import { invocationArgv, isBunExecPath, projectScheduleHash, renderScheduleLines, resolveKeryxInvocation, resolveScheduleEntry, type KeryxInvocation } from "./schedule";
 import { triggersConfigPath } from "./config";
 
 async function writeTriggers(root: string, triggers: unknown[]): Promise<void> {
@@ -66,7 +66,11 @@ describe("renderScheduleLines", () => {
 
   test("the systemd service ExecStart uses the same absolute-path invocation, no bare `keryx`", () => {
     const lines = renderScheduleLines({ projectRoot: "/srv/project", name: "nightly", cron: "0 2 * * *", invocation: FAKE_INVOCATION });
+    // flow 319: FAKE_INVOCATION's interpreter is /opt/node/bin/node — Node, not
+    // Bun — so no SAFE_BUN_SPAWN_ARGS here (Node does not accept those flags
+    // and refuses to start with them). See the bun-interpreter case below.
     expect(lines.systemdService).toContain("ExecStart=/opt/node/bin/node /opt/keryx/dist/cli.js trigger run nightly");
+    expect(lines.systemdService).not.toContain("--no-env-file");
     expect(lines.systemdService).toContain("WorkingDirectory=/srv/project");
     // Flow 295 (AC8): a REAL OnCalendar= (flow 286 printed only a commented
     // placeholder, which never fired), and a project-unique unit name.
@@ -74,6 +78,16 @@ describe("renderScheduleLines", () => {
     expect(lines.systemdTimer).not.toContain("# OnCalendar=");
     expect(lines.systemdTimer).toContain("0 2 * * *"); // the cron expression it was translated from
     expect(lines.timerUnitName).toBe(`keryx-${projectScheduleHash("/srv/project")}-nightly.timer`);
+  });
+
+  test("flow 319: a BUN interpreter DOES get SAFE_BUN_SPAWN_ARGS in ExecStart (only Node is exempt)", () => {
+    const lines = renderScheduleLines({
+      projectRoot: "/srv/project",
+      name: "nightly",
+      cron: "0 2 * * *",
+      invocation: { execPath: "/opt/bun/bin/bun", scriptPath: "/opt/keryx/dist/cli.js" },
+    });
+    expect(lines.systemdService).toContain("ExecStart=/opt/bun/bin/bun --no-env-file --config=/dev/null /opt/keryx/dist/cli.js trigger run nightly");
   });
 
   test("a cron with no systemd equivalent keeps the placeholder and says why", () => {
@@ -150,13 +164,18 @@ describe("renderScheduleLines", () => {
     });
 
     test("systemd ExecStart quotes a space-containing interpreter/script path", () => {
+      // flow 319: a bun interpreter here (not node — a node one gets no
+      // SAFE_BUN_SPAWN_ARGS, see the dedicated interpreter-detection tests
+      // below), so the flags this test is actually about (quoting) are present.
       const spaced = renderScheduleLines({
         projectRoot: "/srv/project",
         name: "nightly",
         cron: "0 2 * * *",
-        invocation: { execPath: "/opt/my node/bin/node", scriptPath: "/opt/keryx dist/cli.js" },
+        invocation: { execPath: "/opt/my bun/bin/bun", scriptPath: "/opt/keryx dist/cli.js" },
       });
-      expect(spaced.systemdService).toContain('ExecStart="/opt/my node/bin/node" "/opt/keryx dist/cli.js" trigger run nightly');
+      expect(spaced.systemdService).toContain(
+        'ExecStart="/opt/my bun/bin/bun" --no-env-file --config=/dev/null "/opt/keryx dist/cli.js" trigger run nightly',
+      );
     });
 
     test("cron line is unaffected by shell quoting alone: the cronCommand itself already single-quotes the space", () => {
@@ -284,9 +303,11 @@ describe("resolveKeryxInvocation on a compiled binary", () => {
     expect(invocationArgv(resolveKeryxInvocation("B:\\~BUN\\root\\keryx.exe", "C:\\keryx\\keryx.exe"))).toEqual(["C:\\keryx\\keryx.exe"]);
   });
 
-  test("a real script entry keeps [interpreter, absolute script]", () => {
+  test("a real script entry keeps [interpreter, ...safe flags, absolute script] — R2-02: every self-spawn carries SAFE_BUN_SPAWN_ARGS", () => {
     expect(invocationArgv(resolveKeryxInvocation("dist/cli.js", "/opt/bun/bin/bun"))).toEqual([
       "/opt/bun/bin/bun",
+      "--no-env-file",
+      "--config=/dev/null",
       path.resolve("dist/cli.js"),
     ]);
   });
@@ -302,5 +323,53 @@ describe("resolveKeryxInvocation on a compiled binary", () => {
     expect(lines.cronCommand).not.toContain("$bunfs");
     expect(lines.systemdService).toContain("ExecStart=/usr/local/bin/keryx trigger run nightly");
     expect(lines.systemdService).not.toContain("$bunfs");
+  });
+});
+
+// Flow 319 (CI, R1): SAFE_BUN_SPAWN_ARGS are Bun-only flags. Node refuses to
+// start with them, so `invocationArgv` must insert them ONLY for a Bun
+// interpreter — decided by `isBunExecPath`, exercised here directly.
+describe("invocationArgv: SAFE_BUN_SPAWN_ARGS only for a Bun interpreter", () => {
+  test("a node interpreter gets [execPath, scriptPath] — no safe flags", () => {
+    expect(invocationArgv({ execPath: "/opt/node/bin/node", scriptPath: "/opt/keryx/cli.js" })).toEqual([
+      "/opt/node/bin/node",
+      "/opt/keryx/cli.js",
+    ]);
+  });
+
+  test("a bun interpreter gets the safe flags inserted between execPath and scriptPath", () => {
+    expect(invocationArgv({ execPath: "/opt/bun/bin/bun", scriptPath: "/opt/keryx/cli.js" })).toEqual([
+      "/opt/bun/bin/bun",
+      "--no-env-file",
+      "--config=/dev/null",
+      "/opt/keryx/cli.js",
+    ]);
+  });
+
+  test("bunx and the .exe Windows spellings of both are recognized by basename", () => {
+    for (const execPath of ["/usr/local/bin/bunx", "C:\\bun\\bun.exe", "C:\\bun\\bunx.exe"]) {
+      expect(invocationArgv({ execPath, scriptPath: "/opt/keryx/cli.js" })).toEqual([
+        execPath,
+        "--no-env-file",
+        "--config=/dev/null",
+        "/opt/keryx/cli.js",
+      ]);
+    }
+  });
+
+  test("node.exe (Windows) is still recognized as node, not bun — no flags", () => {
+    expect(invocationArgv({ execPath: "C:\\node\\node.exe", scriptPath: "C:\\keryx\\cli.js" })).toEqual(["C:\\node\\node.exe", "C:\\keryx\\cli.js"]);
+  });
+
+  test("isBunExecPath: a non-bun-named execPath is still recognized when it IS this (bun-run) test process's own execPath", () => {
+    // `bun test` runs this file under Bun itself, so process.execPath is a
+    // real bun binary, whatever it happens to be named — proves the
+    // "this process's own execPath, under Bun" fallback, independent of the
+    // basename check above.
+    expect(isBunExecPath(process.execPath)).toBe(true);
+  });
+
+  test("isBunExecPath: an unrelated path that is neither bun-named nor this process's own execPath is not bun", () => {
+    expect(isBunExecPath("/opt/some-other-interpreter")).toBe(false);
   });
 });

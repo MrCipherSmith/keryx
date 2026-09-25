@@ -900,7 +900,7 @@ export function buildToolRegistry(): ToolEntry[] {
         if (harnessIdentity === null) {
           return {
             status: "error" as const,
-            error: "harness identity not bound at launch (keryx mcp serve --harness <id>)",
+            error: "harness identity not bound at launch (keryx serve-mcp --harness <id>)",
           };
         }
         const from = stringParam(params, "from") ?? "";
