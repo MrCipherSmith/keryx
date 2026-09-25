@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 4: stack packs for csharp-dotnet, swift-ios, kotlin-android, flutter-dart",
   "status": "in-progress",
   "createdAt": "2026-09-25T15:14:46.872Z",
-  "updatedAt": "2026-09-25T15:21:04.524Z",
+  "updatedAt": "2026-09-25T15:39:09.813Z",
   "source": {
     "type": "description",
     "ref": null
@@ -48,45 +48,66 @@
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:21:24.988Z",
+            "outcome": "started",
+            "detail": "dispatching 4 parallel sonnet workers, one per stack pack"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:38:24.986Z",
+            "outcome": "started",
+            "detail": "running offline integrity/lint guard tests scoped to the 4 new packs and shared wiring"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-25T15:39:09.538Z",
+            "outcome": "started",
+            "detail": "runner self-review: diff scope, stability/agents, offline checks all green"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -107,6 +128,36 @@
     {
       "at": "2026-09-25T15:21:04.524Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-25T15:21:24.988Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — dispatching 4 parallel sonnet workers, one per stack pack"
+    },
+    {
+      "at": "2026-09-25T15:38:19.945Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-25T15:38:24.986Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — running offline integrity/lint guard tests scoped to the 4 new packs and shared wiring"
+    },
+    {
+      "at": "2026-09-25T15:38:25.275Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-25T15:39:09.538Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — runner self-review: diff scope, stability/agents, offline checks all green"
+    },
+    {
+      "at": "2026-09-25T15:39:09.813Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
