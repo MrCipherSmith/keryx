@@ -170,6 +170,12 @@ enum, never a guessed or versioned model id. Set
 `.metaproject/tasks.config.json`'s `modelGuidance.claudeSubagentAliases:
 false` to opt a project out and keep `model: inherit` for every tier.
 
+`keryx update` does not rewrite subagent files you already exported. The alias
+reaches an existing `.claude/agents/*.md` file on the next explicit
+`keryx agents export --runtime claude` or `keryx integrations` sync, which
+replaces an unedited exported file without a prompt. Set the opt-out before
+that run if you want those files to stay on `inherit`.
+
 ## The prompt-defense baseline
 
 Every compiled agent — regardless of export target — gets one shared,
