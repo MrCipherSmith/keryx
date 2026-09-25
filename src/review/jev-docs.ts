@@ -376,7 +376,6 @@ export interface DocsNoulQuestion {
 }
 
 export const JEV_DOCS_TOKEN_BUDGET = 64_000;
-const QUESTIONS_BUDGET_FRACTION = 0.5;
 /** Per-hunk chars kept in the question's own state — a section can link to a large hunk; only the changed lines matter to the judgement. */
 const HUNK_TEXT_CHARS = 2_000;
 /**
@@ -433,18 +432,48 @@ export interface DocsBatch {
   readonly questions: Readonly<Record<string, DocsNoulQuestion>>;
 }
 
-/** AC1: batch linked sections into as few `/systemone` requests as fit the 64k budget — mirrors `src/review/conform-jev.ts`'s `batchConformItems` shape. */
+/**
+ * Rebuilds one batch's `state`/`questions` from a subset of items. Used by
+ * {@link batchDocsSections}'s own initial pack, and by the adapter's
+ * split-and-retry-once path (`src/commands/review-jev-docs.ts`): a batch that
+ * comes back with a real vendor `HTTP 400 max_tokens_exceeded` is split into
+ * two item lists and each is rebuilt through this SAME function — never a
+ * second, bespoke batch-assembly path that could drift from this one. Same
+ * shape `buildContractClaimBatch` (`src/review/jev-contract.ts`) and
+ * `buildTriageBatch` (`src/review/jev-triage.ts`) each independently use.
+ */
+export function buildDocsBatch(items: readonly LinkedSection[]): DocsBatch {
+  return {
+    items,
+    state: items.map(renderSectionFacts).join("\n\n"),
+    questions: Object.fromEntries(items.map((item) => [docsQuestionKey(item), questionFor(item)])),
+  };
+}
+
+/**
+ * Conservative on purpose — same reasoning `jev-contract.ts`'s own
+ * `BATCH_BUDGET_FRACTION` documents: `estimateTokens` is a chars÷4 heuristic
+ * that UNDERESTIMATES a code-shaped diff hunk, and a live run of this
+ * reviewer against PR #743 (flow's own default settings) hit a real vendor
+ * `HTTP 400 max_tokens_exceeded` with no split-retry to recover from it — the
+ * whole run crashed instead of degrading. 0.4 of the 64k budget (not the
+ * previous 0.5, and applied to state+questions TOGETHER, not just questions'
+ * own share) leaves the same headroom `jev-contract.ts` and `jev-triage.ts`
+ * already carry.
+ */
+export const DOCS_BATCH_BUDGET_FRACTION = 0.4;
+/** Mirrors `jev-contract.ts`'s own `MAX_CLAIMS_PER_BATCH`: fewer sections per batch means a smaller `state` per Jev call, independent of the token-budget fraction above — a section's own evidence (bounded by `SECTION_TEXT_CHARS`/`HUNK_TEXT_CHARS`) can still be large enough to dominate a batch of even 2. */
+export const MAX_SECTIONS_PER_BATCH = 3;
+
+/** AC1: batch linked sections into as few `/systemone` requests as fit the conservative 40%-of-64k budget, at most {@link MAX_SECTIONS_PER_BATCH} sections each — mirrors `src/review/conform-jev.ts`'s `batchConformItems` shape. */
 export function batchDocsSections(items: readonly LinkedSection[]): DocsBatch[] {
   const batches: DocsBatch[] = [];
   let current: LinkedSection[] = [];
+  const effectiveBudget = JEV_DOCS_TOKEN_BUDGET * DOCS_BATCH_BUDGET_FRACTION;
 
   const flush = (): void => {
     if (current.length === 0) return;
-    batches.push({
-      items: current,
-      state: current.map(renderSectionFacts).join("\n\n"),
-      questions: Object.fromEntries(current.map((item) => [docsQuestionKey(item), questionFor(item)])),
-    });
+    batches.push(buildDocsBatch(current));
     current = [];
   };
 
@@ -454,8 +483,7 @@ export function batchDocsSections(items: readonly LinkedSection[]): DocsBatch[] 
     const questionsTokens = estimateTokens(
       attempt.map((linked) => `${docsQuestionKey(linked)}:noul:${questionFor(linked).instructions}`).join("\n"),
     );
-    const withinQuestionsShare = questionsTokens <= JEV_DOCS_TOKEN_BUDGET * QUESTIONS_BUDGET_FRACTION;
-    if (current.length > 0 && (stateTokens + questionsTokens > JEV_DOCS_TOKEN_BUDGET || !withinQuestionsShare)) {
+    if (current.length > 0 && (attempt.length > MAX_SECTIONS_PER_BATCH || stateTokens + questionsTokens > effectiveBudget)) {
       flush();
       current = [item];
     } else {

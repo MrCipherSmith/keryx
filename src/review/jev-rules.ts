@@ -432,6 +432,62 @@ export function clauseFileKindApplicability(
 }
 
 // ---------------------------------------------------------------------------
+// API/endpoint scope gating (precision fix, live PR #743's own run) — a rule
+// source whose OWN declared scope is HTTP/API endpoints applies to endpoint
+// code, not every changed file. The live check found `api-contracts.mdc`'s
+// "required fields for every endpoint" clause paired against
+// `src/standard/command-registry.ts`, a CLI command registry with no HTTP
+// endpoint anywhere in it — the SAME shape of mistake `clauseFileKindApplic-
+// ability` above already fixes for docs vs code (a source's OWN declared
+// scope, applied everywhere it declares no narrower restriction), just for a
+// different scope axis. An ADDITIONAL gate alongside `clauseApplicability`'s
+// existing path/stack check — never a replacement for it — keyed on the
+// SOURCE's own detected API scope versus whether the CHANGED FILE itself
+// looks like an API surface.
+// ---------------------------------------------------------------------------
+
+/** Whole-word, case-insensitive — matched against a rule source's declared path globs (`metadata.paths`), its own title (frontmatter `description`, else its first `#` heading — {@link ruleSourceTitle}), and its file path, the same three places `classifyRuleSourceCategory` and AC9's live check already read a rule's own stated scope from. */
+export const API_SCOPE_TERMS = ["api", "endpoint", "rest", "http", "openapi"] as const;
+
+/** AC-follow-up 5: is `source`'s own declared scope HTTP/API endpoints? A path glob naming `api/**`, a description/title mentioning "REST", "OpenAPI", "HTTP", or a filename like `api-contracts.mdc` are each sufficient on their own. */
+export function isApiScopedRuleSource(source: RuleSourceFile): boolean {
+  const haystack = `${(source.declaredPaths ?? []).join(" ")} ${ruleSourceTitle(source.text)} ${source.path}`.toLowerCase();
+  return API_SCOPE_TERMS.some((term) => new RegExp(`\\b${term}\\b`).test(haystack));
+}
+
+/** A directory literally named `api`, `routes`, `controllers`, `handlers`, or `server` — the conventional homes for HTTP endpoint code in this codebase's own stack and the frameworks it's paired against. */
+const API_SURFACE_DIR_RE = /(^|\/)(api|routes|controllers|handlers|server)\//i;
+/** An `import ... from "<http-framework>"` in the hunk's own changed text — evidence the hunk itself wires up an HTTP endpoint, independent of its path. */
+const HTTP_FRAMEWORK_IMPORT_RE = /\bfrom\s*["'](?:express|fastify|koa|hono|@hono\/[\w-]+|hapi|@nestjs\/(?:common|core)|next\/server|h3)["']/;
+
+/** Does `region` look like an API surface — a path under one of {@link API_SURFACE_DIR_RE}'s directories, or a hunk that imports a known HTTP framework? A fact about the HUNK, independent of any rule source. */
+export function looksLikeApiSurfaceHunk(region: ScopedRegion): boolean {
+  return API_SURFACE_DIR_RE.test(region.path) || HTTP_FRAMEWORK_IMPORT_RE.test(region.text);
+}
+
+/** May ANY hunk-checkable clause of `source` be paired against `region` at all, from the API-scope gate's point of view? A source that is not API-scoped (`isApiScopedRuleSource`) is untouched by this gate — always applicable. Same shape as {@link ApplicabilityDecision}, kept as its own named type so a caller can tell which gate produced a refusal from the type alone, same discipline `FileKindApplicabilityDecision` already follows for the file-kind gate. */
+export interface ApiScopeApplicabilityDecision {
+  readonly applicable: boolean;
+  readonly reason: string;
+}
+
+/** AC-follow-up 5: is `source` (an API-scoped rule source, or not) applicable to `region`? A source not API-scoped always passes this gate untouched — it is additive, never a replacement for `clauseApplicability`'s existing path/stack check. */
+export function clauseApiScopeApplicability(source: RuleSourceFile, region: ScopedRegion): ApiScopeApplicabilityDecision {
+  if (!isApiScopedRuleSource(source)) {
+    return { applicable: true, reason: "rule source is not API/endpoint-scoped — this gate does not apply" };
+  }
+  if (looksLikeApiSurfaceHunk(region)) {
+    return { applicable: true, reason: `rule source is API/endpoint-scoped and ${region.path} looks like an API surface` };
+  }
+  return {
+    applicable: false,
+    reason:
+      `rule source is API/endpoint-scoped (its declared paths/description/title name one of: ${API_SCOPE_TERMS.join(", ")}) but ${region.path} ` +
+      "does not look like an API surface (no api/routes/controllers/handlers/server path segment, and this hunk imports no known HTTP framework)",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Pair selection (AC3): every (region, rule clause) pair the applicability
 // decision admits, capped at `--max-calls`, deterministic order, nothing
 // dropped silently.
@@ -576,6 +632,11 @@ export function selectRuleHunkPairs(
       const decision = clauseApplicability(source, region.path, detectedStack);
       if (!decision.applicable) {
         notApplicable.push({ region, ruleId: source.path, reason: decision.reason });
+        continue;
+      }
+      const apiScopeDecision = clauseApiScopeApplicability(source, region);
+      if (!apiScopeDecision.applicable) {
+        notApplicable.push({ region, ruleId: source.path, reason: apiScopeDecision.reason });
         continue;
       }
       let sawHunkCheckable = false;
