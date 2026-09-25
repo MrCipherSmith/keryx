@@ -545,3 +545,35 @@ conflated them.
 pass, 0 fail); `tsc --noEmit` and `eslint` clean; `checkStablePackGate`
 for `go`/`python` still pass; reviewer's own `i11.ts` re-run shows 0
 FAILs (the one metric round 1 could not fully clear).
+- 2026-09-25T19:00:23.429Z - task-attempt: T15: started (attempt 3) — narrow opus verification of review round 2 fixes
+
+## Round 2 verification: mergeable (0 blocker/0 major), three small follow-ups
+
+The round-2 opus verification confirmed B1 and M2 both fully closed (its
+own description-level near-copy check, `scratchpad/i12.ts`, also came back
+clean) and reported the PR mergeable. Three small, non-blocking items were
+requested before merging, addressed in one follow-up commit — none of
+these are new blocker/major findings, and none touches the honest-gate
+content (run 1 stays official, no gate re-run):
+
+- W1-stack-catalog.md's "Kept" bullet (the list of description/triggers
+  additions that survived both review rounds) was missing
+  `ci-pipeline-build-fix`'s "Not for a failure in the application code..."
+  clause, and quoted `docker-k8s-terraform-review`'s kept clause loosely
+  rather than verbatim -- both fixed with exact current file text.
+- `authoring-lint.test.ts`'s regression test for the `globMatchToken`
+  4-character floor tested `**/py.*` against
+  `STACK_EXTENSIONS["docker-k8s-terraform"]`, which never contained `"py"`
+  at all -- the test passed, but not because the floor did anything; it
+  would have passed identically without the floor. Retargeted to
+  `STACK_EXTENSIONS.python` (which genuinely lists `"py"`), so the test
+  now actually exercises the collision the floor exists to prevent.
+- `ci-pipeline-implementation/SKILL.md`'s Step 4 verification bullet still
+  had the vague, GitHub/GitLab-conflating "no `${{ github.event.* }}`/
+  untrusted variable is interpolated directly inside a `run:`/`script:`
+  string" — split into the two real checks (GitHub `run:` + `${{ }}`;
+  GitLab `script:` + unquoted/`eval` use), matching every other place in
+  this pack that already got this correction.
+
+Verified: full offline sweep green (3211 pass); `tsc --noEmit`/`eslint`
+clean.

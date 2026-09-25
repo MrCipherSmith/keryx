@@ -244,12 +244,16 @@ Rule body.
     // accidentally collide with an unrelated stack's ordinary dotted
     // extension (e.g. "py" from STACK_EXTENSIONS.python) even though the
     // glob doesn't mean *.py at all. The reversed branch now requires at
-    // least 4 characters, mirroring I7b's own anti-collision floor.
+    // least 4 characters, mirroring I7b's own anti-collision floor. Tested
+    // against STACK_EXTENSIONS.python specifically (not docker-k8s-terraform,
+    // whose allowlist never contained "py" at all and so could not actually
+    // exercise the collision this floor prevents -- that first version of
+    // this test passed vacuously, for the wrong reason).
     test("rejects a short Name.* glob even when the name coincides with another stack's ordinary extension", () => {
       const content = good.replace('paths: ["**/*.py"]', 'paths: ["**/py.*"]');
       const findings = lintStackRule(content, {
         path: "/tmp/pack/rules/coding-style.mdc",
-        allowedExtensions: STACK_EXTENSIONS["docker-k8s-terraform"]!,
+        allowedExtensions: STACK_EXTENSIONS.python!,
       });
       expect(findings.map((f) => f.rule)).toContain("stack-rule-paths-scope");
     });

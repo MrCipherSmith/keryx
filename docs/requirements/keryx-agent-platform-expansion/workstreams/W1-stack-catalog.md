@@ -1442,11 +1442,16 @@ round 1 blocker/major was genuinely fixed, but returned its own findings
     without echoing specific failing-prompt wording —
     `docker-k8s-terraform-build-fix`'s "Not for an application-code build
     failure... (a Go/TypeScript/Python compile or test error)";
-    `ci-pipeline-build-fix`'s "not for a Dockerfile/Kubernetes/Terraform
-    build or validation failure" and "not for authoring a new
-    workflow/pipeline from scratch" clauses;
-    `docker-k8s-terraform-review`'s "never builds, deploys, or runs...
-    (use the deploy quality skill for that)" clause. `i11.ts` (the
+    `ci-pipeline-build-fix`'s "Not for a failure in the application code
+    the pipeline runs (a Python, TypeScript, Go, or other language
+    compile/import/test error -- fix the code, or use that language's own
+    build-fix skill)", "not for a Dockerfile/Kubernetes/Terraform build or
+    validation failure" and "not for authoring a new workflow/pipeline
+    from scratch" clauses;
+    `docker-k8s-terraform-review`'s "Read-only, no edits: never builds an
+    image, runs a deployment/release (use the `deploy` quality skill for
+    that), or resolves a failing build/validate/plan (use
+    `docker-k8s-terraform-build-fix` for that)" clause. `i11.ts` (the
     reviewer's own near-copy measurement script) shows 0 FAILs against the
     final state.
 - **The first run is therefore the official result, unchanged.** Per

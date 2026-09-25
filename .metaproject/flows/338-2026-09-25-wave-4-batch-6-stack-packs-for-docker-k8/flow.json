@@ -10,7 +10,7 @@
   "title": "Wave 4 batch 6: stack packs for docker-k8s-terraform, ci-github-gitlab",
   "status": "in-progress",
   "createdAt": "2026-09-25T15:14:53.313Z",
-  "updatedAt": "2026-09-25T18:46:11.105Z",
+  "updatedAt": "2026-09-25T19:00:23.429Z",
   "source": {
     "type": "description",
     "ref": null
@@ -339,7 +339,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 3,
         "log": [
           {
             "at": "2026-09-25T18:14:42.488Z",
@@ -350,6 +350,11 @@
             "at": "2026-09-25T18:46:11.105Z",
             "outcome": "started",
             "detail": "narrow opus verification of review round 1 fixes"
+          },
+          {
+            "at": "2026-09-25T19:00:23.429Z",
+            "outcome": "started",
+            "detail": "narrow opus verification of review round 2 fixes"
           }
         ]
       },
@@ -660,6 +665,11 @@
       "at": "2026-09-25T18:46:11.105Z",
       "event": "task-attempt",
       "detail": "T15: started (attempt 2) — narrow opus verification of review round 1 fixes"
+    },
+    {
+      "at": "2026-09-25T19:00:23.429Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 3) — narrow opus verification of review round 2 fixes"
     }
   ],
   "signatures": [

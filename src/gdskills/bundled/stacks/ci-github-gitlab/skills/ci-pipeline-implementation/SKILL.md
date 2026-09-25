@@ -92,8 +92,10 @@ summary.
   project has it configured; otherwise re-read the file against
   `rules/security.mdc`'s anti-pattern list line by line.
 - Confirm every `uses:` line names a full commit SHA, not a tag.
-- Confirm no `${{ github.event.* }}`/untrusted variable is interpolated
-  directly inside a `run:`/`script:` string.
+- Confirm no `${{ github.event.* }}` is interpolated directly inside a
+  `run:` string (GitHub Actions), and no untrusted GitLab CI/CD variable
+  is used unquoted or concatenated into an `eval`/`sh -c` string in
+  `script:`.
 - Confirm the `permissions:` block (or the absence of workflow-level
   `write-all`) matches what Step 2 decided.
 
