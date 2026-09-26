@@ -14,6 +14,7 @@ import {
 } from "./review-jev-edit-guard";
 
 let dir: string;
+let emptyConfigDir: string;
 let logLines: string[];
 let errorLines: string[];
 let originalLog: typeof console.log;
@@ -21,6 +22,7 @@ let originalError: typeof console.error;
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "keryx-edit-guard-cli-"));
+  emptyConfigDir = mkdtempSync(path.join(tmpdir(), "keryx-edit-guard-cfg-"));
   mkdirSync(path.join(dir, ".metaproject", "rules", "core"), { recursive: true });
   logLines = [];
   errorLines = [];
@@ -38,6 +40,7 @@ afterEach(() => {
   console.log = originalLog;
   console.error = originalError;
   rmSync(dir, { recursive: true, force: true });
+  rmSync(emptyConfigDir, { recursive: true, force: true });
 });
 
 function writeConfig(content: unknown): void {
@@ -187,6 +190,7 @@ describe("runJevEditGuardHook: fails open, always exits clean", () => {
       dir,
       deps({
         env: {},
+        configDir: emptyConfigDir,
         fetchFn: (async () => {
           fetchCalled = true;
           return new Response("{}", { status: 200 });
@@ -198,6 +202,20 @@ describe("runJevEditGuardHook: fails open, always exits clean", () => {
     const records = await readEditGuardLogRecords(dir);
     expect(records[0]!.status).toBe("skipped");
     expect(records[0]!.reason).toContain("credential");
+  });
+
+  test("a key saved in keryx's own config (not the env, not the project dir) is found and used", async () => {
+    // Regression: the credential gate used to look for auth.json in the PROJECT
+    // root, so a hook run with an empty env stayed silent even with a saved key.
+    writeConfig({ review: { jev: { edit_guard: true, edit_guard_threshold: 0.5 } } });
+    writeRule();
+    writeFileSync(path.join(emptyConfigDir, "auth.json"), JSON.stringify({ openrouterKey: "sk-or-saved-test-key" }), { mode: 0o600 });
+    const calls = { count: 0 };
+    await runJevEditGuardHook(dir, deps({ env: {}, configDir: emptyConfigDir, fetchFn: fakeJevFetch(0.9, calls) }));
+    expect(calls.count).toBeGreaterThan(0);
+    expect(logLines).toHaveLength(1);
+    const records = await readEditGuardLogRecords(dir);
+    expect(records.at(-1)!.status).not.toBe("skipped");
   });
 
   test("a Jev error (e.g. a rejected credential) fails open: silent, exit stays 0, logged as error", async () => {

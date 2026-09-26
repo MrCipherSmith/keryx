@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.8] — 2026-09-26
+
+### Fixed
+- **The Jev edit guard now finds the OpenRouter key saved in keryx's config.**
+  It looked for `auth.json` in the project folder instead of keryx's own data
+  folder, so with no `OPENROUTER_API_KEY` in the environment it silently
+  skipped every edit. The key it finds is also passed to its Jev calls. A
+  regression test covers a saved key with an empty environment.
+
 ## [0.3.7] — 2026-09-26
 
 ### Added
