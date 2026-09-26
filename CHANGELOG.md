@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.12] — 2026-09-26
+
+### Fixed
+- **`keryx shell` no longer demands another tool call after a completed answer.**
+  The continuation guard treated words such as «проверки», «проверял» and
+  «сделано» as a promise to act, then emitted a misleading warning that the
+  model could not call tools. It now matches explicit first-person action
+  words instead. An unexecuted «Проверю…» still requests a tool call.
+
 ## [0.3.11] — 2026-09-26
 
 ### Added

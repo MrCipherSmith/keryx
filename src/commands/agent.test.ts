@@ -852,6 +852,41 @@ test("runAgentTurn reprompts twice, escalating, when the model narrates again", 
   expect(requests.length).toBe(4);
 });
 
+test("runAgentTurn accepts a completed report containing action stems", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "Проверки завершены. Я проверял журнал; всё сделано." }, { kind: "model_end" }],
+  ]);
+  const { io, system } = collectingIo();
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, baseDeps(provider), history, "продолжай");
+  expect(requests).toHaveLength(2);
+  expect(system.join("")).not.toContain("did not emit a tool call");
+  expect(history.filter((m) => m.role === "user" && m.content.startsWith("[system]"))).toHaveLength(0);
+});
+
+test("runAgentTurn still reprompts an unexecuted future step", async () => {
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "Проверю журнал релизов." }, { kind: "model_end" }],
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "Готово." }, { kind: "model_end" }],
+  ]);
+  const { io, toolCalls } = collectingIo();
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, baseDeps(provider), history, "продолжай");
+  expect(requests).toHaveLength(3);
+  expect(toolCalls).toContain("get_cwd");
+  expect(history.some((m) => m.role === "user" && m.content === buildToollessReprompt(1))).toBe(true);
+});
+
 test("runAgentTurn abandons the reprompt budget when the model repeats itself verbatim", async () => {
   const narration = "Посмотрю реализацию 145.";
   const { provider, requests } = scriptedProvider([

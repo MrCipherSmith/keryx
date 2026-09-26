@@ -1262,48 +1262,14 @@ function modelClaimedAction(text: string): boolean {
   }
   const tokens = tokensForActionDetection(text);
   const markers = new Set([
-    "trying",
-    "executing",
-    "running",
-    "starting",
-    "checking",
-    "searching",
-    "scanning",
-    "i",
-    "im",
-    "will",
-    "сейчас",
-    "праюсь",
-    "пыта",
-    "запуска",
-    "выполня",
-    "проверя",
-    "ищи",
-    "ищет",
-    "прогони",
+    "trying", "executing", "running", "starting", "checking", "searching", "scanning", "will",
+    "сейчас", "пытаюсь", "запускаю", "запущу", "выполняю", "выполню",
+    "проверяю", "проверю", "ищу", "прогоню", "сделаю", "посмотрю",
+    "найду", "изучу", "гляну", "открою", "покажу", "создам",
+    "исправлю", "добавлю", "обновлю", "реализую",
   ]);
-  // Root-level prefixes cover both the imperfective/present ("проверяю") and
-  // the perfective future ("проверю") first-person forms Russian speakers use
-  // interchangeably to announce a next step.
-  const prefixes = [
-    "пыта",
-    "запуска",
-    "выполня",
-    "провер",
-    "сдела",
-    "посмотр",
-    "найд",
-    "изуч",
-    "гля",
-    "откро",
-    "покаж",
-    "созда",
-    "испра",
-    "добав",
-    "обновля",
-    "реализу",
-  ];
-  return tokens.some((token) => markers.has(token) || prefixes.some((prefix) => token.startsWith(prefix)));
+  // Match whole first-person action words: nouns and past-tense reports are not promises.
+  return tokens.some((token) => markers.has(token));
 }
 
 /**
