@@ -167,6 +167,14 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx routing profile list [--json]\n",
     "  keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>\n",
     "  routing   Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set)\n",
+    // Flow 346: `keryx external` — the EXTERNAL switch, a brand-new verb, so
+    // both a USAGE_BODY block and a Commands: summary row are added (same
+    // shape as flow 305's `routing`, above).
+    "  keryx external on [--project] | off [--project]\n",
+    "                                               Block/allow sending private work (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed providers/models\n",
+    "  keryx external status [--json]              Effective on/off, source, Jev credential availability, and what is blocked right now\n",
+    "  keryx external list [--json]                 The effective block list (providers, model patterns) and where it came from\n",
+    "  external  Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on, off, status, list)\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

@@ -116,6 +116,7 @@ import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
 import { routingCommand } from "./commands/routing";
+import { externalCommand } from "./commands/external";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
 import { forgettingCommand } from "./commands/forgetting";
@@ -157,6 +158,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   projects: projectsCommand,
   providers: providersCommand,
   routing: routingCommand,
+  external: externalCommand,
   auth: authCommand,
   serve: serveCommand,
   update: updateCommand,
@@ -323,6 +325,10 @@ export const USAGE_BODY = `Usage:
   keryx routing trust
   keryx routing profile list [--json]
   keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>
+  keryx external on [--project] | off [--project]
+                                               Block/allow sending private work (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed providers/models
+  keryx external status [--json]              Effective on/off, source, Jev credential availability, and what is blocked right now
+  keryx external list [--json]                 The effective block list (providers, model patterns) and where it came from
   keryx auth list [--json]
   keryx auth login <provider>
   keryx auth logout <provider>
@@ -474,6 +480,7 @@ Commands:
   sync      Reconcile graph/wiki/memory with the current code, and wire the git hooks
   providers Providers this operator has configured, and cross-family review eligibility
   routing   Category -> model routing table (list, set, unset, trust) and the model-profile catalogue (profile list, profile set)
+  external  Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on, off, status, list)
   auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
   orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
   agents    Manage optional global agent bootstrap instructions, and the agent catalog (list/show/export/verify/generate)

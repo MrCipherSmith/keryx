@@ -3,6 +3,46 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Added
+- **The EXTERNAL switch — `/external on|off` and `keryx external
+  on|off|status|list`.** One general control that stops keryx from sending
+  private work (code, diffs, CI-log excerpts, prompts, rule text) to
+  Jev/TypeSafe and to other model vendors/tiers the operator has not
+  chosen to trust. A per-user default (`"on"`, unchanged pre-existing
+  behavior) with an optional per-project override
+  (`.metaproject/tasks.config.json`'s `external` key, which always wins).
+  Enforced at the Jev client (`callJevSystemOne` — covers the edit guard,
+  every `review-jev-*` command, `conform`, `ci-triage`, `jev-select`, the
+  routing classifier and the turn guard) and at the routing/model-selection
+  choke point (`resolveCategoryDetailed`'s connected predicate), before any
+  network I/O. The block list is an editable JSON file
+  (`<keryx config dir>/external-providers.json`), created with built-in
+  defaults on first use: Jev/TypeSafe, `deepseek`/`zai`/`zai-coding`/
+  `moonshot` (keryx's own direct provider ids) and the equivalent OpenRouter
+  vendor-prefix patterns (also covering `minimax`, `qwen`/`alibaba`,
+  `baidu`, `tencent`, `bytedance`, `01-ai`, which have no direct keryx
+  provider), OpenRouter's free tier (`*:free`), and any model id containing
+  `muse`. The mainstream paid US providers connected directly (Anthropic,
+  OpenAI, Google, GitHub Copilot, xAI, Groq) stay off the default list.
+- **Jev's recommended review profile is now on by default wherever Jev is
+  reachable.** `review.jev.ci_triage`, `.select`, and `.edit_guard` default
+  to `true` (through one shared resolver every reader goes through) as
+  soon as `/external` is on and a Jev/OpenRouter credential resolves — no
+  per-project opt-in required. An explicit `true`/`false` in
+  `.metaproject/tasks.config.json` always wins. `keryx review jev-profile
+  show` now names each key's effective source (`explicit`/
+  `default-because-jev-available`/`off-by-external`). A one-time notice —
+  "Jev is on here: redacted code/CI snippets go to OpenRouter/TypeSafe.
+  Turn off: `/external off`" — is shown once per project, on CLI stderr,
+  the first time a step runs because of the default rather than an
+  explicit opt-in, and never repeats after that.
+- TUI: a `/external` slash command (bare prints the effective state,
+  source, Jev credential availability and block list; `on`/`off` toggles
+  the per-user setting) and a sidebar `external: on`/`external: off`
+  indicator.
+
 ## [0.3.10] — 2026-09-26
 
 ### Fixed

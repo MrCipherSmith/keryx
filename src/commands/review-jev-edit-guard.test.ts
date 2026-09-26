@@ -166,11 +166,18 @@ describe("runJevEditGuardHook: flagged -> feedback, silent otherwise", () => {
 });
 
 describe("runJevEditGuardHook: fails open, always exits clean", () => {
-  test("disabled (no tasks.config.json) -> silent, no network call at all", async () => {
+  test("disabled (no tasks.config.json, no credential) -> silent, no network call at all", async () => {
+    // Flow 346: `edit_guard` is now one of the three keys that default ON
+    // when a Jev credential is available and /external is on, even with no
+    // explicit config — so THIS test (proving the "nothing configured,
+    // nothing happens" floor) must also strip the credential `deps()`
+    // otherwise supplies by default, or it would exercise the new default-on
+    // path instead of the "disabled" one it means to test.
     let fetchCalled = false;
     await runJevEditGuardHook(
       dir,
       deps({
+        env: {},
         fetchFn: (async () => {
           fetchCalled = true;
           return new Response("{}", { status: 200 });
@@ -181,6 +188,30 @@ describe("runJevEditGuardHook: fails open, always exits clean", () => {
     expect(fetchCalled).toBe(false);
     const records = await readEditGuardLogRecords(dir);
     expect(records[0]!.status).toBe("skipped");
+  });
+
+  test("Flow 346: edit_guard defaults on with no explicit config when a credential is available — the one-time consent notice fires once, then stays silent", async () => {
+    writeRule();
+    const calls = { count: 0 };
+    // No `writeConfig` at all: `review.jev.edit_guard` is unset, so this
+    // exercises the DEFAULT (not an explicit opt-in) — `deps()`'s FAKE_ENV
+    // credential plus `/external`'s built-in "on" default is exactly the
+    // "default-because-jev-available" path `resolveJevProfileFlag` names.
+    await runJevEditGuardHook(dir, deps({ configDir: emptyConfigDir, fetchFn: fakeJevFetch(0.9, calls) }));
+    expect(calls.count).toBeGreaterThan(0);
+    expect(errorLines.some((line) => line.includes("Jev is on here") && line.includes("/external off"))).toBe(true);
+
+    // A second run over the SAME project (same `dir`/`emptyConfigDir`) never
+    // repeats the notice. `.metaproject/data` (the edit-guard log) is cleared
+    // first, same as the "threshold is respected" test above — otherwise the
+    // hook's own per-file dedup, unrelated to this flow, would skip the Jev
+    // call outright and the assertion below would prove nothing.
+    errorLines = [];
+    rmSync(path.join(dir, ".metaproject", "data"), { recursive: true, force: true });
+    const calls2 = { count: 0 };
+    await runJevEditGuardHook(dir, deps({ configDir: emptyConfigDir, fetchFn: fakeJevFetch(0.9, calls2) }));
+    expect(calls2.count).toBeGreaterThan(0);
+    expect(errorLines.some((line) => line.includes("Jev is on here"))).toBe(false);
   });
 
   test("missing credential (env option, never the real machine key) -> silent, no network call", async () => {

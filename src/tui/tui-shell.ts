@@ -127,6 +127,13 @@ import {
 } from "./routing-classifier-source";
 import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
 import type { RoutingCategory } from "../harness/routing/table";
+// Flow 346: the EXTERNAL switch's `/external on|off` command + status line —
+// no modal (see the flow's own AC8 scope note); the sidebar row and bare
+// status text are rendered from `external-command.ts`.
+import { EXTERNAL_COMMAND, isExternalCommand, renderExternalSidebarValue, renderExternalStatusLines } from "./external-command";
+import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
+import { loadExternalProvidersConfig } from "../lib/external-providers";
+import { resolveJevApiKey } from "../harness/decision/jev-client";
 // flow 343: the Jev EDIT GUARD's `/editguard` modal — everything else
 // (the CLI hook, the config/log I/O) lives in
 // `../commands/review-jev-edit-guard.ts`/`../review/jev-edit-guard*.ts`.
@@ -4177,6 +4184,15 @@ export async function launchTuiAgentShell(opts: {
     // paint happens after an async read rather than synchronously here.
     const sbEditGuard = new otui.BoxRenderable(r, { id: "sb-edit-guard", flexDirection: "column", flexShrink: 0 });
     sidebar.add(sbEditGuard);
+    // Flow 346: "External" row — always shows one line ("external: on" /
+    // "external: off"), unlike the zero-rows-while-off idiom above, since
+    // this is a general switch worth seeing even in its default state.
+    // Created here (sidebar position); filled by `refreshExternalSidebar`,
+    // defined below once `externalStatus` exists. Its state can come from a
+    // PROJECT file (`.metaproject/tasks.config.json`'s `external` override),
+    // so its first paint happens after an async read, like `sbEditGuard`.
+    const sbExternal = new otui.BoxRenderable(r, { id: "sb-external", flexDirection: "column", flexShrink: 0 });
+    sidebar.add(sbExternal);
     // Multi-agent / page-worker fleet (enrich swarm + future harness subagents).
     // Live activity: main agent phase + optional enrich/subagent fleet.
     // Yellow when blocked (user must act), red on failure — not cryptic glyphs only.
@@ -4829,6 +4845,65 @@ export async function launchTuiAgentShell(opts: {
         })
         .catch((error: unknown) => {
           io.onSystem?.(`editguard: ${error instanceof Error ? error.message : String(error)}\n`);
+        });
+    };
+
+    // --- flow 346: the EXTERNAL switch ---------------------------------------
+    // Per-user default (`ShellConfig.external`), overridable per PROJECT
+    // (`.metaproject/tasks.config.json`'s `external` key, which always wins —
+    // `resolveExternalSetting`, `../lib/external-switch.ts`). `/external`
+    // alone prints the full status block (state/source/credential/block
+    // list — no modal, see the flow's own AC8 scope note); `/external on|off`
+    // toggles + persists the PER-USER layer only, mirroring `/guard`/`/route`.
+    const externalProjectDir = (): string => opts.session?.cwd ?? process.cwd();
+    let externalStatus: ResolvedExternalSetting = { value: "on", source: "default" };
+    const loadExternalStatus = (): Promise<ResolvedExternalSetting> => resolveExternalSetting({ cwd: externalProjectDir() });
+    const refreshExternalSidebar = (): void => {
+      clearTranscriptChildren(sbExternal);
+      sbExternal.add(new otui.TextRenderable(r, { id: "sb-external-k", content: otui.t`${dimChunk(otui, "External")}`, marginTop: 1 }));
+      sbExternal.add(
+        new otui.TextRenderable(r, {
+          id: "sb-external-v",
+          content: otui.t`${dimChunk(otui, renderExternalSidebarValue(externalStatus))}`,
+          onMouseDown: () => {
+            showExternalStatus();
+          },
+        }),
+      );
+    };
+    refreshExternalSidebar();
+    // A missing/unparsable project config or read failure reads as the
+    // built-in default ("on") — never a startup crash, same posture as
+    // `loadEditGuardStatus` above.
+    void loadExternalStatus()
+      .then((status) => {
+        externalStatus = status;
+        refreshExternalSidebar();
+      })
+      .catch(() => {});
+    /** `/external on|off`: live toggle + persistence of the PER-USER layer only — a project's own override (if any) still wins on the next resolve, exactly as `resolveExternalSetting`'s precedence documents. */
+    const setExternalEnabled = (next: "on" | "off"): void => {
+      writeUserExternalSetting(next);
+      void loadExternalStatus()
+        .then((status) => {
+          externalStatus = status;
+          refreshExternalSidebar();
+          io.onSystem?.(`External: ${status.value}${status.source === "project" ? " (this project overrides the per-user setting)" : ""}\n`);
+        })
+        .catch(() => {});
+    };
+    /** Bare `/external`: the full status block, freshly read. */
+    const showExternalStatus = (): void => {
+      void loadExternalStatus()
+        .then((status) => {
+          externalStatus = status;
+          refreshExternalSidebar();
+          const jevAvailable = resolveJevApiKey(process.env) !== undefined;
+          const { config } = loadExternalProvidersConfig();
+          io.onSystem?.(`${renderExternalStatusLines(status, jevAvailable, config).join("\n")}\n`);
+        })
+        .catch((error: unknown) => {
+          io.onSystem?.(`external: ${error instanceof Error ? error.message : String(error)}\n`);
         });
     };
 
@@ -7891,6 +7966,22 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           showEditGuard();
+          return;
+        }
+        if (isExternalCommand(command.name)) {
+          // flow 346: `/external on|off` toggles + persists the PER-USER
+          // layer; bare `/external` prints the full status block (no modal —
+          // see the flow's own AC8 scope note, mirroring `/route`'s header).
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+          if (arg === "on" || arg === "off") {
+            setExternalEnabled(arg);
+            return;
+          }
+          if (arg.length > 0) {
+            io.onSystem?.(`Unknown /external argument '${arg}'. Usage: ${EXTERNAL_COMMAND} [on|off]\n`);
+            return;
+          }
+          showExternalStatus();
           return;
         }
         if (command.name === "/bus") {

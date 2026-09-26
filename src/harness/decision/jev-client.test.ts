@@ -3,9 +3,11 @@
 
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { saveShellConfig } from "../../lib/shell-config";
+import { ExternalBlockedError } from "../../lib/external-switch";
 import {
   callJevSystemOne,
   DEFAULT_JEV_MODEL,
@@ -579,5 +581,69 @@ describe("bounded retry for transient failures (the live keryx review jev-rules 
     ).rejects.toBeInstanceOf(JevAuthRejectedError);
     expect(fetchFn.calls).toHaveLength(1);
     expect(delays).toEqual([]);
+  });
+});
+
+describe("Flow 346: the EXTERNAL switch's choke point (AC1) — checked before anything else, including credential resolution", () => {
+  test("external off (user-level, via injected dir) -> ExternalBlockedError, and the fake fetch is never called", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-jev-external-off-"));
+    saveShellConfig({ external: "off" }, dir);
+    const fetchFn = fakeFetch({});
+    let caught: unknown;
+    try {
+      await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, dir });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ExternalBlockedError);
+    expect((fetchFn as unknown as { calls: unknown[] }).calls).toHaveLength(0);
+    const err = caught as ExternalBlockedError;
+    // AC2: no stack-trace noise — a plain, readable "skipped: blocked by
+    // /external" message every existing fail-open caller already surfaces
+    // via `error.message`.
+    expect(err.message).toContain("skipped: blocked by /external off");
+    expect(err.message).toContain("Jev/TypeSafe System One");
+    expect(err.message).toContain("/external on");
+  });
+
+  test("checked BEFORE the credential check — off with NO credential at all still raises ExternalBlockedError, not JevCredentialError", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-jev-external-off-nokey-"));
+    saveShellConfig({ external: "off" }, dir);
+    const fetchFn = fakeFetch({});
+    await expect(callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: {}, dir })).rejects.toBeInstanceOf(
+      ExternalBlockedError,
+    );
+    expect((fetchFn as unknown as { calls: unknown[] }).calls).toHaveLength(0);
+  });
+
+  test("external on (the default) -> the call proceeds exactly as before flow 346", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-jev-external-on-"));
+    const fetchFn = fakeFetch({ answers: { warranted: { type: "noul", noul: 0.4 } }, usage: {} });
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, dir });
+    expect(result.answers.warranted).toEqual({ type: "noul", noul: 0.4 });
+    expect((fetchFn as unknown as { calls: unknown[] }).calls).toHaveLength(1);
+  });
+
+  test("an operator who removes \"jev\" from external-providers.json is not blocked, even with external off", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-jev-external-off-no-jev-entry-"));
+    saveShellConfig({ external: "off" }, dir);
+    await Bun.write(path.join(dir, "external-providers.json"), JSON.stringify({ version: 1, providers: [], modelPatterns: [], notes: "" }));
+    const fetchFn = fakeFetch({ answers: { warranted: { type: "noul", noul: 0.4 } }, usage: {} });
+    const result = await callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, dir });
+    expect(result.answers.warranted).toEqual({ type: "noul", noul: 0.4 });
+  });
+
+  test("a project's own external override (via opts.cwd) is checked, not only the user-level setting", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-jev-external-project-cfg-"));
+    const cwd = mkdtempSync(path.join(tmpdir(), "keryx-jev-external-project-cwd-"));
+    // User-level says "on"; the project's own tasks.config.json says "off" and must win.
+    saveShellConfig({ external: "on" }, dir);
+    await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "tasks.config.json"), JSON.stringify({ external: "off" }), "utf8");
+    const fetchFn = fakeFetch({});
+    await expect(
+      callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, { env: ENV_WITH_KEY, dir, cwd }),
+    ).rejects.toBeInstanceOf(ExternalBlockedError);
+    expect((fetchFn as unknown as { calls: unknown[] }).calls).toHaveLength(0);
   });
 });

@@ -146,6 +146,17 @@ export interface ShellConfig {
    * not implied by merely connecting openrouter" rule.
    */
   routingClassifier?: { enabled?: boolean; classifier?: "jev" };
+  /**
+   * Flow 346 — the EXTERNAL switch's per-user default: `"on"` (the
+   * unset/legacy behavior) sends private work to Jev/TypeSafe and any other
+   * connected provider/model as before; `"off"` blocks every destination
+   * listed in `external-providers.json` (`src/lib/external-providers.ts`)
+   * before any network I/O. Persisted by `/external on|off` and `keryx
+   * external on|off` (without `--project`). A project's own
+   * `.metaproject/tasks.config.json` `external` key wins over this one — see
+   * `src/lib/external-switch.ts`'s `resolveExternalSetting`.
+   */
+  external?: "on" | "off";
 }
 
 /**

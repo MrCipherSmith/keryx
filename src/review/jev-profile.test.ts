@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { RECOMMENDED_JEV_PROFILE, currentJevProfile, mergeRecommendedJevProfile, renderJevProfileMarkdown } from "./jev-profile";
+import {
+  JEV_DEFAULT_ON_KEYS,
+  RECOMMENDED_JEV_PROFILE,
+  currentJevProfile,
+  mergeRecommendedJevProfile,
+  renderJevProfileMarkdown,
+  resolveJevProfileFlag,
+} from "./jev-profile";
 
 describe("RECOMMENDED_JEV_PROFILE", () => {
   test("ci_triage, select, and edit_guard are recommended; the rest are not", () => {
@@ -56,6 +63,45 @@ describe("currentJevProfile", () => {
     expect(currentJevProfile({})).toEqual({});
     expect(currentJevProfile({ review: "not an object" })).toEqual({});
     expect(currentJevProfile({ review: { jev: "not an object" } })).toEqual({});
+  });
+});
+
+describe("Flow 346: resolveJevProfileFlag — the ONE place every review.jev.* reader goes through", () => {
+  test("JEV_DEFAULT_ON_KEYS is exactly the recommended trio", () => {
+    expect([...JEV_DEFAULT_ON_KEYS].sort()).toEqual(["ci_triage", "edit_guard", "select"]);
+  });
+
+  test("an explicit value always wins, regardless of external/credential state", () => {
+    expect(resolveJevProfileFlag("ci_triage", true, { externalOn: false, jevAvailable: false })).toEqual({ value: true, source: "explicit" });
+    expect(resolveJevProfileFlag("ci_triage", false, { externalOn: true, jevAvailable: true })).toEqual({ value: false, source: "explicit" });
+  });
+
+  test("a key outside the default-on trio stays off when unset, even with external on and a credential available", () => {
+    expect(resolveJevProfileFlag("risk", undefined, { externalOn: true, jevAvailable: true })).toEqual({ value: false, source: "off" });
+  });
+
+  test("a default-on key, unset, defaults to true when external is on and a credential is available", () => {
+    for (const key of JEV_DEFAULT_ON_KEYS) {
+      expect(resolveJevProfileFlag(key, undefined, { externalOn: true, jevAvailable: true })).toEqual({
+        value: true,
+        source: "default-because-jev-available",
+      });
+    }
+  });
+
+  test("a default-on key, unset, stays off without a credential — reporting \"on\" would lie about what will happen", () => {
+    for (const key of JEV_DEFAULT_ON_KEYS) {
+      expect(resolveJevProfileFlag(key, undefined, { externalOn: true, jevAvailable: false })).toEqual({ value: false, source: "off" });
+    }
+  });
+
+  test("/external off always wins over the default, even with a credential available", () => {
+    for (const key of JEV_DEFAULT_ON_KEYS) {
+      expect(resolveJevProfileFlag(key, undefined, { externalOn: false, jevAvailable: true })).toEqual({
+        value: false,
+        source: "off-by-external",
+      });
+    }
   });
 });
 

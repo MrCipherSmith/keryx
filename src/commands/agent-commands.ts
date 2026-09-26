@@ -308,6 +308,17 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 346: the EXTERNAL switch — blocks/allows sending private work
+    // (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed
+    // providers/models. Bare `/external` prints state/source/effective-list
+    // (what `keryx external status`/`list` show); `/external on|off` toggles
+    // + persists per-user (project override stays CLI/tasks.config.json-only
+    // — same reasoning `/route`'s bare-print/toggle split already uses).
+    name: "/external",
+    description: "Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on|off]",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 344: every `review.jev.*` key next to its measured verdict
     // (CI triage proven; risk/contract measured weaker than a strong model;
     // rules not useful on top of one; scenarios/docs/comments experimental;

@@ -63,11 +63,17 @@ interface GhRunListEntry {
  * something to say rather than an empty panel with no explanation.
  */
 export async function loadCiTriageList(cwd: string, spawn: CiSourceSpawn = defaultSpawn): Promise<CiTriageListRead> {
-  if (!(await readCiTriageEnabled(cwd))) {
+  // Flow 346: computed BEFORE the gate (not after, as `resolveJevApiKey` used
+  // to be called only once a credential was already needed) so the shared
+  // default-on resolver (`resolveJevProfileFlag`) can see whether a
+  // credential is actually available — see `readCiTriageEnabled`'s own doc.
+  const jevAvailable = resolveJevApiKey(process.env) !== undefined;
+  if (!(await readCiTriageEnabled(cwd, { jevAvailable }))) {
     return {
       items: [],
       note:
-        'review.jev.ci_triage is not enabled for this project. Enable it in .metaproject/tasks.config.json ({"review":{"jev":{"ci_triage":true}}}) — CI triage sends a redacted log excerpt to OpenRouter/TypeSafe.',
+        'review.jev.ci_triage is not enabled for this project (default: on when a Jev/OpenRouter credential is available and /external is on). ' +
+        'Enable it explicitly in .metaproject/tasks.config.json ({"review":{"jev":{"ci_triage":true}}}) — CI triage sends a redacted log excerpt to OpenRouter/TypeSafe.',
     };
   }
   const pr = await spawn(["gh", "pr", "view", "--json", "number,headRefName"], cwd);
@@ -150,10 +156,10 @@ export async function runCiTriageForItem(
   fetchFn: typeof fetch = globalThis.fetch,
   signal?: AbortSignal,
 ): Promise<CiTriageRunResult> {
-  if (!(await readCiTriageEnabled(cwd))) {
-    return { ok: false, reason: "review.jev.ci_triage is not enabled for this project." };
-  }
   const apiKey = resolveJevApiKey(process.env);
+  if (!(await readCiTriageEnabled(cwd, { jevAvailable: apiKey !== undefined && apiKey.length > 0 }))) {
+    return { ok: false, reason: "review.jev.ci_triage is not enabled for this project (default: on when a Jev/OpenRouter credential is available and /external is on)." };
+  }
   if (apiKey === undefined || apiKey.length === 0) {
     return { ok: false, reason: "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config." };
   }

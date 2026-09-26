@@ -46,6 +46,8 @@ import type { ChildModelRequest } from "../../child/model";
 import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
 import { loadRoutingConfig } from "../../routing/config";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../../routing/table";
+import { resolveExternalSetting } from "../../../lib/external-switch";
+import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../../../lib/external-providers";
 
 export type SubagentMode = "read_only" | "general";
 
@@ -641,7 +643,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // actually detected is unresolved at that layer; `catalog` (above) is
         // the SAME detection result already computed for tier resolution, so
         // this adds no new network call.
-        const connected = connectedPredicateFrom(catalog);
+        // Flow 346 (design §3): same external-block wrap as `review.ts`'s
+        // "review" category resolution — a subagent-routing entry naming a
+        // blocked provider/model falls through with a notice, never silently.
+        const external = await resolveExternalSetting({ cwd: deps.cwd });
+        const { config: externalConfig } = loadExternalProvidersConfig();
+        const connected = externalAllowedConnectedPredicate(connectedPredicateFrom(catalog), external.value === "on", externalConfig);
         const resolved = resolveCategoryDetailed("subagents", { project: projectRouting.table, user: userRouting.table }, connected);
         if (resolved.rejected !== undefined) {
           emitFleetEvent({

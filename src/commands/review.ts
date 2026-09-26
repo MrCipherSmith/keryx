@@ -89,6 +89,9 @@ import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FIN
 import { loadRoutingConfig } from "../harness/routing/config";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
 import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
+import { resolveExternalSetting } from "../lib/external-switch";
+import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../lib/external-providers";
+import { EXTERNAL_DEFAULT_NOTICE_TEXT, shouldShowExternalDefaultNotice } from "../lib/external-notice";
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
@@ -179,7 +182,7 @@ import {
   computeCiSignals,
   computeCiTriageVerdict,
   extractFailingTestName,
-  readCiTriageEnabled,
+  readCiTriageEnabledDetailed,
   renderCiTriageAdvisory,
   type CiSignalsPrecomputed,
   type CiTriageCriterion,
@@ -1103,7 +1106,13 @@ async function applyReviewRoutingCategory(
   for (const layer of [project, user]) {
     if (layer.error !== undefined) notices.push(layer.error);
   }
-  const connected = connectedPredicateFrom(catalog);
+  // Flow 346 (design §3): a routing-table entry naming an externally-blocked
+  // provider/model reads as "not connected" when `/external` is off — the
+  // SAME fallback-with-notice path AC10 (flow 305) already exercises for an
+  // unconnected provider, never a silent switch.
+  const external = await resolveExternalSetting({ cwd });
+  const { config: externalConfig } = loadExternalProvidersConfig();
+  const connected = externalAllowedConnectedPredicate(connectedPredicateFrom(catalog), external.value === "on", externalConfig);
   const resolved = resolveCategoryDetailed("review", { project: project.table, user: user.table }, connected);
   if (resolved.rejected !== undefined) {
     notices.push(describeFallbackNotice(resolved.rejected.assignment, resolved.assignment));
@@ -1660,20 +1669,29 @@ async function triageOneJob(
 
 /** AC10: the opt-in + credential gate, shared by `--run` and `--eval --live` — both refuse before any read/network call. */
 async function refuseWithoutCiTriageGate(cwd: string): Promise<boolean> {
-  if (!(await readCiTriageEnabled(cwd))) {
+  // AC7: the pre-flight message (no key at all) also names the two places a
+  // key could have come from, even though there is no rejected credential to
+  // attribute yet — consistent phrasing with the AC7 error the live call
+  // raises when OpenRouter itself rejects one. Resolved BEFORE the opt-in
+  // check (flow 346) so the shared default-on resolver can see whether a
+  // credential is actually available — see `readCiTriageEnabled`'s own doc.
+  const { key } = resolveJevApiKeyResolution(process.env);
+  const gate = await readCiTriageEnabledDetailed(cwd, { jevAvailable: key !== undefined && key.length > 0 });
+  if (!gate.value) {
     console.error(
-      "`review.jev.ci_triage` is not enabled for this project (.metaproject/tasks.config.json: " +
-        '`{"review":{"jev":{"ci_triage":true}}}`). CI triage sends a redacted log excerpt to OpenRouter/TypeSafe, ' +
-        "so it is opt-in — nothing was read and no network call was made.",
+      "`review.jev.ci_triage` is not enabled for this project (default: on when a Jev/OpenRouter credential is " +
+        'available and /external is on). Enable it explicitly in .metaproject/tasks.config.json ' +
+        '(`{"review":{"jev":{"ci_triage":true}}}`). CI triage sends a redacted log excerpt to OpenRouter/TypeSafe, ' +
+        "and nothing was read and no network call was made.",
     );
     process.exitCode = 1;
     return true;
   }
-  // AC7: the pre-flight message (no key at all) also names the two places a
-  // key could have come from, even though there is no rejected credential to
-  // attribute yet — consistent phrasing with the AC7 error the live call
-  // raises when OpenRouter itself rejects one.
-  const { key } = resolveJevApiKeyResolution(process.env);
+  // Flow 346, design §5: the one-time consent notice — only for a step that
+  // is about to run BECAUSE OF the default, never for an explicit opt-in.
+  if (gate.source === "default-because-jev-available" && shouldShowExternalDefaultNotice(cwd)) {
+    console.error(EXTERNAL_DEFAULT_NOTICE_TEXT);
+  }
   if (key === undefined || key.length === 0) {
     console.error(
       "OPENROUTER_API_KEY is not set, and no openrouterKey is saved in the keryx shell config: CI triage needs a " +

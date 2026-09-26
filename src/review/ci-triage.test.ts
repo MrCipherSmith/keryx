@@ -1,7 +1,7 @@
 // Flow 306: the core CI-triage logic — question building, state bounding and
 // redaction, verdict computation, advisory rendering, and the opt-in gate.
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -19,6 +19,7 @@ import {
   makeDefaultGitShow,
   normalizeRepoRelativePath,
   readCiTriageEnabled,
+  readCiTriageEnabledDetailed,
   renderCiTriageAdvisory,
   type GitShow,
 } from "./ci-triage";
@@ -219,6 +220,61 @@ describe("AC10: opt-in gate", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("Flow 346: ci_triage default-on through the shared resolveJevProfileFlag", () => {
+  let dir = "";
+  let cfgDir = "";
+
+  afterEach(async () => {
+    if (dir.length > 0) await rm(dir, { recursive: true, force: true });
+    if (cfgDir.length > 0) await rm(cfgDir, { recursive: true, force: true });
+    dir = "";
+    cfgDir = "";
+  });
+
+  async function freshProjectDir(config?: unknown): Promise<string> {
+    dir = await mkdtemp(path.join(tmpdir(), "keryx-ci-triage-default-on-cwd-"));
+    await mkdir(path.join(dir, ".metaproject"), { recursive: true });
+    if (config !== undefined) {
+      await writeFile(path.join(dir, ".metaproject", "tasks.config.json"), JSON.stringify(config), "utf8");
+    }
+    return dir;
+  }
+
+  async function freshConfigDir(): Promise<string> {
+    cfgDir = await mkdtemp(path.join(tmpdir(), "keryx-ci-triage-default-on-cfg-"));
+    return cfgDir;
+  }
+
+  test("unset + external on (default) + a Jev credential available -> defaults to true", async () => {
+    const cwd = await freshProjectDir(undefined);
+    const configDir = await freshConfigDir();
+    const result = await readCiTriageEnabledDetailed(cwd, { jevAvailable: true, configDir });
+    expect(result).toEqual({ value: true, source: "default-because-jev-available" });
+    expect(await readCiTriageEnabled(cwd, { jevAvailable: true, configDir })).toBe(true);
+  });
+
+  test("unset + external on + NO credential available -> stays false", async () => {
+    const cwd = await freshProjectDir(undefined);
+    const configDir = await freshConfigDir();
+    const result = await readCiTriageEnabledDetailed(cwd, { jevAvailable: false, configDir });
+    expect(result).toEqual({ value: false, source: "off" });
+  });
+
+  test("the project's own tasks.config.json external: \"off\" always wins over the default, even with a credential available", async () => {
+    const cwd = await freshProjectDir({ external: "off" });
+    const configDir = await freshConfigDir();
+    const result = await readCiTriageEnabledDetailed(cwd, { jevAvailable: true, configDir });
+    expect(result).toEqual({ value: false, source: "off-by-external" });
+  });
+
+  test("an explicit review.jev.ci_triage: false always wins, even with a credential available and external on", async () => {
+    const cwd = await freshProjectDir({ review: { jev: { ci_triage: false } } });
+    const configDir = await freshConfigDir();
+    const result = await readCiTriageEnabledDetailed(cwd, { jevAvailable: true, configDir });
+    expect(result).toEqual({ value: false, source: "explicit" });
   });
 });
 

@@ -1519,6 +1519,45 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // ---- external (flow 346) -------------------------------------------------
+  // The EXTERNAL switch: block/allow sending private work (code, diffs, CI
+  // logs, prompts) to Jev/TypeSafe and other listed providers/models.
+  // `on`/`off` write the per-user setting (or this project's own override
+  // with `--project`); `status`/`list` are read-only and network-free.
+  {
+    module: "external",
+    command: "external on",
+    summary: "Allow keryx to send private work to Jev/TypeSafe and other connected providers/models (per-user default, or this project's override with --project).",
+    intent: ["включи external", "external on", "разреши jev", "allow jev", "keryx external on"],
+    args: [{ name: "project", type: "bool", required: false, desc: "write this project's own override instead of the per-user default" }],
+    sideEffects: ["writes `external: \"on\"` to auth.json (or, with --project, to .metaproject/tasks.config.json)"],
+  },
+  {
+    module: "external",
+    command: "external off",
+    summary: "Block every destination listed in external-providers.json (Jev/TypeSafe and other listed vendors/models) before any network I/O.",
+    intent: ["выключи external", "external off", "заблокируй jev", "block jev", "keryx external off", "stop sending code to jev"],
+    args: [{ name: "project", type: "bool", required: false, desc: "write this project's own override instead of the per-user default" }],
+    sideEffects: ["writes `external: \"off\"` to auth.json (or, with --project, to .metaproject/tasks.config.json)"],
+  },
+  {
+    module: "external",
+    command: "external status",
+    summary: "The effective on/off state, which layer (project/user/default) set it, whether a Jev credential resolves, and what is blocked right now.",
+    intent: ["external status", "статус external", "заблокирован ли jev", "is jev blocked", "keryx external status"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured state/source/credential/block-list summary" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "external",
+    command: "external list",
+    summary: "The effective block list (provider ids and model-id patterns, each with its reason) and where it came from (default / user-edited file).",
+    intent: ["external list", "список блокировок external", "keryx external list", "what does external block"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured {path, origin, config}" }],
+    json: true,
+    read: true,
+  },
   // ---- retention ----------------------------------------------------------
   {
     module: "retention",

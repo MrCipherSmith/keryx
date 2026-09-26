@@ -14,7 +14,8 @@ import { optionValue } from "../lib/args";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { collectReviewers, PROJECT_REVIEWER_MODULE } from "../review/reviewers";
 import { DEFAULT_CONTEXT_LINES, buildReviewScope } from "../review/scope";
-import { readJevSelectEnabled, readJevSelectSkipBelow, DEFAULT_SELECT_SKIP_BELOW } from "../review/jev-select-config";
+import { readJevSelectEnabledDetailed, readJevSelectSkipBelow, DEFAULT_SELECT_SKIP_BELOW } from "../review/jev-select-config";
+import { EXTERNAL_DEFAULT_NOTICE_TEXT, shouldShowExternalDefaultNotice } from "../lib/external-notice";
 import {
   DEFAULT_SELECT_STATE_BUDGET_TOKENS,
   allKeptFailOpen,
@@ -183,19 +184,28 @@ export async function runJevSelect(args: string[]): Promise<void> {
   // Opt-in gate. UNLIKE every other `review.jev.*` gate, this one never
   // refuses the round — it keeps every candidate and says why, because a
   // selection lever nobody has measured yet must never cost reviewer
-  // coverage on its own account.
-  if (fixturesDir === undefined && !(await readJevSelectEnabled(cwd))) {
+  // coverage on its own account. `apiKey` is resolved BEFORE the gate (flow
+  // 346) so the shared default-on resolver can see whether a credential is
+  // actually available — see `readJevSelectEnabled`'s own doc.
+  const apiKey = fixturesDir === undefined ? resolveJevApiKey(process.env) : undefined;
+  const selectGate =
+    fixturesDir === undefined ? await readJevSelectEnabledDetailed(cwd, { jevAvailable: apiKey !== undefined && apiKey.length > 0 }) : undefined;
+  if (fixturesDir === undefined && !(selectGate?.value ?? false)) {
     const decisions = allKeptFailOpen(
       candidates,
-      `review.jev.select is not enabled for this project (.metaproject/tasks.config.json: {"review":{"jev":{"select":true}}}) — kept (fail-open)`,
+      `review.jev.select is not enabled for this project (default: on when a Jev/OpenRouter credential is available and /external is on; explicit: .metaproject/tasks.config.json {"review":{"jev":{"select":true}}}) — kept (fail-open)`,
     );
     writeOutput(decisions, skipBelow, asJson);
     await writeOut(outPath, decisions, skipBelow);
     return;
   }
+  // Flow 346, design §5: the one-time consent notice — only when this round
+  // is running BECAUSE OF the default, never for an explicit opt-in.
+  if (selectGate?.source === "default-because-jev-available" && shouldShowExternalDefaultNotice(cwd)) {
+    console.error(EXTERNAL_DEFAULT_NOTICE_TEXT);
+  }
 
   if (fixturesDir === undefined) {
-    const apiKey = resolveJevApiKey(process.env);
     if (apiKey === undefined || apiKey.length === 0) {
       const decisions = allKeptFailOpen(
         candidates,
