@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.9] — 2026-09-26
+
+### Changed
+- **`review jev-rules` and the Jev edit guard now find a Claude Code project's
+  own rules.** Auto-discovery adds `.claude/rules/**` and the root `CLAUDE.md`
+  (or `AGENTS.md` when there is no `CLAUDE.md`), with keryx's managed routing
+  block stripped. They pass the same filter that drops process-only rules.
+  Before this, a project that keeps its rules there got no rule checks unless
+  every path was passed with `--rules`.
+
 ## [0.3.8] — 2026-09-26
 
 ### Fixed
