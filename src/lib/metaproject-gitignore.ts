@@ -27,16 +27,33 @@ export async function syncMetaprojectGitignore(projectRoot: string): Promise<voi
   );
   const metaprojectIgnoreLines = new Set(metaprojectIgnoreBlock.split("\n"));
   const withoutExistingManagedBlock = existing.replace(blockPattern, "");
+  // A blanket `.metaproject/` line is the project's own choice when nothing
+  // under .metaproject is tracked: that team keeps the workspace out of git.
+  // Deleting it would make the whole folder show up as untracked and easy to
+  // commit by accident. Only drop it where .metaproject is already tracked.
+  const keepBlanketIgnore = !(await metaprojectIsTracked(projectRoot));
   const withoutLegacyMetaprojectIgnore = withoutExistingManagedBlock
     .split("\n")
     .filter((line) => {
       const trimmed = line.trim();
-      return trimmed !== ".metaproject/" && !metaprojectIgnoreLines.has(trimmed);
+      if (trimmed === ".metaproject/" || trimmed === ".metaproject") return keepBlanketIgnore;
+      return !metaprojectIgnoreLines.has(trimmed);
     })
     .join("\n");
   const next = `${withoutLegacyMetaprojectIgnore.trimEnd()}\n\n${managedBlock}\n`;
   if (existing !== next) {
     await writeContained(projectRoot, ".gitignore", next);
+  }
+}
+
+/** True when git tracks at least one file under `.metaproject/`. No git, or a git error, counts as not tracked. */
+async function metaprojectIsTracked(projectRoot: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "ls-files", "--", ".metaproject"], { cwd: projectRoot, stdout: "pipe", stderr: "ignore" });
+    const out = await new Response(proc.stdout).text();
+    return (await proc.exited) === 0 && out.trim().length > 0;
+  } catch {
+    return false;
   }
 }
 

@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.10] — 2026-09-26
+
+### Fixed
+- **`keryx update` no longer deletes a project's own `.metaproject/` ignore.**
+  It treated the blanket line as a leftover and removed it, so on a project
+  that keeps its keryx workspace out of git the whole folder suddenly showed
+  up as untracked and could be committed by accident. The line is now kept
+  when nothing under `.metaproject/` is tracked, and dropped only where the
+  project already commits `.metaproject/`.
+
 ## [0.3.9] — 2026-09-26
 
 ### Changed

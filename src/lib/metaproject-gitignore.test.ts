@@ -144,3 +144,38 @@ test("syncMetaprojectGitignore refuses to write through a .gitignore symlink tha
     await rm(outsideRoot, { recursive: true, force: true });
   }
 });
+
+async function gitRepo(): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-gitignore-blanket-"));
+  Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+  return root;
+}
+
+test("a blanket .metaproject/ ignore survives when the project keeps .metaproject out of git", async () => {
+  const root = await gitRepo();
+  try {
+    await writeFile(path.join(root, ".gitignore"), "node_modules/\n.metaproject/\n");
+    await syncMetaprojectGitignore(root);
+    const next = await readFile(path.join(root, ".gitignore"), "utf8");
+    expect(next.split("\n")).toContain(".metaproject/");
+    expect(next).toContain("# keryx:begin");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a blanket .metaproject/ ignore is dropped where .metaproject is already tracked", async () => {
+  const root = await gitRepo();
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "index.md"), "# index\n");
+    Bun.spawnSync(["git", "add", ".metaproject/index.md"], { cwd: root });
+    Bun.spawnSync(["git", "-c", "user.email=t@x", "-c", "user.name=t", "commit", "-qm", "track"], { cwd: root });
+    await writeFile(path.join(root, ".gitignore"), "node_modules/\n.metaproject/\n");
+    await syncMetaprojectGitignore(root);
+    const next = await readFile(path.join(root, ".gitignore"), "utf8");
+    expect(next.split("\n")).not.toContain(".metaproject/");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
