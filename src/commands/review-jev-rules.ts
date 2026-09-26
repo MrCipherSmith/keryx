@@ -347,6 +347,31 @@ export interface JevRulesRunOptions {
   readonly threshold?: number;
   readonly model?: string;
   readonly fetchFn?: typeof fetch;
+  /**
+   * Threaded straight through to every `callJevSystemOne` call this run
+   * makes (tagging and violation-scoring alike) — additive for
+   * `keryx review jev-edit-guard` (flow 343), whose hard wall-clock cap
+   * fires this to abort a still-in-flight call rather than let the hook's
+   * own process hang. `undefined` (the default) reproduces every existing
+   * caller's behaviour exactly: no external abort wiring at all.
+   */
+  readonly signal?: AbortSignal;
+  /**
+   * Threaded straight through to every `callJevSystemOne` call this run
+   * makes, exactly like `signal` above — additive, also for `keryx review
+   * jev-edit-guard`, whose own credential gate already resolved a key from a
+   * caller-supplied env (real `process.env`, or a test's injected fixture)
+   * BEFORE ever reaching this function. Every `callJevSystemOne` call here
+   * used to hardcode `process.env` regardless of what `env` this function
+   * itself was handed — invisible on a machine with a real/saved OpenRouter
+   * credential, but a test that injects a FAKE key via its own `env` option
+   * (never touching `process.env`) still hit the real credential resolution
+   * path and threw `JevCredentialError` wherever `process.env` had none —
+   * exactly what happened on CI. `undefined` (the default) reproduces every
+   * existing caller's behaviour exactly: `callJevSystemOne`'s own default of
+   * `process.env`.
+   */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /** Shared running totals across every Jev call this run makes — tagging and violation calls counted separately (AC-follow-up 1's "tagging: N calls (cached next run)" usage line). */
@@ -397,7 +422,15 @@ interface ClauseTagResolution {
  * scaffolding — `[x] <criterion 1> — verified by <test>` and the like — right
  * after extraction, BEFORE it is ever offered a tagging call.
  */
-async function resolveRuleSourceClauseTags(cwd: string, source: RuleSourceFile, fetchFn: typeof fetch, model: string, usage: JevUsageAccumulator): Promise<ClauseTagResolution> {
+async function resolveRuleSourceClauseTags(
+  cwd: string,
+  source: RuleSourceFile,
+  fetchFn: typeof fetch,
+  model: string,
+  usage: JevUsageAccumulator,
+  signal: AbortSignal | undefined,
+  env: Readonly<Record<string, string | undefined>> | undefined,
+): Promise<ClauseTagResolution> {
   const extracted = extractReferenceClauses(source.text);
   const rawClauses = extracted.filter((clause) => !isPlaceholderClauseText(clause.text));
   const droppedPlaceholders = extracted
@@ -416,7 +449,7 @@ async function resolveRuleSourceClauseTags(cwd: string, source: RuleSourceFile, 
     const result = await callJevSystemOne(
       fetchFn,
       { model, state: `Rule-document clause classification (review-jev-rules): "${source.path}" — no additional state beyond each clause's own text.`, questions: tagQuestions },
-      { env: process.env },
+      { env: env ?? process.env, ...(signal !== undefined ? { signal } : {}) },
     );
     usage.taggingCalls += 1;
     accumulateUsage(usage, result.usage);
@@ -456,12 +489,14 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
 
   const { sources, excluded } = await discoverRuleSources(cwd, options.explicitRulePaths ?? []);
   const detectedStack = await detectProjectStack(cwd);
+  const signal = options.signal;
+  const env = options.env;
 
   const usage: JevUsageAccumulator = { taggingCalls: 0, violationCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, sawUsage: false };
   const taggedSources: TaggedRuleSource[] = [];
   const droppedPlaceholderClauses: { ruleId: string; clauseId: string; reason: string }[] = [];
   for (const source of sources) {
-    const { clauses, droppedPlaceholders } = await resolveRuleSourceClauseTags(cwd, source, fetchFn, model, usage);
+    const { clauses, droppedPlaceholders } = await resolveRuleSourceClauseTags(cwd, source, fetchFn, model, usage, signal, env);
     taggedSources.push({ source, clauses });
     for (const dropped of droppedPlaceholders) {
       droppedPlaceholderClauses.push({ ruleId: source.path, clauseId: dropped.clauseId, reason: dropped.reason });
@@ -493,7 +528,7 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
     }
     if (Object.keys(uncachedQuestions).length === 0) continue;
 
-    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: uncachedQuestions as JevQuestions }, { env: process.env });
+    const result = await callJevSystemOne(fetchFn, { model, state: batch.state, questions: uncachedQuestions as JevQuestions }, { env: env ?? process.env, ...(signal !== undefined ? { signal } : {}) });
     usage.violationCalls += 1;
     accumulateUsage(usage, result.usage);
     for (const item of batch.items) {

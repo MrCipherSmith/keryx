@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "343",
+  "slug": "jev-edit-guard",
+  "title": "Jev EDIT GUARD: PostToolUse hook for rule-violation feedback",
+  "status": "implemented",
+  "createdAt": "2026-09-26T11:36:08.403Z",
+  "updatedAt": "2026-09-26T13:27:57.862Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:686247fceb1e887d4faabfa865ff76f78407e47b877f2a6a56959247574568d5",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-26T13:25:10.448Z",
+      "note": "Verified via manual CLI run with fixtures: flagged output matches shape and text"
+    },
+    "AC2": {
+      "at": "2026-09-26T13:25:19.747Z",
+      "note": "Tested disabled, no-credential, malformed stdin, unsupported tool, no-diff, error, and timeout paths, all silent, exit 0, logged"
+    },
+    "AC3": {
+      "at": "2026-09-26T13:25:19.894Z",
+      "note": "jev-edit-guard-config.test.ts covers absent, unparsable, valid, out-of-range, and write round-trip"
+    },
+    "AC4": {
+      "at": "2026-09-26T13:25:20.040Z",
+      "note": "review-jev-edit-guard.test.ts install/uninstall/status tests, verified idempotent and merge-safe against real settings.json in manual run"
+    },
+    "AC5": {
+      "at": "2026-09-26T13:25:20.185Z",
+      "note": "jev-edit-guard-inspector.ts modal plus tui-shell.ts sidebar wiring, agent-commands.ts and help-groups.ts entries added and tested"
+    },
+    "AC6": {
+      "at": "2026-09-26T13:25:20.333Z",
+      "note": "bun test src/core-package.test.ts passed, all new tests inject fetchFn and env, no real network or key"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/757"
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read reuse points: jev-client, conform-clauses, review-jev-rules, security hooks install, settings-json, security-impact-evidence, turn-guard-inspector, agent-commands, help-groups"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented core edit-guard modules, adapter hook and installer, TUI modal and sidebar, CLI registration"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Added unit and CLI tests, fixed agent-commands.test.ts pinned lists, ran keryx test run --changed 1033 passed, typecheck and lint clean"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Opened PR 757 on feat/jev-edit-guard, self-review done via typecheck/lint/tests and manual end-to-end proof"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-26T11:36:08.403Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-26T13:24:26.549Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-26T13:24:31.002Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-26T13:24:53.240Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-26T13:24:58.685Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-26T13:25:03.998Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-26T13:25:10.448Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified via manual CLI run with fixtures: flagged output matches shape and text (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:19.747Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Tested disabled, no-credential, malformed stdin, unsupported tool, no-diff, error, and timeout paths, all silent, exit 0, logged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:19.894Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: jev-edit-guard-config.test.ts covers absent, unparsable, valid, out-of-range, and write round-trip (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:20.040Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: review-jev-edit-guard.test.ts install/uninstall/status tests, verified idempotent and merge-safe against real settings.json in manual run (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:20.185Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: jev-edit-guard-inspector.ts modal plus tui-shell.ts sidebar wiring, agent-commands.ts and help-groups.ts entries added and tested (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:20.333Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test src/core-package.test.ts passed, all new tests inject fetchFn and env, no real network or key (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:27:55.961Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-26T13:27:57.862Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/757 (warning: PR is not a draft)"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-26T13:25:10.448Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:686247fceb1e887d4faabfa865ff76f78407e47b877f2a6a56959247574568d5"
+    },
+    {
+      "at": "2026-09-26T13:25:19.747Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:686247fceb1e887d4faabfa865ff76f78407e47b877f2a6a56959247574568d5"
+    },
+    {
+      "at": "2026-09-26T13:25:19.894Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:686247fceb1e887d4faabfa865ff76f78407e47b877f2a6a56959247574568d5"
+    },
+    {
+      "at": "2026-09-26T13:25:20.040Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:686247fceb1e887d4faabfa865ff76f78407e47b877f2a6a56959247574568d5"
+    },
+    {
+      "at": "2026-09-26T13:25:20.185Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:686247fceb1e887d4faabfa865ff76f78407e47b877f2a6a56959247574568d5"
+    },
+    {
+      "at": "2026-09-26T13:25:20.333Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:686247fceb1e887d4faabfa865ff76f78407e47b877f2a6a56959247574568d5"
+    }
+  ]
+}

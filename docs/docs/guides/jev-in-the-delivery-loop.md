@@ -8,11 +8,12 @@ merges a PR on Jev's say alone.
 ## Edit guard
 
 A Claude Code `PostToolUse` hook asks Jev about every agent edit against the
-project's rules and feeds violations back to the agent mid-task, as a tool
-result beginning `Rule check flagged: <rule> — <what>`.
+project's rules and feeds violations back to the agent mid-task, one line per
+flag: `Rule check flagged: <clause id> at <file>:<line> — fix it if it is a
+real violation.`
 
-- `task-implementer` checks the flagged line against the named rule as soon as
-  the result arrives: fixes it if the flag is real, continues if not, and
+- `task-implementer` checks the flagged clause against the named rule as soon
+  as the line arrives: fixes it if the flag is real, continues if not, and
   records a false flag in the task report (`notes`) so the threshold can be
   tuned.
 - `job-orchestrator` and `flow-orchestrator` confirm the guard is installed

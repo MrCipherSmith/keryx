@@ -298,6 +298,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 343 (Jev EDIT GUARD): a `PostToolUse` hook check, not a
+    // per-turn one — this modal shows the opt-in state, threshold, and
+    // recent flags of the Claude Code hook installed by `keryx review
+    // jev-edit-guard install`, and toggles it. TUI-only, same reasoning as
+    // `/guard`/`/route`.
+    name: "/editguard",
+    description: "Jev EDIT GUARD status/threshold/recent flags, with a toggle — install via keryx review jev-edit-guard install",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 344: every `review.jev.*` key next to its measured verdict
     // (CI triage proven; risk/contract measured weaker than a strong model;
     // rules not useful on top of one; scenarios/docs/comments experimental;

@@ -6,6 +6,20 @@ All notable changes to `keryx` are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Jev EDIT GUARD**: a Claude Code `PostToolUse` hook that checks every
+  `Edit`/`Write`/`MultiEdit` a coding agent makes against the project's own
+  written rules, using Jev, and feeds violations straight back to the agent
+  before the code ever reaches a human reviewer. Opt-in
+  (`review.jev.edit_guard: true` in `.metaproject/tasks.config.json`,
+  threshold `review.jev.edit_guard_threshold`, default `0.5`; per-run budget
+  `review.jev.edit_guard_max_calls`). Fails open on any error, timeout
+  (~4s hard cap) or missing credential, and always exits `0`. New:
+  `keryx review jev-edit-guard install|uninstall|status`, the TUI's
+  `/editguard` (modal + sidebar indicator). Measured on a real project (10
+  tasks × 2 runs, a large production React/MobX frontend): real rule
+  violations reaching the first review round fell 27 → 10 (−63%) and review
+  rounds 31 → 24, at the same total cost (Jev cost $0.04 for 40 runs); the
+  agent acted on 79% of the flags at threshold 0.5.
 - **`keryx review jev-select`** (flow 344): an advisory, opt-in (`review.jev.select`), fail-open
   pre-dispatch filter over the candidate reviewer set `review-orchestrator` is about to dispatch.
   Asks Jev one `noul` per reviewer against a compact diff summary and skips a candidate only when
@@ -36,7 +50,7 @@ All notable changes to `keryx` are documented here. The format follows
   dispatch, and triage a red CI check (`review.jev.ci_triage`) before treating
   it as a fix task — rerun once on `flaky`, investigate `real-regression` as
   usual, report `infra` without touching code. `task-implementer` reacts to
-  `Rule check flagged: …` tool results from the edit guard, and `code-verifier`
+  the edit guard's `Rule check flagged: ...` tool results, and `code-verifier`
   runs the same CI triage before filing a red check as a defect. Guidance only;
   both features are opt-in and pre-existing (`keryx review jev-edit-guard`,
   `keryx review ci-triage`). See [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).

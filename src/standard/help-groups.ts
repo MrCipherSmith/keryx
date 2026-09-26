@@ -362,6 +362,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/editguard",
+    group: "Managed work",
+    summary: "Jev EDIT GUARD status, threshold and recent flags for the Claude Code PostToolUse hook, with a toggle.",
+  },
+  {
+    kind: "slash",
     name: "/jevprofile",
     group: "Managed work",
     summary: "Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile.",
