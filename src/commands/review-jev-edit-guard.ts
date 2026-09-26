@@ -232,6 +232,11 @@ export async function runJevEditGuardHook(cwd: string, deps: EditGuardCliDeps = 
         threshold: cfg.threshold,
         fetchFn: deps.fetchFn ?? globalThis.fetch,
         signal: controller.signal,
+        // The credential gate above already resolved a key from THIS same
+        // `env` (real `process.env`, or a test's injected fixture) — every
+        // Jev call `computeJevRulesResult` makes must resolve its credential
+        // the same way, never silently fall back to the real `process.env`.
+        env,
       });
     } finally {
       clearTimeout(timer);
