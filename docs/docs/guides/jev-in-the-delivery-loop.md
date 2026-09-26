@@ -75,5 +75,6 @@ and `edit_guard` together in one step, explicitly — though as of flow 346
 all three already apply by default wherever Jev is reachable (see above).
 `keryx review jev-profile show` names each key's effective source
 (`explicit`/`default-because-jev-available`/`off-by-external`).
-See [Keeping private work in-house](../../../README.md#keeping-private-work-in-house-external)
-for the `/external` switch itself.
+See [the `external` CLI reference](../cli-reference.md#external) for the
+`/external` switch itself — also covered in the project README's "Keeping
+private work in-house: /external" section.

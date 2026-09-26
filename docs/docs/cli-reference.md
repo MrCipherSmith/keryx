@@ -1617,8 +1617,9 @@ keryx external list [--json]
 
 In the TUI, `/external` alone prints the same status block (state, source,
 credential availability, effective block list); `/external on|off` toggles
-+ persists the per-user setting. A sidebar row always shows `external:
-on`/`external: off`.
++ persists the per-user setting. A sidebar row appears when it is `off` —
+the default `on` state costs no permanent sidebar space, the same idiom
+`/guard`/`/route` use for their own default state.
 
 ---
 

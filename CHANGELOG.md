@@ -40,8 +40,9 @@ All notable changes to `keryx` are documented here. The format follows
   explicit opt-in, and never repeats after that.
 - TUI: a `/external` slash command (bare prints the effective state,
   source, Jev credential availability and block list; `on`/`off` toggles
-  the per-user setting) and a sidebar `external: on`/`external: off`
-  indicator.
+  the per-user setting) and a sidebar indicator that appears when
+  external is `off` (the default `on` state costs no permanent sidebar
+  space).
 
 ## [0.3.10] — 2026-09-26
 

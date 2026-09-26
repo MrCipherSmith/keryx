@@ -4860,6 +4860,12 @@ export async function launchTuiAgentShell(opts: {
     const loadExternalStatus = (): Promise<ResolvedExternalSetting> => resolveExternalSetting({ cwd: externalProjectDir() });
     const refreshExternalSidebar = (): void => {
       clearTranscriptChildren(sbExternal);
+      // Zero rows in the default "on" state — same idiom `sbGuard`/`sbRoute`
+      // use for THEIR default state (off), and for the same reason: a fixed-
+      // height terminal (`shell-pty-launch.smoke.test.ts`'s 80x24 pty) has no
+      // spare vertical budget for a permanent row nobody turned on. "off" is
+      // the notable, security-relevant state — that is the one shown.
+      if (externalStatus.value === "on") return;
       sbExternal.add(new otui.TextRenderable(r, { id: "sb-external-k", content: otui.t`${dimChunk(otui, "External")}`, marginTop: 1 }));
       sbExternal.add(
         new otui.TextRenderable(r, {

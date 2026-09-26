@@ -105,9 +105,10 @@ is off). The first time a project's `ci_triage`/`select`/edit-guard hook
 actually runs because of the default — not an explicit opt-in — one line is
 shown once on stderr and then never repeats for that project: `Jev is on
 here: redacted code/CI snippets go to OpenRouter/TypeSafe. Turn off:
-/external off`. See [Keeping private work in-house](../../README.md#keeping-private-work-in-house-external)
+/external off`. See [the `external` CLI reference](./cli-reference.md#external)
 for the full switch (the block list, the routing exclusion, and why each
-default entry is on it).
+default entry is on it) — also covered in the project README's "Keeping
+private work in-house: /external" section.
 
 `--apply recommended` still merge-writes the three keys explicitly into
 `.metaproject/tasks.config.json` when you want them on the record rather

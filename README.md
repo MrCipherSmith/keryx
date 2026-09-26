@@ -809,8 +809,9 @@ then never repeats for that project: `Jev is on here: redacted code/CI
 snippets go to OpenRouter/TypeSafe. Turn off: /external off`.
 
 In the TUI, `/external` (bare) shows the same status block; `/external
-on|off` toggles the per-user setting; a sidebar row always shows
-`external: on`/`external: off`. See [the CLI
+on|off` toggles the per-user setting; a sidebar row appears when it is
+`off` (the default "on" state costs no permanent sidebar space, same idiom
+`/guard`/`/route` use for their own default state). See [the CLI
 reference](docs/docs/cli-reference.md#external) for the full command and
 [Jev in review](docs/docs/jev-in-review.md#recommended-profile-now-on-by-default-when-jev-is-reachable)
 for what changed there.
