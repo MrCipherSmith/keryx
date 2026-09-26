@@ -46,6 +46,14 @@ export type BundledReviewer = {
    * flow 330/332/333 already worked.
    */
   engine?: string;
+  /**
+   * Frontmatter routing description (flow 344), folded to one line — the
+   * same field a project reviewer already carries. Added so a caller that
+   * needs "every candidate reviewer's id and description" (`keryx review
+   * jev-select`) reads it from this one inventory rather than re-parsing
+   * every bundled `SKILL.md` a second time.
+   */
+  description?: string;
 };
 
 /**
@@ -239,14 +247,15 @@ export async function collectReviewers(projectRoot: string): Promise<ReviewerInv
       // `metadata.engine` (flow 330/332/333): read best-effort — a reviewer with no
       // engine declared, or a SKILL.md that vanished between the directory
       // listing above and this read, is a plain LLM sub-agent reviewer.
-      const engine = await readFile(path.join(bundledRoot, name, "SKILL.md"), "utf8")
-        .then((content) => metadataList(content, "engine")[0])
-        .catch(() => undefined);
+      const content = await readFile(path.join(bundledRoot, name, "SKILL.md"), "utf8").catch(() => undefined);
+      const engine = content !== undefined ? metadataList(content, "engine")[0] : undefined;
+      const description = content !== undefined ? parseSkillFrontmatter(content).description : undefined;
       return {
         name,
         source: "bundled" as const,
         path: path.posix.join(".metaproject", "skills", "gdskills", "review", name),
         ...(engine !== undefined ? { engine } : {}),
+        ...(description !== undefined ? { description } : {}),
       };
     }),
   );

@@ -32,12 +32,14 @@ unified report sorted by severity. It does not perform any review logic itself.
 ```
 Review Orchestrator Progress:
 - [ ] Step 0: On a PR target, collect external comments — `keryx review comments collect`
+- [ ] Step 0b: On a PR target whose checks are red, triage each failed run with `keryx review ci-triage --run <id>` (opt-in `review.jev.ci_triage`) — see "CI Triage on Red Checks"
 - [ ] Step 1: Build Review Context Pack — PR metadata AND the PR's own description, scope, rules, context_doc summary, accepted memory, and the cross-repo contracts the diff consumes
 - [ ] Step 2: Detect review mode (diff mode vs. path mode)
 - [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
 - [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing — and KEEP the `--json` file; `review ingest --blast-radius <file>` is refused without it
 - [ ] Step 4: Parse flags / auto-detect domain from scope
 - [ ] Step 5: Ask user to confirm optional convention reviewers (legacy/profile reviewers are flag-only, never prompted)
+- [ ] Step 5c: When `review.jev.select` is on, run `keryx review jev-select` over the finalized candidate set and drop its `skip` decisions from Wave A/B — see "Reviewer selection with Jev"
 - [ ] Step 6: Plan sub-agent dispatch and token budgets, and compute each dispatch's model with `keryx review tier` — never by hand
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
 - [ ] Step 8: Dispatch selected reviewers in PARALLEL with reviewer-input schema
@@ -411,6 +413,14 @@ The rule is about the other pull request:
 
 ---
 
+## CI Triage on Red Checks (Step 0b)
+
+Run once per round, on a PR target whose checks are red, before Step 1: for each failed check run, `keryx review ci-triage --run <id>` (flow 306/307) — an existing keryx command, not something this skill re-implements. Gate it exactly the way the command gates itself: skip it — recorded in the report, never silently absent — when `review.jev.ci_triage` is not `true` in `.metaproject/tasks.config.json`, or no Jev/OpenRouter credential is resolvable; either means the command refuses before any read or network call.
+
+Read each run's verdict (`flaky` | `regression` | `infra`) into the report: `flaky` suggests a rerun rather than a finding; `regression` means investigate before trusting this round's other findings, since a broken build can hide or mimic a real defect; `infra` is noted and the round continues. Advisory only — a verdict never gates dispatch and is never itself a finding.
+
+---
+
 ## Everything written to GitHub is brief
 
 One rule, applied to every outward surface: **PR bodies, PR comments, review
@@ -663,6 +673,8 @@ A **fix round** is any review of work produced to answer earlier findings. Set
 `is_fix_round: true` on every reviewer input, and populate `prior_findings` with
 the earlier findings and the disposition the fix claimed for each.
 
+**The Jev edit guard is a FIX-phase tool, not a review-round tool.** `keryx review jev-edit-guard` (a separate feature) is the recommended Jev step during the FIX phase itself — run by the author's agent as it applies fixes, before this round re-reviews them. This skill never runs it; it is not part of review-orchestrator's own dispatch.
+
 **Nothing refuses a dispatch that omits them.** `reviewer-input.schema.json`
 states the rule and no production TypeScript loads that schema; reviewer
 dispatch is an action the host agent takes, not a `keryx` invocation, so there
@@ -891,8 +903,6 @@ nothing moved. The final round recomputes whatever the file set did — otherwis
 fix introduced in round 3 gets no regression check at all, and the round that
 certifies the flow is the one that checked the least.
 
----
-
 ### Path Mode
 
 When a path or target is named, collect the candidate files:
@@ -917,8 +927,6 @@ read none of the ones it dropped. Set `SCOPE_MODE: path`. Path mode has no hunks
 and therefore no context window; the drop list is recorded exactly the same way.
 
 **Reviewer behavior in path mode:** reviewers check the entire file content — not just added lines. All findings apply to the current state of the code, not only to changes.
-
----
 
 ### Auto-detection of Reviewers (both modes)
 
@@ -1069,6 +1077,10 @@ If the user does not answer and the review is part of an automated `job-orchestr
 use the job setting `convention_reviewers` (default: `"ask"`; if still unresolved, include all
 detected reviewers and record that choice in the review scope).
 
+### Reviewer selection with Jev (`jev-select`) — advisory, before dispatch (Step 5c)
+
+When `review.jev.select` is on, before Wave A/B dispatch: run `keryx review jev-select (--diff <ref>|--pr <n>) --json` over the finalized candidate set (bundled + project reviewers, after every filter above) and drop every reviewer whose `decision` is `skip` from Wave A/B — **never** the Wave A core safety set (`review-logic`, `review-architecture`, `review-security-code`, `review-highload` when selected), which `jev-select` itself never marks `skip`. Record every decision in the report's scope section as `skipped by Jev selection (advisory)`, naming the probability and reason — this lever is UNMEASURED (unlike every CLI-engine reviewer below), so its skips must stay visible enough for a later round to check whether the skipped reviewer's domain surfaced a real finding anyway. It fails open — keeps every candidate — on its own opt-in being off, a missing credential, or any error; never treat a `jev-select` failure as a reason to skip a reviewer.
+
 ---
 
 ## Legacy/Profile Reviewer Auto-Detection
@@ -1137,8 +1149,6 @@ Multiple flags may be combined: `review --backend --security` dispatches `review
 This table applies once this skill is running; reaching it is a separate question. The router strips `--`, so `review --style` is the same phrase as `review-style`'s own `style review` trigger and goes straight there — the same destination this table names, and likewise for `--architecture`, `--security` and `--performance`. Only `--all`, `--project-conventions` and `--legacy-profiles` name this orchestrator, which is why they are its triggers.
 `--frontend` and `--backend` are the exception: this table fans each out to three reviewers, but a bare `review --frontend` reaches `review-frontend` alone, because `review frontend` and `frontend review` are one phrase to the router and that phrase is the specialist's — two skills may not share a trigger token set (`src/gdskills/catalog-single-source.test.ts`). Ask by name, or use `review --all`, when you want the three-reviewer fan-out; `docs/skills/rejected-skill-changes.md` records the alternatives that were measured and rejected.
 
----
-
 ## Stage 1 Gate — Spec Compliance
 
 **Run this FIRST, before dispatching quality reviewers, whenever the change has a
@@ -1178,7 +1188,7 @@ whoever reads the merge commit a year later reads the body. When `review.jev.con
 Dispatch selected reviewers in parallel when independent. Use waves when token budget is tight or when one reviewer needs another result:
 
 1. Wave A - core correctness/risk reviewers: logic, architecture, security/highload when selected.
-2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files. `review-jev-rules` (flow 330), `review-jev-risk`/`review-jev-scenarios` (flow 332), `review-jev-docs`/`review-jev-comments` (flow 333), `review-jev-contract` (flow 335) also run here, CLI-engine not sub-agent, `"engine": "jev"` in `keryx review reviewers --json`, gated on their own opt-in and a resolvable Jev/OpenRouter credential — `SKILL.detail.md` § "CLI-engine reviewers".
+2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files. `review-jev-rules` (flow 330), `review-jev-risk`/`review-jev-scenarios` (flow 332), `review-jev-docs`/`review-jev-comments` (flow 333), `review-jev-contract` (flow 335) also run here, CLI-engine not sub-agent, `"engine": "jev"` in `keryx review reviewers --json`, gated on their own opt-in and a resolvable Jev/OpenRouter credential — measured verdicts per reviewer (keep off by default, experimental, etc.) in `SKILL.detail.md` § "CLI-engine reviewers".
 3. Wave C - **verification**: `review-verifier` over the consolidated findings, when blockers/majors
    exist, `--verify` is set, or the PR is high-risk. See below.
 
@@ -1333,8 +1343,6 @@ Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills
 | Shared flow/graph abstraction contracts | NO | `review-flow-graph` |
 | Legacy/profile review profiles | NO | `code-ai-review`, `code-learned-review`, `code-style-review`, `code-mobx-store-review` |
 
----
-
 ## Sub-Agent Report Quality Gate
 
 Before consolidation, validate every reviewer result:
@@ -1345,8 +1353,6 @@ Before consolidation, validate every reviewer result:
 - Duplicate findings are merged by `dedupe_key` or by `(file, quote, problem)`.
 - `NEEDS_CONTEXT` triggers one targeted context refill. If still unresolved, keep it as an explicit open question, not as a blocker.
 - If a reviewer exceeds `max_findings`, keep blockers/majors first and summarize lower severity findings.
-
----
 
 ## Severity (canonical)
 
@@ -1445,8 +1451,6 @@ inventing a fifth level to express it would put us back where we started.
 `review-security-code` carries a fourth — every security finding states its attack
 vector — which does not generalise and stays there.
 
----
-
 ## Finding Format
 
 ### Class scope — required for `blocker` and `major`
@@ -1530,8 +1534,6 @@ All findings from all sub-reviewers must be normalized to this format before con
 
 Severity ordering for sort: `blocker` > `major` > `minor` > `info`.
 
----
-
 ### Model Metadata Rules
 
 `adaptive` is a model-assignment outcome recorded when `keryx review tier` printed `inherit: true` and the host picked the model for the tier, not a model name. Never render it as `model: adaptive` or as the PR comment `Model` value.
@@ -1543,8 +1545,6 @@ When writing review report metadata or a PR comment:
 4. Record the model actually assigned per reviewer — the `tier` and (`provider`+`model` or `inherit`) from the `model` block `keryx review tier` printed for that dispatch — rather than a fixed set of classes; include `complex_model`, `normal_model`, and `simple_model` too when `model_plan` reports them.
 5. If the dispatch's `model` block carried `inherit: true`, write `Model assignment: adaptive` and the model the host actually dispatched on for that tier (or `unknown`).
 6. If the actual model is unknown, write `unknown`; do not substitute `adaptive` or `inherit`.
-
----
 
 ## Output Contract
 

@@ -31,6 +31,7 @@ keryx init
 - **[hooks.md](./hooks.md)** — The `keryx shell` lifecycle hook runtime: the ten events, config files, composition with the policy engine, built-ins, and the `keryx hooks` CLI.
 - **[integrations.md](./integrations.md)** — The harness adapter registry: `keryx integrations install|doctor|uninstall|matrix`, install-state and drift, and the generated capability matrix.
 - **[cli-reference.md](./cli-reference.md)** — Complete reference for every command, subcommand, flag, and exit code.
+- **[jev-in-review.md](./jev-in-review.md)** — What we measured putting Jev in the review domain: CI triage (proven), three CLI-engine reviewers (measured weaker than a strong model), and reviewer selection (unmeasured, most promising).
 - **[workspace-and-lifecycle.md](./workspace-and-lifecycle.md)** — The `.metaproject/` directory contract, source-of-truth vs generated `data/`, the manifest, agent entrypoints, and the `init`/`update` lifecycle.
 - **[guides/shared-agent-context.md](./guides/shared-agent-context.md)** — Shared Agent Context: `keryx workspace`, FWK reads, propose/review, MCP `sac.*`, harness `workspace_*`.
 

@@ -360,6 +360,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Managed work",
     summary: "Opt-in routing classifier: each request runs on its routing category's model — /route [on|off].",
   },
+  {
+    kind: "slash",
+    name: "/jevprofile",
+    group: "Managed work",
+    summary: "Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile.",
+  },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {
     kind: "slash",

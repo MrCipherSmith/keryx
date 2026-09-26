@@ -131,6 +131,9 @@ generated reference page, [Commands by task](docs/docs/commands-by-task.md).
 Run `keryx <command> --help` for the live flag surface of any command.
 Delivery orchestrators can also ask Jev to flag rule-breaking edits and triage
 failed CI jobs — see [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).
+The review orchestrator can ask Jev to triage CI and pick which reviewers to
+dispatch — see [Jev in review](docs/docs/jev-in-review.md) for what was
+measured and what was not.
 
 ## Why keryx
 
@@ -825,6 +828,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Architecture](docs/docs/architecture.md)** — the four-layer pattern, invariants, cross-module data flows.
 - **[Module reference](docs/docs/modules.md)** — one section per module: purpose, CLI surface, mechanics, data paths.
 - **[CLI reference](docs/docs/cli-reference.md)** — the command surface: subcommands, flags and exit codes.
+- **[Jev in review](docs/docs/jev-in-review.md)** — what we measured putting Jev in the review domain: CI triage (proven), three CLI-engine reviewers (measured weaker than a strong model), and reviewer selection (unmeasured, most promising).
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.

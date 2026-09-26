@@ -102,6 +102,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/triage` | Advisory annotations — severity calibration, duplicate-merge candidates, verifier queue order — over the latest review package, with Jev. |
 | `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
 | `/route` | Opt-in routing classifier: each request runs on its routing category's model — /route [on\|off]. |
+| `/jevprofile` | Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
 
