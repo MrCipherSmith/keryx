@@ -130,6 +130,8 @@ export interface EditGuardCliDeps {
   readonly diffFn?: (root: string, relFile: string, contextLines: number) => Promise<string>;
   readonly now?: () => Date;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** Directory of keryx's own saved config (`auth.json`) for the saved OpenRouter key fallback; defaults to the usual keryx data dir. Tests point it at an empty temp dir so the machine's saved key never leaks in. */
+  readonly configDir?: string;
   /** Overrides {@link DEFAULT_EDIT_GUARD_TIMEOUT_MS} — a test's own escape hatch to exercise the fail-open timeout path in milliseconds, not seconds. */
   readonly timeoutMs?: number;
 }
@@ -169,7 +171,7 @@ export async function runJevEditGuardHook(cwd: string, deps: EditGuardCliDeps = 
       await finish({ file: "(none)", tool: "(none)", status: "skipped", reason: "review.jev.edit_guard is not enabled", jevCalls: 0, threshold: cfg.threshold, flags: [] });
       return;
     }
-    const apiKey = resolveJevApiKey(env, root);
+    const apiKey = resolveJevApiKey(env, deps.configDir);
     if (apiKey === undefined || apiKey.length === 0) {
       await finish({ file: "(none)", tool: "(none)", status: "skipped", reason: "no Jev/OpenRouter credential", jevCalls: 0, threshold: cfg.threshold, flags: [] });
       return;
@@ -236,7 +238,9 @@ export async function runJevEditGuardHook(cwd: string, deps: EditGuardCliDeps = 
         // `env` (real `process.env`, or a test's injected fixture) — every
         // Jev call `computeJevRulesResult` makes must resolve its credential
         // the same way, never silently fall back to the real `process.env`.
-        env,
+        // The key may have come from keryx's saved config rather than the
+        // env, so hand the resolved key down explicitly.
+        env: { ...env, OPENROUTER_API_KEY: apiKey },
       });
     } finally {
       clearTimeout(timer);
