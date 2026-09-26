@@ -17,6 +17,7 @@
 //   2. first keyed provider with a credential in env/auth.json
 //   3. legacy fallback name `anthropic` (fail-closed if no ANTHROPIC_API_KEY)
 
+import { loadOAuthGrant } from "../../lib/oauth/grants";
 import { makeProvider } from "./make-provider";
 import type { NormalizedError, NormalizedRequest, NormalizedUsage, ProviderPort } from "./types";
 import { OPENAI_COMPAT_PROVIDERS, providerByName } from "../../commands/providers";
@@ -55,7 +56,12 @@ export function defaultModelFor(provider: string): string {
 }
 
 /** Whether a usable credential exists for `provider` in `env`. */
-export function hasCredential(provider: string, env: Record<string, string | undefined>): boolean {
+export function hasCredential(provider: string, env: Record<string, string | undefined>, configDir?: string): boolean {
+  if (provider === "openai-codex") {
+    // The ChatGPT subscription signs in with an OAuth grant, not an API key;
+    // makeProvider's Codex adapter reads (and refreshes) that grant itself.
+    return loadOAuthGrant(provider, configDir) !== undefined;
+  }
   if (provider === "ollama") {
     return true; // local loopback, no key required
   }

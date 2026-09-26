@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.13] — 2026-09-26
+
+### Fixed
+- **`wiki enrich` and other one-shot model calls can run on the ChatGPT
+  subscription (`--provider openai-codex`).** They treated it as "no
+  credential" because it signs in with an OAuth grant, not an API key. OAuth
+  access tokens of subscription providers are also loaded before `wiki enrich`,
+  as `keryx shell` does.
+
 ## [0.3.12] — 2026-09-26
 
 ### Fixed
