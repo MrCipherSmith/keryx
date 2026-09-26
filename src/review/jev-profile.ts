@@ -38,8 +38,9 @@ export const RECOMMENDED_JEV_PROFILE: readonly JevProfileKey[] = [
     key: "edit_guard",
     recommended: true,
     verdict:
-      "Separate feature (parallel PR, `keryx review jev-edit-guard`) — recommended as the Jev step during the FIX phase, " +
-      "when the author's agent applies fixes. This profile only sets the key; the parallel PR implements it.",
+      "`keryx review jev-edit-guard` — flags rule-breaking edits during the FIX phase, when the " +
+      "author's agent applies fixes, and is already wired into job-orchestrator/flow-orchestrator/" +
+      "task-implementer/code-verifier. This profile only sets the key.",
   },
   {
     key: "risk",
@@ -121,7 +122,7 @@ export function renderJevProfileMarkdown(current: Record<string, unknown>, appli
   }
   lines.push(
     "",
-    "`edit_guard` is read by a parallel feature (`keryx review jev-edit-guard`); this command only sets the key.",
+    "`edit_guard` is read by `keryx review jev-edit-guard`; this command only sets the key.",
   );
   return `${lines.join("\n")}\n`;
 }

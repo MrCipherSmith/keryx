@@ -87,9 +87,9 @@ keryx review jev-profile show              # current state, next to each verdict
 keryx review jev-profile --apply recommended
 ```
 
-`--apply recommended` turns on `ci_triage`, `select`, and `edit_guard` (a separate, parallel
-feature — `keryx review jev-edit-guard`, the recommended Jev step during the FIX phase, when the
-author's agent applies fixes; this profile only sets the key), and leaves `risk`, `contract`,
+`--apply recommended` turns on `ci_triage`, `select`, and `edit_guard` (`keryx review
+jev-edit-guard` — see [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md) for what it
+does and where it is wired in; this profile only sets the key), and leaves `risk`, `contract`,
 `rules`, `scenarios`, `docs`, and `comments` off. It merge-writes `.metaproject/tasks.config.json`,
 touching only the `review.jev.*` keys it names.
 

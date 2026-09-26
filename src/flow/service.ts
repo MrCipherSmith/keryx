@@ -36,6 +36,12 @@ export { CONFIRMATION_CAVEAT } from "./confirm-token";
 // the zone's internals (import policy, rule 2 — `client-imports-core-internal`
 // only excuses a `service.ts` target).
 export { acPath, assertAcIntact, readFlow, resolveFlowDir } from "./store";
+// Flow 344: re-exported so a client reads the review-gate config path
+// through THIS facade rather than `./review-gate`'s internals (import
+// policy, rule 2) — `src/commands/review-jev-profile.ts` is the first
+// client-zone reader that needed it; every core-zone `review/jev-*-config.ts`
+// reader still imports `./review-gate` directly (core-to-core is allowed).
+export { REVIEW_GATE_CONFIG_PATH } from "./review-gate";
 export {
   AC_CHECK_TOKEN_BUDGET,
   acCheckCacheKey,

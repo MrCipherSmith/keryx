@@ -799,6 +799,8 @@ Task({
 })
 ```
 
+**Before this wave's first task-implementer dispatch:** when `review.jev.edit_guard` is on (`.metaproject/tasks.config.json`), confirm the guard is active — `keryx review jev-edit-guard status`, else `keryx review jev-edit-guard install` — and say why in one line.
+
 #### task-implementer dispatch (Step B)
 
 ```
@@ -2024,6 +2026,7 @@ Each step failure is classified into one of three classes with different recover
 | All reviewers fail | `recoverable` | Record the round as failed with a reason, add a warning to the report, continue to VERIFY (2.8) |
 | Fix loop exceeds max_review_iterations | `recoverable` | Disposition every surviving finding, log which ended the loop, continue to VERIFY (2.8) |
 | Final checks fail | `recoverable` | Include in report, still propose PR (user decides) |
+| A GitHub CI check on the PR fails | `recoverable` | When `review.jev.ci_triage` is on, run `keryx review ci-triage --run <id> --json` before reporting it as a defect: `flaky`/`deterministic` → rerun once and note it in the report, a second failure counts as `real-regression`; `real-regression` → treat as a real failure; `infra` → report it, don't touch code. Verdict is advisory only. |
 | gh CLI not available | `recoverable` | Print PR data, user creates manually. `keryx review comments` needs it too — say so rather than reporting `0 outstanding`. |
 
 ### Retry Protocol (for `retryable` errors)
@@ -2041,13 +2044,7 @@ attempt 1: keryx job step <job-name> <step-id> --status in-progress
 **Critical:** on retry, re-send the **same prompt** — hold it for the duration of the
 step and re-send it verbatim. Never re-derive it; re-derivation causes drift.
 
-The prompt itself is **not** persisted: `keryx job` writes no `step.prompt` and no
-prompt size, so do not instruct a resuming session to read one. What *is* persisted is
-that the attempt happened — `metrics.steps[].retries`, incremented every time the step
-re-enters `in_progress`, and the `--reason` line in `journal.md`. A resumed session
-therefore knows how many attempts a step has had, which is the fact the retry budget
-needs, and reconstructs the prompt from the plan and the analysis exactly as the first
-attempt did.
+The prompt itself is **not** persisted: `keryx job` writes no `step.prompt` and no prompt size, so do not instruct a resuming session to read one. What *is* persisted is that the attempt happened — `metrics.steps[].retries`, incremented every time the step re-enters `in_progress`, and the `--reason` line in `journal.md`. A resumed session therefore knows how many attempts a step has had, which is the fact the retry budget needs, and reconstructs the prompt from the plan and the analysis exactly as the first attempt did.
 
 ---
 

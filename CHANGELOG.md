@@ -23,13 +23,23 @@ All notable changes to `keryx` are documented here. The format follows
   the measured verdicts for every CLI-engine reviewer (`review-jev-risk`/`review-jev-contract`:
   measured weaker than a strong model, keep off by default; `review-jev-rules`: not useful on top of
   a strong reviewer; `review-jev-scenarios`/`review-jev-docs`/`review-jev-comments`: experimental).
-  Also notes that the Jev edit guard (`keryx review jev-edit-guard`, a separate, parallel feature) is
-  the recommended Jev step during the FIX phase.
+  Also notes that the Jev edit guard (`keryx review jev-edit-guard`) is the recommended Jev step
+  during the FIX phase — landed separately (below) in the delivery orchestrators.
 - **`docs/docs/jev-in-review.md`**: what we measured putting Jev in the review domain, with the full
   numbers behind every verdict above, from a live benchmark on a large production React/MobX
   frontend.
 - A `/jevprofile` TUI modal: every `review.jev.*` key next to its measured verdict, with enter/space
   to toggle one key and `a` to apply the recommended profile.
+- **The two proven Jev wins are wired into the delivery orchestrators.**
+  `job-orchestrator` and `flow-orchestrator` confirm the edit-guard hook is
+  installed (`review.jev.edit_guard`) before the first `task-implementer`
+  dispatch, and triage a red CI check (`review.jev.ci_triage`) before treating
+  it as a fix task — rerun once on `flaky`, investigate `real-regression` as
+  usual, report `infra` without touching code. `task-implementer` reacts to
+  `Rule check flagged: …` tool results from the edit guard, and `code-verifier`
+  runs the same CI triage before filing a red check as a defect. Guidance only;
+  both features are opt-in and pre-existing (`keryx review jev-edit-guard`,
+  `keryx review ci-triage`). See [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).
 
 ## [0.3.6] — 2026-09-25
 

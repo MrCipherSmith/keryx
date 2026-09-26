@@ -8,17 +8,50 @@
   "id": "344",
   "slug": "jev-orchestrator",
   "title": "Integrate Jev into review-orchestrator (jev-select, ci-triage report, jev-profile, TUI)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-26T11:38:53.110Z",
-  "updatedAt": "2026-09-26T13:22:41.602Z",
+  "updatedAt": "2026-09-26T13:25:35.613Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-26T13:24:56.351Z",
+      "note": "keryx review jev-select implemented with --diff/--ref, candidate list from collectReviewers, JSON output {reviewer,probability,decision,reason}"
+    },
+    "AC2": {
+      "at": "2026-09-26T13:25:01.796Z",
+      "note": "decideCandidates: skip only if probability < skipBelow; CORE_MANDATORY_REVIEWER_IDS never skipped"
+    },
+    "AC3": {
+      "at": "2026-09-26T13:25:07.469Z",
+      "note": "fail-open verified in tests (opt-in off, no credential, Jev error) and live run made no fail-open call since it succeeded"
+    },
+    "AC4": {
+      "at": "2026-09-26T13:25:12.813Z",
+      "note": "SKILL.md Step 0b and Step 5c added and wired, both copies identical"
+    },
+    "AC5": {
+      "at": "2026-09-26T13:25:18.354Z",
+      "note": "review-orchestrator-skill-parity.test.ts passes: byte-identical copies, line count 1723 matches ceiling; SKILL.detail.md verdicts table added"
+    },
+    "AC6": {
+      "at": "2026-09-26T13:25:24.178Z",
+      "note": "jev-profile.test.ts and review-jev-profile-cli.test.ts cover show and --apply recommended, merge-safe writer"
+    },
+    "AC7": {
+      "at": "2026-09-26T13:25:29.798Z",
+      "note": "jev-profile-inspector.ts modal, agent-commands.ts and help-groups.ts entries added, commands-by-task.md regenerated, tests pass"
+    },
+    "AC8": {
+      "at": "2026-09-26T13:25:35.613Z",
+      "note": "docs/docs/jev-in-review.md created and linked, cli-reference.md entries added, CHANGELOG Unreleased entry added"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/756"
   },
   "tasks": [
     {
@@ -77,7 +110,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -85,7 +118,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #756 opened on feat/jev-orchestrator: https://github.com/MrCipherSmith/keryx/pull/756"
     }
   ],
   "history": [
@@ -116,6 +151,147 @@
       "at": "2026-09-26T13:22:41.602Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-26T13:24:41.784Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-26T13:24:43.702Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/756 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-26T13:24:56.351Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: keryx review jev-select implemented with --diff/--ref, candidate list from collectReviewers, JSON output {reviewer,probability,decision,reason} (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:01.796Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: decideCandidates: skip only if probability < skipBelow; CORE_MANDATORY_REVIEWER_IDS never skipped (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:07.469Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: fail-open verified in tests (opt-in off, no credential, Jev error) and live run made no fail-open call since it succeeded (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:12.813Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: SKILL.md Step 0b and Step 5c added and wired, both copies identical (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:18.354Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: review-orchestrator-skill-parity.test.ts passes: byte-identical copies, line count 1723 matches ceiling; SKILL.detail.md verdicts table added (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:24.178Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: jev-profile.test.ts and review-jev-profile-cli.test.ts cover show and --apply recommended, merge-safe writer (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:29.798Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: jev-profile-inspector.ts modal, agent-commands.ts and help-groups.ts entries added, commands-by-task.md regenerated, tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:25:35.613Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: docs/docs/jev-in-review.md created and linked, cli-reference.md entries added, CHANGELOG Unreleased entry added (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-09-26T13:24:56.351Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:25:01.796Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:25:07.469Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:25:12.813Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:25:18.354Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:25:24.178Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:25:29.798Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:25:35.613Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
     }
   ]
 }

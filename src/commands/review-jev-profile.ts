@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { optionValue } from "../lib/args";
-import { REVIEW_GATE_CONFIG_PATH } from "../flow/review-gate";
+import { REVIEW_GATE_CONFIG_PATH } from "../flow/service";
 import { currentJevProfile, mergeRecommendedJevProfile, renderJevProfileMarkdown, toggleJevProfileKey } from "../review/jev-profile";
 
 export const JEV_PROFILE_FLAGS = ["--apply", "--json"];
