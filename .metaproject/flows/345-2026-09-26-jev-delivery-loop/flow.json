@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "345",
+  "slug": "jev-delivery-loop",
+  "title": "Wire Jev edit-guard and ci-triage into delivery orchestrators",
+  "status": "in-progress",
+  "createdAt": "2026-09-26T11:39:15.361Z",
+  "updatedAt": "2026-09-26T13:03:44.006Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "aleks.zeitler@gmail.com",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read job-orchestrator, flow-orchestrator, task-implementer, code-verifier SKILL.md structure/headings; located exact task-implementer dispatch points and CI-reaction points; confirmed jev-edit-guard config not yet on main (parallel branch) and ci-triage already ships."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Edited the four orchestration SKILL.md files (canonical + mirrored .metaproject copy) per plan.md; updated src/gdskills/skill-length-ceilings.ts (all entries lowered or unchanged, none raised); added docs/docs/guides/jev-in-the-delivery-loop.md, README.md line+link, CHANGELOG.md Unreleased entry."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "No new test files needed (guidance-only prose changes); ran bun test src/gdskills/ (7459 pass), src/flow/ + ci-triage tests (448 pass), bun run lint, bun run typecheck — all green after fixing a round-bound.test.ts regression (reverted a SKILL.detail.md extraction that dropped a pinned citation)."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-26T11:39:15.361Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-26T13:03:21.232Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-26T13:03:25.073Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-26T13:03:32.563Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-26T13:03:38.109Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-26T13:03:44.006Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ]
+}

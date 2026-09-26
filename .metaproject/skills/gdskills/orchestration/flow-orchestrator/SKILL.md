@@ -26,13 +26,9 @@ license: "MIT"
 Flow Orchestrator is the Task Manager-aware implementation orchestrator. Plan bridge: publish the tasks with `plan_set` under the ids `T1`…`Tn`, mirror each `keryx flow task done` with `plan_update`, and publish Phase 4's completion choice as `proposed` — see the `session-plan-bridge` rule.
 It wraps the existing gdskills pipeline with `keryx flow` state.
 
-Use this skill instead of `job-orchestrator` when the user wants a managed
-story/issue lifecycle with frozen acceptance criteria, task state, an explicit
-completion choice, Code Health, and a durable flow package in
-`.metaproject/flows/`.
+Use this skill instead of `job-orchestrator` when the user wants a managed story/issue lifecycle with frozen acceptance criteria, task state, an explicit completion choice, Code Health, and a durable flow package in `.metaproject/flows/`.
 
-Do not modify `job-orchestrator` or `task-implementer` behavior. They remain
-usable without Task Manager. This skill coordinates them through flow state.
+Do not modify `job-orchestrator` or `task-implementer` behavior. They remain usable without Task Manager. This skill coordinates them through flow state.
 
 ## Hard Preconditions
 
@@ -311,6 +307,8 @@ Recommended worker routing:
 | `review` | `review-orchestrator` |
 | `docs` | `job-documenter`, `prd-creator`, or documentation-specific project skill |
 
+**Before the first `task-implementer` dispatch of the run:** when `review.jev.edit_guard` is on (`.metaproject/tasks.config.json`), confirm the guard is active — `keryx review jev-edit-guard status`, else `keryx review jev-edit-guard install` — and say why in one line.
+
 ### Worker communication is schema-governed
 
 Workers do not inherit session state; every dispatch is constructed explicitly
@@ -545,6 +543,8 @@ the bound plus an escalation — never an unbounded loop.
    branch state.
 2. If findings or required check failures remain, create or update a flow fix
    task, dispatch `task-implementer`, push the fix, and run review again.
+
+   **A required check failure is not automatically a fix task.** When `review.jev.ci_triage` is on, run `keryx review ci-triage --run <id> --json` on each failed run first: `top: flaky` (or a `deterministic` override) → rerun once (`gh run rerun --failed <id>`), record it in `journal.md`, and treat a second failure as `real-regression` regardless; `top: real-regression` → investigate and fix as usual; `top: infra` → report it in the completion notes and leave the code alone. The verdict is advisory only — never the sole reason to skip a fix task.
 
    **The threshold is `minor`.** The loop exits when the round reports zero
    findings at `blocker`, `major` or `minor`; `info` does not hold it. State the

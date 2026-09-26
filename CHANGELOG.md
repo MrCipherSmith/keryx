@@ -3,6 +3,19 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+### Added
+- **The two proven Jev wins are wired into the delivery orchestrators.**
+  `job-orchestrator` and `flow-orchestrator` confirm the edit-guard hook is
+  installed (`review.jev.edit_guard`) before the first `task-implementer`
+  dispatch, and triage a red CI check (`review.jev.ci_triage`) before treating
+  it as a fix task — rerun once on `flaky`, investigate `real-regression` as
+  usual, report `infra` without touching code. `task-implementer` reacts to
+  `Rule check flagged: …` tool results from the edit guard, and `code-verifier`
+  runs the same CI triage before filing a red check as a defect. Guidance only;
+  both features are opt-in and pre-existing (`keryx review jev-edit-guard`,
+  `keryx review ci-triage`). See [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).
+
 ## [0.3.6] — 2026-09-25
 
 ### Fixed

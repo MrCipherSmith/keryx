@@ -102,15 +102,15 @@ export const DEFAULT_SKILL_LENGTH_CEILING = 500;
  */
 const CEILINGS_BY_KEY = {
   "core/reviewer-skill-creator": 280,
-  "orchestration/code-verifier": 346,
+  "orchestration/code-verifier": 339,
   "orchestration/context-collector": 671,
   "orchestration/feature-analyzer": 447,
   "orchestration/feature-dev": 177,
   "orchestration/flow-orchestrator": 696,
   "orchestration/issue-analyzer": 373,
   "orchestration/job-documenter": 414,
-  "orchestration/job-orchestrator": 2246,
-  "orchestration/task-implementer": 670,
+  "orchestration/job-orchestrator": 2243,
+  "orchestration/task-implementer": 668,
   "planning/autodoc-analyst": 180,
   "planning/autodoc-architect": 179,
   "planning/autodoc-assembler": 145,
