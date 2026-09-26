@@ -129,6 +129,8 @@ with [Onboarding](docs/docs/onboarding.md) for the complete first-run
 walkthrough. `keryx help` groups every command by task; the same table is a
 generated reference page, [Commands by task](docs/docs/commands-by-task.md).
 Run `keryx <command> --help` for the live flag surface of any command.
+Delivery orchestrators can also ask Jev to flag rule-breaking edits and triage
+failed CI jobs — see [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).
 
 ## Why keryx
 

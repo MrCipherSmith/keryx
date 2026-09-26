@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "345",
+  "slug": "jev-delivery-loop",
+  "title": "Wire Jev edit-guard and ci-triage into delivery orchestrators",
+  "status": "implemented",
+  "createdAt": "2026-09-26T11:39:15.361Z",
+  "updatedAt": "2026-09-26T13:23:49.845Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-26T13:23:39.889Z",
+      "note": "flow-orchestrator + job-orchestrator: added edit-guard install-check lines before task-implementer dispatch (verified via git diff)"
+    },
+    "AC2": {
+      "at": "2026-09-26T13:23:40.248Z",
+      "note": "flow-orchestrator PR review/fix loop + job-orchestrator Error Table: added ci-triage classification lines (verified via git diff)"
+    },
+    "AC3": {
+      "at": "2026-09-26T13:23:40.579Z",
+      "note": "task-implementer Rules of Engagement item 11: Rule check flagged handling"
+    },
+    "AC4": {
+      "at": "2026-09-26T13:23:40.924Z",
+      "note": "code-verifier Phase 2.4: GitHub CI results triage before filing a finding"
+    },
+    "AC5": {
+      "at": "2026-09-26T13:23:41.257Z",
+      "note": "diff -q confirmed empty for all four SKILL.md pairs after each edit"
+    },
+    "AC6": {
+      "at": "2026-09-26T13:23:41.587Z",
+      "note": "bun test src/gdskills/: 7459 pass, 0 fail; no ceiling raised (code-verifier 346->339, task-implementer 670->668, job-orchestrator 2246->2243, flow-orchestrator unchanged 696)"
+    },
+    "AC7": {
+      "at": "2026-09-26T13:23:41.935Z",
+      "note": "bun run lint and bun run typecheck both clean"
+    },
+    "AC8": {
+      "at": "2026-09-26T13:23:42.252Z",
+      "note": "docs/docs/guides/jev-in-the-delivery-loop.md created, linked from docs/docs/index.md, mkdocs.yml, and README.md; CHANGELOG.md Unreleased entry added"
+    },
+    "AC9": {
+      "at": "2026-09-26T13:23:42.565Z",
+      "note": "PR #755 open, base main, all 18 CI checks green after mkdocs nav fix"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/755"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "aleks.zeitler@gmail.com",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read job-orchestrator, flow-orchestrator, task-implementer, code-verifier SKILL.md structure/headings; located exact task-implementer dispatch points and CI-reaction points; confirmed jev-edit-guard config not yet on main (parallel branch) and ci-triage already ships."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Edited the four orchestration SKILL.md files (canonical + mirrored .metaproject copy) per plan.md; updated src/gdskills/skill-length-ceilings.ts (all entries lowered or unchanged, none raised); added docs/docs/guides/jev-in-the-delivery-loop.md, README.md line+link, CHANGELOG.md Unreleased entry."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "No new test files needed (guidance-only prose changes); ran bun test src/gdskills/ (7459 pass), src/flow/ + ci-triage tests (448 pass), bun run lint, bun run typecheck — all green after fixing a round-bound.test.ts regression (reverted a SKILL.detail.md extraction that dropped a pinned citation)."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-reviewed diff (git diff on all four SKILL.md pairs + ceilings file); opened PR #755 (feat/jev-delivery-loop -> main); watched CI end to end (typecheck-and-tests initially failed on a docs/mkdocs nav parity test for the new guide, fixed by registering it in mkdocs.yml, pushed, all 18 checks green)."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-26T11:39:15.361Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-26T13:03:21.232Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-26T13:03:25.073Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-26T13:03:32.563Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-26T13:03:38.109Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-26T13:03:44.006Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-26T13:23:29.690Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-26T13:23:39.889Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: flow-orchestrator + job-orchestrator: added edit-guard install-check lines before task-implementer dispatch (verified via git diff) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:40.248Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: flow-orchestrator PR review/fix loop + job-orchestrator Error Table: added ci-triage classification lines (verified via git diff) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:40.579Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: task-implementer Rules of Engagement item 11: Rule check flagged handling (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:40.924Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: code-verifier Phase 2.4: GitHub CI results triage before filing a finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:41.257Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: diff -q confirmed empty for all four SKILL.md pairs after each edit (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:41.587Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test src/gdskills/: 7459 pass, 0 fail; no ceiling raised (code-verifier 346->339, task-implementer 670->668, job-orchestrator 2246->2243, flow-orchestrator unchanged 696) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:41.935Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun run lint and bun run typecheck both clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:42.253Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: docs/docs/guides/jev-in-the-delivery-loop.md created, linked from docs/docs/index.md, mkdocs.yml, and README.md; CHANGELOG.md Unreleased entry added (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:42.566Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: PR #755 open, base main, all 18 CI checks green after mkdocs nav fix (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:23:49.845Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/755 (warning: PR is not a draft)"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-26T13:23:39.889Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:40.248Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:40.579Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:40.924Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:41.257Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:41.587Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:41.935Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:42.252Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    },
+    {
+      "at": "2026-09-26T13:23:42.565Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:3a21661b3fb1fff2aaef2935d810d0ac70ef11ff1ad25bdc0399a058e450c42e"
+    }
+  ]
+}

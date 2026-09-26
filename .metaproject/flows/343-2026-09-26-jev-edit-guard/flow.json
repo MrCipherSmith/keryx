@@ -8,9 +8,9 @@
   "id": "343",
   "slug": "jev-edit-guard",
   "title": "Jev EDIT GUARD: PostToolUse hook for rule-violation feedback",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-26T11:36:08.403Z",
-  "updatedAt": "2026-09-26T13:25:20.333Z",
+  "updatedAt": "2026-09-26T13:27:57.862Z",
   "source": {
     "type": "description",
     "ref": null
@@ -43,7 +43,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/757"
   },
   "baseBranch": "main",
   "tasks": [
@@ -103,7 +103,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -111,7 +111,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Opened PR 757 on feat/jev-edit-guard, self-review done via typecheck/lint/tests and manual end-to-end proof"
     }
   ],
   "history": [
@@ -172,6 +174,16 @@
       "at": "2026-09-26T13:25:20.333Z",
       "event": "ac-confirmed",
       "detail": "AC6: bun test src/core-package.test.ts passed, all new tests inject fetchFn and env, no real network or key (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:27:55.961Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-26T13:27:57.862Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/757 (warning: PR is not a draft)"
     }
   ],
   "signatures": [

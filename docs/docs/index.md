@@ -40,6 +40,7 @@ the one that describes shipped behaviour.
 - [Use local SearXNG for agent web search](guides/use-local-searxng.md)
 - [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)
 - [Review a branch and keep a durable record](guides/review-with-a-record.md)
+- [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md)
 - [`/goal` — deterministic starts, optional autonomous continuation](guides/goal.md)
 - [Slate for external agents](guides/slate.md)
 - [Keep the wiki current](guides/keep-the-wiki-current.md)

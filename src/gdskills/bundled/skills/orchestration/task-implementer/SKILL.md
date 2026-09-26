@@ -546,10 +546,8 @@ second copy of a schema is how that happens.
 7. **DO** use `runInAction()` after every `await` in MobX actions.
 8. **DO** use conventional commit format when auto-commit is enabled. Reference only a supplied real issue number; omit the issue reference when absent.
 9. **DO** verify your work before reporting.
-10. **DO** make `STATUS: <TOKEN>` the first line of your final message, and put no
-    JSON in the response body. The full JSON result is the file Phase 6.1 writes
-    and records. `parseChildResult` throws on any first line that is not a
-    canonical STATUS token.
+10. **DO** make `STATUS: <TOKEN>` the first line of your final message, and put no JSON in the response body. The full JSON result is the file Phase 6.1 writes and records. `parseChildResult` throws on any first line that is not a canonical STATUS token.
+11. **DO** check a `Rule check flagged: <clause id> at <file>:<line> — fix it if it is a real violation.` line against the named clause as soon as it arrives — fix the flagged line if it's real, otherwise continue; never argue with or silently ignore it, and record a false flag as `edit-guard false flag: <clause id> — <why>` in `notes` (Phase 6.1) so `review.jev.edit_guard_threshold` can be tuned.
 
 ---
 

@@ -12,3 +12,5 @@
 - 2026-09-26T13:25:20.040Z - ac-confirmed: AC4: review-jev-edit-guard.test.ts install/uninstall/status tests, verified idempotent and merge-safe against real settings.json in manual run (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-26T13:25:20.185Z - ac-confirmed: AC5: jev-edit-guard-inspector.ts modal plus tui-shell.ts sidebar wiring, agent-commands.ts and help-groups.ts entries added and tested (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-26T13:25:20.333Z - ac-confirmed: AC6: bun test src/core-package.test.ts passed, all new tests inject fetchFn and env, no real network or key (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-26T13:27:55.961Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-26T13:27:57.862Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/757 (warning: PR is not a draft)

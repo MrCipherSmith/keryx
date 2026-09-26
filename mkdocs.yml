@@ -84,6 +84,7 @@ nav:
       - Use local SearXNG for web search: guides/use-local-searxng.md
       - Drive keryx from a bot: guides/drive-keryx-remotely.md
       - Review with a durable record: guides/review-with-a-record.md
+      - Jev in the delivery loop: guides/jev-in-the-delivery-loop.md
       - Shared Agent Context (experimental): guides/shared-agent-context.md
       - "/goal: deterministic starts, autonomous continuation": guides/goal.md
       - Slate for external agents: guides/slate.md

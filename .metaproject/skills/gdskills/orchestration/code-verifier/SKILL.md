@@ -151,6 +151,17 @@ Capture:
 - Exit code
 - List of circular chains (if any)
 
+**2.4 GitHub CI results (only when the dispatch names a PR or run id):**
+```bash
+gh pr checks <pr> --json name,state,link   # or use the run id already given
+```
+For each failed check, when `review.jev.ci_triage` is on, run `keryx review
+ci-triage --run <id> --json` before filing it as a finding — `real-regression`
+files CRITICAL as usual; `flaky`/`deterministic` files INFO, "likely flaky —
+rerun before treating as a defect"; `infra` files INFO, "infra failure, not a
+code defect." Every red check still appears; only severity and note change.
+Setting off → file CRITICAL as before, no Jev call.
+
 ---
 
 ### Phase 3: ANALYZE
@@ -259,26 +270,13 @@ STATUS: BLOCKED       — could not run checks (missing tooling, wrong directory
 
 ## Integration with job-orchestrator
 
-The orchestrator dispatches `code-verifier` at two points:
+The orchestrator dispatches `code-verifier` at two points, always with
+`codebase_path: <worktree_path>` and `scope: changed`:
 
-**After task-implementer wave (pre-review gate):**
-```
-code-verifier:
-  codebase_path: <worktree_path>
-  scope: changed
-  base_branch: <base_branch from JOB_STATE>
-→ If gate: FAIL → dispatch fix tasks → re-run code-verifier
-→ If gate: PASS → proceed to review
-```
-
-**After fix iterations (post-fix gate):**
-```
-code-verifier:
-  codebase_path: <worktree_path>
-  scope: changed
-→ If gate still FAIL after 3 iterations → report as BLOCKED, skip to report
-→ If gate: PASS → proceed to report
-```
+| Dispatch point | Extra input | On FAIL | On PASS |
+|---|---|---|---|
+| After task-implementer wave (pre-review gate) | `base_branch` from JOB_STATE | dispatch fix tasks, re-run | proceed to review |
+| After fix iterations (post-fix gate) | — | after 3 iterations: report BLOCKED, skip to report | proceed to report |
 
 **The orchestrator's internal "checks" step (2.8) is replaced by `code-verifier` dispatch.**
 
@@ -287,14 +285,9 @@ code-verifier:
 ## Standalone Usage
 
 ```bash
-# Run on current directory, changed files only
-/code-verifier
-
-# Run on specific project
+/code-verifier                        # current directory, changed files only
 /code-verifier --path /path/to/project
-
-# Full project scan (not just changed files)
-/code-verifier --scope full
+/code-verifier --scope full            # full project scan
 ```
 
 ---
