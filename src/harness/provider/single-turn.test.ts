@@ -252,3 +252,31 @@ describe("runModelTurn instrumentation", () => {
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("hasCredential: the ChatGPT subscription (openai-codex) signs in with an OAuth grant", () => {
+  test("no saved grant -> no credential, even with API keys in the env", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-codex-cred-"));
+    try {
+      expect(hasCredential("openai-codex", { OPENAI_API_KEY: "sk-not-a-subscription" }, dir)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a saved device-code grant counts as a credential without any API key", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const { saveOAuthGrant } = await import("../../lib/oauth/grants");
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-codex-cred-"));
+    try {
+      saveOAuthGrant("openai-codex", { method: "device-code", access: "codex-access-test", obtainedAt: "2026-09-26T00:00:00.000Z" }, dir);
+      expect(hasCredential("openai-codex", {}, dir)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

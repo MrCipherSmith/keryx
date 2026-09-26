@@ -643,6 +643,11 @@ async function runSections(args: string[]): Promise<void> {
 }
 
 async function runEnrich(args: string[]): Promise<void> {
+  // Subscription providers (ChatGPT/Codex, Copilot, …) authenticate through
+  // OAuth grants rather than an API key; load their access tokens into the env
+  // the same way `keryx shell` and `keryx auth` do, or enrich reports "no credential".
+  const { applyOAuthAccessToEnv } = await import("../lib/oauth/grants");
+  applyOAuthAccessToEnv();
   const { defaultEnrichProgress, planWikiEnrich, wikiEnrich } = await import("../wiki/enrich");
   const prompt = optionValue(args, "--prompt");
   const provider = optionValue(args, "--provider");
