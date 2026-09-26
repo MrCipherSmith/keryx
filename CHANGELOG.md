@@ -3,7 +3,7 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.3.7] — 2026-09-26
 
 ### Added
 - **Jev EDIT GUARD**: a Claude Code `PostToolUse` hook that checks every
