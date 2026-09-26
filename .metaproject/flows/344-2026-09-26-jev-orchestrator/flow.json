@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "344",
+  "slug": "jev-orchestrator",
+  "title": "Integrate Jev into review-orchestrator (jev-select, ci-triage report, jev-profile, TUI)",
+  "status": "in-progress",
+  "createdAt": "2026-09-26T11:38:53.110Z",
+  "updatedAt": "2026-09-26T13:22:41.602Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Read existing review-orchestrator SKILL.md/SKILL.detail.md, reviewers.ts, jev-client.ts, jev-risk/jev-scenarios/ci-triage as templates; confirmed ci-triage already exists as a CLI command."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented jev-select (core/config/adapter), jev-profile (core/adapter), SKILL.md/SKILL.detail.md updates (both copies, byte-identical, 1723 lines), TUI /jevprofile modal + wiring, docs, CHANGELOG."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All new/updated test files pass (449/449 in the related-tests run), including jev-select/jev-profile unit+CLI tests, the new SKILL byte-identical/line-ceiling test, and the TUI modal test. typecheck and lint clean. Live jev-select run against this repo's own diff: 28 candidates, 26 kept, 2 skipped."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-26T11:38:53.110Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-26T13:22:18.279Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-26T13:22:22.702Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-26T13:22:29.368Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-26T13:22:35.097Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-26T13:22:41.602Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ]
+}

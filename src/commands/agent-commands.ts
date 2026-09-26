@@ -298,6 +298,18 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 344: every `review.jev.*` key next to its measured verdict
+    // (CI triage proven; risk/contract measured weaker than a strong model;
+    // rules not useful on top of one; scenarios/docs/comments experimental;
+    // select/edit_guard unmeasured but recommended and fail-open/recall-
+    // first). A modal, not a bare on/off command like `/guard`/`/route`
+    // above, because there are nine keys here, not one — see
+    // `jev-profile-inspector.ts`'s header.
+    name: "/jevprofile",
+    description: "Show every Jev review setting next to its measured verdict; toggle one or apply the recommended profile",
+    modes: AGENT_ONLY,
+  },
+  {
     // P2 flipped this, as the entry it replaces said it would: `/mcp` was
     // "Deprecated alias of /integrations", kept pointing at the installer
     // only because the consumer view did not exist and a slash command

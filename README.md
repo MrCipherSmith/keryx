@@ -823,6 +823,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Architecture](docs/docs/architecture.md)** — the four-layer pattern, invariants, cross-module data flows.
 - **[Module reference](docs/docs/modules.md)** — one section per module: purpose, CLI surface, mechanics, data paths.
 - **[CLI reference](docs/docs/cli-reference.md)** — the command surface: subcommands, flags and exit codes.
+- **[Jev in review](docs/docs/jev-in-review.md)** — what we measured putting Jev in the review domain: CI triage (proven), three CLI-engine reviewers (measured weaker than a strong model), and reviewer selection (unmeasured, most promising).
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.

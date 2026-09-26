@@ -3,6 +3,34 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Added
+- **`keryx review jev-select`** (flow 344): an advisory, opt-in (`review.jev.select`), fail-open
+  pre-dispatch filter over the candidate reviewer set `review-orchestrator` is about to dispatch.
+  Asks Jev one `noul` per reviewer against a compact diff summary and skips a candidate only when
+  its probability is below `review.jev.select_skip_below` (default `0.15`) — never the Wave A core
+  safety set (`review-logic`/`review-architecture`/`review-security-code`/`review-highload`), and
+  never on its own opt-in being off, a missing credential, or any Jev error, all of which keep every
+  candidate instead. `review-orchestrator` (Step 5c) records every decision, including the skips, in
+  the report's scope section for later measurement.
+- **`keryx review jev-profile [show] [--apply recommended]`**: the recommended-profile helper for
+  every `review.jev.*` key, next to its measured verdict. `--apply recommended` merge-writes
+  `ci_triage`/`select`/`edit_guard: true` and `risk`/`contract`/`rules`/`scenarios`/`docs`/
+  `comments: false` into `.metaproject/tasks.config.json`, preserving every other key untouched.
+- **`review-orchestrator`** now runs `keryx review ci-triage` (Step 0b) on a PR whose checks are red
+  and `review.jev.ci_triage` is on, folding each failed run's verdict into the report, and documents
+  the measured verdicts for every CLI-engine reviewer (`review-jev-risk`/`review-jev-contract`:
+  measured weaker than a strong model, keep off by default; `review-jev-rules`: not useful on top of
+  a strong reviewer; `review-jev-scenarios`/`review-jev-docs`/`review-jev-comments`: experimental).
+  Also notes that the Jev edit guard (`keryx review jev-edit-guard`, a separate, parallel feature) is
+  the recommended Jev step during the FIX phase.
+- **`docs/docs/jev-in-review.md`**: what we measured putting Jev in the review domain, with the full
+  numbers behind every verdict above, from a live benchmark on a large production React/MobX
+  frontend.
+- A `/jevprofile` TUI modal: every `review.jev.*` key next to its measured verdict, with enter/space
+  to toggle one key and `a` to apply the recommended profile.
+
 ## [0.3.6] — 2026-09-25
 
 ### Fixed
