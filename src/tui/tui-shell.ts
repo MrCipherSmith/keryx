@@ -116,6 +116,8 @@ import { isOpencommentsCommand, runOpencommentsForShell } from "./jev-comments-c
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
 import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
+import { isJevProfileCommand, openJevProfile } from "./jev-profile-inspector";
+import { applyRecommendedJevProfileForShell, readJevProfileForShell, toggleJevProfileKeyForShell } from "../commands/review-jev-profile";
 import { renderTurnGuardNoticeLine } from "../review/turn-guard";
 import {
   renderRoutingSidebarValue,
@@ -6297,6 +6299,31 @@ export async function launchTuiAgentShell(opts: {
         inputBlocked: () => chrome.keyboardOwnedElsewhere(),
       });
     };
+    /** `/jevprofile` (flow 344): every `review.jev.*` key next to its measured verdict, with enter/space to toggle one key and `a` to apply the recommended profile. */
+    const showJevProfile = (): void => {
+      const cwd = inspectorCwd();
+      void (async () => {
+        try {
+          let profile = await readJevProfileForShell(cwd);
+          openJevProfile(otui, chrome, {
+            current: () => profile,
+            onToggle: async (key) => {
+              await toggleJevProfileKeyForShell(cwd, key);
+              profile = await readJevProfileForShell(cwd);
+            },
+            onApplyRecommended: async () => {
+              await applyRecommendedJevProfileForShell(cwd);
+              profile = await readJevProfileForShell(cwd);
+            },
+            onKeypress: (handler) => onKeypress(r, handler),
+            renderer: r,
+            inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+          });
+        } catch (error) {
+          io.onSystem?.(`/jevprofile: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+      })();
+    };
     /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
     const showBus = (): void => {
       if (liveBus === undefined) {
@@ -7821,6 +7848,16 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           showTurnGuard();
+          return;
+        }
+        if (isJevProfileCommand(command.name)) {
+          // flow 344: `/jevprofile` opens a modal over every `review.jev.*`
+          // key next to its measured verdict, with enter/space to toggle one
+          // key and `a` to apply the recommended profile — see
+          // `jev-profile-inspector.ts`'s header for why this is a modal and
+          // not a bare on/off command like `/guard`/`/route` above (there is
+          // no single boolean to toggle; there are nine).
+          showJevProfile();
           return;
         }
         if (isRouteCommand(command.name)) {

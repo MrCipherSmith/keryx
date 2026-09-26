@@ -94,6 +94,29 @@ dispatch). A future engine-backed reviewer follows the same pattern: gate on
 its own opt-in and reachability, dispatch as a command, merge its `--json`
 output the same way.
 
+### Measured verdicts (flow 344 — a live benchmark on a large production React/MobX frontend)
+
+Gating them on is still a project's own choice; these are RESULTS, not a change to the gates above.
+
+| Reviewer | Verdict | Measured |
+|---|---|---|
+| `review-jev-risk` | **Off by default** — measured weaker than a strong model | Top-3 recall 21% vs. "largest diff first" 30%; Sonnet 5 alone: 44%. |
+| `review-jev-contract` | **Off by default** — measured weaker than a strong model | Caught 12.5% of false PR-description claims vs. Sonnet 5's 67.5%. |
+| `review-jev-rules` | **Not useful on top of a strong reviewer** | Dispatched as an EXTRA reviewer beside an already-strong reviewer: +0 findings. |
+| `review-jev-scenarios` | Experimental — not measured | — |
+| `review-jev-docs` | Experimental — not measured | — |
+| `review-jev-comments` | Experimental — not measured | — |
+
+By contrast, `keryx review ci-triage` (Step 0b, not a reviewer) and `keryx
+review jev-select` (Step 5c, not a reviewer either) both have a measured case
+FOR them: CI triage cut developer minutes per failure from 30 to 15.4 under an
+explicit cost model (38% vs. 25% flaky/regression/infra accuracy against
+Sonnet 5 reading the same log, p=0.035); reviewer *selection* is the
+unmeasured lever this benchmark named as most promising, which is why
+`jev-select` ships recall-first and fails open rather than waiting for a
+measurement that has not run yet. Full numbers, methodology and the cost
+model: `docs/docs/jev-in-review.md`.
+
 ## `jev-triage` — advisory annotations, not a reviewer (Step 9b)
 
 `review-jev-triage` (flow 340) is a DIFFERENT shape from every CLI-engine

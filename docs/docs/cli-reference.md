@@ -4656,6 +4656,69 @@ read and makes no network call.
 The `/triage` slash command runs the same triage over the latest review
 package in the current flow and prints the annotations into the transcript.
 
+### `review jev-select`
+
+Flow 344. An ADVISORY, pre-dispatch filter — not itself a reviewer, and it
+never produces a `findings` array — over the candidate reviewer set
+`review-orchestrator` is about to dispatch. For each candidate (bundled +
+project reviewers, the same source `keryx review reviewers --json` reads), it
+asks Jev one `noul`: given a compact diff summary (changed paths, file types,
+a sample of hunks trimmed to budget) and the reviewer's own routing
+description, is this reviewer applicable to this diff / likely to find
+something? Reviewer (sub-agent) SELECTION is the cost lever a live benchmark
+named as most promising and, unlike CI triage or review-jev-risk/contract/
+rules, it has **not** been measured yet — so the policy is deliberately
+recall-first: a candidate is skipped only when its probability is *below*
+`review.jev.select_skip_below` (default `0.15`), the Wave A core safety set
+(`review-logic`, `review-architecture`, `review-security-code`,
+`review-highload`) is never skipped whatever Jev answers, and any error — no
+opt-in, no credential, a failed call — keeps EVERY remaining candidate rather
+than dropping one. See `docs/docs/jev-in-review.md` for the full numbers.
+
+```bash
+keryx review jev-select --ref main --json
+keryx review jev-select --diff pr.diff --json
+echo "$DIFF" | keryx review jev-select --diff - --json
+```
+
+| Flag | Description |
+|---|---|
+| `--diff <file>` \| `-` \| `--ref <base>` | Exactly one is required. `--diff` reads a unified diff from a file or stdin; `--ref` runs `git diff <base>` itself. |
+| `--reviewers <file>` \| `-` | Overrides the candidate set with a prior `keryx review reviewers --json` capture (or an array of `{id, description}`), instead of re-reading the installed tree. |
+| `--skip-below <0..1>` | Overrides `review.jev.select_skip_below` for this run. |
+| `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
+| `--fixtures <dir>` | Answers every Jev call (`jev-responses.json`) and, optionally, the candidate set (`reviewers.json`) from files on disk — no real network call, and the opt-in/credential gates are bypassed (same convention as every other `review jev-*` command's `--fixtures`). |
+| `--out <path>` | Writes the decisions into `path` — a `.json` file gets `{decisions, skipBelow, summary}`; anything else gets a `## Jev reviewer selection (advisory)` markdown block upserted (replacing any earlier one, never appending a second). |
+| `--json` | Prints `{decisions: [{reviewer, probability, decision: "keep"\|"skip", reason}], skipBelow, summary, target}`. |
+
+**Opt-in with `review.jev.select: true`, and it FAILS OPEN — the one
+`review.jev.*` gate that does not refuse.** With the opt-in off, no
+credential, or any Jev call failing partway through a batch, every candidate
+is decided `keep` with a reason saying why, and the command still exits `0`.
+An unmeasured lever must never cost reviewer coverage on its own account.
+`review-orchestrator` (Step 5c) records every decision in the report's scope
+section, including the skips, so a later round can check whether a skipped
+reviewer's domain surfaced a real finding anyway.
+
+### `review jev-profile`
+
+Flow 344. The recommended-profile helper: every `review.jev.*` key this
+benchmark produced a verdict for, in one place, next to the project's current
+value — so a project does not have to read multiple flow journals to know
+which Jev review steps are worth turning on.
+
+```bash
+keryx review jev-profile show
+keryx review jev-profile --apply recommended
+keryx review jev-profile --apply recommended --json
+```
+
+| Flag | Description |
+|---|---|
+| `show` (bare, or `--apply show`) | Prints the current `review.jev.*` state next to each key's measured verdict. Never writes. |
+| `--apply recommended` | Merge-writes the recommended profile into `.metaproject/tasks.config.json`: `ci_triage: true`, `select: true`, `edit_guard: true` (read by the separate `keryx review jev-edit-guard` feature — this command only sets the key), and `risk`/`contract`/`rules`/`scenarios`/`docs`/`comments: false`. Every other key in the file, at every level, is preserved untouched. |
+| `--json` | Prints `{current, applied, path?}`. |
+
 ### `review conform`
 
 Reference-document conformance mode (flow 308): a rules file, a skill, or a

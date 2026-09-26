@@ -51,6 +51,12 @@ import { runJevTriage } from "./review-jev-triage";
 // flow 343: the Jev EDIT GUARD, a Claude Code `PostToolUse` hook — see
 // `review-jev-edit-guard.ts` for everything past registration.
 import { runJevEditGuard } from "./review-jev-edit-guard";
+// flow 344: reviewer (sub-agent) SELECTION — the cost lever the measurement
+// programme named as most promising and least measured. See
+// `review-jev-select.ts`/`review-jev-profile.ts` for everything past
+// registration.
+import { runJevSelect } from "./review-jev-select";
+import { runJevProfile } from "./review-jev-profile";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -620,6 +626,19 @@ export async function reviewCommand(args: string[]): Promise<void> {
     // `src/commands/review-jev-triage.ts` for everything past registration.
     if (command === "jev-triage") {
       await runJevTriage(args.slice(1));
+      return;
+    }
+    // flow 344: reviewer selection, advisory, opt-in, fail-open — see
+    // `src/commands/review-jev-select.ts` for everything past registration.
+    if (command === "jev-select") {
+      await runJevSelect(args.slice(1));
+      return;
+    }
+    // flow 344: the recommended-profile helper for every `review.jev.*` key
+    // — see `src/commands/review-jev-profile.ts` for everything past
+    // registration.
+    if (command === "jev-profile") {
+      await runJevProfile(args.slice(1));
       return;
     }
     if (command === "learn") {
