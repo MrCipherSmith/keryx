@@ -125,6 +125,18 @@ import {
 } from "./routing-classifier-source";
 import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
 import type { RoutingCategory } from "../harness/routing/table";
+// flow 343: the Jev EDIT GUARD's `/editguard` modal — everything else
+// (the CLI hook, the config/log I/O) lives in
+// `../commands/review-jev-edit-guard.ts`/`../review/jev-edit-guard*.ts`.
+import {
+  EDIT_GUARD_COMMAND,
+  isEditGuardCommand,
+  openEditGuard,
+  renderEditGuardSidebarValue,
+  type EditGuardStatusSnapshot,
+} from "./jev-edit-guard-inspector";
+import { readJevEditGuardConfig, writeJevEditGuardEnabled } from "../review/jev-edit-guard-config";
+import { editGuardTodayStats, readEditGuardLogRecords, recentEditGuardFlags } from "../review/jev-edit-guard-log";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -4155,6 +4167,14 @@ export async function launchTuiAgentShell(opts: {
     // defined below once `routingEnabled`/`routingRoutedCount` exist.
     const sbRoute = new otui.BoxRenderable(r, { id: "sb-route", flexDirection: "column", flexShrink: 0 });
     sidebar.add(sbRoute);
+    // Flow 343: "EditGuard" row — same zero-rows-while-off idiom as `sbGuard`/
+    // `sbRoute` above. Created here (sidebar position); filled by
+    // `refreshEditGuardSidebar`, defined below once `editGuardStatus` exists.
+    // Unlike the guard/route rows, this one's state lives in a PROJECT file
+    // (`.metaproject/tasks.config.json`), not session memory, so its first
+    // paint happens after an async read rather than synchronously here.
+    const sbEditGuard = new otui.BoxRenderable(r, { id: "sb-edit-guard", flexDirection: "column", flexShrink: 0 });
+    sidebar.add(sbEditGuard);
     // Multi-agent / page-worker fleet (enrich swarm + future harness subagents).
     // Live activity: main agent phase + optional enrich/subagent fleet.
     // Yellow when blocked (user must act), red on failure — not cryptic glyphs only.
@@ -4715,6 +4735,99 @@ export async function launchTuiAgentShell(opts: {
       saveShellConfig({ routingClassifier: { ...existing, enabled: next } });
       refreshRoutingSidebar();
       io.onSystem?.(`Route: ${next ? "on" : "off"}\n`);
+    };
+
+    // --- flow 343: Jev EDIT GUARD --------------------------------------------
+    // Opt-in, default off — but unlike the guard/route rows above, its on/off
+    // and threshold live in the PROJECT's own `.metaproject/tasks.config.json`
+    // (`review.jev.edit_guard`), the same file the CLI hook installed by
+    // `keryx review jev-edit-guard install` reads. The sidebar's first paint
+    // therefore happens after an async read rather than synchronously here.
+    const editGuardProjectDir = (): string => opts.session?.cwd ?? process.cwd();
+    let editGuardStatus: EditGuardStatusSnapshot = {
+      enabled: false,
+      threshold: 0.5,
+      maxCalls: 24,
+      today: { calls: 0, flagged: 0, costUsd: 0 },
+      recentFlags: [],
+    };
+    const loadEditGuardStatus = async (): Promise<EditGuardStatusSnapshot> => {
+      const dir = editGuardProjectDir();
+      const cfg = await readJevEditGuardConfig(dir);
+      const records = await readEditGuardLogRecords(dir);
+      const today = editGuardTodayStats(records);
+      const recentFlags = recentEditGuardFlags(records, 10).map((flag) => ({
+        file: flag.file,
+        line: flag.line,
+        ruleId: flag.ruleId,
+        clauseId: flag.clauseId,
+        probability: flag.probability,
+        at: flag.at,
+      }));
+      return { enabled: cfg.enabled, threshold: cfg.threshold, maxCalls: cfg.maxCalls, today, recentFlags };
+    };
+    const refreshEditGuardSidebar = (): void => {
+      clearTranscriptChildren(sbEditGuard);
+      const value = renderEditGuardSidebarValue(editGuardStatus);
+      if (value === undefined) return;
+      sbEditGuard.add(new otui.TextRenderable(r, { id: "sb-edit-guard-k", content: otui.t`${dimChunk(otui, "EditGuard")}`, marginTop: 1 }));
+      sbEditGuard.add(
+        new otui.TextRenderable(r, {
+          id: "sb-edit-guard-v",
+          content: otui.t`${dimChunk(otui, value)}`,
+          onMouseDown: () => {
+            showEditGuard();
+          },
+        }),
+      );
+    };
+    // A missing/unparsable config or log reads as "off" (the constructed
+    // default above) — never a startup crash.
+    void loadEditGuardStatus()
+      .then((status) => {
+        editGuardStatus = status;
+        refreshEditGuardSidebar();
+      })
+      .catch(() => {});
+    const toggleEditGuardEnabled = async (): Promise<void> => {
+      await writeJevEditGuardEnabled(editGuardProjectDir(), !editGuardStatus.enabled);
+    };
+    /** `/editguard` alone opens the modal (fetching a fresh snapshot first); `/editguard on|off` toggles directly, mirroring `/guard`/`/route`. */
+    const showEditGuard = (): void => {
+      void loadEditGuardStatus()
+        .then((initialStatus) => {
+          editGuardStatus = initialStatus;
+          refreshEditGuardSidebar();
+          openEditGuard(otui, chrome, {
+            initialStatus,
+            loadStatus: async () => {
+              const next = await loadEditGuardStatus();
+              editGuardStatus = next;
+              refreshEditGuardSidebar();
+              return next;
+            },
+            toggle: toggleEditGuardEnabled,
+            onKeypress: (handler) => onKeypress(r, handler),
+            renderer: r,
+            inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+            onError: (message) => io.onSystem?.(`editguard: ${message}\n`),
+          });
+        })
+        .catch((error: unknown) => {
+          io.onSystem?.(`editguard: ${error instanceof Error ? error.message : String(error)}\n`);
+        });
+    };
+    const setEditGuardEnabled = (next: boolean): void => {
+      void writeJevEditGuardEnabled(editGuardProjectDir(), next)
+        .then(() => loadEditGuardStatus())
+        .then((status) => {
+          editGuardStatus = status;
+          refreshEditGuardSidebar();
+          io.onSystem?.(`EditGuard: ${status.enabled ? "on" : "off"}\n`);
+        })
+        .catch((error: unknown) => {
+          io.onSystem?.(`editguard: ${error instanceof Error ? error.message : String(error)}\n`);
+        });
     };
 
     // Approval gate: `shell_exec` (remembered patterns) + `spawn_subagent` (MAE).
@@ -7724,6 +7837,23 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           io.onSystem?.(`Route: ${renderRoutingSidebarValue(routingEnabled, routingRoutedCount, routingLastCategory)}\n`);
+          return;
+        }
+        if (isEditGuardCommand(command.name)) {
+          // flow 343: `/editguard on|off` toggles + persists (in the PROJECT's
+          // `.metaproject/tasks.config.json`, not per-user shell config);
+          // bare `/editguard` opens the modal — status, threshold, recent
+          // flags, today's counts, and its own in-modal `t` toggle.
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+          if (arg === "on" || arg === "off") {
+            setEditGuardEnabled(arg === "on");
+            return;
+          }
+          if (arg.length > 0) {
+            io.onSystem?.(`Unknown /editguard argument '${arg}'. Usage: ${EDIT_GUARD_COMMAND} [on|off]\n`);
+            return;
+          }
+          showEditGuard();
           return;
         }
         if (command.name === "/bus") {

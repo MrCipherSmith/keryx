@@ -118,6 +118,17 @@ export {
   type RulesExportResult,
 } from "./rules-export";
 
+// Flow 343: the Jev EDIT GUARD's own standalone `PostToolUse` surface — see
+// `./jev-edit-guard-surface.ts`'s header for why it is exported here rather
+// than added to `HARNESS_ADAPTERS`.
+export {
+  EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH,
+  EDIT_GUARD_HOOK_MATCHER,
+  EDIT_GUARD_HOOK_SENTINEL,
+  JEV_EDIT_GUARD_SURFACE,
+  editGuardHookCommand,
+} from "./jev-edit-guard-surface";
+
 export {
   ACP_PERMISSION_ZED,
   CTX_GUARD_GEMINI_CLI,

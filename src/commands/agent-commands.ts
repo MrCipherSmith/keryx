@@ -298,6 +298,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 343 (Jev EDIT GUARD): a `PostToolUse` hook check, not a
+    // per-turn one — this modal shows the opt-in state, threshold, and
+    // recent flags of the Claude Code hook installed by `keryx review
+    // jev-edit-guard install`, and toggles it. TUI-only, same reasoning as
+    // `/guard`/`/route`.
+    name: "/editguard",
+    description: "Jev EDIT GUARD status/threshold/recent flags, with a toggle — install via keryx review jev-edit-guard install",
+    modes: AGENT_ONLY,
+  },
+  {
     // P2 flipped this, as the entry it replaces said it would: `/mcp` was
     // "Deprecated alias of /integrations", kept pointing at the installer
     // only because the consumer view did not exist and a slash command

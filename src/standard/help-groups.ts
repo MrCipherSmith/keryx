@@ -360,6 +360,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Managed work",
     summary: "Opt-in routing classifier: each request runs on its routing category's model — /route [on|off].",
   },
+  {
+    kind: "slash",
+    name: "/editguard",
+    group: "Managed work",
+    summary: "Jev EDIT GUARD status, threshold and recent flags for the Claude Code PostToolUse hook, with a toggle.",
+  },
   { kind: "slash", name: "/plan", group: "Managed work", summary: "Toggle read-only mode — /plan [on|off]." },
   {
     kind: "slash",

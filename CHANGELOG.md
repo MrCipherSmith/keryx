@@ -3,6 +3,24 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Added
+- **Jev EDIT GUARD**: a Claude Code `PostToolUse` hook that checks every
+  `Edit`/`Write`/`MultiEdit` a coding agent makes against the project's own
+  written rules, using Jev, and feeds violations straight back to the agent
+  before the code ever reaches a human reviewer. Opt-in
+  (`review.jev.edit_guard: true` in `.metaproject/tasks.config.json`,
+  threshold `review.jev.edit_guard_threshold`, default `0.5`; per-run budget
+  `review.jev.edit_guard_max_calls`). Fails open on any error, timeout
+  (~4s hard cap) or missing credential, and always exits `0`. New:
+  `keryx review jev-edit-guard install|uninstall|status`, the TUI's
+  `/editguard` (modal + sidebar indicator). Measured on a real project (10
+  tasks × 2 runs, a large production React/MobX frontend): real rule
+  violations reaching the first review round fell 27 → 10 (−63%) and review
+  rounds 31 → 24, at the same total cost (Jev cost $0.04 for 40 runs); the
+  agent acted on 79% of the flags at threshold 0.5.
+
 ## [0.3.6] — 2026-09-25
 
 ### Fixed

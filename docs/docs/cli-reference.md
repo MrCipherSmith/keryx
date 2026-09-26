@@ -5048,6 +5048,59 @@ rule doc's own content hash (a re-run against a DIFFERENT diff but the SAME
 rule corpus costs zero additional tagging calls, even though the hunks —
 and so the violation cache — miss).
 
+### `review jev-edit-guard`
+
+Flow 343. The Jev EDIT GUARD — a Claude Code `PostToolUse` hook that catches
+a rule violation the moment an `Edit`/`Write`/`MultiEdit` makes it, rather
+than at the next review round. It reuses `review jev-rules`'s own
+`computeJevRulesResult` (discovery, clause tagging with its cache, pair
+selection, batching, threshold-based finding synthesis) unchanged — the only
+new work is: diffing the ONE file the tool call just touched against `HEAD`,
+running that one changed region through it, and turning the result into the
+hook's own feedback text.
+
+```bash
+keryx review jev-edit-guard install            # merge-safe .claude/settings.json write
+keryx review jev-edit-guard status [--json]     # on/off, threshold, today's calls/flags/cost
+keryx review jev-edit-guard uninstall           # removes only this hook's entry
+keryx review jev-edit-guard --hook claude       # what the installed hook itself runs; reads the PostToolUse payload from stdin
+```
+
+| Flag/subcommand | Description |
+|---|---|
+| `install` | Merge-safe, idempotent (same primitives `keryx security hooks install` uses — a standalone `SurfaceAdapter`, `src/integrations/jev-edit-guard-surface.ts`): writes a `PostToolUse` group matching `Edit\|Write\|MultiEdit` into `.claude/settings.json`, preserving every other hook entry. Running it twice never duplicates the group. |
+| `uninstall` | Removes only the entry this installer wrote (tagged with its own sentinel), leaving every other hook untouched. |
+| `status [--json]` | Whether `review.jev.edit_guard` is on, the effective threshold and per-run call cap, and today's Jev calls/flags/cost from `.metaproject/data/jev/edit-guard.jsonl`. |
+| `--hook claude` | What the installed hook actually invokes. Reads the `PostToolUse` payload from stdin, diffs the named file against `HEAD`, and prints a `{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "..."}}` line ONLY when something is flagged — otherwise it prints nothing. Any other `--hook` runtime is a no-op (no codec exists yet), exiting `0`. |
+
+**Opt-in**, same shape as `review jev-rules`: `review.jev.edit_guard: true` in
+`.metaproject/tasks.config.json`. Threshold: `review.jev.edit_guard_threshold`
+(default `0.5`). Per-run budget/cost cap: `review.jev.edit_guard_max_calls`
+(default 24 — a single edit is usually 1-3 hunks, so this doubles as the
+feature's own cost ceiling). With the setting off, or with no Jev/OpenRouter
+credential, the hook makes no network call and stays silent.
+
+**Fails open, always, no exceptions.** Disabled, no credential, malformed
+hook JSON, an unsupported tool, no changed region against `HEAD`, a Jev
+error, or the hard **~4 second** wall-clock timeout on the whole invocation
+(gate + diff + every Jev call, enforced by aborting the in-flight request,
+not merely by racing a promise) — every one of these prints nothing and
+exits `0`. Only a real finding at or above threshold ever produces hook
+output, capped at 5 lines of feedback per invocation. Every invocation is
+logged to `.metaproject/data/jev/edit-guard.jsonl` (mode `0600`,
+gitignored): timestamp, file, tool, status, latency, Jev calls, cost, and
+every flag (rule, clause, line, probability) — `status`/the TUI's
+`/editguard` modal read this same log.
+
+**Measured on a real project** (10 tasks × 2 runs, a large production
+React/MobX frontend): at threshold 0.5, real rule violations reaching the
+first review round fell from 27 to 10 (−63%) and review rounds from 31 to
+24, at the same total cost (Jev itself cost $0.04 for the 40 runs); the
+agent acted on 79% of the flags. At threshold 0.2 the guard flagged almost
+every edit, the agent learned to ignore it, and it had no measurable
+effect — this is why the default is `0.5` and not lower: precision matters
+more than recall for a hook an agent reads on every edit.
+
 ### `review ci-triage --eval`
 
 ```bash

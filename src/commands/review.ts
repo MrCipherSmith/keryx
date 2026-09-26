@@ -48,6 +48,9 @@ import { runJevContract } from "./review-jev-contract";
 // CONSOLIDATED findings — see `review-jev-triage.ts` for everything past
 // registration.
 import { runJevTriage } from "./review-jev-triage";
+// flow 343: the Jev EDIT GUARD, a Claude Code `PostToolUse` hook — see
+// `review-jev-edit-guard.ts` for everything past registration.
+import { runJevEditGuard } from "./review-jev-edit-guard";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -577,6 +580,12 @@ export async function reviewCommand(args: string[]): Promise<void> {
     // `src/commands/review-jev-rules.ts` for everything past registration.
     if (command === "jev-rules") {
       await runJevRules(args.slice(1));
+      return;
+    }
+    // flow 343: the Jev EDIT GUARD — see `review-jev-edit-guard.ts` for
+    // everything past registration.
+    if (command === "jev-edit-guard") {
+      await runJevEditGuard(args.slice(1));
       return;
     }
     // flow 332: two more ADDITIONAL, CLI-driven reviewers — see

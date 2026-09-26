@@ -754,6 +754,47 @@ The seams exist for the model-backed variants when they ship.
 Tree-sitter grammars for the symbol/call graph are downloadable and optional; the
 graph falls back to its deterministic resolver when a grammar is absent.
 
+## Jev EDIT GUARD (opt-in)
+
+A Claude Code `PostToolUse` hook that checks every `Edit`/`Write`/`MultiEdit` a
+coding agent makes against your project's own written rules, using Jev, and
+feeds violations straight back to the agent through the hook's
+`additionalContext` channel — before the code ever reaches a human reviewer.
+It never blocks the tool call: on any error, timeout, or missing credential
+it fails open silently and always exits `0`.
+
+Measured on a real project (10 tasks × 2 runs, a large production
+React/MobX frontend):
+
+| | violations reaching first review | review rounds | Jev cost |
+|---|---|---|---|
+| without the guard | 27 | 31 | — |
+| with the guard (threshold 0.5) | **10 (−63%)** | **24** | $0.04 for 40 runs |
+
+The agent acted on 79% of the flags at threshold 0.5. At threshold 0.2 the
+guard flagged almost every edit, the agent learned to ignore it, and it had
+no measurable effect — so **precision matters more than recall here**, and
+`0.5` is the default for exactly that reason. Raise it if the guard still
+flags too much for your rule set; lower it only if you have evidence the
+agent is actually acting on the extra flags.
+
+```bash
+keryx review jev-edit-guard install   # merge-safe: writes .claude/settings.json
+```
+
+Then opt in per project — the hook is installed but stays silent until this is set:
+
+```json
+// .metaproject/tasks.config.json
+{ "review": { "jev": { "edit_guard": true, "edit_guard_threshold": 0.5 } } }
+```
+
+`keryx review jev-edit-guard status` shows whether it is on, the threshold,
+and today's calls/flags/cost. The TUI's `/editguard` shows the same, plus the
+most recent flags, with a one-key toggle. `keryx review jev-edit-guard
+uninstall` removes only this hook's entry, leaving every other hook
+untouched.
+
 ## Current limitations
 
 | Limitation | Impact | Alternative |
