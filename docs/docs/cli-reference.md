@@ -1551,6 +1551,78 @@ shows the per-task cost next to a `derived` row once it is known:
 
 ---
 
+## external
+
+Flow 346 — the **EXTERNAL switch**: keeps private work (code, diffs, CI-log
+excerpts, prompts, rule text) in-house by blocking every call to
+Jev/TypeSafe and any other listed provider/model before any network I/O.
+Two config layers, same "project wins" precedence every other project-vs-
+user keryx toggle uses: **per-project `.metaproject/tasks.config.json`
+(`external`) > per-user setting (shell config) > built-in default
+(`"on"`)**.
+
+**On by default, off when you say so.** `external: "on"` (the default, and
+the pre-flow-346 behavior byte-for-byte) sends private work to Jev/TypeSafe
+and any connected provider/model exactly as before. `external: "off"`
+blocks every destination listed in `<keryx config dir>/external-
+providers.json` — the Jev client (`callJevSystemOne`, every `review-jev-*`
+command, `conform`, `ci-triage`, `jev-select`, the routing classifier, the
+turn guard) and the routing/model-selection choke point both check it, so a
+listed provider/model is excluded from routing (falls through to the next
+layer, with a notice — never silently) and every Jev call throws a typed,
+readable `ExternalBlockedError` instead of ever reaching `fetch`.
+
+**The block list is yours to edit.** `<keryx config dir>/external-
+providers.json` is created with built-in defaults on first use and never
+overwritten again — `keryx external list` prints the effective list and
+where it came from. The built-in defaults: Jev/TypeSafe System One (the
+OpenRouter `/api/v1/systemone` endpoint — it receives code and CI logs on
+every call); keryx's own direct provider ids for vendors hosted under
+jurisdictions/terms where a prompt may be retained or trained on
+(`deepseek`, `zai`/`zai-coding`, `moonshot`); the SAME vendors reached
+instead through an OpenRouter model id, plus vendors with no first-class
+keryx provider at all (`deepseek/*`, `minimax/*`, `z-ai/*`/`zhipu/*`/`glm/*`,
+`moonshotai/*`, `qwen/*`/`alibaba/*`, `baidu/*`, `tencent/*`,
+`bytedance/*`, `01-ai/*`); OpenRouter's free tier (`*:free`), whose
+underlying provider's logging/training policy is unaudited per-model; and
+any model id containing `muse`, named explicitly by the operator. The
+mainstream paid US providers you connect directly — Anthropic, OpenAI,
+Google/Gemini, GitHub Copilot, xAI, Groq — stay off the list.
+
+**Jev is on by default wherever it is reachable.** The three recommended,
+fail-open `review.jev.*` steps (`ci_triage`, `select`, `edit_guard`) now
+apply automatically — no per-project opt-in — whenever `/external` is on
+AND a Jev/OpenRouter credential resolves (env or a saved key). An explicit
+`true`/`false` for that key in `.metaproject/tasks.config.json` always wins
+over the default. `keryx review jev-profile show` names the source of each
+key's effective value: `explicit`, `default-because-jev-available`, or
+`off-by-external`. The first time a project actually sends data because of
+this default (not an explicit opt-in), one line is shown once — on CLI
+stderr for `ci_triage`/`select`/the edit-guard hook — and recorded so it
+never repeats for that project: `Jev is on here: redacted code/CI snippets
+go to OpenRouter/TypeSafe. Turn off: /external off`.
+
+```
+keryx external on [--project]
+keryx external off [--project]
+keryx external status [--json]
+keryx external list [--json]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `on` / `off` | `--project` | Persist the setting per-user (default) or, with `--project`, to this project's own `.metaproject/tasks.config.json` override. |
+| `status` | `--json` | The effective on/off state, which layer answered (`project`/`user`/`default`), whether a Jev credential resolves, and what is blocked right now. |
+| `list` | `--json` | The effective block list — every provider id and model-id pattern, each with its reason — and where the list came from (`default-created` / `user-file` / `default-fallback-malformed`, with a warning). |
+
+In the TUI, `/external` alone prints the same status block (state, source,
+credential availability, effective block list); `/external on|off` toggles
++ persists the per-user setting. A sidebar row appears when it is `off` —
+the default `on` state costs no permanent sidebar space, the same idiom
+`/guard`/`/route` use for their own default state.
+
+---
+
 ## serve
 
 An **opt-in, off-by-default** loopback-bound HTTP entry over the same agent

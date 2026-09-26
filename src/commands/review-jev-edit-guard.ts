@@ -33,7 +33,15 @@ import {
   renderEditGuardFeedback,
   type EditGuardHookPayload,
 } from "../review/jev-edit-guard";
-import { readJevEditGuardConfig, readJevEditGuardEnabled, type EditGuardConfigSnapshot } from "../review/jev-edit-guard-config";
+import {
+  readJevEditGuardConfig,
+  readJevEditGuardEnabled,
+  readJevEditGuardEnabledDetailed,
+  readJevEditGuardMaxCalls,
+  readJevEditGuardThreshold,
+  type EditGuardConfigSnapshot,
+} from "../review/jev-edit-guard-config";
+import { EXTERNAL_DEFAULT_NOTICE_TEXT, shouldShowExternalDefaultNotice } from "../lib/external-notice";
 import {
   appendEditGuardLog,
   editGuardTodayStats,
@@ -166,15 +174,43 @@ export async function runJevEditGuardHook(cwd: string, deps: EditGuardCliDeps = 
 
   let cfg: EditGuardConfigSnapshot | undefined;
   try {
-    cfg = await readJevEditGuardConfig(root);
+    // Flow 346: resolved BEFORE the opt-in check (not after, as before) so
+    // the shared default-on resolver (`resolveJevProfileFlag`) can see
+    // whether a credential is actually available — see
+    // `readJevEditGuardEnabled`'s own doc.
+    const apiKey = resolveJevApiKey(env, deps.configDir);
+    const enabledOpts = {
+      jevAvailable: apiKey !== undefined && apiKey.length > 0,
+      ...(deps.configDir !== undefined ? { configDir: deps.configDir } : {}),
+    };
+    const [enabledResult, threshold, maxCalls] = await Promise.all([
+      readJevEditGuardEnabledDetailed(root, enabledOpts),
+      readJevEditGuardThreshold(root),
+      readJevEditGuardMaxCalls(root),
+    ]);
+    cfg = { enabled: enabledResult.value, threshold, maxCalls };
     if (!cfg.enabled) {
-      await finish({ file: "(none)", tool: "(none)", status: "skipped", reason: "review.jev.edit_guard is not enabled", jevCalls: 0, threshold: cfg.threshold, flags: [] });
+      await finish({
+        file: "(none)",
+        tool: "(none)",
+        status: "skipped",
+        reason: "review.jev.edit_guard is not enabled (default: on when a Jev/OpenRouter credential is available and /external is on)",
+        jevCalls: 0,
+        threshold: cfg.threshold,
+        flags: [],
+      });
       return;
     }
-    const apiKey = resolveJevApiKey(env, deps.configDir);
     if (apiKey === undefined || apiKey.length === 0) {
       await finish({ file: "(none)", tool: "(none)", status: "skipped", reason: "no Jev/OpenRouter credential", jevCalls: 0, threshold: cfg.threshold, flags: [] });
       return;
+    }
+    // Flow 346, design §5: the one-time consent notice on stderr — only for
+    // a run that is happening BECAUSE OF the default, never an explicit
+    // opt-in. `console.error`, not `finish`'s own log: this line is for the
+    // OPERATOR watching the hook's stderr, not the edit-guard log file.
+    if (enabledResult.source === "default-because-jev-available" && shouldShowExternalDefaultNotice(root, deps.configDir)) {
+      console.error(EXTERNAL_DEFAULT_NOTICE_TEXT);
     }
 
     const raw = await readStdin(deps.stdin ?? process.stdin);

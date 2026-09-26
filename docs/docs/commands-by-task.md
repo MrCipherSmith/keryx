@@ -24,6 +24,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx auth` | Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status. |
 | `keryx providers` | Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility. |
 | `keryx routing` | Category -> model routing table (list, set, unset, trust), the model-profile catalogue (profile list, profile set), and real measured task cost (stats). |
+| `keryx external` | Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on\|off\|status\|list). |
 
 | Shell command | Summary |
 |---|---|
@@ -32,6 +33,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/search-provider` | Configure and test a web search provider. |
 | `/search-connect` | Select a connected web search provider. |
 | `/provider` | Switch provider — /provider <name>, or no arg to re-select. |
+| `/external` | Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on\|off]. |
 
 ## Look and feel
 

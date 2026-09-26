@@ -2,8 +2,19 @@
 
 Two Jev-backed checks are wired into the delivery orchestrators
 (`job-orchestrator`, `flow-orchestrator`, `task-implementer`, `code-verifier`).
-Both are opt-in and advisory — nothing here writes code, reruns a job, or
-merges a PR on Jev's say alone.
+Both are advisory — nothing here writes code, reruns a job, or merges a PR
+on Jev's say alone.
+
+**Both are now on by default wherever Jev is reachable** (flow 346): edit
+guard and CI triage apply automatically as soon as a Jev/OpenRouter
+credential resolves, as long as [`/external`](../cli-reference.md#external)
+is on (the default) — no per-project `.metaproject/tasks.config.json` edit
+required. Run `keryx external off` (or `/external off` in the TUI) to keep
+this project's code/diffs/CI logs from reaching Jev/TypeSafe entirely; an
+explicit `review.jev.ci_triage`/`edit_guard` of `true`/`false` still wins
+over the default either way. The enable instructions below still work —
+they just record the choice explicitly instead of leaving it to the
+default.
 
 ## Edit guard
 
@@ -60,4 +71,10 @@ failure from **30 to 15.4**.
 ## Related
 
 `keryx review jev-profile --apply recommended` turns on `ci_triage`, `select`,
-and `edit_guard` together in one step, once it ships.
+and `edit_guard` together in one step, explicitly — though as of flow 346
+all three already apply by default wherever Jev is reachable (see above).
+`keryx review jev-profile show` names each key's effective source
+(`explicit`/`default-because-jev-available`/`off-by-external`).
+See [the `external` CLI reference](../cli-reference.md#external) for the
+`/external` switch itself — also covered in the project README's "Keeping
+private work in-house: /external" section.

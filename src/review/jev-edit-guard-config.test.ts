@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   readJevEditGuardConfig,
   readJevEditGuardEnabled,
+  readJevEditGuardEnabledDetailed,
   readJevEditGuardMaxCalls,
   readJevEditGuardThreshold,
   writeJevEditGuardEnabled,
@@ -72,6 +73,33 @@ describe("reads: fail-closed, never throw", () => {
     writeConfig({ review: { jev: { edit_guard: true, edit_guard_threshold: 0.7, edit_guard_max_calls: 10 } } });
     const cfg = await readJevEditGuardConfig(dir);
     expect(cfg).toEqual({ enabled: true, threshold: 0.7, maxCalls: 10 });
+  });
+});
+
+describe("Flow 346: edit_guard default-on through the shared resolveJevProfileFlag", () => {
+  let cfgDir: string;
+  beforeEach(() => {
+    cfgDir = mkdtempSync(path.join(tmpdir(), "keryx-edit-guard-default-on-cfg-"));
+  });
+  afterEach(() => {
+    rmSync(cfgDir, { recursive: true, force: true });
+  });
+
+  test("unset + external on (default) + a Jev credential available -> defaults to true", async () => {
+    const result = await readJevEditGuardEnabledDetailed(dir, { jevAvailable: true, configDir: cfgDir });
+    expect(result).toEqual({ value: true, source: "default-because-jev-available" });
+    expect(await readJevEditGuardEnabled(dir, { jevAvailable: true, configDir: cfgDir })).toBe(true);
+  });
+
+  test("unset + external on + NO credential available -> stays false", async () => {
+    const result = await readJevEditGuardEnabledDetailed(dir, { jevAvailable: false, configDir: cfgDir });
+    expect(result).toEqual({ value: false, source: "off" });
+  });
+
+  test("the project's own external: \"off\" always wins, even with a credential available", async () => {
+    writeConfig({ external: "off" });
+    const result = await readJevEditGuardEnabledDetailed(dir, { jevAvailable: true, configDir: cfgDir });
+    expect(result).toEqual({ value: false, source: "off-by-external" });
   });
 });
 

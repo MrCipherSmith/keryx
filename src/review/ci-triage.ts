@@ -56,6 +56,11 @@ import { estimateTokens } from "./cost";
 // rest of the codebase holds uniformly, for no benefit.
 import { redactSensitiveText } from "../security/service";
 import { REVIEW_GATE_CONFIG_PATH } from "../flow/review-gate";
+// `lib` is SHARED (`import-zones.ts`) — safe for this CORE module to import,
+// unlike `harness/decision/jev-client.ts` (CLIENT), which this file's own
+// header explains it may never reach.
+import { resolveExternalSetting } from "../lib/external-switch";
+import { resolveJevProfileFlag, type JevProfileFlagResult } from "./jev-profile";
 import {
   CI_SPAWN_OUTPUT_CAP_BYTES,
   type CiAttemptJobs,
@@ -275,24 +280,57 @@ export function renderCiTriageAdvisory(input: {
   ].join("\n");
 }
 
+/** Options `readCiTriageEnabled`'s caller passes to reach the shared default-on resolver (`resolveJevProfileFlag`, `./jev-profile.ts`) — see that function's `JevProfileFlagContext` doc for why `jevAvailable` cannot be computed in here. */
+export interface CiTriageEnabledOptions {
+  /** Whether a Jev/OpenRouter credential currently resolves — computed by the caller via `resolveJevApiKey` (CLIENT zone). Omitted (the default) reads as "no credential", so a caller that has not been updated to pass this never silently defaults on. */
+  readonly jevAvailable?: boolean;
+  /** Per-user config dir override for `resolveExternalSetting`'s user-level layer — the same test seam every other reader in this codebase takes. */
+  readonly configDir?: string;
+}
+
 /**
- * AC10: opt-in per project, `review.jev.ci_triage` in
- * `.metaproject/tasks.config.json`, mirroring `completion.require_confirmation`'s
- * own opt-in shape (`src/flow/confirm-token.ts:readRequireConfirmationDefault`)
- * exactly — absent or unparsable reads `false`, never throws, never defaults on.
+ * AC10 (flow 306) / flow 346 (default-on): `review.jev.ci_triage` in
+ * `.metaproject/tasks.config.json`, resolved through the ONE shared
+ * `resolveJevProfileFlag` every `review.jev.*` reader goes through — an
+ * explicit `true`/`false` in the file always wins; unset, it now defaults to
+ * `true` when `/external` is on and a Jev credential resolves (design §4),
+ * and to `false` otherwise. Absent/unparsable config or a read failure reads
+ * `false`, never throws — the same fail-closed floor this function has
+ * always had, mirroring `completion.require_confirmation`'s own opt-in shape
+ * (`src/flow/confirm-token.ts:readRequireConfirmationDefault`).
  */
-export async function readCiTriageEnabled(cwd: string): Promise<boolean> {
+export async function readCiTriageEnabled(cwd: string, opts?: CiTriageEnabledOptions): Promise<boolean> {
+  return (await readCiTriageEnabledDetailed(cwd, opts)).value;
+}
+
+/**
+ * Same as {@link readCiTriageEnabled}, but returns the full
+ * `JevProfileFlagResult` (value + source) rather than the bare boolean — a
+ * caller that needs to know WHETHER this was a default-on trigger (flow 346
+ * §5's one-time consent notice) reads `.source ===
+ * "default-because-jev-available"` rather than re-parsing the config itself.
+ */
+export async function readCiTriageEnabledDetailed(cwd: string, opts?: CiTriageEnabledOptions): Promise<JevProfileFlagResult> {
+  let explicit: boolean | undefined;
   try {
     const parsed: unknown = JSON.parse(await readFile(path.join(cwd, REVIEW_GATE_CONFIG_PATH), "utf8"));
-    if (typeof parsed !== "object" || parsed === null) return false;
-    const review = (parsed as Record<string, unknown>)["review"];
-    if (typeof review !== "object" || review === null) return false;
-    const jev = (review as Record<string, unknown>)["jev"];
-    if (typeof jev !== "object" || jev === null) return false;
-    return (jev as Record<string, unknown>)["ci_triage"] === true;
+    if (typeof parsed === "object" && parsed !== null) {
+      const review = (parsed as Record<string, unknown>)["review"];
+      if (typeof review === "object" && review !== null) {
+        const jev = (review as Record<string, unknown>)["jev"];
+        if (typeof jev === "object" && jev !== null) {
+          const raw = (jev as Record<string, unknown>)["ci_triage"];
+          if (typeof raw === "boolean") explicit = raw;
+        }
+      }
+    }
   } catch {
-    return false;
+    // Unreadable/unparsable config: no explicit value, same as absent —
+    // falls through to the default-on resolver below exactly as "absent"
+    // always has, never a thrown error.
   }
+  const external = await resolveExternalSetting({ cwd, ...(opts?.configDir !== undefined ? { dir: opts.configDir } : {}) });
+  return resolveJevProfileFlag("ci_triage", explicit, { externalOn: external.value === "on", jevAvailable: opts?.jevAvailable === true });
 }
 
 /**

@@ -80,18 +80,40 @@ coverage:
   (`skipped by Jev selection (advisory)`) — so a later round can check whether a skipped reviewer's
   domain surfaced a real finding anyway, which is how this lever eventually gets its own verdict.
 
-## Recommended profile
+## Recommended profile — now on by default when Jev is reachable
+
+Flow 346: `ci_triage`, `select`, and `edit_guard` no longer need
+`keryx review jev-profile --apply recommended` to turn on. They apply
+automatically whenever [`/external`](./cli-reference.md#external) is on
+(the default) AND a Jev/OpenRouter credential resolves (env or a saved
+key) — no per-project opt-in required. An explicit `true`/`false` for any
+of the three in `.metaproject/tasks.config.json` still wins over the
+default, and `risk`, `contract`, `rules`, `scenarios`, `docs`, and
+`comments` are unaffected — they stay off unless explicitly turned on.
 
 ```bash
-keryx review jev-profile show              # current state, next to each verdict
-keryx review jev-profile --apply recommended
+keryx review jev-profile show              # current state, next to each verdict AND its source
+keryx review jev-profile --apply recommended   # still available — writes the three keys explicitly
+keryx external status                      # is /external on, does a Jev credential resolve, what's blocked
+keryx external off                         # keep private work in-house: disables the default (and every Jev call)
 ```
 
-`--apply recommended` turns on `ci_triage`, `select`, and `edit_guard` (`keryx review
-jev-edit-guard` — see [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md) for what it
-does and where it is wired in; this profile only sets the key), and leaves `risk`, `contract`,
-`rules`, `scenarios`, `docs`, and `comments` off. It merge-writes `.metaproject/tasks.config.json`,
-touching only the `review.jev.*` keys it names.
+`jev-profile show` names each key's source: `explicit` (set in
+`tasks.config.json`), `default-because-jev-available` (this flow's new
+default), or `off-by-external` (the default would apply, but `/external`
+is off). The first time a project's `ci_triage`/`select`/edit-guard hook
+actually runs because of the default — not an explicit opt-in — one line is
+shown once on stderr and then never repeats for that project: `Jev is on
+here: redacted code/CI snippets go to OpenRouter/TypeSafe. Turn off:
+/external off`. See [the `external` CLI reference](./cli-reference.md#external)
+for the full switch (the block list, the routing exclusion, and why each
+default entry is on it) — also covered in the project README's "Keeping
+private work in-house: /external" section.
+
+`--apply recommended` still merge-writes the three keys explicitly into
+`.metaproject/tasks.config.json` when you want them on the record rather
+than resolved implicitly, and still leaves `risk`, `contract`, `rules`,
+`scenarios`, `docs`, and `comments` off.
 
 See [cli-reference.md](./cli-reference.md) for the full flag reference of every command named here,
 and `review-orchestrator/SKILL.detail.md` (`.metaproject/skills/gdskills/review/review-orchestrator/`)

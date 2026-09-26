@@ -58,6 +58,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/guard",
     "/route",
     "/editguard",
+    "/external",
     "/jevprofile",
     "/mcp",
     "/compact",
@@ -167,6 +168,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/guard",
     "/route",
     "/editguard",
+    "/external",
     "/jevprofile",
     "/mcp",
     "/compact",
@@ -306,6 +308,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/guard",
     "/route",
     "/editguard",
+    "/external",
     "/jevprofile",
     "/mcp",
     "/compact",
@@ -350,7 +353,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
     "/clear",
   ]);
-  expect(filterCommands("/e", "agent").map((c) => c.name)).toEqual(["/expand", "/editguard", "/exit"]);
+  expect(filterCommands("/e", "agent").map((c) => c.name)).toEqual(["/expand", "/editguard", "/external", "/exit"]);
   expect(filterCommands("/co", "agent").map((c) => c.name)).toEqual([
     "/connect",
     "/copy",

@@ -41,6 +41,13 @@ import { envWithSavedApiKeys } from "../../lib/shell-config";
 // excerpt, reused here so a vendor error body gets the identical redaction
 // floor before it is embedded in an Error message (flow 307 review, item 4).
 import { redactSensitiveText } from "../../security/service";
+// `lib` is SHARED — safe from CLIENT either way. Flow 346's choke point:
+// EVERY caller of `callJevSystemOne` (the edit guard, every `review-jev-*`
+// command, `conform`, `ci-triage`, `jev-select`, the routing classifier and
+// the turn guard) is protected by the one check below, with no per-caller
+// edit needed.
+import { ExternalBlockedError, resolveExternalSetting } from "../../lib/external-switch";
+import { externalBlockReason, isProviderIdExternal, loadExternalProvidersConfig } from "../../lib/external-providers";
 
 /** `POST` target for every Jev/System-One call this client makes. */
 export const JEV_ENDPOINT = "https://openrouter.ai/api/v1/systemone";
@@ -527,11 +534,26 @@ export async function callJevSystemOne(
   opts?: {
     env?: Readonly<Record<string, string | undefined>>;
     dir?: string;
+    /** Project root for the EXTERNAL switch's project-level override (`.metaproject/tasks.config.json`'s `external` key) — default `process.cwd()`, which is the project root for every real caller in this codebase. */
+    cwd?: string;
     signal?: AbortSignal;
     timeoutMs?: number;
     sleepFn?: JevSleepFn;
   },
 ): Promise<JevResult> {
+  // Flow 346 (design §3): checked FIRST — before resolving a credential,
+  // before the budget preflight, before touching `fetchFn` at all. `dir`
+  // scopes BOTH the per-user `/external` setting and the block-list file to
+  // the same config dir every other Jev credential/config read in this
+  // module already uses, so a test that injects `opts.dir` gets a fully
+  // hermetic check with no real `~/.local/share/keryx` touched.
+  const externalSetting = await resolveExternalSetting({ cwd: opts?.cwd ?? process.cwd(), ...(opts?.dir !== undefined ? { dir: opts.dir } : {}) });
+  if (externalSetting.value === "off") {
+    const { config } = loadExternalProvidersConfig(opts?.dir);
+    if (isProviderIdExternal("jev", config)) {
+      throw new ExternalBlockedError("Jev/TypeSafe System One", externalBlockReason("jev", input.model, config));
+    }
+  }
   const keyResolution = resolveJevApiKeyResolution(opts?.env ?? process.env, opts?.dir);
   const apiKey = keyResolution.key;
   if (apiKey === undefined || apiKey.length === 0) {

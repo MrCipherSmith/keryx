@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DEFAULT_SELECT_SKIP_BELOW, readJevSelectEnabled, readJevSelectSkipBelow } from "./jev-select-config";
+import { DEFAULT_SELECT_SKIP_BELOW, readJevSelectEnabled, readJevSelectEnabledDetailed, readJevSelectSkipBelow } from "./jev-select-config";
 
 let ROOT = "";
 
@@ -43,6 +43,38 @@ describe("readJevSelectEnabled", () => {
     await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
     await writeFile(path.join(ROOT, ".metaproject", "tasks.config.json"), "{not json", "utf8");
     expect(await readJevSelectEnabled(ROOT)).toBe(false);
+  });
+});
+
+describe("Flow 346: select default-on through the shared resolveJevProfileFlag", () => {
+  let cfgDir = "";
+  afterEach(async () => {
+    if (cfgDir) {
+      await rm(cfgDir, { recursive: true, force: true });
+      cfgDir = "";
+    }
+  });
+
+  test("unset + external on (default) + a Jev credential available -> defaults to true", async () => {
+    ROOT = await projectRoot(undefined);
+    cfgDir = await mkdtemp(path.join(tmpdir(), "keryx-jev-select-default-on-cfg-"));
+    const result = await readJevSelectEnabledDetailed(ROOT, { jevAvailable: true, configDir: cfgDir });
+    expect(result).toEqual({ value: true, source: "default-because-jev-available" });
+    expect(await readJevSelectEnabled(ROOT, { jevAvailable: true, configDir: cfgDir })).toBe(true);
+  });
+
+  test("unset + external on + NO credential available -> stays false", async () => {
+    ROOT = await projectRoot(undefined);
+    cfgDir = await mkdtemp(path.join(tmpdir(), "keryx-jev-select-default-on-cfg-"));
+    const result = await readJevSelectEnabledDetailed(ROOT, { jevAvailable: false, configDir: cfgDir });
+    expect(result).toEqual({ value: false, source: "off" });
+  });
+
+  test("the project's own external: \"off\" always wins, even with a credential available", async () => {
+    ROOT = await projectRoot({ external: "off" });
+    cfgDir = await mkdtemp(path.join(tmpdir(), "keryx-jev-select-default-on-cfg-"));
+    const result = await readJevSelectEnabledDetailed(ROOT, { jevAvailable: true, configDir: cfgDir });
+    expect(result).toEqual({ value: false, source: "off-by-external" });
   });
 });
 

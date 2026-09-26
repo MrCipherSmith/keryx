@@ -17,6 +17,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { REVIEW_GATE_CONFIG_PATH } from "../flow/review-gate";
+// `lib` is SHARED (`import-zones.ts`) — safe for this CORE module; the
+// CLIENT-zone `resolveJevApiKey` is not, so `jevAvailable` below must be
+// computed by the caller — see `resolveJevProfileFlag`'s doc in
+// `./jev-profile.ts`.
+import { resolveExternalSetting } from "../lib/external-switch";
+import { resolveJevProfileFlag, type JevProfileFlagResult } from "./jev-profile";
 import { DEFAULT_EDIT_GUARD_MAX_CALLS, DEFAULT_EDIT_GUARD_THRESHOLD } from "./jev-edit-guard";
 
 async function readReviewJevBlock(cwd: string): Promise<Record<string, unknown> | undefined> {
@@ -32,9 +38,30 @@ async function readReviewJevBlock(cwd: string): Promise<Record<string, unknown> 
   }
 }
 
-export async function readJevEditGuardEnabled(cwd: string): Promise<boolean> {
+/** See `CiTriageEnabledOptions` (`./ci-triage.ts`) — the same shape, for the same reason. */
+export interface JevEditGuardEnabledOptions {
+  readonly jevAvailable?: boolean;
+  readonly configDir?: string;
+}
+
+/**
+ * Flow 343's opt-in gate, now resolved through the shared default-on
+ * resolver (flow 346, design §4): an explicit `true`/`false` always wins;
+ * unset, `edit_guard` (one of the three `JEV_DEFAULT_ON_KEYS`) now defaults
+ * to `true` when `/external` is on and a Jev credential resolves, `false`
+ * otherwise — same fail-closed floor as before for a malformed/absent file.
+ */
+export async function readJevEditGuardEnabled(cwd: string, opts?: JevEditGuardEnabledOptions): Promise<boolean> {
+  return (await readJevEditGuardEnabledDetailed(cwd, opts)).value;
+}
+
+/** Same as {@link readJevEditGuardEnabled}, but returns the full `JevProfileFlagResult` (value + source) — see `readCiTriageEnabledDetailed`'s doc (`./ci-triage.ts`) for why. */
+export async function readJevEditGuardEnabledDetailed(cwd: string, opts?: JevEditGuardEnabledOptions): Promise<JevProfileFlagResult> {
   const jev = await readReviewJevBlock(cwd);
-  return jev?.["edit_guard"] === true;
+  const raw = jev?.["edit_guard"];
+  const explicit = typeof raw === "boolean" ? raw : undefined;
+  const external = await resolveExternalSetting({ cwd, ...(opts?.configDir !== undefined ? { dir: opts.configDir } : {}) });
+  return resolveJevProfileFlag("edit_guard", explicit, { externalOn: external.value === "on", jevAvailable: opts?.jevAvailable === true });
 }
 
 /** Clamped to `0..1`; an out-of-range or non-numeric value reads as the default rather than as a broken threshold. */
@@ -59,9 +86,9 @@ export interface EditGuardConfigSnapshot {
   readonly maxCalls: number;
 }
 
-export async function readJevEditGuardConfig(cwd: string): Promise<EditGuardConfigSnapshot> {
+export async function readJevEditGuardConfig(cwd: string, opts?: JevEditGuardEnabledOptions): Promise<EditGuardConfigSnapshot> {
   const [enabled, threshold, maxCalls] = await Promise.all([
-    readJevEditGuardEnabled(cwd),
+    readJevEditGuardEnabled(cwd, opts),
     readJevEditGuardThreshold(cwd),
     readJevEditGuardMaxCalls(cwd),
   ]);

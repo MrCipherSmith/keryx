@@ -106,6 +106,79 @@ export function currentJevProfile(parsed: unknown): Record<string, unknown> {
   return jev as Record<string, unknown>;
 }
 
+/**
+ * Flow 346 — Jev default-on. The three RECOMMENDED, fail-open `review.jev.*`
+ * keys (`ci_triage`, `select`, `edit_guard` — the same trio
+ * `RECOMMENDED_JEV_PROFILE` marks `recommended: true`) now apply BY DEFAULT
+ * wherever Jev is reachable, so a project needs no per-project opt-in when
+ * the operator has a working OpenRouter/Jev credential and has not turned
+ * `/external` off. `risk`/`contract`/`rules`/`scenarios`/`docs`/`comments`
+ * are NOT in this set — they stay off unless explicitly enabled, exactly as
+ * `RECOMMENDED_JEV_PROFILE` already documents.
+ */
+export const JEV_DEFAULT_ON_KEYS: ReadonlySet<string> = new Set(["ci_triage", "select", "edit_guard"]);
+
+/** Which rule decided a `review.jev.*` key's effective value — `keryx review jev-profile show` displays this per key. */
+export type JevProfileFlagSource = "explicit" | "default-because-jev-available" | "off-by-external" | "off";
+
+export interface JevProfileFlagResult {
+  readonly value: boolean;
+  readonly source: JevProfileFlagSource;
+}
+
+/**
+ * What a caller must already know to resolve one key — deliberately NOT
+ * computed in here. `externalOn` needs only `resolveExternalSetting`
+ * (`src/lib/external-switch.ts`, SHARED zone, safe from this CORE module).
+ * `jevAvailable` needs `resolveJevApiKey` (`src/harness/decision/
+ * jev-client.ts`, CLIENT zone) — `src/review/` may never import CLIENT
+ * (`import-zones.ts`'s core->client rule, no exception), so every caller of
+ * this function (and of the three `review.jev.*` readers that call through
+ * it: `readCiTriageEnabled`, `readJevSelectEnabled`,
+ * `readJevEditGuardEnabled`) computes `jevAvailable` itself, in its own
+ * CLIENT/ADAPTER zone, and passes it in. Design §4: "reuse
+ * `resolveJevApiKey` WITHOUT passing a project dir" — the per-project
+ * credential dir override that some Jev callers use for other purposes is
+ * deliberately NOT part of this default-on check.
+ */
+export interface JevProfileFlagContext {
+  readonly externalOn: boolean;
+  readonly jevAvailable: boolean;
+}
+
+/**
+ * THE single place every `review.jev.*` reader goes through (design §4) to
+ * decide a key's effective boolean:
+ *
+ *   1. An explicit `true`/`false` in `.metaproject/tasks.config.json` always
+ *      wins — a project's own choice is never overridden by a default.
+ *   2. Otherwise, a key outside {@link JEV_DEFAULT_ON_KEYS} (risk, contract,
+ *      rules, scenarios, docs, comments) stays off — unmeasured/measured-
+ *      weaker steps get no default-on.
+ *   3. Otherwise (a `JEV_DEFAULT_ON_KEYS` member, unset): off when
+ *      `/external` is off (`"off-by-external"`) — the switch always wins
+ *      over the default, never the other way around.
+ *   4. Otherwise: on when a Jev credential resolves
+ *      (`"default-because-jev-available"`), off when it does not (`"off"`
+ *      — no credential means Jev could not run anyway; reporting it as
+ *      "on" would be a default that lies about what will happen).
+ */
+export function resolveJevProfileFlag(key: string, explicit: boolean | undefined, ctx: JevProfileFlagContext): JevProfileFlagResult {
+  if (typeof explicit === "boolean") {
+    return { value: explicit, source: "explicit" };
+  }
+  if (!JEV_DEFAULT_ON_KEYS.has(key)) {
+    return { value: false, source: "off" };
+  }
+  if (!ctx.externalOn) {
+    return { value: false, source: "off-by-external" };
+  }
+  if (ctx.jevAvailable) {
+    return { value: true, source: "default-because-jev-available" };
+  }
+  return { value: false, source: "off" };
+}
+
 export function renderJevProfileMarkdown(current: Record<string, unknown>, applied: boolean): string {
   const lines = [
     "# keryx review jev-profile",

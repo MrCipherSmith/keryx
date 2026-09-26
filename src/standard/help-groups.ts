@@ -158,6 +158,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Connect a model provider",
     summary: "Switch provider — /provider <name>, or no arg to re-select.",
   },
+  {
+    kind: "cli",
+    name: "external",
+    group: "Connect a model provider",
+    summary: "Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on|off|status|list).",
+  },
+  {
+    kind: "slash",
+    name: "/external",
+    group: "Connect a model provider",
+    summary: "Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on|off].",
+  },
 
   // ---- Look and feel -------------------------------------------------------
   {

@@ -759,14 +759,74 @@ The seams exist for the model-backed variants when they ship.
 Tree-sitter grammars for the symbol/call graph are downloadable and optional; the
 graph falls back to its deterministic resolver when a grammar is absent.
 
-## Jev EDIT GUARD (opt-in)
+## Keeping private work in-house: /external
+
+`/external on|off` (and `keryx external on|off`) is one general switch that
+stops keryx from sending private work — code, diffs, CI-log excerpts,
+prompts, rule text — to Jev/TypeSafe and to model vendors/tiers the
+operator has not decided to trust with it. It is on by default (today's
+behavior, unchanged) and is checked at the two places that actually send
+anything out: the Jev client (`callJevSystemOne`, so every `review-jev-*`
+command, `conform`, `ci-triage`, `jev-select`, the routing classifier and
+the turn guard are covered by one change) and the routing/model-selection
+choke point (a listed provider/model is excluded from a category
+resolution, falling through to the next layer with a notice rather than
+silently).
+
+```bash
+keryx external status         # effective on/off, source, Jev credential availability, what's blocked now
+keryx external off            # keep this project's/your work in-house
+keryx external off --project  # override for this project only (wins over your per-user setting)
+keryx external list           # the effective block list — every provider id and model pattern, with its reason
+```
+
+The block list lives in an editable JSON file
+(`<keryx config dir>/external-providers.json`), created with built-in
+defaults on first use and never overwritten again. The defaults: Jev/
+TypeSafe System One (the OpenRouter `/api/v1/systemone` endpoint — it
+receives code and CI logs on every call); keryx's own direct provider ids
+for vendors hosted under jurisdictions/terms where a prompt may be
+retained or trained on (`deepseek`, `zai`/`zai-coding`, `moonshot`); the
+same vendors reached instead through an OpenRouter model id, plus vendors
+with no first-class keryx provider at all (`deepseek/*`, `minimax/*`,
+`z-ai/*`/`zhipu/*`/`glm/*`, `moonshotai/*`, `qwen/*`/`alibaba/*`,
+`baidu/*`, `tencent/*`, `bytedance/*`, `01-ai/*`); OpenRouter's free tier
+(`*:free`), whose underlying provider's logging/training policy is
+unaudited per-model; and any model id containing `muse`, named explicitly
+by the operator. The mainstream paid US providers you connect directly —
+Anthropic, OpenAI, Google/Gemini, GitHub Copilot, xAI, Groq — stay off the
+list; adjust any of it by editing the file.
+
+Because Jev is only worth blocking when it would otherwise run, the
+recommended, fail-open review steps (`ci_triage`, `select`, `edit_guard` —
+see below) are now **on by default wherever Jev is reachable**: as soon as
+a Jev/OpenRouter credential resolves and `/external` is on, no per-project
+opt-in is needed. `keryx review jev-profile show` names each key's
+effective source (`explicit`/`default-because-jev-available`/
+`off-by-external`), and the first time a project actually sends data
+because of the default — not an explicit opt-in — one line is shown once,
+then never repeats for that project: `Jev is on here: redacted code/CI
+snippets go to OpenRouter/TypeSafe. Turn off: /external off`.
+
+In the TUI, `/external` (bare) shows the same status block; `/external
+on|off` toggles the per-user setting; a sidebar row appears when it is
+`off` (the default "on" state costs no permanent sidebar space, same idiom
+`/guard`/`/route` use for their own default state). See [the CLI
+reference](docs/docs/cli-reference.md#external) for the full command and
+[Jev in review](docs/docs/jev-in-review.md#recommended-profile-now-on-by-default-when-jev-is-reachable)
+for what changed there.
+
+## Jev EDIT GUARD
 
 A Claude Code `PostToolUse` hook that checks every `Edit`/`Write`/`MultiEdit` a
 coding agent makes against your project's own written rules, using Jev, and
 feeds violations straight back to the agent through the hook's
 `additionalContext` channel — before the code ever reaches a human reviewer.
 It never blocks the tool call: on any error, timeout, or missing credential
-it fails open silently and always exits `0`.
+it fails open silently and always exits `0`. As of the `/external` switch
+above, it (along with CI triage and reviewer selection) is on by default
+wherever Jev is reachable — the opt-in below still works, but only records
+the choice explicitly rather than leaving it to the default.
 
 Measured on a real project (10 tasks × 2 runs, a large production
 React/MobX frontend):
@@ -870,6 +930,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Module reference](docs/docs/modules.md)** — one section per module: purpose, CLI surface, mechanics, data paths.
 - **[CLI reference](docs/docs/cli-reference.md)** — the command surface: subcommands, flags and exit codes.
 - **[Jev in review](docs/docs/jev-in-review.md)** — what we measured putting Jev in the review domain: CI triage (proven), three CLI-engine reviewers (measured weaker than a strong model), and reviewer selection (unmeasured, most promising).
+- **[Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md)** — edit guard and CI triage inside `job-orchestrator`/`flow-orchestrator`/`task-implementer`/`code-verifier`, on by default wherever Jev is reachable.
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.
