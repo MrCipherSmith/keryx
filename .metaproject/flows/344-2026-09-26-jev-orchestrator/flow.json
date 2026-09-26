@@ -10,7 +10,7 @@
   "title": "Integrate Jev into review-orchestrator (jev-select, ci-triage report, jev-profile, TUI)",
   "status": "implemented",
   "createdAt": "2026-09-26T11:38:53.110Z",
-  "updatedAt": "2026-09-26T13:25:35.613Z",
+  "updatedAt": "2026-09-26T13:50:51.894Z",
   "source": {
     "type": "description",
     "ref": null
@@ -48,6 +48,10 @@
     "AC8": {
       "at": "2026-09-26T13:25:35.613Z",
       "note": "docs/docs/jev-in-review.md created and linked, cli-reference.md entries added, CHANGELOG Unreleased entry added"
+    },
+    "AC9": {
+      "at": "2026-09-26T13:50:51.893Z",
+      "note": "keryx test related, typecheck, lint all clean; PR 756 open on feat/jev-orchestrator, all 18 CI checks pass, not merged"
     }
   },
   "pr": {
@@ -201,6 +205,11 @@
       "at": "2026-09-26T13:25:35.613Z",
       "event": "ac-confirmed",
       "detail": "AC8: docs/docs/jev-in-review.md created and linked, cli-reference.md entries added, CHANGELOG Unreleased entry added (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-26T13:50:51.894Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: keryx test related, typecheck, lint all clean; PR 756 open on feat/jev-orchestrator, all 18 CI checks pass, not merged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "baseBranch": "main",
@@ -291,6 +300,17 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC8",
+      "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
+    },
+    {
+      "at": "2026-09-26T13:50:51.893Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
       "acChecksum": "sha256:b53b6cfbf729afad70035d36d087e73142274e7e3b8b43feb40d3b72ed7c9fd2"
     }
   ]

@@ -16,3 +16,4 @@
 - 2026-09-26T13:25:24.178Z - ac-confirmed: AC6: jev-profile.test.ts and review-jev-profile-cli.test.ts cover show and --apply recommended, merge-safe writer (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-26T13:25:29.798Z - ac-confirmed: AC7: jev-profile-inspector.ts modal, agent-commands.ts and help-groups.ts entries added, commands-by-task.md regenerated, tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-26T13:25:35.613Z - ac-confirmed: AC8: docs/docs/jev-in-review.md created and linked, cli-reference.md entries added, CHANGELOG Unreleased entry added (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-26T13:50:51.894Z - ac-confirmed: AC9: keryx test related, typecheck, lint all clean; PR 756 open on feat/jev-orchestrator, all 18 CI checks pass, not merged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
