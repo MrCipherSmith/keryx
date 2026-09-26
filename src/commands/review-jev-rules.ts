@@ -176,18 +176,35 @@ function classify(file: Omit<RuleSourceFile, "category">): ClassifiedSource {
  * only a `--rules` entry that names ONE FILE explicitly bypasses the filter
  * — the operator picked that exact document, full stop. A `--rules`
  * DIRECTORY is walked and its files are filtered exactly like
- * `.metaproject/rules/**`/`rules/**` auto-discovery — asking for a whole
+ * `.metaproject/rules/**`/`rules/** Removes keryx's managed `<!-- keryx:index -->` … `<!-- /keryx:index -->` block from an agent guide. */
+export function stripKeryxManagedBlock(text: string): string {
+  return text.replace(/<!-- keryx:index -->[\s\S]*?<!-- \/keryx:index -->\n?/g, "");
+}
+
+/**` auto-discovery — asking for a whole
  * directory is not the same as naming one document.
  */
-async function discoverRuleSources(cwd: string, explicitPaths: readonly string[]): Promise<RuleSourceDiscovery> {
+export async function discoverRuleSources(cwd: string, explicitPaths: readonly string[]): Promise<RuleSourceDiscovery> {
   const discovered: ClassifiedSource[] = [];
 
-  for (const root of [join(cwd, ".metaproject", "rules"), join(cwd, "rules")]) {
+  for (const root of [join(cwd, ".metaproject", "rules"), join(cwd, "rules"), join(cwd, ".claude", "rules")]) {
     for (const file of await walkMatching(root, [".md", ".mdc"])) {
       const text = await readIfExists(file);
       if (text === undefined) continue;
       discovered.push(classify({ path: relative(cwd, file), kind: "project-rule", text }));
     }
+  }
+
+  // The project's root agent guide: CLAUDE.md, else AGENTS.md (they usually
+  // carry the same rules, so never both). keryx's own managed routing block is
+  // stripped first — it is tool routing, not a code rule. The category filter
+  // below still drops a guide that is mostly process.
+  for (const name of ["CLAUDE.md", "AGENTS.md"]) {
+    const text = await readIfExists(join(cwd, name));
+    if (text === undefined) continue;
+    const body = stripKeryxManagedBlock(text);
+    if (body.trim().length > 0) discovered.push(classify({ path: name, kind: "project-rule", text: body }));
+    break;
   }
 
   const skillRoots: ReadonlyArray<readonly [string, RuleSourceFile["kind"]]> = [

@@ -33,9 +33,11 @@
 // DOCUMENTED, with `--rules <paths>` as the escape hatch for everything it
 // misses:
 //
-//   - every file under `.metaproject/rules/**` or `rules/**` (this
-//     repository's own hand-written `.mdc`/`.md` rule corpus — exactly what
-//     AC9's live check runs against);
+//   - every file under `.metaproject/rules/**`, `rules/**` or
+//     `.claude/rules/**` (hand-written `.mdc`/`.md` rule corpora; the last is
+//     where Claude Code projects keep theirs);
+//   - the root `CLAUDE.md` (else `AGENTS.md`), without keryx's managed
+//     routing block;
 //   - a project-skill or installed gdskill whose directory name contains
 //     "convention" (case-insensitive), or whose frontmatter declares
 //     `metadata.category: conventions` — the one category value this
