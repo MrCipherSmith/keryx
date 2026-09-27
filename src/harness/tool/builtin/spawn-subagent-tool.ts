@@ -9,7 +9,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -255,6 +255,15 @@ function formatStoppedStatusLine(
 }
 
 export interface SpawnSubagentToolDeps {
+  /**
+   * The PARENT's working directory. Parent-scoped on purpose: the routing
+   * config location (`routing.config.json`), the external-runtime settings
+   * lookup, the shared MAE budget ledger and the ephemeral slate's temp
+   * directory all belong to the parent session and keep reading this value.
+   * The CHILD's tools, its slate anchors and the "Project root:" line of its
+   * prompt instead use the resolved per-call `cwd` input (flow 347 T8; see
+   * `resolveSubagentCwd`), which defaults to this value when omitted.
+   */
   cwd: string;
   /** Parent provider/model (inherited by child unless MAE resolves otherwise). */
   getParentModel: () => { providerId: string; modelId: string; baseUrl?: string };
@@ -426,9 +435,9 @@ const execFileAsync = promisify(execFile);
  * REALPATH (symlinks resolved, so a symlink cannot point the child somewhere
  * this check never actually inspected) is:
  *   - the project root itself, or a filesystem descendant of it, OR
- *   - a path `git worktree list --porcelain`, run IN the project root, reports
- *     for that same repository (a linked worktree of the parent's own repo —
- *     exactly the `.review-pr-N/` shape from the incident).
+ *   - a VERIFIED worktree of the project root's own repository (exactly the
+ *     `.review-pr-N/` shape from the incident), or a filesystem descendant of
+ *     one — see {@link verifiedWorktreeRoots} for what "verified" means.
  * A nonexistent path is refused the same as one outside both of the above —
  * `realpath` throwing is not distinguished from a real-but-disallowed path,
  * both are "cannot accept this cwd." The caller (`invoke()` below) must spawn
@@ -453,27 +462,15 @@ async function resolveSubagentCwd(
   // comparing against it verbatim rather than treating that as the child's
   // failure.
   const realRoot = await realpath(parentCwd).catch(() => parentCwd);
-  if (real === realRoot || real.startsWith(realRoot + path.sep)) {
+  if (isSameOrDescendant(real, realRoot)) {
     return { ok: true, cwd: real };
   }
-  // Not inside the project root — the only other accepted shape is a linked
-  // worktree of the SAME repository, as the project root's own git reports it.
-  try {
-    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: parentCwd });
-    const worktreePaths = stdout
-      .split("\n")
-      .filter((line) => line.startsWith("worktree "))
-      .map((line) => line.slice("worktree ".length).trim())
-      .filter((p) => p.length > 0);
-    for (const worktreePath of worktreePaths) {
-      const realWorktree = await realpath(worktreePath).catch(() => undefined);
-      if (realWorktree !== undefined && realWorktree === real) {
-        return { ok: true, cwd: real };
-      }
+  // Not inside the project root — the only other accepted shape is a verified
+  // worktree of the SAME repository (or a directory inside one).
+  for (const worktreeRoot of await verifiedWorktreeRoots(parentCwd)) {
+    if (isSameOrDescendant(real, worktreeRoot)) {
+      return { ok: true, cwd: real };
     }
-  } catch {
-    // `parentCwd` is not a git repository, or `git` is unavailable — falls
-    // through to the refusal below; no worktree can be confirmed either way.
   }
   return {
     ok: false,
@@ -481,6 +478,116 @@ async function resolveSubagentCwd(
       `spawn_subagent refused cwd "${rawCwd}" (resolved: ${real}): it is neither the project root, ` +
       "a descendant of it, nor a worktree of this repository",
   };
+}
+
+function isSameOrDescendant(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+}
+
+/**
+ * Flow 347 review F-001: the realpaths of this repository's worktrees that
+ * survive verification, for `resolveSubagentCwd`.
+ *
+ * `git worktree list` only echoes `<common-dir>/worktrees/<id>/gitdir`, a file
+ * anyone who can write under `.git/` can point at an arbitrary directory, so a
+ * listed path is a CANDIDATE, never an answer. Git runs only in `parentCwd`
+ * (never inside a candidate — a candidate's own config could run hooks or
+ * fsmonitor commands), and its output is parsed NUL-separated (`-z`) so a
+ * worktree path containing a newline cannot inject an extra `worktree` line.
+ * `prunable` entries (git itself thinks the worktree is gone) are skipped.
+ * A candidate is then accepted only when the files on disk agree, both ways:
+ *   - main worktree: `<candidate>/.git` is this repository's common dir;
+ *   - linked worktree: `<candidate>/.git` is a gitfile whose `gitdir:` resolves
+ *     to `<common-dir>/worktrees/<id>`, AND that entry's `gitdir` file resolves
+ *     back to `<candidate>/.git`.
+ * Any failure (not a git repo, git missing, unreadable file) yields no roots,
+ * so the caller refuses — fail-closed.
+ */
+async function verifiedWorktreeRoots(parentCwd: string): Promise<string[]> {
+  let commonDir: string;
+  let listing: string;
+  try {
+    const common = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      cwd: parentCwd,
+    });
+    commonDir = await realpath(path.resolve(parentCwd, common.stdout.replace(/\r?\n$/, "")));
+    listing = (await execFileAsync("git", ["worktree", "list", "--porcelain", "-z"], { cwd: parentCwd })).stdout;
+  } catch {
+    return [];
+  }
+  const worktreesDir = path.join(commonDir, "worktrees");
+  const roots: string[] = [];
+  for (const record of parseWorktreeListZ(listing)) {
+    if (record.prunable) {
+      continue;
+    }
+    const verified = await verifyWorktreeCandidate(record.path, commonDir, worktreesDir);
+    if (verified !== undefined) {
+      roots.push(verified);
+    }
+  }
+  return roots;
+}
+
+/** Parse `git worktree list --porcelain -z`: NUL-terminated fields, an empty field ends a record. */
+function parseWorktreeListZ(stdout: string): { path: string; prunable: boolean }[] {
+  const records: { path: string; prunable: boolean }[] = [];
+  let current: { path: string; prunable: boolean } | undefined;
+  for (const field of stdout.split("\0")) {
+    if (field.length === 0) {
+      if (current !== undefined) {
+        records.push(current);
+      }
+      current = undefined;
+      continue;
+    }
+    if (field.startsWith("worktree ")) {
+      if (current !== undefined) {
+        records.push(current);
+      }
+      current = { path: field.slice("worktree ".length), prunable: false };
+    } else if (current !== undefined && (field === "prunable" || field.startsWith("prunable "))) {
+      current.prunable = true;
+    }
+  }
+  if (current !== undefined) {
+    records.push(current);
+  }
+  return records.filter((r) => r.path.length > 0 && path.isAbsolute(r.path));
+}
+
+/** Verify one listed worktree by reading files only; returns its realpath, or `undefined` when refused. */
+async function verifyWorktreeCandidate(
+  candidate: string,
+  commonDir: string,
+  worktreesDir: string,
+): Promise<string | undefined> {
+  try {
+    const realCandidate = await realpath(candidate);
+    const dotGit = path.join(realCandidate, ".git");
+    const dotGitStat = await lstat(dotGit);
+    if (dotGitStat.isDirectory()) {
+      // Main worktree: its `.git` IS the common dir.
+      return (await realpath(dotGit)) === commonDir ? realCandidate : undefined;
+    }
+    if (!dotGitStat.isFile()) {
+      return undefined;
+    }
+    const gitfile = await readFile(dotGit, "utf8");
+    const match = /^gitdir: (.+?)\r?\n?$/.exec(gitfile);
+    if (match === null) {
+      return undefined;
+    }
+    const adminDir = await realpath(path.resolve(realCandidate, match[1]!));
+    if (path.dirname(adminDir) !== worktreesDir) {
+      return undefined;
+    }
+    const backLink = (await readFile(path.join(adminDir, "gitdir"), "utf8")).replace(/\r?\n$/, "");
+    const backTarget = await realpath(path.resolve(adminDir, backLink));
+    return backTarget === (await realpath(dotGit)) ? realCandidate : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // The two profiles that used to be built here moved to
@@ -578,7 +685,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           },
           max_tool_calls: {
             type: "integer",
-            minimum: 0,
+            // Flow 347 review F-007: 0 would mean "about 0 calls" to the child
+            // while bounding nothing, so the schema and `invoke()` both require
+            // >= 1; omit the field for no advisory target.
+            minimum: 1,
             maximum: Number.MAX_SAFE_INTEGER,
             description:
               "Advisory tool-call target. Never stops the child; from 80% of it every tool result tells " +
@@ -673,7 +783,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const mode: SubagentMode = input.mode === "general" ? "general" : "read_only";
       for (const field of ["max_tool_calls", "max_rounds"] as const) {
         const value = input[field];
-        const minimum = field === "max_rounds" ? 1 : 0;
+        const minimum = 1;
         if (value !== undefined && (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum)) {
           return { status: "Error", output: `spawn_subagent ${field} must be a safe integer >= ${minimum}`, isError: true };
         }
@@ -1672,8 +1782,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
                   `summary: ${submitted.summary}\n` +
                   `result:\n${typeof submitted.result === "string" ? submitted.result : JSON.stringify(submitted.result, null, 2)}`,
               ).text
-            : `no result submitted${turnResult?.submitResultError !== undefined ? ` (${turnResult.submitResultError})` : ""}\n` +
-              `--- last output ---\n${folded.text}`;
+            : // Flow 347 review F-008: `submitResultError` echoes child-controlled
+              // text (the tool name it called, its JSON keys), so the whole block
+              // — not just the last output — goes through the quarantine pass.
+              foldChildSummary(
+                `no result submitted${turnResult?.submitResultError !== undefined ? ` (${turnResult.submitResultError})` : ""}\n` +
+                  `--- last output ---\n${raw}`,
+              ).text;
         const boundedResult = boundSummary(resultBlock);
         return {
           status,
