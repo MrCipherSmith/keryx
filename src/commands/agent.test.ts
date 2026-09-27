@@ -568,6 +568,43 @@ test("AC6 (flow 352 audit): finishWithBudgetSummary's wrap-up request carries th
   expect(wrapUpRequest?.signal).toBe(turnSignal);
 });
 
+test("flow 352 review r1 (M-1): an abort during the budget wrap-up is reported as an interruption, and the cut text stays out of history", async () => {
+  const toolRound = [
+    { kind: "tool_call_start" as const, toolCallId: "c1", toolName: "get_cwd" },
+    { kind: "tool_call_end" as const, toolCallId: "c1", input: "{}" },
+    { kind: "model_end" as const },
+  ];
+  const { provider: inner } = scriptedProvider([
+    toolRound,
+    toolRound,
+    toolRound,
+    toolRound,
+    [{ kind: "text_delta", text: "half a wrap-" }, { kind: "model_end" }],
+  ]);
+  const controller = new AbortController();
+  // Abort the moment the wrap-up (the one request without tools) starts
+  // streaming — the no-progress branch has already been entered by then.
+  const provider: AgentDeps["provider"] = {
+    describe: inner.describe,
+    stream: (request, opts) => {
+      if (request.tools === undefined) controller.abort();
+      return inner.stream(request, opts);
+    },
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  const result = await runAgentTurn(collectingIo().io, deps, history, "loop forever", { signal: controller.signal });
+  expect(result.finishReason).toBe("interrupted");
+  expect(history.some((m) => m.role === "assistant" && m.content.includes("half a wrap-"))).toBe(false);
+});
+
 test("untrusted web output cannot authorize later tools within the SAME turn", async () => {
   const { provider } = scriptedProvider([
     [

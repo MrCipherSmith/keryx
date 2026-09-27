@@ -910,6 +910,11 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     }
   };
 
+  // Review r1 of flow 352 (B-1): the same one `finally` the agent REPL got for
+  // AC7. A slash command or the line source throwing out of this loop used to
+  // skip both calls below — they ran only on `/exit` and end of input — and the
+  // lease and bus presence outlived the process's useful life.
+  try {
   for await (const line of io.lines) {
     io.onSafeBoundary?.();
     // Slash commands FIRST — a slash line NEVER reaches `provider.stream`.
@@ -919,8 +924,6 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       const argument = parts.slice(1).join(" ");
 
       if (command === "/exit" || command === "/quit") {
-        leaveBus();
-        releaseLease();
         return;
       }
       if (command === "/bus") {
@@ -1191,9 +1194,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     io.onSafeBoundary?.();
     io.write("\n\n");
   }
-  // End of input: the normal return releases the bus and the lease (AC7).
-  leaveBus();
-  releaseLease();
+  } finally {
+    // AC7: every exit — `/exit`, end of input, a thrown turn — leaves the bus
+    // first (a peer never sees presence outlive the lease it names), then
+    // releases the lease.
+    leaveBus();
+    releaseLease();
+  }
 }
 
 /**

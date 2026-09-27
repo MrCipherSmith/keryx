@@ -3499,7 +3499,11 @@ async function runAgentTurnCore(
       }
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
-        await finishWithBudgetSummary(io, deps, history, parentRunId, { maxAttempts, toolLog }, signal);
+        const wrapUp = await finishWithBudgetSummary(io, deps, history, parentRunId, { maxAttempts, toolLog }, signal);
+        if (wrapUp.aborted) {
+          system("\n[stopped] Model turn interrupted by user.\n");
+          return { finishReason: "interrupted" };
+        }
       } else {
         system(
           `\n[budget] Stopping tools: no progress (only repeated/exhausted tool signatures; ` +
@@ -3743,7 +3747,7 @@ async function finishWithBudgetSummary(
   // reached the provider call, so the round streamed to completion — the one
   // "final" turn call still uninterruptible by construction.
   signal: AbortSignal | undefined,
-): Promise<void> {
+): Promise<{ aborted: boolean }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
       io.onSystem(text);
@@ -3819,6 +3823,13 @@ async function finishWithBudgetSummary(
   const request: NormalizedRequest = signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
 
   const round = await streamWrapUpRound(io, deps, request, signal, system);
+  // Review F-006, applied here too (flow 352 review r1, M-1): an abort during
+  // the wrap-up is an interruption, never a budget outcome — and the text
+  // streamed before the cut is not a complete turn, so it does not enter
+  // history as one.
+  if (round.aborted || signal?.aborted === true) {
+    return { aborted: true };
+  }
   if (round.thrownError !== undefined) {
     system(`\n[error] wrap-up failed: ${round.thrownError}\n`);
   }
@@ -3837,6 +3848,7 @@ async function finishWithBudgetSummary(
         "needed `keryx …` command directly (e.g. `keryx wiki enrich --all`).\n",
     );
   }
+  return { aborted: false };
 }
 
 /**

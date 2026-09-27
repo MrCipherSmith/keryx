@@ -193,6 +193,39 @@ describe("runShell bus join (AC1, AC9, readline chat loop)", () => {
   });
 });
 
+describe("flow 352 review r1 (B-1) — the chat REPL's one finally, like the agent REPL's", () => {
+  test("a line source that throws mid-loop still leaves the bus and releases the lease", async () => {
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+    let joinedDuringRun: BusClient | undefined;
+    let leasedDuringRun: SessionLeaseHandle | undefined;
+    let rejected: unknown;
+    try {
+      await runShell(
+        {
+          lines: (async function* () {
+            joinedDuringRun = busBox.current;
+            leasedDuringRun = leaseBox.current;
+            throw new Error("boom: line source crashed");
+            yield "";
+          })(),
+          write: () => {},
+        },
+        shellDeps({ cwd, busBox, leaseBox }),
+      );
+    } catch (cause) {
+      rejected = cause;
+    }
+    expect((rejected as Error).message).toContain("boom: line source crashed");
+    expect(joinedDuringRun).toBeDefined();
+    expect(leasedDuringRun).toBeDefined();
+    // Before the fix both calls sat inline at `/exit` and end of input only.
+    expect(busBox.current).toBeUndefined();
+    expect(leaseBox.current).toBeUndefined();
+    expect(leasedDuringRun?.released).toBe(true);
+  });
+});
+
 describe("runShell bus events and /bus (AC3, AC4, readline chat loop)", () => {
   test("an event addressed to this instance prints one ⇄ line, via displaySafe", async () => {
     const output: string[] = [];

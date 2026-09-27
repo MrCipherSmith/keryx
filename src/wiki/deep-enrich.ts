@@ -219,6 +219,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
     return { fallback: true, reason: "deep enrich cancelled", toolCalls };
   }
 
+  let disposeComposed: (() => void) | undefined;
   try {
     const env = envWithSavedApiKeys(input.env ?? process.env);
     const credentialAvailable = hasCredential(input.provider, env);
@@ -312,6 +313,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
     let pending: DeepEnrichToolCall | undefined;
     const abort = new AbortController();
     const composed = composeAbortSignals(input.signal, abort.signal);
+    disposeComposed = composed.dispose;
     const io: AgentIO = {
       write: (s) => {
         assistant += s;
@@ -446,6 +448,10 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
     }
     return { enriched: raw, toolCalls };
   } catch (cause) {
+    // Flow 352 review r1 (M-2): the three deliberate returns above dispose the
+    // composed signal; a throw did not, and `input.signal` is shared by a whole
+    // enrich batch, so each failed page left one more listener on it.
+    disposeComposed?.();
     return { fallback: true, reason: `deep enrich failed: ${errorMessage(cause)}`, toolCalls };
   }
 }

@@ -121,6 +121,48 @@ function hangingProviderFactory(): ProviderFactory {
   return () => provider;
 }
 
+// --- flow 352 review r1 (M-2): the outer catch disposes the composed signal ---
+
+test("a turn that throws still removes the abort listener from the caller's shared signal", async () => {
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const added: string[] = [];
+  const removed: string[] = [];
+  const originalAdd = signal.addEventListener.bind(signal);
+  const originalRemove = signal.removeEventListener.bind(signal);
+  signal.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+    added.push(type);
+    originalAdd(type, listener, options);
+  }) as typeof signal.addEventListener;
+  signal.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => {
+    removed.push(type);
+    originalRemove(type, listener, options);
+  }) as typeof signal.removeEventListener;
+
+  // `idSeq` is called eight times before the composed signal exists and again
+  // inside the child turn; a throw on the ninth call is one the outer catch
+  // sees. The `addedAborts > 0` assertion below is the guard on that count: a
+  // throw that lands earlier never registers a listener and fails there.
+  let calls = 0;
+  const result = await enrichPageDeep(
+    baseInput({
+      signal,
+      providerFactory: scriptedProviderFactory([[{ kind: "text_delta", text: "x" }, { kind: "model_end" }]]).factory,
+      idSeq: () => {
+        calls += 1;
+        if (calls > 8) throw new Error("boom: id source failed");
+        return `id-${calls}`;
+      },
+    }),
+  );
+  expect("fallback" in result && result.fallback).toBe(true);
+  expect("reason" in result ? result.reason : "").toContain("deep enrich failed");
+  // Every abort listener the call added to the shared signal is gone again.
+  const addedAborts = added.filter((kind) => kind === "abort").length;
+  expect(addedAborts).toBeGreaterThan(0);
+  expect(removed.filter((kind) => kind === "abort").length).toBe(addedAborts);
+});
+
 // --- AC3/FR-6: flat recursion — the exact, construction-level tool grant ---
 
 test("buildDeepEnrichTools grants exactly the DEEP_ENRICH_OPS allowlist and nothing else", async () => {
