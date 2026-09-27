@@ -258,7 +258,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
 describe("keryx <unknown command> (AC3)", () => {
   test("`keryx docto` suggests `doctor`, one line, exit 1, nothing on stdout", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
-    const result = await runBunExpectingFailure([cliPath, "docto"]);
+    const result = await runBunCapture([cliPath, "docto"]);
 
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
@@ -267,7 +267,7 @@ describe("keryx <unknown command> (AC3)", () => {
 
   test("a nonsense word gets no suggestion, but still one line and exit 1", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
-    const result = await runBunExpectingFailure([cliPath, "zzzqxvvv"]);
+    const result = await runBunCapture([cliPath, "zzzqxvvv"]);
 
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
@@ -286,7 +286,7 @@ describe("keryx <unknown command> (AC3)", () => {
 describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
   test.each([...groupsWithKnownSubcommands()])("`keryx %s zzzqxvvv`: exit 1, one stderr line naming its own --help, empty stdout", async (group: string) => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
-    const result = await runBunExpectingFailure([cliPath, group, "zzzqxvvv"]);
+    const result = await runBunCapture([cliPath, group, "zzzqxvvv"]);
 
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
@@ -297,7 +297,7 @@ describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
 
   test("`keryx health rn` suggests `run`", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
-    const result = await runBunExpectingFailure([cliPath, "health", "rn"]);
+    const result = await runBunCapture([cliPath, "health", "rn"]);
 
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
@@ -312,7 +312,7 @@ describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
   // exit 1, never wiki's own full usage dump.
   test("`keryx wiki serach`: one line, empty stdout, exit 1 (no real `search` subcommand to suggest)", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
-    const result = await runBunExpectingFailure([cliPath, "wiki", "serach"]);
+    const result = await runBunCapture([cliPath, "wiki", "serach"]);
 
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
@@ -321,29 +321,25 @@ describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
 
   test("a real subcommand of a checked group is unaffected (`keryx health status`, `keryx wiki ask`)", async () => {
     const cliPath = path.join(import.meta.dir, "cli.ts");
-    const health = await runBunExpectingFailure([cliPath, "health", "status"]);
+    const health = await runBunCapture([cliPath, "health", "status"]);
     expect(health.code).toBe(0);
-    const wiki = await runBunExpectingFailure([cliPath, "wiki", "ask", "--help"]);
+    const wiki = await runBunCapture([cliPath, "wiki", "ask", "--help"]);
     // `ask --help` is a question, not a claim about wiki's data — exit 0 either way is not the property under test here; only that it was NOT rejected as "unknown".
     expect(wiki.stderr).not.toContain("Unknown command");
   });
 
-  // Flow 353 review round 2 (L3, T3): first positionals that are not one bare
-  // subcommand word must pass the guard untouched — a comma-joined editor list,
-  // a file path, a search pattern. The guard only fires for a group in the map,
-  // so `integrate` (not in it) and positionals of mapped groups both get here.
-  test("a comma-joined, path or pattern first positional is never refused as unknown", async () => {
+  // Flow 353 review rounds 2–3 (L3, T3, T4): the guard inspects `args[1]` of a
+  // MAPPED group only, so the one real positive case is a group whose first
+  // positional is not a subcommand word at all — `integrate`'s comma-joined
+  // editor list. Re-adding `integrate` to the map fails both assertions below
+  // (round 3 showed that path/pattern cases behind a bare subcommand word pass
+  // with or without the guard, so they prove nothing and are not here).
+  test("a group whose first positional is a comma-joined list is not in the map and is never refused", async () => {
+    expect([...groupsWithKnownSubcommands()]).not.toContain("integrate");
     const cliPath = path.join(import.meta.dir, "cli.ts");
-    const cases: string[][] = [
-      ["integrate", "cursor,claude", "--dry-run"],
-      ["gdgraph", "affected", "src/cli.ts"],
-      ["ctx", "rg", "knownSubcommandsFor", "src/cli.ts"],
-      ["rules", "sync", "--help"],
-    ];
-    for (const args of cases) {
-      const result = await runBunExpectingFailure([cliPath, ...args]);
-      expect(result.stderr, args.join(" ")).not.toContain("Unknown command");
-    }
+    const result = await runBunCapture([cliPath, "integrate", "cursor,claude", "--dry-run"]);
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("Unknown command");
   });
 });
 
@@ -382,11 +378,11 @@ function runBun(args: string[]): Promise<string> {
 }
 
 /**
- * Same spawn as {@link runBun}, but for the error path (flow 353 AC3): a
- * non-zero exit is the case under test, not a test-harness failure, so
- * this resolves with stdout/stderr/code regardless of what the code was.
+ * Same spawn as {@link runBun}, but it never rejects on the exit code: it
+ * resolves with stdout/stderr/code whatever the code was, so a test can assert
+ * exit 1 (flow 353 AC3) or exit 0 as the case under test.
  */
-function runBunExpectingFailure(args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
+function runBunCapture(args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, {
       cwd: path.join(import.meta.dir, ".."),
