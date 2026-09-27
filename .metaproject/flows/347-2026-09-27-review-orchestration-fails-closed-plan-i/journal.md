@@ -203,3 +203,9 @@ fleet event detail: budget-exhausted
 - Lane 1: marker `[keryx shell — control nudge · <nonce>]`, nonce 72-bit base64url per session (TUI/readline shell, ACP per session, trigger per run; per-turn fallback), own nonce per child; instruction states the marker on every request; tool output verbatim (neutraliser deleted; quarantine pattern is a flag only); nonce scrubbed to `[nonce]` from tool results, task notifications, peer messages, abort replay, submit_result round outputs, and quoted error text inside nudges. R2-4: `finishReason: "interrupted"` → status `Interrupted`, fleet failed/interrupted, slate incomplete; ACP maps to `cancelled`.
 - 548 targeted tests pass; typecheck + lint clean (orchestrator re-run).
 - Accepted concerns: nonce is not persisted, so a resumed session treats older nudges as content (intended: authority is per live session); other abort paths still return `{}` (child aborts happen only on timeout today); the child-nonce test documents intent more than it guards the explicit line.
+- 2026-09-27T10:57:14.633Z - task-done: T17: Review r02 fixes: per-session nonce envelope for shell nudges (option A), R2-1 packageRelativePath in bundled builds, R2-4 explicit interrupted status
+- 2026-09-27T10:57:14.918Z - task-attempt: T18: started (attempt 1) — 347-T18 review round 3
+
+## Review round 3 (T18) — review-r03.md, and the loop bound
+
+All six round-2 targets fixed; two new minors in one call site (R3-1 raw error text inside a nonce-bearing nudge; R3-2 unredacted error text, pre-existing) + two infos. Three review/fix attempts are used, so no fourth full round: re-planned as a narrow task T19 with orchestrator verification (diff read, targeted tests, full suite vs base, re-run of the reviewer's reproduction). Approved by the user.
