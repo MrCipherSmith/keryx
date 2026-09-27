@@ -337,7 +337,7 @@ directly in a unit-style check (`bun test` already covers this — see
 | SESSCLI-01 | `keryx sessions path` | **Not yet tested** (used manually throughout the prior pass, never as a formal assertion) | Prints the real on-disk store root |
 | SESSCLI-02 | `keryx sessions list --json` (if supported) or plain | *(used live, informally)* | Matches what `/sessions`/`/resume` would show in TUI |
 | SESSCLI-03 | A session store read failure states the file + reason, not a stack trace | **Not yet tested** — `config-dir.readers.test.ts` implies this exists as tested behavior; worth a real CLI-level confirmation | Clean error message |
-| SESSCLI-04 | An oversized/corrupted session file is refused cleanly, not crashed on | **Not yet tested** | Named refusal |
+| SESSCLI-04 | A corrupted or oversized session file is handled cleanly, not crashed on | `keryx sessions export <id>` — probed 2026-09-27 with trailing garbage, mid-JSON truncation, full binary overwrite, an oversized file and a directory in place of `archive.jsonl` | Graceful, line-tolerant recovery: unparseable JSONL lines are skipped and the export exits 0 with the lines that parse. An unreadable (oversized or non-regular) `archive.jsonl` falls back to the active context and the export says **incomplete** in its header. Only when the context itself is unreadable does it refuse: `Cannot export session "<id>": …` naming the file and reason, exit 1, no stack trace |
 
 ---
 
