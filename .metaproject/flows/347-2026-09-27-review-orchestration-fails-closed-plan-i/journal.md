@@ -192,3 +192,14 @@ fleet event detail: budget-exhausted
 ## Review round 2 (T16) — review-r02.md
 
 14 of 18 fixed; AC3/AC6/AC7 now met. User chose option A (per-session nonce on genuine nudges) over patching more channels. T17 = nonce envelope (closes F-009, SEC2-1/R2-2, SEC2-2, R2-3) + R2-1 + R2-4; T18 = round-3 verification (last attempt in the three-attempt bound). Residual, accepted: F-013 declined approval counted as executed; SEC2-3 check-then-use on cwd.
+- 2026-09-27T10:22:55.963Z - task-done: T16: Review round 2 on the r01 fixes
+- 2026-09-27T10:22:56.272Z - task-added: T17: Review r02 fixes: per-session nonce envelope for shell nudges (option A), R2-1 packageRelativePath in bundled builds, R2-4 explicit interrupted status
+- 2026-09-27T10:22:56.572Z - task-added: T18: Review round 3: verify r02 fixes
+- 2026-09-27T10:22:56.872Z - task-attempt: T17: started (attempt 1) — 347-T17
+
+## T17 accepted (DONE_WITH_CONCERNS)
+
+- Lane 2 (0b1d80c2): `packageRelativePath` derives from the resolved file via the `src/gdskills/bundled` marker; both `bundledSkillMarkdownPath` candidates always contain it, so the new throw is unreachable on real paths.
+- Lane 1: marker `[keryx shell — control nudge · <nonce>]`, nonce 72-bit base64url per session (TUI/readline shell, ACP per session, trigger per run; per-turn fallback), own nonce per child; instruction states the marker on every request; tool output verbatim (neutraliser deleted; quarantine pattern is a flag only); nonce scrubbed to `[nonce]` from tool results, task notifications, peer messages, abort replay, submit_result round outputs, and quoted error text inside nudges. R2-4: `finishReason: "interrupted"` → status `Interrupted`, fleet failed/interrupted, slate incomplete; ACP maps to `cancelled`.
+- 548 targeted tests pass; typecheck + lint clean (orchestrator re-run).
+- Accepted concerns: nonce is not persisted, so a resumed session treats older nudges as content (intended: authority is per live session); other abort paths still return `{}` (child aborts happen only on timeout today); the child-nonce test documents intent more than it guards the explicit line.
