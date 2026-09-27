@@ -7,8 +7,11 @@ import {
   ENV_SUBAGENT_MAX_TOOL_CALLS,
   ENV_SUBAGENT_TIMEOUT_MS,
   resolveSubagentMaxToolCalls,
+  subagentFleetDetail,
+  subagentStatusForFinishReason,
   type SpawnSubagentFleetEvent,
 } from "./spawn-subagent-tool";
+import { harnessEnvelopePrefix, runAgentTurn } from "../../../commands/agent";
 import { DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
 import { loadRoutingConfigRaw } from "../../routing/config";
@@ -988,4 +991,54 @@ test("flow 305 item 3: a malformed routing.config.json is surfaced as a non-fata
     (event) => event.kind === "log" && event.entry.kind === "system" && event.entry.text.startsWith("routing:"),
   );
   expect(diagnostics.length).toBeGreaterThan(0);
+});
+
+// --- Flow 347 T17 ---
+
+function markerNonceOf(systemInstruction: string | undefined): string | undefined {
+  return /\[keryx shell — control nudge · ([A-Za-z0-9_-]+)\]/.exec(systemInstruction ?? "")?.[1];
+}
+
+test("flow 347 T17: a subagent's instruction states its own control nonce, distinct from its parent's", async () => {
+  const parentNonce = "parentNonce_347";
+  const events: SpawnSubagentFleetEvent[] = [];
+  const child = scriptedChildProvider(() => textRound("child done"));
+  const parent = scriptedChildProvider((n) =>
+    n === 1
+      ? toolCalls({ id: "spawn", name: "spawn_subagent", input: JSON.stringify({ task: "look around", max_rounds: 1 }) })
+      : textRound("parent done"),
+  );
+  const results: string[] = [];
+  await runAgentTurn(
+    { write: () => undefined, onToolResult: (_name, r) => results.push(r.output), requestApproval: async () => true },
+    {
+      provider: parent.provider,
+      providerId: "ollama",
+      modelId: "fixture",
+      tools: [childTool(child.provider, events)],
+      systemInstruction: "parent",
+      controlNonce: parentNonce,
+      idSeq: (() => {
+        let n = 0;
+        return () => `p-${n++}`;
+      })(),
+    },
+    [],
+    "delegate",
+  );
+  expect(results.join("\n")).toContain("child done");
+  expect(parent.requests[0]?.systemInstruction).toContain(harnessEnvelopePrefix(parentNonce));
+  const childNonce = markerNonceOf(child.requests[0]?.systemInstruction);
+  expect(childNonce).toBeDefined();
+  expect(childNonce).not.toBe(parentNonce);
+  expect(child.requests[0]?.systemInstruction).not.toContain(parentNonce);
+});
+
+test("flow 347 review R2-4: an interrupted wrap-up is never reported as Completed", () => {
+  expect(subagentStatusForFinishReason("interrupted")).toBe("Interrupted");
+  expect(subagentFleetDetail("Interrupted")).toBe("interrupted");
+  expect(subagentStatusForFinishReason(undefined)).toBe("Completed");
+  expect(subagentStatusForFinishReason("budget")).toBe("BudgetExhausted");
+  expect(subagentStatusForFinishReason("tool-call-budget")).toBe("BudgetExhausted");
+  expect(subagentStatusForFinishReason("no-progress")).toBe("NoProgress");
 });

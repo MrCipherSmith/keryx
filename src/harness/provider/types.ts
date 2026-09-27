@@ -200,8 +200,8 @@ export interface NormalizedMessage {
    * a synthetic nudge cannot use its own role), but `"harness"` marks content
    * the keryx shell itself synthesized and injected into history — a control
    * nudge like the toolless reprompt or the plan follow-through — rather than
-   * anything the operator typed. See `HARNESS_ENVELOPE_PREFIX` in
-   * `src/commands/agent.ts` for the matching visible envelope. Any switch on
+   * anything the operator typed. See `harnessEnvelopePrefix` in
+   * `src/commands/agent.ts` for the matching visible, nonce-bearing envelope. Any switch on
    * this union should treat an unhandled `"harness"` as "untrusted, not the
    * operator" — the same bucket `"project"`/`"model"`/`"tool"` already fall
    * into wherever only `"trusted"` is special-cased.

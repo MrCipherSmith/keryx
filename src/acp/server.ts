@@ -14,10 +14,12 @@
 import { randomUUID } from "node:crypto";
 import {
   buildAgentSystemInstruction,
+  generateControlNonce,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   runAgentTurn,
   type AgentDeps,
+  type AgentFinishReason,
   type ReasoningEffortLevel,
 } from "../commands/agent";
 import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
@@ -167,14 +169,14 @@ const DEFAULT_AGENT_INFO: AcpImplementation = { name: "keryx", version: "0" };
 /** How long a new or loaded session waits for the model list before answering with the launch model only. */
 export const DEFAULT_MODEL_LIST_TIMEOUT_MS = 8_000;
 
-function finishReasonToStopReason(
-  finishReason: "budget" | "tool-call-budget" | "no-progress" | undefined,
-): AcpStopReason {
+function finishReasonToStopReason(finishReason: AgentFinishReason | undefined): AcpStopReason {
   switch (finishReason) {
     case "budget":
       return "max_tokens";
     case "tool-call-budget":
       return "max_turn_requests";
+    case "interrupted":
+      return "cancelled";
     case "no-progress":
     case undefined:
       return "end_turn";
@@ -314,6 +316,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * replaces this session's hook runtime, keyed by the same id.
    */
   const shellHooksBySession = new Map<string, ShellHookContext>();
+  /**
+   * Flow 347 T17: one control-nudge nonce per ACP session, created on its first
+   * prompt and reused by every later turn, so nudges already in its history
+   * keep matching the marker its instruction states.
+   */
+  const controlNonceBySession = new Map<string, string>();
+  const controlNonceFor = (sessionId: string): string => {
+    let nonce = controlNonceBySession.get(sessionId);
+    if (nonce === undefined) {
+      nonce = generateControlNonce();
+      controlNonceBySession.set(sessionId, nonce);
+    }
+    return nonce;
+  };
 
   /**
    * Build (or rebuild) THIS session's hook runtime and fire `SessionStart`
@@ -1135,6 +1151,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         modelId,
         toolNames,
       }),
+      controlNonce: controlNonceFor(sessionId),
       idSeq,
       // Flow 306 (W6, T15): this session's own `HookRuntime` (built at
       // `session/new`/`session/load`, `ensureShellHooksAndFireStart` above),

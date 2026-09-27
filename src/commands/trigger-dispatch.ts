@@ -48,7 +48,7 @@ import { mkdir, rm, symlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
@@ -816,6 +816,7 @@ async function dispatchLocked(
         providerId: dispatch.provider,
         modelId: dispatch.model,
         tools,
+        controlNonce: generateControlNonce(),
         systemInstruction: buildAgentSystemInstruction(undefined, {
           providerId: dispatch.provider,
           modelId: dispatch.model,

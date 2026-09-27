@@ -24,7 +24,14 @@ import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
-import { runAgentTurn, type AgentDeps, type AgentIO, type RunAgentTurnResult } from "../../../commands/agent";
+import {
+  generateControlNonce,
+  runAgentTurn,
+  type AgentDeps,
+  type AgentFinishReason,
+  type AgentIO,
+  type RunAgentTurnResult,
+} from "../../../commands/agent";
 import type { ShellHookContext } from "../../../commands/agent-hooks";
 import type { ProviderPort } from "../../provider/types";
 import {
@@ -92,6 +99,9 @@ export type SpawnSubagentFleetEvent =
  *   before the child ever spawned (existing paths, now labeled).
  * - `"NoProgress"` — `runAgentTurn`'s existing no-progress detector fired
  *   (`finishReason: "no-progress"`, D2a), distinct from budget exhaustion.
+ * - `"Interrupted"` — the child was aborted during its `submit_result`
+ *   wrap-up round (`finishReason: "interrupted"`, flow 347 review R2-4); it
+ *   never counts as a clean finish.
  *
  * PRD R9 guard: this status is advisory for the PARENT MODEL's own judgment
  * (retry/extend/accept-partial/give up) only. Do not add mechanical
@@ -103,7 +113,8 @@ export type SubagentCompletionStatus =
   | "Timeout"
   | "Denied"
   | "Error"
-  | "NoProgress";
+  | "NoProgress"
+  | "Interrupted";
 
 /**
  * `spawn_subagent`'s actual result shape (spec §D2). A strict structural
@@ -242,9 +253,12 @@ function boundSummary(text: string): string {
  * `status: NoProgress (…)` — so the parent reads the outcome before anything else.
  */
 function formatStoppedStatusLine(
-  status: "BudgetExhausted" | "NoProgress",
+  status: "BudgetExhausted" | "NoProgress" | "Interrupted",
   turnResult: RunAgentTurnResult | undefined,
 ): string {
+  if (status === "Interrupted") {
+    return "status: Interrupted (stopped during the final submit_result round)";
+  }
   if (status === "NoProgress") {
     return "status: NoProgress (only repeated or exhausted tool calls)";
   }
@@ -252,6 +266,41 @@ function formatStoppedStatusLine(
   return stop === undefined
     ? "status: BudgetExhausted"
     : `status: BudgetExhausted (${stop.used}/${stop.limit} ${stop.unit})`;
+}
+
+/**
+ * D2b: the completion status for a child turn that settled (not timed out),
+ * from the child's OWN `finishReason`. Only an absent reason is `Completed`;
+ * `interrupted` (flow 347 review R2-4) never is.
+ */
+export function subagentStatusForFinishReason(
+  finishReason: AgentFinishReason | undefined,
+): "Completed" | "BudgetExhausted" | "NoProgress" | "Interrupted" {
+  switch (finishReason) {
+    case "budget":
+    case "tool-call-budget":
+      return "BudgetExhausted";
+    case "no-progress":
+      return "NoProgress";
+    case "interrupted":
+      return "Interrupted";
+    case undefined:
+      return "Completed";
+  }
+}
+
+/** The fleet `detail` for a settled child's status (its fleet `status` is `done` only when `Completed`). */
+export function subagentFleetDetail(status: ReturnType<typeof subagentStatusForFinishReason>): string {
+  switch (status) {
+    case "Completed":
+      return "done";
+    case "NoProgress":
+      return "no-progress";
+    case "Interrupted":
+      return "interrupted";
+    case "BudgetExhausted":
+      return "budget-exhausted";
+  }
 }
 
 export interface SpawnSubagentToolDeps {
@@ -1385,6 +1434,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           "in which the only tool is submit_result — use it to hand back a partial result. " +
           "End with a short factual summary the parent can use.",
         idSeq: () => idSeq(),
+        // Flow 347 T17: the child's OWN control-nudge nonce, never the parent's —
+        // a child that echoes its nudges back cannot hand the parent a marker
+        // the parent's instruction would accept.
+        controlNonce: generateControlNonce(),
         maxRounds,
         ...(configuredMaxToolCalls === undefined ? {} : { maxToolCalls: configuredMaxToolCalls }),
         subagentBudget: advisoryToolCalls === undefined ? {} : { advisoryToolCalls },
@@ -1737,13 +1790,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // check whether `runAgentTurnCore` itself cut the turn short for one
         // of D2a's two internal reasons FIRST. No new detection here; this
         // only labels what `finishReason` (D2a) already computed.
-        const finishReason = turnResult?.finishReason;
-        const status: SubagentCompletionStatus =
-          finishReason === "budget" || finishReason === "tool-call-budget"
-            ? "BudgetExhausted"
-            : finishReason === "no-progress"
-              ? "NoProgress"
-              : "Completed";
+        const status = subagentStatusForFinishReason(turnResult?.finishReason);
         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
@@ -1755,7 +1802,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           id: workerId,
           label,
           status: isError ? "failed" : "done",
-          detail: status === "Completed" ? "done" : status === "NoProgress" ? "no-progress" : "budget-exhausted",
+          detail: subagentFleetDetail(status),
           model: `${runModel.provider}/${runModel.model}`,
           task,
         });

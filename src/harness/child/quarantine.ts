@@ -24,12 +24,14 @@ interface QuarantinePattern {
 }
 
 /**
- * The keryx shell's control-nudge envelope (`[keryx shell — control nudge]`,
- * `HARNESS_ENVELOPE_PREFIX` in `src/commands/agent.ts`), tolerant of spacing,
- * case and the dash variant, so a look-alike cannot slip past on a hyphen.
- * Only the shell itself may emit it (flow 347 review F-009).
+ * The keryx shell's control-nudge envelope (`[keryx shell — control nudge · <nonce>]`,
+ * `harnessEnvelopePrefix` in `src/commands/agent.ts`), with or without a nonce,
+ * tolerant of spacing, case and the dash variant. A FLAG only (flow 347 T17):
+ * what makes a nudge genuine is the per-session nonce the model learns from its
+ * system instruction, which content cannot know — this pattern just marks a
+ * child summary or peer message that claims the envelope, so the reader sees it.
  */
-const HARNESS_ENVELOPE_SOURCE = String.raw`\[\s*keryx\s+shell\s*[—–-]+\s*control\s+nudge\s*\]`;
+const HARNESS_ENVELOPE_SOURCE = String.raw`\[\s*keryx\s+shell\s*[—–-]+\s*control\s+nudge[^\]\n]{0,80}\]`;
 
 const PATTERNS: readonly QuarantinePattern[] = [
   {
@@ -68,17 +70,6 @@ const PATTERNS: readonly QuarantinePattern[] = [
       ),
   },
 ];
-
-/**
- * Defuse every occurrence of the shell's control-nudge envelope inside content
- * the shell forwards (a tool result, a file it read): the bracketed form is
- * rewritten to `(quoted: keryx shell — control nudge)` so the text stays
- * readable but can no longer pass for the shell's own nudge, which the shell
- * then appends itself where one is genuine. Pure; identity when absent.
- */
-export function neutraliseHarnessEnvelope(text: string): string {
-  return text.replace(new RegExp(HARNESS_ENVELOPE_SOURCE, "gi"), "(quoted: keryx shell — control nudge)");
-}
 
 /** Outcome of {@link quarantineChildSummary}. */
 export interface QuarantineResult {
