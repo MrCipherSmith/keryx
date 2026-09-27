@@ -108,3 +108,77 @@ Report: review-r01.md (REQUEST_CHANGES; 0 blocker, 4 major, 14 minor, 7 info; si
 - F-015: the demo scripts move into this flow directory (`demo/`) and their verbatim output is pasted here after T13–T15 (F-016 changes the `[plan]` line, so the pre-fix output would be stale).
 - F-025 (T-2): intended by AC4, no action.
 - Deferred to a follow-up flow (with D/E): F-011 caller-supplied stop strategy instead of `subagentBudget` branches in the turn loop, F-024 extracting nudge helpers / subagent wrap-up out of agent.ts (fits the shell god-file split program), F-020 one-line bullet stall suppressing the reprompt, F-021 unattended-vs-subagent precedence (latent).
+
+## T14 accepted (DONE)
+
+- F-001: `verifiedWorktreeRoots` — git runs only in the parent root (`rev-parse --git-common-dir`, `worktree list --porcelain -z`); prunable skipped; each candidate verified by reading its gitfile ↔ `<common>/worktrees/<id>/gitdir` (realpath). Descendants of a verified worktree accepted. Tests: forged gitdir (outside repo; plain dir), newline-path injection (runs on macOS git 2.51), gitfile pointed at another repo, genuine worktree + subdir. Needs git ≥ 2.31 (`--path-format`); older git fails closed for worktrees only.
+- F-003: scripted child `read_file`/`list_dir` on relative paths reads the cwd copy, not the parent root copy (descendant + linked worktree).
+- F-007: `max_tool_calls` minimum 1 (schema + runtime). F-008: whole no-result block folded. F-018, F-023 done.
+- 102 spawn-subagent tests pass.
+- 2026-09-27T09:45:45.530Z - task-done: T14: Review r01 fixes, spawn_subagent: F-001 cwd worktree validation, F-003 tool-follows-cwd test, F-007, F-008, F-018, F-023
+
+## T15 accepted (DONE)
+
+- F-002 proposed rank 3; F-004 injectable package lookup + command tests for exit 1 (text, --json); F-019; F-022 `packageRelativePath` added to catalog.ts (additive; outside the listed files, accepted); F-017 both copies of skill + bridge, byte-identical, SKILL.md still 1723 lines.
+- One failure in the wider run ("REGRESSION — a round is located at the commit it records") is in the origin/main environment failure set.
+- 2026-09-27T09:49:46.484Z - task-done: T15: Review r01 fixes, small: F-002 snapshot order, F-004 not-found exit tests, F-019, F-022, F-017 skill wording
+
+## T13 accepted (DONE_WITH_CONCERNS) — 588aad5d
+
+- F-005 provider error named in `submitResultError`; F-006 abort → `[stopped]`, no wrap-up request; F-009 `harness-envelope` quarantine pattern + `neutraliseHarnessEnvelope` applied to tool content before the genuine budget line; F-010 shared `streamWrapUpRound` (both wrap-ups; main loop left alone — it streams into history and aborts mid-stream); F-012 `src/harness/tool/builtin/submit-result-tool.ts`; F-013 flag set only for executed, registered calls; F-016 one-line `[plan]` note. Worker verified each new test fails with its fix reverted. 287 targeted tests pass; typecheck + lint clean (whole repo, orchestrator re-run).
+- Accepted concerns: a declined approval prompt inside `executeCall` still counts as executed for F-013 (executeCall does not report denial separately); envelope neutralisation also applies to top-level tool output (harmless: rewrites only the bracketed envelope); parallel-spawn results replayed on abort skip neutralisation (they go through `redactSensitiveText` only) — noted for round 2.
+
+## Demo (F-015) — scripts in `demo/`, run from the worktree root against HEAD 588aad5d
+
+`bun run .metaproject/flows/347-2026-09-27-review-orchestration-fails-closed-plan-i/demo/ac1-plan-follow-through.ts`
+
+```text
+=== Scenario A: planFollowThrough at default (off) ===
+requests.length === 1: true
+nudge appended to history: false
+history entries after assistant reply: 2
+operator system() contains required [plan] line: true
+--- system() output ---
+[plan] Turn ending with open plan items (follow-through is off): implement, verify
+=== Scenario B: planFollowThrough: true (opt-in) ===
+requests.length === 2 (nudge caused exactly one follow-through): true
+nudge pushed with provenance "harness": true
+nudge content starts with envelope prefix: true
+HARNESS_ENVELOPE_PREFIX = "[keryx shell — control nudge]"
+--- nudge content ---
+[keryx shell — control nudge] The current execution plan still has actionable items remaining. Continue the work now. Do not give another final reply until the plan is complete or genuinely blocked.
+```
+
+`bun run .metaproject/flows/347-2026-09-27-review-orchestration-fails-closed-plan-i/demo/ac4-ac5-ac13-spawn-subagent.ts`
+
+```text
+=== Scenario A (AC4/AC13): model-supplied max_tool_calls: 3 is advisory; child makes 5 calls, not stopped ===
+child NOT stopped -- result.status: Completed (expected "Completed")
+requests made: 6 (5 tool-call rounds + 1 text round = 6)
+tool results seen by child in the final tool-bearing request: 5
+80% budget-warning line present per result: [false,false,true,true,true]
+--- example warning line seen by the child ---
+[keryx shell — control nudge] Budget: 0 of 3 advisory tool calls left. Return your result now.
+output first line: "subagent sub-1 (sub:fb841e38-d224-4b29-8a51-2ed31b770a6f) read_only via ollama/fixture"
+fleet event status: done (expected "done")
+=== Scenario B (AC4/AC5): operator-configured hard cap (configuredMaxToolCalls: 3) stops the child ===
+requests made: 2 (expected 2: the tool-call round + the wrap-up round)
+final request tools offered: ["submit_result"] (expected only submit_result)
+result.status: BudgetExhausted (expected "BudgetExhausted")
+output first line: "status: BudgetExhausted (3/3 calls)"
+--- full parent-visible output ---
+status: BudgetExhausted (3/3 calls)
+subagent sub-1 (sub:a51597c9-df65-409d-8182-9a14972d00b1) read_only via ollama/fixture
+MAE reservation: rounds≤10 calls≤3 calls~40(advisory) runtime≤300000ms children=1
+--- submitted result (partial) ---
+summary: read three listings
+result:
+{
+  "findings": [
+    "F-1",
+    "F-2"
+  ]
+}
+fleet event status: failed (expected NOT "done")
+fleet event detail: budget-exhausted
+```
