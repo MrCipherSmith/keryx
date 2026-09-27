@@ -182,3 +182,8 @@ result:
 fleet event status: failed (expected NOT "done")
 fleet event detail: budget-exhausted
 ```
+- 2026-09-27T10:00:41.837Z - task-done: T13: Review r01 fixes, turn loop: F-005 F-006 F-009 F-010 F-012 F-013 F-016 (agent.ts, new harness submit-result module, quarantine patterns)
+
+## Full suite after T13–T15
+
+- `bun run test:core` at d9bdbd02: 17737 pass / 238 fail; failing-name set identical to clean origin/main (17710 / 238). The 114 failures T13's worker saw in a wider run are part of that environment set.
