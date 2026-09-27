@@ -22,20 +22,6 @@ inline escape marker that states a reason.
 > each section; questions without a source are marked `unknown` rather than
 > answered from the code.
 
-## Questions this page must close
-
-> Rule template (wiki-specification.md §4): "Which rule applies in exactly
-> this situation?"
-
-| # | Question | Coverage | Basis |
-|---|----------|----------|-------|
-| Q1 | Which rule applies when an agent runs ripgrep or grep over this project's code? | covered | `CLAUDE.md`:22, `AGENTS.md`:22, and `.metaproject/index.md` step 8 state it identically. |
-| Q2 | What is the sanctioned exception, and what must accompany it? | covered | `escapeReasonOf` and `ESCAPE_MARKER` in `src/ctx/hook-classify.ts`; the reason is echoed by `exitCodeAllow` in `src/ctx/runtimes.ts`. |
-| Q3 | What enforces the rule, and what does the agent see when it fires? | covered | `runCtxHook` in `src/ctx/hook.ts`, `buildBlockMessage` in `src/ctx/hook-classify.ts`, `refusalAction` in `src/ctx/runtimes.ts`. Live refusal text appears under Enforcement References. |
-| Q4 | Which command shapes does the guard not classify? | covered | The `classifyCommand` doc comment in `src/ctx/hook-classify.ts` names them; `classifyCommand` only tests `tokens[0]` against fixed name lists. |
-| Q5 | Why was a hard refusal chosen over an advisory warning? | unknown | No decision record states it. Searching `docs/decisions/` for "routing guard", "ctx hook", "keryx:raw", or "hook-classify" returns nothing. The `docs/` pages that mention the guard cover installation and reference only. |
-| Q6 | Does the rule bind only searches over code, or over any file? | partial | The written rule scopes itself to "project code" (`CLAUDE.md`:22). The enforcement does not: the `ROUTES` table in `src/ctx/hook-classify.ts` matches only on command name, never inspecting the target path. A search over docs or a log is refused identically. Which is authoritative is unrecorded. |
-
 ## Scope
 
 **Applies to:**
@@ -197,6 +183,22 @@ The routed form is compressed and recorded in the routing audit (ctx_used).
 If raw output is genuinely required, append an escape marker with a reason:
   cat <file>   # keryx:raw <why raw is needed>
 ```
+
+## Questions this page must close
+
+Short answer to Q1: every text, symbol or pattern search over project code goes through `keryx ctx rg`; a bare `rg`/`grep` is a last resort with a stated reason.
+
+> Rule template (wiki-specification.md §4): "Which rule applies in exactly
+> this situation?"
+
+| # | Question | Coverage | Basis |
+|---|----------|----------|-------|
+| Q1 | Which rule applies when an agent runs ripgrep or grep over this project's code? | covered | `CLAUDE.md`:22, `AGENTS.md`:22, and `.metaproject/index.md` step 8 state it identically. |
+| Q2 | What is the sanctioned exception, and what must accompany it? | covered | `escapeReasonOf` and `ESCAPE_MARKER` in `src/ctx/hook-classify.ts`; the reason is echoed by `exitCodeAllow` in `src/ctx/runtimes.ts`. |
+| Q3 | What enforces the rule, and what does the agent see when it fires? | covered | `runCtxHook` in `src/ctx/hook.ts`, `buildBlockMessage` in `src/ctx/hook-classify.ts`, `refusalAction` in `src/ctx/runtimes.ts`. Live refusal text appears under Enforcement References. |
+| Q4 | Which command shapes does the guard not classify? | covered | The `classifyCommand` doc comment in `src/ctx/hook-classify.ts` names them; `classifyCommand` only tests `tokens[0]` against fixed name lists. |
+| Q5 | Why was a hard refusal chosen over an advisory warning? | unknown | No decision record states it. Searching `docs/decisions/` for "routing guard", "ctx hook", "keryx:raw", or "hook-classify" returns nothing. The `docs/` pages that mention the guard cover installation and reference only. |
+| Q6 | Does the rule bind only searches over code, or over any file? | partial | The written rule scopes itself to "project code" (`CLAUDE.md`:22). The enforcement does not: the `ROUTES` table in `src/ctx/hook-classify.ts` matches only on command name, never inspecting the target path. A search over docs or a log is refused identically. Which is authoritative is unrecorded. |
 
 ## Related Links
 
