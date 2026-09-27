@@ -58,6 +58,9 @@ conditional step never runs, it is `skipped` — never absent.
 1. **Publish once, as soon as the plan exists** — after `job-orchestrator`'s 1.1
    plan build, after the Flow's task list exists in Phase 1, after
    `review-orchestrator` fixes its scope and dispatch in Step 6. Not at the end.
+   For `review-orchestrator` that is the ONLY publication: nothing before Step 6,
+   then all fifteen ids at once — steps 0–5 that ran as `completed`, the ones
+   that did not as `skipped`.
 2. **`proposed` for a plan that is awaiting the operator.** Where an orchestrator
    stops to ask — `job-orchestrator` 1.3's "Proceed? (yes / adjust …)" and
    `flow-orchestrator` Phase 4's completion choice — the items are `proposed`
@@ -72,7 +75,12 @@ conditional step never runs, it is `skipped` — never absent.
    operator can see is a moving marker, not a growing list of ticks.
 5. **`blocked` when the run needs the operator** — an approval, a credential, a
    failure that needs a decision.
-6. **`plan_get` before a write when a conflict is possible** (a resumed session, a
+6. **`completed` only once the step's artifact exists.** A step that produces
+   an artifact is marked `completed` after that artifact exists, not after the
+   work was attempted — review steps 8–10 only once `keryx review ingest` has
+   recorded their results. A step whose subagent returned nothing usable is
+   `blocked`. The plan may lag the work; it must never run ahead of it.
+7. **`plan_get` before a write when a conflict is possible** (a resumed session, a
    second shell on the same checkout) and re-apply against the revision you read.
 
 ## What the bridge is NOT
@@ -85,6 +93,9 @@ conditional step never runs, it is `skipped` — never absent.
 - Not a completion signal. A plan whose items are all `completed` does not mean
   the job is done: verification, review and the completion report are the
   orchestrator's own gates.
+- Not a turn controller. The plan is display-only: an item left `pending` is
+  never a reason to continue a turn, and a fully ticked plan is never a reason
+  to end one. The orchestrator's gates and the operator decide that.
 
 ## Red Flags — stop and re-read this rule if you are thinking:
 
@@ -92,5 +103,7 @@ conditional step never runs, it is `skipped` — never absent.
 |---|---|
 | "I'll publish the plan when the work is finished and I know all the statuses" | That is a report, not a plan. The sidebar exists so the operator can watch WHILE it runs — a plan published at the end has nothing to show. |
 | "The ids are mine to choose, as long as the titles match" | Then the session plan and `keryx job status` cannot be reconciled by a human or by a resumed run, and the projection has become a second plan. |
-| "`proposed` is the same as `pending`, I'll just use `pending`" | `pending` is actionable work, so the agent continues on its own and the "wait for approval" gate disappears. |
+| "`proposed` is the same as `pending`, I'll just use `pending`" | `pending` reads as actionable work — to the operator, and to the shell's plan follow-through when it is opted in — so the "wait for approval" gate disappears. |
+| "The step ran, so I'll tick it and write the record afterwards" | `completed` means the artifact exists. A plan that ticked steps 8–10 before any ingest is how an unrun review looked finished. |
+| "Items are still `pending`, so I have to keep going" | The plan is display-only. Whether the turn continues is the orchestrator's gate and the operator's call, never the sidebar's. |
 | "Skipping the plan is fine when the job is short" | Then the operator's single progress surface is empty for exactly the runs where watching matters most. |
