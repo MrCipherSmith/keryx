@@ -280,10 +280,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * SAME mechanism a local UI hard-stop uses (`RunAgentTurnOptions.signal`,
    * `context.md` §"the mapping"). `cancelled` is what makes the outcome
    * distinguishable from an ordinary finish: F-5 of context.md is that
-   * `RunAgentTurnResult.finishReason` is `undefined` on EVERY abort path,
-   * identical to a clean toolless finish at the return-value level — the
-   * adapter has to remember the abort itself rather than read it off the
-   * result. `permissionRequestIds` is the live set of this turn's own
+   * `RunAgentTurnResult.finishReason` is `undefined` on most abort paths,
+   * identical to a clean toolless finish at the return-value level (only an
+   * abort during a subagent's `submit_result` wrap-up reports `"interrupted"`,
+   * flow 347 R2-4) — the adapter has to remember the abort itself rather than
+   * read it off the result. `permissionRequestIds` is the live set of this turn's own
    * `session/request_permission` requests (usually 0 or 1; never another
    * session's) — F-14's seam for settling only THIS turn's pending ask on
    * cancel, not every question on the connection (`AcpClientRequests.close`
@@ -319,7 +320,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /**
    * Flow 347 T17: one control-nudge nonce per ACP session, created on its first
    * prompt and reused by every later turn, so nudges already in its history
-   * keep matching the marker its instruction states.
+   * keep matching the marker its instruction states. Never pruned per session:
+   * ACP gives a session no end (keryx advertises no `session/close`, see the
+   * `SharedMcpSet` doc above), so like `shellHooksBySession` the map lives for
+   * the connection and goes with `runAcpServer`'s scope.
    */
   const controlNonceBySession = new Map<string, string>();
   const controlNonceFor = (sessionId: string): string => {
@@ -1178,10 +1182,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // turn, keyed by session id, so `session/cancel` — a NOTIFICATION that can
     // arrive on any later line while this handler is still suspended (F-12: the
     // read loop never awaits a handler before reading the next line) — has
-    // something to reach. `RunAgentTurnResult.finishReason` never distinguishes
-    // an abort from a clean toolless finish (both are `undefined`), so
-    // `turn.cancelled` is the ONLY record of "this exact turn was cancelled" and
-    // it is set by `handleSessionCancel`, never inferred from the result below.
+    // something to reach. `RunAgentTurnResult.finishReason` does not reliably
+    // distinguish an abort from a clean toolless finish (most abort paths and a
+    // toolless finish both return `undefined`; only an abort during a
+    // `submit_result` wrap-up returns `"interrupted"`), so `turn.cancelled` is
+    // the authoritative record of "this exact turn was cancelled" and it is set
+    // by `handleSessionCancel`, never inferred from the result below.
     const turn: AcpActiveTurn = {
       controller: new AbortController(),
       cancelled: false,
@@ -1202,10 +1208,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       });
       registry.updateHandle(sessionId, updatedHandle);
       // `turn.cancelled` wins over whatever `finishReason` came back: a turn
-      // `session/cancel` interrupted reports `cancelled` even though
-      // `runAgentTurn`'s abort paths all return `finishReason: undefined` —
-      // the SAME value an ordinary toolless finish returns (F-5) — which
-      // `finishReasonToStopReason` alone would read as `end_turn`.
+      // `session/cancel` interrupted reports `cancelled` even though most of
+      // `runAgentTurn`'s abort paths return `finishReason: undefined` — the
+      // SAME value an ordinary toolless finish returns (F-5) — which
+      // `finishReasonToStopReason` alone would read as `end_turn`. (An abort
+      // during a `submit_result` wrap-up returns `"interrupted"`, which already
+      // maps to `cancelled`.)
       return { stopReason: turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason) };
     } finally {
       // Released on EVERY exit path — a normal finish, a thrown error, and a

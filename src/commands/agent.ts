@@ -1284,8 +1284,8 @@ export function scrubControlNonce(text: string, nonce: string): string {
 }
 
 /**
- * Wrap a control-nudge body in the genuine envelope. The body is scrubbed too:
- * some nudges quote tool output (the repeated-failure hint's error text).
+ * Wrap a control-nudge body in the genuine envelope. No nudge body may quote
+ * tool output (flow 347 review R3-1); the body is still scrubbed as a backstop.
  */
 function wrapHarnessNudge(body: string, nonce: string): string {
   return `${harnessEnvelopePrefix(nonce)} ${scrubControlNonce(body, nonce)}`;
@@ -1462,19 +1462,36 @@ function isCompleteStructuredAnswer(text: string): boolean {
   return hasHeading || hasList;
 }
 
+/** Longest tool name {@link sanitizeNudgeToolName} lets into a control nudge. */
+const NUDGE_TOOL_NAME_MAX = 64;
+
 /**
- * The hint injected when a tool keeps failing identically. It names the tool and
- * echoes the (bounded) error so the model has an explicit signal to change tool
- * or ask the user, instead of blindly re-issuing the same doomed call until the
- * hash budget stops it with no diagnosis.
+ * A tool name made safe to sit inside a control nudge: one line, bounded, and
+ * only `[A-Za-z0-9_.:-]` (every other character, brackets and quotes included,
+ * becomes `_`). The name comes from the model's own call, which may name a tool
+ * that does not exist, so it is never trusted verbatim.
  */
-export function buildRepeatedFailureHint(name: string, error: string, nonce: string): string {
-  const trimmed = error.trim();
-  const shown = trimmed.length > 200 ? `${trimmed.slice(0, 199)}…` : trimmed;
+export function sanitizeNudgeToolName(name: string): string {
+  const safe = name.replace(/[^A-Za-z0-9_.:-]/g, "_");
+  if (safe.length === 0) return "(unnamed)";
+  return safe.length > NUDGE_TOOL_NAME_MAX ? `${safe.slice(0, NUDGE_TOOL_NAME_MAX - 1)}…` : safe;
+}
+
+/**
+ * The hint injected when a tool keeps failing identically. It names the tool
+ * and points the model at the error already shown in that tool's result, so the
+ * model has an explicit signal to change tool or ask the user instead of
+ * re-issuing the same doomed call until the hash budget stops it with no
+ * diagnosis. Flow 347 review R3-1/R3-2: it quotes NO tool-supplied text — the
+ * hint carries the genuine control marker, and an error string (stderr, an MCP
+ * error payload) is attacker-controllable content that must never speak under
+ * it; the model already has the (redacted, scrubbed) error in the tool result.
+ */
+export function buildRepeatedFailureHint(name: string, nonce: string): string {
   return wrapHarnessNudge(
-    `tool "${name}" is failing repeatedly with the same error: ${shown} — ` +
-      `it is likely unavailable or misconfigured in this environment. Switch to a different ` +
-      `tool or ask the user; do not retry the same call.`,
+    `tool "${sanitizeNudgeToolName(name)}" is failing repeatedly with the same error ` +
+      `(see that tool's latest result above) — it is likely unavailable or misconfigured in ` +
+      `this environment. Switch to a different tool or ask the user; do not retry the same call.`,
     nonce,
   );
 }
@@ -2281,7 +2298,8 @@ async function runAgentTurnCore(
           }
         }
         if (fire.additionalContext.length > 0) {
-          effectivePrompt = `${userLine}\n\n[hook context]\n${fire.additionalContext.join("\n")}`;
+          // Review R3-3: hook output is untrusted text like any tool result.
+          effectivePrompt = `${userLine}\n\n[hook context]\n${scrub(fire.additionalContext.join("\n"))}`;
         }
       } catch (err) {
         // Flow 306 fix (review finding 3): a hook CRASH on a gate-capable
@@ -2357,7 +2375,7 @@ async function runAgentTurnCore(
         if (!wasOpened && options.slateSession.opened) {
           const freshSlate = await readSlateSession(options.slateSession);
           if (freshSlate !== undefined) {
-            history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project", ts: now() });
+            history.push({ role: "user", content: scrub(renderAnchorsBlock(freshSlate.anchors)), provenance: "project", ts: now() });
             io.onHistoryChange?.("tool");
             // Flow 200: NO auto resolve-or-create here anymore. The slate
             // opens with workspaceId unset; the agent binds/creates a
@@ -3393,7 +3411,7 @@ async function runAgentTurnCore(
         errorStreakByHash.set(reservation.hash, streak);
         if (streak >= REPEAT_FAILURE_HINT_THRESHOLD && !warnedFailingHashes.has(reservation.hash)) {
           warnedFailingHashes.add(reservation.hash);
-          const hint = buildRepeatedFailureHint(call.name, result.output, controlNonce);
+          const hint = buildRepeatedFailureHint(call.name, controlNonce);
           system(`\n${hint}\n`);
           repeatedFailureHint = hint;
         }
@@ -3407,7 +3425,7 @@ async function runAgentTurnCore(
     // Both pushed here, AFTER every call in this batch has its `tool` result
     // in `history` — never mid-loop (see the two comments above the loop).
     if (anchorsToAnnounce !== undefined) {
-      history.push({ role: "user", content: renderAnchorsBlock(anchorsToAnnounce), provenance: "project", ts: now() });
+      history.push({ role: "user", content: scrub(renderAnchorsBlock(anchorsToAnnounce)), provenance: "project", ts: now() });
       io.onHistoryChange?.("tool");
     }
     if (repeatedFailureHint !== undefined) {
