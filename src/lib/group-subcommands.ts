@@ -178,8 +178,9 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   ],
   // commands/sandbox.ts:181 (only "status" and its bare-alias are real)
   ["sandbox", ["status"]],
-  // commands/integrate.ts:19 (EDITOR_USAGE) — a closed target enum, first positional
-  ["integrate", ["cursor", "claude", "opencode", "vscode", "generic", "all"]],
+  // `integrate` is deliberately NOT here: its first positional is a comma-joined
+  // editor list (`keryx integrate cursor,claude`, commands/integrate.ts
+  // `parseEditors`), not one literal subcommand — flow 353 review round 2, L3.
   // commands/integrations.ts:36-52
   ["integrations", ["install", "uninstall", "doctor", "matrix"]],
   // commands/workspace.ts:31-270 (bare "help", not just "--help"/"-h", is also real there)

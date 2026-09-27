@@ -327,6 +327,24 @@ describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
     // `ask --help` is a question, not a claim about wiki's data — exit 0 either way is not the property under test here; only that it was NOT rejected as "unknown".
     expect(wiki.stderr).not.toContain("Unknown command");
   });
+
+  // Flow 353 review round 2 (L3, T3): first positionals that are not one bare
+  // subcommand word must pass the guard untouched — a comma-joined editor list,
+  // a file path, a search pattern. The guard only fires for a group in the map,
+  // so `integrate` (not in it) and positionals of mapped groups both get here.
+  test("a comma-joined, path or pattern first positional is never refused as unknown", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const cases: string[][] = [
+      ["integrate", "cursor,claude", "--dry-run"],
+      ["gdgraph", "affected", "src/cli.ts"],
+      ["ctx", "rg", "knownSubcommandsFor", "src/cli.ts"],
+      ["rules", "sync", "--help"],
+    ];
+    for (const args of cases) {
+      const result = await runBunExpectingFailure([cliPath, ...args]);
+      expect(result.stderr, args.join(" ")).not.toContain("Unknown command");
+    }
+  });
 });
 
 test("agents bootstrap help is available without touching global files", async () => {
