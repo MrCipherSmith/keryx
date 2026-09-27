@@ -1161,21 +1161,40 @@ function normalizeToolError(output: string): string {
 export const MAX_TOOLLESS_REPROMPTS = 2;
 
 /**
+ * Visible envelope for a shell-synthesized control nudge (flow 347 T6, AC9).
+ * These messages carry `role: "user"` (providers require strict user/
+ * assistant alternation, so a nudge cannot get its own role) but must still
+ * read as coming from the keryx shell itself, not the operator — a bare
+ * `[system]` prefix looked identical to operator-authored text with a
+ * "[system]" label pasted in front of it, to both the model and anyone
+ * reading the transcript. Every control nudge (the toolless reprompt, the
+ * plan follow-through) wraps its body with this same prefix and pairs it
+ * with `provenance: "harness"` at the `history.push` call site — see
+ * `NormalizedMessage.provenance` in `src/harness/provider/types.ts`.
+ */
+export const HARNESS_ENVELOPE_PREFIX = "[keryx shell — control nudge]";
+
+/** Wrap a control-nudge body in the shared harness envelope (see {@link HARNESS_ENVELOPE_PREFIX}). */
+function wrapHarnessNudge(body: string): string {
+  return `${HARNESS_ENVELOPE_PREFIX} ${body}`;
+}
+
+/**
  * The reprompt injected after a toolless reply to an action request. `attempt`
  * is 1-based; the final attempt states the consequence of another prose answer
  * so the escalation is visible to the model, not just to us.
  */
 export function buildToollessReprompt(attempt: number): string {
   if (attempt >= MAX_TOOLLESS_REPROMPTS) {
-    return (
-      "[system] Second reminder: this request still has no tool call. Do not describe " +
-      "the step, perform it. Reply with exactly ONE tool call and no prose. If you cannot " +
-      "call tools, say so plainly instead — another narrative answer ends this turn unexecuted."
+    return wrapHarnessNudge(
+      "Second reminder: this request still has no tool call. Do not describe " +
+        "the step, perform it. Reply with exactly ONE tool call and no prose. If you cannot " +
+        "call tools, say so plainly instead — another narrative answer ends this turn unexecuted.",
     );
   }
-  return (
-    "[system] You were asked to execute or inspect, but you replied with text and no tool call. " +
-    "Resend a single compliant tool call now (with fully populated required arguments)."
+  return wrapHarnessNudge(
+    "You were asked to execute or inspect, but you replied with text and no tool call. " +
+      "Resend a single compliant tool call now (with fully populated required arguments).",
   );
 }
 
@@ -1278,8 +1297,13 @@ function modelClaimedAction(text: string): boolean {
     return true;
   }
   const tokens = tokensForActionDetection(text);
+  // Flow 347 T6 (AC8): "will" (and, in an earlier pass, the bare pronoun "i")
+  // fired on ordinary finished prose ("I will follow up if anything else
+  // comes up.") that had already answered the request — neither token
+  // reliably distinguishes a stalled promise from a completed report the way
+  // the present-tense action verbs below do.
   const markers = new Set([
-    "trying", "executing", "running", "starting", "checking", "searching", "scanning", "will",
+    "trying", "executing", "running", "starting", "checking", "searching", "scanning",
     "сейчас", "пытаюсь", "запускаю", "запущу", "выполняю", "выполню",
     "проверяю", "проверю", "ищу", "прогоню", "сделаю", "посмотрю",
     "найду", "изучу", "гляну", "открою", "покажу", "создам",
@@ -1287,6 +1311,41 @@ function modelClaimedAction(text: string): boolean {
   ]);
   // Match whole first-person action words: nouns and past-tense reports are not promises.
   return tokens.some((token) => markers.has(token));
+}
+
+/**
+ * Length past which a toolless reply is treated as a finished answer rather
+ * than a stalled narration, when it also has the shape of a structured
+ * report (see {@link isCompleteStructuredAnswer}). Chosen well above a
+ * one-line "Checking the config…" stall (typically well under 200 chars) and
+ * comfortably under a short complete answer that just happens to be a few
+ * sentences long, so this length threshold rarely fires alone — the heading/
+ * list shape below is what usually satisfies AC8's "complete, structured
+ * answer" bar.
+ */
+export const COMPLETE_ANSWER_LENGTH_THRESHOLD = 400;
+
+/**
+ * True when a toolless reply looks like a finished, structured report — a
+ * markdown heading or list, or one long enough to plausibly be a full
+ * write-up — rather than a narrated-but-unexecuted next step (flow 347 T6,
+ * AC8). Callers still reprompt when the reply ENDS on a bare colon (checked
+ * separately, in {@link modelClaimedAction}) — a stall can render as a
+ * heading or a list-shaped lead-in too ("## Next steps:\n- Checking the
+ * config:"), and the trailing colon is what actually distinguishes "I did
+ * this" from "I am about to do this".
+ */
+function isCompleteStructuredAnswer(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+  if (trimmed.length > COMPLETE_ANSWER_LENGTH_THRESHOLD) {
+    return true;
+  }
+  const hasHeading = /^#{1,6}\s+\S/m.test(trimmed);
+  const hasList = /^(?:[-*+]\s+\S|\d+[.)]\s+\S)/m.test(trimmed);
+  return hasHeading || hasList;
 }
 
 /**
@@ -2264,6 +2323,12 @@ async function runAgentTurnCore(
   // with the SAME sentence is not going to produce a tool call on the next one,
   // so the remaining budget is abandoned rather than spent (see below).
   let lastToollessText: string | undefined;
+  // Flow 347 T6 (AC8): true once any round IN THIS TURN has executed at least
+  // one tool call. The toolless reprompt exists to catch a model that
+  // NARRATES a step and never executes it — once a tool call has actually
+  // run this turn, a later toolless round is a normal wrap-up/summary reply,
+  // not the stalled shape the reprompt targets, so it must not fire again.
+  let turnExecutedToolCall = false;
   for (;;) {
     if (roundState.round >= roundState.maxRounds) {
       if ((await stopAtRoundLimit()) === "reset") {
@@ -2504,7 +2569,18 @@ async function runAgentTurnCore(
       return {};
     }
     if (calls.length === 0) {
-      const shouldReprompt = actionRequest && (assistantText.length === 0 || modelClaimedAction(assistantText));
+      // Flow 347 T6 (AC8): a round in THIS turn already executed a tool call
+      // (`turnExecutedToolCall`), or this toolless reply is itself a
+      // complete, structured answer (unless it ends on a bare colon — still
+      // a stall) — either way, this is not the "narrated but never executed"
+      // shape the reprompt exists to catch.
+      const looksLikeFinishedAnswer =
+        isCompleteStructuredAnswer(assistantText) && !assistantText.trim().endsWith(":");
+      const shouldReprompt =
+        actionRequest &&
+        !turnExecutedToolCall &&
+        !looksLikeFinishedAnswer &&
+        (assistantText.length === 0 || modelClaimedAction(assistantText));
       const normalizedText = collapseWhitespace(assistantText);
       const repeatedVerbatim = lastToollessText !== undefined && normalizedText === lastToollessText;
       lastToollessText = normalizedText;
@@ -2522,7 +2598,7 @@ async function runAgentTurnCore(
         history.push({
           role: "user",
           content: buildToollessReprompt(toollessReprompts),
-          provenance: "project",
+          provenance: "harness",
           ts: now(),
         });
         io.onHistoryChange?.("tool");
@@ -2663,10 +2739,13 @@ async function runAgentTurnCore(
         planFollowThroughUsed = true;
         history.push({
           role: "user",
-          content:
-            "[system] The current execution plan still has actionable items remaining. Continue the work now. " +
-            "Do not give another final reply until the plan is complete or genuinely blocked.",
-          provenance: "project",
+          content: wrapHarnessNudge(
+            "The current execution plan still has actionable items remaining. Continue the work now. " +
+              "Do not give another final reply until the plan is complete or genuinely blocked.",
+          ),
+          // Flow 347 T6 (AC9): "harness", not "project" — this is the keryx
+          // shell's own synthesized control nudge, not operator input.
+          provenance: "harness",
           ts: now(),
         });
         io.onHistoryChange?.("tool");
@@ -2695,6 +2774,11 @@ async function runAgentTurnCore(
 
       return {}; // error, or a text-only finish → turn complete
     }
+
+    // Flow 347 T6 (AC8): reached only when `calls.length > 0` — this turn has
+    // now executed (or is about to execute) at least one tool call, so a
+    // later toolless round this same turn is not the reprompt's target shape.
+    turnExecutedToolCall = true;
 
     if (isAborted()) {
       system("\n[stopped] Model turn interrupted by user.\n");

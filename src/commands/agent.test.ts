@@ -13,6 +13,7 @@ import {
   ENV_AGENT_MAX_OUTPUT_TOKENS,
   ENV_AGENT_MAX_ROUNDS,
   ENV_REASONING_EFFORT,
+  HARNESS_ENVELOPE_PREFIX,
   MAX_AGENT_MAX_ATTEMPTS_PER_HASH,
   MAX_AGENT_MAX_ROUNDS,
   MAX_ATTEMPTS_PER_HASH,
@@ -332,7 +333,9 @@ test("runAgentTurn with planFollowThrough opted in: injects the current plan and
   expect(requests).toHaveLength(2);
   expect(requests[0]?.systemInstruction).toContain("Current execution plan (revision 1)");
   expect(requests[0]?.systemInstruction).toContain("implement [in_progress]");
-  expect(history.some((message) => message.provenance === "project" && message.content.includes("actionable items remain"))).toBe(true);
+  // Flow 347 T6 (AC9): the follow-through nudge is "harness" provenance, not
+  // "project" — it is the shell's own synthesized control nudge.
+  expect(history.some((message) => message.provenance === "harness" && message.content.includes("actionable items remain"))).toBe(true);
   expect(collected.system.join("")).toContain("Actionable items remain after the single follow-through");
   expect(collected.system.join("")).toContain("implement [in_progress]");
   expect(collected.system.join("")).toContain("verify [pending]");
@@ -371,9 +374,11 @@ test("runAgentTurn with planFollowThrough left at its default (off): ends on the
   // ONE request: no synthetic follow-through was injected.
   expect(requests).toHaveLength(1);
   expect(
-    history.some((message) => message.provenance === "project" && message.content.includes("actionable items remain")),
+    history.some((message) => message.provenance === "harness" && message.content.includes("actionable items remain")),
   ).toBe(false);
-  expect(history.some((message) => message.role === "user" && String(message.content).includes("[system]"))).toBe(false);
+  expect(history.some((message) => message.role === "user" && String(message.content).includes(HARNESS_ENVELOPE_PREFIX))).toBe(
+    false,
+  );
   const said = collected.system.join("");
   expect(said).toContain("[plan]");
   expect(said).toContain("implement [in_progress]");
@@ -887,7 +892,7 @@ test("runAgentTurn reprompts twice, escalating, when the model narrates again", 
   await runAgentTurn(io, deps, history, "продолжай");
 
   const reprompts = history
-    .filter((m) => m.role === "user" && m.content.startsWith("[system]"))
+    .filter((m) => m.role === "user" && m.content.startsWith(HARNESS_ENVELOPE_PREFIX))
     .map((m) => m.content);
   expect(reprompts).toEqual([buildToollessReprompt(1), buildToollessReprompt(2)]);
   expect(reprompts[1]).not.toBe(reprompts[0]);
@@ -909,7 +914,7 @@ test("runAgentTurn accepts a completed report containing action stems", async ()
   await runAgentTurn(io, baseDeps(provider), history, "продолжай");
   expect(requests).toHaveLength(2);
   expect(system.join("")).not.toContain("did not emit a tool call");
-  expect(history.filter((m) => m.role === "user" && m.content.startsWith("[system]"))).toHaveLength(0);
+  expect(history.filter((m) => m.role === "user" && m.content.startsWith(HARNESS_ENVELOPE_PREFIX))).toHaveLength(0);
 });
 
 test("runAgentTurn still reprompts an unexecuted future step", async () => {
@@ -952,10 +957,98 @@ test("runAgentTurn abandons the reprompt budget when the model repeats itself ve
 
   await runAgentTurn(io, deps, history, "продолжай");
 
-  const reprompts = history.filter((m) => m.role === "user" && m.content.startsWith("[system]"));
+  const reprompts = history.filter((m) => m.role === "user" && m.content.startsWith(HARNESS_ENVELOPE_PREFIX));
   expect(reprompts).toHaveLength(1);
   expect(requests.length).toBe(2);
   expect(system.join("")).toContain("did not emit a tool call");
+});
+
+// Flow 347 T6 (AC8): once a tool call has run THIS turn, a later toolless
+// round is a normal wrap-up, not the "narrated but never executed" shape the
+// reprompt targets — even when the wrap-up happens to contain a marker word.
+test("runAgentTurn does not reprompt a toolless reply once a tool call already ran this turn", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    // Contains "проверяю" (an action marker) but must NOT be reprompted: a
+    // tool call already ran earlier in this same turn.
+    [{ kind: "text_delta", text: "Проверяю итог, но пока не завершено." }, { kind: "model_end" }],
+  ]);
+  const { io, system } = collectingIo();
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, baseDeps(provider), history, "продолжай");
+  expect(requests).toHaveLength(2);
+  expect(history.filter((m) => m.role === "user" && m.content.startsWith(HARNESS_ENVELOPE_PREFIX))).toHaveLength(0);
+  expect(system.join("")).not.toContain("did not emit a tool call");
+});
+
+// Flow 347 T6 (AC8): a toolless reply shaped like a finished, structured
+// report (markdown headings/lists here) must not be reprompted even though
+// it contains an action-marker word, unless it ends on a bare colon.
+test("runAgentTurn does not reprompt a complete structured answer", async () => {
+  // Includes "checking" (an action marker modelClaimedAction would otherwise
+  // flag) precisely to prove the structured-answer shape is what suppresses
+  // the reprompt here, not an accidental absence of any marker.
+  const structured =
+    "## Summary\n\n" +
+    "I am checking in with a final status: everything is up to date.\n\n" +
+    "- Nothing else is running\n" +
+    "- No follow-up needed";
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: structured }, { kind: "model_end" }]]);
+  const { io, system } = collectingIo();
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, baseDeps(provider), history, "продолжай");
+  expect(requests).toHaveLength(1);
+  expect(history.filter((m) => m.role === "user" && m.content.startsWith(HARNESS_ENVELOPE_PREFIX))).toHaveLength(0);
+  expect(system.join("")).not.toContain("did not emit a tool call");
+});
+
+// Flow 347 T6 (AC8): a toolless reply that is long/structured enough to look
+// "complete" but ENDS on a bare colon is still a stall (it announced a next
+// step and stopped), so the reprompt must still fire.
+test("runAgentTurn still reprompts a structured-looking reply that ends on a stall colon", async () => {
+  const stall =
+    "## Plan\n\n" +
+    "- Reviewed the current config\n" +
+    "- Next, checking the deploy target:";
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: stall }, { kind: "model_end" }],
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "Done." }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, baseDeps(provider), history, "продолжай");
+  // reprompt round + the tool-call round it provoked + the final wrap-up round.
+  expect(requests).toHaveLength(3);
+  expect(history.some((m) => m.role === "user" && m.content === buildToollessReprompt(1))).toBe(true);
+});
+
+// Flow 347 T6 (AC8): the plain "Checking the config:" stall from the flow's
+// own doc comments must still reprompt — the bare-colon check is the
+// strongest single stall signal and must survive the marker/structure changes.
+test("runAgentTurn still reprompts a genuine 'Checking the config:' stall", async () => {
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "Checking the config:" }, { kind: "model_end" }],
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "Done." }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIo();
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, baseDeps(provider), history, "продолжай");
+  expect(requests).toHaveLength(3);
+  expect(history.some((m) => m.role === "user" && m.content === buildToollessReprompt(1))).toBe(true);
 });
 
 test("runAgentTurn reports an unknown tool without throwing", async () => {

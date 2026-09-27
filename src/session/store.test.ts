@@ -106,6 +106,37 @@ test("a resumed session preserves assistant tool calls and their result ids", ()
   }
 });
 
+// Flow 347 T6 (AC9): a shell-synthesized control nudge (toolless reprompt,
+// plan follow-through) persists with provenance "harness" — omitting it from
+// `readJsonl`'s allowlist would silently downgrade it to provenance-less
+// `role: "user"` on every resume, indistinguishable from operator input.
+test("a resumed session preserves the harness provenance on a shell-synthesized control nudge", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-harness-provenance-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(
+      created.handle,
+      [
+        { role: "user", content: "продолжай", provenance: "project" },
+        {
+          role: "user",
+          content: "[keryx shell — control nudge] Resend a single compliant tool call now.",
+          provenance: "harness",
+        },
+      ],
+      { provider: "p", model: "m" },
+    );
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history[0]?.provenance).toBe("project");
+    expect(resumed.history[1]?.provenance).toBe("harness");
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("a transcript line with malformed tool-call fields drops them instead of replaying them", () => {
   const dataDir = tempData();
   const proj = mkdtempSync(path.join(tmpdir(), "keryx-toolcalls-bad-"));

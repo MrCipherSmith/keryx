@@ -192,8 +192,21 @@ export interface MessageReasoning {
 export interface NormalizedMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
-  /** Trust provenance of the content (trusted policy vs. project/model output). */
-  provenance?: "trusted" | "project" | "model" | "tool";
+  /**
+   * Trust provenance of the content (trusted policy vs. project/model output).
+   *
+   * `"harness"` (flow 347 T6, AC9) is distinct from `"project"`: both are
+   * `role: "user"` (providers require strict user/assistant alternation, so
+   * a synthetic nudge cannot use its own role), but `"harness"` marks content
+   * the keryx shell itself synthesized and injected into history — a control
+   * nudge like the toolless reprompt or the plan follow-through — rather than
+   * anything the operator typed. See `HARNESS_ENVELOPE_PREFIX` in
+   * `src/commands/agent.ts` for the matching visible envelope. Any switch on
+   * this union should treat an unhandled `"harness"` as "untrusted, not the
+   * operator" — the same bucket `"project"`/`"model"`/`"tool"` already fall
+   * into wherever only `"trusted"` is special-cased.
+   */
+  provenance?: "trusted" | "project" | "model" | "tool" | "harness";
   /**
    * Assistant only: the tool calls this turn emitted.
    *
