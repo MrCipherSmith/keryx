@@ -3,49 +3,57 @@ Title: Module src/harness/replay
 Version: 0.1.0
 Type: component
 Status: draft
-Summary: "`src/harness/replay` groups 3 file(s). Depends on `src/harness/tool`, `src/harness`, `src/harness/provider`."
+Summary: "`src/harness/replay` groups replay-related functionality for the harness layer, providing a replay-aware surface that integrates with harness tools, providers, and core harness capabilities."
 ---
 # Module src/harness/replay
 
 ## Summary
 
-`src/harness/replay` groups three files and provides replay-related support for the harness layer. It is built on harness abstractions, tool-related behavior, and provider integration points.
+`src/harness/replay` groups replay-related functionality for the harness layer, providing a replay-aware surface that integrates with harness tools, providers, and core harness capabilities. The module is a cohesive unit of three files that work together to support replay scenarios within the testing harness.
 
 ## Overview
 
 This module owns replay-related behavior within the harness component area. Its role is to provide a replay-aware surface that can interact with harness tools, providers, and general harness capabilities.
 
-The code graph shows `replay.ts` as the main implementation or export point, while the test files exercise broader harness behavior through related modules.
+The code graph identifies three files within this module:
+
+| File | Imports | Imported by |
+|------|---------|-------------|
+| `replay.ts` | 0 | 4 |
+| `replay.test.ts` | 11 | 0 |
+| `replay.hardening.test.ts` | 11 | 0 |
+
+`replay.ts` serves as the main implementation or export point, while the test files exercise broader harness behavior through related modules. This separation keeps the public surface clean and the test coverage comprehensive.
 
 ## How it works
 
-The module is centered on `replay.ts`, which is imported by other parts of the codebase and appears to provide the module’s primary public surface.
+The module is centered on `replay.ts`, which provides the primary public API for replay functionality. Other parts of the codebase import from this file to access replay-related capabilities.
 
-At a module level, `src/harness/replay` connects with:
+At a module level, `src/harness/replay` integrates with:
 
-- `src/harness`: shared harness abstractions and base behavior.
-- `src/harness/tool`: tool-oriented harness behavior.
-- `src/harness/provider`: provider-facing harness behavior.
-- `src/contracts`, `src/harness/policy`, and `src/harness/run`: supporting modules used mainly through test coverage and module-level dependencies.
+- **`src/harness`**: shared harness abstractions and base behavior
+- **`src/harness/tool`**: tool-oriented harness behavior
+- **`src/harness/provider`**: provider-facing harness behavior
+- **`src/contracts`**, **`src/harness/policy`**, **`src/harness/run`**: supporting modules used mainly through test coverage and module-level dependencies
 
-The test files, `replay.test.ts` and `replay.hardening.test.ts`, contain the broader dependency footprint. They indicate that replay behavior is verified against multiple harness integration points, including tools, providers, policies, and runs.
+The test files contain the broader dependency footprint, validating replay behavior against multiple harness integration points including tools, providers, policies, and runs.
 
 ## Key concepts
 
 - **Replay surface**  
-  The main entry point exposed by the module, represented by `replay.ts`.
+  The main entry point exposed by `replay.ts`. This is what consumers import to access replay functionality.
 
 - **Harness integration**  
-  The module depends on general harness behavior, meaning it is intended to participate in harness workflows rather than operate in isolation.
+  The module depends on general harness behavior via `src/harness`, indicating it participates in harness workflows rather than operating in isolation.
 
 - **Tool participation**  
-  Its dependency on `src/harness/tool` suggests that replay behavior needs to understand or coordinate with harness tools.
+  The dependency on `src/harness/tool` means replay behavior coordinates with harness tools during replay operations.
 
 - **Provider participation**  
-  Its dependency on `src/harness/provider` suggests that provider-related state or behavior may be involved during replay-aware operations.
+  The dependency on `src/harness/provider` indicates that provider-related state or behavior may be involved during replay-aware operations.
 
 - **Test-backed validation**  
-  The presence of both `replay.test.ts` and `replay.hardening.test.ts` shows that the module’s behavior and robustness are validated across a relatively broad set of imports.
+  Both `replay.test.ts` and `replay.hardening.test.ts` validate the module's behavior and robustness across multiple harness integration boundaries.
 
 ## Main flows
 
@@ -53,17 +61,14 @@ The test files, `replay.test.ts` and `replay.hardening.test.ts`, contain the bro
    Other code imports `replay.ts` to access the replay-related functionality provided by this module.
 
 2. **Tool and provider collaboration**  
-   Replay-related behavior is associated with harness tools and providers, indicating that replay operations may need to coordinate across both areas.
+   Replay-related behavior coordinates with both harness tools and providers, delegating to appropriate integration points as needed.
 
 3. **Test validation**  
-   The tests exercise replay behavior together with harness, tool, provider, contract, policy, and run-related modules. This suggests the tests validate replay behavior against multiple harness integration boundaries.
+   Tests exercise replay behavior together with harness, tool, provider, contract, policy, and run-related modules, validating replay behavior against multiple integration boundaries.
 
----
+## Reference
 
-## Reference (from code graph)
-
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+*Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.*
 
 ### Key files
 
@@ -91,8 +96,7 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/harness/tool](src-harness-tool.md)

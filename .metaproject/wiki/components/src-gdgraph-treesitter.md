@@ -1,46 +1,57 @@
-# Module src/gdgraph/treesitter
-
-Version: 1.0.1
+---
+Title: Module src/gdgraph/treesitter
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:1534ea8ce7117787cc12e37ee9ca66705943ceb31ea4cd5e5c55795013f56376
+Summary: "Provides optional TypeScript and JavaScript symbol enrichment for the code graph using web-tree-sitter. Parses source files to extract typed symbol nodes (functions, methods, classes, interfaces) and records call edges between them, with graceful fallback when the runtime is unavailable."
+---
+# Module src/gdgraph/treesitter
+
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:6ec0f3354d12d15bbde85c75e187ee5a879be69dc9bcf2704cf2594f15e8aee6
 
 ## Summary
 
-`src/gdgraph/treesitter` groups 7 file(s). Depends on `src/assets`, `src/gdgraph`. Exposes 8 public symbol(s).
+`src/gdgraph/treesitter` provides optional TypeScript and JavaScript symbol enrichment for the code graph. It depends on `src/assets` and `src/gdgraph` and exposes public symbols for configuring and resolving the tree-sitter capability.
 
 ## Overview
 
-`src/gdgraph/treesitter` owns the optional symbol-enrichment layer of the code graph: it parses TypeScript and JavaScript source files with `web-tree-sitter`, extracts typed symbol nodes (functions, methods, classes, interfaces), and records call edges between them. The module is deliberately isolated behind a capability seam so the rest of the graph builder remains dependency-free and deterministic even when `web-tree-sitter` is not installed. It is the sole place in `src/` that may load the `web-tree-sitter` runtime, and it absorbs every parse failure gracefully rather than propagating errors outward.
+The module parses supported source files with `web-tree-sitter` and adds typed symbol nodes and call edges to the graph. It isolates the optional parser runtime behind a capability seam, so graph construction can proceed without a symbol layer when the runtime or required grammar assets are unavailable.
+
+`adapter.ts` owns runtime integration and the per-file parse flow. `extract.ts` walks syntax trees through a minimal `TsNode` interface, keeping extraction logic separate from the parser dependency. `grammars.ts` resolves language grammar assets through the asset resolver.
 
 ## How it works
 
-The module is split into two distinct layers that never cross-import in the wrong direction. `adapter.ts` is the only file that touches `web-tree-sitter`; it implements the `CapabilityAdapter<BuildInput, SymbolLayer>` contract by loading resolved grammar WASM assets, creating one parser instance per language, and driving the per-file parse loop. Because `web-tree-sitter` ships two incompatible API shapes (0.22 exports a default Parser class; 0.25 exports named `Parser` and `Language`), the adapter normalises both variants at runtime through a version-tolerant `normalizeParserApi` wrapper before use.
+The adapter loads the parser runtime and grammar assets, creates parsers for the supported languages, and parses input files. It normalizes the runtime API so it can accommodate the incompatible export shapes described for `web-tree-sitter` versions 0.22 and 0.25.
 
-`extract.ts` is intentionally dependency-free: it accepts the root syntax node through the minimal `TsNode` interface and performs a pure recursive walk, collecting `SymbolNode` records (functions, arrow functions, methods, classes, interfaces) and raw `CallEdge` candidates. Within a single file the extractor resolves call targets whose callee name matches a symbol defined in the same file; all remaining calls are left as `unresolved-call` edges. After all files are processed the adapter calls `resolveCrossFileCalls`, which does a global name-uniqueness pass and upgrades unambiguous `unresolved-call` edges to proper `calls` edges, deliberately leaving any name that resolves to more than one symbol as unresolved to avoid false graph edges. `defines` edges (file → symbol) are also emitted during per-file extraction so the graph can answer containment queries without a separate pass.
+For each parsed file, the extractor walks the syntax tree and collects symbols such as functions, arrow functions, methods, classes, and interfaces. It also records call candidates and emits `defines` edges from the file to its symbols. Calls that can be matched to a symbol in the same file are resolved during extraction. After processing the files, the adapter attempts to resolve remaining calls across files by name; it resolves only unambiguous matches and leaves unknown or ambiguous targets as `unresolved-call` edges.
+
+The capability checks whether the parser runtime can be loaded and whether grammar assets resolve. If the capability is unavailable, graph construction omits the symbol layer rather than failing.
 
 ## Key concepts
 
-**SymbolNode** — the core graph vertex produced by this layer. Each node carries a stable `id` of the form `<filePath>#[Container.]<name>` (with an `@<startLine>` suffix added only when the same base id appears more than once in a file), plus kind, path, line range, language, and a rendered signature string.
-
-**CallEdge** — a directed edge between two graph nodes with kind `defines`, `calls`, or `unresolved-call`. `defines` edges link a file path to each symbol it contains; `calls` edges link a symbol to the symbol it calls; `unresolved-call` edges preserve call sites whose target could not be matched to a unique known symbol.
-
-**Grammar assets** — language-specific WASM grammar files (one per language) resolved at runtime by `grammars.ts` through the Asset Resolver. Their presence is the operative gate for `isAvailable()`: the adapter returns `false` and the capability is skipped silently when no grammar resolves successfully.
-
-**Capability seam** — `adapter.ts` registers itself via `createTreesitterSpec`, which returns a `CapabilitySpec` consumed by the graph builder's `resolveCapability` function. This seam means the entire tree-sitter enrichment path is opt-in: the graph builder calls `isAvailable()` first, and if it returns `false`, the symbol layer is simply absent from the output rather than causing an error.
+- **Symbol node:** A graph node representing an extracted declaration. It includes a stable ID based on the file path and symbol name, with a line suffix when needed to distinguish duplicate base IDs in a file. Nodes also carry kind, source location, language, and a rendered signature.
+- **Call edge:** A directed relationship. `defines` links a file to a symbol, `calls` links a symbol to a resolved target, and `unresolved-call` preserves a call whose target could not be identified uniquely.
+- **Grammar assets:** Language-specific WASM grammar files resolved at runtime. Their availability is required for the tree-sitter capability to run.
+- **Capability seam:** The adapter exposes a capability specification for the graph builder to resolve. This keeps tree-sitter enrichment optional.
 
 ## Main flows
 
-**Parse a file and produce symbols and calls.** The adapter iterates over input files sorted by path. For each file it picks the parser for the matching language, calls `parser.parse(file.content)`, and passes `tree.rootNode` into `extractSymbolLayer`. The extractor walks the syntax tree recursively, tracking the nearest enclosing class or interface as `container` and the nearest enclosing symbol id as `enclosingSymbolId`. On each node it checks whether it is a declaration (function, method, class, interface, or `const`/`let` arrow-function holder) and emits a `SymbolNode`, or whether it is a `call_expression`/`new_expression` and emits a raw `CallEdge`. The extractor then performs same-file call resolution against the file's own symbol name map, emits `defines` edges, deduplicates, sorts, and returns a `SymbolLayer`.
+### Parse and extract
 
-**Cross-file call resolution.** After all per-file `extractSymbolLayer` calls complete, the adapter aggregates every symbol and every call edge across the entire file set. It then calls `resolveCrossFileCalls`, which builds a name-to-id index and a name-occurrence counter over all symbols. Any `unresolved-call` edge whose callee last-segment maps to exactly one symbol id is promoted to a resolved `calls` edge; edges with an ambiguous or unknown callee remain as `unresolved-call`. Self-edges (from === to) are dropped. The resulting call array is sorted and returned as part of the final `SymbolLayer`.
+The adapter processes input files in path order, selects a parser for each file's language, and passes the parsed root node to the extractor. The extractor identifies declarations and call expressions, tracks enclosing containers and symbols, and returns the per-file symbols and edges.
 
-**Capability availability check.** Before the graph builder invokes `run()`, it calls `isAvailable()` on the `TreesitterAdapter`. The adapter attempts to load `web-tree-sitter` (injected as an optional dependency via the capability seam) and then calls `resolveGrammars` to locate WASM grammar files for the configured languages. If the dependency is absent or no grammar resolves, `isAvailable()` returns `false` and the graph builder proceeds without the symbol layer, preserving full determinism for environments that do not have `web-tree-sitter` installed.
+### Resolve calls across files
+
+After per-file extraction, the adapter aggregates symbols and call edges. It uses symbol names to resolve an unresolved call only when that name identifies a unique symbol across the processed files. Unknown and ambiguous calls remain unresolved. Self-edges are dropped from the final call results.
+
+### Check capability availability
+
+Before running the capability, the graph builder checks whether the parser runtime can be loaded and whether grammar assets can be resolved. If either requirement is missing, the adapter reports the capability as unavailable and the graph builder proceeds without the symbol layer.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=2522e61a0b0780fcf9770aad5af3a5507fba6f7dd9504045fa12491b0f17b800 -->
+<!-- keryx:reference:begin v=1 hash=3c473b1613edead8ebf325e8ce4a87684551955a3a7b664b5570f141982c3bef -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -51,39 +62,47 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 - `FileRecord` (interface)
 - `BuildInput` (interface)
 - `TreesitterAdapterConfig` (interface)
+- `GrammarDiagnosisStatus`
+- `GrammarDiagnosis` (interface)
+- `describeGrammarDiagnoses` (function)
 - `createTreesitterSpec` (function)
 - `resolveTreesitterCapability` (function)
 - `vs`
 
 ### Key files
 
-- `src/gdgraph/treesitter/adapter.ts` - imported by 2, imports 5
+- `src/gdgraph/treesitter/adapter.ts` - imported by 8, imports 5
 - `src/gdgraph/treesitter/adapter.test.ts` - imported by 0, imports 6
-- `src/gdgraph/treesitter/extract.ts` - imported by 4, imports 1
+- `src/gdgraph/treesitter/extract.ts` - imported by 5, imports 1
 - `src/gdgraph/treesitter/grammars.ts` - imported by 1, imports 2
+- `src/gdgraph/treesitter/builtin-method-calls.test.ts` - imported by 0, imports 2
 - `src/gdgraph/treesitter/extract.test.ts` - imported by 0, imports 2
-- `src/gdgraph/treesitter/resolve-calls.test.ts` - imported by 0, imports 2
 
 ### Depends on
 
-- `src/gdgraph` - 7 import(s)
-- `src/capability` - 3 import(s)
+- `src/capability` - 2 import(s)
+- `src/gdgraph` - 2 import(s)
 - `src/assets` - 2 import(s)
 
 ### Depended on by
 
-- `src/gdgraph` - 1 import(s)
+- `src/gdgraph` - 2 import(s)
+- `src/wiki/freshness` - 2 import(s)
+- `src/commands` - 1 import(s)
+
+### Dependency basis
+
+- Production imports only: 8 import(s) from test file(s) (e.g. `src/gdgraph/symbols-capability.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 7
-- Cross-module imports: 12
+- Files: 9
+- Cross-module imports: 6
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/assets](src-assets.md)
@@ -91,6 +110,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 1.0.0 - Prose enriched: Overview, How it works, Key concepts, Main flows written from extract.ts and adapter.ts. Status set to accepted.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

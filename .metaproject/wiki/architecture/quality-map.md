@@ -3,59 +3,87 @@ Title: Quality Map
 Version: 0.1.0
 Type: architecture
 Status: accepted
-Describes: none  # not code-scoped: generated from a Code Health run, so its currency depends on when health last ran, not on which files moved
-Summary: Generated from Code Health: gate warn, score 90, 62 findings.
+Summary: Auto-generated snapshot of project code health, risk level, and findings distribution from a Code Health scan.
 ---
 
 # Quality Map
 
-This page represents the architecture-level quality map for the project. It is automatically generated from a Code Health scan and provides a snapshot of the current codebase health, risk, and the distribution of findings across different analysis sources.
+The Quality Map is an architecture-level snapshot of the project's code health. It is **automatically generated** from a Code Health scan and summarizes the current health score, risk level, and distribution of findings across the codebase.
 
-## Gate
+> **Note:** This page is not code-scoped. Its currency depends on when the health scan last ran — not on which files have changed since. Treat it as a point-in-time report, not a live view.
 
-The gate is evaluated as **warn** due to a health regression of 5 points compared to the baseline. This indicates that while the overall score is acceptable, the trend is negative and warrants attention.
+## Gate Status
 
-- **Status**: warn
-- **Reason**: WARN: health regression 5 vs baseline
+The quality gate reflects whether the project's health trend is acceptable.
+
+| Property | Value |
+|----------|-------|
+| Status | warn |
+| Reason | 5-point health regression vs. baseline |
+
+The gate is currently in **warn** state. A 5-point drop in the health score compared to the baseline signals a negative trend. The overall score is still within an acceptable range, but the regression is worth investigating before it compounds.
 
 ## Project Score
 
-The project receives an overall health score of **90** (out of 100) with a corresponding risk score of **310**. There are **62 findings** in total, all classified as P2 (medium priority). No P0, P1, or P3 findings exist.
+| Metric | Value |
+|--------|-------|
+| Health Score | 90 / 100 |
+| Risk Score | 310 |
+| Total Findings | 62 |
 
-- **Health score**: 90
-- **Risk score**: 310
-- **Findings**: 62
-- **P0/P1/P2/P3**: 0 / 0 / 62 / 0
+The health score summarizes overall code quality; the risk score aggregates the severity-weighted impact of all open findings.
+
+### Findings by Priority
+
+| Priority | Count |
+|----------|-------|
+| P0 (Critical) | 0 |
+| P1 (High) | 0 |
+| P2 (Medium) | 62 |
+| P3 (Low) | 0 |
+
+All 62 findings are **medium priority (P2)**. There are no critical, high, or low priority issues at this time — the regression is driven by an accumulation of medium-severity findings rather than a single acute problem.
 
 ## Findings by Source
 
-All 62 findings originate from the **complexity** analysis source. No other source reported any findings.
+| Source | Findings |
+|--------|----------|
+| complexity | 62 |
+| Other sources | 0 |
 
-- complexity: 62
+Every finding currently on record originates from the **complexity** analysis source. No other analysis source is contributing findings.
 
-## Sources
+## Analysis Sources Status
 
-The quality map aggregates data from several analysis sources. Their availability and findings count are as follows:
+| Source | Status | Findings |
+|--------|--------|----------|
+| eslint | skipped | 0 |
+| typescript | available | 0 |
+| tests | missing | 0 |
+| dependencyAudit | missing | 0 |
+| sonarqube | skipped | 0 |
+| coverage | missing | 0 |
+| complexity | available | 62 |
 
-- **eslint**: skipped (0 findings)
-- **typescript**: available (0 findings)
-- **tests**: missing (0 findings)
-- **dependencyAudit**: missing (0 findings)
-- **sonarqube**: skipped (0 findings)
-- **coverage**: missing (0 findings)
-- **complexity**: available (62 findings)
+Several sources are **skipped** or **missing**, meaning their findings — if any — are not reflected in this scan. The current picture is based only on the sources marked `available` (`typescript`, `complexity`). Enabling the missing sources (tests, dependency audit, coverage) would give a more complete view of project health.
 
-## Related Reports
+## Interpreting This Report
 
-Detailed artifacts for this quality map are stored in the health data directory:
+- The **warn** gate status means action is advisable but not urgent.
+- Since all findings are complexity-related P2 issues, focus remediation on the highest-complexity modules first.
+- Re-run the health scan after addressing findings to confirm the regression is resolved and the gate returns to a healthy state.
 
-- `.metaproject/data/health/artifacts/latest.md`
-- `.metaproject/data/health/artifacts/latest.json`
+## Artifacts
 
-## Related Wiki
+Detailed reports are stored in `.metaproject/data/health/artifacts/`:
+
+- `.metaproject/data/health/artifacts/latest.md` — human-readable report (generated, gitignored — run `keryx health run` to produce it locally)
+- `.metaproject/data/health/artifacts/latest.json` — structured data (generated, gitignored — run `keryx health run` to produce it locally)
+
+## Related Pages
 
 - [Wiki Index](../index.md)
 
 ## Changelog
 
-- **0.1.0** – Generated by `keryx wiki collect` at `2026-07-09T21:28:28.047Z`.
+- **0.1.0** — Generated by `keryx wiki collect` at `2026-07-09T21:28:28.047Z`.

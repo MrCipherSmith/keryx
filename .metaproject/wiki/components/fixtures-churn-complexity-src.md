@@ -46,6 +46,68 @@ Tests load the sidecar JSON directly and pass the churn data to `rankHotspots` i
 - **End-to-end gate invariance test (AC5/AC6):** `hotspot.test.ts` passes the fixture files to `computeMetrics` with a real `HealthConfig`. It verifies that the hotspot penalty term is zero at the default weight of 0 (score equals pre-D1 formula) and that a non-zero weight produces a measurable penalty and triggers a gate failure, confirming the fixture exercises the full scoring and gate pipeline.
 
 ---
+```markdown
+---
+Title: Module fixtures/churn-complexity/src
+Version: 1.0.1
+Type: component
+Status: accepted
+VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
+VerifiedScope: sha256:224af889eada5beda9cc1c97fce4e8998940efdad610e2741d3e1f7faaaf71f7
+Summary: Test fixture providing four TypeScript files representing churn-vs-complexity quadrants, used to validate hotspot detection without a live git repository.
+---
+
+# Module fixtures/churn-complexity/src
+
+## Overview
+
+`fixtures/churn-complexity/src` is a test fixture — not production code. It contains four small TypeScript files that cover the four quadrants of the churn-vs-complexity space: high/low churn crossed with high/low cyclomatic complexity. These files are used by Block D acceptance tests (AC1–AC6, AC17) in `keryx`'s hotspot-detection suite. The fixture provides known ground truth so the hotspot detector can be validated without a live git repository.
+
+## Fixture file contents
+
+Each `.ts` file in `src/` is annotated with a comment stating its intended quadrant and cyclomatic complexity. The files are pure TypeScript with no internal imports and no dependencies on one another (0 cross-module imports):
+
+| File | Exported Functions | Complexity | Description |
+|------|-------------------|------------|-------------|
+| `hot.ts` | `greet(name: string): string` | 6 | Five-branch conditional; high churn × high complexity hotspot |
+| `churny-simple.ts` | `identity<T>(x: T): T` | 2 | Two-branch conditional; high churn but low complexity |
+| `complex-stable.ts` | `identity<T>(x: T): T` | 6 | Five-branch conditional; low churn despite complexity |
+| `cold.ts` | (module-level logic only) | 1 | Straight-line code; low churn × low complexity |
+
+The `greet` function uses a five-branch `if/else if` chain to classify a name by first letter. The `identity` function uses a single boolean check to decide whether to return the input or a default value.
+
+## How it works
+
+Three JSON sidecar files complete the fixture:
+
+- **`churn.json`** — seeded churn count per file (substituted for real `git log` counts).
+- **`expected.json`** — pre-computed score and expected ranking for every file.
+- **`cases.json`** — labels each file as `positive` (a true hotspot) or `negative`, so the corpus harness (`runCorpus`/`gateCorpus`) can measure precision and recall.
+
+Tests load the sidecar JSON directly and pass the churn data to `rankHotspots` instead of calling `getChurn` against a real repository. This keeps the suite fast and deterministic.
+
+## Key concepts
+
+- **Churn** — number of git commits that touched a file. Seeded artificially (values range from 2 to 100).
+- **Cyclomatic complexity** — number of independent paths: `1 + decision_points`. Straight-line functions score 1; the five-branch functions `greet` and `identity` score 6 each.
+- **Hotspot score** — product `churn × complexity`. Only high churn *and* high complexity indicates a true maintenance hotspot.
+- **Quadrant labeling** — four files represent four cases:
+  - `hot.ts` — high churn (100) × high complexity (6) → top hotspot, score 600.
+  - `churny-simple.ts` — high churn (40) × low complexity (2) → high rank but not a hotspot, score 80.
+  - `complex-stable.ts` — low churn (10) × high complexity (6) → low rank despite complexity, score 60.
+  - `cold.ts` — low churn (2) × low complexity (1) → lowest rank, score 2.
+- **Threshold** — score > 100 distinguishes the single true positive (`hot.ts`) from the three negatives.
+- **Corpus cases** — `cases.json` marks each file as `positive` or `negative` so the harness computes false-negative rate and precision.
+
+## Main flows
+
+- **Hotspot ranking test (AC2/AC3):** `hotspot.test.ts` reads `churn.json` into a `Map`, calls `analyzeSourceFiles` on the four `src/` files to compute complexity, then passes both to `rankHotspots`. The returned ranking is compared against `expected.json` for exact file order and per-file `{ churn, complexity, score }`. Running the same call twice (AC3) asserts byte-identical output, verifying determinism.
+
+- **Corpus precision/recall test (AC17):** `block-d-corpora.test.ts` builds the hotspot score map from the same inputs, then feeds it into `runCorpus` using `cases.json`. The harness checks whether each file is correctly flagged (`score > 100`) against its `positive`/`negative` label, then asserts zero false-negative rate and perfect precision before calling `gateCorpus`.
+
+- **End-to-end gate invariance test (AC5/AC6):** `hotspot.test.ts` passes the fixture files to `computeMetrics` with a real `HealthConfig`. It verifies that the hotspot penalty term is zero at the default weight of 0 (score equals pre-D1 formula) and that a non-zero weight produces a measurable penalty and triggers a gate failure, confirming the fixture exercises the full scoring and gate pipeline.
+
+---
 
 <!-- keryx:reference:begin v=1 hash=d453043689313cfe09e359cc78cddb7661bc2adc075663773c9d942057f4441c -->
 ## Reference (from code graph)
@@ -82,3 +144,4 @@ Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exi
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 1.0.0 - Prose sections enriched: Overview, How it works, Key concepts, Main flows grounded in code reads of all four fixture files and both test files. Status set to accepted.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+```

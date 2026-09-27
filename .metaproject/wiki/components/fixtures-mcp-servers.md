@@ -5,87 +5,97 @@ Type: component
 Status: draft
 Summary: "`fixtures/mcp-servers` groups 2 file(s). Exposes 4 public symbol(s)."
 ---
+```markdown
+---
+Title: Module fixtures/mcp-servers
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`fixtures/mcp-servers` groups 2 file(s). Exposes 4 public symbol(s)."
+---
+
 # Module fixtures/mcp-servers
 
 ## Summary
 
-`fixtures/mcp-servers` groups 2 file(s). Exposes 4 public symbol(s).
+`fixtures/mcp-servers` provides fixture helpers for working with MCP servers during development and testing. It exposes 4 public symbols and groups 2 files.
 
 ## Overview
 
-`fixtures/mcp-servers` owns fixture helpers for working with MCP servers during development and testing. Its purpose is to provide a local, controllable stand-in for an MCP server so that dependent modules, especially `src/mcp-servers`, can exercise MCP server integration paths without relying on a real external service.
+This module provides a local, controllable stand-in for an MCP server so that dependent modules—particularly `src/mcp-servers`—can exercise MCP server integration paths without relying on real external services.
 
-The module is centered around a mock HTTP-based MCP server. It also includes a small echo-style fixture file, although the current code graph shows no importers for that file.
+The module centers on a mock HTTP-based MCP server implementation. It also includes a lightweight echo-style fixture file, though the current code graph shows no importers for that file.
 
 ## How it works
 
-The module is organized around two fixture files:
+The module contains two fixture files:
 
-- `fixtures/mcp-servers/http-server.ts` provides the primary mock server implementation and public API surface.
-- `fixtures/mcp-servers/echo-server.ts` appears to provide a lightweight echo-style fixture, but it is not currently imported by other modules in the graph.
+- `fixtures/mcp-servers/http-server.ts` — provides the primary mock server implementation and public API surface.
+- `fixtures/mcp-servers/echo-server.ts` — provides a lightweight echo-style fixture (currently unused in the codebase).
 
-The public symbols exposed by `fixtures/mcp-servers` form a small fixture layer:
+### Public API
 
-- `startMockHttpMcpServer` starts a mock HTTP MCP server.
-- `MockOptions` describes configuration for the mock server.
-- `MockHttpMcpServer` represents the running mock server instance.
-- `RecordedRequest` represents request data captured by the mock server.
+| Symbol | Description |
+|--------|-------------|
+| `startMockHttpMcpServer` | Starts a mock HTTP MCP server. |
+| `MockOptions` | Configuration options for the mock server. |
+| `MockHttpMcpServer` | Represents the running mock server instance. |
+| `RecordedRequest` | Captured request data from the mock server. |
 
-In practice, code imports the public API from this module, creates or starts a mock server using `MockOptions`, and then uses the returned `MockHttpMcpServer` instance as a local endpoint for MCP client interactions. The server can record requests as `RecordedRequest` values, which makes it useful for inspecting what a client sent during a test or local workflow.
+In practice, code imports the public API from this module, creates a mock server using `MockOptions`, and uses the returned `MockHttpMcpServer` instance as a local endpoint for MCP client interactions. The server records requests as `RecordedRequest` values, enabling inspection of what a client sent during a test or local workflow.
 
 ## Key concepts
 
-- **MCP fixture**  
-  A reusable test or development resource that simulates MCP server behavior in a controlled way.
+- **MCP fixture** — A reusable test or development resource that simulates MCP server behavior in a controlled way.
 
-- **Mock HTTP MCP server**  
-  A local HTTP-based stand-in for an MCP server. It allows dependent code to interact with MCP server logic while remaining isolated from external services.
+- **Mock HTTP MCP server** — A local HTTP-based stand-in for an MCP server. It allows dependent code to interact with MCP server logic while remaining isolated from external services.
 
-- **Mock options**  
-  Configuration supplied when creating or starting the mock server. These options shape how the fixture behaves.
+- **Mock options** — Configuration supplied when creating or starting the mock server. These options shape how the fixture behaves.
 
-- **Recorded request**  
-  A captured representation of an incoming request. This makes it possible to inspect, assert against, or otherwise analyze MCP traffic during tests.
+- **Recorded request** — A captured representation of an incoming request. Enables inspection, assertions, and analysis of MCP traffic during tests.
 
-- **Echo fixture**  
-  A secondary fixture file suggested by `echo-server.ts`. Based on its name, it likely supports simple response behavior, but the code graph does not currently show it being imported.
+- **Echo fixture** — A secondary fixture file suggested by `echo-server.ts`. Likely supports simple response behavior, but is not currently imported by other modules.
 
 ## Main flows
 
 ### Starting the mock server
 
-A dependent module imports `startMockHttpMcpServer` and `MockOptions` from `fixtures/mcp-servers`. It provides the desired options and starts a `MockHttpMcpServer`. That instance can then be used as a local MCP server endpoint by tests or development code.
+1. Import `startMockHttpMcpServer` and `MockOptions` from `fixtures/mcp-servers`.
+2. Provide desired configuration via `MockOptions`.
+3. Start the server to obtain a `MockHttpMcpServer` instance.
+4. Use the instance as a local MCP server endpoint in tests or development code.
 
 ### Capturing requests
 
-During MCP interactions, the mock server can record incoming requests as `RecordedRequest` objects. This allows calling code to inspect what was sent to the server, which is useful for validating client behavior and MCP integration paths.
+During MCP interactions, the mock server records incoming requests as `RecordedRequest` objects. This allows calling code to inspect what was sent, supporting validation of client behavior and MCP integration paths.
 
-### Consuming the fixtures from `src/mcp-servers`
+### Integration with `src/mcp-servers`
 
-The `src/mcp-servers` module depends on this fixture module through four imports in the code graph. That suggests these fixtures are used to support the real MCP server code paths, most likely for testing, local validation, or developer workflows.
+The `src/mcp-servers` module depends on this fixture module through four imports. These fixtures support the real MCP server code paths—likely for testing, local validation, or developer workflows.
 
 ---
 
-## Reference (from code graph)
+## Reference
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+_Extracted by `keryx wiki collect`; regenerated by `--force`._
 
 ### Public API
 
 - `RecordedRequest`
 - `MockHttpMcpServer`
 - `MockOptions`
-- `startMockHttpMcpServer` (function)
+- `startMockHttpMcpServer`
 
 ### Key files
 
-- `fixtures/mcp-servers/http-server.ts` - imported by 4, imports 0
-- `fixtures/mcp-servers/echo-server.ts` - imported by 0, imports 0
+| File | Importers | Imports |
+|------|-----------|---------|
+| `fixtures/mcp-servers/http-server.ts` | 4 | 0 |
+| `fixtures/mcp-servers/echo-server.ts` | 0 | 0 |
 
 ### Depended on by
 
-- `src/mcp-servers` - 4 import(s)
+- `src/mcp-servers` (4 imports)
 
 ### Graph signals
 
@@ -94,12 +104,10 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
-
 - [Wiki Index](../index.md)
 - [Module src/mcp-servers](src-mcp-servers.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched by the gdwiki workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched by the gdwiki workflow.
+```

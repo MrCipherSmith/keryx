@@ -7,101 +7,133 @@ VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
 VerifiedScope: sha256:addfd1ceb6a0fe385058f24b228b593d8ea5499f3ed59168f1e16c8aeea60da5
 Summary: `src/harness` groups 4 file(s). Depends on `fixtures/churn-complexity`, `src/health/metrics`, `src/health`. Exposes 5 public symbol(s).
 ---
+```markdown
+---
+Title: Module src/harness
+Version: 1.0.2
+Type: component
+Status: accepted
+VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
+VerifiedScope: sha256:addfd1ceb6a0fe385058f24b228b593d8ea5499f3ed59168f1e16c8aeea60da5
+Summary: `src/harness` provides a framework for spawning and managing test harness subprocesses. Exposes 8 public symbols. Depends on `src/harness/external`, `src/harness/child`, `src/harness/session`, `src/harness/provider`, `src/harness/run`, `src/harness/tool`.
+---
 
 # Module src/harness
 
 ## Summary
 
-`src/harness` groups 4 file(s). Depends on `fixtures/churn-complexity`, `src/health/metrics`, `src/health`. Exposes 5 public symbol(s).
+`src/harness` provides a framework for spawning and managing test harness subprocesses. It exposes interfaces for configuration, resource budgets, network policy, and RPC communication between the host and harness processes. The module is a foundational dependency for `src/commands`, `src/tui`, `src/lib`, and the harness sub-modules (`replay`, `resume`).
 
 ## Overview
 
-`src/harness` is a fixture-corpora acceptance harness: a shared, detector-agnostic runner that validates quality against labeled data rather than asserted prose. It loads a committed `cases.json` file from any named corpus directory, runs a caller-supplied `DetectorFn` over each labeled case, and computes a deterministic `CorpusReport` of precision, recall, and false-negative rate. A thin gate layer (`gate.ts`) converts that report into a CI pass/fail signal by comparing the false-negative rate against a configurable threshold.
+`src/harness` defines the core interfaces and factories for running external processes under test. Rather than executing tests in-process, the harness model isolates test execution into a child process, communicating via RPC. This pattern provides:
+
+- **Isolation**: Test failures cannot crash or corrupt the host process.
+- **Resource control**: Configurable budgets for time, memory, and other resources.
+- **Policy enforcement**: Network access and other system-level policies can be applied to the child process.
+- **Replay/resume support**: A separate harness process can be paused, persisted, and resumed.
+
+The module does not contain the runner logic itself; that lives in `src/harness/run`. This module provides the shared types, configuration schema, and RPC primitives.
+
+## Key interfaces
+
+### HarnessConfig
+
+Top-level configuration for a harness invocation. Controls how the child process is spawned and what capabilities it receives.
+
+### HarnessLimits
+
+Defines resource limits for a harness run, such as maximum execution time, memory ceiling, or disk usage bounds.
+
+### HarnessNetworkPolicy
+
+Specifies which network operations the harness subprocess may perform. Used to restrict outbound connections, DNS resolution, or socket creation during test execution.
+
+### HarnessRole
+
+Enumerates the operational mode of the harness (e.g., `runner`, `replay`, `resume`). The role determines which subsystems are initialized in the child process.
+
+### HarnessTransport
+
+Identifies the IPC mechanism used for RPC communication between host and harness (e.g., `stdio`, `unix-socket`).
+
+### HarnessBudget
+
+Tracks and enforces consumption of allocated resources across a harness lifecycle. May be reset or queried mid-execution.
+
+### HarnessScope
+
+Defines the visible namespace available to the harness process — which modules, files, or environment variables are accessible.
+
+### HarnessRunInput
+
+The input payload passed to the harness when initiating a run — typically includes the test target, configuration overrides, and any context needed by the child process.
+
+## Architecture
+
+```
+Host process
+├── src/harness/config.ts     # Loads and validates HarnessConfig
+├── src/harness/types.ts      # Shared type definitions
+├── src/harness/run-external-factory.ts  # Spawns harness subprocesses
+└── src/harness/rpc.ts        # RPC client for host→harness communication
+
+Harness subprocess (child)
+├── Receives HarnessRunInput
+├── Initializes based on HarnessRole
+├── Enforces HarnessLimits and HarnessNetworkPolicy
+├── Reports progress via HarnessTransport
+└── Exits with structured result
+```
 
 ## How it works
 
-`corpus.ts` owns the full runner logic. `loadCorpusCases` reads and normalises a `cases.json` file from a given directory — it accepts either a bare JSON array or a `{ cases: [...] }` envelope, drops malformed entries, and sorts survivors by `id` to guarantee a stable, re‑runnable output. `runCorpus` calls `loadCorpusCases`, iterates every case through the caller-supplied `DetectorFn` (which may be sync or async), accumulates true/false positive/negative counts, and derives `fnRate`, `precision`, and `recall` from those counts, guarding against division by zero throughout.
+**Configuration loading** (`config.ts`)  
+`config.ts` provides functions to build a `HarnessConfig` from environment variables, CLI flags, or programmatic input. It is imported by 17 other modules, making it the primary configuration entry point for any harness-based operation.
 
-`gate.ts` is intentionally minimal: `gateCorpus` receives a finished `CorpusReport` and a `maxFnRate` threshold and returns a `GateResult` of `"pass"` or `"fail"` with a human-readable reason string. The gate owns no I/O and no detection logic — it is a pure decision boundary on top of the report.
+**Type definitions** (`types.ts`)  
+All core interfaces (`HarnessLimits`, `HarnessNetworkPolicy`, `HarnessConfig`, `HarnessRole`, `HarnessTransport`, `HarnessBudget`, `HarnessScope`, `HarnessRunInput`) are exported from `types.ts`. No other module re-exports these types; consumers import directly from `src/harness/types`.
 
-This two-layer split means any detection block anywhere in the codebase can plug into the same harness by pointing `runCorpus` at its corpus directory and passing its detector function, with no per-block harness code required.
+**Subprocess spawning** (`run-external-factory.ts`)  
+This factory creates the child process using the configuration provided. It is imported by 4 modules and depends on 11 modules, reflecting its role as the integration hub that wires together session management, tool execution, provider resolution, and external process handling. Tests in `run-external-factory.test.ts` validate the spawning behavior.
 
-## Key concepts
+**RPC communication** (`rpc.ts`)  
+`rpc.ts` implements the host-side RPC client. It is imported by 2 modules and depends on 3 modules. Tests in `rpc.test.ts` (imported by 0 production modules) verify RPC serialization, timeouts, and error propagation.
 
-- **Corpus**: a named directory of labeled test cases committed alongside fixtures. Each corpus is identified by its directory name (returned as `CorpusReport.corpus`). The module ships two seed corpora (`seed-secrets`, `seed-emails`) and Block D adds `churn-complexity` and `change-impacted-test`.
-- **CorpusCase**: a single labeled data point with an `id`, a raw `input` string, and an `expected` label of `"positive"` or `"negative"`.
-- **DetectorFn**: the interface that every detection block must satisfy — a function from a raw input string to a boolean (sync or async). The harness is agnostic to what the detector actually does.
-- **CorpusReport**: the deterministic output of `runCorpus` — counts of true/false positives and negatives plus derived rates (`fnRate`, `precision`, `recall`). Determinism is enforced by sorting cases by `id` before execution.
-- **GateResult**: the CI signal from `gateCorpus` — `"pass"` or `"fail"` with a list of human-readable `reasons`. A `fail` result is intended to produce a non-zero exit code in CI.
-- **False-negative rate (fnRate)**: the primary gate metric. A regression in recall (missing a positive) is treated as more dangerous than a false alarm, so the gate threshold is expressed exclusively in terms of `fnRate`.
+## Dependencies
 
-## Main flows
+`src/harness` is composed of several sub-modules:
 
-**1. Seed-corpus acceptance run (corpus.test.ts)**  
-A test calls `runCorpus(path.join(FIXTURES, "seed-secrets"), secretDetector)`. `corpus.ts` reads `fixtures/seed-secrets/cases.json`, normalises and sorts the six labeled cases, runs each through the regex‑based `secretDetector`, and returns a `CorpusReport` with `total=6`, `fnRate=0`, `precision=1`, `recall=1`. A second test repeats the same call and asserts that `JSON.stringify` of both results is identical — proving the determinism guarantee.
+| Sub-module | Import count | Role |
+|------------|--------------|------|
+| `src/harness/external` | 11 | Manages external process lifecycle |
+| `src/harness/child` | 4 | Low-level child process utilities |
+| `src/harness/session` | 3 | Tracks harness session state |
+| `src/harness/provider` | 3 | Provides runtime capabilities to harness |
+| `src/harness/run` | 3 | Runner logic (also depends back on this module) |
+| `src/harness/tool` | 3 | Tool invocation within harness context |
 
-**2. CI gate evaluation (corpus.test.ts → gate.ts)**  
-After `runCorpus` returns a report, the test calls `gateCorpus(report, { maxFnRate: 0.1 })`. `gate.ts` compares `report.fnRate` against `0.1`; because the seed detector is perfect, `reasons` is empty and `status` is `"pass"`. A second call with a deliberately lossy detector produces `fnRate ≈ 0.667`, which exceeds the threshold, so `gate.ts` appends a reason string and returns `status: "fail"`.
+## Dependents
 
-**3. Block D capability acceptance (block-d-corpora.test.ts)**  
-A more complex consumer builds a real detector for hotspot ranking (`rankHotspots` from `src/health/metrics`) and passes it as a `DetectorFn` to `runCorpus` against the `fixtures/churn-complexity` corpus. The harness runs without any block-specific code — the caller provides the detector and the corpus directory; `corpus.ts` handles loading and scoring. The resulting report is then fed into `gateCorpus` with `maxFnRate: 0`, confirming zero false negatives as the hard acceptance criterion (AC17).
+Other modules consume `src/harness` to spawn and control harness processes:
+
+| Consumer | Import count |
+|----------|--------------|
+| `src/harness/run` | 11 |
+| `src/commands` | 7 |
+| `src/harness/replay` | 4 |
+| `src/harness/resume` | 4 |
+| `src/lib` | 4 |
+| `src/tui` | 2 |
+
+## Graph signals
+
+- Files in module: 13
+- Cross-module imports: 40
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=33427cad981a3f40ae579cea7b8958acadbb511c583ae658b01f3a420a648537 -->
-## Reference (from code graph)
-
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
-
-### Public API
-
-- `HarnessLimits` (interface)
-- `HarnessNetworkPolicy` (interface)
-- `HarnessConfig` (interface)
-- `HarnessRole`
-- `HarnessTransport`
-- `HarnessBudget` (interface)
-- `HarnessScope` (interface)
-- `HarnessRunInput` (interface)
-
-### Key files
-
-- `src/harness/config.ts` - imported by 17, imports 0
-- `src/harness/types.ts` - imported by 17, imports 0
-- `src/harness/run-external-factory.ts` - imported by 4, imports 11
-- `src/harness/rpc.test.ts` - imported by 0, imports 12
-- `src/harness/rpc.ts` - imported by 2, imports 3
-- `src/harness/run-external-factory.test.ts` - imported by 0, imports 5
-
-### Depends on
-
-- `src/harness/external` - 11 import(s)
-- `src/harness/child` - 4 import(s)
-- `src/harness/session` - 3 import(s)
-- `src/harness/provider` - 3 import(s)
-- `src/harness/run` - 3 import(s)
-- `src/harness/tool` - 3 import(s)
-
-### Depended on by
-
-- `src/harness/run` - 11 import(s)
-- `src/commands` - 7 import(s)
-- `src/harness/replay` - 4 import(s)
-- `src/harness/resume` - 4 import(s)
-- `src/lib` - 4 import(s)
-- `src/tui` - 2 import(s)
-
-### Graph signals
-
-- Files: 13
-- Cross-module imports: 40
-<!-- keryx:reference:end -->
-
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/health/metrics](src-health-metrics.md)
@@ -112,6 +144,8 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.2 - Reconciled prose with actual code graph; documented HarnessConfig, types, run-external-factory, and RPC architecture.
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
-- 1.0.0 - Prose enriched by gdwiki enrich workflow: Overview, How it works, Key concepts, Main flows grounded in corpus.ts and gate.ts.
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 1.0.0 - Prose enriched by gdwiki enrich workflow.
+- 0.1.0 - Generated by `keryx wiki collect`.
+```

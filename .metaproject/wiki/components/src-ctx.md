@@ -1,10 +1,15 @@
-# Module src/ctx
-
-Version: 1.1.1
+---
+Title: Module src/ctx
+Version: 1.1.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:ae233cfe18b82cf0a8334712973e620b38709d9b2e54a7029b891640ff90fede
+Summary: "The `src/ctx` module provides the gdctx routing guard: a pre-execution hook layer that intercepts shell commands from AI coding harnesses and redirects token-heavy operations through `keryx ctx`. It also generates orientation context for agent awareness."
+---
+
+# Module src/ctx
+
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:4be292df5e08e19348539ae83d75894ef69c05fe25dd244586cfb41c3fad8755
 
 ## Summary
 
@@ -12,39 +17,176 @@ VerifiedScope: sha256:ae233cfe18b82cf0a8334712973e620b38709d9b2e54a7029b891640ff
 
 ## Overview
 
-`src/ctx` owns the gdctx routing guard: the pre-execution hook layer that intercepts shell commands issued by AI coding harnesses (Claude Code, Codex, Cursor, Windsurf, Antigravity, OpenCode) and forces token-heavy commands (`rg`, `cat`, `git diff`, etc.) through `keryx ctx` instead of running raw. It also provides orientation context — a bounded project-root Metaproject excerpt followed by a compact code-graph map and wiki index — so the agent sees the mandatory local entrypoint and structured navigation before broad work. The module is the enforcement and awareness layer for the gdctx discipline enforced across the whole workspace.
+`src/ctx` owns the gdctx routing guard: the pre-execution hook layer that intercepts shell commands issued by AI coding harnesses (Claude Code, Codex, Cursor, Windsurf, Antigravity, OpenCode) and forces token-heavy commands (`rg`, `cat`, `git diff`, etc.) through `keryx ctx` instead of letting them run raw. It also produces orientation context — a bounded project-root Metaproject excerpt followed by a compact code-graph map and wiki index — so an agent sees the mandatory local entrypoint and structured navigation before it starts broad work. The module is the enforcement and awareness layer for the gdctx discipline enforced across the whole workspace.
 
 ## How it works
 
-The module is organized in three layers. The bottom layer is the harness-agnostic **classifier** (`hook-classify.ts`), a pure function that receives a raw shell command string, splits it into pipeline segments, skips over environment assignments and benign wrappers (`sudo`, `env`, etc.), and returns a `HookClassification` — whether to block, which command family matched, what the suggested `keryx ctx` replacement is, and whether an explicit escape marker (`# keryx:raw <reason>`) was present. The classifier knows nothing about any specific harness.
+The module is organized into three layers.
 
-The middle layer is the **runtime registry** (`runtimes.ts`). Each `CtxRuntime` implementation encapsulates the four harness-specific concerns: how to parse the payload from stdin, how to signal BLOCK vs ALLOW back to the harness (exit-code-based for Claude/Codex/Windsurf; stdout JSON for Cursor and Antigravity), where the install artifact lives, and how to merge/strip the managed hook entry in that artifact. JSON-config runtimes share generic sentinel helpers (`_keryxManaged: "ctx-agent-hooks"`) that make install idempotent and uninstall surgical. OpenCode, which has no JSON hook config, instead gets a generated JS bridge plugin written to `.opencode/plugin/keryx-ctx-guard.js`.
+### 1. Classifier (bottom layer)
 
-The top layer has two thin adapters. `hook.ts` is the CLI entry point for `keryx ctx hook <runtime>`: it reads the harness payload from stdin, resolves the runtime, calls the classifier, and writes the runtime's block or allow signal to stdout/stderr/exitCode. `hook-install.ts` owns the generic read/write loop for JSON-config runtimes: it reads the existing settings file (if any), delegates to the runtime's `merge` function, writes the result back, and immediately re-reads to run the runtime's `validate` function.
+The harness-agnostic **classifier** (`hook-classify.ts`) is a pure function that:
 
-`orient.ts` stands apart: it does not participate in the hook pipeline at all. It generates a bounded, freshness-aware Markdown block combining three optional portions: a project-root `.metaproject/index.md` excerpt, a trimmed code-graph summary, and the wiki page index. The index lookup deliberately does not walk ancestors because the harness launch cwd is the project boundary. Its excerpt retains at most 60 useful lines, skips the low-value `Data` and `Refresh` sections, and ends with a marker directing the model to read the full file when truncation occurred.
+- Receives a raw shell command string
+- Splits it into pipeline segments
+- Skips over environment assignments and benign wrappers (`sudo`, `env`, etc.)
+- Returns a `HookClassification` containing:
+  - Whether to block
+  - Which command family matched
+  - The suggested `keryx ctx` replacement
+  - Whether an explicit escape marker (`# keryx:raw <reason>`) was present
+
+The classifier has no knowledge of any specific harness.
+
+### 2. Runtime registry (middle layer)
+
+Each `CtxRuntime` implementation in `runtimes.ts` encapsulates four harness-specific concerns:
+
+| Concern | Description |
+|---------|-------------|
+| Payload parsing | How to parse the payload from stdin |
+| Signaling | How to signal BLOCK vs ALLOW (exit-code-based for Claude/Codex/Windsurf; stdout JSON for Cursor/Antigravity) |
+| Install artifact | Where the install artifact lives |
+| Merge/strip | How to merge/strip the managed hook entry in that artifact |
+
+- **JSON-config runtimes** share generic sentinel helpers (`_keryxManaged: "ctx-agent-hooks"`) for idempotent install and surgical uninstall.
+- **OpenCode** (no JSON hook config) instead gets a generated JS bridge plugin at `.opencode/plugin/keryx-ctx-guard.js`.
+
+### 3. Adapters (top layer)
+
+Two thin adapters provide the CLI surface:
+
+- **`hook.ts`** — CLI entry point for `keryx ctx hook <runtime>`:
+  1. Reads the harness payload from stdin
+  2. Resolves the runtime
+  3. Calls the classifier
+  4. Writes the block/allow signal to stdout/stderr/exitCode
+
+- **`hook-install.ts`** — Generic read/write loop for JSON-config runtimes:
+  1. Reads the existing settings file (if any)
+  2. Delegates to the runtime's `merge` function
+  3. Writes the result back
+  4. Re-reads and runs the runtime's `validate` function
+
+### Orientation module (`orient.ts`)
+
+Stands apart from the hook pipeline. Generates a bounded, freshness-aware Markdown block combining:
+
+1. A project-root `.metaproject/index.md` excerpt (max 60 useful lines)
+2. A trimmed code-graph summary
+3. The wiki page index
+
+Notes:
+- Index lookup deliberately does not walk ancestors — the harness launch cwd is treated as the project boundary.
+- The excerpt skips low-value `Data` and `Refresh` sections.
+- It ends with a marker directing the model to read the full file whenever truncation occurred.
 
 ## Key concepts
 
-- **`CtxRuntime`** — the central interface every harness adapter implements. It bundles a payload parser, block/allow signalers, an install locator, and optional merge/strip/validate methods (or `customInstall`/`customUninstall` for non-JSON harnesses).
-- **`HookClassification`** — the result of the classifier: `block: boolean`, plus `matched` (the command family), `suggestion` (the `keryx ctx` form), and `escapeReason` (present when the escape marker opted the command out).
-- **`HookAction`** — what the hook process should emit: `exitCode`, optional `stdout`, optional `stderr`. The exact combination varies by harness protocol (exit-2 + stderr vs. stdout JSON decision).
-- **`CTX_HOOK_SENTINEL` / `MANAGED_KEY`** — the sentinel values written into every managed JSON group so install is idempotent and uninstall removes only the keryx entry.
-- **`Confidence`** — `"verified"` for runtimes confirmed against first-party docs; `"experimental"` for community-doc-based runtimes that print a warning at install time.
-- **Escape marker** — `# keryx:raw <reason>` appended to a command opts it out of the guard and self-documents why raw output was genuinely needed.
-- **Orientation block** — the Markdown snapshot from `orient.ts` combining a bounded project-root Metaproject entrypoint excerpt, code-graph stats, and the wiki index. The excerpt is precedence guidance, not an enforced runtime gate; the full `.metaproject/index.md` remains the authoritative routing source.
+### CtxRuntime
+
+The central interface every harness adapter implements. It bundles:
+
+- Payload parser
+- Block/allow signalers
+- Install locator
+- Optional merge/strip/validate methods (or `customInstall`/`customUninstall` for non-JSON harnesses)
+
+### HookClassification
+
+Result of the classifier:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `block` | `boolean` | Whether to block the command |
+| `matched` | `string` | The command family matched |
+| `suggestion` | `string` | The `keryx ctx` replacement form |
+| `escapeReason` | `string \| undefined` | Present when an escape marker opted the command out |
+
+### HookAction
+
+What the hook process should emit:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `exitCode` | `number` | Process exit code |
+| `stdout` | `string \| undefined` | Optional stdout content |
+| `stderr` | `string \| undefined` | Optional stderr content |
+
+### Constants
+
+| Constant | Purpose |
+|----------|---------|
+| `CTX_HOOK_SENTINEL` / `MANAGED_KEY` | Sentinel values written into managed JSON groups for idempotent install and surgical uninstall |
+| `Confidence` | `"verified"` (first-party docs) or `"experimental"` (community docs, with warning) |
+
+### Escape marker
+
+`# keryx:raw <reason>` appended to a command opts it out of the guard and self-documents why raw output was genuinely needed.
+
+### Orientation block
+
+A Markdown snapshot from `orient.ts` combining:
+
+- A bounded project-root Metaproject entrypoint excerpt
+- Code-graph stats
+- The wiki index
+
+The excerpt is precedence guidance, not an enforced runtime gate. The full `.metaproject/index.md` remains the authoritative routing source.
 
 ## Main flows
 
-**Hook intercept flow (e.g. agent runs `rg pattern src/`):** The harness fires `keryx ctx hook claude` before the Bash tool executes. `hook.ts` reads the JSON payload from stdin, calls `CLAUDE_RUNTIME.parseCommand()` to extract the shell command string, passes it to `classifyCommand()`, which splits the command into segments and matches `rg` against the `ROUTES` table. The classifier returns `{ block: true, matched: "rg", suggestion: 'keryx ctx rg "pattern" [path]' }`. `hook.ts` calls `CLAUDE_RUNTIME.block(command, classification)`, which returns `{ exitCode: 2, stderr: "..." }` built by `buildBlockMessage`. The process writes to stderr and exits with code 2, causing Claude Code to abort the tool call and surface the routing message to the agent.
+### Hook intercept flow
 
-**Hook install flow (e.g. `keryx ctx install-hook --runtime claude`):** `installRuntimeHook()` in `hook-install.ts` reads the current `.claude/settings.json` (or starts from `{}`), calls `CLAUDE_RUNTIME.merge(settings)` which merges a `PreToolUse/Bash` group carrying the `_keryxManaged` sentinel into the hooks array, writes the updated JSON back, then re-reads and calls `CLAUDE_RUNTIME.validate()` to confirm the guard is present. The result is a single atomic read-merge-write-verify cycle that is safe to run repeatedly.
+When an agent runs `rg pattern src/`:
 
-**Orientation injection flow (e.g. session-start hook):** A harness session-start event calls `buildOrientation(cwd)` from `orient.ts`, which concurrently checks `<cwd>/.metaproject/index.md`, fetches the gdgraph summary (`data/gdgraph/artifacts/summary.md`), and reads the wiki index (`wiki/index.md`). It bounds all three portions, appends a freshness note derived from `git diff --name-only HEAD`, and returns a single Markdown block. If the project-root index exists, the first portion directs the model to read it in full before other project work. If it is absent, the previous graph/wiki-only format is preserved.
+1. The harness fires `keryx ctx hook claude` before the Bash tool executes.
+2. `hook.ts` reads the JSON payload from stdin.
+3. It calls `CLAUDE_RUNTIME.parseCommand()` to extract the shell command string.
+4. The command is passed to `classifyCommand()`, which splits it into segments and matches `rg` against the `ROUTES` table.
+5. The classifier returns:
+   ```typescript
+   {
+     block: true,
+     matched: "rg",
+     suggestion: 'keryx ctx rg "pattern" [path]'
+   }
+   ```
+6. `hook.ts` calls `CLAUDE_RUNTIME.block(command, classification)`, which returns `{ exitCode: 2, stderr: "..." }` built by `buildBlockMessage`.
+7. The process writes to stderr and exits with code 2.
+8. Claude Code aborts the tool call and surfaces the routing message to the agent.
+
+### Hook install flow
+
+When running `keryx ctx install-hook --runtime claude`:
+
+1. `installRuntimeHook()` in `hook-install.ts` reads the current `.claude/settings.json` (or starts from `{}`).
+2. It calls `CLAUDE_RUNTIME.merge(settings)`, which merges a `PreToolUse/Bash` group carrying the `_keryxManaged` sentinel into the hooks array.
+3. It writes the updated JSON back.
+4. It re-reads the file and calls `CLAUDE_RUNTIME.validate()` to confirm the guard is present.
+
+Result: a single atomic read-merge-write-verify cycle that is safe to run repeatedly.
+
+### Orientation injection flow
+
+When a harness session-start event triggers orientation:
+
+1. `buildOrientation(cwd)` is called from `orient.ts`.
+2. It concurrently checks:
+   - `<cwd>/.metaproject/index.md`
+   - The gdgraph summary (`data/gdgraph/artifacts/summary.md`)
+   - The wiki index (`wiki/index.md`)
+3. All three portions are bounded in size.
+4. A freshness note derived from `git diff --name-only HEAD` is appended.
+5. A single Markdown block is returned.
+
+Behavior:
+- If the project-root index exists, the first portion directs the model to read it in full before other project work.
+- If it is absent, the previous graph/wiki-only format is preserved.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=3ca0669011f03d3ef9784ece9e7fb1e7c4137028b42b9ceb9a9c59f916d6477c -->
+<!-- keryx:reference:begin v=1 hash=7d6153a287c94f35975a9edc0c1d0878fc144b0c63d5fb900221684b6a1cc1ab -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -52,57 +194,63 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Public API
 
-- `CTX_HOOK_SENTINEL`
-- `MANAGED_KEY`
 - `Settings`
-- `HookAction` (interface)
 - `Confidence`
-- `CtxRuntime` (interface)
 - `GroupShape`
-- `parseToolName` (function)
-- `nativeSearchMessage` (function)
-- `refusalAction` (function)
-- `allowAction` (function)
+- `CtxRuntime` (interface)
 - `preToolUseMatcher` (function)
 - `describeExistingGuard` (function)
+- `nativeSearchMessage` (function)
+- `CTX_RUNTIMES`
 - `CLAUDE_RUNTIME`
 - `CODEX_RUNTIME`
 - `CURSOR_RUNTIME`
 - `WINDSURF_RUNTIME`
 - `ANTIGRAVITY_RUNTIME`
-- `KeryxCtxGuard`
 - `OPENCODE_RUNTIME`
+- `UNSUPPORTED_RUNTIMES`
+- `runtimeIds` (function)
+- `getRuntime` (function)
+- `resolveRuntimes` (function)
+- `CTX_HOOK_SENTINEL`
+- `MANAGED_KEY`
 
 ### Key files
 
-- `src/ctx/runtimes.ts` - imported by 10, imports 2
-- `src/ctx/orient.ts` - imported by 5, imports 1
-- `src/ctx/hook-classify.ts` - imported by 5, imports 0
-- `src/ctx/hook-install.ts` - imported by 3, imports 2
-- `src/ctx/hook.ts` - imported by 1, imports 3
-- `src/ctx/assembly.ts` - imported by 3, imports 0
+- `src/ctx/runtimes.ts` - imported by 14, imports 2
+- `src/ctx/orient.ts` - imported by 6, imports 4
+- `src/ctx/hook-install.ts` - imported by 5, imports 3
+- `src/ctx/hook-classify.ts` - imported by 6, imports 0
+- `src/ctx/orient-runtimes.ts` - imported by 5, imports 1
+- `src/ctx/assembly.ts` - imported by 5, imports 0
 
 ### Depends on
 
-- `src/lib` - 4 import(s)
+- `src/integrations` - 4 import(s)
+- `src/lib` - 3 import(s)
+- `src/gdgraph` - 1 import(s)
 
 ### Depended on by
 
-- `src/commands` - 9 import(s)
+- `src/commands` - 14 import(s)
 - `src/sac` - 2 import(s)
-- `src/security` - 1 import(s)
+- `src/gdgraph` - 1 import(s)
 - `src/session` - 1 import(s)
+- `src/wiki` - 1 import(s)
+
+### Dependency basis
+
+- Production imports only: 13 import(s) from test file(s) (e.g. `src/commands/routing-entrypoint-lifecycle.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 15
-- Cross-module imports: 4
+- Files: 27
+- Cross-module imports: 8
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/lib](src-lib.md)
@@ -110,7 +258,8 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 1.1.1 - Reference refreshed from the code graph (5886c474).
-- 1.1.0 - Documented bounded project-root Metaproject bootstrap orientation, root-only discovery, truncation, and the no-index compatibility path (2026-08-10).
-- 1.0.0 - Prose sections enriched by gdwiki agent (2026-07-10): Overview, How it works, Key concepts, Main flows written from key-file reads.
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 1.1.2 - Reference refreshed from the code graph (4e80355f).
+- **1.1.1** - Reference refreshed from the code graph (5886c474).
+- **1.1.0** - Documented bounded project-root Metaproject bootstrap orientation, root-only discovery, truncation, and the no-index compatibility path.
+- **1.0.0** - Prose sections enriched by gdwiki agent: Overview, How it works, Key concepts, Main flows written from key-file reads.
+- **0.1.0** - Generated by `keryx wiki collect`. Prose sections are drafts for the gdwiki enrich workflow.

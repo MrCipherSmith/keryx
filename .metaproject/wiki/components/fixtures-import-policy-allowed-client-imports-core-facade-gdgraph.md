@@ -5,93 +5,84 @@ Type: component
 Status: draft
 Summary: "`fixtures/import-policy/allowed-client-imports-core-facade/gdgraph` groups 2 file(s). Exposes 2 public symbol(s)."
 ---
+```markdown
+---
+Title: Module fixtures/import-policy/allowed-client-imports-core-facade/gdgraph
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "A fixture module for the `gdgraph` case under the allowed-client-imports core facade area. Exposes 2 public symbols (`serve`, `detail`) and contains 2 files."
+---
+
 # Module fixtures/import-policy/allowed-client-imports-core-facade/gdgraph
 
 ## Summary
 
-`fixtures/import-policy/allowed-client-imports-core-facade/gdgraph` is a fixture module for the `gdgraph` case under the allowed-client-imports core facade fixture area.
-
-It groups 2 files and exposes 2 public symbols:
-
-- `serve`
-- `detail`
+A fixture module that represents the `gdgraph` import-policy scenario under the `allowed-client-imports-core-facade` area. It exposes two public symbols—`serve` and `detail`—and contains two files: `service.ts` and `internal.ts`.
 
 ## Overview
 
-This module provides a small fixture-oriented boundary for `gdgraph` import-policy scenarios. Its purpose is to make the `gdgraph` fixture available to the surrounding import-policy harness without exposing internal support code.
+This module serves as a focused fixture boundary for `gdgraph` import-policy tests. Its primary role is to provide a clean, minimal public surface to the surrounding test harness without exposing internal support code.
 
-The module is intentionally narrow. It has no cross-module imports, so it does not pull in behavior from other modules. It is consumed by `fixtures/import-policy/allowed-client-imports-core-facade/harness`, which uses its public symbols as part of the fixture setup.
+Key characteristics:
 
-## How it works
+- **Two public symbols**: `serve` and `detail`
+- **Two files**: `service.ts` (primary) and `internal.ts` (internal helper)
+- **Zero cross-module imports**: The module does not depend on other modules in the fixture graph
+- **Consumed by**: `fixtures/import-policy/allowed-client-imports-core-facade/harness`
 
-The module is organized around two files:
+## File Structure
 
-- `service.ts`
-- `internal.ts`
+| File | Purpose |
+|------|---------|
+| `service.ts` | Primary fixture file. Coordinates behavior and exposes the module's public symbols. Has 1 inbound and 1 outbound import. |
+| `internal.ts` | Internal support file. Contains helper logic not intended for external use. Has 1 inbound import and no outbound imports. |
 
-From the code graph, `service.ts` is the primary fixture file associated with the module. It has one inbound import and one outbound import, which suggests that it coordinates fixture behavior or exposes the module's public symbols.
+## Public API
 
-`internal.ts` is a support file. It has one inbound import and no outbound imports, so it behaves like a leaf helper inside the fixture module. It likely contains details that should not become part of the public fixture API.
+- **`serve`** — One of the two symbols available for external consumption.
+- **`detail`** — The second public symbol available for external consumption.
 
-The public surface of the module is intentionally limited to `serve` and `detail`. Consumers should use those symbols rather than depending on the module's internal file structure.
+Consumers should use only these symbols. Direct access to `internal.ts` or its contents is not part of the intended API.
 
-## Key concepts
+## Usage
 
-- **Fixture module**: A small package under `fixtures/import-policy` used to represent a specific import-policy scenario.
-- **`gdgraph` fixture case**: The named fixture grouping under the allowed-client-imports core facade.
-- **Public symbol boundary**: `serve` and `detail` are the symbols intended for external use.
-- **Internal helper**: `internal.ts` supports the fixture but is not part of the module's public surface.
-- **Harness consumption**: The `harness` module imports this fixture to validate allowed client import behavior.
+The fixture is accessed through the test harness:
 
-## Main flows
-
-### Fixture access through public symbols
-
-1. A test or harness accesses the `gdgraph` fixture.
-2. It uses the public symbols `serve` and `detail` from the fixture module.
-3. The fixture's service-oriented file coordinates the behavior exposed by those symbols.
-4. Internal helpers provide supporting behavior without expanding the public API.
-
-### Import-policy harness usage
-
-1. `fixtures/import-policy/allowed-client-imports-core-facade/harness` imports this module.
-2. The harness references `serve` and `detail` as part of its allowed-client-imports fixture setup.
-3. Because the fixture module has zero cross-module imports, its dependencies remain local to the fixture graph.
+1. The harness imports `gdgraph` from `fixtures/import-policy/allowed-client-imports-core-facade/gdgraph`
+2. The harness uses `serve` and `detail` as part of allowed-client-imports fixture setup
+3. Because the module has zero cross-module imports, its dependencies remain isolated within the fixture graph
 
 ---
 
-## Reference (from code graph)
+## Reference
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+> Extracted by `keryx wiki collect`; regenerated by `--force`.
 
 ### Public API
 
 - `serve`
 - `detail`
 
-### Key files
+### Key Files
 
-- `fixtures/import-policy/allowed-client-imports-core-facade/gdgraph/service.ts` - imported by 1, imports 1
-- `fixtures/import-policy/allowed-client-imports-core-facade/gdgraph/internal.ts` - imported by 1, imports 0
+- `fixtures/import-policy/allowed-client-imports-core-facade/gdgraph/service.ts` — 1 inbound import, 1 outbound import
+- `fixtures/import-policy/allowed-client-imports-core-facade/gdgraph/internal.ts` — 1 inbound import, 0 outbound imports
 
 ### Depended on by
 
-- `fixtures/import-policy/allowed-client-imports-core-facade/harness` - 1 import(s)
+- `fixtures/import-policy/allowed-client-imports-core-facade/harness` (1 import)
 
-### Graph signals
+### Graph Signals
 
-- Files: 2
-- Cross-module imports: 0
+- **Files**: 2
+- **Cross-module imports**: 0
 
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+## Related
 
 - [Wiki Index](../index.md)
 
-
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z
+```

@@ -1,14 +1,26 @@
-# Module src/commands
-
-Version: 1.1.1
+---
+Title: Module src/commands
+Version: 1.1.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:189d7af94f4f59401d170e647215ebe263dafccbfd83b4b010f965ebf8c9ce61
+Summary: "Groups 32 command files implementing all top-level CLI entry points for keryx, including workspace initialization, updates, capability management, and the interactive agent loop. Exports 6 public symbols."
+---
+
+# Module src/commands
+
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:dd174f2423786bc2661f8fa5e989fcd337dd02c82a6170ad9611ccca59e26bd2
 
 ## Summary
 
-`src/commands` groups 32 file(s). Depends on `src/lib`, `src/gdskills`, `src/security`. Exposes 4 public symbol(s).
+The `src/commands` module is the CLI command layer of keryx, providing implementations for every top-level `keryx <subcommand>` entry point. It handles:
+
+- **Workspace lifecycle**: `init.ts` scaffolds new `.metaproject/` directories; `update.ts` refreshes existing workspaces after pulling changes
+- **Interactive operations**: `shell.ts` and `agent.ts` drive the agent loop with tool-call validation and risk-separated budgets
+- **Capability management**: Thin CLI adapters (`gdgraph.ts`, `ctx.ts`, `skills.ts`, `security.ts`) expose domain services via subcommands
+- **User-facing effects**: Writing manifest files, installing git hooks, building dashboards, printing wizards
+
+Depends on `src/lib` (117 imports), `src/gdskills` (17 imports), `src/session` (20 imports), and `src/sac` (18 imports). Exports 6 public symbols consumed by `src` (34 imports) and `src/tui` (25 imports).
 
 ## Overview
 
@@ -38,20 +50,52 @@ The capability-specific command files (`gdgraph.ts`, `ctx.ts`, `skills.ts`, `sec
 ## Main flows
 
 **Flow 1 — First-time workspace setup (`keryx init`)**
-`initCommand` in `init.ts` is called with raw CLI args. `parseInitArgs` converts them to an `InitOptions` struct. If `--yes` is absent, the function runs an interactive module selection wizard using `confirm` and `choice` from `src/lib/prompt`. After selections are recorded, `createBaseStructure` creates the `.metaproject/` directory tree, then per-module `create*Structure` helpers add module subdirectories. `syncAgentRules` writes or updates `AGENTS.md`/`CLAUDE.md` imports. `installGdskills` unpacks bundled skills. Each enabled module's managed service files are written via `writeTextIfChanged` / `writeTextIfMissing`. Git hooks that the user opted into are installed with `installManagedHook`. `buildManifest` assembles the `MetaprojectManifest` object, which `writeJsonIfChanged` writes to `metaproject.json`. Finally, `nextSteps` prints the post-init guidance.
+
+1. `initCommand` in `init.ts` receives raw CLI args
+2. `parseInitArgs` converts args to an `InitOptions` struct
+3. If `--yes` is absent, an interactive module selection wizard runs using `confirm` and `choice` from `src/lib/prompt`
+4. `createBaseStructure` creates the `.metaproject/` directory tree
+5. Per-module `create*Structure` helpers add module subdirectories
+6. `syncAgentRules` writes or updates `AGENTS.md`/`CLAUDE.md` imports
+7. `installGdskills` unpacks bundled skills
+8. Each enabled module's managed service files are written via `writeTextIfChanged` / `writeTextIfMissing`
+9. Git hooks that the user opted into are installed with `installManagedHook`
+10. `buildManifest` assembles the `MetaprojectManifest` object
+11. `writeJsonIfChanged` writes the manifest to `metaproject.json`
+12. `nextSteps` prints post-init guidance
 
 **Flow 2 — Workspace refresh after pulling changes (`keryx update`)**
-`updateCommand` in `update.ts` calls `readManifest`, which returns a `ManifestReadResult` carrying either the parsed manifest or one inferred from filesystem presence (recovery path). `refreshServiceFiles` then iterates the enabled module set, calling `writeTextIfChanged` for all managed files (skill READMEs, module manifests, dashboard HTML) and re-invoking `installManagedHook` for each hook that the manifest records. Security hook drift is resolved by comparing manifest entries against on-disk sentinel presence: if a hook is no longer in the manifest but still on disk, `removeManagedHook` / `uninstallSecurityAgentHooks` removes it. If the task manager module is absent from an older manifest, it is backfilled via `enableTasksInManifest`.
+
+1. `updateCommand` in `update.ts` calls `readManifest`
+2. `readManifest` returns either the parsed manifest or one inferred from filesystem presence (recovery path)
+3. `refreshServiceFiles` iterates enabled modules, calling `writeTextIfChanged` for all managed files
+4. `installManagedHook` re-invokes each hook recorded in the manifest
+5. Security hook drift is resolved by comparing manifest entries against on-disk sentinel presence
+6. If a hook is no longer in the manifest but still on disk, `removeManagedHook` / `uninstallSecurityAgentHooks` removes it
+7. If the task manager module is absent from an older manifest, it is backfilled via `enableTasksInManifest`
 
 **Flow 3 — Dashboard rebuild (`buildDashboard`)**
-The exported `buildDashboard` function in `update.ts` is called by post-commit hooks and the `keryx update` path. It reads the manifest, invokes `collectDashboardData` to gather structured data from health JSON artifacts, gdgraph JSONL storage, testing artifacts, and wiki/memory markdown files, then passes the combined data object to `renderMetaprojectDashboardHtml` from `src/lib/templates` and writes the result to `keryx-dashboard.html` via `writeTextIfChanged`.
+
+1. The exported `buildDashboard` function in `update.ts` is called by post-commit hooks and the `keryx update` path
+2. It reads the manifest
+3. `collectDashboardData` gathers structured data from health JSON artifacts, gdgraph JSONL storage, testing artifacts, and wiki/memory markdown files
+4. The combined data object is passed to `renderMetaprojectDashboardHtml` from `src/lib/templates`
+5. `writeTextIfChanged` writes the result to `keryx-dashboard.html`
 
 **Flow 4 — Interactive agent tool loop (`runAgentTurn`)**
-The shell submits a provider request with registered tools, executes returned calls, and repeats with accumulated tool results. Reaching a budget exactly does not end the turn: the model receives one normal round to answer from the newest result. A tool-free wrap-up is requested only when the model asks for a new signature beyond the total/read/non-read pool, or when a round makes no progress because it only repeats exhausted signatures. The wrap-up identifies the exhausted pool.
+
+1. The shell submits a provider request with registered tools
+2. Returned tool calls are validated and classified by risk
+3. Calls are executed through injected `InteractiveTool` implementations
+4. Results are appended as `role: "tool"` history and fed back to the provider
+5. The loop repeats with accumulated tool results
+6. Reaching a budget exactly does not end the turn: the model receives one normal round to answer from the newest result
+7. A tool-free wrap-up is requested only when the model asks for a new signature beyond the total/read/non-read pool, or when a round makes no progress because it only repeats exhausted signatures
+8. The wrap-up identifies the exhausted pool
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=1c988272933fccf56a49defe24c91f4eb44dc077bb9d080678996c06a4a33a8f -->
+<!-- keryx:reference:begin v=1 hash=d27de5eb0b7180e3708c839065ebd2cd394947cb73c3648b9fe649bf854ce533 -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -60,51 +104,57 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 ### Public API
 
 - `readlineAgentHelpText` (function)
+- `busLeasesFromClient` (function)
+- `bareResumeTarget` (function)
+- `LeasedChoiceIO` (interface)
+- `resolveLeasedChoice` (function)
+- `LeaseChoiceRuntime` (interface)
+- `runWithLeaseChoice` (function)
+- `runLeasedChatShell` (function)
 - `runShell` (function)
-- `EXPAND_MAX_LINES`
-- `expandedToolOutput` (function)
-- `VersionAdvisoryBoundary` (interface)
-- `createVersionAdvisoryBoundary` (function)
-- `MCP_INIT_RUNTIMES`
-- `initCommand` (function)
+- `describeSkippedSession`
+- `reviewCommand` (function)
 
 ### Key files
 
-- `src/commands/shell.ts` - imported by 7, imports 41
-- `src/commands/init.ts` - imported by 12, imports 34
-- `src/commands/harness.ts` - imported by 7, imports 31
-- `src/commands/agent.ts` - imported by 22, imports 15
-- `src/commands/review.ts` - imported by 11, imports 23
-- `src/commands/update.ts` - imported by 3, imports 25
+- `src/commands/shell.ts` - imported by 18, imports 66
+- `src/commands/review.ts` - imported by 27, imports 55
+- `src/commands/agent.ts` - imported by 52, imports 27
+- `src/commands/init.ts` - imported by 17, imports 38
+- `src/commands/providers.ts` - imported by 40, imports 13
+- `src/commands/harness.ts` - imported by 8, imports 31
 
 ### Depends on
 
-- `src/lib` - 117 import(s)
-- `src/harness/tool/builtin` - 29 import(s)
-- `src/session` - 20 import(s)
-- `src/sac` - 18 import(s)
-- `src/harness/provider` - 17 import(s)
-- `src/gdskills` - 17 import(s)
+- `src/lib` - 180 import(s)
+- `src/review` - 73 import(s)
+- `src/trigger` - 26 import(s)
+- `src/harness/tool/builtin` - 25 import(s)
+- `src/bus` - 24 import(s)
+- `src/security` - 23 import(s)
 
 ### Depended on by
 
-- `src` - 34 import(s)
-- `src/tui` - 25 import(s)
-- `src/review` - 7 import(s)
+- `src` - 51 import(s)
+- `src/tui` - 33 import(s)
+- `src/harness/external` - 7 import(s)
+- `src/acp` - 6 import(s)
 - `scripts/benchmark` - 5 import(s)
-- `src/capability` - 4 import(s)
-- `src/flow` - 3 import(s)
+- `src/harness` - 4 import(s)
+
+### Dependency basis
+
+- Production imports only: 463 import(s) from test file(s) (e.g. `src/acp/commands.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 112
-- Cross-module imports: 441
+- Files: 282
+- Cross-module imports: 740
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/lib](src-lib.md)
@@ -118,6 +168,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 1.1.2 - Reference refreshed from the code graph (4e80355f).
 - 1.1.1 - Reference refreshed from the code graph (5886c474).
 - 1.1.0 - Documented the interactive agent driver, risk-separated `48/40/8` unique-signature budgets, side-worker total ceiling, and non-premature wrap-up behavior (2026-08-10).
 - 1.0.0 - Prose sections enriched by gdwiki enrich workflow.

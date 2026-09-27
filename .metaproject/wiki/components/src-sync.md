@@ -1,50 +1,67 @@
-# Module src/sync
-
-Version: 1.0.1
+---
+Title: Module src/sync
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:071179fab9c8c6f494fe008ad5abf34774a91f5e4d6d49ce1146f8f299f50ed3
+Summary: "Tracks the freshness of derived artifacts against git state and manages advisory sync hooks. Groups 5 files, depends on src/lib, and exposes 15 public symbols."
+---
+# Module src/sync
 
-## Summary
-
-`src/sync` groups 5 file(s). Depends on `src/lib`. Exposes 15 public symbol(s).
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:f8e2f7c0870c94ee07236ae66344a5394ba66c990c5e0e8e6dc93c2055809f75
 
 ## Overview
 
-`src/sync` owns the incremental-rebuild layer that tracks whether keryx's derived artifacts (code graph, wiki, memory) are up-to-date with the repository's current git state. It records a build provenance stamp (commit + branch + timestamp) inside each module's data directory whenever a module is regenerated, and later computes an exact file-level diff between that stamp and the current HEAD so only the changed paths need to be processed. Git hooks for `post-merge` and `post-checkout` are also managed here so that a `git pull` or branch switch automatically surfaces an advisory sync report without blocking the developer.
+`src/sync` provides the incremental-rebuild layer for tracking whether derived artifacts—such as the code graph, wiki, and memory—are current with respect to git state. It records build provenance for a module and uses that state to identify changed paths.
 
-## How it works
+The module also manages `post-merge` and `post-checkout` git hooks. These hooks report that a sync may be needed; they do not block git operations or automatically apply a rebuild.
 
-The module is split into three thin layers. `provenance.ts` forms the lowest layer: it wraps raw `git` process calls (`gitCmd`, `gitHead`) and provides `recordProvenance` / `readProvenance` to write and read a `.provenance.json` file under `.metaproject/data/<module>/`. The JSON encodes the commit SHA, branch name, and ISO build timestamp. For non-git projects every provenance call silently returns `null`, signalling the caller to perform a full rebuild instead.
+## Components
 
-`diff.ts` sits above provenance: given the commit SHA stored in a provenance file, it calls `git diff --name-status <base>` (via the shared `gitCmd`) and parses the tabular output into a `SyncDiff` value — three plain string arrays (`added`, `modified`, `deleted`). Renames are split into a synthetic delete of the old path and an add of the new path. A `codeOnly` filter restricts any `SyncDiff` to source-code extensions so that documentation-only changes do not trigger graph/wiki rebuilds.
+- **`provenance.ts`** reads and writes `.provenance.json` files under `.metaproject/data/<module>/`. A provenance record contains a commit SHA, branch name, and build timestamp. Git commands are run through shared helpers. If the project is not a git repository, provenance operations can return `null`, allowing callers to fall back to a full rebuild.
+- **`diff.ts`** compares a provenance commit with the current working tree and parses git name-status output into a `SyncDiff` containing `added`, `modified`, and `deleted` path arrays. Renames are represented as a deletion of the old path and an addition of the new path. The `codeOnly` filter limits a diff to source-code extensions.
+- **`hooks.ts`** installs or removes a managed shell block in `.git/hooks/post-merge` and `.git/hooks/post-checkout`. The block runs `keryx sync` in advisory mode. Managed markers let the installer update or remove its own block while preserving content outside it.
 
-`hooks.ts` is the installation layer: it writes or removes a managed shell block (delimited by `# keryx:keryx-sync:begin` / `# keryx:keryx-sync:end` markers) inside `.git/hooks/post-merge` and `.git/hooks/post-checkout`. The block runs `keryx sync` in advisory, non-blocking mode — a hook failure is swallowed so it never interrupts a git operation. The installer preserves any pre-existing hook content outside its managed block.
+The module also includes tests for diff parsing and hook behavior.
 
 ## Key concepts
 
-**Provenance** — the `Provenance` interface (`{ commit, branch, builtAt }`) records the exact git state at which a derived artifact was last generated. It is the anchor point for all incremental sync decisions.
-
-**SyncedModule** — a string union (`"gdgraph" | "gdwiki" | "memory"`) that enumerates which keryx modules carry their own provenance stamps. The constant `SYNCED_MODULES` drives iteration over all three.
-
-**SyncDiff** — the core delta type (`{ added: string[], modified: string[], deleted: string[] }`) representing file-level changes between a provenance commit and the current working tree. Renames appear as a delete + add pair; copies appear as an add only.
-
-**Managed-block discipline** — the convention used by `hooks.ts` to inject shell code into existing git hook files without destroying user-owned content. Begin/end sentinel comments bracket the keryx-owned section; the installer updates only that section on re-runs and removes only that section on uninstall.
-
-**Advisory sync** — the design principle that git hooks report drift but never auto-apply a heavy rebuild; the developer explicitly runs `keryx sync --apply` to reconcile artifacts.
+- **Provenance** — The `Provenance` interface records the commit, branch, and build time associated with a generated artifact.
+- **Synced modules** — `SyncedModule` identifies modules with provenance records: `gdgraph`, `gdwiki`, and `memory`. `SYNCED_MODULES` provides the list.
+- **Sync diff** — `SyncDiff` represents added, modified, and deleted paths between a recorded commit and the current working tree. Renames appear as a delete-and-add pair; copies appear as additions.
+- **Managed hook block** — Begin and end markers delimit the section owned by keryx. Install and uninstall operations act on that section while preserving other hook content.
+- **Advisory sync** — Hooks surface potential drift without performing a heavy rebuild. A developer can run `keryx sync --apply` to reconcile artifacts.
 
 ## Main flows
 
-**1. Recording provenance after a build** — When a module such as `gdgraph` finishes rebuilding, `src/commands` calls `recordProvenance(cwd, "gdgraph", builtAt)` from `provenance.ts`. `gitHead` runs two `git rev-parse` calls to capture the current commit SHA and branch name. These are merged with the provided ISO timestamp into a `Provenance` object and written as JSON to `.metaproject/data/gdgraph/.provenance.json`. On a non-git project `gitHead` returns `null` and the function returns early with no file written.
+### Recording provenance
 
-**2. Computing what changed since the last build (incremental sync)** — A `keryx sync` invocation reads the stored provenance via `readProvenance(cwd, module)`, extracts the `commit` field, and passes it to `diffSince(cwd, commit)` in `diff.ts`. `diffSince` runs `git diff --name-status <commit>` against the current working tree (capturing both committed changes since that SHA and any uncommitted edits), parses the output with `parseNameStatus`, and returns a `SyncDiff`. Callers then apply `codeOnly(diff)` to drop documentation-only paths before deciding which graph/wiki/memory entries to update.
+After a module finishes rebuilding, a caller can use `recordProvenance` to save its build state.
 
-**3. Installing git hooks** — `installSyncHooks(projectRoot)` in `hooks.ts` iterates over `["post-merge", "post-checkout"]`. For each hook it reads the existing hook file (defaulting to a bare shebang if absent), checks for a pre-existing managed block, and either replaces that block or appends a new one. The generated shell function runs `keryx sync` and unconditionally returns 0. The file is then written back with execute permission (`0o755`). Uninstalling via `uninstallSyncHooks` reverses this by stripping the managed block and rewriting the file.
+1. `gitHead` obtains the current commit SHA and branch name.
+2. The values are combined with the build timestamp into a `Provenance` record.
+3. The record is written to the module’s `.provenance.json` file.
+
+If the project is not a git repository, the git-state lookup returns `null` and no provenance file is written.
+
+### Finding changes since a build
+
+A sync caller can use the saved provenance to identify paths that have changed.
+
+1. `readProvenance` loads the module’s record.
+2. The caller passes its commit to `diffSince`.
+3. `diffSince` compares that commit with the current working tree and parses the name-status output into a `SyncDiff`.
+4. Callers can use `codeOnly` to exclude paths that do not match the source-code filter.
+
+### Managing git hooks
+
+`installSyncHooks` installs managed blocks in the `post-merge` and `post-checkout` hooks. It replaces an existing managed block or appends one while preserving content outside the markers. The generated block runs `keryx sync` and returns success so that sync-hook failures do not interrupt the git operation.
+
+`uninstallSyncHooks` removes the managed blocks while leaving unrelated hook content intact.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=276194a1b23a3c568971c4296a0199fd861268b2c0a4f28476497dcbef9b231e -->
+<!-- keryx:reference:begin v=1 hash=3f8e515a7ed090dba33cc095ccdc9534e3211ca8b31442e78ad6adbfad145f7d -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -56,8 +73,13 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 - `SYNCED_MODULES`
 - `SyncedModule`
 - `provenancePath` (function)
+- `GitCmdResult`
+- `gitCmdResult` (function)
 - `gitCmd` (function)
 - `gitHead` (function)
+- `GitHeadResolution`
+- `findGitEntry` (function)
+- `resolveGitHead` (function)
 - `recordProvenance` (function)
 - `readProvenance` (function)
 - `SYNC_HOOKS`
@@ -66,11 +88,12 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/sync/provenance.ts` - imported by 5, imports 1
+- `src/sync/provenance.ts` - imported by 22, imports 1
 - `src/sync/hooks.ts` - imported by 2, imports 2
 - `src/sync/diff.ts` - imported by 2, imports 1
 - `src/sync/diff.test.ts` - imported by 0, imports 1
 - `src/sync/hooks.test.ts` - imported by 0, imports 1
+- `src/sync/provenance.test.ts` - imported by 0, imports 1
 
 ### Depends on
 
@@ -78,19 +101,25 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Depended on by
 
-- `src/commands` - 5 import(s)
-- `src/wiki` - 1 import(s)
+- `src/commands` - 6 import(s)
+- `src/wiki/freshness` - 2 import(s)
+- `src/wiki` - 2 import(s)
+- `scripts/benchmark` - 1 import(s)
+- `src/gdgraph` - 1 import(s)
+
+### Dependency basis
+
+- Production imports only: 10 import(s) from test file(s) (e.g. `src/commands/gdgraph.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 5
+- Files: 6
 - Cross-module imports: 3
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived links, regenerated by `keryx wiki collect --force`:
 
 - [Wiki Index](../index.md)
 - [Module src/lib](src-lib.md)
@@ -99,6 +128,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 1.0.0 - Prose sections enriched by gdwiki enrich workflow (2026-07-10). Status promoted to accepted.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

@@ -1,65 +1,107 @@
 ---
 Title: Module src/wiki
-Version: 1.0.1
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:d35349addd1b709eab7e3faca56688c905b18b7817a57379997f3e4bb4fdbd37
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:efbece62df36a579c3c2cb2e1a29804e1ce674bd6ac9a0540f89b71c65fa299e
+---
 
 # Module src/wiki
 
 ## Summary
 
-`src/wiki` groups 9 file(s). Depends on `src/memory`, `src/memory/embedding`, `src/lib`. Exposes 11 public symbol(s).
+`src/wiki` owns the keryx project knowledge base: Markdown pages stored under `.metaproject/wiki/`. It provides CLI-facing logic for creating and indexing pages, checking links, validating the collection, generating graph-driven drafts, and answering questions using wiki and memory content. It also includes utilities for enriching pages and finding pages that reference a source file.
 
 ## Overview
 
-`src/wiki` owns the keryx project knowledge base: it scaffolds, validates, and queries a collection of Markdown wiki pages that live under `.metaproject/wiki/`. The module provides the CLI-facing logic for creating pages, generating the index, checking internal links, running full validation, collecting graph-driven draft pages, and answering natural-language questions against the collected corpus. It is the persistence and retrieval layer for human-and-agent-authored documentation that outlives any single task.
+The module is the persistence and retrieval layer for project documentation intended to outlast individual tasks. Its public contract is consumed by command and MCP integrations. The module depends on graph, library, provider, memory, tool, and security functionality; see the reference section for current dependency details.
 
-## How it works
+## Architecture
 
-The module is organised into three collaborating layers.
+The module is organized around cooperating responsibilities:
 
-**Core service layer (`service.ts`)** is the largest file and the hub of the module. It implements all eight exported operations directly as plain async functions and also assembles them into a `GdWikiService` facade object returned by `createGdWikiService`. Internally, the service maintains two conventions:
-- Wiki pages are always read through `collectPages`, which walks the typed subdirectory tree under `.metaproject/wiki/` and parses each file's frontmatter fields (`Version`, `Type`, `Status`) and summary section.
-- All writes are gated through `guardOutput` (from `src/security`) before touching the filesystem.
+| Responsibility | Files | Purpose |
+|---|---|---|
+| Service and domain types | `service.ts`, `types.ts` | Implement wiki operations and define their shared data structures |
+| Question answering | `ask.ts` | Retrieve and rank wiki and memory candidates |
+| Link lookup | `backlinks.ts` | Build reverse lookups from outgoing links |
+| Rendering | `templates.ts` | Render page scaffolds and managed index content |
+| Collection | `collect.ts` | Gather and rank candidate pages |
+| Enrichment | `enrich.ts`, `deep-enrich.ts` | Plan or perform page enrichment using additional context |
 
-The most complex operation is `wikiCollect`. It reads the code graph's `nodes.jsonl` and `edges.jsonl` directly to compute per-module file counts and cross-module import statistics, then ranks modules by size and connectivity to determine which ones get a wiki page. It additionally pulls data from the health artifact and the testing context file, generating three categories of collected pages: component module pages, a quality-map architecture page, and a testing-map architecture page. Pages are only overwritten when they are still unmodified drafts (the `Status: draft` marker plus the generated-by comment must both be present), protecting human-authored content from accidental regeneration.
+### Service and page handling
 
-**Type layer (`types.ts`)** declares all domain types and constants used across the module.
-- `WikiPageType` is a discriminated union of eight page categories (`architecture`, `domain-model`, `business-rule`, `user-scenario`, `component`, `service`, `integration`, `decision`), each mapped to a folder and a human-readable purpose in `WIKI_PAGE_TYPES`.
-- `WikiPage`, `WikiCollectedPage`, and `WikiAskCitation` types describe pages at runtime.
-- `GdWikiService` interface is the public contract consumed by `src/commands` and `src/mcp`.
+`service.ts` provides core wiki operations and assembles them into the `GdWikiService` facade returned by `createGdWikiService`.
 
-**Ask layer (`ask.ts`)** implements a deterministic Q&A engine. It combines candidates from the wiki pages (title + summary text) and from the memory module (non-superseded, non-expired entries), scores each candidate using Jaccard token overlap against the question, and returns the top-k citations assembled into a Markdown answer. An optional rerank path upgrades the ordering to cosine similarity via the embedding capability (`src/memory/embedding`), but the candidate set and provenance remain strictly local — no network calls.
+Pages are loaded through `collectPages`. This reads the typed directory tree under `.metaproject/wiki/`, parses page frontmatter such as `Version`, `Type`, and `Status`, and extracts each page's summary. Writes pass candidate content through `guardOutput` from `src/security` before it is written to disk.
 
-**Backlinks (`backlinks.ts`)** is a standalone utility that inverts the wiki's outgoing link graph. It extracts both Markdown hyperlinks and inline code spans that look like source-file references (`src/x.ts`), resolves them relative to the page's repo root, and builds a reverse map from targets to referencing pages. The `wikiPagesForFile` function in `service.ts` uses this index to support "which wiki pages document this file?" lookups.
+The collection workflow uses code-graph data to rank modules and produce candidate pages. It can also gather candidates from health and testing context. Generated pages begin as drafts; regeneration is intended to preserve human-authored content rather than overwrite it.
 
-**Templates (`templates.ts`)** holds pure rendering functions for new page scaffolds, the index scaffold, the gdwiki module manifest, and the gdwiki skill README. It also declares the sentinel comment pair (`WIKI_INDEX_BEGIN` / `WIKI_INDEX_END`) that `service.ts` uses to update only the managed block of `wiki/index.md` without clobbering human-written content above it.
+### Types
 
-## Key concepts
+`types.ts` defines the domain model, including:
 
-- **WikiPageType** — the eight-value taxonomy controlling which subfolder a page lives in and what kind of knowledge it captures (from architecture down to individual decisions). Every page's frontmatter `Type:` field must match its folder; `wikiValidate` enforces this.
-- **WikiPage** — the in-memory representation of a parsed wiki file: absolute path, repo-relative path, page type, frontmatter fields (`version`, `type`, `status`), and extracted summary.
-- **Collected page / collect candidate** — an intermediate object produced by the collect operation that pairs a wiki page type and slug with pre-rendered Markdown content derived from graph data, health, or testing artifacts. `writeCollectedPage` decides whether to write, skip, or block (security gate) each candidate.
-- **Draft vs. accepted** — the lifecycle status of a wiki page. Pages generated by `keryx wiki collect` start as `Status: draft`; only pages with `Status: accepted` (or any non-draft status with the generated marker removed) are treated as human-owned and are left untouched by `--force` regeneration.
-- **Backlink index** — the inverted link graph mapping any target (a wiki page or a source file path) to the list of wiki pages that reference it. Built on demand from the full page set; used by `wikiPagesForFile` for the code→wiki reverse lookup.
-- **Security seam** — every candidate page content is passed through `guardOutput` (from `src/security`) before being written. In `advisory` mode the write proceeds; in `enforced`/`ci` mode a blocked candidate is recorded with a `securityReason` and its file is not created.
+- **`WikiPageType`** — the page categories used to determine a page's folder and purpose.
+- **`WikiPage`** — the in-memory representation of a parsed page, including its path, type, frontmatter fields, and summary.
+- **`WikiCollectedPage`** — a page type, slug, and rendered Markdown content prepared for collection.
+- **`WikiAskCitation`** — a citation returned by the question-answering operation.
+- **`GdWikiService`** — the service contract used by integrations.
 
-## Main flows
+The supported page categories and their folder mappings are defined by `WIKI_PAGE_TYPES`. Validation checks that a page's declared type matches its folder.
 
-**Flow 1 — `keryx wiki collect` (scaffold generation)**  
-`wikiCollect` in `service.ts` is called with the project `cwd`. It reads `nodes.jsonl` and `edges.jsonl` from the graph storage directory, groups files by module directory, ranks modules by file count then cross-module edge count, and builds a `WikiCollectCandidate` for each module using `renderModuleWikiPage` (from the same file). In parallel it calls `collectHealthWikiCandidates` and `collectTestingWikiCandidates`. For each candidate, `writeCollectedPage` checks whether the file exists and whether it is still an unmodified draft before calling `guardOutput` and then writing. After all pages are processed, `wikiGenerateIndex` re-renders the managed block inside `wiki/index.md` using the sentinel markers from `templates.ts`, and `recordProvenance` (from `src/sync`) stamps the run timestamp.
+### Question answering
 
-**Flow 2 — `keryx wiki validate` (health check)**  
-`wikiValidate` calls `collectPages` to load every page's parsed frontmatter, then iterates through them checking for missing `Version`, `Type`, and `Status` fields and for `Type` values that do not match the page's folder. It then delegates to `wikiCheckLinks`, which walks all Markdown files under the wiki root (skipping the `templates/` folder), extracts link targets using a regex, resolves each local target relative to the containing file, and checks filesystem existence. Broken links are accumulated into a report written to `data/gdwiki/link-check/latest.md`. Finally, `isIndexStale` re-renders the index body without the timestamp stamp and compares it to what is on disk; a mismatch becomes an `index` issue.
+`ask.ts` combines candidates from wiki pages and memory entries. It scores candidates against the question using token overlap and returns citations assembled into a Markdown answer. An optional embedding-based rerank can adjust candidate order when the embedding capability is available. Candidate retrieval remains local; the rerank capability does not change candidate provenance.
 
-**Flow 3 — `keryx wiki ask` (Q&A retrieval)**  
-`wikiAsk` in `ask.ts` is called with a natural-language question. It calls `collectPages` (via the imported function from `service.ts`) to build the wiki candidate set and `collectEntries` (from `src/memory`) for the memory candidate set, filtering memory entries that are superseded or past their `validTo` date. Each candidate's text (title + summary + tags) is scored against the tokenised question using the Jaccard distance function imported from `src/memory/text`. The top-k candidates are returned as `WikiAskCitation` objects. If `rerank: true` is set and the embedding capability resolves, the citations are re-ranked by cosine similarity (using `cosine` from `src/memory/embedding`) before the final Markdown answer is assembled by `assembleAnswer`.
+### Backlinks
+
+`backlinks.ts` builds a reverse index from wiki pages' outgoing references. It recognizes Markdown links and inline code that resembles source-file paths, then resolves targets relative to the repository root. The index supports lookups such as which wiki pages document a given source file.
+
+### Rendering and enrichment
+
+`templates.ts` contains rendering functions for page and index scaffolds, as well as related generated content. Sentinel markers delimit the managed section of `wiki/index.md`, allowing that section to be updated separately from surrounding human-written content.
+
+The enrichment files provide functionality for selecting pages and planning or performing enrichment. Their exported symbols are listed in the reference section.
+
+## Key Concepts
+
+- **Page type** — A category that determines where a page belongs and what kind of knowledge it describes. The page's `Type` frontmatter value must agree with its directory.
+- **Parsed page** — The in-memory representation of a wiki file, including its path, frontmatter values, and summary.
+- **Collected page** — A rendered candidate produced from graph or other project context. Collection logic decides whether it can be written.
+- **Draft and accepted status** — Generated pages use `Status: draft`. Draft markers help distinguish generated content from content that should be preserved as human-owned.
+- **Backlink index** — A reverse map from wiki or source-file targets to pages that reference them.
+- **Output security check** — Candidate content is checked with `guardOutput` before filesystem writes. The security policy determines whether a candidate can be written.
+
+## Main Flows
+
+### Collect pages
+
+1. The collection workflow reads code-graph data and groups files by module.
+2. It ranks modules using graph-derived information and renders page candidates.
+3. It gathers additional candidates from health and testing context where available.
+4. Before writing a candidate, it checks whether existing content is eligible for regeneration and applies the output security check.
+5. It updates the managed section of the wiki index.
+6. It records provenance for the collection run.
+
+### Validate the wiki
+
+1. `wikiValidate` loads pages and their parsed frontmatter.
+2. It checks required fields and verifies that page types match their folders.
+3. Link checking scans Markdown files under the wiki root, excluding `templates/`, and reports unresolved local targets.
+4. The validation flow checks whether the generated index content is stale.
+5. Link-check results are written to the latest report location.
+
+### Answer a question
+
+1. `wikiAsk` loads wiki pages and eligible memory entries.
+2. It scores candidates against the tokenized question.
+3. If requested and available, embedding similarity reranks the candidates.
+4. It returns citations and assembles a Markdown answer.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=77b538ff4baa0b94688cb566b70978f71d7d46d620defb7528d83c89466e48a6 -->
+<!-- keryx:reference:begin v=1 hash=d2f9593ad7c88ffaf33945259757c48fbe4075f762ce7670f92d2b11162a425f -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -67,58 +109,62 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Public API
 
+- `wikiStatus` (function)
+- `wikiCreatePage` (function)
+- `wikiGenerateIndex` (function)
+- `wikiCheckLinks` (function)
+- `wikiValidate` (function)
+- `wikiCollect` (function)
+- `WikiPruneResult` (interface)
+- `wikiPruneOrphans` (function)
+- `validModuleNames` (function)
+- `WikiEvidenceInput`
+- `wikiEvidence` (function)
+- `GdWikiEvidenceService`
+- `createGdWikiService` (function)
+- `collectGraphWikiCandidates` (function)
+- `isTestSourceFile` (function)
+- `extractModuleApi` (function)
 - `DEFAULT_MAX_OUTPUT_TOKENS`
 - `DEFAULT_CONCURRENCY`
 - `MAX_CONCURRENCY`
 - `WikiEnrichInput` (interface)
-- `WikiEnrichPlan` (interface)
-- `WikiEnrichAction`
-- `WikiEnrichPageResult` (interface)
-- `WikiEnrichResult` (interface)
-- `resolveEnrichProviderModel` (function)
-- `resumeStatePath` (function)
-- `loadResumeState` (function)
-- `saveResumeState` (function)
-- `selectPages` (function)
-- `planWikiEnrich` (function)
-- `isWikiEnrichIntent` (function)
-- `hasYamlFrontmatter` (function)
-- `extractYamlFrontmatterBlock` (function)
-- `EnsureWikiFrontmatterHints` (interface)
-- `EnsureWikiFrontmatterResult` (interface)
-- `ensureWikiFrontmatter` (function)
 
 ### Key files
 
-- `src/wiki/enrich.ts` - imported by 5, imports 18
-- `src/wiki/service.ts` - imported by 15, imports 8
-- `src/wiki/ask.ts` - imported by 6, imports 11
+- `src/wiki/service.ts` - imported by 23, imports 16
+- `src/wiki/enrich.ts` - imported by 6, imports 19
+- `src/wiki/collect.ts` - imported by 19, imports 4
+- `src/wiki/types.ts` - imported by 21, imports 2
+- `src/wiki/ask.ts` - imported by 9, imports 11
 - `src/wiki/deep-enrich.ts` - imported by 2, imports 14
-- `src/wiki/types.ts` - imported by 15, imports 0
-- `src/wiki/collect.ts` - imported by 10, imports 4
 
 ### Depends on
 
-- `src/gdgraph` - 17 import(s)
+- `src/gdgraph` - 13 import(s)
 - `src/lib` - 11 import(s)
-- `src/harness/provider` - 8 import(s)
-- `src/memory` - 4 import(s)
-- `src/harness/tool` - 4 import(s)
-- `src/security` - 3 import(s)
+- `src/memory` - 7 import(s)
+- `src/harness/provider` - 4 import(s)
+- `src/harness/tool` - 3 import(s)
+- `src/memory/embedding` - 2 import(s)
 
 ### Depended on by
 
-- `src/commands` - 9 import(s)
+- `src/commands` - 15 import(s)
+- `src/harness/tool` - 10 import(s)
+- `src/forgetting` - 5 import(s)
 - `src/gdgraph` - 4 import(s)
+- `src/wiki/freshness` - 4 import(s)
 - `scripts/benchmark` - 3 import(s)
-- `src/gdskills` - 3 import(s)
-- `src/harness/tool` - 3 import(s)
-- `src/mcp` - 2 import(s)
+
+### Dependency basis
+
+- Production imports only: 38 import(s) from test file(s) (e.g. `src/commands/sync-forgetting.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 27
-- Cross-module imports: 57
+- Files: 48
+- Cross-module imports: 52
 <!-- keryx:reference:end -->
 
 ## Related Wiki
@@ -137,5 +183,6 @@ Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exi
 
 ## Changelog
 
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

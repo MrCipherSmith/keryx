@@ -31,18 +31,18 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-09-21T22:39:06.913Z | pages: 96 -->
+<!-- generated: 2026-09-26T23:46:12.106Z | pages: 96 -->
 
 ### Architecture
 
-- [Agent Bus](architecture/agent-bus.md) (accepted) - The agent bus lets several interactive `keryx shell` instances working on one git clone — the checkout and every linked worktree — see each other and send each other short, typed messages. It exists because the place where two `keryx shell` agents actually collide is not "two projects" but "two worktrees of the same repository": one agent cutting a release while another keeps developing on a feature branch, each unaware the other is running. The bus is a local, file-based coordination channel (an append-only event log plus small per-instance presence records under the git common directory) — not a chat system, not a second copy of any other ledger, and not a way for one agent to control another's permissions.
-- [Supervised Shell Tasks (formerly Background Shell Jobs)](architecture/background-jobs.md) (accepted) - **Every `shell_exec` call is a supervised task.** The call returns within a bounded yield (`KERYX_SHELL_YIELD_MS`, 10 s): a command that finishes inside it returns its output exactly as a blocking call would, and one still running when the yield elapses keeps running as a background task, handing back `{task_id, pid, status, output}` instead of freezing the turn. Backgrounding is not a mode the model has to choose — it is what happens to any command that turns out to be slow, which is the point: the model cannot forget to ask for it.
+- [Agent Bus](architecture/agent-bus.md) (accepted)
+- [Supervised Shell Tasks (formerly Background Shell Jobs)](architecture/background-jobs.md) (accepted) - **Every `shell_exec` call is a supervised task.** The call returns within a bounded yield (`KERYX_SHELL_YIELD_MS`, 10 s by default): a command that finishes inside the yield returns its output exactly as a blocking call would, while one still running when the yield elapses keeps running as a background task and hands back `{task_id, pid, status, output}` instead of freezing the turn. Backgrounding is not a mode the model has to choose — it is what happens to any command that turns out to be slow. The model cannot forget to ask for it.
 - [OS Sandbox](architecture/os-sandbox.md) (accepted) - The OS sandbox is a kernel-enforced containment layer that sits *below* keryx's policy engine, structural command guard, env allowlist, and approval gate. Those layers decide **whether a command may start**; the OS sandbox constrains **what the process can do once running** — which paths it can write, which secrets it can read, and which network it can reach — using macOS Seatbelt (`sandbox-exec`) or Linux bubblewrap (`bwrap`). It adds no npm dependencies: containment is delegated to system binaries. When containment cannot be applied, a run is **refused**, never silently downgraded.
-- [Permission Modes](architecture/permission-modes.md) (accepted) - The interactive agent session (`keryx shell`, both the OpenTUI surface and the readline fallback) has three user-selectable permission modes — `ask`, `trust`, `auto` — that decide whether a mutating tool call (`shell_exec`, `spawn_subagent`, any tool declaring `risk: "destructive"`) prompts for approval before it runs. They sit **above** the existing per-call approval gate in `src/commands/agent.ts`'s `executeCall`, deciding whether `AgentIO.requestApproval` is even invoked — never replacing it, and never touching the separate `src/harness/policy`/`src/harness/mutation` evidence engine that governs `harness run`/`harness exec`/`keryx serve` (see "Explicitly out of scope" below).
-- [Project Map](architecture/project-map.md) (accepted) - This page is the deterministic architecture map for the project. It captures the repository as a graph of code files and assets, including import relationships between top-level modules.
+- [Permission Modes](architecture/permission-modes.md) (accepted) - The interactive agent session (`keryx shell`, supporting both the OpenTUI surface and the readline fallback) exposes three user-selectable permission modes — `ask`, `trust`, and `auto` — that determine whether a mutating tool call prompts for approval before execution. Affected operations include `shell_exec`, `spawn_subagent`, and any tool declaring `risk: "destructive"`.
+- [Project Map](architecture/project-map.md) (accepted)
 - [Quality Map](architecture/quality-map.md) (accepted)
-- [Testing Map](architecture/testing-map.md) (accepted) - This page provides a high-level map of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as a quick reference for developers and CI/CD pipelines.
-- [Wiki, Graph, and Shared Agent Context](architecture/wiki-graph-sac.md) (accepted) - The project wiki, the code graph, and Shared Agent Context (SAC) are one connected stack with three owners. Graph answers structural questions. Wiki stores curated long-lived understanding. SAC is a reviewed collaboration entry point: it references those owners, projects Flow as Work, and never becomes a second wiki.
+- [Testing Map](architecture/testing-map.md) (accepted) - This page provides a high-level overview of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as a quick reference for developers and CI/CD pipelines.
+- [Wiki, Graph, and Shared Agent Context](architecture/wiki-graph-sac.md) (accepted) - The project wiki, the code graph, and Shared Agent Context (SAC) form a unified knowledge stack with three distinct owners. Each layer has a clear responsibility:
 
 ### Domain Model
 
@@ -50,7 +50,7 @@ _No pages yet._
 
 ### Business Rule
 
-- [Code Search Routing Rule](business-rules/code-search-routing.md) (accepted) - Every text, symbol or pattern search an agent runs over this project's code goes through `keryx ctx rg`, never a bare `rg` or `grep`. A `PreToolUse` hook enforces the rule before the command runs and refuses the raw form with a message naming the routed replacement. The one sanctioned way out is an inline escape marker that states a reason.
+- [Code Search Routing Rule](business-rules/code-search-routing.md) (accepted) - Every text, symbol, or pattern search an agent runs over this project's code goes through `keryx ctx rg` — never a bare `rg` or `grep`. A `PreToolUse` hook enforces the rule before the command runs and refuses the raw form with a message naming the routed replacement. The one sanctioned exception is an inline escape marker that states a reason.
 
 ### User Scenario
 
@@ -155,5 +155,5 @@ _No pages yet._
 
 ### Decision
 
-- [SAC: SAC harness integration demo](decisions/sac-proposal-a41fc4152ad147e2.md) (draft) - SAC complements wiki and graph; it does not replace them.
+- [SAC: SAC harness integration demo](decisions/sac-proposal-a41fc4152ad147e2.md) (draft)
 <!-- keryx:wiki-index:end -->

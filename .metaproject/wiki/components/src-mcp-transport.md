@@ -1,5 +1,15 @@
 ---
 Title: Module src/mcp/transport
+Version: 1.0.2
+Type: component
+Status: accepted
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:6843520d73082e770d8e4300e68eb7d44bb69a8109424c810ed70af261f1a74c
+Summary: `src/mcp/transport` groups 2 file(s). Exposes 3 public symbol(s).
+---
+```markdown
+---
+Title: Module src/mcp/transport
 Version: 1.0.1
 Type: component
 Status: accepted
@@ -12,35 +22,35 @@ Summary: `src/mcp/transport` groups 2 file(s). Exposes 3 public symbol(s).
 
 ## Overview
 
-`src/mcp/transport` owns the two concrete MCP transport adapters used by the keryx MCP server: a default stdio adapter and an opt-in HTTP/SSE adapter. Its purpose is to bridge the MCP SDK’s transport contract to whichever I/O channel the server is started with, while keeping the two paths fully isolated from each other so neither can affect the other’s startup or runtime behaviour.
+`src/mcp/transport` provides the two concrete MCP transport adapters used by the keryx MCP server: a default stdio adapter and an opt-in HTTP/SSE adapter. This module bridges the MCP SDK's transport contract to whichever I/O channel the server is started with, while keeping the two paths fully isolated so neither affects the other's startup or runtime behaviour.
 
 ## How it works
 
-The module consists of exactly two files, each exporting a single async function that sets up one transport variant. Both files load the MCP SDK transport class lazily via a dynamic `import()` inside the function body — there are no top-level SDK imports at the module boundary; the SDK is only pulled in when the function is actually called. Both files also define a minimal local `ConnectableServer` structural interface instead of importing the SDK’s `Server` type, keeping the module free of compile-time SDK coupling.
+The module consists of exactly two files, each exporting a single async function that sets up one transport variant. Both files load the MCP SDK transport class lazily via a dynamic `import()` inside the function body — there are no top-level SDK imports at the module boundary. The SDK is only pulled in when the function is actually called. Both files also define a minimal local `ConnectableServer` structural interface instead of importing the SDK's `Server` type, keeping the module free of compile-time SDK coupling.
 
-- **`stdio.ts`** is the default transport. It instantiates `StdioServerTransport` from the SDK and calls `server.connect(transport)`, opening a JSON-RPC channel over the process’s stdin/stdout without binding any network socket.
-- **`http-sse.ts`** is the opt-in transport. It instantiates `StreamableHTTPServerTransport` in stateless mode (no session ID generator) and connects it to the same server interface. It then creates a Node.js `http.Server` that forwards every incoming request to `transport.handleRequest`. The HTTP server binds strictly to the configured host and port (defaulting to the IPv4 loopback address to ensure localhost-only exposure) and is intentionally unauthenticated — it is a developer-local bridge, not a public endpoint.
+- **`stdio.ts`** is the default transport. It dynamically imports `StdioServerTransport` from the MCP SDK, instantiates it, and calls `server.connect(transport)`. This opens a JSON-RPC channel over the process's stdin/stdout without binding any network socket.
+- **`http-sse.ts`** is the opt-in transport. It dynamically imports `StreamableHTTPServerTransport` from the SDK and instantiates it in stateless mode (no session ID generator). After connecting the transport to the server, it creates a Node.js `http.Server` that forwards every incoming request to `transport.handleRequest`. The HTTP server binds strictly to the configured host and port, defaulting to the IPv4 loopback address (`[REDACTED:ip]`) to ensure localhost-only exposure. The endpoint is intentionally unauthenticated — it is a developer-local bridge, not a public endpoint.
 
 The parent `src/mcp` module is the only importer of this module; it selects which of the two functions to call based on whether the `--http` CLI flag is present.
 
 ## Key concepts
 
 - **Transport**: the MCP SDK abstraction that moves JSON-RPC messages between a `Server` instance and an I/O channel. This module provides concrete implementations of that abstraction.
-- **Stdio transport**: carries JSON-RPC over process stdin/stdout; no network socket; the default and primary transport for CLI-driven MCP usage.
-- **HTTP/SSE (Streamable-HTTP) transport**: carries JSON-RPC over an HTTP endpoint using the SDK’s `StreamableHTTPServerTransport` in stateless mode; opt-in, localhost-only, developer-local only.
-- **Stateless mode**: the `StreamableHTTPServerTransport` is configured with `sessionIdGenerator: undefined`, meaning each request is handled independently with no server-side session state.
+- **Stdio transport**: carries JSON-RPC over process stdin/stdout; no network socket required; the default and primary transport for CLI-driven MCP usage.
+- **HTTP/SSE (Streamable-HTTP) transport**: carries JSON-RPC over an HTTP endpoint using the SDK's `StreamableHTTPServerTransport` in stateless mode; opt-in, localhost-only, developer-local only.
+- **Stateless mode**: the `StreamableHTTPServerTransport` is configured with `sessionIdGenerator: undefined`, meaning each request is handled independently with no server-side session state. This simplifies the transport but means the client must re-send any session context with each request.
 - **ConnectableServer**: a structural interface (`{ connect(transport: unknown): Promise<void> }`) used in both files to accept the MCP `Server` without a top-level SDK type import, keeping the transport files decoupled from the SDK at compile time.
-- **Lazy SDK import**: both transport functions use dynamic `import()` to load the relevant SDK transport class at call time rather than at module load time, so the SDK is only pulled in for the transport path that is actually used.
+- **Lazy SDK import**: both transport functions use dynamic `import()` to load the relevant SDK transport class at call time rather than at module load time. This ensures the SDK is only pulled in for the transport path that is actually used, reducing initial load overhead.
 
 ## Main flows
 
-- **Default stdio startup**: `src/mcp/server.ts` calls `startStdioTransport(server)`. The function dynamically imports `StdioServerTransport` from the SDK, constructs the transport, and calls `server.connect(transport)`. From that point the MCP server reads requests from stdin and writes responses to stdout; no port is opened.
-- **Opt-in HTTP startup**: when the `--http` flag is passed, `src/mcp/server.ts` calls `startHttpTransport(server, { host, port })`. The function dynamically imports `StreamableHTTPServerTransport`, constructs it in stateless mode, connects it to the server, then creates a `node:http` server that routes all requests to `transport.handleRequest`. The HTTP server listens on the configured host and port (binding completes when the `listen` callback fires), after which the MCP server is reachable over HTTP/SSE at that address.
-- **Transport isolation**: neither file imports the other, and neither is referenced outside `src/mcp`. Deleting `http-sse.ts` leaves the stdio path fully intact; the two transport variants cannot interfere with each other at startup or runtime.
+- **Default stdio startup**: `src/mcp/server.ts` calls `startStdioTransport(server)`. The function dynamically imports `StdioServerTransport` from the SDK, constructs the transport, and calls `server.connect(transport)`. From that point the MCP server reads requests from stdin and writes responses to stdout. No port is opened and no network resources are consumed.
+- **Opt-in HTTP startup**: when the `--http` flag is passed, `src/mcp/server.ts` calls `startHttpTransport(server, { host, port })`. The function dynamically imports `StreamableHTTPServerTransport`, constructs it in stateless mode, connects it to the server, then creates a `node:http` server that routes all requests to `transport.handleRequest`. The HTTP server listens on the configured host and port; binding completes when the `listen` callback fires. After this, the MCP server is reachable over HTTP/SSE at that address.
+- **Transport isolation**: neither file imports the other, and neither is referenced outside `src/mcp`. Deleting `http-sse.ts` leaves the stdio path fully intact. The two transport variants cannot interfere with each other at startup or runtime, and unused transport code is never loaded.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=1dce7de2685e379dcb3e3a24683e51bca436ea5beed69c13e963971c93a460e7 -->
+<!-- keryx:reference:begin v=1 hash=ad69eb0a470d768e77e41fad2451ad453cec22eaa780cb4de8afbb2da5137f76 -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -49,13 +59,21 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 ### Public API
 
 - `HttpTransportOptions` (interface)
+- `isTrustedMcpHttpRequest` (function)
 - `startHttpTransport` (function)
-- `startStdioTransport` (function)
+- `resolveMcpLoopbackHost` (function)
+- `McpHttpConfigError` (class)
 
 ### Key files
 
-- `src/mcp/transport/http-sse.ts` - imported by 1, imports 0
+- `src/mcp/transport/http-sse.ts` - imported by 2, imports 1
+- `src/mcp/transport/loopback-host.ts` - imported by 1, imports 1
+- `src/mcp/transport/http-sse.loopback.test.ts` - imported by 0, imports 1
 - `src/mcp/transport/stdio.ts` - imported by 1, imports 0
+
+### Depends on
+
+- `src/lib` - 1 import(s)
 
 ### Depended on by
 
@@ -63,8 +81,8 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Graph signals
 
-- Files: 2
-- Cross-module imports: 0
+- Files: 4
+- Cross-module imports: 1
 <!-- keryx:reference:end -->
 
 ## Related Wiki
@@ -76,6 +94,8 @@ Graph-derived — regenerated by `keryx wiki collect --force`. Only pages that e
 
 ## Changelog
 
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 1.0.0 — Prose enriched by gdwiki enrich workflow: Overview, How it works, Key concepts, Main flows filled from direct code reads of `src/mcp/transport/stdio.ts` and `src/mcp/transport/http-sse.ts`. Status set to accepted.
 - 0.1.0 — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+```

@@ -10,129 +10,127 @@ Summary: "`src/harness/resume` groups 7 file(s). Depends on `src/harness/session
 
 ## Summary
 
-`src/harness/resume` groups 7 file(s). Depends on `src/harness/session`, `src/contracts`, `src/harness`. Exposes 5 public symbol(s).
+Provides the resumable-session layer of the [harness](src-harness.md). This module enables capturing session state, persisting it, and recovering execution when a session resumes later. It defines contracts for snapshots, checkpoints, and storage, along with an in-memory store implementation.
+
+**Key facts:**
+- 7 files, 25 cross-module imports
+- Depends on: [src/harness/session](src-harness-session.md), [src/contracts](src-contracts.md), [src/harness](src-harness.md)
+- Exposes 5 public symbols
 
 ## Overview
 
-`src/harness/resume` owns the resumable-session layer of the harness. It provides shared abstractions for capturing session state, storing it, and recovering it when execution continues later.
+This module owns the resumable-session layer of the harness. It provides shared abstractions for:
 
-The module exposes a narrow public surface: interfaces describe session snapshots and checkpoints, a store interface abstracts persistence, and an in-memory store provides a concrete implementation for process-local use. Recovery behavior and error handling are separated from the core contracts so callers can reason about state restoration independently of storage details.
+- **Capturing** session state at a point in time
+- **Storing** that state through a storage abstraction
+- **Recovering** state when execution continues later
 
-## How it works
+This separation lets callers reason about state restoration independently of storage details, and keeps recovery behavior and error handling separate from the core state contracts.
 
-The module is organized around a contract-first structure:
+## Key Concepts
 
-- **State contracts**
-  - `SessionSnapshot` describes a persisted representation of session state.
-  - `Checkpoint` describes a resumable point in a session’s progress.
-  - `SessionStore` defines how snapshots are saved, retrieved, and managed.
+- **Session snapshot** — A persistable representation of session state, allowing a session to survive process restarts or move across boundaries.
+- **Checkpoint** — A resumable point in a session's progress; the operational unit that resume flows work against.
+- **Session store** — A persistence abstraction (the `SessionStore` interface) for managing snapshots. Callers depend on the interface rather than a specific backend.
+- **In-memory store** — `InMemorySessionStore` is a concrete implementation for process-local use, tests, and development.
+- **Unknown session error** — `UnknownSessionError` is a typed error for missing or unidentifiable sessions.
 
-- **Persistence implementation**
-  - `InMemorySessionStore` implements `SessionStore` for in-process scenarios.
-  - This keeps the resume path usable without external infrastructure while allowing alternative stores to satisfy the same interface.
+## Architecture
 
-- **Recovery behavior**
-  - Recovery logic determines whether a requested session state is available and usable.
-  - `UnknownSessionError` gives callers a typed way to distinguish missing or unknown sessions from other runtime failures.
+### Contracts (state interfaces)
 
-- **Harness integration**
-  - The module depends on `src/harness/session`, `src/contracts`, and other harness modules.
-  - These dependencies allow resumed state to re-enter the broader harness execution flow rather than existing as an isolated data structure.
+| Symbol | Purpose |
+|--------|---------|
+| `SessionSnapshot` | Describes a persisted representation of session state |
+| `Checkpoint` | Describes a resumable point in a session's progress |
+| `SessionStore` | Defines how snapshots are saved, retrieved, and managed |
 
-## Key concepts
+### Persistence
 
-- **Session snapshot**
-  - A serializable or otherwise persistable representation of session state.
-  - Snapshots allow a session to be moved across process boundaries or reloaded later.
+- `InMemorySessionStore` implements `SessionStore` for in-process scenarios.
+- Keeps the resume path usable without external infrastructure.
+- Alternative stores can satisfy the same `SessionStore` interface, making persistence storage-agnostic.
 
-- **Checkpoint**
-  - A resumable state point that captures enough context for a session to continue.
-  - Checkpoints are the operational unit that resume flows ultimately work against.
+### Recovery
 
-- **Session store**
-  - A persistence abstraction for snapshot management.
-  - Callers can depend on the interface rather than a specific storage backend.
+- `recovery.ts` contains the logic that determines whether a requested session's state is available and usable.
+- `UnknownSessionError` surfaces missing sessions as a typed error rather than a generic failure.
 
-- **In-memory store**
-  - A simple concrete implementation of the session store.
-  - Useful for development, tests, and short-lived processes where durable persistence is not required.
+### Harness Integration
 
-- **Unknown session error**
-  - A typed error representing recovery against a session that cannot be identified.
-  - Helps callers handle missing or invalid session state explicitly.
+The module integrates with the broader [harness](src-harness.md) through its dependencies:
 
-## Main flows
+- [src/harness/session](src-harness-session.md) — 9 imports
+- [src/contracts](src-contracts.md) — 4 imports
+- [src/harness](src-harness.md) — 4 imports
 
-1. **Prepare state for resume**
-   - Session-related state is represented through snapshot or checkpoint-shaped data.
-   - Downstream harness components can consume this state without knowing how it was originally produced or persisted.
+Resumed state re-enters the harness execution flow rather than existing as an isolated data structure.
 
-2. **Persist and reload snapshots**
-   - `InMemorySessionStore` accepts snapshot values and returns them later within the same process.
-   - Because persistence is behind the `SessionStore` interface, resume behavior does not depend on a particular storage mechanism.
+## Main Flows
 
-3. **Handle recovery against unknown sessions**
-   - If recovery cannot resolve the requested session state, the module surfaces `UnknownSessionError`.
-   - This allows callers to distinguish an unknown or unavailable session from generic errors raised elsewhere in the harness.
+### 1. Prepare state for resume
 
-## Reference (from code graph)
+1. Session-related state is captured as snapshot- or checkpoint-shaped data.
+2. Downstream harness components consume this state without needing to know its origin.
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+### 2. Persist and reload snapshots
 
-### Public API
+1. `InMemorySessionStore` accepts snapshot values.
+2. It returns them later within the same process.
+3. Because persistence sits behind the `SessionStore` interface, resume behavior remains storage-agnostic — other implementations can be swapped in without changing callers.
 
-- `Checkpoint` (interface)
-- `SessionSnapshot` (interface)
-- `SessionStore` (interface)
-- `UnknownSessionError` (class)
-- `InMemorySessionStore` (class)
+### 3. Handle unknown sessions
 
-### Key files
+1. Recovery attempts to resolve the requested session state.
+2. If resolution fails, `UnknownSessionError` is raised.
+3. Callers can distinguish unknown or unavailable sessions from other runtime failures.
 
-- `src/harness/resume/resume.test.ts` - imported by 0, imports 14
-- `src/harness/resume/store.ts` - imported by 11, imports 1
-- `src/harness/resume/resume.ts` - imported by 1, imports 8
-- `src/harness/resume/recovery.ts` - imported by 5, imports 2
-- `src/harness/resume/recovery.hardening.test.ts` - imported by 0, imports 5
-- `src/harness/resume/recovery.test.ts` - imported by 0, imports 5
+## Public API
 
-### Depends on
+| Symbol | Type | Location |
+|--------|------|----------|
+| `Checkpoint` | interface | `resume.ts` |
+| `SessionSnapshot` | interface | `resume.ts` |
+| `SessionStore` | interface | `store.ts` |
+| `UnknownSessionError` | class | `recovery.ts` |
+| `InMemorySessionStore` | class | `store.ts` |
 
-- `src/harness/session` - 9 import(s)
-- `src/contracts` - 4 import(s)
-- `src/harness` - 4 import(s)
-- `src/harness/provider` - 3 import(s)
-- `src/harness/run` - 2 import(s)
-- `src/harness/tool` - 2 import(s)
+## Key Files
+
+| File | Imports | Purpose |
+|------|---------|---------|
+| `store.ts` | 11 / 1 | Session store interface and in-memory implementation |
+| `recovery.ts` | 5 / 2 | Recovery logic and error types |
+| `resume.ts` | 1 / 8 | Core interfaces (`SessionSnapshot`, `Checkpoint`) |
+| `resume.test.ts` | 0 / 14 | Tests for core resume behavior |
+| `recovery.test.ts` | 0 / 5 | Tests for recovery logic |
+| `recovery.hardening.test.ts` | 0 / 5 | Hardening tests for recovery edge cases |
+
+## Dependencies
+
+### Module depends on
+
+- [src/harness/session](src-harness-session.md) — 9 imports
+- [src/contracts](src-contracts.md) — 4 imports
+- [src/harness](src-harness.md) — 4 imports
+- [src/harness/provider](src-harness-provider.md) — 3 imports
+- [src/harness/run](src-harness-run.md) — 2 imports
+- [src/harness/tool](src-harness-tool.md) — 2 imports
 
 ### Depended on by
 
-- `src/harness/branch` - 4 import(s)
-- `src/harness/mutation` - 3 import(s)
-- `src/harness` - 1 import(s)
-- `src/harness/process` - 1 import(s)
+- [src/harness/branch](src-harness-branch.md) — 4 imports
+- [src/harness/mutation](src-harness-mutation.md) — 3 imports
+- [src/harness](src-harness.md) — 1 import
+- [src/harness/process](src-harness-process.md) — 1 import
 
-### Graph signals
-
-- Files: 7
-- Cross-module imports: 25
-
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+## Related
 
 - [Wiki Index](../index.md)
+- [Module src/harness](src-harness.md)
 - [Module src/harness/session](src-harness-session.md)
 - [Module src/contracts](src-contracts.md)
-- [Module src/harness](src-harness.md)
-- [Module src/harness/provider](src-harness-provider.md)
-- [Module src/harness/run](src-harness-run.md)
-- [Module src/harness/tool](src-harness-tool.md)
-- [Module src/harness/branch](src-harness-branch.md)
-- [Module src/harness/mutation](src-harness-mutation.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z

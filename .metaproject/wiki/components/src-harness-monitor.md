@@ -5,141 +5,95 @@ Type: component
 Status: draft
 Summary: "`src/harness/monitor` groups 4 file(s). Depends on `src/contracts`. Exposes 8 public symbol(s)."
 ---
+```markdown
+---
+Title: Module src/harness/monitor
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`src/harness/monitor` groups 4 file(s). Depends on `src/contracts`. Exposes 8 public symbol(s)."
+---
+
 # Module src/harness/monitor
 
 ## Summary
 
-`src/harness/monitor` groups 4 file(s). Depends on `src/contracts`. Exposes 8 public symbol(s).
-
-The module provides typed representations for agents and exposes helper functions for reducing agent data into snapshots and comparing agent state changes.
+`src/harness/monitor` provides typed representations for agents and exposes helper functions for reducing agent data into snapshots and comparing agent state changes.
 
 ## Overview
 
 `src/harness/monitor` is a monitoring-oriented component inside the harness. Its public surface defines data shapes for agents, including events, status, usage, records, snapshots, and deltas.
 
-The module is imported by `src/commands` and `src/harness/external`, suggesting that those consumers use it to normalize, inspect, or compare agent-related state. It depends on `src/contracts`, indicating that it participates in shared project-wide contracts or common domain shapes.
+The module is imported by [src/commands](src-commands.md) and [src/harness/external](src-harness-external.md), which use it to normalize, inspect, or compare agent-related state. It depends on [src/contracts](src-contracts.md), ensuring its public shapes align with shared project-wide contracts.
 
 ## How it works
 
 The module combines public type definitions with reduction and comparison helpers.
 
-- Public types describe agent-related data:
-  - `AgentEvent`
-  - `AgentStatus`
-  - `AgentUsage`
-  - `AgentRecord`
-  - `AgentsSnapshot`
-  - `AgentDelta`
+### Public types
 
-- Public helpers transform those data shapes:
-  - `reduceAgents` reduces agent-related input into an aggregated or normalized representation.
-  - `diffAgents` compares agent representations and produces a delta describing changes.
+- `AgentEvent` — event associated with an agent
+- `AgentStatus` — agent's current state
+- `AgentUsage` — usage-related information attached to an agent
+- `AgentRecord` — tracked agent entry or record
+- `AgentsSnapshot` — point-in-time representation of multiple agents
+- `AgentDelta` — change between agent states or snapshots
 
-The implementation is concentrated around small reduction and state modules:
+### Public helpers
 
-- `src/harness/monitor/reduce.ts`
-- `src/harness/monitor/reduce-state.ts`
+- `reduceAgents` — reduces agent-related input into an aggregated or normalized representation
+- `diffAgents` — compares agent representations and produces a delta
 
-Tests around those modules provide coverage for reduction and state-related behavior:
+### Key files
 
-- `src/harness/monitor/reduce.test.ts`
-- `src/harness/monitor/reduce-state.test.ts`
-
-Because `src/harness/monitor` depends on `src/contracts`, its public shapes are expected to align with shared contracts used elsewhere in the codebase.
-
-## Key concepts
-
-- `AgentEvent`
-  - A public interface for an event associated with an agent.
-
-- `AgentStatus`
-  - A public status representation used to describe an agent’s state.
-
-- `AgentUsage`
-  - A public interface for usage-related information attached to an agent.
-
-- `AgentRecord`
-  - A public interface representing a tracked agent entry or record.
-
-- `AgentsSnapshot`
-  - A point-in-time representation of multiple agents or their combined state.
-
-- `reduceAgents`
-  - A public function for reducing agent-related data into a normalized or aggregated representation.
-
-- `AgentDelta`
-  - A public interface describing a change between agent states or snapshots.
-
-- `diffAgents`
-  - A public function for computing an `AgentDelta` from agent data.
+| File | Purpose |
+|------|---------|
+| `src/harness/monitor/reduce.ts` | Core reduction logic |
+| `src/harness/monitor/reduce-state.ts` | State management for reduction |
+| `src/harness/monitor/reduce.test.ts` | Tests for reduction |
+| `src/harness/monitor/reduce-state.test.ts` | Tests for state management |
 
 ## Main flows
 
 ### Snapshot reduction
 
-A consumer such as `src/commands` or `src/harness/external` provides agent-related input to `reduceAgents`.
-
-Typical outcome:
-
-- The monitor module produces an `AgentsSnapshot`.
-- The consumer can then pass that snapshot to downstream logic.
+1. Consumer provides agent-related input to `reduceAgents`
+2. Monitor produces an `AgentsSnapshot`
+3. Consumer passes snapshot to downstream logic
 
 ### Change detection
 
-A consumer compares existing agent state or snapshots using `diffAgents`.
-
-Typical outcome:
-
-- The monitor module produces an `AgentDelta`.
-- The consumer can use the delta to determine what changed.
+1. Consumer compares existing agent state or snapshots using `diffAgents`
+2. Monitor produces an `AgentDelta`
+3. Consumer uses delta to determine what changed
 
 ### Shared contract alignment
 
 During either flow, the module relies on shared definitions from `src/contracts`. This keeps agent-related shapes compatible with other modules in the project.
 
----
+## Public API
 
-## Reference (from code graph)
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `AgentEvent` | interface | Event associated with an agent |
+| `AgentStatus` | type | Status representation for agent state |
+| `AgentUsage` | interface | Usage information for an agent |
+| `AgentRecord` | interface | Tracked agent entry or record |
+| `AgentsSnapshot` | interface | Point-in-time representation of agents |
+| `reduceAgents` | function | Reduces agent data into normalized form |
+| `AgentDelta` | interface | Change between agent states |
+| `diffAgents` | function | Computes an `AgentDelta` |
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+## Dependencies
 
-### Public API
+**Depends on:**
+- [src/contracts](src-contracts.md) — 1 import
 
-- `AgentEvent` (interface)
-- `AgentStatus`
-- `AgentUsage` (interface)
-- `AgentRecord` (interface)
-- `AgentsSnapshot` (interface)
-- `reduceAgents` (function)
-- `AgentDelta` (interface)
-- `diffAgents` (function)
-
-### Key files
-
-- `src/harness/monitor/reduce.ts` - imported by 7, imports 0
-- `src/harness/monitor/reduce-state.test.ts` - imported by 0, imports 3
-- `src/harness/monitor/reduce-state.ts` - imported by 1, imports 1
-- `src/harness/monitor/reduce.test.ts` - imported by 0, imports 1
-
-### Depends on
-
-- `src/contracts` - 1 import(s)
-
-### Depended on by
-
-- `src/commands` - 2 import(s)
-- `src/harness/external` - 2 import(s)
-
-### Graph signals
-
-- Files: 4
-- Cross-module imports: 1
+**Depended on by:**
+- [src/commands](src-commands.md) — 2 imports
+- [src/harness/external](src-harness-external.md) — 2 imports
 
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/contracts](src-contracts.md)
@@ -148,4 +102,5 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched to describe public data contracts, reduction/diff helpers, and consumer boundaries.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose enriched to describe public data contracts, reduction/diff helpers, and consumer boundaries.
+```

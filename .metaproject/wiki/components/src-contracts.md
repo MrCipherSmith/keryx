@@ -5,6 +5,14 @@ Type: component
 Status: draft
 Summary: "`src/contracts` groups 6 file(s). Depends on `src/security/detect`. Exposes 5 public symbol(s)."
 ---
+```markdown
+---
+Title: Module src/contracts
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`src/contracts` is a validation-contracts component that exposes five public symbols for schema validation. It depends on `src/security/detect` for security-related checks during validation."
+---
 # Module src/contracts
 
 ## Summary
@@ -13,94 +21,101 @@ Summary: "`src/contracts` groups 6 file(s). Depends on `src/security/detect`. Ex
 
 ## Overview
 
-The module owns the contract layer between application data, harness operations, and schema-driven validation. Its public surface describes what a validation result looks like and how callers ask the module to validate either a schema or a schema-like object. This keeps validation behavior consistent across modules that consume it, especially harness and flow components.
+The module owns the contract layer between application data, harness operations, and schema-driven validation. Its public surface describes what a validation result looks like and how callers ask the module to validate either a schema or a schema-like object.
 
-The module is mainly consumed by harness modules and `src/flow`, suggesting it provides reusable validation contracts for orchestration, tool execution, branching, and child-process related flows. Its audit and fixture files indicate that contract coverage is an important part of the module.
+This keeps validation behavior consistent across modules that consume it, especially harness and flow components.
+
+**Consumers:**
+- `src/harness/resume` (4 imports)
+- `src/harness/tool` (4 imports)
+- `src/harness/child` (3 imports)
+- `src/harness/branch` (2 imports)
+- `src/harness/flow` (2 imports)
+- `src/flow` (2 imports)
+
+## Public API
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `ValidateOptions` | interface | Options passed to validation operations |
+| `ValidationResult` | interface | Outcome of a validation operation |
+| `SchemaError` | interface | Error or violation during schema validation |
+| `validateAgainstSchema` | function | Validate data against a schema |
+| `validateAgainstSchemaObject` | function | Validate data against a schema-like object |
 
 ## How it works
 
-At the center is `validator.ts`, which exposes the primary validation entry points and supporting types. It is the most widely imported file in the module and coordinates the behavior behind `validateAgainstSchema` and `validateAgainstSchemaObject`.
+### Core validator
+
+`validator.ts` exposes the primary validation entry points and supporting types. It is the most widely imported file in the module and coordinates the behavior behind `validateAgainstSchema` and `validateAgainstSchemaObject`.
+
+### Type hierarchy
 
 The module separates validation inputs, outputs, and errors through public types:
 
-- `ValidateOptions` describes options passed to validation.
-- `ValidationResult` describes the outcome of a validation operation.
-- `SchemaError` describes an error or violation produced during schema validation.
+- `ValidateOptions` — caller-provided settings that control how validation is performed
+- `ValidationResult` — structured outcome returned after validation (success, failure, or metadata)
+- `SchemaError` — violation described when input does not match a schema
+
+### Security detection integration
 
 `src/security/detect` provides security detection imported by the validation layer. This allows validation to consult detection logic while checking schemas or objects, without requiring every consumer to wire that dependency directly.
 
-Supporting files extend the core contract behavior:
+### Supporting files
 
-- `resolver.ts` provides contract or schema resolution behavior consumed by validation-related callers.
-- `export-audit.ts` supports auditing exported contract behavior.
-- `keyword-coverage.ts` supports coverage checks for validation keywords.
-- Fixture tests capture representative validation behavior without adding production imports.
-
-## Key concepts
-
-- **Schema validation**: checking a schema or object against expected contract rules.
-- **Validation result**: the structured outcome returned after validation, representing success, failure, or validation metadata.
-- **Schema error**: a violation described by the contract layer when input does not match a schema.
-- **Validation options**: caller-provided settings that control how validation is performed.
-- **Security detection integration**: validation can use `src/security/detect` to include security-related checks in its results.
+| File | Purpose |
+|------|---------|
+| `resolver.ts` | Contract or schema resolution for validation-related callers |
+| `export-audit.ts` | Auditing exported contract behavior |
+| `keyword-coverage.ts` | Coverage checks for validation keywords |
+| `fixtures.test.ts` | Representative validation test cases |
 
 ## Main flows
 
-1. **Validate a schema**
-   A caller imports `validateAgainstSchema` from `src/contracts` and supplies a schema plus `ValidateOptions`. The validator in `validator.ts` performs the check and returns a `ValidationResult`. If schema rules fail, the result can include one or more `SchemaError` values.
+### Validate a schema
 
-2. **Validate a schema-like object**
-   A caller uses `validateAgainstSchemaObject` for object-shaped contract inputs. This flow is relevant to harness and flow modules that need to validate structured data against a contract. Security-related detection from `src/security/detect` may be incorporated during validation.
+1. Caller imports `validateAgainstSchema` from `src/contracts`
+2. Supplies a schema plus `ValidateOptions`
+3. `validator.ts` performs the check and returns a `ValidationResult`
+4. If schema rules fail, result includes one or more `SchemaError` values
 
-3. **Resolve and audit contracts**
-   Modules such as `src/harness/tool` or `src/flow` may import resolver or audit helpers to check exported contracts, keywords, or validation coverage. Fixture tests exercise representative validation cases, while `export-audit.ts` and `keyword-coverage.ts` help verify the module’s public contract surface.
+### Validate a schema-like object
 
----
+1. Caller uses `validateAgainstSchemaObject` for object-shaped contract inputs
+2. Relevant for harness and flow modules validating structured data
+3. Security detection from `src/security/detect` may be incorporated during validation
 
-## Reference (from code graph)
+### Resolve and audit contracts
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+1. Modules import resolver or audit helpers
+2. Check exported contracts, keywords, or validation coverage
+3. Fixture tests exercise representative validation cases
 
-### Public API
+## Key concepts
 
-- `SchemaError` (interface)
-- `ValidationResult` (interface)
-- `ValidateOptions` (interface)
-- `validateAgainstSchema` (function)
-- `validateAgainstSchemaObject` (function)
+- **Schema validation** — checking a schema or object against expected contract rules
+- **Validation result** — structured outcome representing success, failure, or validation metadata
+- **Schema error** — violation described by the contract layer when input does not match a schema
+- **Validation options** — caller-provided settings controlling validation behavior
+- **Security detection integration** — validation uses `src/security/detect` to include security-related checks
 
-### Key files
+## File inventory
 
-- `src/contracts/validator.ts` - imported by 43, imports 1
-- `src/contracts/agent-first-core.fixtures.test.ts` - imported by 0, imports 3
-- `src/contracts/export-audit.ts` - imported by 1, imports 2
-- `src/contracts/fixtures.test.ts` - imported by 0, imports 2
-- `src/contracts/keyword-coverage.ts` - imported by 2, imports 0
-- `src/contracts/resolver.ts` - imported by 1, imports 0
+| File | Imports received | Imports made |
+|------|-------------------|--------------|
+| `src/contracts/validator.ts` | 43 | 1 |
+| `src/contracts/export-audit.ts` | 1 | 2 |
+| `src/contracts/keyword-coverage.ts` | 2 | 0 |
+| `src/contracts/resolver.ts` | 1 | 0 |
+| `src/contracts/agent-first-core.fixtures.test.ts` | 0 | 3 |
+| `src/contracts/fixtures.test.ts` | 0 | 2 |
 
-### Depends on
+## Dependencies
 
-- `src/security/detect` - 2 import(s)
-
-### Depended on by
-
-- `src/harness/resume` - 4 import(s)
-- `src/harness/tool` - 4 import(s)
-- `src/harness/child` - 3 import(s)
-- `src/flow` - 2 import(s)
-- `src/harness/branch` - 2 import(s)
-- `src/harness/flow` - 2 import(s)
-
-### Graph signals
-
-- Files: 6
-- Cross-module imports: 2
+**Module depends on:**
+- `src/security/detect` — 2 cross-module imports (security detection during validation)
 
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/security/detect](src-security-detect.md)
@@ -113,4 +128,5 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+```

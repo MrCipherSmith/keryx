@@ -1,44 +1,86 @@
-# Module src/memory/embedding
-
-Version: 1.0.1
+---
+Title: Module src/memory/embedding
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:8d9c512afc9e5207796c909b9d3b976dfd24dcf7718ed3415198e4092a3a4b3e
+Summary: "Semantic embedding and reranking layer for the memory subsystem. Builds a content-hash-keyed vector cache from memory entries and reranks lexical search results using cosine similarity. Falls back to lexical ranking when the optional embedding runtime is unavailable."
+---
+# Module src/memory/embedding
 
-## Summary
-
-`src/memory/embedding` groups 3 file(s). Depends on `src/memory`, `src/capability`, `src/lib`. Exposes 10 public symbol(s).
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:11f6ddb4a58b4969c59bfd9d4600d392fb41236e9b015c68ec3691cf5507a5f5
 
 ## Overview
 
-`src/memory/embedding` owns the semantic layer of the memory subsystem: it builds and persists a content-hash-keyed vector cache derived from memory entries, and reranks lexical search results using cosine similarity against that cache. The module is deliberately a read-only consumer of the Markdown store — it never mutates entries, only reads them and writes a disposable derived index under `.metaproject/data/memory/embeddings/`. When the optional embedding runtime or its model asset is absent, the module degrades silently to lexical ranking so the memory service always returns a result.
+`src/memory/embedding` provides the semantic-search layer for the memory subsystem. It builds a derived vector cache from memory entries and uses cosine similarity to rerank lexical search results.
 
-## How it works
+The module reads memory entries but does not modify the Markdown store. Its disposable derived index is written under `.metaproject/data/memory/embeddings/`. If the optional embedding runtime or model asset is unavailable, callers can continue with lexical results.
 
-The module is organized in two cooperating layers. The adapter layer (`adapter.ts`) defines the pluggable vectorization contract: an `Embedder` function type and the `CapabilitySpec` that wires an optional runtime (`@xenova/transformers`, imported lazily via the capability seam) together with a verified model asset. Availability is declared false unless both the optional dependency resolved and the model asset passed sha256 verification; a failed `run()` propagates upward to the seam, which catches it and falls back to lexical. A deterministic offline embedder (`deterministicEmbedder`) — a bag-of-token FNV-1a hash normalized to L2 — is provided for tests and as an explicit fallback, giving the reranking contract provable correctness without any download.
+The module exposes 10 public symbols and depends on `src/memory`, `src/capability`, and `src/lib`.
 
-The index layer (`index.ts`) owns the derived cache: it reads `MemoryEntry` objects from the store, converts each to a stable text representation (`entryText`), computes a 16-character SHA-256 content hash, calls the `Embedder`, and writes two files — `index.meta.json` and `vectors.jsonl` — to the embeddings directory. Entries are sorted by path before writing so the on-disk representation is byte-stable across rebuilds for the same corpus and model. Loading the index back is a simple parse of those two files, returning `null` on any error so callers can safely embed on the fly. The `rerankByEmbedding` function ties the two layers together: given a lexical candidate pool, a query, and an optional loaded index, it embeds the query, serves cached vectors for entries whose content hash is current, re-embeds stale or missing entries on the fly, and returns the pool sorted by cosine similarity with the original lexical order as a stable tiebreaker.
+## Architecture
+
+The module has two cooperating layers:
+
+### Adapter layer (`adapter.ts`)
+
+The adapter defines the pluggable vectorization contract:
+
+- **`Embedder`** is an asynchronous function with the shape `(texts: string[]) => Promise<Float32Array[]>`.
+- **`CapabilitySpec`** connects an optional runtime (`@xenova/transformers`, loaded lazily) to a verified model asset.
+- The runtime is considered available only when the optional dependency resolves and the model asset passes SHA-256 verification.
+- If `run()` fails, the capability seam handles the failure and falls back to lexical search.
+
+### Index layer (`index.ts`)
+
+The index layer manages the derived cache:
+
+- Reads `MemoryEntry` objects from the store.
+- Converts each entry to a stable text representation with `entryText`.
+- Computes a 16-character SHA-256 content hash for that text.
+- Calls the embedder and writes `index.meta.json` and `vectors.jsonl` to the embeddings directory.
+- Sorts entries by path before writing, making rebuild output byte-stable.
 
 ## Key concepts
 
-- **Embedder** — a plain async function `(texts: string[]) => Promise<Float32Array[]>` that the index and rerank functions consume; decoupled from any specific runtime so tests can inject a deterministic implementation.
-- **EmbeddingIndex** — the in-memory representation of the derived cache: an `EmbeddingIndexMeta` header (model, dims, timestamp, entry count) plus a `byPath` map from entry relative path to `{ contentHash, vector }`.
-- **Content hash** — a 16-character SHA-256 prefix of the stable text representation of an entry (title + summary + tags + details). A changed hash signals that a cached vector is stale and must be re-embedded on the fly; an unchanged hash means the cached vector can be reused without hitting the runtime.
-- **CapabilitySpec / ceiling** — the adapter exposes the embedding runtime to the rest of the system through `src/capability`'s seam. A `"ceiling"` capability entry in `metaproject.json` disables the runtime globally; the spec's `isAvailable()` returns false and no import warning is emitted.
-- **Deterministic embedder** — a dependency-free FNV-1a-based bag-of-token vectorizer used offline; its cosine similarity is equivalent to TF cosine, making it suitable for correctness tests and as a documented fallback.
+| Concept | Description |
+|---------|-------------|
+| **Embedder** | An asynchronous function that vectorizes a batch of text. Keeping it independent of a specific runtime allows tests to inject a deterministic implementation. |
+| **Embedding index** | The in-memory representation of the cache: an `EmbeddingIndexMeta` header containing model, dimensions, timestamp, and entry count, plus a `byPath` map of entry paths to content hashes and vectors. |
+| **Content hash** | A 16-character SHA-256 prefix derived from an entry’s stable text representation (title, summary, tags, and details). A changed hash marks a cached vector as stale; an unchanged hash allows it to be reused. |
+| **Capability spec** | Exposes the optional embedding runtime through the `src/capability` seam. A `"ceiling"` capability entry in `metaproject.json` can disable the runtime globally. |
+| **Deterministic embedder** | A dependency-free FNV-1a bag-of-token vectorizer. Its cosine similarity is equivalent to TF cosine and is suitable for tests and as a documented fallback. |
 
 ## Main flows
 
-**Build index flow.** `buildEmbeddingIndex(cwd, entries, embedder, model, now)` sorts entries by path, maps each to `entryText`, calls the embedder for all texts in one batch, assembles `EmbeddingVectorRecord` objects (path + content hash + vector as a plain number array), writes `index.meta.json` and `vectors.jsonl` to the embeddings directory, then converts records to the in-memory `EmbeddingIndex` via `toIndex`. The Markdown store is never touched.
+### Build an index
 
-**Rerank flow.** `rerankByEmbedding(query, pool, embedder, index)` first embeds the query, then iterates the lexical candidate pool: for each entry it checks whether a cached vector exists with a matching content hash; mismatches go into a `needsEmbed` batch that is re-embedded in one additional embedder call. All vectors are then used to compute cosine similarity against the query vector, and the pool is stably sorted — cosine descending, original order as tiebreaker.
+1. `buildEmbeddingIndex(cwd, entries, embedder, model, now)` receives the entries and embedder.
+2. Entries are sorted by path and converted to text with `entryText`.
+3. The embedder vectorizes the texts in one batch.
+4. The module assembles `EmbeddingVectorRecord` objects containing each path, content hash, and vector as a plain number array.
+5. It writes `index.meta.json` and `vectors.jsonl` to the embeddings directory.
+6. The records are converted to an in-memory `EmbeddingIndex` with `toIndex`.
 
-**Degraded / lexical-only flow.** When the capability seam resolves the adapter to `null` (runtime absent or model asset unverified), callers in `src/memory` skip `rerankByEmbedding` entirely. `loadEmbeddingIndex` returns `null` on a missing or corrupt cache, and `buildEmbeddingIndex` may still be called with the deterministic embedder as a stub so lexical results remain the output without error.
+The Markdown store is not modified during this flow.
+
+### Rerank results
+
+1. `rerankByEmbedding(query, pool, embedder, index)` embeds the query.
+2. For each entry in the lexical candidate pool, it reuses a cached vector when the content hash matches.
+3. Entries with missing or stale cached vectors are collected and re-embedded in one batch.
+4. The module computes cosine similarity between the query vector and each candidate vector.
+5. Results are sorted by descending similarity, preserving their original order as a tiebreaker.
+
+### Lexical-only fallback
+
+When the capability seam resolves the adapter to `null`, callers in `src/memory` skip embedding reranking. `loadEmbeddingIndex` also returns `null` when the cache is missing or corrupt. In these cases, lexical results remain available without requiring the embedding runtime.
+
+`buildEmbeddingIndex` can also be called with the deterministic embedder.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=338e1bd93f7c8e2cc86db6005701478e5320973eb5755bd568e4230ca303cfda -->
+<!-- keryx:reference:begin v=1 hash=38a2c340a5129542417b892655ba819d440a0a95c2fd513d1bb3cd87d1f3c294 -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -65,14 +107,18 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Depends on
 
-- `src/memory` - 5 import(s)
-- `src/capability` - 3 import(s)
-- `src/lib` - 2 import(s)
+- `src/capability` - 1 import(s)
+- `src/lib` - 1 import(s)
+- `src/memory` - 1 import(s)
 
 ### Depended on by
 
 - `src/memory` - 2 import(s)
 - `src/wiki` - 2 import(s)
+
+### Dependency basis
+
+- Production imports only: 7 import(s) from test file(s) (e.g. `src/memory/embedding/embedding.test.ts`) excluded from the two sections above in both directions.
 
 ### Entry points
 
@@ -81,13 +127,10 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 ### Graph signals
 
 - Files: 3
-- Cross-module imports: 10
+- Cross-module imports: 3
 <!-- keryx:reference:end -->
 
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/memory](src-memory.md)
@@ -97,6 +140,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference refreshed from the code graph (5886c474).
-- 1.0.0 - Prose enriched by gdwiki enrich workflow: Overview, How it works, Key concepts, Main flows filled from key files. Status set to accepted.
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
+- **1.0.1** — Reference refreshed from the code graph (5886c474)
+- **1.0.0** — Prose enriched: overview, architecture, key concepts, and main flows documented. Status set to accepted.
+- **0.1.0** — Generated by `keryx wiki collect`

@@ -9,106 +9,98 @@ Summary: "`src/harness/session` groups 3 file(s). Depends on `src/contracts`. Ex
 
 ## Summary
 
-`src/harness/session` groups 3 file(s). Depends on `src/contracts`. Exposes 13 public symbol(s).
-
-This module defines the core data shapes and helpers used to represent, append to, resume, and migrate harness sessions.
+The `src/harness/session` module provides the core data shapes, interfaces, and runtime helpers for representing, building, resuming, and migrating harness sessions. It depends on `src/contracts` and exposes 13 public symbols.
 
 ## Overview
 
-`src/harness/session` owns the session-oriented abstractions used by the harness layer. Its purpose is to provide a common model for session state, entries, provenance, artifact references, and manifest data so that dependent modules can operate on consistent session information.
+`src/harness/session` owns the session-oriented abstractions used by the harness layer. It provides:
 
-The module also exposes runtime helpers for working with append-only session behavior, including creating or resuming sessions and migrating session data across schema changes. It depends on `src/contracts` for shared contract definitions and is consumed by several harness modules that need session-aware behavior.
+- **Data contracts** — Type and interface definitions for session state, entries, manifests, seeds, dependencies, artifact references, and append options.
+- **Runtime helpers** — Operations for appending to sessions, resuming from existing session data, and migrating session data across schema changes.
 
-## How it works
+These abstractions ensure consistent session information across all dependent harness modules.
 
-The module is organized around two main layers:
+## Structure
 
-- **Session types**: type and interface definitions describe the shape of session data.
-- **Session operations**: exported helpers support session lifecycle actions such as resuming and migrating session data.
+The module is organized around two layers:
 
-The public API is intentionally split between data contracts and runtime behavior. Interfaces define the expected structure of sessions, entries, manifests, seeds, dependencies, and append options. Concrete exports such as `AppendOnlySession`, `resumeSession`, and `migrateSession` provide operational support on top of those shapes.
+| Layer | Purpose |
+|-------|---------|
+| **Session types** | Type and interface definitions that describe the shape of session data. |
+| **Session operations** | Exported helpers that support session lifecycle actions such as resuming and migrating. |
 
-Internally, the module uses a small number of files. `types.ts` provides the main public definitions and is widely imported. `session.ts` provides the main session implementation surface and depends on one other module, while `session.test.ts` validates the module behavior.
+**File layout:**
+
+| File | Role |
+|------|------|
+| `src/harness/session/types.ts` | Main public type definitions; widely imported (25 consumers). |
+| `src/harness/session/session.ts` | Session implementation surface; imports `types.ts`. |
+| `src/harness/session/session.test.ts` | Unit tests for session behavior. |
 
 ## Key concepts
 
-- **Session**: a structured record of harness activity, represented through manifests, entries, and related data.
-- **SessionEntry**: an individual record within a session.
-- **SessionEntryPayload**: the payload data carried by a session entry.
-- **SessionEntryCausal**: a causal view of session entry data, linking related session records.
-- **SessionManifest**: metadata describing a session as a whole.
-- **SessionSeed**: initial data used to create or bootstrap a session.
-- **SessionDeps**: dependencies required to construct or operate on a session.
-- **AppendOptions**: options that control how entries are appended to a session.
-- **ArtifactRef**: a reference to an artifact associated with session data.
-- **Provenance**: metadata describing the origin or source of session-related data.
-- **SchemaMigrationError**: an error signal used when session schema migration cannot be completed.
+- **Session** — A structured record of harness activity, expressed through manifests, entries, and related data.
+- **SessionEntry** — An individual record within a session.
+- **SessionEntryPayload** — The payload data carried by a session entry.
+- **SessionEntryCausal** — A causal view of session entry data, linking related session records.
+- **SessionManifest** — Metadata describing a session as a whole.
+- **SessionSeed** — Initial data used to create or bootstrap a session.
+- **SessionDeps** — Dependencies required to construct or operate on a session.
+- **AppendOptions** — Options controlling how entries are appended to a session.
+- **ArtifactRef** — A reference to an artifact associated with session data.
+- **Provenance** — Metadata describing the origin or source of session-related data.
+- **SchemaMigrationError** — An error thrown when session schema migration fails.
 
 ## Main flows
 
 ### Session setup
 
-Callers typically construct or resume a session using a seed, dependency set, and manifest-related data. These values allow the session to be initialized in a consistent state before entries are added.
+Construct or resume a session using a `SessionSeed`, `SessionDeps`, and manifest-related data. These values initialize the session in a consistent state before entries are added.
 
 ### Entry append
 
-When session activity occurs, an entry or entry payload is appended through the session surface. `AppendOptions` can shape how the append is performed, while provenance and artifact reference concepts allow the resulting session data to carry contextual information.
+When harness activity occurs, append an entry or entry payload through the session surface. Use `AppendOptions` to shape the append behavior. Provenance and artifact reference concepts allow the resulting session data to carry contextual information.
 
 ### Resume and migration
 
-`resumeSession` provides a helper for resuming from existing session data. `migrateSession` supports transformation of session data across schema changes, and `SchemaMigrationError` signals failure when a migration cannot be performed safely.
+- `resumeSession` — Resumes a session from existing session data.
+- `migrateSession` — Transforms session data across schema changes.
+- `SchemaMigrationError` — Signals failure when migration cannot be performed safely.
 
----
+## Public API
 
-## Reference (from code graph)
+| Symbol | Type |
+|--------|------|
+| `ArtifactRef` | interface |
+| `Provenance` | interface |
+| `SessionEntryPayload` | type |
+| `SessionEntryCausal` | interface |
+| `SessionEntry` | interface |
+| `SessionManifest` | interface |
+| `SessionSeed` | interface |
+| `SessionDeps` | interface |
+| `AppendOptions` | interface |
+| `AppendOnlySession` | class |
+| `resumeSession` | function |
+| `SchemaMigrationError` | class |
+| `migrateSession` | function |
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+## Dependencies
 
-### Public API
+**Depends on:**
 
-- `ArtifactRef` (interface)
-- `Provenance` (interface)
-- `SessionEntryPayload`
-- `SessionEntryCausal` (interface)
-- `SessionEntry` (interface)
-- `SessionManifest` (interface)
-- `SessionSeed` (interface)
-- `SessionDeps` (interface)
-- `AppendOptions` (interface)
-- `AppendOnlySession` (class)
-- `resumeSession` (function)
-- `SchemaMigrationError` (class)
-- `migrateSession` (function)
+- `src/contracts`
 
-### Key files
+**Depended on by:**
 
-- `src/harness/session/types.ts` - imported by 25, imports 0
-- `src/harness/session/session.ts` - imported by 14, imports 1
-- `src/harness/session/session.test.ts` - imported by 0, imports 2
-
-### Depends on
-
-- `src/contracts` - 1 import(s)
-
-### Depended on by
-
-- `src/harness/child` - 9 import(s)
-- `src/harness/resume` - 9 import(s)
-- `src/harness/branch` - 6 import(s)
-- `src/harness/extension` - 3 import(s)
-- `src/harness` - 3 import(s)
-- `src/harness/mutation` - 2 import(s)
-
-### Graph signals
-
-- Files: 3
-- Cross-module imports: 1
+- `src/harness/child` (9 imports)
+- `src/harness/resume` (9 imports)
+- `src/harness/branch` (6 imports)
+- `src/harness/extension` (3 imports)
+- `src/harness` (3 imports)
+- `src/harness/mutation` (2 imports)
 
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/contracts](src-contracts.md)
@@ -121,4 +113,4 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Initial deterministic skeleton; prose sections later enriched.
+- 0.1.0 — Initial release. Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z.

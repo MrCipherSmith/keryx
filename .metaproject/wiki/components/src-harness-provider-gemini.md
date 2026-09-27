@@ -5,46 +5,58 @@ Type: component
 Status: draft
 Summary: "`src/harness/provider/gemini` groups 2 file(s). Depends on `src/harness/provider`, `src/harness/mutation`, `src/harness/provider/anthropic`. Exposes 5 public symbol(s)."
 ---
+
 # Module src/harness/provider/gemini
 
 ## Summary
 
-`src/harness/provider/gemini` groups 2 file(s). Depends on `src/harness/provider`, `src/harness/mutation`, `src/harness/provider/anthropic`. Exposes 5 public symbol(s).
+Provides the Gemini-facing integration surface for the harness provider layer. Groups 2 files, depends on `src/harness/provider`, `src/harness/mutation`, and `src/harness/provider/anthropic`, and exposes 5 public symbols.
 
 ## Overview
 
 `src/harness/provider/gemini` owns the Gemini-facing integration surface for the harness provider layer. It exposes the public contracts and implementation needed for other modules to recognize, construct, and interact with a Gemini provider.
 
-The module is positioned between provider-generic harness behavior and Gemini-specific provider details. It depends on `src/harness/provider` for the broader provider contract, `src/harness/mutation` for mutation-related concepts, and `src/harness/provider/anthropic` for coordination or shared integration behavior with the adjacent Anthropic provider implementation.
+The module sits between provider-generic harness behavior and Gemini-specific provider details. It depends on:
 
-## How it works
+- `src/harness/provider` for the broader provider contract
+- `src/harness/mutation` for mutation-related concepts
+- `src/harness/provider/anthropic` for coordination with the adjacent Anthropic provider implementation
 
-The module is organized around a small public surface: interfaces describe provider capabilities, dependencies, and model metadata, while `GeminiProvider` provides the concrete provider implementation.
-
-- **Provider contract surface**: `GeminiProviderDeps`, `GeminiModelDescriptor`, `GeminiProviderDescriptorDocument`, and `GeminiCapabilityGrant` define the shapes expected by the harness when working with Gemini providers.
-- **Concrete provider implementation**: `GeminiProvider` is the class intended to be consumed by `src/harness/provider` or related integration points.
-- **Shared harness integration**: The dependency on `src/harness/mutation` suggests that mutation-related interactions are represented through shared harness mutation abstractions rather than provider-local logic.
-- **Sibling provider relationship**: The dependency on `src/harness/provider/anthropic` indicates that the Gemini provider module is treated as part of the same provider family as Anthropic and may share integration patterns or descriptors with it.
-
-The test file `gemini-provider.test.ts` exercises this module locally and is not itself imported elsewhere in the current graph.
-
-## Key concepts
+## Public API
 
 | Symbol | Kind | Purpose |
 | --- | --- | --- |
 | `GeminiCapabilityGrant` | interface | Describes a capability grant associated with Gemini provider usage. |
 | `GeminiProviderDeps` | interface | Declares dependencies required to construct or operate `GeminiProvider`. |
 | `GeminiModelDescriptor` | interface | Describes a Gemini model at a level visible to the harness. |
-| `GeminiProviderDescriptorDocument` | interface | Represents a descriptor document used to describe Gemini provider capabilities or models. |
+| `GeminiProviderDescriptorDocument` | interface | Represents a descriptor document for Gemini provider capabilities or models. |
 | `GeminiProvider` | class | Concrete provider implementation for Gemini within the harness provider layer. |
 
-The public API is intentionally narrow: callers interact with this module through these exported symbols, while implementation details remain in the provider implementation and tests.
+The public API is intentionally narrow. Callers interact with this module through these exported symbols, while implementation details remain internal.
+
+## How it works
+
+### Provider contract surface
+
+`GeminiProviderDeps`, `GeminiModelDescriptor`, `GeminiProviderDescriptorDocument`, and `GeminiCapabilityGrant` define the shapes expected by the harness when working with Gemini providers.
+
+### Concrete provider implementation
+
+`GeminiProvider` is the class intended to be consumed by `src/harness/provider` or related integration points.
+
+### Mutation-aware behavior
+
+The dependency on `src/harness/mutation` indicates that mutation-related interactions are routed through shared harness mutation abstractions rather than provider-local logic.
+
+### Sibling provider relationship
+
+The dependency on `src/harness/provider/anthropic` shows that the Gemini provider is treated as part of the same provider family as Anthropic, sharing integration patterns or descriptors with it.
 
 ## Main flows
 
 1. **Provider integration**
    - `src/harness/provider` imports from this module.
-   - The provider layer accesses the public Gemini provider types and `GeminiProvider` through this module’s interface.
+   - The provider layer accesses the public Gemini provider types and `GeminiProvider` through this module's interface.
 
 2. **Model and capability description**
    - Model metadata is expressed through `GeminiModelDescriptor`.
@@ -52,38 +64,31 @@ The public API is intentionally narrow: callers interact with this module throug
    - Allowed or relevant capabilities are represented by `GeminiCapabilityGrant`.
 
 3. **Mutation-aware provider behavior**
-   - The module depends on `src/harness/mutation`, which suggests mutation-related behavior is routed through shared harness mutation concepts.
-   - Provider capability grants can be used to express what mutation-related capabilities a Gemini provider is allowed to participate in.
+   - The module depends on `src/harness/mutation`, which routes mutation-related behavior through shared harness mutation concepts.
+   - Provider capability grants can express what mutation-related capabilities a Gemini provider is allowed to participate in.
+
+## Key files
+
+| File | Description |
+| --- | --- |
+| `src/harness/provider/gemini/gemini-provider.ts` | Main provider implementation. Imported by 2 modules, imports 5 modules. |
+| `src/harness/provider/gemini/gemini-provider.test.ts` | Local unit tests. Imported by 0 modules, imports 3 modules. |
+
+## Dependencies
+
+- `src/harness/provider` — 5 imports
+- `src/harness/mutation` — 1 import
+- `src/harness/provider/anthropic` — 1 import
+
+## Dependents
+
+- `src/harness/provider` — 1 import
 
 ---
 
-## Reference (from code graph)
+## Reference
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
-
-### Public API
-
-- `GeminiCapabilityGrant` (interface)
-- `GeminiProviderDeps` (interface)
-- `GeminiModelDescriptor` (interface)
-- `GeminiProviderDescriptorDocument` (interface)
-- `GeminiProvider` (class)
-
-### Key files
-
-- `src/harness/provider/gemini/gemini-provider.ts` - imported by 2, imports 5
-- `src/harness/provider/gemini/gemini-provider.test.ts` - imported by 0, imports 3
-
-### Depends on
-
-- `src/harness/provider` - 5 import(s)
-- `src/harness/mutation` - 1 import(s)
-- `src/harness/provider/anthropic` - 1 import(s)
-
-### Depended on by
-
-- `src/harness/provider` - 1 import(s)
+*Graph data extracted by `keryx wiki collect`; regenerated by `--force`.*
 
 ### Graph signals
 
@@ -92,9 +97,6 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
-
 - [Wiki Index](../index.md)
 - [Module src/harness/provider](src-harness-provider.md)
 - [Module src/harness/mutation](src-harness-mutation.md)
@@ -102,4 +104,4 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.

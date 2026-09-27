@@ -7,6 +7,16 @@ VerifiedAt: 7d38dba02fad6f8f81d8f244f76b08d0b2f59682
 VerifiedScope: sha256:a76be4d64e521e3aad00ce7ab4c21ec463c8fac6b32040f634963ac0b56c16db
 Summary: `src/health/metrics` groups 8 file(s). Depends on `src/health`, `fixtures/churn-complexity`, `src/health/sources`. Exposes 3 public symbol(s).
 ---
+```markdown
+---
+Title: Module src/health/metrics
+Version: 1.0.0
+Type: component
+Status: accepted
+VerifiedAt: 7d38dba02fad6f8f81d8f244f76b08d0b2f59682
+VerifiedScope: sha256:a76be4d64e521e3aad00ce7ab4c21ec463c8fac6b32040f634963ac0b56c16db
+Summary: `src/health/metrics` groups 8 file(s). Depends on `src/health`, `fixtures/churn-complexity`, `src/health/sources`. Exposes 3 public symbol(s).
+---
 
 # Module src/health/metrics
 
@@ -16,13 +26,21 @@ Summary: `src/health/metrics` groups 8 file(s). Depends on `src/health`, `fixtur
 
 The module is organized around three orthogonal concerns that compose into a single enriched signal.
 
-**`complexity.ts`** — the lowest layer: a self-contained, token-based cyclomatic complexity approximator for TypeScript/JavaScript. It strips comments and string literals, locates function bodies via brace matching (handling arrow functions, generics, and return-type annotations), then counts decision points per function while masking nested bodies so inner functions are measured in isolation. It exposes a `FileComplexity` shape (`functions`, `max`) consumed by the layers above.
+### `complexity.ts`
 
-**`churn.ts`** — wraps `git log --numstat` to accumulate added-plus-deleted line counts per source file over a configurable day window. It returns a `Map<string, number>` keyed by relative file path, falling back gracefully to an empty map when git is absent or the command fails.
+The lowest layer: a self-contained, token-based cyclomatic complexity approximator for TypeScript/JavaScript. It strips comments and string literals, locates function bodies via brace matching (handling arrow functions, generics, and return-type annotations), then counts decision points per function while masking nested bodies so inner functions are measured in isolation. It exposes a `FileComplexity` shape (`functions`, `max`) consumed by the layers above.
 
-**`hotspot.ts`** — sits atop both: it combines a churn map and a `SourceFileAnalysis` map (produced by `src/health/source-analysis`) into a ranked `FileHotspot[]`. The score for each file is `churn × complexity`; only files that are both frequently changed and complex rank high, matching the CodeScene behavioral-code-analysis model. The sort is score-descending then path-ascending for reproducibility.
+### `churn.ts`
 
-**`complexity-findings.ts`** — bridges metrics into the health finding system. It calls `analyzeSourceFiles` (from `src/health`) to obtain per-function complexity arrays, then emits one P2 `Finding` per file where at least one function exceeds the configured `complexityThreshold`. The finding includes the count of over-threshold functions, the maximum complexity seen, and a suggested refactoring action.
+Wraps `git log --numstat` to accumulate added-plus-deleted line counts per source file over a configurable day window. Returns a `Map<string, number>` keyed by relative file path, falling back gracefully to an empty map when git is absent or the command fails.
+
+### `hotspot.ts`
+
+Sits atop both: combines a churn map and a `SourceFileAnalysis` map (produced by `src/health/source-analysis`) into a ranked `FileHotspot[]`. The score for each file is `churn × complexity`; only files that are both frequently changed and complex rank high, matching the CodeScene behavioral-code-analysis model. The sort is score-descending then path-ascending for reproducibility.
+
+### `complexity-findings.ts`
+
+Bridges metrics into the health finding system. Calls `analyzeSourceFiles` (from `src/health`) to obtain per-function complexity arrays, then emits one P2 `Finding` per file where at least one function exceeds the configured `complexityThreshold`. The finding includes the count of over-threshold functions, the maximum complexity seen, and a suggested refactoring action.
 
 ## Key concepts
 
@@ -35,11 +53,28 @@ The module is organized around three orthogonal concerns that compose into a sin
 
 ## Main flows
 
-**Hotspot ranking flow:** the `src/health` coordinator calls `getChurn(cwd, windowDays)` to obtain the churn map, then calls `analyzeSourceFiles` to obtain the `SourceFileAnalysis` map, then passes both to `rankHotspots(files, churn, sourceAnalysis)`. Inside `rankHotspots`, each file is scored via `hotspotScore(churn, complexity)` where complexity is the sum of all per-function values from `fileComplexity(analysis)`. The result is a sorted `FileHotspot[]` ready for health scoring and reporting.
+### Hotspot ranking flow
 
-**Complexity findings flow:** `getComplexityFindings(cwd, sourceFiles, config, sourceAnalysis?)` optionally accepts a pre-computed `SourceFileAnalysis`; if absent, it runs `analyzeSourceFiles` itself. For each file it reads the per-function complexity array, finds the maximum and the count of functions exceeding `config.metrics.complexityThreshold`, and emits a P2 `Finding` via `makeFinding` for any file with at least one violation. These findings flow back to the parent health module for gate evaluation.
+1. The `src/health` coordinator calls `getChurn(cwd, windowDays)` to obtain the churn map.
+2. Calls `analyzeSourceFiles` to obtain the `SourceFileAnalysis` map.
+3. Passes both to `rankHotspots(files, churn, sourceAnalysis)`.
+4. Inside `rankHotspots`, each file is scored via `hotspotScore(churn, complexity)` where complexity is the sum of all per-function values from `fileComplexity(analysis)`.
+5. Returns a sorted `FileHotspot[]` ready for health scoring and reporting.
 
-**Complexity computation flow (internal):** `computeComplexity(source)` first runs `stripStringsAndComments` to neutralize string literals and comments, then `extractFunctionBodyRanges` to locate every function body via brace matching. For each body it calls `maskNestedFunctionBodies` to blank out inner functions, then `countDecisions` on the cleaned slice to produce a per-function complexity value starting at 1 (the function itself always has at least one path).
+### Complexity findings flow
+
+1. `getComplexityFindings(cwd, sourceFiles, config, sourceAnalysis?)` optionally accepts a pre-computed `SourceFileAnalysis`; if absent, it runs `analyzeSourceFiles` itself.
+2. For each file, reads the per-function complexity array.
+3. Finds the maximum and the count of functions exceeding `config.metrics.complexityThreshold`.
+4. Emits a P2 `Finding` via `makeFinding` for any file with at least one violation.
+5. These findings flow back to the parent health module for gate evaluation.
+
+### Complexity computation flow (internal)
+
+1. `computeComplexity(source)` first runs `stripStringsAndComments` to neutralize string literals and comments.
+2. Runs `extractFunctionBodyRanges` to locate every function body via brace matching.
+3. For each body, calls `maskNestedFunctionBodies` to blank out inner functions.
+4. Calls `countDecisions` on the cleaned slice to produce a per-function complexity value starting at 1 (the function itself always has at least one path).
 
 ## Code Graph
 
@@ -51,12 +86,14 @@ The module is organized around three orthogonal concerns that compose into a sin
 
 ### Key files
 
-- `src/health/metrics/hotspot.test.ts` — imported by 0, imports 9
-- `src/health/metrics/complexity-findings.ts` — imported by 2, imports 2
-- `src/health/metrics/hotspot.ts` — imported by 4, imports 0
-- `src/health/metrics/churn.ts` — imported by 2, imports 1
-- `src/health/metrics/complexity-findings.test.ts` — imported by 0, imports 3
-- `src/health/metrics/complexity.ts` — imported by 2, imports 0
+| File | Imported by | Imports |
+|------|-------------|---------|
+| `src/health/metrics/hotspot.test.ts` | 0 | 9 |
+| `src/health/metrics/complexity-findings.ts` | 2 | 2 |
+| `src/health/metrics/hotspot.ts` | 4 | 0 |
+| `src/health/metrics/churn.ts` | 2 | 1 |
+| `src/health/metrics/complexity-findings.test.ts` | 0 | 3 |
+| `src/health/metrics/complexity.ts` | 2 | 0 |
 
 ### Dependencies (incoming)
 
@@ -83,5 +120,6 @@ The module is organized around three orthogonal concerns that compose into a sin
 
 ## Changelog
 
-- 1.0.0 — Prose enriched by gdwiki enrich workflow: Overview, How it works, Key concepts, Main flows filled from code reads of all four module core files.
-- 0.1.0 — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- **1.0.0** — Prose enriched by gdwiki enrich workflow: Overview, How it works, Key concepts, Main flows filled from code reads of all four module core files.
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+```

@@ -1,45 +1,52 @@
-# Module src
-
+---
+Title: Module src
 Version: 1.0.1
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
+Summary: Root module that serves as the CLI entry point, dispatching commands to submodules via a flat routing table.
+---
+# Module src
+
+VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df  
 VerifiedScope: sha256:e87ad671e43e8a318aed5dadbc4b0de89011f40434c844f4ce60766195ef99d9
 
 ## Summary
 
-`src` groups 2 file(s). Depends on `src/commands`, `root`. Exposes 1 public symbol(s).
+`src` is the source root for the CLI. It contains the entry point and its tests, and depends on `src/commands` for command handlers and on the root module. Its public API includes `main` and `CLI_ROUTES`.
 
 ## Overview
 
-`src` is the entire source root of keryx — a CLI-first metaproject workspace that installs a `.metaproject/` folder into any project and makes it navigable by AI agents. The root owns exactly two files: `cli.ts`, which is the binary entry point that parses `process.argv` and dispatches to one of ~20 top-level commands, and `cli.test.ts`, the smoke-test harness for the CLI itself. All substantive logic lives in subdirectories; `src` is the thin dispatch layer that holds the tool together.
+The root module provides a thin command-dispatch layer. The routing table is defined in `src/cli.ts`; command-specific behavior is delegated to handlers in `src/commands`.
 
-## How it works
+The code graph lists three files in this module:
 
-The architecture is a flat command-dispatch shell over a collection of independent module implementations. `src/cli.ts` exports a single `main()` function, which reads the first CLI argument, matches it against a hardcoded list of command names (e.g. `init`, `gdgraph`, `wiki`, `health`, `flow`, `security`, `mcp`), and delegates to the corresponding command handler imported from `src/commands/*`. Each handler is self-contained and owns its own module logic (e.g. `src/gdgraph/`, `src/wiki/`, `src/health/`, `src/security/`). When invoked as a binary (`#!/usr/bin/env bun`) the `import.meta.main` guard at the bottom of `cli.ts` calls `main()` and exits on unhandled error. There is no routing middleware or plugin system; the dispatch table lives directly in `cli.ts`.
+- `src/cli.ts` — CLI routing and entry point.
+- `src/cli.test.ts` — CLI tests.
+- `src/cli-reference-coverage.test.ts` — reference coverage tests.
+
+## Command dispatch
+
+The CLI routes commands by matching the command name against `CLI_ROUTES` and calling the corresponding handler. The handlers receive the remaining command-line arguments and own the details of parsing and executing their commands.
+
+This is a static routing table rather than a plugin or middleware system. The entry point and route definitions are in `src/cli.ts`; command implementations are organized under `src/commands`.
+
+When `src/cli.ts` runs as the program entry point, its `import.meta.main` guard invokes `main()`.
 
 ## Key concepts
 
-- **Metaproject** — the `.metaproject/` folder that `keryx init` scaffolds inside a target project. It is the persistent workspace artifact; keryx is the tool that manages it.
-- **Modules** — optional, toggleable capability groups (gdgraph, gdctx, gdwiki, gdskills, health, testing, memory, flow, security, mcp). Each module owns a `src/<module>/` subdirectory and is exposed to agents through a manifest in `.metaproject/modules/*.md`.
-- **Commands** — the CLI surface in `src/commands/`. Each file corresponds to one top-level `keryx <command>` subcommand and imports from the relevant module directory.
-- **`main()` function** — the single public symbol exported by this root module; it is the binary entry point invoked by Bun when the compiled `dist/cli.js` is executed.
+- **`main()`** — the CLI entry point and a public symbol of this module.
+- **`CLI_ROUTES`** — the public routing table used to associate CLI commands with handlers.
+- **Commands** — top-level CLI operations implemented by handlers in `src/commands`.
 
-## Main flows
+## Main flow
 
-**`keryx init`** — A user runs `keryx init` (optionally with `--yes` and module-toggle flags). `main()` matches `"init"` and calls `initCommand(args)` from `src/commands/init.ts`. The init command scaffolds the full `.metaproject/` tree: it writes module manifests, installs gdskills from the bundled catalog, creates the wiki index scaffold, writes health and security configs, and optionally installs agent hook files into `.claude/settings.json` or equivalent.
+1. The user invokes the CLI with a command and any arguments.
+2. The entry point uses `CLI_ROUTES` to select a handler.
+3. The handler processes the remaining arguments and delegates to the relevant implementation.
 
-**`keryx <module> <subcommand>`** — For any other command (e.g. `keryx gdgraph build`, `keryx wiki collect`, `keryx health run`), `main()` matches the first argument and delegates to the corresponding handler in `src/commands/`. The handler parses the remaining `args` slice and calls the appropriate function from the module's own subdirectory (e.g. `src/gdgraph/`, `src/wiki/`). Output is written to `.metaproject/data/<module>/` for later agent consumption.
-
-**`keryx serve-mcp`** — `main()` routes to `mcpCommand`, which starts an MCP server that exposes metaproject capabilities (graph queries, wiki reads, health status, memory search) as structured tool calls for connected agents, without requiring any CLI invocation.
-
----
-
-<!-- keryx:reference:begin v=1 hash=a2a413008d3cc0d5faca9227d3e96226b65352d921d361094b20016b6c4fce98 -->
 ## Reference (from code graph)
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
@@ -48,35 +55,35 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/cli.ts` - imported by 5, imports 34
-- `src/cli.test.ts` - imported by 0, imports 2
-- `src/cli-reference-coverage.test.ts` - imported by 0, imports 1
+| File | Imported by | Imports |
+|------|-------------|---------|
+| `src/cli.ts` | 5 | 34 |
+| `src/cli.test.ts` | 0 | 2 |
+| `src/cli-reference-coverage.test.ts` | 0 | 1 |
 
-### Depends on
+### Dependencies
 
-- `src/commands` - 34 import(s)
-- `root` - 1 import(s)
+- `src/commands` — 34 import(s)
+- `root` — 1 import(s)
 
-### Depended on by
+### Dependents
 
-- `src/commands` - 2 import(s)
-- `src/standard` - 1 import(s)
+- `src/commands` — 2 import(s)
+- `src/standard` — 1 import(s)
 
 ### Graph signals
 
 - Files: 3
 - Cross-module imports: 35
-<!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived — regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/commands](src-commands.md)
 
 ## Changelog
 
-- 1.0.1 - Reference refreshed from the code graph (5886c474).
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- **1.0.1** — Reference refreshed from the code graph (5886c474)
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

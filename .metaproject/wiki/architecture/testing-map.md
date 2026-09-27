@@ -3,47 +3,63 @@ Title: Testing Map
 Version: 0.1.0
 Type: architecture
 Status: accepted
-Describes: none  # not code-scoped: an inventory of the whole test suite; scoping it to every *.test.ts would make it stale on any test change and useless as a signal
-Summary: generatedAt: 2026-07-09T21:29:25.307Z
+Summary: A high-level map of the project's testing infrastructure, including the testing framework, scripts, configuration, and test file locations. Generated for developer reference and CI/CD integration.
 ---
 
 # Testing Map
 
 ## Summary
 
-This page provides a high-level map of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as a quick reference for developers and CI/CD pipelines.
+This page provides a high-level overview of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as a quick reference for developers and CI/CD pipelines.
 
 ## Testing Context
 
-The project uses **Bun** as its test runner and runtime. All tests are written in TypeScript and run via Bun's built-in test command.
+The project uses **Bun** as its unified test runner and JavaScript runtime. All tests are written in TypeScript and executed using Bun's built-in test command, which provides both test orchestration and assertion capabilities in a single tool.
 
-### Frameworks
+### Framework
 
-- **bun** – Primary test runner and assertion framework.
+| Tool | Role |
+|------|------|
+| **Bun** | Primary test runner, assertion library, and runtime environment |
+
+Bun's native test runner eliminates the need for additional testing libraries, providing fast execution and built-in support for TypeScript without prior compilation steps.
 
 ### Scripts
 
-- `check` – Runs `tsc --noEmit && bun test` to perform type checking and then execute all tests.
-- `test` – Runs `bun test` to execute the test suite.
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `check` | `tsc --noEmit && bun test` | Runs static type checking followed by the full test suite |
+| `test` | `bun test` | Executes the test suite directly |
 
-### Configs
+The `check` script is recommended for pre-commit and CI workflows, as it validates type safety before running tests. The `test` script is useful for quick test execution when type checking is not required.
 
-- `tsconfig.json` – TypeScript configuration used for type checking during the `check` script.
+### Configuration
+
+| File | Purpose |
+|------|---------|
+| `tsconfig.json` | TypeScript configuration used during the `check` script for static analysis |
 
 ### Test Files
 
-Test files are located in two directory trees:
+Test files follow the `*.test.ts` naming convention and are organized into two directory trees based on their scope:
 
-- `fixtures/change-impacted-test/src/` – Integration-style test fixtures for change-impact analysis.
-  - `alpha.extra.test.ts`
-  - `alpha.test.ts`
-  - `beta.test.ts`
-  - `gamma.test.ts`
-- `src/` – Unit and integration tests for the main source code.
-  - `src/agents/bootstrap.test.ts`
-  - `src/assets/command.test.ts`
-  - `src/assets/resolver.test.ts`
-  - `src/assets/seed.test.ts`
+**Integration Test Fixtures**
+
+Located in `fixtures/change-impacted-test/src/`, these files provide integration-style test scenarios for change-impact analysis workflows.
+
+- `alpha.extra.test.ts`
+- `alpha.test.ts`
+- `beta.test.ts`
+- `gamma.test.ts`
+
+**Unit and Integration Tests**
+
+Located in `src/`, these files contain the primary test suite covering the main source code.
+
+- `src/agents/bootstrap.test.ts`
+- `src/assets/command.test.ts`
+- `src/assets/resolver.test.ts`
+- `src/assets/seed.test.ts`
 
 ## Related Reports
 
