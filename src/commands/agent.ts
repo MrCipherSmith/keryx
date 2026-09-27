@@ -19,6 +19,7 @@ import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touche
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
+import { neutraliseHarnessEnvelope } from "../harness/child/quarantine";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
 import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
@@ -26,6 +27,12 @@ import { extractFilePathsFromToolInput } from "../harness/hooks/runtime";
 import type { HookFireResult } from "../harness/hooks/runtime";
 import type { PolicyOutcome } from "../harness/policy/types";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import {
+  parseSubmitResultInput,
+  SUBMIT_RESULT_TOOL_DEFINITION,
+  SUBMIT_RESULT_TOOL_NAME,
+  type SubmittedResult,
+} from "../harness/tool/builtin/submit-result-tool";
 import type { McpRuntime } from "../mcp-servers/runtime";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
@@ -39,7 +46,6 @@ import type {
   NormalizedRequest,
   NormalizedRequestOptions,
   NormalizedToolCall,
-  NormalizedToolDefinition,
   NormalizedUsage,
   ProviderPort,
   ProviderReplayItem,
@@ -704,79 +710,6 @@ export interface RunAgentTurnResult {
   submittedResult?: SubmittedResult;
   /** Flow 347 T7 (AC5): why the wrap-up round produced no valid result, when it ran and none was submitted. */
   submitResultError?: string;
-}
-
-/** Flow 347 T7 (AC5): name of the only tool offered in a subagent's budget wrap-up round. */
-export const SUBMIT_RESULT_TOOL_NAME = "submit_result";
-
-/** Flow 347 T7 (AC5): a validated `submit_result` input. */
-export interface SubmittedResult {
-  status: "partial";
-  summary: string;
-  /** The task's result payload, in whatever shape the task text asked for. */
-  result: string | Record<string, unknown> | unknown[];
-}
-
-/**
- * Flow 347 T7 (AC5): the `submit_result` tool definition. No provider in this
- * codebase exposes a forced tool choice (`NormalizedRequest` has no such
- * field), so the wrap-up round forces it the only portable way: this is the
- * ONLY tool in the request, the round is instructed to call it, and the input
- * is validated by {@link parseSubmitResultInput} rather than trusted.
- */
-export const SUBMIT_RESULT_TOOL_DEFINITION: NormalizedToolDefinition = {
-  name: SUBMIT_RESULT_TOOL_NAME,
-  description:
-    "Submit your result now. Your budget is exhausted and this is your final round: call this " +
-    "tool exactly once with status 'partial', a summary of what you did and found, and the " +
-    "result payload in the format your task asked for (a string, or a JSON object).",
-  inputSchema: {
-    type: "object",
-    properties: {
-      status: { type: "string", enum: ["partial"] },
-      summary: { type: "string" },
-      result: { type: ["string", "object", "array"] },
-    },
-    required: ["status", "summary", "result"],
-    additionalProperties: false,
-  },
-  risk: "read",
-};
-
-/**
- * Validate a raw `submit_result` input string against
- * {@link SUBMIT_RESULT_TOOL_DEFINITION}'s schema. Returns the result, or the
- * reason it was rejected.
- */
-export function parseSubmitResultInput(raw: string): { ok: true; value: SubmittedResult } | { ok: false; reason: string } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { ok: false, reason: "input is not valid JSON" };
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return { ok: false, reason: "input is not a JSON object" };
-  }
-  const input = parsed as Record<string, unknown>;
-  const extra = Object.keys(input).filter((key) => key !== "status" && key !== "summary" && key !== "result");
-  if (extra.length > 0) {
-    return { ok: false, reason: `unexpected field(s): ${extra.join(", ")}` };
-  }
-  if (input.status !== "partial") {
-    return { ok: false, reason: "status must be \"partial\"" };
-  }
-  if (typeof input.summary !== "string" || input.summary.trim().length === 0) {
-    return { ok: false, reason: "summary must be a non-empty string" };
-  }
-  const result = input.result;
-  if (typeof result !== "string" && (typeof result !== "object" || result === null)) {
-    return { ok: false, reason: "result must be a string, an object or an array" };
-  }
-  return {
-    ok: true,
-    value: { status: "partial", summary: input.summary, result: result as SubmittedResult["result"] },
-  };
 }
 
 /**
@@ -2443,7 +2376,12 @@ async function runAgentTurnCore(
    * this is a subagent turn at or past 80% of any applicable limit; `content`
    * unchanged otherwise.
    */
-  const withBudgetWarning = (content: string): string => {
+  const withBudgetWarning = (rawContent: string): string => {
+    // Review F-009: tool content (a file, a command's output, a child's
+    // summary) must not be able to forge the shell's control-nudge envelope.
+    // Every copy already in the content is defused here, so the only intact
+    // envelope a tool result can carry is the genuine line appended below.
+    const content = neutraliseHarnessEnvelope(rawContent);
     if (subagentBudget === undefined) return content;
     const limits: { used: number; limit: number; unit: "tool calls" | "rounds"; advisory?: boolean }[] = [];
     if (advisoryToolCalls !== undefined) {
@@ -2467,6 +2405,12 @@ async function runAgentTurnCore(
     finishReason: "budget" | "tool-call-budget" | "no-progress",
     stop: { used: number; limit: number; unit: "calls" | "rounds" } | undefined,
   ): Promise<RunAgentTurnResult> => {
+    // Review F-006: an interrupted turn gets no wrap-up request — it ends the
+    // way every other interruption does, not as a budget outcome.
+    if (isAborted()) {
+      system("\n[stopped] Model turn interrupted by user.\n");
+      return {};
+    }
     const why =
       finishReason === "no-progress"
         ? `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`
@@ -2476,6 +2420,10 @@ async function runAgentTurnCore(
     system(`\n[budget] Stopping tools: ${why}. One final round to submit a result…\n`);
     roundState.round += 1;
     const outcome = await finishWithSubmitResult(io, deps, history, parentRunId, why, signal);
+    if (outcome.aborted === true) {
+      system("\n[stopped] Model turn interrupted by user.\n");
+      return {};
+    }
     return {
       finishReason,
       ...(stop !== undefined ? { budgetStop: stop } : {}),
@@ -2939,29 +2887,29 @@ async function runAgentTurnCore(
         const actionable = currentPlan?.items.filter(
           (item) => item.status === "pending" || item.status === "in_progress",
         ) ?? [];
-        const shown = actionable.slice(0, 7).map((item) => {
-          const title = item.title.length > 120 ? `${item.title.slice(0, 119)}…` : item.title;
-          return `- ${item.id} [${item.status}]: ${title}`;
-        });
-        if (actionable.length > shown.length) {
-          shown.push(`- … ${actionable.length - shown.length} more actionable item(s)`);
+        if (planFollowThroughUsed) {
+          // After the (opt-in) follow-through round already ran once: the
+          // itemised list, so the operator sees exactly what is still open.
+          const shown = actionable.slice(0, 7).map((item) => {
+            const title = item.title.length > 120 ? `${item.title.slice(0, 119)}…` : item.title;
+            return `- ${item.id} [${item.status}]: ${title}`;
+          });
+          if (actionable.length > shown.length) {
+            shown.push(`- … ${actionable.length - shown.length} more actionable item(s)`);
+          }
+          system(`\n[plan] Actionable items remain after the single follow-through:\n${shown.join("\n")}\n`);
+        } else {
+          // Flow 347 AC1, review F-016: the default-off path is ONE line
+          // naming the open item ids — the plan is display-only here, so
+          // this is a notice, not a report.
+          const ids = actionable.slice(0, 7).map((item) => item.id);
+          if (actionable.length > ids.length) ids.push(`… ${actionable.length - ids.length} more`);
+          system(`\n[plan] Turn ending with open plan items (follow-through is off): ${ids.join(", ")}\n`);
         }
-        // Two distinct one-line notes for the operator: after the (opt-in)
-        // follow-through round already ran once, vs. the default-off path
-        // where the turn is ending on its very first actionable-plan check.
-        const label = planFollowThroughUsed
-          ? "Actionable items remain after the single follow-through"
-          : "Turn ending with actionable plan items remaining (follow-through is off)";
-        system(`\n[plan] ${label}:\n${shown.join("\n")}\n`);
       }
 
       return {}; // error, or a text-only finish → turn complete
     }
-
-    // Flow 347 T6 (AC8): reached only when `calls.length > 0` — this turn has
-    // now executed (or is about to execute) at least one tool call, so a
-    // later toolless round this same turn is not the reprompt's target shape.
-    turnExecutedToolCall = true;
 
     if (isAborted()) {
       system("\n[stopped] Model turn interrupted by user.\n");
@@ -3248,6 +3196,14 @@ async function runAgentTurnCore(
       }
 
       executedAny = true;
+      // Flow 347 T6 (AC8), review F-013: only a call that actually runs a
+      // registered tool counts — a refused call (untrusted-content gate,
+      // attempt guard) never reaches this line, and an unknown tool name
+      // executes nothing. Once one has run, a later toolless round this turn
+      // is a normal wrap-up reply, not the reprompt's target shape.
+      if (toolByName.has(call.name)) {
+        turnExecutedToolCall = true;
+      }
       // A call already dispatched (and settled) by the concurrent
       // `spawn_subagent` sub-batch above uses that precomputed result
       // instead of executing again — `runConcurrentSpawnBatch` guarantees
@@ -3513,6 +3469,160 @@ async function offerRoundLimitReset(
 }
 
 /**
+ * What one wrap-up provider round produced — see {@link streamWrapUpRound}.
+ */
+interface WrapUpRoundOutcome {
+  assistantText: string;
+  /** Tool calls the round emitted (both callers still receive them; the budget summary offers no tools). */
+  calls: PendingCall[];
+  /** The round's reasoning, ready to attach to its assistant message (`undefined` when there was none). */
+  reasoning: MessageReasoning | undefined;
+  /** Message of a `provider_error` event that ended the round (already shown to the operator). */
+  providerError?: string;
+  /** Message of an exception the stream threw (NOT shown — each caller words its own notice). */
+  thrownError?: string;
+  /** The turn was aborted while this round was streaming. */
+  aborted: boolean;
+}
+
+/**
+ * Stream ONE wrap-up request (flow 347 review F-010) — the shared consumer
+ * behind `finishWithBudgetSummary` and `finishWithSubmitResult`, so both
+ * capture and replay reasoning exactly as the round loop in
+ * `runAgentTurnCore` does (flow 268 T11/T17: `onReasoningDelta`,
+ * `onReasoning`, `onReasoningEnd`, and a durable {@link MessageReasoning}),
+ * forward `text_delta` through `io.write`, report usage, and collect tool
+ * calls. It does not touch `history`: the caller decides what the round's
+ * assistant message looks like. The main round loop keeps its own consumer —
+ * it pushes the assistant message while streaming (interrupted drafts are
+ * kept) and aborts the whole turn mid-stream, neither of which a wrap-up does.
+ */
+async function streamWrapUpRound(
+  io: AgentIO,
+  deps: AgentDeps,
+  request: NormalizedRequest,
+  signal: AbortSignal | undefined,
+  system: (text: string) => void,
+): Promise<WrapUpRoundOutcome> {
+  const now = deps.now ?? (() => new Date().toISOString());
+  let assistantText = "";
+  let reasoningText = "";
+  let reasoningFlushed = false;
+  let reasoningRedacted = false;
+  const reasoningReplay: ProviderReplayItem[] = [];
+  let reasoningStartedAt: string | undefined;
+  let reasoningEndedAt: string | undefined;
+  let reasoningTokens: number | undefined;
+  let reasoningEndFlushed = false;
+  const flushReasoning = (): void => {
+    if (reasoningText.length > 0 && !reasoningFlushed) {
+      io.onReasoning?.(reasoningText);
+      reasoningFlushed = true;
+    }
+    if (!reasoningEndFlushed && (reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0)) {
+      const durationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+      io.onReasoningEnd?.({
+        text: reasoningText,
+        redacted: reasoningRedacted,
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+      });
+      reasoningEndFlushed = true;
+    }
+  };
+  const nameById = new Map<string, string>();
+  const calls: PendingCall[] = [];
+  let providerError: string | undefined;
+  let thrownError: string | undefined;
+  let aborted = false;
+  try {
+    const streamOptions = {
+      attemptId: deps.idSeq(),
+      ...(signal === undefined ? {} : { signal }),
+      ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
+    };
+    for await (const event of deps.provider.stream(request, streamOptions)) {
+      if (signal?.aborted === true) {
+        aborted = true;
+        break;
+      }
+      if (
+        reasoningStartedAt !== undefined &&
+        reasoningEndedAt === undefined &&
+        event.kind !== "reasoning_delta" &&
+        event.kind !== "reasoning_replay"
+      ) {
+        reasoningEndedAt = now();
+      }
+      if (event.kind === "reasoning_delta") {
+        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+        reasoningText += event.text ?? "";
+        if (event.redacted === true) reasoningRedacted = true;
+        io.onReasoningDelta?.(reasoningDeltaPayload(event));
+      } else if (event.kind === "reasoning_replay") {
+        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+        if (event.replay !== undefined) reasoningReplay.push(event.replay);
+      } else if (event.kind === "text_delta") {
+        flushReasoning();
+        const text = event.text ?? "";
+        io.write(text);
+        assistantText += text;
+      } else if (event.kind === "tool_call_start") {
+        if (event.toolCallId !== undefined && event.toolName !== undefined) {
+          nameById.set(event.toolCallId, event.toolName);
+        }
+      } else if (event.kind === "tool_call_end") {
+        if (event.toolCallId !== undefined) {
+          calls.push({
+            id: event.toolCallId,
+            name: nameById.get(event.toolCallId) ?? event.toolName ?? "",
+            input: event.input ?? "",
+          });
+        }
+      } else if (event.kind === "usage_update") {
+        if (event.usage !== undefined) {
+          io.onUsage?.(event.usage);
+          reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
+        }
+      } else if (event.kind === "provider_error") {
+        system(formatProviderErrorMessage(event.error));
+        providerError = event.error?.message ?? event.error?.kind ?? "provider error";
+        break;
+      } else if (event.kind === "model_end") {
+        break;
+      }
+    }
+  } catch (cause) {
+    if (signal?.aborted === true) {
+      aborted = true;
+    } else {
+      thrownError = cause instanceof Error ? cause.message : String(cause);
+    }
+  }
+
+  flushReasoning();
+  const durationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+  const reasoning: MessageReasoning | undefined =
+    reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
+      ? {
+          ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
+          ...(reasoningRedacted ? { redacted: true } : {}),
+          ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
+          ...(durationMs !== undefined ? { durationMs } : {}),
+          ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+        }
+      : undefined;
+  return {
+    assistantText,
+    calls,
+    reasoning,
+    ...(providerError !== undefined ? { providerError } : {}),
+    ...(thrownError !== undefined ? { thrownError } : {}),
+    aborted,
+  };
+}
+
+/**
  * No progress with provider capacity remaining: one final model turn **without
  * tools** so the assistant explains what happened and suggests next steps.
  */
@@ -3595,99 +3705,19 @@ async function finishWithBudgetSummary(
     parentRunId,
   };
 
-  let assistantText = "";
-  let reasoningText = "";
-  let reasoningFlushed = false;
-  // flow 268 T11: same accumulation as `runAgentTurnCore` — see its comments.
-  let reasoningRedacted = false;
-  const reasoningReplay: ProviderReplayItem[] = [];
-  let reasoningStartedAt: string | undefined;
-  let reasoningEndedAt: string | undefined;
-  // flow 268 T17 (AC16): same pattern as `runAgentTurnCore` — see its comments.
-  let reasoningTokens: number | undefined;
-  let reasoningEndFlushed = false;
-  const flushReasoning = (): void => {
-    if (reasoningText.length > 0 && !reasoningFlushed) {
-      io.onReasoning?.(reasoningText);
-      reasoningFlushed = true;
-    }
-    if (!reasoningEndFlushed && (reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0)) {
-      const durationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
-      io.onReasoningEnd?.({
-        text: reasoningText,
-        redacted: reasoningRedacted,
-        ...(durationMs !== undefined ? { durationMs } : {}),
-        ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
-      });
-      reasoningEndFlushed = true;
-    }
-  };
-  try {
-    const wrapUpStreamOptions = {
-      attemptId: deps.idSeq(),
-      ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
-    };
-    for await (const event of deps.provider.stream(request, wrapUpStreamOptions)) {
-      if (
-        reasoningStartedAt !== undefined &&
-        reasoningEndedAt === undefined &&
-        event.kind !== "reasoning_delta" &&
-        event.kind !== "reasoning_replay"
-      ) {
-        reasoningEndedAt = now();
-      }
-      if (event.kind === "reasoning_delta") {
-        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
-        reasoningText += event.text ?? "";
-        if (event.redacted === true) reasoningRedacted = true;
-        io.onReasoningDelta?.(reasoningDeltaPayload(event));
-      } else if (event.kind === "reasoning_replay") {
-        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
-        if (event.replay !== undefined) reasoningReplay.push(event.replay);
-      } else if (event.kind === "text_delta") {
-        flushReasoning();
-        const text = event.text ?? "";
-        io.write(text);
-        assistantText += text;
-      } else if (event.kind === "usage_update") {
-        if (event.usage !== undefined) {
-          io.onUsage?.(event.usage);
-          reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
-        }
-      } else if (event.kind === "provider_error") {
-        system(formatProviderErrorMessage(event.error));
-        break;
-      } else if (event.kind === "model_end") {
-        break;
-      }
-    }
-  } catch (cause) {
-    system(`\n[error] wrap-up failed: ${cause instanceof Error ? cause.message : String(cause)}\n`);
+  const round = await streamWrapUpRound(io, deps, request, undefined, system);
+  if (round.thrownError !== undefined) {
+    system(`\n[error] wrap-up failed: ${round.thrownError}\n`);
   }
-
-  flushReasoning();
-  // Durable counterpart of the forwarding above (AC6) — see
-  // `runAgentTurnCore`'s identical construction for the full rationale.
-  const roundReasoningDurationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
-  const roundReasoning: MessageReasoning | undefined =
-    reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
-      ? {
-          ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
-          ...(reasoningRedacted ? { redacted: true } : {}),
-          ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
-          ...(roundReasoningDurationMs !== undefined ? { durationMs: roundReasoningDurationMs } : {}),
-          ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
-        }
-      : undefined;
-  if (assistantText.length > 0) {
+  if (round.assistantText.length > 0) {
     history.push({
       role: "assistant",
-      content: assistantText,
+      content: round.assistantText,
       provenance: "model",
       ts: now(),
-      ...(roundReasoning !== undefined ? { reasoning: roundReasoning } : {}),
+      ...(round.reasoning !== undefined ? { reasoning: round.reasoning } : {}),
     });
-    io.onAssistantText?.(assistantText);
+    io.onAssistantText?.(round.assistantText);
   } else {
     system(
       "\n[budget] No wrap-up text from the model. Re-run your request, or call the " +
@@ -3703,6 +3733,9 @@ async function finishWithBudgetSummary(
  * the instruction, and the input is validated rather than trusted). The first
  * valid `submit_result` call wins; every call gets a tool result so the
  * recorded history stays well-formed. Never executes any other tool.
+ *
+ * `aborted: true` means the turn was interrupted during this round; the
+ * caller reports that as a normal interruption, not as a budget outcome.
  */
 async function finishWithSubmitResult(
   io: AgentIO,
@@ -3711,7 +3744,7 @@ async function finishWithSubmitResult(
   parentRunId: string,
   why: string,
   signal: AbortSignal | undefined,
-): Promise<{ submitted?: SubmittedResult; error?: string }> {
+): Promise<{ submitted?: SubmittedResult; error?: string; aborted?: true }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
       io.onSystem(text);
@@ -3758,49 +3791,18 @@ async function finishWithSubmitResult(
   };
   const request: NormalizedRequest = signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
 
-  let assistantText = "";
-  const nameById = new Map<string, string>();
-  const calls: PendingCall[] = [];
-  try {
-    const streamOptions = {
-      attemptId: deps.idSeq(),
-      ...(signal === undefined ? {} : { signal }),
-      ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
-    };
-    for await (const event of deps.provider.stream(request, streamOptions)) {
-      if (signal?.aborted === true) {
-        return { error: "the final round was interrupted" };
-      }
-      if (event.kind === "text_delta") {
-        const text = event.text ?? "";
-        io.write(text);
-        assistantText += text;
-      } else if (event.kind === "tool_call_start") {
-        if (event.toolCallId !== undefined && event.toolName !== undefined) {
-          nameById.set(event.toolCallId, event.toolName);
-        }
-      } else if (event.kind === "tool_call_end") {
-        if (event.toolCallId !== undefined) {
-          calls.push({
-            id: event.toolCallId,
-            name: nameById.get(event.toolCallId) ?? event.toolName ?? "",
-            input: event.input ?? "",
-          });
-        }
-      } else if (event.kind === "usage_update") {
-        if (event.usage !== undefined) io.onUsage?.(event.usage);
-      } else if (event.kind === "provider_error") {
-        system(formatProviderErrorMessage(event.error));
-        break;
-      } else if (event.kind === "model_end") {
-        break;
-      }
-    }
-  } catch (cause) {
-    const msg = cause instanceof Error ? cause.message : String(cause);
-    system(`\n[error] final round failed: ${msg}\n`);
-    return { error: `the final round failed: ${msg}` };
+  const round = await streamWrapUpRound(io, deps, request, signal, system);
+  // Review F-006: an abort during this round is an interruption, never a
+  // budget outcome — checked before the thrown-error branch, since an abort
+  // commonly surfaces as a stream exception.
+  if (round.aborted || signal?.aborted === true) {
+    return { aborted: true };
   }
+  if (round.thrownError !== undefined) {
+    system(`\n[error] final round failed: ${round.thrownError}\n`);
+    return { error: `the final round failed: ${round.thrownError}` };
+  }
+  const { assistantText, calls } = round;
 
   if (assistantText.length > 0 || calls.length > 0) {
     history.push({
@@ -3809,6 +3811,7 @@ async function finishWithSubmitResult(
       provenance: "model",
       ts: now(),
       ...(calls.length > 0 ? { toolCalls: calls.map((c) => ({ id: c.id, name: c.name, arguments: c.input })) } : {}),
+      ...(round.reasoning !== undefined ? { reasoning: round.reasoning } : {}),
     });
     if (assistantText.length > 0) io.onAssistantText?.(assistantText);
   }
@@ -3838,6 +3841,11 @@ async function finishWithSubmitResult(
   }
   if (submitted !== undefined) {
     return { submitted };
+  }
+  // Review F-005: a round that ended on a provider error failed; it did not
+  // merely "make no call", and the reason must say which.
+  if (round.providerError !== undefined) {
+    return { error: `the final round failed: ${round.providerError}` };
   }
   if (calls.length === 0) {
     system(`\n[budget] The final round returned no ${SUBMIT_RESULT_TOOL_NAME} call.\n`);

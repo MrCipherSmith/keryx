@@ -380,9 +380,9 @@ test("runAgentTurn with planFollowThrough left at its default (off): ends on the
     false,
   );
   const said = collected.system.join("");
-  expect(said).toContain("[plan]");
-  expect(said).toContain("implement [in_progress]");
-  expect(said).toContain("verify [pending]");
+  // Review F-016: exactly one line, naming the open item ids.
+  const planLines = said.split("\n").filter((line) => line.length > 0);
+  expect(planLines).toEqual(["[plan] Turn ending with open plan items (follow-through is off): implement, verify"]);
 });
 
 test("runAgentTurn: a main-turn round's request budget defaults to DEFAULT_MAX_OUTPUT_TOKENS", async () => {
@@ -989,6 +989,32 @@ test("runAgentTurn does not reprompt a toolless reply once a tool call already r
   expect(requests).toHaveLength(2);
   expect(history.filter((m) => m.role === "user" && m.content.startsWith(HARNESS_ENVELOPE_PREFIX))).toHaveLength(0);
   expect(system.join("")).not.toContain("did not emit a tool call");
+});
+
+// Review F-013: a call that never ran (here an unknown tool name) does not
+// count as "a tool call already ran this turn" — the narrated stall after it
+// is still the reprompt's target shape.
+test("runAgentTurn still reprompts a toolless reply when the only earlier call named an unknown tool", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "no_such_tool" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "Проверяю итог, но пока не завершено." }, { kind: "model_end" }],
+    [
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c2", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "Готово." }, { kind: "model_end" }],
+  ]);
+  const { io, toolCalls } = collectingIo();
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, baseDeps(provider), history, "продолжай");
+  expect(history.some((m) => m.role === "user" && m.content === buildToollessReprompt(1))).toBe(true);
+  expect(requests).toHaveLength(4);
+  expect(toolCalls).toContain("get_cwd");
 });
 
 // Flow 347 T6 (AC8): a toolless reply shaped like a finished, structured
@@ -4159,8 +4185,7 @@ test("without planFollowThrough opted in, a plan with real work left ends the tu
   expect(requests).toHaveLength(1);
   const said = system.join("");
   expect(said).not.toContain("still has actionable items");
-  expect(said).toContain("[plan]");
-  expect(said).toContain("t2 [pending]");
+  expect(said).toContain("[plan] Turn ending with open plan items (follow-through is off): t2\n");
 });
 
 test("the instruction teaches the agent the `proposed` vocabulary, or the status is unusable in practice", () => {

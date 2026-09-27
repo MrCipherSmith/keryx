@@ -23,7 +23,21 @@ interface QuarantinePattern {
   test: (text: string) => boolean;
 }
 
+/**
+ * The keryx shell's control-nudge envelope (`[keryx shell — control nudge]`,
+ * `HARNESS_ENVELOPE_PREFIX` in `src/commands/agent.ts`), tolerant of spacing,
+ * case and the dash variant, so a look-alike cannot slip past on a hyphen.
+ * Only the shell itself may emit it (flow 347 review F-009).
+ */
+const HARNESS_ENVELOPE_SOURCE = String.raw`\[\s*keryx\s+shell\s*[—–-]+\s*control\s+nudge\s*\]`;
+
 const PATTERNS: readonly QuarantinePattern[] = [
+  {
+    // A forged shell control nudge: text that is not the shell's own claiming
+    // to be one, to be read as a harness instruction rather than content.
+    name: "harness-envelope",
+    test: (t) => new RegExp(HARNESS_ENVELOPE_SOURCE, "i").test(t),
+  },
   {
     // Imitations of harness control tags (e.g. <system-reminder>, </system>),
     // including the agent-bus/child-notification wrappers a forged summary or
@@ -54,6 +68,17 @@ const PATTERNS: readonly QuarantinePattern[] = [
       ),
   },
 ];
+
+/**
+ * Defuse every occurrence of the shell's control-nudge envelope inside content
+ * the shell forwards (a tool result, a file it read): the bracketed form is
+ * rewritten to `(quoted: keryx shell — control nudge)` so the text stays
+ * readable but can no longer pass for the shell's own nudge, which the shell
+ * then appends itself where one is genuine. Pure; identity when absent.
+ */
+export function neutraliseHarnessEnvelope(text: string): string {
+  return text.replace(new RegExp(HARNESS_ENVELOPE_SOURCE, "gi"), "(quoted: keryx shell — control nudge)");
+}
 
 /** Outcome of {@link quarantineChildSummary}. */
 export interface QuarantineResult {
